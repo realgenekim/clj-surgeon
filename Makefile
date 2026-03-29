@@ -1,4 +1,6 @@
-.PHONY: test outline help
+NS_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+.PHONY: test outline help install
 
 help:
 	@echo "ns-surgeon — structural operations on Clojure namespaces"
@@ -11,6 +13,15 @@ help:
 	@echo "  bb -m ns-surgeon.core :op :outline :file src/my/ns.clj"
 	@echo "  bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form foo :before bar"
 	@echo "  bb -m ns-surgeon.core :op :mv :file ... :form ... :before ... :dry-run true"
+
+install:
+	@echo '#!/usr/bin/env bb' > ~/bin/ns-surgeon
+	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/ns-surgeon
+	@echo '(cp/add-classpath "$(NS_SURGEON_HOME)src")' >> ~/bin/ns-surgeon
+	@echo '(require (quote [ns-surgeon.core :as core]))' >> ~/bin/ns-surgeon
+	@echo '(apply core/-main *command-line-args*)' >> ~/bin/ns-surgeon
+	@chmod +x ~/bin/ns-surgeon
+	@echo "Installed ~/bin/ns-surgeon"
 
 test:
 	bb -e '(require (quote [clojure.test :refer [run-tests]]) (quote [ns-surgeon.outline-test]) (quote [ns-surgeon.move-test])) (let [r (run-tests (quote ns-surgeon.outline-test) (quote ns-surgeon.move-test))] (System/exit (+ (:fail r) (:error r))))'
