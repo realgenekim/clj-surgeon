@@ -134,10 +134,10 @@
           (is (some #{"ping"} (:needed-declares p))))))))
 
 ;; ============================================================
-;; Unsafe move detection: form depends on something below target
+;; Leaf dep-pulling: form has deps below target, but all are leaves
 ;; ============================================================
 
-(def unsafe-move
+(def pullable-deps
   "(ns my.app)
 
 (declare foo)
@@ -151,15 +151,67 @@
   (+ x (:x config)))
 ")
 
+(deftest test-plan-pullable
+  (with-temp-file pullable-deps
+    (fn [path]
+      (let [p (fix/plan path)]
+        (testing "foo has pull-deps (config is a leaf)"
+          (let [action (first (:actions p))]
+            (is (= "foo" (:name action)))
+            (is (contains? (:pull-deps action) "config"))
+            (is (nil? (:unresolved-deps action)))))
+        (testing "summary shows safe-with-pull"
+          (is (= 1 (-> p :summary :safe-with-pull))))))))
+
+(deftest test-execute-pullable
+  (with-temp-file pullable-deps
+    (fn [path]
+      (let [result (fix/execute! path)
+            new-source (slurp path)]
+        (testing "config moved above caller (pulled)"
+          (is (< (str/index-of new-source "(def config")
+                 (str/index-of new-source "(defn caller"))))
+        (testing "foo moved above caller"
+          (is (< (str/index-of new-source "(defn foo")
+                 (str/index-of new-source "(defn caller"))))
+        (testing "declare deleted"
+          (is (not (str/includes? new-source "(declare foo)"))))
+        (testing "parens balanced"
+          (let [opens (count (filter #(= \( %) new-source))
+                closes (count (filter #(= \) %) new-source))]
+            (is (= opens closes))))))))
+
+;; ============================================================
+;; Unsafe move detection: form depends on something below target
+;; ============================================================
+
+(def unsafe-move
+  "(ns my.app)
+
+(declare foo)
+
+(defn caller []
+  (foo 42))
+
+(defn deep-helper [x]
+  (+ x 1))
+
+(defn compute [x]
+  (deep-helper x))
+
+(defn foo [x]
+  (compute x))
+")
+
 (deftest test-plan-unsafe
   (with-temp-file unsafe-move
     (fn [path]
       (let [p (fix/plan path)]
-        (testing "detects unresolved dep"
+        (testing "detects unresolved non-leaf dep"
           (is (= 1 (-> p :summary :unsafe))))
-        (testing "flags config as unresolved"
+        (testing "flags compute as unresolved"
           (let [action (first (:actions p))]
-            (is (contains? (:unresolved-deps action) "config"))))))))
+            (is (contains? (:unresolved-deps action) "compute"))))))))
 
 (deftest test-execute-skips-unsafe
   (with-temp-file unsafe-move

@@ -70,7 +70,7 @@
                  :declares (run-declares opts)
                  :deps (run-deps opts)
                  :topo (run-topo opts)
-                 :closure (run-closure opts)
+                 :ls-extract (run-closure opts)
                  :ls-deps (run-ls-deps opts)
                  :rename-ns (rename/plan opts)
                  :rename-ns! (rename/execute! opts)
