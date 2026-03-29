@@ -91,6 +91,70 @@
         (is (:error result))
         (is (str/includes? (:error result) "nope"))))))
 
+(deftest test-move-skips-declare
+  (let [source "(ns my.app)
+
+(declare my-fn)
+
+(defn caller []
+  (my-fn 42))
+
+(defn my-fn [x]
+  (+ x 1))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "dry-run targets the defn, not the declare"
+          (let [result (move/move-form {:file path
+                                        :form "my-fn"
+                                        :before "caller"
+                                        :dry-run true})]
+            (is (:ok result))
+            ;; Should find the defn (line 8), NOT the declare (line 3)
+            (is (> (-> result :plan :from-line) 5))))
+        (testing "move actually moves the defn body"
+          (let [result (move/move-form {:file path
+                                        :form "my-fn"
+                                        :before "caller"})]
+            (is (:ok result))
+            (let [new-source (slurp path)
+                  defn-pos (str/index-of new-source "(defn my-fn")
+                  caller-pos (str/index-of new-source "(defn caller")]
+              ;; defn my-fn should now appear BEFORE defn caller
+              (is (some? defn-pos))
+              (is (some? caller-pos))
+              (is (< defn-pos caller-pos)))))))))
+
+(deftest test-move-with-declare-and-defn
+  (let [source "(ns my.app)
+
+(declare helper)
+
+(defn main []
+  (helper 1))
+
+(defn middle []
+  :ok)
+
+(defn helper [x]
+  (inc x))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "moves defn helper before main, declare stays"
+          (let [result (move/move-form {:file path
+                                        :form "helper"
+                                        :before "main"})]
+            (is (:ok result))
+            (let [new-source (slurp path)]
+              ;; defn helper should appear before defn main
+              (is (< (str/index-of new-source "(defn helper")
+                     (str/index-of new-source "(defn main")))
+              ;; declare should still be in the file (we don't auto-remove it)
+              (is (str/includes? new-source "(declare helper)"))
+              ;; all forms still present
+              (is (str/includes? new-source "(defn middle")))))))))
+
 (deftest test-move-with-comments
   (let [source "(ns my.app)
 

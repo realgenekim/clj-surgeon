@@ -12,17 +12,19 @@
   (let [target (str form-name)]
     (loop [zloc zloc]
       (when zloc
-        (if (and (z/list? zloc)
-                 (let [first-child (some-> zloc z/down z/string)
-                       second-child (some-> zloc z/down z/right z/string)]
-                   ;; Match defn name, stripping metadata prefix
-                   (and second-child
-                        (or (= second-child target)
-                            ;; Handle ^:private etc
-                            (let [third (some-> zloc z/down z/right z/right z/string)]
-                              (= third target))))))
-          zloc
-          (recur (z/right zloc)))))))
+        (let [first-child (some-> zloc z/down z/string)]
+          (if (and (z/list? zloc)
+                   ;; Skip declare forms — we want the actual defn
+                   (not= "declare" first-child)
+                   (let [second-child (some-> zloc z/down z/right z/string)]
+                     ;; Match defn name, stripping metadata prefix
+                     (and second-child
+                          (or (= second-child target)
+                              ;; Handle ^:private etc
+                              (let [third (some-> zloc z/down z/right z/right z/string)]
+                                (= third target))))))
+            zloc
+            (recur (z/right zloc))))))))
 
 (defn- preceding-comment-nodes
   "Collect comment/newline nodes immediately preceding a form."
