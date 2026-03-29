@@ -12,6 +12,7 @@
             [clj-surgeon.move :as move]
             [clj-surgeon.analyze :as analyze]
             [clj-surgeon.rename :as rename]
+            [clj-surgeon.fix-declares :as fix-declares]
             [clojure.pprint :as pp]))
 
 (defn run-outline [{:keys [file]}]
@@ -67,8 +68,10 @@
                  :closure (run-closure opts)
                  :rename-ns (rename/plan opts)
                  :rename-ns! (rename/execute! opts)
+                 :fix-declares (fix-declares/plan (:file opts))
+                 :fix-declares! (fix-declares/execute! (:file opts))
                  {:error (str "Unknown op: " op
-                              ". Valid ops: :outline, :mv, :declares, :deps, :topo, :closure, :rename-ns, :rename-ns!")})]
+                              ". Valid ops: :ls, :mv, :declares, :deps, :topo, :closure, :rename-ns, :fix-declares")})]
     (pp/pprint result)))
 
 (defn- parse-val [s]
