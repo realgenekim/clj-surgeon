@@ -1,4 +1,4 @@
-(ns ns-surgeon.analyze
+(ns clj-surgeon.analyze
   "Homoiconicity-powered analysis: because Clojure code IS data,
    we can walk the AST to discover structure that would take 10,000 lines
    in a non-homoiconic language.

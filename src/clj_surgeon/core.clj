@@ -1,4 +1,4 @@
-(ns ns-surgeon.core
+(ns clj-surgeon.core
   "ns-surgeon: structural operations on Clojure namespaces.
 
    A babashka CLI tool. Returns EDN.
@@ -7,10 +7,11 @@
      bb -m ns-surgeon.core :op :outline :file src/my/ns.clj
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn :dry-run true"
-  (:require [ns-surgeon.outline :as outline]
-            [ns-surgeon.forward-refs :as fwd]
-            [ns-surgeon.move :as move]
-            [ns-surgeon.analyze :as analyze]
+  (:require [clj-surgeon.outline :as outline]
+            [clj-surgeon.forward-refs :as fwd]
+            [clj-surgeon.move :as move]
+            [clj-surgeon.analyze :as analyze]
+            [clj-surgeon.rename :as rename]
             [clojure.pprint :as pp]))
 
 (defn run-outline [{:keys [file]}]
@@ -63,8 +64,10 @@
                  :deps (run-deps opts)
                  :topo (run-topo opts)
                  :closure (run-closure opts)
+                 :rename-ns (rename/plan opts)
+                 :rename-ns! (rename/execute! opts)
                  {:error (str "Unknown op: " op
-                              ". Valid ops: :outline, :mv, :declares, :deps, :topo, :closure")})]
+                              ". Valid ops: :outline, :mv, :declares, :deps, :topo, :closure, :rename-ns, :rename-ns!")})]
     (pp/pprint result)))
 
 (defn- parse-val [s]

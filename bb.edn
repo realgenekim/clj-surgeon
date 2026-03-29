@@ -1,2 +1,2 @@
 {:paths ["src" "test"]
- :bbin/bin {ns-surgeon {:main-opts ["-m" "ns-surgeon.core"]}}}
+ :bbin/bin {clj-surgeon {:main-opts ["-m" "clj-surgeon.core"]}}}

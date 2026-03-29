@@ -1,6 +1,6 @@
-(ns ns-surgeon.analyze-test
+(ns clj-surgeon.analyze-test
   (:require [clojure.test :refer [deftest is testing]]
-            [ns-surgeon.analyze :as a]
+            [clj-surgeon.analyze :as a]
             [clojure.string :as str]))
 
 ;; ============================================================

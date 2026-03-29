@@ -1,4 +1,4 @@
-(ns ns-surgeon.forward-refs
+(ns clj-surgeon.forward-refs
   "Detect forward references using clj-kondo analysis."
   (:require [clojure.java.shell :as shell]
             [clojure.string :as str]

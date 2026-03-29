@@ -1,4 +1,4 @@
-(ns ns-surgeon.move
+(ns clj-surgeon.move
   "Move forms within a file using rewrite-clj zipper surgery.
    Forms are moved as AST nodes, not text — parens always balanced,
    comments travel with their form, whitespace is preserved."

@@ -1,6 +1,6 @@
-(ns ns-surgeon.outline-test
+(ns clj-surgeon.outline-test
   (:require [clojure.test :refer [deftest is testing]]
-            [ns-surgeon.outline :as outline]
+            [clj-surgeon.outline :as outline]
             [clojure.string :as str]))
 
 (def simple-ns

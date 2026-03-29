@@ -1,4 +1,4 @@
-(ns ns-surgeon.outline
+(ns clj-surgeon.outline
   "Parse a Clojure file and return structured outline of all top-level forms."
   (:require [rewrite-clj.zip :as z]
             [rewrite-clj.node :as n]

@@ -1,6 +1,6 @@
-(ns ns-surgeon.move-test
+(ns clj-surgeon.move-test
   (:require [clojure.test :refer [deftest is testing]]
-            [ns-surgeon.move :as move]
+            [clj-surgeon.move :as move]
             [clojure.string :as str]))
 
 (def test-source

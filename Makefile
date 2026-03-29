@@ -1,36 +1,34 @@
-NS_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CLJ_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 .PHONY: test outline help install nrepl
 
 help:
-	@echo "ns-surgeon — structural operations on Clojure namespaces"
+	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test              Run all tests"
-	@echo "  make outline FILE=...  Show outline for a file"
-	@echo "  make fwd-refs FILE=... Show forward references"
+	@echo "  make install           Install to ~/bin/clj-surgeon"
+	@echo "  make nrepl             Start bb nREPL"
 	@echo ""
 	@echo "Direct usage:"
-	@echo "  bb -m ns-surgeon.core :op :outline :file src/my/ns.clj"
-	@echo "  bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form foo :before bar"
-	@echo "  bb -m ns-surgeon.core :op :mv :file ... :form ... :before ... :dry-run true"
+	@echo "  bb -m clj-surgeon.core :op :outline :file src/my/ns.clj"
+	@echo "  bb -m clj-surgeon.core :op :declares :file src/my/ns.clj"
+	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
+	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
 install:
-	@echo '#!/usr/bin/env bb' > ~/bin/ns-surgeon
-	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/ns-surgeon
-	@echo '(cp/add-classpath "$(NS_SURGEON_HOME)src")' >> ~/bin/ns-surgeon
-	@echo '(require (quote [ns-surgeon.core :as core]))' >> ~/bin/ns-surgeon
-	@echo '(apply core/-main *command-line-args*)' >> ~/bin/ns-surgeon
-	@chmod +x ~/bin/ns-surgeon
-	@echo "Installed ~/bin/ns-surgeon"
+	@echo '#!/usr/bin/env bb' > ~/bin/clj-surgeon
+	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/clj-surgeon
+	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> ~/bin/clj-surgeon
+	@echo '(require (quote [clj-surgeon.core :as core]))' >> ~/bin/clj-surgeon
+	@echo '(apply core/-main *command-line-args*)' >> ~/bin/clj-surgeon
+	@chmod +x ~/bin/clj-surgeon
+	@echo "Installed ~/bin/clj-surgeon"
 
 nrepl:
-	cd /Users/genekim/src.local/ns-surgeon && bb nrepl-server 0
+	cd $(CLJ_SURGEON_HOME) && bb nrepl-server 0
 
 test:
-	bb -e '(require (quote [clojure.test :refer [run-tests]]) (quote [ns-surgeon.outline-test]) (quote [ns-surgeon.move-test])) (let [r (run-tests (quote ns-surgeon.outline-test) (quote ns-surgeon.move-test))] (System/exit (+ (:fail r) (:error r))))'
+	bb -e '(require (quote [clojure.test :refer [run-tests]]) (quote [clj-surgeon.outline-test]) (quote [clj-surgeon.move-test]) (quote [clj-surgeon.analyze-test]) (quote [clj-surgeon.rename-test])) (let [r (run-tests (quote clj-surgeon.outline-test) (quote clj-surgeon.move-test) (quote clj-surgeon.analyze-test) (quote clj-surgeon.rename-test))] (System/exit (+ (:fail r) (:error r))))'
 
 outline:
-	bb -m ns-surgeon.core :op :outline :file $(FILE)
-
-fwd-refs:
-	bb -m ns-surgeon.core :op :outline :file $(FILE) | bb -e '(let [d (read)] (doseq [f (:forward-refs d)] (println (format "  %-40s used at %4d, defined at %4d  (gap: %d)" (:name f) (:used-at f) (:defined-at f) (:gap f)))))'
+	bb -m clj-surgeon.core :op :outline :file $(FILE)
