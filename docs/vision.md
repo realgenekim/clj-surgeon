@@ -221,22 +221,104 @@ That's why clj-surgeon is 500 lines and does what 50,000-line IDE plugins do. No
 
 ---
 
-## Current State (8 ops, 30 tests)
+## The Bitter Lesson: Build Tools for Bookkeeping, Not for Thinking
 
-| Op | Status | What |
+After building 13 ops and using them on a real codebase, a clear pattern emerged:
+**the valuable ops eliminate mechanical work. The wasteful ops replace judgment.**
+
+### The Test: "Is This Bookkeeping or Judgment?"
+
+**Bookkeeping** = the AI knows what to do but the mechanics are slow, error-prone,
+or burn context window. These are the ops worth building:
+
+- `:ls` — reading a 2768-line file to find form boundaries (bookkeeping)
+- `:extract!` — cutting 18 forms, writing a new file, fixing requires (bookkeeping)
+- `:fix-declares!` — moving forms in topo order, deleting stale declares (bookkeeping)
+- `:rename-ns!` — updating ns declarations and requires across 10 files (bookkeeping)
+- `:mv` — precisely cutting a form with its comment header (bookkeeping)
+
+**Judgment** = the AI already has the information and can make the decision.
+Building a tool replaces flexible reasoning with rigid pattern matching:
+
+- `:diff` — the AI can read `git diff` and understand what changed
+- `:dead-code` — `clj-kondo` already warns; the AI can grep and check
+- `:suggest-split` — the AI can look at `:deps` + `:ls` and see the clusters
+- `:find-extractable-pure` — the AI knows the -tx pattern (it's in CLAUDE.md)
+
+### The -tx Extraction Example
+
+Consider extracting a pure `-tx` function from a `swap!` mutator:
+
+```clojure
+;; BEFORE: pure logic buried in swap!
+(defn archive-critique-pill! [idx]
+  (swap! app-state
+    (fn [st]
+      (let [pills (get-in st [:distillery :lanes 0 :pills])
+            pill (nth pills idx nil)]
+        (when pill
+          (-> st
+              (update-in [:distillery :lanes 0 :pills] ...)
+              (update-in [:distillery :archived] (fnil conj []) pill)
+              (update-in [:distillery :focus-index] ...)))))))
+
+;; AFTER: pure core extracted
+(defn archive-critique-pill-tx [st idx]
+  (let [pills (get-in st [:distillery :lanes 0 :pills])
+        pill (nth pills idx nil)]
+    (if pill
+      (-> st ...)
+      st)))  ;; when → if returning st (pure fns don't return nil)
+
+(defn archive-critique-pill! [idx]
+  (swap! app-state archive-critique-pill-tx idx))
+```
+
+Could a `:find-extractable-pure` op detect this pattern? Yes — find every
+`(swap! app-state (fn [st] ...))` and extract the lambda. ~40 lines of code.
+
+But the **judgment** is everything:
+- `when` must become `if` returning `st` (pure functions shouldn't return nil)
+- Should `idx` be a param or should the caller pass the pill directly?
+- Is the `focus-index` clamping logic correct? Should the test verify the edge case?
+- Does the extracted function need a Guardrails `>defn` spec?
+
+The detection (finding the pattern) is trivially useful. The extraction is
+30 seconds of editing guided by architectural judgment. A tool that automates
+the extraction would get the mechanics right but miss every judgment call.
+
+**Where clj-surgeon DOES help:** After you've manually extracted 20 `-tx`
+functions (judgment work), you want to move them all to `writer.state.transforms`
+(bookkeeping). That's `:extract!`.
+
+### The Principle
+
+> **Build tools that eliminate mechanical work. Don't build tools that
+> replace judgment. The AI is good at judgment. The AI is bad at precisely
+> cutting 18 forms from a 2768-line file.**
+
+The compiler catches what the tool doesn't detect. The AI fixes what the
+compiler reports. The tool does the bookkeeping in between.
+
+---
+
+## Current State (13 ops, 58 tests)
+
+| Op | Status | Category |
 |---|---|---|
-| `:ls` / `:outline` | **DONE** | Form boundaries, forward refs |
-| `:mv` | **DONE** | Move form within file (skips declares) |
-| `:declares` | **DONE** | Audit: which declares are removable? |
-| `:deps` | **DONE** | Intra-namespace call graph |
-| `:topo` | **DONE** | Topological sort (optimal ordering) |
-| `:closure` | **DONE** | Minimal extractable unit |
-| `:rename-ns` | **DONE** | Rename namespace prefix (plan) |
-| `:rename-ns!` | **DONE** | Rename namespace prefix (execute) |
-| `:extract` | NEXT | Move forms to new namespace |
-| `:reorder` | NEXT | Auto-eliminate all removable declares |
-| `:dead-code` | PLANNED | Unreferenced forms across project |
-| `:find` | DREAM | Structural search (pattern match on AST) |
-| `:suggest-split` | DREAM | Dependency-aware namespace splitting |
-| `:diff` | DREAM | Semantic diff (form-level, not line-level) |
-| `:refactor` | DREAM | Full auto-refactor pipeline |
+| `:ls` / `:outline` | **DONE** | Visibility |
+| `:ls-deps` | **DONE** | Visibility |
+| `:ls-extract` | **DONE** | Visibility |
+| `:deps` | **DONE** | Visibility |
+| `:topo` | **DONE** | Visibility |
+| `:declares` | **DONE** | Visibility |
+| `:mv` | **DONE** | Action |
+| `:fix-declares!` | **DONE** | Compound action |
+| `:extract!` | **DONE** | Compound action |
+| `:rename-ns!` | **DONE** | Compound action |
+| `:dead-code` | BITTER LESSON | clj-kondo does this; AI can grep |
+| `:find` | BITTER LESSON | AI + grep handles 95% of cases |
+| `:suggest-split` | BITTER LESSON | AI + `:deps` + `:ls` = judgment |
+| `:diff` | BITTER LESSON | AI + `git diff` = judgment |
+| `:find-extractable-pure` | BITTER LESSON | Detection useful, extraction is judgment |
+| `:refactor` | BITTER LESSON | Compound ops + AI judgment = this already |
