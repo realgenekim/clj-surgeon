@@ -88,6 +88,8 @@
     (= s "true") true
     (= s "false") false
     (.startsWith s ":") (keyword (subs s 1))
+    (.startsWith s "[") (read-string s)  ;; parse EDN vectors like '[foo bar]
+    (.startsWith s "{") (read-string s)  ;; parse EDN maps
     :else s))
 
 (defn- parse-args [args]
