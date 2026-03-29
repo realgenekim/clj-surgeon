@@ -1,6 +1,6 @@
 NS_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: test outline help install
+.PHONY: test outline help install nrepl
 
 help:
 	@echo "ns-surgeon — structural operations on Clojure namespaces"
@@ -22,6 +22,9 @@ install:
 	@echo '(apply core/-main *command-line-args*)' >> ~/bin/ns-surgeon
 	@chmod +x ~/bin/ns-surgeon
 	@echo "Installed ~/bin/ns-surgeon"
+
+nrepl:
+	cd /Users/genekim/src.local/ns-surgeon && bb nrepl-server 0
 
 test:
 	bb -e '(require (quote [clojure.test :refer [run-tests]]) (quote [ns-surgeon.outline-test]) (quote [ns-surgeon.move-test])) (let [r (run-tests (quote ns-surgeon.outline-test) (quote ns-surgeon.move-test))] (System/exit (+ (:fail r) (:error r))))'
