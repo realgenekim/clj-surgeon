@@ -206,6 +206,88 @@
         (is (not (contains? names "unrelated")))))))
 
 ;; ============================================================
+;; dep-tree (transitive dependency tree)
+;; ============================================================
+
+(def dep-tree-ns
+  "(ns my.app)
+
+(def config {:x 1})
+
+(defn helper [x]
+  (+ x (:x config)))
+
+(defn process [x]
+  (helper (inc x)))
+
+(defn main []
+  (process 42))
+
+(defn unrelated []
+  :nope)
+")
+
+(deftest test-dep-tree-simple
+  (let [zloc (a/string->zloc dep-tree-ns)
+        deps (a/intra-ns-deps zloc)
+        tree (a/dep-tree deps "main")]
+    (testing "root is main"
+      (is (= "main" (:name tree))))
+    (testing "main depends on process"
+      (is (= ["process"] (mapv :name (:deps tree)))))
+    (testing "process depends on helper"
+      (let [process-node (first (:deps tree))]
+        (is (= ["helper"] (mapv :name (:deps process-node))))))
+    (testing "helper depends on config (leaf)"
+      (let [helper-node (-> tree :deps first :deps first)]
+        (is (= "helper" (:name helper-node)))
+        (let [config-node (first (:deps helper-node))]
+          (is (= "config" (:name config-node)))
+          (is (:leaf? config-node)))))))
+
+(deftest test-dep-tree-leaf
+  (let [zloc (a/string->zloc dep-tree-ns)
+        deps (a/intra-ns-deps zloc)
+        tree (a/dep-tree deps "config")]
+    (testing "leaf form has no deps"
+      (is (:leaf? tree))
+      (is (nil? (:deps tree))))))
+
+(deftest test-dep-tree-circular
+  (let [zloc (a/string->zloc circular-ns)
+        deps (a/intra-ns-deps zloc)
+        tree (a/dep-tree deps "ping")]
+    (testing "circular dep is marked"
+      (let [pong-node (first (:deps tree))
+            ping-back (first (:deps pong-node))]
+        (is (= "pong" (:name pong-node)))
+        (is (:circular? ping-back))))))
+
+(deftest test-dep-tree-unrelated-excluded
+  (let [zloc (a/string->zloc dep-tree-ns)
+        deps (a/intra-ns-deps zloc)
+        tree (a/dep-tree deps "main")
+        all-names (a/flatten-dep-tree tree)]
+    (testing "unrelated forms not in tree"
+      (is (not (contains? all-names "unrelated"))))
+    (testing "full transitive closure"
+      (is (= #{"main" "process" "helper" "config"} all-names)))))
+
+(deftest test-dep-tree-real-file
+  (let [file "test-fixtures/state.clj"]
+    (when (.exists (java.io.File. file))
+      (let [zloc (a/file->zloc file)
+            deps (a/intra-ns-deps zloc)
+            tree (a/dep-tree deps "transition!")]
+        (testing "transition! has deps"
+          (is (some? (:deps tree)))
+          (is (not (:leaf? tree))))
+        (testing "transitive closure includes log-event! and its deps"
+          (let [all (a/flatten-dep-tree tree)]
+            (is (contains? all "transition!"))
+            (is (contains? all "log-event!"))))))))
+
+;; ============================================================
 ;; topological-sort
 ;; ============================================================
 

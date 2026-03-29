@@ -57,6 +57,11 @@
   (let [zloc (analyze/file->zloc file)]
     (analyze/extraction-closure zloc form)))
 
+(defn run-ls-deps [{:keys [file form]}]
+  (let [zloc (analyze/file->zloc file)
+        deps (analyze/intra-ns-deps zloc)]
+    (analyze/dep-tree deps form)))
+
 (defn run [{:keys [op] :as opts}]
   (let [result (case op
                  :ls (run-outline opts)
@@ -66,6 +71,7 @@
                  :deps (run-deps opts)
                  :topo (run-topo opts)
                  :closure (run-closure opts)
+                 :ls-deps (run-ls-deps opts)
                  :rename-ns (rename/plan opts)
                  :rename-ns! (rename/execute! opts)
                  :fix-declares (fix-declares/plan (:file opts))

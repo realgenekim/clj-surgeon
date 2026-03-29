@@ -230,6 +230,46 @@
                      visited'))))))))
 
 ;; ============================================================
+;; Dependency tree: transitive deps as a tree structure
+;; ============================================================
+
+(defn dep-tree
+  "Build a transitive dependency tree for a named form.
+   Returns a nested map showing the full dep chain with metadata.
+   PURE — takes deps list, no I/O."
+  ([deps-list target-name] (dep-tree deps-list target-name #{}))
+  ([deps-list target-name visited]
+   (let [deps-by-name (into {} (map (juxt :name identity) deps-list))
+         form (get deps-by-name target-name)]
+     (when form
+       (let [children (->> (:depends-on form)
+                           sort
+                           (mapv (fn [dep-name]
+                                   (if (contains? visited dep-name)
+                                     {:name dep-name :circular? true}
+                                     (or (dep-tree deps-list dep-name
+                                                   (conj visited target-name))
+                                         {:name dep-name :external? true})))))]
+         (cond-> {:name (:name form)
+                  :type (:type form)
+                  :line (:line form)
+                  :leaf? (empty? (:depends-on form))}
+           (seq children) (assoc :deps children)))))))
+
+(defn flatten-dep-tree
+  "Flatten a dep-tree into a set of all form names (transitive closure)."
+  [tree]
+  (if (nil? tree)
+    #{}
+    (let [children (:deps tree [])]
+      (reduce (fn [acc child]
+                (if (or (:circular? child) (:external? child))
+                  acc
+                  (into acc (flatten-dep-tree child))))
+              #{(:name tree)}
+              children))))
+
+;; ============================================================
 ;; Topological sort: reorder to eliminate forward refs
 ;; ============================================================
 
