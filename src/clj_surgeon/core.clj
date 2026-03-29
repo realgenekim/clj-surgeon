@@ -58,6 +58,7 @@
 
 (defn run [{:keys [op] :as opts}]
   (let [result (case op
+                 :ls (run-outline opts)
                  :outline (run-outline opts)
                  :mv (run-mv opts)
                  :declares (run-declares opts)
