@@ -178,3 +178,62 @@
               (let [comment-pos (str/index-of new-source ";; Helper function")
                     helper-pos (str/index-of new-source "(defn helper")]
                 (is (< comment-pos helper-pos))))))))))
+
+;; ============================================================
+;; Dependency validation: :mv should warn when destination
+;; creates new unresolved references (the Whac-A-Mole bug)
+;; ============================================================
+
+(deftest test-move-creates-new-forward-ref
+  (let [source "(ns my.app)
+
+(declare foo)
+
+(defn bar []
+  (foo 42))
+
+(def config {:x 1})
+
+(defn foo [x]
+  (+ x (:x config)))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "moving foo above bar creates new forward ref to config"
+          ;; foo depends on config (line 8). Moving foo to before bar (line 5)
+          ;; means foo references config before it's defined.
+          ;; The tool should detect this and warn.
+          (let [result (move/move-form {:file path
+                                        :form "foo"
+                                        :before "bar"
+                                        :dry-run true})]
+            (is (:ok result))
+            ;; TODO: once we add :unresolved-deps to dry-run output,
+            ;; test that it warns about config
+            ;; (is (contains? (set (:unresolved-deps (:plan result))) "config"))
+            ))))))
+
+(deftest test-move-safe-when-deps-above
+  (let [source "(ns my.app)
+
+(def config {:x 1})
+
+(declare foo)
+
+(defn bar []
+  (foo 42))
+
+(defn foo [x]
+  (+ x (:x config)))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "moving foo above bar is safe because config is above both"
+          (let [result (move/move-form {:file path
+                                        :form "foo"
+                                        :before "bar"
+                                        :dry-run true})]
+            (is (:ok result))
+            ;; config is at line 3, destination is line 7
+            ;; foo's dependency (config) is satisfied
+            ))))))
