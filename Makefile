@@ -28,7 +28,7 @@ nrepl:
 	cd $(CLJ_SURGEON_HOME) && bb nrepl-server 0
 
 test:
-	bb -e '(require (quote [clojure.test :refer [run-tests]]) (quote [clj-surgeon.outline-test]) (quote [clj-surgeon.move-test]) (quote [clj-surgeon.analyze-test]) (quote [clj-surgeon.rename-test]) (quote [clj-surgeon.fix-declares-test])) (let [r (run-tests (quote clj-surgeon.outline-test) (quote clj-surgeon.move-test) (quote clj-surgeon.analyze-test) (quote clj-surgeon.rename-test) (quote clj-surgeon.fix-declares-test))] (System/exit (+ (:fail r) (:error r))))'
+	bb test/run_all.clj
 
 outline:
 	bb -m clj-surgeon.core :op :outline :file $(FILE)

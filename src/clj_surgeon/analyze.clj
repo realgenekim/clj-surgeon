@@ -39,7 +39,12 @@
                             :node (z/node zloc)
                             :meta (meta (z/node zloc))
                             :type-str (some-> zloc z/down z/string)
-                            :name-str (some-> zloc z/down z/right z/string)})
+                            :name-str (let [second (some-> zloc z/down z/right)]
+                                        (when second
+                                          ;; Skip metadata nodes (^:private, ^:dynamic, etc.)
+                                          (if (= :meta (some-> second z/node n/tag))
+                                            (some-> second z/down z/rightmost z/string)
+                                            (z/string second))))})
                forms)))))
 
 ;; ============================================================
@@ -138,7 +143,7 @@
    [{:name \"foo\" :depends-on #{\"bar\" \"baz\"}} ...]"
   [zloc]
   (let [forms (->> (top-level-forms zloc)
-                   (remove #(= "ns" (:type-str %)))) ;; skip ns form
+                   (remove #(#{"ns" "declare"} (:type-str %)))) ;; skip ns + declare forms
         all-names (set (keep :name-str forms))]
     (->> forms
          (filter :name-str)

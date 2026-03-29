@@ -137,6 +137,26 @@
 ;; intra-ns-deps
 ;; ============================================================
 
+(deftest test-intra-ns-deps-skips-declares
+  (let [source "(ns my.app)
+
+(declare helper)
+
+(defn caller []
+  (helper 42))
+
+(defn helper [x]
+  (inc x))
+"
+        zloc (a/string->zloc source)
+        deps (a/intra-ns-deps zloc)]
+    (testing "declares excluded from deps list"
+      (is (not (some #(= "declare" (:type %)) deps))))
+    (testing "defn helper found with correct deps"
+      (let [h (first (filter #(= "helper" (:name %)) deps))]
+        (is (some? h))
+        (is (= "defn" (:type h)))))))
+
 (deftest test-intra-ns-deps
   (let [zloc (a/string->zloc simple-ns)
         deps (a/intra-ns-deps zloc)]
