@@ -10,6 +10,7 @@
   (:require [ns-surgeon.outline :as outline]
             [ns-surgeon.forward-refs :as fwd]
             [ns-surgeon.move :as move]
+            [ns-surgeon.analyze :as analyze]
             [clojure.pprint :as pp]))
 
 (defn run-outline [{:keys [file]}]
@@ -22,12 +23,48 @@
 (defn run-mv [{:keys [file form before dry-run] :as opts}]
   (move/move-form opts))
 
+(defn run-declares [{:keys [file]}]
+  (let [zloc (analyze/file->zloc file)
+        deps (analyze/intra-ns-deps zloc)
+        declares (filter #(= "declare" (:type %)) deps)
+        topo (analyze/topological-sort zloc)
+        truly-cyclic (set (:cycles topo))]
+    {:file file
+     :declares
+     (mapv (fn [d]
+             {:name (:name d)
+              :line (:line d)
+              :needed? (contains? truly-cyclic (:name d))})
+           declares)
+     :summary {:total (count declares)
+               :removable (count (remove #(contains? truly-cyclic (:name %)) declares))
+               :needed (count (filter #(contains? truly-cyclic (:name %)) declares))}}))
+
+(defn run-deps [{:keys [file form]}]
+  (let [zloc (analyze/file->zloc file)
+        deps (analyze/intra-ns-deps zloc)]
+    (if form
+      (first (filter #(= form (:name %)) deps))
+      deps)))
+
+(defn run-topo [{:keys [file]}]
+  (let [zloc (analyze/file->zloc file)]
+    (analyze/topological-sort zloc)))
+
+(defn run-closure [{:keys [file form]}]
+  (let [zloc (analyze/file->zloc file)]
+    (analyze/extraction-closure zloc form)))
+
 (defn run [{:keys [op] :as opts}]
   (let [result (case op
                  :outline (run-outline opts)
                  :mv (run-mv opts)
+                 :declares (run-declares opts)
+                 :deps (run-deps opts)
+                 :topo (run-topo opts)
+                 :closure (run-closure opts)
                  {:error (str "Unknown op: " op
-                              ". Valid ops: :outline, :mv")})]
+                              ". Valid ops: :outline, :mv, :declares, :deps, :topo, :closure")})]
     (pp/pprint result)))
 
 (defn- parse-val [s]
