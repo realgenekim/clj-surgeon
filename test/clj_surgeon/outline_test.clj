@@ -110,9 +110,12 @@
         result (outline-from-string source)
         names (mapv :name (:forms result))]
     (testing "metadata stripped from names"
-      ;; Names should be the actual symbol, not the metadata
       (is (every? some? names))
-      (is (not-any? #(str/starts-with? (str %) "^") (map str names))))))
+      (is (not-any? #(str/starts-with? (str %) "^") (map str names))))
+    (testing "^:private def name is 'secret', not '^:private'"
+      (is (some #(= 'secret %) names)))
+    (testing "^:dynamic def name is '*binding*'"
+      (is (some #(= '*binding* %) names)))))
 
 (deftest test-guardrails-defn
   (let [source "(ns my.guardrails)

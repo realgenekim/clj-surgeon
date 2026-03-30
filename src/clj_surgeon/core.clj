@@ -27,21 +27,35 @@
   (move/move-form opts))
 
 (defn run-declares [{:keys [file]}]
-  (let [zloc (analyze/file->zloc file)
-        deps (analyze/intra-ns-deps zloc)
-        declares (filter #(= "declare" (:type %)) deps)
+  (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
+        ol (outline/outline file)
+        declares (->> (:forms ol)
+                      (filter #(= 'declare (:type %))))
+        ;; Use topo sort to find genuine cycles
+        zloc (analyze/file->zloc file)
         topo (analyze/topological-sort zloc)
-        truly-cyclic (set (:cycles topo))]
+        truly-cyclic (set (:cycles topo))
+        ;; Also check forward-refs to see which declares are still needed
+        fwd (when (:ns ol)
+              (set (map #(str (:name %))
+                        (fwd/detect-forward-refs file (:ns ol)))))]
     {:file file
      :declares
      (mapv (fn [d]
-             {:name (:name d)
-              :line (:line d)
-              :needed? (contains? truly-cyclic (:name d))})
+             (let [name-str (str (:name d))
+                   has-forward-ref? (contains? fwd name-str)
+                   in-cycle? (contains? truly-cyclic name-str)]
+               {:name name-str
+                :line (:line d)
+                :needed? (or in-cycle? has-forward-ref?)}))
            declares)
      :summary {:total (count declares)
-               :removable (count (remove #(contains? truly-cyclic (:name %)) declares))
-               :needed (count (filter #(contains? truly-cyclic (:name %)) declares))}}))
+               :removable (count (remove #(or (contains? truly-cyclic (str (:name %)))
+                                              (contains? fwd (str (:name %))))
+                                         declares))
+               :needed (count (filter #(or (contains? truly-cyclic (str (:name %)))
+                                           (contains? fwd (str (:name %))))
+                                      declares))}}))
 
 (defn run-deps [{:keys [file form]}]
   (let [zloc (analyze/file->zloc file)
