@@ -58,7 +58,9 @@ Read <path-to-clj-surgeon>/skill.md — it teaches you when and how to use clj-s
 
 `skill.md` contains every operation, when to use each one, workflows, and proactive usage rules. One line, and Claude reaches for clj-surgeon automatically.
 
-I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same.
+I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same. Here's what I put in mine:
+
+> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` outline before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for form boundaries (~50 tokens per file), then `Read` only the specific line ranges you need. Only spawn Explore agents for targeted follow-up questions with specific file paths.
 
 ## Operations
 
@@ -188,12 +190,6 @@ clj-surgeon ships as a Claude Code [skill](https://docs.anthropic.com/en/docs/cl
 
 The design philosophy: **give the AI better visibility, not cleverer automation.** The tool provides the X-ray; the AI provides the judgment. Simple tools that compose beat complex tools that guess.
 
-**The one line that makes it all automatic.** This is what I put in my global `CLAUDE.md` (instructions Claude sees in every conversation):
-
-> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` outline before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for form boundaries (~50 tokens per file), then `Read` only the specific line ranges you need. Only spawn Explore agents for targeted follow-up questions with specific file paths.
-
-With that single instruction, Claude reaches for clj-surgeon first in every Clojure project — no prompting needed.
-
 ## How This Tool Was Designed
 
 Each feature was created by watching Claude Code work on real refactoring tasks and identifying where it struggled.
@@ -296,4 +292,4 @@ The principle:
 
 Future ops will stay on the bookkeeping side of this line. clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
 
-Also: I keep thinking the project name should be `clj-scalpel`, because you the programmer are the surgeon, and this is just a tool.  But it's just harder to type, I have `clj-surgeon` referenced everywhere already, so I guess I'm sticking wit this name.  I guess the tool is the surgeon, and you're head of the medical ward!
+Also: I keep thinking the project name should be `clj-scalpel`, because you the programmer are the surgeon, and this is just a tool.  But it's just harder to type, I have `clj-surgeon` referenced everywhere already, so I guess I'm sticking with this name.  I guess the tool is the surgeon, and you're head of the medical ward!
