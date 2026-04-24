@@ -269,3 +269,5 @@ The principle:
 > **The tool provides the X-ray. The AI provides the judgment. The compiler catches what the tool misses. The AI fixes what the compiler reports.**
 
 Future ops will stay on the bookkeeping side of this line. clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
+
+Also: I keep thinking the project name should be `clj-scalpel`, because you the programmer are the surgeon, and this is just a tool.  But it's just harder to type, I have `clj-surgeon` referenced everywhere already, so I guess I'm sticking wit this name.  I guess the tool is the surgeon, and you're head of the medical ward!
