@@ -271,6 +271,8 @@ The long-open [clojure-lsp#566](https://github.com/clojure-lsp/clojure-lsp/issue
 
 Eric's talk on [ECA](https://github.com/editor-code-assistant/eca) (Editor Code Assistant) at Clojure/Conj 2025 was mind-expanding — it got me thinking about the problem of AI-assisted code manipulation with fresh eyes. The idea that AI pair programming should be editor-agnostic and work at the structural level resonated deeply with what became clj-surgeon's approach.
 
+[cclsp](https://github.com/dazld/cclsp) by Dan Peddle ([@dazld](https://github.com/dazld)) — Claude Code LSP integration — was also eye-opening. Even just reading the list of clojure-lsp commands available through it (`clean-ns`, `extract-function`, `inline-symbol`, `move-to-let`, `cycle-privacy`, `create-test`...) was mind-bending. These structural operations are *possible*. I had trouble using them reliably, especially given the aforementioned clojure-lsp move-form issue, but seeing what the LSP could do shaped what clj-surgeon tries to do — the same structural manipulations, via rewrite-clj, without the LSP's edge-case fragility.
+
 ## Roadmap: Stay Dumb, Stay Useful
 
 After building 13 ops and watching the AI use them, a clear principle emerged: **build tools for bookkeeping, not for thinking.**
