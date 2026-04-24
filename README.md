@@ -34,7 +34,9 @@ $ make runtests-once
 337 tests, 1056 assertions, 0 failures.
 ```
 
-5 declares eliminated (3 direct moves + 2 with leaf deps pulled along), 2 unsafe moves correctly skipped (they have non-leaf dependency chains). Previously this took 15+ minutes of manual grep-read-edit-test cycles, with the AI playing Whac-A-Mole as each move created new forward refs.
+5 declares eliminated (3 direct moves + 2 with leaf deps pulled along), 2 unsafe moves correctly skipped (they have non-leaf dependency chains).
+
+Previously, Claude spent 15+ minutes in Whac-A-Mole: move `transition!` up → `"Unable to resolve symbol: app-state"` → add a declare → `"Unable to resolve symbol: active-project-file"` → each fix creates a new forward ref. The [ethnographic observation](docs/observations/2026-03-28-first-real-use.md) captured it: *"clj-surgeon's analysis is excellent. Its actions are too atomic."* So we built `:fix-declares` — a compound operation that moves leaves first in topological order, never creating a new unresolved reference.
 
 ## Install
 
@@ -179,6 +181,18 @@ The design philosophy: **give the AI better visibility, not cleverer automation.
 > **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` outline before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for form boundaries (~50 tokens per file), then `Read` only the specific line ranges you need. Only spawn Explore agents for targeted follow-up questions with specific file paths.
 
 With that single instruction, Claude reaches for clj-surgeon first in every Clojure project — no prompting needed.
+
+## How This Tool Was Designed
+
+Each feature was created by watching Claude Code work on real refactoring tasks and identifying where it struggled.
+
+1. **Watch the AI work.** Give Claude Code a real refactoring task on a real codebase. Don't help.
+2. **Identify the pain.** Where does it burn tokens re-reading files? Where does it play Whac-A-Mole? Where does each fix create a new problem?
+3. **Separate bookkeeping from judgment.** The AI knows *what* to move and *where*. It struggles with *precisely cutting forms from a 2768-line file without breaking anything*.
+4. **Build the smallest tool.** `:ls` was first — form boundaries in 50 tokens instead of reading 2000 lines. Then `:mv`, then `:fix-declares`, each born from watching the AI hit the next mechanical bottleneck.
+5. **Use it, break it, fix it.** Every bug in [The Journey](#the-journey-built-used-broken-fixed) was found by watching the AI hit it in real time. Tests came after.
+
+The full session transcripts are in [docs/observations/](docs/observations/). If you're building tools for AI-assisted development, start there.
 
 ## Why This Works
 
