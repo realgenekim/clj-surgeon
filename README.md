@@ -1,12 +1,17 @@
 # clj-surgeon
 
-Structural operations on Clojure namespaces. A babashka CLI that parses Clojure code as data (not text) using [rewrite-clj](https://github.com/clj-commons/rewrite-clj), returning EDN.
+A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST and making structural refactorings — move forms, fix declares, rename namespaces, extract to new files. Parses Clojure code as data (not text) using [rewrite-clj](https://github.com/clj-commons/rewrite-clj), returning EDN.
+
+**You'll want this if you:**
+- Need to split up giant `.clj` files that Claude Code is prone to creating — deterministically move forms (within and between files), along with their dependencies
+- Want to get rid of `(declare ...)` forms (which Claude Code is prone to creating) by automatically reordering `defn`s and `def`s
+- Want Claude Code to explore a Clojure codebase via the AST instead of reading entire files — 100x faster, 150x fewer tokens
 
 **Origin story:** I watched Claude Code spend 45 minutes refactoring a 5,000-line `views.clj` file — painfully extracting functions, moving them, reading and re-reading to get the ordering right, burning through context window. It was doing the right things, just agonizingly slowly. So I asked it: *"What would the ideal tool be to help you manipulate beautiful Clojure homoiconic EDN files?"* clj-surgeon was born 45 minutes later.
 
 **Built in one session. From zero to production use in 4 hours.** 13 ops, ~1500 lines of Clojure, zero dependencies beyond babashka.
 
-**Designed for AI-assisted development.** clj-surgeon is a [Claude Code](https://claude.ai/claude-code) skill — Claude knows how to use every operation, when to call each one, and how to compose them. The tool provides structural visibility (the X-ray); the AI provides judgment (what to do about it). See [How Claude Code Uses This](#how-claude-code-uses-this).
+All CLI commands are available to [Claude Code](https://claude.ai/claude-code) as a [skill](https://docs.anthropic.com/en/docs/claude-code/skills) — you don't need to learn all the commands, because Claude Code already knows how to use them. See [Teach Claude Code](#teach-claude-code).
 
 ## Measured Performance
 
@@ -17,7 +22,7 @@ In a planning session (writer, 5 files, ~5000 lines), two approaches explored th
 
 ~5,000 lines of code, fully mapped — namespace structure, function signatures, dependency relationships — in ~200 tokens per file.
 
-**Give the AI structural visibility so it reads less and understands more.** The tool provides the X-ray; the AI provides the judgment. The result is faster exploration, smaller context windows, and better-informed decisions.
+The result: Claude explores a codebase without reading entire files, so it stays fast and doesn't fill up its context window.
 
 ## Headline Feats
 
@@ -64,7 +69,7 @@ I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful �
 
 ## Operations
 
-### Visibility (the X-ray)
+### Read-only operations
 
 #### `:ls` / `:outline` — See the skeleton of a namespace
 
@@ -80,7 +85,7 @@ Every top-level form with exact line boundaries, types, names, arglists, and for
 clj-surgeon :op :ls-deps :file state.clj :form transition!
 ```
 
-The full dependency chain as a nested tree — shows which deps are leaves, which have their own deps, and which are circular. This is the X-ray that tells you whether a refactoring is safe.
+The full dependency chain as a nested tree — shows which deps are leaves, which have their own deps, and which are circular. Use this to check whether a form can be safely moved — if all its deps are leaves, it's a clean extraction.
 
 ```
 transition! (line 2655)
@@ -119,7 +124,7 @@ clj-surgeon :op :deps :file state.clj :form sync-draft!
 clj-surgeon :op :topo :file state.clj
 ```
 
-### Actions (the scalpel)
+### Write operations
 
 #### `:fix-declares` / `:fix-declares!` — Eliminate unnecessary declares
 
@@ -178,7 +183,7 @@ Planning is pure — only `:extract!` writes files. The compiler catches bare re
 
 ## How Claude Code Uses This
 
-clj-surgeon ships as a Claude Code [skill](https://docs.anthropic.com/en/docs/claude-code/skills) that teaches the AI when and how to use each operation. In practice:
+clj-surgeon ships as a Claude Code [skill](https://docs.anthropic.com/en/docs/claude-code/skills) — a markdown file that tells Claude when to run each command. In practice:
 
 **Before reading a large file,** Claude runs `:ls` to get form boundaries in ~50 tokens instead of reading 2000+ lines blind. It then `Read`s only the specific line ranges it needs.
 
@@ -188,7 +193,7 @@ clj-surgeon ships as a Claude Code [skill](https://docs.anthropic.com/en/docs/cl
 
 **When renaming,** Claude runs `:rename-ns` to see the plan (every file that would change, every require that would update), then `:rename-ns!` to execute. No grep-and-replace, no missed references.
 
-The design philosophy: **give the AI better visibility, not cleverer automation.** The tool provides the X-ray; the AI provides the judgment. Simple tools that compose beat complex tools that guess.
+The pattern: the tool does mechanical work (parsing, moving, rewriting requires). Claude decides what to move and where.
 
 ## How This Tool Was Designed
 
@@ -290,7 +295,7 @@ The tempting-but-wrong ops replace judgment — detecting patterns, suggesting s
 
 The principle:
 
-> **The tool provides the X-ray. The AI provides the judgment. The compiler catches what the tool misses. The AI fixes what the compiler reports.**
+> **The tool does the mechanical work. The AI decides what to do. The compiler catches mistakes. The AI fixes what the compiler reports.**
 
 Future ops will stay on the bookkeeping side of this line. clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
 
