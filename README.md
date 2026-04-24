@@ -21,7 +21,7 @@ In a planning session (writer, 5 files, ~5000 lines), two approaches explored th
 
 ## Headline Feats
 
-**Self-surgery:** clj-surgeon renamed itself from `ns-surgeon` to `clj-surgeon` — 10 files, 10 file moves, every ns declaration and `:require` entry updated by walking and manipulating the EDN data structure, in less than one second. No more painful watching Claude do grep-and-replace. Symbol node replacement in the parse tree. Aliases preserved, string literals untouched, parens always balanced.
+**Self-surgery:** Renaming namespaces is something I often want to do but avoid because it's so invasive. But I was able to rename this project from `ns-surgeon` to `clj-surgeon` in less than one second — 10 files, 10 file moves, every ns declaration and `:require` entry updated by walking and manipulating the EDN data structure. No more painful watching Claude do grep-and-replace. Symbol node replacement in the parse tree. Aliases preserved, string literals untouched, parens always balanced.
 
 **One-command declare cleanup:** A 2768-line production namespace with 7 forward declares. One command:
 
