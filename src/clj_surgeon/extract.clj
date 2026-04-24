@@ -18,29 +18,67 @@
             [rewrite-clj.zip :as z]
             [rewrite-clj.node :as n]
             [clojure.string :as str]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.edn :as edn]))
 
 ;; ============================================================
 ;; Pure helpers
 ;; ============================================================
 
+(defn- source-paths-from-deps-edn
+  "Read :paths and alias :extra-paths from deps.edn. Returns nil if no deps.edn."
+  []
+  (let [f (io/file "deps.edn")]
+    (when (.exists f)
+      (let [deps (edn/read-string (slurp f))]
+        (distinct
+         (concat (:paths deps)
+                 (mapcat :extra-paths (vals (:aliases deps)))))))))
+
 (defn- file-path->ns-name
   "Derive namespace name from a file path.
    src/writer/state/distillery.clj → writer.state.distillery
-   /tmp/foo/src/my/app.clj → my.app"
-  [path]
-  (let [;; Find 'src/' in the path and take everything after it
-        src-idx (str/index-of path "/src/")
-        relative (if src-idx
-                   (subs path (+ src-idx 5))  ;; skip "/src/"
-                   ;; Fallback: try leading "src/"
-                   (if (str/starts-with? path "src/")
-                     (subs path 4)
-                     path))]
-    (-> relative
-        (str/replace #"\.clj$" "")
-        (str/replace "/" ".")
-        (str/replace "_" "-"))))
+   /tmp/foo/src/my/app.clj → my.app
+   src/clj/myapp/core.clj → myapp.core (with source-paths [\"src/clj\"])
+   src/cljs/myapp/ui.cljs → myapp.ui (with source-paths [\"src/cljs\"])"
+  ([path] (file-path->ns-name path nil))
+  ([path source-paths]
+   (let [source-paths (or (seq source-paths)
+                          (source-paths-from-deps-edn)
+                          ["src"])
+         ;; Normalize: strip leading ./
+         norm (str/replace path #"^\.\/" "")
+         ;; For absolute paths, extract everything after the source root
+         ;; For relative paths, match against source-paths directly
+         match-root (fn [root]
+                      (cond
+                        ;; Relative path starting with root/
+                        (str/starts-with? norm (str root "/"))
+                        (subs norm (+ (count root) 1))
+                        ;; Absolute path containing /root/
+                        (str/includes? norm (str "/" root "/"))
+                        (let [i (str/index-of norm (str "/" root "/"))]
+                          (subs norm (+ i (count root) 2)))
+                        :else nil))
+         ;; Try all source paths, pick longest match (most specific root)
+         matched (->> source-paths
+                      (keep (fn [root] (when-let [rel (match-root root)]
+                                         {:root root :relative rel})))
+                      (sort-by #(count (:root %)) >)
+                      first)
+         relative (if matched
+                    (:relative matched)
+                    ;; Last-resort fallback: old /src/ splitting behavior
+                    (let [src-idx (str/index-of norm "/src/")]
+                      (if src-idx
+                        (subs norm (+ src-idx 5))
+                        (if (str/starts-with? norm "src/")
+                          (subs norm 4)
+                          norm))))]
+     (-> relative
+         (str/replace #"\.clj[sc]?$" "")
+         (str/replace "/" ".")
+         (str/replace "_" "-")))))
 
 (defn- ns-name->alias
   "Derive a short alias from a namespace name.
@@ -102,14 +140,14 @@
   "Build a plan to extract forms from source to a new namespace.
    Returns EDN with the plan or {:error ...}.
    PURE — no side effects."
-  [{:keys [file forms to]}]
+  [{:keys [file forms to source-paths]}]
   (let [source (slurp file)
         lines (vec (str/split-lines source))
         total-lines (count lines)
         ol (outline/outline file)
         all-forms (:forms ol)
         source-ns (str (:ns ol))
-        target-ns (file-path->ns-name to)
+        target-ns (file-path->ns-name to source-paths)
         target-alias (ns-name->alias target-ns)
         form-names (set (map str forms))
         ;; Find the requested forms (skip declares)
