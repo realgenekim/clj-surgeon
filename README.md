@@ -11,7 +11,7 @@ A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST
 
 **Built in one session. From zero to production use in 4 hours.** 13 ops, ~1500 lines of Clojure, zero dependencies beyond babashka.
 
-All CLI commands are available to [Claude Code](https://claude.ai/claude-code) as a [skill](https://docs.anthropic.com/en/docs/claude-code/skills) — you don't need to learn all the commands, because Claude Code already knows how to use them. See [Teach Claude Code](#teach-claude-code).
+All CLI commands are available to [Claude Code](https://claude.ai/claude-code) as a [skill](https://code.claude.com/docs/en/skills) — you don't need to learn all the commands, because Claude Code already knows how to use them. See [Teach Claude Code](#teach-claude-code).
 
 ## Measured Performance
 
@@ -183,7 +183,7 @@ Planning is pure — only `:extract!` writes files. The compiler catches bare re
 
 ## How Claude Code Uses This
 
-clj-surgeon ships as a Claude Code [skill](https://docs.anthropic.com/en/docs/claude-code/skills) — a markdown file that tells Claude when to run each command. In practice:
+clj-surgeon ships as a Claude Code [skill](https://code.claude.com/docs/en/skills) — a markdown file that tells Claude when to run each command. In practice:
 
 **Before reading a large file,** Claude runs `:ls` to get form boundaries in ~50 tokens instead of reading 2000+ lines blind. It then `Read`s only the specific line ranges it needs.
 
