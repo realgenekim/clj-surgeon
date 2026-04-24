@@ -48,6 +48,18 @@ make install    # → ~/bin/clj-surgeon
 
 Requires [babashka](https://babashka.org/) (rewrite-clj and cheshire are built in).
 
+## Teach Claude Code
+
+Add this line to your project's `CLAUDE.md`:
+
+```
+Read <path-to-clj-surgeon>/skill.md — it teaches you when and how to use clj-surgeon for Clojure structural operations.
+```
+
+`skill.md` contains every operation, when to use each one, workflows, and proactive usage rules. One line, and Claude reaches for clj-surgeon automatically.
+
+I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same.
+
 ## Operations
 
 ### Visibility (the X-ray)
