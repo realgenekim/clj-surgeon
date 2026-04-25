@@ -124,6 +124,48 @@ clj-surgeon :op :deps :file state.clj :form sync-draft!
 clj-surgeon :op :topo :file state.clj
 ```
 
+### CLJ / CLJS / CLJC operations
+
+LLMs and humans both struggle with reader conditionals. Forms inside `#?(:clj ...)` aren't lists — pre-existing AST tools silently miss them, and free-form LLM editing produces malformed splices, divergent aliases that don't line up, and silently-dropped `:refer` lists.
+
+These ops are **deterministic**: same input always produces the same output, and the tool refuses to emit malformed reader conditionals.
+
+The pre-existing read-only ops (`:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extract`, `:declares`) are **reader-conditional-aware** — `(defn foo …)` inside `#?(:clj …)` shows up in the outline with `:platforms [:clj]` and participates in dependency analysis.
+
+#### `:cljc-merge` — Combine parallel CLJ + CLJS files into one CLJC
+
+```bash
+clj-surgeon :op :cljc-merge :clj src/foo.clj :cljs src/foo.cljs :out src/foo.cljc
+```
+
+Handles shared requires, one-sided requires (`#?@(:clj […])` / `#?@(:cljs […])`), divergent aliases (the `dom`/`dom-server` pattern: same alias bound to different namespaces), divergent `:refer` lists, npm string requires routed to `:cljs`, and per-form body collisions emitted as `#?(:clj … :cljs …)`. Throws clearly on ns docstrings, attr-maps, unsupported sub-forms, name mismatches, and body-count mismatches rather than producing wrong output.
+
+#### `:cljc-split` — Inverse of merge
+
+```bash
+clj-surgeon :op :cljc-split :file src/foo.cljc :clj-out src/foo.clj :cljs-out src/foo.cljs
+```
+
+Round-trip-tested: `(merge → split → merge)` is a fixed point.
+
+#### `:cljc-add-require` — Platform-aware require addition
+
+```bash
+clj-surgeon :op :cljc-add-require :file src/foo.cljc \
+  :platform :cljs :ns goog.string :as gstr :out src/foo.cljc
+```
+
+`:platform` is `:clj`, `:cljs`, or `:cljc`. Detects alias collisions (refuses to bind one alias to two namespaces on the same platform). Preserves npm string literals (`:ns "react"` stays a string, doesn't get coerced to a symbol).
+
+#### `:cljc-analyze` — Structured classification for LLM consumption
+
+```bash
+clj-surgeon :op :cljc-analyze :clj src/foo.clj :cljs src/foo.cljs    # pair
+clj-surgeon :op :cljc-analyze :file src/foo.cljc                      # single CLJC
+```
+
+Returns EDN with shared / one-sided / divergent require buckets and per-platform top-level form summaries — everything an LLM needs to plan an edit.
+
 ### Write operations
 
 #### `:fix-declares` / `:fix-declares!` — Eliminate unnecessary declares
@@ -251,13 +293,19 @@ All analysis functions are pure (string/zipper in, data out). Side effects are i
 ```
 src/clj_surgeon/
   core.clj           # CLI entry point, :op dispatch
-  outline.clj        # rewrite-clj form boundary parser
+  outline.clj        # rewrite-clj form boundary parser (CLJC-aware)
   forward_refs.clj   # clj-kondo forward-ref detection
   move.clj           # form reordering within a file
-  analyze.clj        # dep graph, topo sort, dep tree, closure, dead code
+  analyze.clj        # dep graph, topo sort, dep tree, closure (CLJC-aware)
   rename.clj         # namespace prefix rename (AST surgery)
   fix_declares.clj   # compound op: eliminate removable declares + pull leaf deps
   extract.clj        # compound op: move forms to a new namespace file
+  cljc/
+    walk.clj         # reader-conditional-aware top-level form walker
+    merge.clj        # CLJ + CLJS → CLJC (divergent aliases, npm, body collisions)
+    split.clj        # CLJC → CLJ + CLJS (inverse of merge)
+    require_ops.clj  # platform-aware add-require (with alias-collision detection)
+    analyze.clj      # structured CLJC classification for LLM consumption
 ```
 
 Zero dependencies beyond babashka.

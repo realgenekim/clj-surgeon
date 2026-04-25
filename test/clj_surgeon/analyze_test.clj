@@ -317,6 +317,44 @@
 ;; Integration: Run against real state.clj fixture
 ;; ============================================================
 
+;; ============================================================
+;; CLJC reader-conditional awareness (augments existing analysis
+;; for cross-platform code).
+;; ============================================================
+
+(def cljc-with-rcond
+  "(ns my.cljc)
+
+(defn shared-fn [x]
+  (jvm-helper (js-helper x)))
+
+#?(:clj
+   (defn jvm-helper [x] (* x 2)))
+
+#?(:cljs
+   (defn js-helper [x] (+ x 1)))
+")
+
+(deftest test-intra-ns-deps-sees-reader-conditional-forms
+  (testing "intra-ns-deps now reaches into #?(:clj ...) and #?(:cljs ...) so
+            jvm-helper and js-helper appear as definitions and shared-fn's
+            references to them are resolved as intra-ns dependencies."
+    (let [zloc (a/string->zloc cljc-with-rcond)
+          deps (a/intra-ns-deps zloc)
+          by-name (into {} (map (juxt :name identity)) deps)]
+      (is (contains? by-name "jvm-helper"))
+      (is (contains? by-name "js-helper"))
+      (is (= #{"jvm-helper" "js-helper"}
+             (:depends-on (get by-name "shared-fn")))))))
+
+(deftest test-topological-sort-includes-reader-conditional-defs
+  (testing "topo sort sees defs inside reader conditionals"
+    (let [zloc (a/string->zloc cljc-with-rcond)
+          {:keys [sorted]} (a/topological-sort zloc)]
+      (is (contains? (set sorted) "jvm-helper"))
+      (is (contains? (set sorted) "js-helper"))
+      (is (contains? (set sorted) "shared-fn")))))
+
 (deftest test-real-file-outline
   (let [file "test-fixtures/state.clj"]
     (when (.exists (java.io.File. file))

@@ -135,3 +135,37 @@
     (is (= 'my.empty (:ns result)))
     (is (= 0 (:form-count result)))
     (is (empty? (:forms result)))))
+
+(defn- outline-from-cljc-string [source]
+  (let [tmp (java.io.File/createTempFile "ns-surgeon-test" ".cljc")]
+    (spit tmp source)
+    (try
+      (outline/outline (.getAbsolutePath tmp))
+      (finally (.delete tmp)))))
+
+(deftest test-cljc-reader-conditional-forms
+  (testing "Forms inside #?(:clj ...) and #?(:cljs ...) are surfaced in the
+            outline with the correct :platforms tags. This is a NEW capability:
+            previously such forms were silently skipped because they live inside
+            reader-macro nodes rather than top-level lists."
+    (let [source "(ns my.app)
+
+(defn shared [] :ok)
+
+#?(:clj
+   (defn jvm-only [] (System/currentTimeMillis)))
+
+#?(:cljs
+   (defn js-only [] (.now js/Date)))
+"
+          result (outline-from-cljc-string source)
+          by-name (into {} (map (juxt :name identity)) (:forms result))]
+      (is (= 3 (:form-count result)))
+      (is (= [:clj :cljs] (:platforms (by-name 'shared))))
+      (is (= [:clj]       (:platforms (by-name 'jvm-only))))
+      (is (= [:cljs]      (:platforms (by-name 'js-only)))))))
+
+(deftest test-clj-file-platforms-tag
+  (testing ".clj file has every form tagged with :platforms [:clj]"
+    (let [result (outline-from-string "(ns my.x) (defn f [])")]
+      (is (= [:clj] (:platforms (first (:forms result))))))))

@@ -4,7 +4,11 @@
    in a non-homoiconic language.
 
    ALL FUNCTIONS ARE PURE. They take a zipper or parsed forms and return data.
-   No file I/O, no side effects."
+   No file I/O, no side effects.
+
+   Reader-conditional aware: top-level walking descends into #?(:clj ...) and
+   #?@(:cljs [...]) branches so that defs inside reader conditionals participate
+   in dependency analysis, topological sort, and extraction."
   (:require [rewrite-clj.zip :as z]
             [rewrite-clj.node :as n]
             [clojure.string :as str]))
@@ -27,25 +31,67 @@
 ;; Walk: Collect all top-level forms from a zipper
 ;; ============================================================
 
+(defn- reader-cond? [zloc]
+  (and (= :reader-macro (some-> zloc z/node n/tag))
+       (#{"?" "?@"} (some-> zloc z/down z/string))))
+
+(defn- splicing-rcond? [zloc]
+  (= "?@" (some-> zloc z/down z/string)))
+
+(defn- list-zloc->form-map [zloc]
+  {:zloc zloc
+   :node (z/node zloc)
+   :meta (meta (z/node zloc))
+   :type-str (some-> zloc z/down z/string)
+   :name-str (let [second (some-> zloc z/down z/right)]
+               (when second
+                 (if (= :meta (some-> second z/node n/tag))
+                   (some-> second z/down z/rightmost z/string)
+                   (z/string second))))})
+
+(defn- forms-from-rcond
+  "Yield list-form maps from inside a reader-conditional zloc, descending into
+   each platform branch. For #?(:k FORM) the value-FORM is yielded if it's a
+   list. For #?@(:k [a b c]) every list child of the splice vector is yielded."
+  [rmacro-zloc]
+  (let [splicing (splicing-rcond? rmacro-zloc)
+        pair-list (-> rmacro-zloc z/down z/right)
+        children (->> (z/down pair-list)
+                      (iterate z/right)
+                      (take-while some?))
+        pairs (partition 2 children)]
+    (mapcat (fn [[_k v-zl]]
+              (cond
+                splicing
+                (->> (z/down v-zl)
+                     (iterate z/right)
+                     (take-while some?)
+                     (filter z/list?)
+                     (map list-zloc->form-map))
+
+                (z/list? v-zl)
+                [(list-zloc->form-map v-zl)]
+
+                :else nil))
+            pairs)))
+
 (defn- top-level-forms
-  "Walk a zipper and collect all top-level list forms with metadata."
+  "Walk a zipper and collect all top-level list forms with metadata.
+   Descends into reader conditionals so forms inside #?(:clj ...) /
+   #?@(:cljs [...]) participate in dependency analysis."
   [zloc]
   (loop [zloc zloc, forms []]
-    (if (nil? zloc)
-      forms
-      (recur (z/right zloc)
-             (if (z/list? zloc)
-               (conj forms {:zloc zloc
-                            :node (z/node zloc)
-                            :meta (meta (z/node zloc))
-                            :type-str (some-> zloc z/down z/string)
-                            :name-str (let [second (some-> zloc z/down z/right)]
-                                        (when second
-                                          ;; Skip metadata nodes (^:private, ^:dynamic, etc.)
-                                          (if (= :meta (some-> second z/node n/tag))
-                                            (some-> second z/down z/rightmost z/string)
-                                            (z/string second))))})
-               forms)))))
+    (cond
+      (nil? zloc) forms
+
+      (reader-cond? zloc)
+      (recur (z/right zloc) (into forms (forms-from-rcond zloc)))
+
+      (z/list? zloc)
+      (recur (z/right zloc) (conj forms (list-zloc->form-map zloc)))
+
+      :else
+      (recur (z/right zloc) forms))))
 
 ;; ============================================================
 ;; Symbols: Extract every symbol referenced within a form's subtree

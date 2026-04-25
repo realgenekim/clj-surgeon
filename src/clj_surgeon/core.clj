@@ -14,6 +14,10 @@
             [clj-surgeon.rename :as rename]
             [clj-surgeon.fix-declares :as fix-declares]
             [clj-surgeon.extract :as extract]
+            [clj-surgeon.cljc.merge :as cljc-merge]
+            [clj-surgeon.cljc.split :as cljc-split]
+            [clj-surgeon.cljc.require-ops :as cljc-req]
+            [clj-surgeon.cljc.analyze :as cljc-analyze]
             [clojure.pprint :as pp]))
 
 (defn run-outline [{:keys [file]}]
@@ -77,6 +81,50 @@
         deps (analyze/intra-ns-deps zloc)]
     (analyze/dep-tree deps form)))
 
+;; ============================================================
+;; CLJC operations: merge, split, add-require
+;; ============================================================
+
+(defn run-cljc-merge
+  "Merge parallel CLJ + CLJS files (same ns) into a single CLJC source.
+   :clj  / :cljs — input file paths (required)
+   :out — optional output path; omitted prints to stdout."
+  [{:keys [clj cljs out] :as _opts}]
+  (let [cljc-src (cljc-merge/merge-files (slurp clj) (slurp cljs))]
+    (if out
+      (do (spit out cljc-src)
+          {:wrote out :bytes (count cljc-src)})
+      cljc-src)))
+
+(defn run-cljc-split
+  "Split a CLJC file into parallel CLJ + CLJS sources.
+   :file     — input CLJC path (required)
+   :clj-out  — optional output CLJ path
+   :cljs-out — optional output CLJS path
+   When out paths are omitted, returns both contents in a map."
+  [{:keys [file clj-out cljs-out] :as _opts}]
+  (let [{:keys [clj cljs] :as result} (cljc-split/split-file (slurp file))]
+    (cond-> result
+      clj-out  (do (spit clj-out clj)   (assoc :wrote-clj clj-out))
+      cljs-out (do (spit cljs-out cljs) (assoc :wrote-cljs cljs-out)))))
+
+(defn run-cljc-add-require
+  "Add a require to a CLJC file at the given platform.
+   :file     — input CLJC path (required)
+   :platform — :clj | :cljs | :cljc (required)
+   :ns       — namespace symbol to require (required)
+   :as       — optional alias
+   :out      — optional output path; omitted prints to stdout."
+  [{:keys [file platform ns as out] :as _opts}]
+  (let [updated (cljc-req/add-require (slurp file)
+                                      {:platform platform
+                                       :ns ns
+                                       :as as})]
+    (if out
+      (do (spit out updated)
+          {:wrote out :bytes (count updated)})
+      updated)))
+
 (defn run [{:keys [op] :as opts}]
   (let [result (case op
                  :ls (run-outline opts)
@@ -93,9 +141,20 @@
                  :fix-declares! (fix-declares/execute! (:file opts))
                  :extract (extract/plan opts)
                  :extract! (extract/execute! opts)
+                 :cljc-merge (run-cljc-merge opts)
+                 :cljc-split (run-cljc-split opts)
+                 :cljc-add-require (run-cljc-add-require opts)
+                 :cljc-analyze (cond
+                                 (:file opts) (cljc-analyze/analyze-cljc (slurp (:file opts)))
+                                 (and (:clj opts) (:cljs opts))
+                                 (cljc-analyze/analyze-pair (slurp (:clj opts))
+                                                            (slurp (:cljs opts)))
+                                 :else {:error "supply :file or :clj + :cljs"})
                  {:error (str "Unknown op: " op
-                              ". Valid ops: :ls, :mv, :declares, :deps, :topo, :closure, :rename-ns, :fix-declares")})]
-    (pp/pprint result)))
+                              ". Valid ops: :ls, :mv, :declares, :deps, :topo, :closure, :rename-ns, :fix-declares, :cljc-merge, :cljc-split, :cljc-add-require, :cljc-analyze")})]
+    (if (string? result)
+      (println result)
+      (pp/pprint result))))
 
 (defn- parse-val [s]
   (cond
