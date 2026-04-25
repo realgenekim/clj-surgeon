@@ -6,7 +6,7 @@ user-invocable: true
 
 # clj-surgeon: Structural Operations on Clojure Namespaces
 
-A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`. 58 tests, 208 assertions.
+A babashka CLI tool — `clj-surgeon` on your `$PATH` after `make install`. Source at `~/src.local/clj-surgeon/`. 58 tests, 208 assertions.
 
 ## When to Use
 
