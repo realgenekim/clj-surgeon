@@ -16,6 +16,7 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
 install:
+	@mkdir -p ~/bin
 	@echo '#!/usr/bin/env bb' > ~/bin/clj-surgeon
 	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/clj-surgeon
 	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> ~/bin/clj-surgeon
