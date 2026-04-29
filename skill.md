@@ -1,21 +1,25 @@
 ---
 name: clj-surgeon
-description: "Clojure structural ops: outline, extract to new ns, fix-declares, deps tree, topo sort, form move, namespace rename — babashka + rewrite-clj"
+description: "Clojure structural ops: outline, extract to new ns, fix-declares, deps tree, topo sort, form move, namespace rename, CLJC merge/split/add-require/analyze — babashka + rewrite-clj"
 user-invocable: true
 ---
 
 # clj-surgeon: Structural Operations on Clojure Namespaces
 
-A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`. 58 tests, 208 assertions.
+A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`. 103 tests, 327 assertions.
 
 ## When to Use
 
-- **Before reading a large .clj file** — `:ls` first (50 tokens vs 2000+)
+- **Before reading a large .clj/.cljs/.cljc file** — `:ls` first (50 tokens vs 2000+); the outline now surfaces forms inside `#?(:clj …)` / `#?@(:cljs […])` with `:platforms` tags
 - **When extracting forms to a new namespace** — `:extract!` does it in one command
 - **When you see a `declare`** — `:fix-declares!` eliminates removable ones
 - **When reordering forms** — `:mv` moves a defn above its caller
 - **When renaming a namespace** — `:rename-ns!` for structural AST rename
 - **When understanding dependencies** — `:ls-deps` shows the full transitive tree
+- **When converting a CLJ + CLJS pair to CLJC** — `:cljc-merge` does it deterministically (handles divergent aliases like `dom`/`dom-server`, npm requires, body-form collisions)
+- **When splitting an unwieldy CLJC back into separate files** — `:cljc-split`
+- **Before deciding what surgery to apply to CLJC** — `:cljc-analyze` returns a classification map (shared / one-sided / divergent requires + per-platform forms)
+- **When adding a require to a CLJC file** — `:cljc-add-require` (refuses to introduce alias collisions; preserves npm string literals)
 
 ## All Operations
 
@@ -107,6 +111,38 @@ clj-surgeon :op :rename-ns :from old-prefix :to new-prefix :root .
 clj-surgeon :op :rename-ns! :from old-prefix :to new-prefix :root .
 ```
 
+### :cljc-merge — Combine CLJ + CLJS into a single CLJC
+
+```bash
+clj-surgeon :op :cljc-merge :clj src/foo.clj :cljs src/foo.cljs :out src/foo.cljc
+```
+
+Same alias bound to different namespaces (e.g. `dom` → `fulcro.dom-server` in CLJ, `fulcro.dom` in CLJS) collapses into a single `#?@(:clj […] :cljs […])` splice. NPM string requires route to `:cljs`. Body forms identical on both sides emit shared; differing bodies emit `#?(:clj … :cljs …)`. Throws on ns docstrings, attr-maps, `:import`, ns-name mismatches, body-count mismatches.
+
+### :cljc-split — Split a CLJC into parallel CLJ + CLJS
+
+```bash
+clj-surgeon :op :cljc-split :file src/foo.cljc :clj-out src/foo.clj :cljs-out src/foo.cljs
+```
+
+### :cljc-add-require — Platform-aware require addition
+
+```bash
+clj-surgeon :op :cljc-add-require :file src/foo.cljc \
+  :platform :cljs :ns goog.string :as gstr :out src/foo.cljc
+```
+
+`:platform` is `:clj`, `:cljs`, or `:cljc`. Throws on alias collision. NPM string requires use `:ns "react"` (string), not `:ns react` (symbol).
+
+### :cljc-analyze — Structured classification
+
+```bash
+clj-surgeon :op :cljc-analyze :clj src/foo.clj :cljs src/foo.cljs
+clj-surgeon :op :cljc-analyze :file src/foo.cljc
+```
+
+Returns a map with `{:requires {:shared … :clj-only … :cljs-only … :divergent …} :forms-clj […] :forms-cljs […]}`. Use this to plan a merge or surgical edit instead of reading both files.
+
 ## Workflows
 
 ### Extract forms to a new namespace
@@ -146,6 +182,24 @@ clj-surgeon :op :ls :file state.clj
 # => 236 forms, 2768 lines — now Read only the lines you need
 ```
 
+### Convert a CLJ + CLJS pair into one CLJC file
+
+```bash
+# 1. Inspect the divergence first — what's shared, what's platform-specific?
+clj-surgeon :op :cljc-analyze :clj src/foo.clj :cljs src/foo.cljs
+
+# 2. Merge deterministically
+clj-surgeon :op :cljc-merge :clj src/foo.clj :cljs src/foo.cljs :out src/foo.cljc
+
+# 3. Verify with a round trip
+clj-surgeon :op :cljc-split :file src/foo.cljc
+
+# 4. Delete the originals once tests pass
+rm src/foo.clj src/foo.cljs
+```
+
+If the merge throws (e.g. ns docstring), the source has something the tool refuses to silently rewrite — fix by hand and retry.
+
 ## Important Notes
 
 - **~5ms startup** — babashka, not JVM. Call it freely.
@@ -158,8 +212,10 @@ clj-surgeon :op :ls :file state.clj
 
 ## Proactive Usage
 
-**Before reading any .clj file over 500 lines, run `:ls` first.**
+**Before reading any .clj/.cljs/.cljc file over 500 lines, run `:ls` first.**
 
 **When the user asks to split a large file,** use `:ls-deps` to see the dependency tree, `:ls-extract` to find natural extraction units, then `:extract!` to execute.
 
 **When you see or add a `(declare ...)`, run `:fix-declares!`.**
+
+**Before manually reconciling a CLJ + CLJS pair**, run `:cljc-analyze` and consider `:cljc-merge`. The tool deterministically handles divergent aliases, npm requires, and body-form collisions that humans and LLMs both routinely get wrong.
