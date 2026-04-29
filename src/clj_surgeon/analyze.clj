@@ -151,9 +151,52 @@
 ;; Alias map: Parse a namespace form to get alias → ns mapping
 ;; ============================================================
 
+(defn- extract-alias-from-vector
+  "Extract alias entry from a require vector zloc.
+   [clojure.string :as str] → [\"str\" \"clojure.string\"], or nil."
+  [v]
+  (let [children (->> (z/down v)
+                      (iterate z/right)
+                      (take-while some?)
+                      (map z/string)
+                      vec)
+        as-idx (.indexOf children ":as")]
+    (when (pos? as-idx)
+      [(nth children (inc as-idx)) (first children)])))
+
+(defn- aliases-from-rcond-in-require
+  "Extract alias entries from reader-conditional nodes inside a :require form.
+   Handles both #?(:clj [ns :as a]) and #?@(:cljs [[ns1 :as a] [ns2 :as b]])."
+  [rcond-zloc]
+  (let [splicing (splicing-rcond? rcond-zloc)
+        pair-list (-> rcond-zloc z/down z/right)
+        children (->> (z/down pair-list)
+                      (iterate z/right)
+                      (take-while some?))
+        pairs (partition 2 children)]
+    (mapcat (fn [[_k v-zl]]
+              (cond
+                ;; #?@(:clj [[ns1 :as a] [ns2 :as b]]) — splice: v-zl is a vector of vectors
+                splicing
+                (->> (z/down v-zl)
+                     (iterate z/right)
+                     (take-while some?)
+                     (filter z/vector?)
+                     (keep extract-alias-from-vector))
+
+                ;; #?(:clj [ns :as a]) — single vector
+                (z/vector? v-zl)
+                (when-let [entry (extract-alias-from-vector v-zl)]
+                  [entry])
+
+                :else nil))
+            pairs)))
+
 (defn parse-ns-aliases
   "Parse the (ns ...) form and extract {:alias namespace} map.
-   E.g., (:require [clojure.string :as str]) → {\"str\" clojure.string}"
+   E.g., (:require [clojure.string :as str]) → {\"str\" clojure.string}
+   Reader-conditional-aware: also finds aliases inside #?(:clj [...]) and
+   #?@(:cljs [[...]]) within the :require block."
   [ns-zloc]
   (let [require-form (->> (z/down ns-zloc)
                           (iterate z/right)
@@ -162,22 +205,18 @@
                                         (= ":require" (some-> % z/down z/string))))
                           first)]
     (when require-form
-      (->> (z/down require-form)
-           (iterate z/right)
-           (take-while some?)
-           (filter z/vector?)
-           (map (fn [v]
-                  ;; [clojure.string :as str] → {"str" "clojure.string"}
-                  (let [children (->> (z/down v)
-                                      (iterate z/right)
-                                      (take-while some?)
-                                      (map z/string)
-                                      vec)
-                        as-idx (.indexOf children ":as")]
-                    (when (pos? as-idx)
-                      [(nth children (inc as-idx)) (first children)]))))
-           (filter some?)
-           (into {})))))
+      (let [require-children (->> (z/down require-form)
+                                  (iterate z/right)
+                                  (take-while some?))
+            ;; Direct vector children (shared requires)
+            direct-aliases (->> require-children
+                                (filter z/vector?)
+                                (keep extract-alias-from-vector))
+            ;; Reader-conditional children (platform-specific requires)
+            rcond-aliases (->> require-children
+                               (filter reader-cond?)
+                               (mapcat aliases-from-rcond-in-require))]
+        (into {} (concat direct-aliases rcond-aliases))))))
 
 ;; ============================================================
 ;; Intra-namespace dependency graph

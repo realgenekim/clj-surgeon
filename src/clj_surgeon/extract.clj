@@ -217,7 +217,7 @@
             project-root (or (some-> file io/file .getParentFile .getParent) ".")
             other-files (->> (file-seq (io/file project-root))
                              (filter #(.isFile %))
-                             (filter #(re-matches #".*\.clj$" (.getName %)))
+                             (filter #(re-matches #".*\.clj[sc]?$" (.getName %)))
                              (remove #(= (.getPath %) (.getPath (io/file file))))
                              (remove #(str/includes? (.getPath %) "/.git/"))
                              (filter (fn [f]
