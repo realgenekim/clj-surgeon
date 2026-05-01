@@ -205,6 +205,41 @@
             names (set (map :name (:forms closure)))]
         (is (not (contains? names "unrelated")))))))
 
+;; Regression: >defn- and mu/defn- must be treated as private by
+;; extraction-closure. Previously only "defn-" was checked, so shared
+;; >defn- helpers were silently dropped from the closure.
+
+(def guardrails-private-ns
+  "(ns my.guardrails)
+
+(>defn- shared-private
+  [x]
+  [int? => int?]
+  (* x 2))
+
+(defn alpha
+  [x]
+  (shared-private x))
+
+(defn beta
+  [x]
+  (+ (shared-private x) 1))
+")
+
+(deftest test-extraction-closure-guardrails-private
+  (let [zloc (a/string->zloc guardrails-private-ns)]
+    (testing ">defn- shared helper is pulled into extraction closure"
+      (let [closure (a/extraction-closure zloc "alpha")
+            names (set (map :name (:forms closure)))]
+        (is (contains? names "alpha"))
+        (is (contains? names "shared-private")
+            ">defn- must be recognized as private so it gets pulled in")))
+    (testing ">defn- shared helper is pulled into other caller too"
+      (let [closure (a/extraction-closure zloc "beta")
+            names (set (map :name (:forms closure)))]
+        (is (contains? names "beta"))
+        (is (contains? names "shared-private"))))))
+
 ;; ============================================================
 ;; dep-tree (transitive dependency tree)
 ;; ============================================================

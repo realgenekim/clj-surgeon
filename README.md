@@ -223,6 +223,37 @@ The compound extraction operation:
 
 Planning is pure — only `:extract!` writes files. The compiler catches bare refs instantly. The AI fixes what the compiler reports.
 
+## Custom Defining Forms
+
+Real-world Clojure codebases don't just use `defn`. Libraries like [Guardrails](https://github.com/fulcrologic/guardrails) (`>defn`, `>defn-`), [Malli](https://github.com/metosin/malli) (`mu/defn`), and [Schema](https://github.com/plumatic/schema) (`s/defn`) define their own `defn`-like macros. Large projects add their own: `defendpoint`, `defenterprise`, `defsetting`.
+
+clj-surgeon recognizes all of these. Every operation — `:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extract`, `:extract`, `:fix-declares` — uses a single classification module (`forms.clj`) to decide what counts as a definition, what has arglists, and what is private.
+
+**How it works:**
+
+1. **Core forms** — `defn`, `defn-`, `def`, `defonce`, `defmacro`, etc. — matched exactly.
+2. **Namespace-qualified forms** — `mu/defn`, `s/defn`, `malli.util/defn-` — the alias is stripped and the local name is matched against core forms. This works regardless of what alias the project uses (`mu/defn`, `m/defn`, `malli/defn` all resolve to `:defn`).
+3. **Explicit aliases** — forms with non-standard names (`>defn`, `>defn-`) that can't be auto-detected from the local name. These are listed in `forms.clj`.
+
+**To add support for a new macro,** check whether it's already handled:
+
+```clojure
+;; Namespace-qualified forms just work — no config needed
+(mu/defn foo ...)     ; ✓ auto-detected: local name "defn" → :defn
+(s/defn bar ...)      ; ✓ auto-detected: local name "defn" → :defn
+(my.lib/defn- baz ..) ; ✓ auto-detected: local name "defn-" → :defn- (private)
+```
+
+If the macro has a non-standard name (doesn't end in a core form name after `/`), add one line to `explicit-aliases` in `src/clj_surgeon/forms.clj`:
+
+```clojure
+(def explicit-aliases
+  {">defn"          :defn
+   ">defn-"         :defn-
+   "defendpoint"    :defn      ;; your custom macro here
+   "defenterprise"  :defn})
+```
+
 ## How Claude Code Uses This
 
 clj-surgeon ships as a Claude Code [skill](https://code.claude.com/docs/en/skills) — a markdown file that tells Claude when to run each command. In practice:
@@ -292,6 +323,7 @@ All analysis functions are pure (string/zipper in, data out). Side effects are i
 
 ```
 src/clj_surgeon/
+  forms.clj          # single source of truth for defining-form classification
   core.clj           # CLI entry point, :op dispatch
   outline.clj        # rewrite-clj form boundary parser (CLJC-aware)
   forward_refs.clj   # clj-kondo forward-ref detection
