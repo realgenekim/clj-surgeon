@@ -6,16 +6,8 @@
   (:require [rewrite-clj.zip :as z]
             [rewrite-clj.node :as n]
             [clj-surgeon.cljc.walk :as cwalk]
+            [clj-surgeon.forms :as forms]
             [clojure.string :as str]))
-
-(def ^:private def-types
-  "Top-level defining forms we care about."
-  #{"def" "defn" "defn-" "defonce" "defmacro" "defmethod" "defmulti"
-    "defprotocol" "defrecord" "deftype" "declare"
-    ">defn" ">defn-"})
-
-(defn- def-form? [type-str]
-  (contains? def-types type-str))
 
 (defn- extract-name
   "Get the name from the second child of a form. Handles metadata like ^:private.
@@ -39,7 +31,7 @@
   "Get arglist from a defn form."
   [zloc]
   (let [type-str (some-> zloc z/down z/string)]
-    (when (contains? #{"defn" "defn-" ">defn" ">defn-"} type-str)
+    (when (forms/has-arglists? type-str)
       ;; Walk children to find first vector (the arglist)
       (loop [child (some-> zloc z/down)]
         (when child
@@ -86,7 +78,7 @@
                        (let [node (z/node zloc)
                              m (meta node)
                              type-str (some-> zloc z/down z/string)
-                             name-str (when (def-form? type-str)
+                             name-str (when (forms/defining-form? type-str)
                                         (extract-name zloc))
                              arglist (when name-str (extract-arglist zloc))
                              form-line (:row m)

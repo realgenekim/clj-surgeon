@@ -11,6 +11,7 @@
    in dependency analysis, topological sort, and extraction."
   (:require [rewrite-clj.zip :as z]
             [rewrite-clj.node :as n]
+            [clj-surgeon.forms :as forms]
             [clojure.string :as str]))
 
 ;; ============================================================
@@ -252,14 +253,12 @@
   (let [deps (intra-ns-deps zloc)
         all-referenced (->> deps
                             (mapcat (comp seq :depends-on))
-                            set)
-        private-types #{"defn-" ">defn-"}]
+                            set)]
     (->> deps
          (filter (fn [d]
                    (and (not (contains? all-referenced (:name d)))
                         ;; Only flag private forms — public might be used externally
-                        (or (contains? private-types (:type d))
-                            (str/starts-with? (or (:type d) "") "defn-")))))
+                        (forms/private-form? (:type d)))))
          (mapv #(select-keys % [:name :type :line])))))
 
 ;; ============================================================
@@ -307,7 +306,7 @@
                                             ;; or if it's private (defn-)
                                             (and (not (visited' dep))
                                                  (let [dep-form (get deps-by-name dep)]
-                                                   (or (= "defn-" (:type dep-form))
+                                                   (or (forms/private-form? (:type dep-form))
                                                        (every? closure' callers)))))))
                                 vec)]
               (recur (into (vec rest-q) new-deps)
