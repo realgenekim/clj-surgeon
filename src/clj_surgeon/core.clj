@@ -8,6 +8,7 @@
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn
      bb -m ns-surgeon.core :op :mv :file src/my/ns.clj :form my-fn :before other-fn :dry-run true"
   (:require [clj-surgeon.outline :as outline]
+            [clj-surgeon.forms :as forms]
             [clj-surgeon.forward-refs :as fwd]
             [clj-surgeon.move :as move]
             [clj-surgeon.analyze :as analyze]
@@ -125,7 +126,11 @@
           {:wrote out :bytes (count updated)})
       updated)))
 
-(defn run [{:keys [op] :as opts}]
+(defn run [{:keys [op file clj cljs] :as opts}]
+  ;; Initialize project aliases from .clj-surgeon.edn near the input file.
+  ;; CLJC ops use :clj/:cljs instead of :file; init from whichever is present.
+  (when-let [anchor (or file clj cljs)]
+    (forms/init-from-file! anchor))
   (let [result (case op
                  :ls (run-outline opts)
                  :outline (run-outline opts)
