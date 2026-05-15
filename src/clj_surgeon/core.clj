@@ -126,6 +126,31 @@
           {:wrote out :bytes (count updated)})
       updated)))
 
+(defn- pprint-outline
+  "Custom printer for :ls / :outline output. Header keys pprinted normally,
+   but :forms is laid out one form per line so output is greppable and
+   scannable. Each form line is self-contained EDN."
+  [result]
+  (let [{:keys [forms]} result
+        header (dissoc result :forms)]
+    (print "{")
+    ;; Header keys, one per line, indented to align with vector
+    (let [pairs (seq header)]
+      (doseq [[i [k v]] (map-indexed vector pairs)]
+        (when (pos? i) (print "\n "))
+        (pr k) (print " ") (pr v)))
+    (when (seq header) (print "\n "))
+    (print ":forms")
+    (if (empty? forms)
+      (println " []}")
+      (do (println " [")
+          (doseq [f forms]
+            (print "  ") (pr f) (println))
+          (println " ]}")))))
+
+(defn- has-forms? [r]
+  (and (map? r) (contains? r :forms)))
+
 (defn run [{:keys [op file clj cljs] :as opts}]
   ;; Initialize project aliases from .clj-surgeon.edn near the input file.
   ;; CLJC ops use :clj/:cljs instead of :file; init from whichever is present.
@@ -157,9 +182,10 @@
                                  :else {:error "supply :file or :clj + :cljs"})
                  {:error (str "Unknown op: " op
                               ". Valid ops: :ls, :mv, :declares, :deps, :topo, :closure, :rename-ns, :fix-declares, :cljc-merge, :cljc-split, :cljc-add-require, :cljc-analyze")})]
-    (if (string? result)
-      (println result)
-      (pp/pprint result))))
+    (cond
+      (string? result)   (println result)
+      (has-forms? result) (pprint-outline result)
+      :else              (pp/pprint result))))
 
 (defn- parse-val [s]
   (cond
