@@ -215,7 +215,7 @@ Projects can register custom def-shaped macros (`defendpoint`, `defenterprise`, 
 
 Each `:fields` value is either:
 - a stdlib symbol (e.g. `->defn-name`) — clj-surgeon resolves it to a built-in extractor
-- a `(fn [zloc] ...)` form — evaluated in an SCI sandbox at config-load. Access to `rewrite-clj.zip` (as `z`), `rewrite-clj.node` (as `n`), and the stdlib symbols.
+- a `(fn [zloc] ...)` form — evaluated in an SCI sandbox at config-load. Access to `rewrite-clj.zip` (as `z`), `rewrite-clj.node` (as `n`), `clojure.string` (as `str`), and the stdlib symbols.
 
 Each extractor takes a zloc (pointing at the top-level form list) and returns the value to emit in `:ls` output. Return `nil` to omit the field.
 

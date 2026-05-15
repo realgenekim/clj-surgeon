@@ -295,6 +295,7 @@ Field extractors are real Clojure functions. They're evaluated in an SCI sandbox
 **Inline functions:** any `(fn [z] ...)` is evaluated by SCI with these bindings available:
 - `z/...` — `rewrite-clj.zip` (subset: `down`, `up`, `right`, `left`, `rightmost`, `leftmost`, `node`, `string`, `sexpr`, `next`, `prev`, `of-string`)
 - `n/...` — `rewrite-clj.node` (subset: `tag`, `children`)
+- `str/...` — `clojure.string` (subset: `upper-case`, `lower-case`, `capitalize`, `trim`, `triml`, `trimr`, `starts-with?`, `ends-with?`, `includes?`, `join`, `split`, `split-lines`, `replace`, `blank?`, `index-of`, `last-index-of`, `escape`)
 - Bare stdlib symbols (`->defn-name` etc.) callable as ordinary functions.
 
 **Privacy** (defn- vs defn) is auto-detected from a trailing `-` in the macro name (`mu/defn-`, `>defn-`). No config needed.
