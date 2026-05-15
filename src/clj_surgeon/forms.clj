@@ -15,10 +15,23 @@
 
        {:aliases {\"defendpoint\"   :defn
                   \"defenterprise\" :defn
-                  \"defsetting\"    :def}}"
+                  \"defsetting\"    :def}}
+
+   Rich form: an alias value may be a map `{:kind <kw> :fields {...}}`
+   where `:fields` declares custom field extraction (see selectors.clj
+   and docs/field-extraction-dsl.md):
+
+       {:aliases
+        {\"api.macros/defendpoint\"
+         {:kind :defn
+          :fields {:method  [:find-first :keyword]
+                   :path    [:right-of :method]
+                   :name    [:join \" \" :method :path]
+                   :arglist [:find-first :vector]}}}}"
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clj-surgeon.selectors :as sel]))
 
 ;; ============================================================
 ;; Core defining forms — these map to themselves
@@ -36,7 +49,8 @@
    "defprotocol" :defprotocol
    "defrecord"   :defrecord
    "deftype"     :deftype
-   "declare"     :declare})
+   "declare"     :declare
+   "deftest"     :def})
 
 ;; ============================================================
 ;; Explicit aliases — non-standard names that can't be auto-detected
@@ -73,20 +87,55 @@
             cfg
             (recur (.getParentFile dir))))))))
 
+(defn- validate-alias-value
+  "Validate a single alias value. May be a bare kind keyword or a rich
+   spec map {:kind <kw> :fields {...}}. Returns a normalized spec map
+   {:kind <kw> :fields <map-or-nil>} on success; throws otherwise."
+  [k v source]
+  (cond
+    ;; bare kind keyword: shorthand for {:kind v}
+    (keyword? v)
+    (do (when-not (contains? valid-kinds v)
+          (throw (ex-info (str source ": :aliases value for '" k
+                               "' must be one of " (sort valid-kinds))
+                          {:key k :value v :valid valid-kinds})))
+        {:kind v})
+
+    ;; rich spec map
+    (map? v)
+    (let [kind (:kind v)]
+      (when-not (contains? valid-kinds kind)
+        (throw (ex-info (str source ": :aliases value for '" k
+                             "' must have :kind in " (sort valid-kinds))
+                        {:key k :value v :valid valid-kinds})))
+      (when-let [fields (:fields v)]
+        (when-not (map? fields)
+          (throw (ex-info (str source ": :fields for '" k "' must be a map")
+                          {:key k :fields fields})))
+        (try (sel/validate-spec fields)
+             (catch Exception e
+               (throw (ex-info (str source ": invalid :fields for '" k
+                                    "' — " (.getMessage e))
+                               {:key k :fields fields} e)))))
+      v)
+
+    :else
+    (throw (ex-info (str source ": :aliases value for '" k
+                         "' must be a keyword or a spec map")
+                    {:key k :value v}))))
+
 (defn- validate-aliases
-  "Throw if `m` isn't a string->valid-kind map. Returns `m` on success."
+  "Validate the full aliases map. Returns a normalized map where every
+   value is a spec map {:kind <kw> :fields <map-or-nil>}."
   [m source]
   (when-not (map? m)
     (throw (ex-info (str source ": :aliases must be a map") {:got m})))
-  (doseq [[k v] m]
-    (when-not (string? k)
-      (throw (ex-info (str source ": :aliases key must be a string")
-                      {:key k :value v})))
-    (when-not (contains? valid-kinds v)
-      (throw (ex-info (str source ": :aliases value for '" k
-                           "' must be one of " (sort valid-kinds))
-                      {:key k :value v :valid valid-kinds}))))
-  m)
+  (into {}
+        (for [[k v] m]
+          (do (when-not (string? k)
+                (throw (ex-info (str source ": :aliases key must be a string")
+                                {:key k :value v})))
+              [k (validate-alias-value k v source)]))))
 
 (defn- read-config
   "Read + validate aliases from a `.clj-surgeon.edn` file. Throws on
@@ -123,11 +172,20 @@
 ;; Classification: the one function everything else calls
 ;; ============================================================
 
-(defn- lookup
-  "One-level lookup: core, in-source explicit, project. No / handling."
+(defn- lookup-kind
+  "One-level lookup returning kind kw. Tiers: core, in-source explicit,
+   project. Project entries are spec maps, so we read :kind out."
   [s]
   (or (core-forms s)
       (explicit-aliases s)
+      (:kind (@project-aliases s))))
+
+(defn- lookup-spec
+  "Look up the full spec map (with :kind + optional :fields). Bare kinds
+   from core-forms/explicit-aliases return {:kind <kw>} with no :fields."
+  [s]
+  (or (when-let [k (core-forms s)] {:kind k})
+      (when-let [k (explicit-aliases s)] {:kind k})
       (@project-aliases s)))
 
 (defn classify
@@ -143,9 +201,18 @@
       'api.macros/defendpoint' -> 'defendpoint' -> :defn when config has it)."
   [type-str]
   (when type-str
-    (or (lookup type-str)
+    (or (lookup-kind type-str)
         (when-let [idx (str/index-of type-str "/")]
-          (lookup (subs type-str (inc idx)))))))
+          (lookup-kind (subs type-str (inc idx)))))))
+
+(defn spec
+  "Return the full spec map for a type-str — {:kind <kw> :fields <map-or-nil>}
+   or nil if not a defining form. Same resolution as classify."
+  [type-str]
+  (when type-str
+    (or (lookup-spec type-str)
+        (when-let [idx (str/index-of type-str "/")]
+          (lookup-spec (subs type-str (inc idx)))))))
 
 ;; ============================================================
 ;; Derived predicates — used across outline, analyze, extract

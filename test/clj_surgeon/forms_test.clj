@@ -127,9 +127,9 @@
 
 (deftest test-project-aliases-classify
   (testing "project aliases extend classify with Metabase-style macros"
-    (with-redefs [forms/project-aliases (atom {"defendpoint"   :defn
-                                                "defenterprise" :defn
-                                                "defsetting"    :def})]
+    (with-redefs [forms/project-aliases (atom {"defendpoint"   {:kind :defn}
+                                                "defenterprise" {:kind :defn}
+                                                "defsetting"    {:kind :def}})]
       (is (= :defn (forms/classify "defendpoint")))
       (is (= :defn (forms/classify "defenterprise")))
       (is (= :def  (forms/classify "defsetting")))
@@ -150,28 +150,25 @@
 
 (deftest test-precedence-core-beats-project
   (testing "core-forms wins over project-aliases for the same key"
-    (with-redefs [forms/project-aliases (atom {"defn" :def})] ;; misconfig
+    (with-redefs [forms/project-aliases (atom {"defn" {:kind :def}})] ;; misconfig
       (is (= :defn (forms/classify "defn"))
           "core 'defn' must remain :defn even if config tries to override"))))
 
 (deftest test-precedence-explicit-beats-project
   (testing "in-source explicit-aliases wins over project-aliases"
-    (with-redefs [forms/project-aliases (atom {">defn" :def})] ;; misconfig
+    (with-redefs [forms/project-aliases (atom {">defn" {:kind :def}})] ;; misconfig
       (is (= :defn (forms/classify ">defn"))
           "in-source '>defn' must remain :defn"))))
 
 (deftest test-precedence-project-beats-ns-qualified-split
   (testing "project-aliases wins over ns-qualified split-on-/"
-    ;; api.macros/defendpoint: split gives 'defendpoint' (not a core form),
-    ;; so ns-qualified split returns nil anyway. Use a contrived case where
-    ;; both could match: alias 'my/defn' to :def, expect :def (project wins).
-    (with-redefs [forms/project-aliases (atom {"my/defn" :def})]
+    (with-redefs [forms/project-aliases (atom {"my/defn" {:kind :def}})]
       (is (= :def (forms/classify "my/defn"))
           "project-aliases must win over ns-qualified split"))))
 
 (deftest test-project-aliases-still-allows-tier-2-passthrough
   (testing "project-aliases that don't match still let ns-qualified split work"
-    (with-redefs [forms/project-aliases (atom {"defendpoint" :defn})]
+    (with-redefs [forms/project-aliases (atom {"defendpoint" {:kind :defn}})]
       (is (= :defn (forms/classify "mu/defn"))
           "mu/defn still resolves via tier-4 ns-qualified split"))))
 
@@ -182,10 +179,15 @@
 (def ^:private validate-aliases #'forms/validate-aliases)
 
 (deftest test-validate-aliases-accepts-valid
-  (testing "string keys mapping to valid kinds pass"
-    (is (= {"defendpoint" :defn}
+  (testing "bare-kind shorthand normalizes to spec map"
+    (is (= {"defendpoint" {:kind :defn}}
            (validate-aliases {"defendpoint" :defn} "test")))
-    (is (= {} (validate-aliases {} "test")))))
+    (is (= {} (validate-aliases {} "test"))))
+  (testing "rich spec map passes through"
+    (is (= {"defendpoint" {:kind :defn :fields {:name [:nth 1]}}}
+           (validate-aliases
+            {"defendpoint" {:kind :defn :fields {:name [:nth 1]}}}
+            "test")))))
 
 (deftest test-validate-aliases-rejects-non-map
   (testing ":aliases must be a map"
@@ -241,9 +243,9 @@
         (testing "init reads + parses the config file"
           (reset! forms/project-aliases {})
           (forms/init-from-file! (.getPath src-file))
-          (is (= {"defendpoint"   :defn
-                  "defenterprise" :defn
-                  "defsetting"    :def}
+          (is (= {"defendpoint"   {:kind :defn}
+                  "defenterprise" {:kind :defn}
+                  "defsetting"    {:kind :def}}
                  @forms/project-aliases)))
         (testing "classify uses the loaded aliases"
           (is (= :defn (forms/classify "defendpoint")))
@@ -262,7 +264,7 @@
       (let [deep-file (spit-edn dir "src/a/b/c/deep.clj" "(ns a.b.c.deep)\n")]
         (reset! forms/project-aliases {})
         (forms/init-from-file! (.getPath deep-file))
-        (is (= {"defendpoint" :defn} @forms/project-aliases)
+        (is (= {"defendpoint" {:kind :defn}} @forms/project-aliases)
             "config should be found by walking up from deep nested file"))
       (finally
         (rm-rf dir)
@@ -316,7 +318,7 @@
       (let [inner-file (spit-edn dir "sub/src/foo.clj" "(ns foo)\n")]
         (reset! forms/project-aliases {})
         (forms/init-from-file! (.getPath inner-file))
-        (is (= {"inner" :def} @forms/project-aliases)
+        (is (= {"inner" {:kind :def}} @forms/project-aliases)
             "closest config wins (sub/.clj-surgeon.edn, not root)"))
       (finally
         (rm-rf dir)

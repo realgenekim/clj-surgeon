@@ -7,6 +7,7 @@
             [rewrite-clj.node :as n]
             [clj-surgeon.cljc.walk :as cwalk]
             [clj-surgeon.forms :as forms]
+            [clj-surgeon.selectors :as sel]
             [clojure.string :as str]))
 
 (defn- extract-name
@@ -28,16 +29,22 @@
             (recur (z/right child))))))))
 
 (defn- extract-arglist
-  "Get arglist from a defn form."
+  "Get arglist from a defn form. Descends into :meta nodes so meta-tagged
+   arglists like `^String [k]` are found — extract-name handles meta the
+   same way."
   [zloc]
   (let [type-str (some-> zloc z/down z/string)]
     (when (forms/has-arglists? type-str)
-      ;; Walk children to find first vector (the arglist)
       (loop [child (some-> zloc z/down)]
         (when child
-          (if (z/vector? child)
-            (z/string child)
-            (recur (z/right child))))))))
+          (let [tag (n/tag (z/node child))]
+            (cond
+              (= :vector tag) (z/string child)
+              (= :meta tag)   (let [inner (some-> child z/down z/rightmost)]
+                                (if (and inner (= :vector (n/tag (z/node inner))))
+                                  (z/string inner)
+                                  (recur (z/right child))))
+              :else           (recur (z/right child)))))))))
 
 (defn- preceding-comments
   "Look backwards from a form's start line to find attached comment lines.
@@ -78,18 +85,35 @@
                        (let [node (z/node zloc)
                              m (meta node)
                              type-str (some-> zloc z/down z/string)
-                             name-str (when (forms/defining-form? type-str)
+                             spec (forms/spec type-str)
+                             user-fields (:fields spec)
+                             extracted (when user-fields
+                                         (sel/resolve-fields zloc user-fields))
+                             ;; Built-in name/args extraction (legacy path)
+                             ;; only runs when no user :fields override is in play
+                             name-str (cond
+                                        (and user-fields (:name extracted))
+                                        (:name extracted)
+                                        (forms/defining-form? type-str)
                                         (extract-name zloc))
-                             arglist (when name-str (extract-arglist zloc))
+                             arglist (cond
+                                       (and user-fields (:arglist extracted))
+                                       (:arglist extracted)
+                                       name-str (extract-arglist zloc))
                              form-line (:row m)
                              comment-start (when form-line
-                                             (preceding-comments lines form-line))]
+                                             (preceding-comments lines form-line))
+                             ;; Extra user-declared fields (everything except
+                             ;; :name and :arglist which are already merged)
+                             extras (when extracted
+                                      (dissoc extracted :name :arglist))]
                          (cond-> {:type (symbol (or type-str "?"))
                                   :platforms (vec (sort platforms))}
                            form-line (assoc :line form-line)
                            (:end-row m) (assoc :end-line (:end-row m))
                            name-str (assoc :name (symbol name-str))
                            arglist (assoc :args arglist)
+                           (seq extras) (merge extras)
                            (and form-line comment-start (< comment-start form-line))
                            (assoc :comment-start comment-start))))
                      walked)

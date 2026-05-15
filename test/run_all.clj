@@ -1,6 +1,7 @@
 (ns run-all
   (:require [clojure.test :refer [run-tests]]
             [clj-surgeon.forms-test]
+            [clj-surgeon.selectors-test]
             [clj-surgeon.outline-test]
             [clj-surgeon.move-test]
             [clj-surgeon.analyze-test]
@@ -14,6 +15,7 @@
             [clj-surgeon.cljc-existing-ops-test]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
+                   'clj-surgeon.selectors-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test
                    'clj-surgeon.analyze-test
