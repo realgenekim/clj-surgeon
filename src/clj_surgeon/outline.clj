@@ -81,6 +81,10 @@
         ext   (file-extension file)
         defaults (cwalk/platforms-for-extension ext)
         walked (cwalk/top-level-forms source defaults)
+        ;; .clj / .cljs files have a single implicit platform; suppress
+        ;; the :platforms key for those. Only emit when the file is .cljc
+        ;; (where reader conditionals can split forms across platforms).
+        show-platforms? (= "cljc" ext)
         forms  (mapv (fn [{:keys [zloc platforms]}]
                        (let [node (z/node zloc)
                              m (meta node)
@@ -91,14 +95,15 @@
                                          (sel/resolve-fields zloc user-fields))
                              ;; Built-in name/args extraction (legacy path)
                              ;; only runs when no user :fields override is in play
+                             ;; If user provided :fields, respect their
+                             ;; complete spec — don't fall back to legacy
+                             ;; extractors for fields they didn't declare.
                              name-str (cond
-                                        (and user-fields (:name extracted))
-                                        (:name extracted)
+                                        user-fields (:name extracted)
                                         (forms/defining-form? type-str)
                                         (extract-name zloc))
                              arglist (cond
-                                       (and user-fields (:arglist extracted))
-                                       (:arglist extracted)
+                                       user-fields (:arglist extracted)
                                        name-str (extract-arglist zloc))
                              form-line (:row m)
                              comment-start (when form-line
@@ -107,8 +112,8 @@
                              ;; :name and :arglist which are already merged)
                              extras (when extracted
                                       (dissoc extracted :name :arglist))]
-                         (cond-> {:type (symbol (or type-str "?"))
-                                  :platforms (vec (sort platforms))}
+                         (cond-> {:type (symbol (or type-str "?"))}
+                           show-platforms? (assoc :platforms (vec (sort platforms)))
                            form-line (assoc :line form-line)
                            (:end-row m) (assoc :end-line (:end-row m))
                            name-str (assoc :name (symbol name-str))
@@ -132,6 +137,6 @@
     {:ns ns-name
      :file file
      :lines total-lines
-     :form-count (count (filter :name forms))
+     :form-count (count (filter #(forms/defining-form? (str (:type %))) forms))
      :forms (vec (remove #(= 'ns (:type %)) forms))
      :forward-refs []})) ;; forward-refs filled in by core with clj-kondo data

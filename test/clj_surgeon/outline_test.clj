@@ -165,7 +165,8 @@
       (is (= [:clj]       (:platforms (by-name 'jvm-only))))
       (is (= [:cljs]      (:platforms (by-name 'js-only)))))))
 
-(deftest test-clj-file-platforms-tag
-  (testing ".clj file has every form tagged with :platforms [:clj]"
+(deftest test-clj-file-platforms-omitted
+  (testing ".clj file does NOT emit :platforms (redundant — single platform)"
     (let [result (outline-from-string "(ns my.x) (defn f [])")]
-      (is (= [:clj] (:platforms (first (:forms result))))))))
+      (is (not (contains? (first (:forms result)) :platforms))
+          ":platforms should only appear for .cljc files where it conveys split info"))))

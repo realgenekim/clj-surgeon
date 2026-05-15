@@ -144,15 +144,16 @@
       (is (= 'myapp.lib.logging (:ns result))))))
 
 (deftest test-ls-clj-file-unchanged
-  (testing "Regression: a plain .clj file still works. All forms get [:clj]."
+  (testing "Regression: a plain .clj file still works. :platforms is omitted
+            for single-platform files (redundant)."
     (with-temp-clj-file "(ns my.plain)\n\n(defn foo [x] (inc x))\n(defn bar [x] (dec x))\n"
       (fn [path]
         (let [result (outline/outline path)
               by-name (forms-by-name result)]
           (is (= 'my.plain (:ns result)))
           (is (= 2 (:form-count result)))
-          (is (= [:clj] (:platforms (by-name 'foo))))
-          (is (= [:clj] (:platforms (by-name 'bar)))))))))
+          (is (not (contains? (by-name 'foo) :platforms)))
+          (is (not (contains? (by-name 'bar) :platforms))))))))
 
 (deftest test-ls-platforms-design-decision
   (testing "Design decision: shared forms in .cljc get [:clj :cljs] — one entry,

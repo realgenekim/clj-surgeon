@@ -153,6 +153,18 @@
                    refs)]
     {:value (clojure.string/join sep parts) :no-zloc true}))
 
+(defn- op-tuple
+  "Build a vector of previously-resolved field values. Each value is read
+   back as EDN (so :method ':get' becomes :get and :path '\"/\"' becomes
+   \"/\"), giving a clean EDN tuple instead of a stringy concat. Useful
+   for synthesizing structured names like :route [:get \"/:id\"]."
+  [_form-zloc refs resolved]
+  (let [parts (map (fn [k]
+                     (when-let [v (some-> (get resolved k) :value)]
+                       (try (read-string v) (catch Exception _ v))))
+                   refs)]
+    {:value (vec parts) :no-zloc true}))
+
 (def ^:private op-table
   {:nth              op-nth
    :find-first       op-find-first
@@ -161,7 +173,8 @@
    :left-of          op-left-of
    :when-type        op-when-type
    :literal          op-literal
-   :join             op-join})
+   :join             op-join
+   :tuple            op-tuple})
 
 ;; ============================================================
 ;; Dispatch + value extraction
@@ -210,6 +223,7 @@
         :left-of          #{(first args)}
         :find-first-after #{(first args)}
         :join             (set (rest args))
+        :tuple            (set args)
         :when-type        (selector-refs (second args))
         #{}))))
 
@@ -250,15 +264,21 @@
 (defn resolve-fields
   "Given a form zloc and a fields map (field-key -> selector or spec map),
    resolve every field in topo order. Returns a map field-key -> string
-   value, omitting fields that didn't resolve unless :optional? false."
+   value, omitting fields that didn't resolve unless :optional? false.
+
+   Fields with `:emit? false` in their spec map are resolved (so they can
+   feed `:join` / `:right-of` etc.) but omitted from the returned map."
   [form-zloc fields]
   (let [order (field-order fields)]
     (loop [remaining order
            resolved {}]
       (if (empty? remaining)
-        ;; Build output: field-key -> :value (strings)
+        ;; Build output: field-key -> :value (strings), skipping :emit? false
         (into {} (for [[k {:keys [value]}] resolved
-                       :when value]
+                       :let [spec (get fields k)
+                             emit? (or (not (map? spec))
+                                       (not= false (:emit? spec)))]
+                       :when (and value emit?)]
                    [k value]))
         (let [k (first remaining)
               spec (get fields k)
