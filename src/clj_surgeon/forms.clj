@@ -102,23 +102,34 @@
 ;; SCI sandbox — evaluate user :fields fn-forms
 ;; ============================================================
 
-(def ^:private zip-bindings
-  "Subset of rewrite-clj.zip / rewrite-clj.node functions we expose to SCI
-   via the `z` and `n` namespace aliases. Add more if extractors need them."
+(def ^:private sandbox-namespaces
+  "Namespaces exposed to SCI as bare-name maps. Each entry binds a
+   namespace symbol to a map of {symbol -> resolved-value}. Add more
+   namespaces or fns here as extractors need them."
   {'rewrite-clj.zip  (into {} (for [s '[down up right left rightmost leftmost
                                         node string sexpr next prev of-string]]
                                 [s (deref (resolve (symbol "rewrite-clj.zip" (str s))))]))
    'rewrite-clj.node (into {} (for [s '[tag children]]
-                                [s (deref (resolve (symbol "rewrite-clj.node" (str s))))]))})
+                                [s (deref (resolve (symbol "rewrite-clj.node" (str s))))]))
+   'clojure.string   (do (require 'clojure.string)
+                         (into {} (for [s '[upper-case lower-case capitalize trim
+                                            starts-with? ends-with? includes?
+                                            join split split-lines replace
+                                            blank? index-of last-index-of
+                                            escape triml trimr]
+                                        :let [v (resolve (symbol "clojure.string" (str s)))]
+                                        :when v]
+                                    [s (deref v)])))})
 
 (defn- sci-opts
-  "SCI context that exposes rewrite-clj.zip + rewrite-clj.node via the
-   `z` and `n` aliases, and the clj-surgeon stdlib (->defn-name etc.) as
-   bare-symbol bindings. Code in `.clj-surgeon.edn` gets these for free."
+  "SCI context that exposes rewrite-clj.zip + rewrite-clj.node + clojure.string
+   via the `z`, `n`, and `str` aliases, plus the clj-surgeon stdlib
+   (->defn-name etc.) as bare-symbol bindings."
   []
-  {:namespaces zip-bindings
+  {:namespaces sandbox-namespaces
    :aliases    {'z 'rewrite-clj.zip
-                'n 'rewrite-clj.node}
+                'n 'rewrite-clj.node
+                'str 'clojure.string}
    :bindings   (into {} (for [[s f] fields/public] [s f]))})
 
 (defn- compile-field

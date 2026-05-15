@@ -1,0 +1,1 @@
+["^ ","~$constant-lift",["^ ","~:row",12,"~:col",1,"~:name","^0","~:ns","~$clojure.tools.analyzer.passes.constant-lifter","~:top-ns","^5"],"~:filename","/Users/bcm/.m2/repository/org/clojure/tools.analyzer/1.2.0/tools.analyzer-1.2.0.jar:clojure/tools/analyzer/passes/constant_lifter.clj"]
