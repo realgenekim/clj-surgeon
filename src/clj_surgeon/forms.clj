@@ -1,37 +1,49 @@
 (ns clj-surgeon.forms
-  "Single source of truth for defining-form classification.
+  "Single source of truth for defining-form classification + per-form field
+   extraction.
 
-   Every operation — :ls, :deps, :mv, :extract, :fix-declares, :topo —
-   uses these predicates to decide what counts as a definition, what has
-   arglists, and what is private.
+   Classification: a form's macro symbol is mapped to a *kind* keyword
+   (:defn, :def, :defn-, etc.) so downstream ops (:deps, :topo, :ls-extract,
+   :fix-declares) know what counts as a definition and what is private.
 
-   To add support for a custom macro (e.g. mu/defn, defendpoint):
-   - If the local name after / matches a core form, it works automatically.
-     (mu/defn -> 'defn' -> :defn)
-   - For ecosystem macros with non-standard names (>defn etc.), add an
-     entry to `explicit-aliases` in this file.
-   - For project-specific macros (defendpoint, defenterprise, defsetting),
-     create a `.clj-surgeon.edn` at the repo root:
+   Field extraction: for forms recognized via `.clj-surgeon.edn`, the user
+   declares `:fields` — a map of field-name → extractor function. Each
+   extractor takes a zloc (pointing at the form list) and returns the value
+   to emit in `:ls` output. Functions are real Clojure forms in the EDN
+   file, evaluated in an SCI sandbox at config-load time. clj-surgeon ships
+   a stdlib of named extractors (`->defn-name`, `->defn-arg-list`,
+   `->first-keyword`, …) in `clj-surgeon.fields/public`.
 
-       {:aliases {\"defendpoint\"   :defn
-                  \"defenterprise\" :defn
-                  \"defsetting\"    :def}}
-
-   Rich form: an alias value may be a map `{:kind <kw> :fields {...}}`
-   where `:fields` declares custom field extraction (see selectors.clj
-   and docs/field-extraction-dsl.md):
+   Example `.clj-surgeon.edn`:
 
        {:aliases
-        {\"api.macros/defendpoint\"
-         {:kind :defn
-          :fields {:method  [:find-first :keyword]
-                   :path    [:right-of :method]
-                   :name    [:join \" \" :method :path]
-                   :arglist [:find-first :vector]}}}}"
+        {\"defenterprise\"
+         {:fields {:name         ->defn-name
+                   :docstring    ->defn-docstring
+                   :ee-namespace (fn [z]
+                                   ;; symbol immediately after the optional docstring
+                                   (let [c (-> z z/down z/right z/right)]
+                                     (z/sexpr (if (->defn-docstring z) (z/right c) c))))
+                   :arglist      ->defn-arg-list}}
+
+         \"defendpoint\"
+         {:fields {:route (fn [z]
+                            [(-> z z/down z/right z/sexpr)
+                             (-> z z/down z/right z/right z/sexpr)])}}
+
+         \"defsetting\"
+         {:fields {:name ->defn-name}}}}
+
+   Resolution: walk up from each source file looking for `.clj-surgeon.edn`.
+   Closest config wins. No config = pure core-forms classification (defn,
+   def, etc. only)."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clj-surgeon.selectors :as sel]))
+            [clj-surgeon.fields :as fields]
+            [rewrite-clj.node :as n]
+            [rewrite-clj.zip :as z]
+            [sci.core :as sci]))
 
 ;; ============================================================
 ;; Core defining forms — these map to themselves
@@ -53,28 +65,119 @@
    "deftest"     :def})
 
 ;; ============================================================
-;; Explicit aliases — non-standard names that can't be auto-detected
-;; from the local part after /
+;; Explicit aliases — ecosystem macros with non-standard names
 ;; ============================================================
 
 (def explicit-aliases
   "Custom defining forms whose local name doesn't match a core form.
-   Add project-specific macros here (one line each)."
+   Add ecosystem macros here (one line each)."
   {">defn"  :defn
    ">defn-" :defn-})
 
 ;; ============================================================
-;; Project-local aliases — from .clj-surgeon.edn at the repo root
+;; Project-local config — from .clj-surgeon.edn
 ;; ============================================================
 
-(def ^:private valid-kinds
-  "Kinds an alias may map to. Same set as core-forms values."
-  #{:def :defn :defn- :defonce :defmacro :defmethod :defmulti
-    :defprotocol :defrecord :deftype :declare})
+(def project-aliases
+  "Singleton: map of macro-name-string -> spec map. Each spec is
+   `{:kind <kw> :fields {field-key compiled-fn}}`. Populated by
+   `init-from-file!`. Defaults empty."
+  (atom {}))
+
+(defn- private-from-name?
+  "Privacy convention: a macro name ending in `-` is private. Matches
+   `defn-`, `>defn-`, `mu/defn-`."
+  [type-str]
+  (.endsWith ^String type-str "-"))
+
+(defn- infer-kind
+  "If user didn't declare :kind, infer from name suffix.
+   Trailing `-` → :defn-. Anything else → :defn."
+  [type-str]
+  (if (private-from-name? type-str)
+    :defn-
+    :defn))
+
+;; ============================================================
+;; SCI sandbox — evaluate user :fields fn-forms
+;; ============================================================
+
+(def ^:private zip-bindings
+  "Subset of rewrite-clj.zip / rewrite-clj.node functions we expose to SCI
+   via the `z` and `n` namespace aliases. Add more if extractors need them."
+  {'rewrite-clj.zip  (into {} (for [s '[down up right left rightmost leftmost
+                                        node string sexpr next prev of-string]]
+                                [s (deref (resolve (symbol "rewrite-clj.zip" (str s))))]))
+   'rewrite-clj.node (into {} (for [s '[tag children]]
+                                [s (deref (resolve (symbol "rewrite-clj.node" (str s))))]))})
+
+(defn- sci-opts
+  "SCI context that exposes rewrite-clj.zip + rewrite-clj.node via the
+   `z` and `n` aliases, and the clj-surgeon stdlib (->defn-name etc.) as
+   bare-symbol bindings. Code in `.clj-surgeon.edn` gets these for free."
+  []
+  {:namespaces zip-bindings
+   :aliases    {'z 'rewrite-clj.zip
+                'n 'rewrite-clj.node}
+   :bindings   (into {} (for [[s f] fields/public] [s f]))})
+
+(defn- compile-field
+  "Take an extractor form from `.clj-surgeon.edn` and turn it into a real
+   fn. If it's already a fn, return it. If it's a symbol, resolve in stdlib.
+   Otherwise eval as SCI code."
+  [form macro-name field-key]
+  (cond
+    (fn? form) form
+
+    (symbol? form)
+    (or (get fields/public form)
+        (throw (ex-info (str ".clj-surgeon.edn: " macro-name " :fields "
+                             field-key " — unknown extractor symbol: " form
+                             "\n  Available: " (sort (keys fields/public)))
+                        {:macro macro-name :field field-key :symbol form})))
+
+    (and (seq? form) (= 'fn (first form)))
+    (try (sci/eval-form (sci/init (sci-opts)) form)
+         (catch Exception e
+           (throw (ex-info (str ".clj-surgeon.edn: " macro-name " :fields "
+                                field-key " — eval failed: " (.getMessage e))
+                           {:macro macro-name :field field-key :form form} e))))
+
+    :else
+    (throw (ex-info (str ".clj-surgeon.edn: " macro-name " :fields "
+                         field-key " — value must be a stdlib symbol or a fn form, got: "
+                         (pr-str form))
+                    {:macro macro-name :field field-key :form form}))))
+
+(defn- compile-spec
+  "Turn a raw alias spec from `.clj-surgeon.edn` into the runtime form
+   used by classify + outline. Returns {:kind kw :fields {k compiled-fn}}."
+  [macro-name raw-value]
+  (let [base (cond
+               (keyword? raw-value) {:kind raw-value}
+               (map? raw-value)     raw-value
+               :else
+               (throw (ex-info (str ".clj-surgeon.edn: " macro-name
+                                    " — value must be a kind keyword or a spec map")
+                               {:macro macro-name :value raw-value})))
+        kind (or (:kind base) (infer-kind macro-name))
+        fields (when-let [fs (:fields base)]
+                 (when-not (map? fs)
+                   (throw (ex-info (str ".clj-surgeon.edn: " macro-name
+                                        " — :fields must be a map")
+                                   {:macro macro-name :fields fs})))
+                 (into {} (for [[fk fv] fs]
+                            [fk (compile-field fv macro-name fk)])))]
+    (cond-> {:kind kind}
+      fields (assoc :fields fields))))
+
+;; ============================================================
+;; Config file resolution
+;; ============================================================
 
 (defn- find-config-file
-  "Walk up from `start` (a path string — file or dir) looking for a
-   `.clj-surgeon.edn`. Return the java.io.File for the config, or nil."
+  "Walk up from `start` (a file or dir path) looking for `.clj-surgeon.edn`.
+   Return the java.io.File for the first one found, or nil."
   [start]
   (let [start-file (some-> start io/file .getAbsoluteFile)
         start-dir (if (and start-file (.isDirectory start-file))
@@ -87,84 +190,39 @@
             cfg
             (recur (.getParentFile dir))))))))
 
-(defn- validate-alias-value
-  "Validate a single alias value. May be a bare kind keyword or a rich
-   spec map {:kind <kw> :fields {...}}. Returns a normalized spec map
-   {:kind <kw> :fields <map-or-nil>} on success; throws otherwise."
-  [k v source]
-  (cond
-    ;; bare kind keyword: shorthand for {:kind v}
-    (keyword? v)
-    (do (when-not (contains? valid-kinds v)
-          (throw (ex-info (str source ": :aliases value for '" k
-                               "' must be one of " (sort valid-kinds))
-                          {:key k :value v :valid valid-kinds})))
-        {:kind v})
-
-    ;; rich spec map
-    (map? v)
-    (let [kind (:kind v)]
-      (when-not (contains? valid-kinds kind)
-        (throw (ex-info (str source ": :aliases value for '" k
-                             "' must have :kind in " (sort valid-kinds))
-                        {:key k :value v :valid valid-kinds})))
-      (when-let [fields (:fields v)]
-        (when-not (map? fields)
-          (throw (ex-info (str source ": :fields for '" k "' must be a map")
-                          {:key k :fields fields})))
-        (try (sel/validate-spec fields)
-             (catch Exception e
-               (throw (ex-info (str source ": invalid :fields for '" k
-                                    "' — " (.getMessage e))
-                               {:key k :fields fields} e)))))
-      v)
-
-    :else
-    (throw (ex-info (str source ": :aliases value for '" k
-                         "' must be a keyword or a spec map")
-                    {:key k :value v}))))
-
-(defn- validate-aliases
-  "Validate the full aliases map. Returns a normalized map where every
-   value is a spec map {:kind <kw> :fields <map-or-nil>}."
-  [m source]
-  (when-not (map? m)
-    (throw (ex-info (str source ": :aliases must be a map") {:got m})))
-  (into {}
-        (for [[k v] m]
-          (do (when-not (string? k)
-                (throw (ex-info (str source ": :aliases key must be a string")
-                                {:key k :value v})))
-              [k (validate-alias-value k v source)]))))
-
 (defn- read-config
-  "Read + validate aliases from a `.clj-surgeon.edn` file. Throws on
-   malformed EDN or invalid aliases so the user sees the problem instead
-   of silent misclassification."
+  "Read + compile a `.clj-surgeon.edn` file. Throws on malformed EDN or
+   invalid extractor forms so the user sees the problem at load time
+   instead of silent misclassification at runtime."
   [f]
   (let [parsed (try (edn/read-string (slurp f))
                     (catch Exception e
                       (throw (ex-info (str (.getPath f) ": invalid EDN — "
                                            (.getMessage e))
-                                      {:file (.getPath f)} e))))]
-    (validate-aliases (:aliases parsed {}) (.getPath f))))
+                                      {:file (.getPath f)} e))))
+        aliases (:aliases parsed {})]
+    (when-not (map? aliases)
+      (throw (ex-info (str (.getPath f) ": :aliases must be a map")
+                      {:file (.getPath f) :got aliases})))
+    (into {} (for [[k v] aliases]
+               (do (when-not (string? k)
+                     (throw (ex-info (str (.getPath f)
+                                          ": :aliases keys must be strings; got "
+                                          (pr-str k))
+                                     {:file (.getPath f) :key k})))
+                   [k (compile-spec k v)])))))
 
 (defn load-project-aliases
   "Find `.clj-surgeon.edn` by walking up from `start` (a file or dir path).
-   Return the parsed/validated `:aliases` map, or `{}` if no config found."
+   Return the compiled aliases map, or `{}` if no config found."
   [start]
   (if-let [f (find-config-file start)]
     (read-config f)
     {}))
 
-(def project-aliases
-  "Singleton aliases map, populated by `init-from-file!`. Defaults empty —
-   any caller that hasn't initialized gets no project-local aliases."
-  (atom {}))
-
 (defn init-from-file!
   "Resolve `.clj-surgeon.edn` near `file-path`, populate `project-aliases`.
-   Call once per CLI invocation, from each top-level op entry point."
+   Call once per CLI invocation, from the top-level dispatch."
   [file-path]
   (reset! project-aliases (load-project-aliases file-path)))
 
@@ -173,32 +231,31 @@
 ;; ============================================================
 
 (defn- lookup-kind
-  "One-level lookup returning kind kw. Tiers: core, in-source explicit,
-   project. Project entries are spec maps, so we read :kind out."
+  "Single-level lookup returning kind kw. Tiers: core forms, in-source
+   explicit aliases, project aliases. Project entries store the kind in
+   `:kind` of their spec map."
   [s]
   (or (core-forms s)
       (explicit-aliases s)
       (:kind (@project-aliases s))))
 
 (defn- lookup-spec
-  "Look up the full spec map (with :kind + optional :fields). Bare kinds
-   from core-forms/explicit-aliases return {:kind <kw>} with no :fields."
+  "Look up the full spec map. Bare kinds (core, explicit) return
+   `{:kind kw}` with no fields. Project entries return their full compiled
+   spec including `:fields`."
   [s]
   (or (when-let [k (core-forms s)] {:kind k})
       (when-let [k (explicit-aliases s)] {:kind k})
       (@project-aliases s)))
 
 (defn classify
-  "Classify a form's type-str into a canonical kind (:defn, :defn-, :def, etc.)
-   or nil if it's not a defining form.
+  "Classify a form's type-str into a canonical kind, or nil if not a
+   defining form.
 
-   Resolution order at each step:
-     core-forms -> in-source explicit-aliases -> project-aliases (.clj-surgeon.edn)
-
-   1. Try the full type-str (handles 'defn', 'defendpoint', '>defn').
-   2. If type-str contains '/', try the local part after the slash
-      (handles 'mu/defn' -> 'defn' -> :defn, and
-      'api.macros/defendpoint' -> 'defendpoint' -> :defn when config has it)."
+   Resolution at each step: core-forms → in-source explicit-aliases →
+   project-aliases. If the full type-str doesn't match anywhere, try the
+   local part after `/` (so `mu/defn` and `api.macros/defendpoint` resolve
+   via their unqualified names)."
   [type-str]
   (when type-str
     (or (lookup-kind type-str)
@@ -206,8 +263,8 @@
           (lookup-kind (subs type-str (inc idx)))))))
 
 (defn spec
-  "Return the full spec map for a type-str — {:kind <kw> :fields <map-or-nil>}
-   or nil if not a defining form. Same resolution as classify."
+  "Return the full spec map for a type-str — `{:kind <kw> :fields <map>}`
+   or nil if not a defining form. Same tier resolution as `classify`."
   [type-str]
   (when type-str
     (or (lookup-spec type-str)
@@ -229,6 +286,8 @@
   (= :defn- (classify type-str)))
 
 (defn has-arglists?
-  "Does this form type have an arglist vector? (defn, defn-, >defn, mu/defn, etc.)"
+  "Does this form type have an arglist vector? Used only by the legacy
+   `extract-arglist` path — when a project alias provides custom `:fields`,
+   the user controls arglist extraction directly."
   [type-str]
-  (#{:defn :defn-} (classify type-str)))
+  (contains? #{:defn :defn-} (classify type-str)))

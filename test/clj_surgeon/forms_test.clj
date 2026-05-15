@@ -173,45 +173,9 @@
           "mu/defn still resolves via tier-4 ns-qualified split"))))
 
 ;; ============================================================
-;; .clj-surgeon.edn — validation
+;; .clj-surgeon.edn — bad-config error paths exercised via
+;; init-from-file! against a tempdir (see end-to-end section below).
 ;; ============================================================
-
-(def ^:private validate-aliases #'forms/validate-aliases)
-
-(deftest test-validate-aliases-accepts-valid
-  (testing "bare-kind shorthand normalizes to spec map"
-    (is (= {"defendpoint" {:kind :defn}}
-           (validate-aliases {"defendpoint" :defn} "test")))
-    (is (= {} (validate-aliases {} "test"))))
-  (testing "rich spec map passes through"
-    (is (= {"defendpoint" {:kind :defn :fields {:name [:nth 1]}}}
-           (validate-aliases
-            {"defendpoint" {:kind :defn :fields {:name [:nth 1]}}}
-            "test")))))
-
-(deftest test-validate-aliases-rejects-non-map
-  (testing ":aliases must be a map"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #":aliases must be a map"
-                          (validate-aliases [["defendpoint" :defn]] "test")))))
-
-(deftest test-validate-aliases-rejects-non-string-key
-  (testing "keys must be strings, not symbols/keywords"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #":aliases key must be a string"
-                          (validate-aliases {'defendpoint :defn} "test")))
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #":aliases key must be a string"
-                          (validate-aliases {:defendpoint :defn} "test")))))
-
-(deftest test-validate-aliases-rejects-bad-kind
-  (testing "values must be one of valid-kinds; bad value names the key"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"value for 'defendpoint'"
-                          (validate-aliases {"defendpoint" :function} "test")))
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"value for 'whatever'"
-                          (validate-aliases {"whatever" "string"} "test")))))
 
 ;; ============================================================
 ;; End-to-end: real .clj-surgeon.edn read from a real temp directory
@@ -295,15 +259,15 @@
         (rm-rf dir)
         (reset! forms/project-aliases {})))))
 
-(deftest test-init-from-file-bad-alias-throws
-  (let [dir (mk-tmp-dir "clj-surgeon-badkind-")]
+(deftest test-init-from-file-non-string-key-throws
+  (let [dir (mk-tmp-dir "clj-surgeon-badkey-")]
     (try
       (spit-edn dir ".clj-surgeon.edn"
-                "{:aliases {\"defendpoint\" :not-a-kind}}\n")
+                "{:aliases {defendpoint :defn}}\n")    ;; symbol key, not string
       (let [src-file (spit-edn dir "src/foo.clj" "(ns foo)\n")]
         (reset! forms/project-aliases {})
         (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"value for 'defendpoint'"
+                              #":aliases keys must be strings"
                               (forms/init-from-file! (.getPath src-file)))))
       (finally
         (rm-rf dir)

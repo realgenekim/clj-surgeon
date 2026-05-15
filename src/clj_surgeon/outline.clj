@@ -7,8 +7,17 @@
             [rewrite-clj.node :as n]
             [clj-surgeon.cljc.walk :as cwalk]
             [clj-surgeon.forms :as forms]
-            [clj-surgeon.selectors :as sel]
             [clojure.string :as str]))
+
+(defn- resolve-user-fields
+  "Run each user-supplied extractor fn against the form zloc. Returns a
+   map field-key -> value, omitting nil results (extractor signaled
+   absence). Exceptions propagate so the user sees the problem."
+  [user-fields zloc]
+  (into {} (for [[k f] user-fields
+                 :let [v (f zloc)]
+                 :when (some? v)]
+             [k v])))
 
 (defn- extract-name
   "Get the name from the second child of a form. Handles metadata like ^:private.
@@ -96,19 +105,17 @@
                              spec (forms/spec type-str)
                              user-fields (:fields spec)
                              extracted (when user-fields
-                                         (sel/resolve-fields zloc user-fields))
-                             ;; Built-in name/args extraction (legacy path)
-                             ;; only runs when no user :fields override is in play
+                                         (resolve-user-fields user-fields zloc))
                              ;; If user provided :fields, respect their
                              ;; complete spec — don't fall back to legacy
                              ;; extractors for fields they didn't declare.
-                             name-str (cond
+                             name-val (cond
                                         user-fields (:name extracted)
                                         (forms/defining-form? type-str)
                                         (extract-name zloc))
                              arglist (cond
                                        user-fields (:arglist extracted)
-                                       name-str (extract-arglist zloc))
+                                       name-val (extract-arglist zloc))
                              form-line (:row m)
                              comment-start (when form-line
                                              (preceding-comments lines form-line))
@@ -120,7 +127,9 @@
                            show-platforms? (assoc :platforms (vec (sort platforms)))
                            form-line (assoc :line form-line)
                            (:end-row m) (assoc :end-line (:end-row m))
-                           name-str (assoc :name (symbol name-str))
+                           name-val (assoc :name (if (symbol? name-val)
+                                                   name-val
+                                                   (symbol (str name-val))))
                            arglist (assoc :args arglist)
                            (seq extras) (merge extras)
                            (and form-line comment-start (< comment-start form-line))
