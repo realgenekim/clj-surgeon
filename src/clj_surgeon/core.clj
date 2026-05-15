@@ -12,7 +12,8 @@
      clj-surgeon ls src/foo.clj
      clj-surgeon mv src/foo.clj --form my-fn --before other-fn --dry-run
      clj-surgeon extract src/foo.clj --forms '[a b c]' --to src/foo/sub.clj --apply"
-  (:require [clj-surgeon.outline :as outline]
+  (:require [babashka.fs :as fs]
+            [clj-surgeon.outline :as outline]
             [clj-surgeon.forms :as forms]
             [clj-surgeon.forward-refs :as fwd]
             [clj-surgeon.move :as move]
@@ -26,6 +27,39 @@
             [clj-surgeon.cljc.analyze :as cljc-analyze]
             [clojure.pprint :as pp]
             [clojure.string :as str]))
+
+;; ============================================================
+;; Glob expansion — turn path args into real files via babashka.fs
+;; ============================================================
+
+(defn- has-glob-meta? [s]
+  (and (string? s) (re-find #"[*?\[]" s)))
+
+(defn- expand-glob
+  "Expand `pattern` to a sorted list of file path strings.
+   If `pattern` has no glob metachar, return [pattern] unchanged.
+   Otherwise split into base + glob, then use babashka.fs/glob."
+  [pattern]
+  (if-not (has-glob-meta? pattern)
+    [pattern]
+    (let [parts (vec (.split ^String pattern "/"))
+          glob-idx (or (some (fn [[i p]] (when (has-glob-meta? p) i))
+                             (map-indexed vector parts))
+                       (count parts))
+          base (if (zero? glob-idx)
+                 "."
+                 (str/join "/" (subvec parts 0 glob-idx)))
+          rel-glob (str/join "/" (subvec parts glob-idx))]
+      (->> (fs/glob base rel-glob)
+           (map str)
+           sort
+           vec))))
+
+(defn- expand-args
+  "Take a vector of positional args. Expand any that look like globs.
+   Returns a flat vector of file paths."
+  [args]
+  (vec (mapcat expand-glob args)))
 
 ;; ============================================================
 ;; Op implementations — same as before, but take a normalized opts map
@@ -342,16 +376,22 @@
   "Parse args for a known command. Returns the normalized opts map.
    - First non-flag arg fills in :file (or whatever the command declares
      as its first positional).
+   - Extra trailing non-flag args accumulate in :extra-files for commands
+     that take :file as their first positional. Globs in any positional
+     are expanded against the filesystem.
    - --flag value pairs fill in flag keys.
    - --bool-flag stands alone."
   [cmd args]
   (let [{:keys [positional flags]} cmd
-        flag-info (or flags {})]
+        flag-info (or flags {})
+        positional (or positional [])]
     (loop [args args
            opts {}
-           pos-remaining positional]
+           pos-remaining positional
+           extra-positional []]
       (if (empty? args)
-        opts
+        (cond-> opts
+          (seq extra-positional) (assoc :extra-files extra-positional))
         (let [a (first args)]
           (cond
             (or (= a "-h") (= a "--help"))
@@ -362,22 +402,27 @@
                   info (flag-info k)
                   type (:type info :string)]
               (if (= type :bool)
-                (recur (rest args) (assoc opts k true) pos-remaining)
+                (recur (rest args) (assoc opts k true) pos-remaining extra-positional)
                 (recur (drop 2 args)
                        (assoc opts k (parse-flag-val type (second args)))
-                       pos-remaining)))
+                       pos-remaining
+                       extra-positional)))
 
-            ;; positional
+            ;; positional — first one fills the declared slot
             (seq pos-remaining)
             (recur (rest args)
                    (assoc opts (first pos-remaining) a)
-                   (rest pos-remaining))
+                   (rest pos-remaining)
+                   extra-positional)
 
-            ;; trailing unrecognized
+            ;; extra trailing positional — accumulate for multi-file mode
             :else
-            (do (binding [*out* *err*]
-                  (println "Warning: unrecognized arg:" a))
-                (recur (rest args) opts pos-remaining))))))))
+            (recur (rest args) opts pos-remaining (conj extra-positional a))))))))
+
+(defn- file-expecting?
+  "Does this command's first positional take a :file?"
+  [cmd]
+  (= :file (first (:positional cmd))))
 
 ;; ============================================================
 ;; Legacy keyword-style args (REPL-flavored): :op :ls :file foo.clj
@@ -470,6 +515,26 @@
           (cond
             (:help opts)
             (print-cmd-help cmd-name)
+
+            ;; Multi-file mode: command takes :file, user gave a glob OR
+            ;; multiple positional args. Run once per matched file, emit
+            ;; a vector of results.
+            (and (file-expecting? c)
+                 (or (has-glob-meta? (:file opts))
+                     (seq (:extra-files opts))))
+            (let [all-paths (expand-args
+                             (into (if (:file opts) [(:file opts)] [])
+                                   (:extra-files opts)))]
+              (cond
+                (empty? all-paths)
+                (binding [*out* *err*]
+                  (println "No files matched.")
+                  (System/exit 1))
+
+                :else
+                (do (forms/init-from-file! (first all-paths))
+                    (doseq [p all-paths]
+                      (print-result ((:run c) (assoc opts :file p)))))))
 
             :else
             (do (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts))]
