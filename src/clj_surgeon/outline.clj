@@ -36,16 +36,22 @@
             (recur (z/right child))))))))
 
 (defn- extract-arglist
-  "Get arglist from a defn form."
+  "Get arglist from a defn form. Descends into :meta nodes so meta-tagged
+   arglists like `^String [k]` are found — extract-name handles meta the
+   same way."
   [zloc]
   (let [type-str (some-> zloc z/down z/string)]
     (when (contains? #{"defn" "defn-" ">defn" ">defn-"} type-str)
-      ;; Walk children to find first vector (the arglist)
       (loop [child (some-> zloc z/down)]
         (when child
-          (if (z/vector? child)
-            (z/string child)
-            (recur (z/right child))))))))
+          (let [tag (n/tag (z/node child))]
+            (cond
+              (= :vector tag) (z/string child)
+              (= :meta tag)   (let [inner (some-> child z/down z/rightmost)]
+                                (if (and inner (= :vector (n/tag (z/node inner))))
+                                  (z/string inner)
+                                  (recur (z/right child))))
+              :else           (recur (z/right child)))))))))
 
 (defn- preceding-comments
   "Look backwards from a form's start line to find attached comment lines.

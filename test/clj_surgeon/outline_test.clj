@@ -169,3 +169,40 @@
   (testing ".clj file has every form tagged with :platforms [:clj]"
     (let [result (outline-from-string "(ns my.x) (defn f [])")]
       (is (= [:clj] (:platforms (first (:forms result))))))))
+
+(deftest test-meta-tagged-arglist
+  (testing "outer meta on arglist (^String [a]) is stripped — arglist is [a]"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn outer-hint
+                     \"doc\"
+                     ^String [a b]
+                     a)")
+          form (first (filter #(= 'outer-hint (:name %)) (:forms result)))]
+      (is (= "[a b]" (:args form))
+          "function-level return-type hint must not appear in :args")))
+  (testing "param meta inside arglist ([^String s]) is preserved"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn inner-hint
+                     \"doc\"
+                     [^String s x]
+                     s)")
+          form (first (filter #(= 'inner-hint (:name %)) (:forms result)))]
+      (is (= "[^String s x]" (:args form))
+          "parameter-level hint must remain attached to the param")))
+  (testing "both outer and param meta together"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn both
+                     \"doc\"
+                     ^Long [^String s ^Integer i]
+                     i)")
+          form (first (filter #(= 'both (:name %)) (:forms result)))]
+      (is (= "[^String s ^Integer i]" (:args form))
+          "outer hint stripped, param hints kept")))
+  (testing "no meta — baseline still works"
+    (let [result (outline-from-string
+                  "(ns my.x) (defn plain [a b] a)")
+          form (first (filter #(= 'plain (:name %)) (:forms result)))]
+      (is (= "[a b]" (:args form))))))
