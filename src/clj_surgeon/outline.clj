@@ -12,7 +12,8 @@
   "Top-level defining forms we care about."
   #{"def" "defn" "defn-" "defonce" "defmacro" "defmethod" "defmulti"
     "defprotocol" "defrecord" "deftype" "declare"
-    ">defn" ">defn-"})
+    ">defn" ">defn-"
+    "deftest"})
 
 (defn- def-form? [type-str]
   (contains? def-types type-str))

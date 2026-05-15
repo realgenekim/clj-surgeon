@@ -169,3 +169,26 @@
   (testing ".clj file has every form tagged with :platforms [:clj]"
     (let [result (outline-from-string "(ns my.x) (defn f [])")]
       (is (= [:clj] (:platforms (first (:forms result))))))))
+
+(deftest test-deftest-classification
+  (testing "plain deftest is recognized as a defining form"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest plain (is true))")
+          form (first (filter #(= 'deftest (:type %)) (:forms result)))]
+      (is (some? form))
+      (is (= 'plain (:name form)))))
+  (testing "deftest with metadata between symbol and name (e.g. ^:integration)"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest ^:integration tagged (is true))")
+          form (first (filter #(= 'deftest (:type %)) (:forms result)))]
+      (is (some? form))
+      (is (= 'tagged (:name form))
+          "deftest with ^:integration meta on name should resolve to 'tagged'")))
+  (testing "deftest counted in :form-count"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest a (is true))
+                   (deftest ^:slow b (is true))")]
+      (is (= 2 (:form-count result))))))
