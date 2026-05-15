@@ -202,40 +202,135 @@ If the merge throws (e.g. ns docstring), the source has something the tool refus
 
 ## Custom Defining Forms (`.clj-surgeon.edn`)
 
-Projects can register custom def-shaped macros (`defendpoint`, `defenterprise`, `defsetting`, etc.) via a `.clj-surgeon.edn` file at the repo root. clj-surgeon walks up from each input file looking for one; closest config wins.
+Projects can register custom def-shaped macros (`defendpoint`, `defenterprise`, `defsetting`, etc.) via a `.clj-surgeon.edn` file at any ancestor directory of source files. clj-surgeon walks up from each input file looking for one; closest config wins.
 
-**Simple form** (string → kind keyword):
-
-```clojure
-{:aliases {"defendpoint"   :defn
-           "defenterprise" :defn
-           "defsetting"    :def}}
-```
-
-**Rich form** (with field-extraction DSL):
+### Shape
 
 ```clojure
 {:aliases
- {"defendpoint"
-  {:kind   :defn
-   :fields {:method {:select [:find-first :keyword] :emit? false}
-            :path   {:select [:right-of :method]    :emit? false}
-            :route  [:tuple :method :path]}}     ;; → :route [:get "/:id"]
-
-  "defenterprise"
-  {:kind   :defn
-   :fields {:name         [:nth 1]
-            :docstring    {:select [:when-type :string [:nth 2]] :optional? true}
-            :ee-namespace {:select [:when-type :symbol [:right-of :docstring]]
-                           :optional? true}
-            :arglist      [:find-first :vector]}}
-
-  "defsetting" {:kind :def}}}
+ {"<macro-name-string>"
+  {:fields {<field-key> <extractor-fn-or-stdlib-symbol>
+            ,,,}}}}
 ```
 
-Selector ops: `:nth`, `:find-first`, `:find-first-after`, `:right-of`, `:left-of`, `:when-type`, `:literal`, `:join`, `:tuple`. Types: `:symbol :string :keyword :vector :map :list :any`. Field-spec keys: `:select`, `:optional?`, `:emit?`. Meta nodes (`^Tag [a]`) auto-unwrapped. See README + docs/field-extraction-dsl.md for full reference.
+Each `:fields` value is either:
+- a stdlib symbol (e.g. `->defn-name`) — clj-surgeon resolves it to a built-in extractor
+- a `(fn [zloc] ...)` form — evaluated in an SCI sandbox at config-load. Access to `rewrite-clj.zip` (as `z`), `rewrite-clj.node` (as `n`), and the stdlib symbols.
 
-**When you see custom def-shapes in a file's `:ls` output showing `{:type custom-macro :line N :end-line M}` with no `:name`, suggest adding a `.clj-surgeon.edn` config.**
+Each extractor takes a zloc (pointing at the top-level form list) and returns the value to emit in `:ls` output. Return `nil` to omit the field.
+
+### Stdlib extractors
+
+| Symbol                                  | Returns                                                            |
+|-----------------------------------------|--------------------------------------------------------------------|
+| `->defn-name` (alias `->name`)          | 2nd child as symbol (meta-unwrapped: `^:private foo` → `foo`).     |
+| `->defn-arg-list` (alias `->arg-list`)  | First vector child as source string (newlines collapsed).          |
+| `->defn-docstring` (alias `->docstring`)| 3rd child if string literal, else nil.                             |
+| `->first-keyword`                       | First keyword child (value, not zloc).                             |
+| `->first-string`                        | First string-literal child (unquoted value).                       |
+| `->first-symbol`                        | First symbol child after position 0.                               |
+| `->first-vector`                        | First vector child as source string.                               |
+| `->nth-child`                           | Higher-order: `(->nth-child 2)` returns an extractor for child #2. |
+| `unwrap-meta`                           | Helper: pass any zloc, get the un-meta-wrapped version.            |
+
+### Worked examples
+
+```clojure
+{:aliases
+ {;; defsetting: just emit the name. Macro shape:
+  ;;   (defsetting NAME DOCSTRING-FORM &KV-OPTS)
+  "defsetting" {:fields {:name ->defn-name}}
+
+  ;; defenterprise: (defenterprise NAME DOCSTRING? EE-NS [args] body)
+  "defenterprise"
+  {:fields {:name         ->defn-name
+            :docstring    ->defn-docstring
+            :ee-namespace (fn [z]
+                            (let [after-name (-> z z/down z/right)
+                                  after-doc  (z/right after-name)
+                                  candidate  (if (string? (try (z/sexpr after-doc)
+                                                               (catch Exception _ nil)))
+                                               (z/right after-doc)
+                                               after-doc)]
+                              (try (let [v (z/sexpr candidate)]
+                                     (when (symbol? v) v))
+                                   (catch Exception _ nil))))
+            :arglist      ->defn-arg-list}}
+
+  ;; defendpoint: (api.macros/defendpoint METHOD URL DOC? META? [args] body).
+  ;; No name slot — synthesize :route [METHOD URL].
+  "defendpoint"
+  {:fields {:route (fn [z]
+                     [(-> z z/down z/right z/sexpr)
+                      (-> z z/down z/right z/right z/sexpr)])}}}}
+```
+
+### When to suggest creating one
+
+When `:ls` shows forms as `{:type custom-macro :line N :end-line M}` with no `:name` or other interesting fields, the macro isn't recognized. Suggest `.clj-surgeon.edn`. Use the `Generate .clj-surgeon.edn` workflow below.
+
+## Generate `.clj-surgeon.edn` for a Repo
+
+When a Clojure repo uses custom defining-form macros that clj-surgeon doesn't recognize out of the box, generate `.clj-surgeon.edn` automatically.
+
+### Step 1 — Find candidate macros
+
+Two sources:
+
+```bash
+# Macros USED in the codebase: top-level def-shaped forms not in core
+rg "^\(([a-z][a-z\-]*(\.[a-z\-]+)*/)?def[a-z\-]*[?!]?" --only-matching -r '$0' src/ | \
+  sort -u | \
+  rg -v "^\((defn-?|def|defmacro|defmethod|defmulti|defprotocol|defrecord|deftype|defonce|declare|deftest)$"
+
+# Macros DEFINED in the codebase: (defmacro X ...)
+rg "^\(defmacro " src/ -o -r '$0' | rg -o "defmacro \S+"
+```
+
+Intersection (macros both defined in repo AND used at top-level) = highest-confidence candidates. Macros used but not defined locally are still candidates (imported from libs).
+
+### Step 2 — Sample each candidate
+
+For each candidate macro `MACRO`:
+
+1. `rg -B 0 -A 10 "^\(MACRO " src/ | head -40` — see typical shapes
+2. Find the macro definition if local: `rg "^\(defmacro MACRO " -l src/` then read its `:arglists` metadata (a defmacro convention) — gives positional spec like `[method route docstring? metadata? [args] & body]`
+
+### Step 3 — Map slots to extractors
+
+For each named slot in the macro's arglist:
+- "name" slot at position 1 → `->defn-name`
+- docstring at position 2 → `->defn-docstring`
+- arglist vector anywhere → `->defn-arg-list`
+- other positional symbols/keywords → inline `(fn [z] (-> z z/down z/right ...))`
+- composite outputs (e.g. method+route → :route tuple) → inline fn returning a vector
+
+Skip slots that are body, varargs, or that you can't infer.
+
+### Step 4 — Write `.clj-surgeon.edn`
+
+Put it at the repo root (or wherever the source files live below). Format:
+
+```clojure
+{:aliases
+ {"MACRO-NAME"
+  {:fields {:name ->defn-name
+            ,,,}}
+  ,,,}}
+```
+
+### Step 5 — Verify
+
+Run `clj-surgeon ls` against one sample file per macro. Confirm:
+- The macro now appears with `:name` (or whatever field you targeted)
+- Other forms (`defn`, `def`, etc.) still extract correctly
+- `:form-count` matches expected number of top-level defs
+
+If a field is wrong, edit the extractor and re-run. Iteration cost is single-file `:ls`, ~5ms.
+
+### Step 6 — Show user the proposed config
+
+Before writing the file, present the proposed `.clj-surgeon.edn` to the user with a brief explanation of each extractor choice. Apply only after confirmation.
 
 ## Important Notes
 

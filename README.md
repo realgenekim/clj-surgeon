@@ -236,72 +236,70 @@ clj-surgeon recognizes all of these through four resolution tiers:
 
 ### `.clj-surgeon.edn` — per-project config
 
-Drop a `.clj-surgeon.edn` file at the project root (clj-surgeon walks up from each source file looking for one; closest config wins). Two forms:
+Drop a `.clj-surgeon.edn` at any ancestor directory of your source files (clj-surgeon walks up from each input file looking for one; closest config wins). Each entry maps a macro name to a spec containing `:fields` — a map of field-key to extractor function.
 
-**Simple form — string → kind keyword:**
+Field extractors are real Clojure functions. They're evaluated in an SCI sandbox at config-load time and called once per matching form. clj-surgeon ships a stdlib of named extractors you compose with.
+
+**Minimal example — get a form's name:**
 
 ```clojure
-{:aliases {"defendpoint"   :defn
-           "defenterprise" :defn
-           "defsetting"    :def}}
+{:aliases {"defsetting" {:fields {:name ->defn-name}}}}
 ```
 
-That gets the macros recognized — `:ls` lists them, `:deps` graphs them, `:topo` sorts them. Default name extraction (second child) is used.
-
-**Rich form — `{:kind <kw> :fields {...}}` with a field-extraction DSL:**
+**Worked Metabase example:**
 
 ```clojure
 {:aliases
- {;; defendpoint has no name slot — synthesize :route [METHOD "path"] from
-  ;; the first keyword child and its right neighbour.
-  "defendpoint"
-  {:kind   :defn
-   :fields {:method {:select [:find-first :keyword] :emit? false}
-            :path   {:select [:right-of :method]    :emit? false}
-            :route  [:tuple :method :path]}}
+ {;; defsetting: just emit the name. Macro shape:
+  ;;   (defsetting NAME DOCSTRING-FORM &KV-OPTS)
+  "defsetting" {:fields {:name ->defn-name}}
 
-  ;; defenterprise — like defn but with an extra EE-namespace symbol
-  ;; between the optional docstring and the arglist.
+  ;; defenterprise: (defenterprise NAME DOCSTRING? EE-NS [args] body)
   "defenterprise"
-  {:kind   :defn
-   :fields {:name         [:nth 1]
-            :docstring    {:select [:when-type :string [:nth 2]] :optional? true}
-            :ee-namespace {:select [:when-type :symbol [:right-of :docstring]]
-                           :optional? true}
-            :arglist      [:find-first :vector]}}
+  {:fields {:name         ->defn-name
+            :docstring    ->defn-docstring
+            :ee-namespace (fn [z]
+                            (let [after-name (-> z z/down z/right)
+                                  after-doc  (z/right after-name)
+                                  candidate  (if (string? (try (z/sexpr after-doc)
+                                                               (catch Exception _ nil)))
+                                               (z/right after-doc)
+                                               after-doc)]
+                              (try (let [v (z/sexpr candidate)]
+                                     (when (symbol? v) v))
+                                   (catch Exception _ nil))))
+            :arglist      ->defn-arg-list}}
 
-  "defsetting" {:kind :def}}}
+  ;; defendpoint: (api.macros/defendpoint METHOD URL DOC? META? [args] body).
+  ;; No name slot — synthesize :route [METHOD URL] from positions 1 and 2.
+  "defendpoint"
+  {:fields {:route (fn [z]
+                     [(-> z z/down z/right z/sexpr)
+                      (-> z z/down z/right z/right z/sexpr)])}}}}
 ```
 
-**Selector ops:**
+**Stdlib extractors** (referenced by bare symbol in `.clj-surgeon.edn`):
 
-| Op                                | Result                                                            |
-|-----------------------------------|-------------------------------------------------------------------|
-| `[:nth N]`                        | Direct child at index N (0 = macro symbol, 1 = name slot).        |
-| `[:find-first <type>]`            | First child matching type (meta auto-unwrapped).                  |
-| `[:find-first-after <field> <t>]` | First child matching type, after a previously-resolved field.     |
-| `[:right-of <field>]`             | Sibling immediately after another resolved field.                 |
-| `[:left-of <field>]`              | Mirror of `:right-of`.                                            |
-| `[:when-type <type> <sel>]`       | Run inner selector, return only if result matches type.           |
-| `[:literal <value>]`              | Constant value.                                                   |
-| `[:join <sep> <refs...>]`         | String-join previously-resolved field values.                     |
-| `[:tuple <refs...>]`              | EDN-vector of previously-resolved values (read back as data).     |
+| Symbol                                 | Returns                                                            |
+|----------------------------------------|--------------------------------------------------------------------|
+| `->defn-name` (alias `->name`)         | 2nd child as symbol (meta-unwrapped).                              |
+| `->defn-arg-list` (alias `->arg-list`) | First vector child as source string (newlines collapsed).          |
+| `->defn-docstring` (alias `->docstring`)| 3rd child if string literal, else nil.                            |
+| `->first-keyword`                      | First keyword child (value, not zloc).                             |
+| `->first-string`                       | First string-literal child (unquoted value).                       |
+| `->first-symbol`                       | First symbol child after position 0.                               |
+| `->first-vector`                       | First vector child as source string.                               |
+| `->nth-child`                          | Higher-order: `(->nth-child 2)` returns an extractor for child #2. |
+| `unwrap-meta`                          | Helper: pass any zloc, get the un-meta-wrapped version.            |
 
-**Types:** `:symbol :string :keyword :vector :map :list :any`.
+**Inline functions:** any `(fn [z] ...)` is evaluated by SCI with these bindings available:
+- `z/...` — `rewrite-clj.zip` (subset: `down`, `up`, `right`, `left`, `rightmost`, `leftmost`, `node`, `string`, `sexpr`, `next`, `prev`, `of-string`)
+- `n/...` — `rewrite-clj.node` (subset: `tag`, `children`)
+- Bare stdlib symbols (`->defn-name` etc.) callable as ordinary functions.
 
-**Field-spec keys:**
+**Privacy** (defn- vs defn) is auto-detected from a trailing `-` in the macro name (`mu/defn-`, `>defn-`). No config needed.
 
-| Key          | Default | Meaning                                                            |
-|--------------|---------|--------------------------------------------------------------------|
-| `:select`    | the spec itself if it's a vector | The selector expression for this field.   |
-| `:optional?` | `false` for bare-vector specs; `true` for map specs | If true, missing field silently omitted; if false, throws. |
-| `:emit?`     | `true`  | If false, field is resolved (so later fields can reference it) but omitted from the final `:ls` output. |
-
-**Meta auto-unwrap:** every terminal selector strips `:meta` wrappers, so `^String [k]` resolves to the vector `[k]`, not the meta node.
-
-**Resolution order:** fields are topo-sorted by their refs. Cycles error at config-load.
-
-See [docs/field-extraction-dsl.md](docs/field-extraction-dsl.md) for the full design.
+**Validation:** config errors fail loudly at load time, not silently at runtime. Bad EDN, unknown stdlib symbol, malformed `fn` form — each throws with file path + macro name + field key. Runtime extractor crashes are also wrapped with macro name, field key, and source line of the offending form.
 
 ## How Claude Code Uses This
 
