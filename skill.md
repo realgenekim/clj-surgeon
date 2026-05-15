@@ -200,14 +200,53 @@ rm src/foo.clj src/foo.cljs
 
 If the merge throws (e.g. ns docstring), the source has something the tool refuses to silently rewrite — fix by hand and retry.
 
+## Custom Defining Forms (`.clj-surgeon.edn`)
+
+Projects can register custom def-shaped macros (`defendpoint`, `defenterprise`, `defsetting`, etc.) via a `.clj-surgeon.edn` file at the repo root. clj-surgeon walks up from each input file looking for one; closest config wins.
+
+**Simple form** (string → kind keyword):
+
+```clojure
+{:aliases {"defendpoint"   :defn
+           "defenterprise" :defn
+           "defsetting"    :def}}
+```
+
+**Rich form** (with field-extraction DSL):
+
+```clojure
+{:aliases
+ {"defendpoint"
+  {:kind   :defn
+   :fields {:method {:select [:find-first :keyword] :emit? false}
+            :path   {:select [:right-of :method]    :emit? false}
+            :route  [:tuple :method :path]}}     ;; → :route [:get "/:id"]
+
+  "defenterprise"
+  {:kind   :defn
+   :fields {:name         [:nth 1]
+            :docstring    {:select [:when-type :string [:nth 2]] :optional? true}
+            :ee-namespace {:select [:when-type :symbol [:right-of :docstring]]
+                           :optional? true}
+            :arglist      [:find-first :vector]}}
+
+  "defsetting" {:kind :def}}}
+```
+
+Selector ops: `:nth`, `:find-first`, `:find-first-after`, `:right-of`, `:left-of`, `:when-type`, `:literal`, `:join`, `:tuple`. Types: `:symbol :string :keyword :vector :map :list :any`. Field-spec keys: `:select`, `:optional?`, `:emit?`. Meta nodes (`^Tag [a]`) auto-unwrapped. See README + docs/field-extraction-dsl.md for full reference.
+
+**When you see custom def-shapes in a file's `:ls` output showing `{:type custom-macro :line N :end-line M}` with no `:name`, suggest adding a `.clj-surgeon.edn` config.**
+
 ## Important Notes
 
 - **~5ms startup** — babashka, not JVM. Call it freely.
 - **Returns EDN** — pipe through `bb -e '(let [d (read)] ...)'` to filter
+- **One form per line in :ls** — output is line-greppable; `grep "defendpoint"` returns full form context per match
 - **All analysis is pure** — side effects only in `!` variants
 - **`:forms` arg takes EDN vector** — `:forms '[foo bar baz]'`
 - **After `:extract!`, always run tests** — the compiler catches bare references instantly
-- **Skips metadata** — handles `^:private`, `^:dynamic` correctly
+- **Skips metadata** — handles `^:private`, `^:dynamic` correctly. Param-meta in arglists (`^String [k]`) and return-type-meta on arglist (`^Long [k]`) both supported
+- **:platforms emitted only for .cljc** — single-platform .clj/.cljs files omit it (redundant)
 - **Skips declares** — `:mv` and `:deps` target actual defns
 
 ## Proactive Usage

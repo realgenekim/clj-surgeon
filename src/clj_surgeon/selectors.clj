@@ -198,6 +198,12 @@
                         {:op op :valid-ops (keys op-table)})))
       (f form-zloc args resolved))))
 
+(defn- collapse-ws
+  "Collapse runs of whitespace (including newlines) to a single space.
+   Source indentation carries no semantic info in :ls-style output."
+  [s]
+  (when s (clojure.string/replace s #"\s+" " ")))
+
 (defn- result->record
   "Normalize a run-selector result into {:zloc z :value v}.
    For synthetic ops (no-zloc), :zloc is nil."
@@ -205,7 +211,7 @@
   (cond
     (nil? result) nil
     (:no-zloc result) {:zloc nil :value (:value result)}
-    :else {:zloc result :value (z/string result)}))
+    :else {:zloc result :value (collapse-ws (z/string result))}))
 
 ;; ============================================================
 ;; Field-spec analysis: figure out resolution order

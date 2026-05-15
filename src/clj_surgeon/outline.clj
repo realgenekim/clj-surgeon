@@ -28,10 +28,14 @@
             s
             (recur (z/right child))))))))
 
+(defn- collapse-ws [s]
+  (when s (str/replace s #"\s+" " ")))
+
 (defn- extract-arglist
   "Get arglist from a defn form. Descends into :meta nodes so meta-tagged
    arglists like `^String [k]` are found — extract-name handles meta the
-   same way."
+   same way. Source whitespace (including newlines) is collapsed to single
+   spaces — :ls output should be one line per form."
   [zloc]
   (let [type-str (some-> zloc z/down z/string)]
     (when (forms/has-arglists? type-str)
@@ -39,10 +43,10 @@
         (when child
           (let [tag (n/tag (z/node child))]
             (cond
-              (= :vector tag) (z/string child)
+              (= :vector tag) (collapse-ws (z/string child))
               (= :meta tag)   (let [inner (some-> child z/down z/rightmost)]
                                 (if (and inner (= :vector (n/tag (z/node inner))))
-                                  (z/string inner)
+                                  (collapse-ws (z/string inner))
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 

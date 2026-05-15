@@ -227,32 +227,81 @@ Planning is pure — only `:extract!` writes files. The compiler catches bare re
 
 Real-world Clojure codebases don't just use `defn`. Libraries like [Guardrails](https://github.com/fulcrologic/guardrails) (`>defn`, `>defn-`), [Malli](https://github.com/metosin/malli) (`mu/defn`), and [Schema](https://github.com/plumatic/schema) (`s/defn`) define their own `defn`-like macros. Large projects add their own: `defendpoint`, `defenterprise`, `defsetting`.
 
-clj-surgeon recognizes all of these. Every operation — `:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extract`, `:extract`, `:fix-declares` — uses a single classification module (`forms.clj`) to decide what counts as a definition, what has arglists, and what is private.
-
-**How it works:**
+clj-surgeon recognizes all of these through four resolution tiers:
 
 1. **Core forms** — `defn`, `defn-`, `def`, `defonce`, `defmacro`, etc. — matched exactly.
-2. **Namespace-qualified forms** — `mu/defn`, `s/defn`, `malli.util/defn-` — the alias is stripped and the local name is matched against core forms. This works regardless of what alias the project uses (`mu/defn`, `m/defn`, `malli/defn` all resolve to `:defn`).
-3. **Explicit aliases** — forms with non-standard names (`>defn`, `>defn-`) that can't be auto-detected from the local name. These are listed in `forms.clj`.
+2. **In-source explicit aliases** — `>defn`, `>defn-` — listed in `forms.clj`.
+3. **Project aliases from `.clj-surgeon.edn`** — see below.
+4. **Namespace-qualified split-on-`/`** — `mu/defn`, `s/defn`, `malli.util/defn-` — the alias is stripped and the local name is re-checked against the prior tiers. Works regardless of what alias the project uses.
 
-**To add support for a new macro,** check whether it's already handled:
+### `.clj-surgeon.edn` — per-project config
 
-```clojure
-;; Namespace-qualified forms just work — no config needed
-(mu/defn foo ...)     ; ✓ auto-detected: local name "defn" → :defn
-(s/defn bar ...)      ; ✓ auto-detected: local name "defn" → :defn
-(my.lib/defn- baz ..) ; ✓ auto-detected: local name "defn-" → :defn- (private)
-```
+Drop a `.clj-surgeon.edn` file at the project root (clj-surgeon walks up from each source file looking for one; closest config wins). Two forms:
 
-If the macro has a non-standard name (doesn't end in a core form name after `/`), add one line to `explicit-aliases` in `src/clj_surgeon/forms.clj`:
+**Simple form — string → kind keyword:**
 
 ```clojure
-(def explicit-aliases
-  {">defn"          :defn
-   ">defn-"         :defn-
-   "defendpoint"    :defn      ;; your custom macro here
-   "defenterprise"  :defn})
+{:aliases {"defendpoint"   :defn
+           "defenterprise" :defn
+           "defsetting"    :def}}
 ```
+
+That gets the macros recognized — `:ls` lists them, `:deps` graphs them, `:topo` sorts them. Default name extraction (second child) is used.
+
+**Rich form — `{:kind <kw> :fields {...}}` with a field-extraction DSL:**
+
+```clojure
+{:aliases
+ {;; defendpoint has no name slot — synthesize :route [METHOD "path"] from
+  ;; the first keyword child and its right neighbour.
+  "defendpoint"
+  {:kind   :defn
+   :fields {:method {:select [:find-first :keyword] :emit? false}
+            :path   {:select [:right-of :method]    :emit? false}
+            :route  [:tuple :method :path]}}
+
+  ;; defenterprise — like defn but with an extra EE-namespace symbol
+  ;; between the optional docstring and the arglist.
+  "defenterprise"
+  {:kind   :defn
+   :fields {:name         [:nth 1]
+            :docstring    {:select [:when-type :string [:nth 2]] :optional? true}
+            :ee-namespace {:select [:when-type :symbol [:right-of :docstring]]
+                           :optional? true}
+            :arglist      [:find-first :vector]}}
+
+  "defsetting" {:kind :def}}}
+```
+
+**Selector ops:**
+
+| Op                                | Result                                                            |
+|-----------------------------------|-------------------------------------------------------------------|
+| `[:nth N]`                        | Direct child at index N (0 = macro symbol, 1 = name slot).        |
+| `[:find-first <type>]`            | First child matching type (meta auto-unwrapped).                  |
+| `[:find-first-after <field> <t>]` | First child matching type, after a previously-resolved field.     |
+| `[:right-of <field>]`             | Sibling immediately after another resolved field.                 |
+| `[:left-of <field>]`              | Mirror of `:right-of`.                                            |
+| `[:when-type <type> <sel>]`       | Run inner selector, return only if result matches type.           |
+| `[:literal <value>]`              | Constant value.                                                   |
+| `[:join <sep> <refs...>]`         | String-join previously-resolved field values.                     |
+| `[:tuple <refs...>]`              | EDN-vector of previously-resolved values (read back as data).     |
+
+**Types:** `:symbol :string :keyword :vector :map :list :any`.
+
+**Field-spec keys:**
+
+| Key          | Default | Meaning                                                            |
+|--------------|---------|--------------------------------------------------------------------|
+| `:select`    | the spec itself if it's a vector | The selector expression for this field.   |
+| `:optional?` | `false` for bare-vector specs; `true` for map specs | If true, missing field silently omitted; if false, throws. |
+| `:emit?`     | `true`  | If false, field is resolved (so later fields can reference it) but omitted from the final `:ls` output. |
+
+**Meta auto-unwrap:** every terminal selector strips `:meta` wrappers, so `^String [k]` resolves to the vector `[k]`, not the meta node.
+
+**Resolution order:** fields are topo-sorted by their refs. Cycles error at config-load.
+
+See [docs/field-extraction-dsl.md](docs/field-extraction-dsl.md) for the full design.
 
 ## How Claude Code Uses This
 
