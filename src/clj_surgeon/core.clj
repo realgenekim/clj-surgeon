@@ -152,10 +152,9 @@
 ;; Output rendering
 ;; ============================================================
 
-(defn- pprint-outline
-  "Custom printer for :ls / :outline output. Header keys pprinted normally,
-   but :forms is laid out one form per line so output is greppable and
-   scannable."
+(defn- pprint-outline-edn
+  "Pretty-print :ls / :outline output as EDN, one form per line.
+   Each form line is self-contained and grep-friendly."
   [result]
   (let [{:keys [forms]} result
         header (dissoc result :forms)]
@@ -173,13 +172,66 @@
             (print "  ") (pr f) (println))
           (println " ]}")))))
 
+(defn- form->text-line
+  "Render one form map as a compact text line.
+
+   LINE-RANGE: TYPE NAME ARGS [extras]
+
+   Examples:
+     74-93: api.macros/defendpoint route=[:get \"/\"]
+     95-122: defn- hydrate [{:keys [id]}]
+     13-21: defsetting application-name"
+  [{:keys [type line end-line name args] :as form}]
+  (let [range-str (cond
+                    (and line end-line (not= line end-line)) (str line "-" end-line)
+                    line (str line)
+                    :else "?")
+        ;; Anything beyond the standard fields we render as key=value at end.
+        ;; Skip the noisy structural keys.
+        skip-keys #{:type :line :end-line :name :args :platforms :comment-start
+                    :forward-refs}
+        extras (->> (dissoc form skip-keys)
+                    (filter (fn [[k v]] (and v (not (contains? skip-keys k)))))
+                    (sort-by key))
+        extras-str (when (seq extras)
+                     (->> extras
+                          (map (fn [[k v]]
+                                 (str (clojure.core/name k) "="
+                                      (cond
+                                        (string? v) (let [s (-> v
+                                                                (clojure.string/replace #"\s+" " ")
+                                                                clojure.string/trim)]
+                                                      (if (> (count s) 60)
+                                                        (str (subs s 0 57) "...")
+                                                        s))
+                                        :else (pr-str v)))))
+                          (clojure.string/join " ")))]
+    (str range-str ": "
+         (clojure.core/name type)
+         (when name (str " " name))
+         (when args (str " " args))
+         (when extras-str (str " " extras-str)))))
+
+(defn- pprint-outline-text
+  "Compact text printer for :ls output. Header on top, then one form per line."
+  [{:keys [ns file lines form-count forms]}]
+  (when ns (printf "%s" ns))
+  (when file (printf "  (%s)" file))
+  (println)
+  (when (or lines form-count)
+    (printf "  %d lines, %d forms%n" (or lines 0) (or form-count 0)))
+  (doseq [f forms]
+    (println (form->text-line f))))
+
 (defn- has-forms? [r]
   (and (map? r) (contains? r :forms)))
+
+(def ^:dynamic *edn-format?* false)
 
 (defn- print-result [result]
   (cond
     (string? result)    (println result)
-    (has-forms? result) (pprint-outline result)
+    (has-forms? result) (if *edn-format?* (pprint-outline-edn result) (pprint-outline-text result))
     :else               (pp/pprint result)))
 
 ;; ============================================================
@@ -213,14 +265,18 @@
 (def commands
   {"ls"
    {:summary    "Outline a file — every top-level form with line ranges, names, args"
-    :usage      "clj-surgeon ls <file>"
+    :usage      "clj-surgeon ls <file> [--edn]"
+    :details    "Default output is a compact one-line-per-form text format
+optimised for scanning. Pass --edn for the full machine-readable EDN."
     :positional [:file]
+    :flags      {:edn {:doc "emit EDN instead of compact text" :type :bool}}
     :run        run-outline}
 
    "outline"
    {:summary    "Alias for 'ls'"
-    :usage      "clj-surgeon outline <file>"
+    :usage      "clj-surgeon outline <file> [--edn]"
     :positional [:file]
+    :flags      {:edn {:doc "emit EDN instead of compact text" :type :bool}}
     :run        run-outline}
 
    "deps"
@@ -512,6 +568,7 @@
 
         :else
         (let [opts (parse-cmd-args c rest-args)]
+          (binding [*edn-format?* (boolean (:edn opts))]
           (cond
             (:help opts)
             (print-cmd-help cmd-name)
@@ -539,7 +596,7 @@
             :else
             (do (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts))]
                   (forms/init-from-file! anchor))
-                (print-result ((:run c) opts)))))))))
+                (print-result ((:run c) opts))))))))))
 
 (defn -main [& args]
   (dispatch args))

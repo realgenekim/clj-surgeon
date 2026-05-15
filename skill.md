@@ -242,9 +242,11 @@ Each extractor takes a zloc (pointing at the top-level form list) and returns th
   "defsetting" {:fields {:name ->defn-name}}
 
   ;; defenterprise: (defenterprise NAME DOCSTRING? EE-NS [args] body)
+  ;; Skip docstring extraction — :ls is a navigation map. Users :ls a
+  ;; file, see the line range, then Read the file to see the docstring.
+  ;; Saves tokens on every invocation.
   "defenterprise"
   {:fields {:name         ->defn-name
-            :docstring    ->defn-docstring
             :ee-namespace (fn [z]
                             (let [after-name (-> z z/down z/right)
                                   after-doc  (z/right after-name)
@@ -300,12 +302,17 @@ For each candidate macro `MACRO`:
 
 For each named slot in the macro's arglist:
 - "name" slot at position 1 → `->defn-name`
-- docstring at position 2 → `->defn-docstring`
 - arglist vector anywhere → `->defn-arg-list`
 - other positional symbols/keywords → inline `(fn [z] (-> z z/down z/right ...))`
 - composite outputs (e.g. method+route → :route tuple) → inline fn returning a vector
 
-Skip slots that are body, varargs, or that you can't infer.
+**Skip docstrings.** `:ls` is a navigation map. Users see the line range
+and `Read` the source for full docstring content. Don't extract docstrings
+in standard configs — it bloats every `:ls` invocation. `->defn-docstring`
+exists in the stdlib for the rare project that explicitly wants them, but
+default to omitting.
+
+Also skip slots that are body, varargs, or that you can't infer.
 
 ### Step 4 — Write `.clj-surgeon.edn`
 
