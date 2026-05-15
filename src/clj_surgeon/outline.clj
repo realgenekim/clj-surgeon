@@ -12,10 +12,24 @@
 (defn- resolve-user-fields
   "Run each user-supplied extractor fn against the form zloc. Returns a
    map field-key -> value, omitting nil results (extractor signaled
-   absence). Exceptions propagate so the user sees the problem."
-  [user-fields zloc]
+   absence).
+
+   When an extractor throws, attach context so the user can find the
+   broken field — which macro, which field key, which form line. Then
+   re-throw."
+  [user-fields zloc type-str line]
   (into {} (for [[k f] user-fields
-                 :let [v (f zloc)]
+                 :let [v (try (f zloc)
+                              (catch Exception e
+                                (throw (ex-info
+                                        (str ".clj-surgeon.edn: extractor for "
+                                             type-str " :fields " k
+                                             " threw at line " line ": "
+                                             (.getMessage e))
+                                        {:macro type-str
+                                         :field k
+                                         :line line}
+                                        e))))]
                  :when (some? v)]
              [k v])))
 
@@ -105,7 +119,8 @@
                              spec (forms/spec type-str)
                              user-fields (:fields spec)
                              extracted (when user-fields
-                                         (resolve-user-fields user-fields zloc))
+                                         (resolve-user-fields user-fields zloc
+                                                              type-str (:row m)))
                              ;; If user provided :fields, respect their
                              ;; complete spec — don't fall back to legacy
                              ;; extractors for fields they didn't declare.
