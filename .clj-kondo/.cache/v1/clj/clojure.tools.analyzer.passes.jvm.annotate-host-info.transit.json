@@ -1,1 +1,0 @@
-["^ ","~$annotate-host-info",["^ ","~:row",20,"~:col",1,"~:fixed-arities",["~#set",[1]],"~:name","^0","~:ns","~$clojure.tools.analyzer.passes.jvm.annotate-host-info","~:top-ns","^7","~:type","~:fn"],"~:filename","/Users/bcm/.m2/repository/org/clojure/tools.analyzer.jvm/1.3.2/tools.analyzer.jvm-1.3.2.jar:clojure/tools/analyzer/passes/jvm/annotate_host_info.clj"]

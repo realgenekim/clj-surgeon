@@ -1,6 +1,10 @@
 .cpcache/
 .lsp/
-.clj-kondo/
+
+# Ignore kondo caches but allow checked-in configs.
+.clj-kondo/.cache/
+.clj-kondo/imports/
+
 .nrepl-port
 *.iml
 .idea/
