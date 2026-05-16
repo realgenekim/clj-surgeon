@@ -10,8 +10,9 @@ help:
 	@echo "  make nrepl             Start bb nREPL"
 	@echo ""
 	@echo "Direct usage:"
-	@echo "  bb -m clj-surgeon.core :op :outline :file src/my/ns.clj"
-	@echo "  bb -m clj-surgeon.core :op :declares :file src/my/ns.clj"
+	@echo "  bb -m clj-surgeon.core :op :ls :file src/my/ns.clj"
+	@echo "  bb -m clj-surgeon.core :op :ls-tree :dir ."
+	@echo "  bb -m clj-surgeon.core :op :ls-tree :dir ~/src.local/ :grep \"mail|imap\""
 	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 

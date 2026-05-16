@@ -79,6 +79,22 @@ clj-surgeon :op :ls :file src/writer/state.clj
 
 Every top-level form with exact line boundaries, types, names, arglists, and forward reference detection. 236 forms in a 2768-line file, returned in ~200ms.
 
+#### `:ls-tree` / `:tree` / `:map` — Map an entire directory of repos
+
+```bash
+# Map a single project
+clj-surgeon :op :ls-tree :dir .
+
+# Search across ALL your repos in seconds
+clj-surgeon :op :ls-tree :dir ~/src.local/ :grep "postgres|jdbc"
+```
+
+Discovers projects via `deps.edn`/`project.clj`, reads their `:paths`, outlines every `.clj` file. With `:grep`, uses ripgrep to find matching files first — turns a 90-second full scan into a 3-second surgical search.
+
+**The value:** "Which of my 20 repos talks to Postgres?" answered in one command, 3 seconds, ~3K tokens. An Explore agent takes 80+ seconds and 55K tokens for the same question.
+
+See [docs/ls-tree.md](docs/ls-tree.md) for full documentation.
+
 #### `:ls-deps` — Transitive dependency tree
 
 ```bash
