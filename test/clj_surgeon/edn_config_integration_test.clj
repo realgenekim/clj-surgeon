@@ -16,7 +16,8 @@
             [clojure.java.io :as io]
             [clj-surgeon.outline :as outline]
             [clj-surgeon.forms :as forms]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [babashka.process :as proc]))
 
 ;; ============================================================
 ;; Helpers
@@ -293,4 +294,104 @@
               (is (= 'create-user (:name second-form)))
               (is (= :post (:method second-form)))
               (is (= "/users" (:path second-form)))))))
+      (finally (rm-rf dir)))))
+
+;; ============================================================
+;; Scenario 6: Subprocess CLI test — what the user actually sees
+;;
+;; Shells out to `bb -m clj-surgeon.core` as a separate process.
+;; No nested SCI — tests the real CLI end-to-end.
+;; ============================================================
+
+(def ^:private project-src
+  "Absolute path to this project's src/ dir, for subprocess classpath."
+  (let [this-file (io/file "test/clj_surgeon/edn_config_integration_test.clj")]
+    (str (.getAbsolutePath (io/file (.getParentFile (.getParentFile (.getParentFile this-file))) "src")))))
+
+(def cli-config
+  "{:aliases
+ {\"defsetting\"
+  {:fields {:name ->defn-name}}
+
+  \"defendpoint\"
+  {:fields {:route (fn [z]
+                     [(-> z z/down z/right z/sexpr)
+                      (-> z z/down z/right z/right z/sexpr)])}}}}")
+
+(def cli-source
+  "(ns myapp.api
+  (:require [clojure.string :as str]))
+
+(defsetting app-name
+  (deferred-tru \"The name\")
+  :default \"MyApp\")
+
+(defendpoint :get \"/users\"
+  \"List all users\"
+  [request]
+  (db/list-users))
+
+(defn helper [x]
+  (str \"hello \" x))")
+
+(deftest test-cli-subprocess-with-edn-config
+  (let [dir (mk-tmp-dir "cli-e2e-")]
+    (try
+      (spit-at dir
+               ".clj-surgeon.edn" cli-config
+               "src/myapp/api.clj" cli-source)
+      (let [src-path (str dir "/src/myapp/api.clj")
+            result (proc/shell {:out :string :err :string :dir (str dir)}
+                               "bb" "-cp" project-src "-m" "clj-surgeon.core"
+                               ":op" ":ls" ":file" src-path)
+            output (:out result)]
+
+        (testing "CLI exits successfully"
+          (is (zero? (:exit result))
+              (str "CLI failed: " (:err result))))
+
+        (testing "defsetting name extracted in CLI output"
+          (is (str/includes? output "app-name")
+              "defsetting should show :name app-name"))
+
+        (testing "defendpoint route extracted via SCI fn in CLI output"
+          (is (str/includes? output ":get")
+              "defendpoint should show :get in route")
+          (is (str/includes? output "\"/users\"")
+              "defendpoint should show \"/users\" in route"))
+
+        (testing "regular defn still appears with arglist"
+          (is (str/includes? output "helper"))
+          (is (str/includes? output "[x]")))
+
+        (testing "namespace detected"
+          (is (str/includes? output "myapp.api")))
+
+        (testing "requires present"
+          (is (str/includes? output "[clojure.string :as str]"))))
+      (finally (rm-rf dir)))))
+
+(deftest test-cli-subprocess-without-config
+  (let [dir (mk-tmp-dir "cli-noconfig-")]
+    (try
+      ;; No .clj-surgeon.edn — defendpoint should NOT be recognized
+      (spit-at dir
+               "src/app.clj"
+               "(ns app)\n(defendpoint handle [req] req)\n(defn greet [x] (str \"hi \" x))")
+      (let [src-path (str dir "/src/app.clj")
+            result (proc/shell {:out :string :err :string :dir (str dir)}
+                               "bb" "-cp" project-src "-m" "clj-surgeon.core"
+                               ":op" ":ls" ":file" src-path)
+            output (:out result)]
+
+        (testing "CLI exits successfully"
+          (is (zero? (:exit result))))
+
+        (testing "defn greet is recognized"
+          (is (str/includes? output "greet"))
+          (is (str/includes? output "[x]")))
+
+        (testing "defendpoint without config has no :name"
+          (is (not (str/includes? output "handle"))
+              "without config, defendpoint name should not be extracted")))
       (finally (rm-rf dir)))))
