@@ -11,7 +11,24 @@
    2. Simple kind-only config (no field extractors)
    3. SCI fn-based extractors
    4. Multiple repos with different configs (closest-wins)
-   5. No config — baseline behavior"
+   5. No config — baseline behavior
+   6. Subprocess CLI tests — shells out to a fresh `bb` process
+
+   WHY TWO KINDS OF INTEGRATION TESTS?
+
+   Scenarios 1-5 call outline/outline directly from within the test
+   suite. This tests the Clojure API but runs inside babashka's own
+   SCI, so when .clj-surgeon.edn contains (fn [z] ...) forms, our
+   sci/eval-form creates nested SCI (see forms.clj comment block for
+   the full story). We fixed the nesting issue with bare symbol
+   namespace keys, but it was fragile and surprising.
+
+   Scenario 6 shells out to `bb -m clj-surgeon.core` as a separate
+   process — no nesting, just a single babashka running clj-surgeon
+   the same way a user would. If the in-process tests ever break due
+   to a babashka SCI update, the subprocess tests will still pass
+   (and tell us the tool actually works — the nesting is our test
+   infrastructure's problem, not the user's)."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
             [clj-surgeon.outline :as outline]

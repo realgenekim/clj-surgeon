@@ -73,12 +73,39 @@
 
 ;; ============================================================
 ;; SCI sandbox — evaluate user :fields fn-forms
+;;
+;; IMPORTANT: babashka itself runs on SCI. When our code calls
+;; sci/eval-form to evaluate a user's (fn [z] ...) extractor,
+;; we're creating SCI-inside-SCI — a nested interpreter. This
+;; works fine from the CLI (one level of nesting), but the test
+;; suite adds another level (bb runs run_all.clj via SCI, which
+;; loads our code via SCI, which calls sci/eval-form).
+;;
+;; At three levels deep, SCI's namespace alias resolution breaks.
+;; Specifically: {:namespaces {'rewrite-clj.zip {...}}
+;;               :aliases    {'z 'rewrite-clj.zip}}
+;; ...causes "Unable to resolve symbol: z/sexpr" in the test suite
+;; even though it works perfectly from the CLI.
+;;
+;; The fix: use bare symbol namespace keys ('z, 'n, 'str) directly
+;; instead of full names + aliases. Do NOT "clean up" these keys
+;; to proper namespace names — it will break the test suite.
+;;
+;; See: test/clj_surgeon/edn_config_integration_test.clj
+;;   - In-process tests exercise the nested SCI path
+;;   - Subprocess tests (test-cli-subprocess-*) shell out to a
+;;     fresh `bb` process, avoiding nesting entirely — these test
+;;     what the user actually sees and are immune to SCI nesting
+;;     issues by design.
+;; See also: https://github.com/realgenekim/clj-surgeon/issues/14
 ;; ============================================================
 
 (defn- sci-opts
   "SCI context for evaluating user extractor fns from .clj-surgeon.edn.
    Uses bare symbol namespace keys ('z, 'n, 'str) — this is the only
-   approach that works reliably inside babashka's nested SCI environment."
+   approach that works reliably inside babashka's nested SCI environment.
+   See the comment block above for why. Do not change these to full
+   namespace names."
   []
   {:namespaces
    {'z   {'down z/down 'up z/up 'right z/right 'left z/left
