@@ -119,3 +119,16 @@
         ">defn- must be private — extraction-closure was missing this")
     (is (forms/private-form? "mu/defn-")
         "mu/defn- must be private — same class of bug")))
+
+;; ============================================================
+;; deftest classification (PR #13, escherize)
+;; ============================================================
+
+(deftest test-classify-deftest
+  (testing "deftest is recognized as a defining form"
+    (is (= :deftest (forms/classify "deftest")))
+    (is (forms/defining-form? "deftest")))
+  (testing "deftest is not private"
+    (is (not (forms/private-form? "deftest"))))
+  (testing "deftest does not have arglists"
+    (is (not (forms/has-arglists? "deftest")))))
