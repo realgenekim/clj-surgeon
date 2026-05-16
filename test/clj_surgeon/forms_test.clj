@@ -1,5 +1,6 @@
 (ns clj-surgeon.forms-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.java.io :as io]
             [clj-surgeon.forms :as forms]))
 
 ;; ============================================================
@@ -109,8 +110,6 @@
 
 ;; ============================================================
 ;; Integration: the >defn- extraction-closure bug
-;; This test documents the bug we found — extraction-closure
-;; must recognize >defn- as private so shared helpers get pulled in.
 ;; ============================================================
 
 (deftest test-private-form-bug-regression
@@ -132,3 +131,182 @@
     (is (not (forms/private-form? "deftest"))))
   (testing "deftest does not have arglists"
     (is (not (forms/has-arglists? "deftest")))))
+
+;; ============================================================
+;; .clj-surgeon.edn — project-local aliases (pure tests)
+;; ============================================================
+
+(deftest test-project-aliases-classify
+  (testing "project aliases extend classify with Metabase-style macros"
+    (with-redefs [forms/project-aliases (atom {"defendpoint"   {:kind :defn}
+                                               "defenterprise" {:kind :defn}
+                                               "defsetting"    {:kind :def}})]
+      (is (= :defn (forms/classify "defendpoint")))
+      (is (= :defn (forms/classify "defenterprise")))
+      (is (= :def  (forms/classify "defsetting")))
+      (is (forms/defining-form? "defendpoint"))
+      (is (forms/has-arglists? "defendpoint")
+          "defendpoint mapped to :defn must report has-arglists? true")
+      (is (not (forms/has-arglists? "defsetting"))
+          "defsetting mapped to :def must report has-arglists? false")
+      (is (not (forms/private-form? "defendpoint"))
+          "defendpoint not private"))))
+
+(deftest test-project-aliases-empty-by-default
+  (testing "empty project aliases do not affect classification"
+    (with-redefs [forms/project-aliases (atom {})]
+      (is (nil? (forms/classify "defendpoint")))
+      (is (= :defn (forms/classify "defn")))
+      (is (= :defn (forms/classify "mu/defn"))))))
+
+(deftest test-precedence-core-beats-project
+  (testing "core-forms wins over project-aliases for the same key"
+    (with-redefs [forms/project-aliases (atom {"defn" {:kind :def}})]
+      (is (= :defn (forms/classify "defn"))
+          "core 'defn' must remain :defn even if config tries to override"))))
+
+(deftest test-precedence-explicit-beats-project
+  (testing "in-source explicit-aliases wins over project-aliases"
+    (with-redefs [forms/project-aliases (atom {">defn" {:kind :def}})]
+      (is (= :defn (forms/classify ">defn"))
+          "in-source '>defn' must remain :defn"))))
+
+(deftest test-precedence-project-beats-ns-qualified-split
+  (testing "project-aliases wins over ns-qualified split-on-/"
+    (with-redefs [forms/project-aliases (atom {"my/defn" {:kind :def}})]
+      (is (= :def (forms/classify "my/defn"))
+          "project-aliases must win over ns-qualified split"))))
+
+(deftest test-project-aliases-still-allows-tier-4-passthrough
+  (testing "project-aliases that don't match still let ns-qualified split work"
+    (with-redefs [forms/project-aliases (atom {"defendpoint" {:kind :defn}})]
+      (is (= :defn (forms/classify "mu/defn"))
+          "mu/defn still resolves via tier-4 ns-qualified split"))))
+
+;; ============================================================
+;; spec — full spec map lookup
+;; ============================================================
+
+(deftest test-spec-returns-kind-for-core-forms
+  (testing "core forms return {:kind kw} with no fields"
+    (is (= {:kind :defn} (forms/spec "defn")))
+    (is (= {:kind :def}  (forms/spec "def")))))
+
+(deftest test-spec-returns-project-spec-with-fields
+  (testing "project aliases return full spec including :fields"
+    (let [dummy-fn (fn [_] :extracted)]
+      (with-redefs [forms/project-aliases (atom {"defendpoint" {:kind :defn
+                                                                :fields {:route dummy-fn}}})]
+        (let [s (forms/spec "defendpoint")]
+          (is (= :defn (:kind s)))
+          (is (fn? (get-in s [:fields :route]))))))))
+
+;; ============================================================
+;; End-to-end: real .clj-surgeon.edn read from temp directory
+;; ============================================================
+
+(defn- mk-tmp-dir [name]
+  (let [d (java.nio.file.Files/createTempDirectory
+           name (into-array java.nio.file.attribute.FileAttribute []))]
+    (.toFile d)))
+
+(defn- spit-edn [dir filename content]
+  (let [f (io/file dir filename)]
+    (io/make-parents f)
+    (spit f content)
+    f))
+
+(defn- rm-rf [^java.io.File f]
+  (when (.isDirectory f)
+    (doseq [child (.listFiles f)]
+      (rm-rf child)))
+  (.delete f))
+
+(deftest test-init-from-file-reads-real-config
+  (let [dir (mk-tmp-dir "clj-surgeon-e2e-")]
+    (try
+      (spit-edn dir ".clj-surgeon.edn"
+                "{:aliases {\"defendpoint\"   :defn\n            \"defenterprise\" :defn\n            \"defsetting\"    :def}}\n")
+      (let [src-file (spit-edn dir "src/foo.clj" "(ns foo)\n(defendpoint x [a] a)\n")]
+        (testing "init reads + parses the config file"
+          (reset! forms/project-aliases {})
+          (forms/init-from-file! (.getPath src-file))
+          (is (= {"defendpoint"   {:kind :defn}
+                  "defenterprise" {:kind :defn}
+                  "defsetting"    {:kind :def}}
+                 @forms/project-aliases)))
+        (testing "classify uses the loaded aliases"
+          (is (= :defn (forms/classify "defendpoint")))
+          (is (= :def  (forms/classify "defsetting")))
+          (is (forms/has-arglists? "defendpoint"))
+          (is (not (forms/has-arglists? "defsetting")))))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
+
+(deftest test-init-from-file-walks-up-from-deep-file
+  (let [dir (mk-tmp-dir "clj-surgeon-walkup-")]
+    (try
+      (spit-edn dir ".clj-surgeon.edn"
+                "{:aliases {\"defendpoint\" :defn}}\n")
+      (let [deep-file (spit-edn dir "src/a/b/c/deep.clj" "(ns a.b.c.deep)\n")]
+        (reset! forms/project-aliases {})
+        (forms/init-from-file! (.getPath deep-file))
+        (is (= {"defendpoint" {:kind :defn}} @forms/project-aliases)
+            "config should be found by walking up from deep nested file"))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
+
+(deftest test-init-from-file-no-config-yields-empty
+  (let [dir (mk-tmp-dir "clj-surgeon-noconfig-")]
+    (try
+      (let [src-file (spit-edn dir "src/foo.clj" "(ns foo)\n")]
+        (reset! forms/project-aliases {"stale" {:kind :defn}})
+        (forms/init-from-file! (.getPath src-file))
+        (is (= {} @forms/project-aliases)
+            "missing config resets to empty, doesn't carry stale state"))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
+
+(deftest test-init-from-file-malformed-edn-throws
+  (let [dir (mk-tmp-dir "clj-surgeon-malformed-")]
+    (try
+      (spit-edn dir ".clj-surgeon.edn" "{:aliases {\"x\" :defn") ;; unbalanced
+      (let [src-file (spit-edn dir "src/foo.clj" "(ns foo)\n")]
+        (reset! forms/project-aliases {})
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"invalid EDN"
+                              (forms/init-from-file! (.getPath src-file)))))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
+
+(deftest test-init-from-file-non-string-key-throws
+  (let [dir (mk-tmp-dir "clj-surgeon-badkey-")]
+    (try
+      (spit-edn dir ".clj-surgeon.edn"
+                "{:aliases {defendpoint :defn}}\n")    ;; symbol key, not string
+      (let [src-file (spit-edn dir "src/foo.clj" "(ns foo)\n")]
+        (reset! forms/project-aliases {})
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #":aliases keys must be strings"
+                              (forms/init-from-file! (.getPath src-file)))))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
+
+(deftest test-init-from-file-closest-config-wins
+  (let [dir (mk-tmp-dir "clj-surgeon-closest-")]
+    (try
+      (spit-edn dir ".clj-surgeon.edn" "{:aliases {\"outer\" :defn}}\n")
+      (spit-edn dir "sub/.clj-surgeon.edn" "{:aliases {\"inner\" :def}}\n")
+      (let [inner-file (spit-edn dir "sub/src/foo.clj" "(ns foo)\n")]
+        (reset! forms/project-aliases {})
+        (forms/init-from-file! (.getPath inner-file))
+        (is (= {"inner" {:kind :def}} @forms/project-aliases)
+            "closest config wins (sub/.clj-surgeon.edn, not root)"))
+      (finally
+        (rm-rf dir)
+        (reset! forms/project-aliases {})))))
