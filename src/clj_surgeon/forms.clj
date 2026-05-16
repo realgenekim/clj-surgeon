@@ -27,7 +27,8 @@
    "defprotocol" :defprotocol
    "defrecord"   :defrecord
    "deftype"     :deftype
-   "declare"     :declare})
+   "declare"     :declare
+   "deftest"     :deftest})
 
 ;; ============================================================
 ;; Explicit aliases — non-standard names that can't be auto-detected

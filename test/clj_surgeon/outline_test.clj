@@ -169,3 +169,71 @@
   (testing ".clj file has every form tagged with :platforms [:clj]"
     (let [result (outline-from-string "(ns my.x) (defn f [])")]
       (is (= [:clj] (:platforms (first (:forms result))))))))
+
+;; ============================================================
+;; PR #12: meta-tagged arglist fix (escherize)
+;; ============================================================
+
+(deftest test-meta-tagged-arglist
+  (testing "outer meta on arglist (^String [a]) is stripped — arglist is [a]"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn outer-hint
+                     \"doc\"
+                     ^String [a b]
+                     a)")
+          form (first (filter #(= 'outer-hint (:name %)) (:forms result)))]
+      (is (= "[a b]" (:args form))
+          "function-level return-type hint must not appear in :args")))
+  (testing "param meta inside arglist ([^String s]) is preserved"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn inner-hint
+                     \"doc\"
+                     [^String s x]
+                     s)")
+          form (first (filter #(= 'inner-hint (:name %)) (:forms result)))]
+      (is (= "[^String s x]" (:args form))
+          "parameter-level hint must remain attached to the param")))
+  (testing "both outer and param meta together"
+    (let [result (outline-from-string
+                  "(ns my.x)
+                   (defn both
+                     \"doc\"
+                     ^Long [^String s ^Integer i]
+                     i)")
+          form (first (filter #(= 'both (:name %)) (:forms result)))]
+      (is (= "[^String s ^Integer i]" (:args form))
+          "outer hint stripped, param hints kept")))
+  (testing "no meta — baseline still works"
+    (let [result (outline-from-string
+                  "(ns my.x) (defn plain [a b] a)")
+          form (first (filter #(= 'plain (:name %)) (:forms result)))]
+      (is (= "[a b]" (:args form))))))
+
+;; ============================================================
+;; PR #13: deftest classification (escherize)
+;; ============================================================
+
+(deftest test-deftest-classification
+  (testing "plain deftest is recognized as a defining form"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest plain (is true))")
+          form (first (filter #(= 'deftest (:type %)) (:forms result)))]
+      (is (some? form))
+      (is (= 'plain (:name form)))))
+  (testing "deftest with metadata between symbol and name (e.g. ^:integration)"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest ^:integration tagged (is true))")
+          form (first (filter #(= 'deftest (:type %)) (:forms result)))]
+      (is (some? form))
+      (is (= 'tagged (:name form))
+          "deftest with ^:integration meta on name should resolve to 'tagged'")))
+  (testing "deftest counted in :form-count"
+    (let [result (outline-from-string
+                  "(ns my.tests (:require [clojure.test :refer [deftest is]]))
+                   (deftest a (is true))
+                   (deftest ^:slow b (is true))")]
+      (is (= 2 (:form-count result))))))
