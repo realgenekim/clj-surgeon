@@ -19,7 +19,10 @@
             [clj-surgeon.cljc.split :as cljc-split]
             [clj-surgeon.cljc.require-ops :as cljc-req]
             [clj-surgeon.cljc.analyze :as cljc-analyze]
-            [clojure.pprint :as pp]))
+            [babashka.fs :as fs]
+            [babashka.process]
+            [clojure.pprint :as pp]
+            [clojure.string :as str]))
 
 (defn run-outline [{:keys [file]}]
   (let [result (outline/outline file)
@@ -126,6 +129,343 @@
           {:wrote out :bytes (count updated)})
       updated)))
 
+;; ============================================================
+;; :ls-tree — directory-wide namespace map
+;; ============================================================
+
+(def ^:private skip-dirs
+  "Directories to skip during project discovery."
+  #{".git" ".cpcache" ".gitlibs" "target" "node_modules"
+    ".clj-kondo" ".lsp" ".shadow-cljs" ".nrepl" ".idea" ".vscode"})
+
+(defn- in-skip-dir?
+  "True if the path (relative to root) passes through any skip directory."
+  [path root]
+  (let [rel (str (fs/relativize root path))]
+    (boolean (some skip-dirs (str/split rel #"/")))))
+
+(defn- find-build-files
+  "Find deps.edn, project.clj, bb.edn under dir, skipping hidden/cache dirs.
+   Uses system find with -prune for speed (~10x faster than fs/glob on large trees)."
+  [dir]
+  (try
+    (let [prune-expr (str/join " -o "
+                               (map #(str "-name " %) skip-dirs))
+          cmd (format "find %s \\( %s \\) -prune -o \\( -name deps.edn -o -name project.clj -o -name bb.edn \\) -print"
+                      (str dir) prune-expr)
+          result (babashka.process/shell {:out :string :err :string :continue true}
+                                         "sh" "-c" cmd)]
+      (if (zero? (:exit result))
+        (->> (str/split-lines (str/trim (:out result)))
+             (remove str/blank?)
+             sort
+             vec)
+        []))
+    (catch Exception _e [])))
+
+(defn source-paths-from-config
+  "Pure: given a build filename and its parsed content, return source paths.
+   Defaults to [\"src\"] when paths not specified."
+  [filename content]
+  (case filename
+    "deps.edn"    (or (:paths content) ["src"])
+    "bb.edn"      (or (:paths content) ["src"])
+    "project.clj" (let [kvs (drop 3 content)
+                        m (apply hash-map kvs)]
+                    (or (:source-paths m) ["src"]))
+    ["src"]))
+
+(defn- extract-source-paths
+  "I/O wrapper: read a build file and return its source paths."
+  [build-file]
+  (try
+    (source-paths-from-config (str (fs/file-name build-file))
+                              (read-string (slurp (str build-file))))
+    (catch Exception _e ["src"])))
+
+(defn- find-clj-files
+  "Find all .clj/.cljs/.cljc files under a directory using system find."
+  [dir]
+  (when (fs/directory? dir)
+    (try
+      (let [result (babashka.process/shell
+                    {:out :string :err :string :continue true}
+                    "find" (str dir)
+                    "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
+        (when (zero? (:exit result))
+          (->> (str/split-lines (str/trim (:out result)))
+               (remove str/blank?))))
+      (catch Exception _e nil))))
+
+(defn- discover-projects
+  "Find projects under dir via build files. Returns [{:name :root :files}].
+   Falls back to recursive scan if no build files found."
+  [dir]
+  (let [dir (fs/path dir)
+        build-files (find-build-files dir)
+        ;; Group by project root, keep first build file per root
+        by-root (group-by #(str (fs/parent %)) build-files)]
+    (if (seq by-root)
+      (->> by-root
+           (map (fn [[root files]]
+                  (let [build-file (first files)
+                        src-paths (extract-source-paths build-file)
+                        root-path (fs/path root)
+                        clj-files (->> src-paths
+                                       (mapcat #(find-clj-files (fs/path root %)))
+                                       (map str)
+                                       sort
+                                       vec)]
+                    {:name (str (fs/file-name root-path))
+                     :root (str root-path)
+                     :files clj-files})))
+           (remove #(empty? (:files %)))
+           (sort-by :name)
+           vec)
+      ;; No build files — fallback to recursive scan
+      (let [clj-files (->> (find-clj-files dir)
+                           (remove #(in-skip-dir? % dir))
+                           (map str)
+                           sort
+                           vec)]
+        (when (seq clj-files)
+          [{:name (str (fs/file-name dir))
+            :root (str dir)
+            :files clj-files}])))))
+
+(defn- rg-available?
+  "Check if ripgrep (rg) is on the PATH."
+  []
+  (try
+    (let [r (babashka.process/shell {:out :string :err :string :continue true}
+                                    "rg" "--version")]
+      (zero? (:exit r)))
+    (catch Exception _e false)))
+
+(defn- grep-tree
+  "Single recursive grep on a directory tree. Returns set of matching absolute paths.
+   Uses ripgrep (rg) if available — faster and respects .gitignore.
+   Falls back to system grep (MUCH slower on large trees)."
+  [pattern dir]
+  (when-not (rg-available?)
+    (binding [*out* *err*]
+      (println "WARNING: ripgrep (rg) not found. Falling back to grep (much slower).")
+      (println "Install: brew install ripgrep  OR  apt install ripgrep")))
+  (try
+    (let [args (if (rg-available?)
+                 ;; ripgrep: fast, respects .gitignore automatically
+                 ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
+                 ["rg" "-li"
+                  "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
+                  "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
+                  pattern (str dir)]
+                 ;; fallback: system grep
+                 (let [exclude-args (mapcat #(vector "--exclude-dir" %)
+                                            [".git" ".cpcache" ".gitlibs" "target"
+                                             "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
+                   (concat ["grep" "-rliE"
+                            "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
+                            "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
+                           exclude-args
+                           [pattern (str dir)])))
+          result (apply babashka.process/shell
+                        {:out :string :err :string :continue true}
+                        args)]
+      (if (zero? (:exit result))
+        (set (str/split-lines (str/trim (:out result))))
+        #{}))
+    (catch Exception _e #{})))
+
+(defn filter-projects-by-hits
+  "Pure: given a set of matching file paths and a list of projects, filter
+   to relevant ones. If a project's build file matched, all its source files
+   are included. Otherwise, only individually matching source files."
+  [projects hits]
+  (let [build-match? (fn [root]
+                       (some hits
+                             [(str root "/deps.edn")
+                              (str root "/project.clj")
+                              (str root "/bb.edn")]))]
+    (->> projects
+         (map (fn [{:keys [root files] :as project}]
+                (if (build-match? root)
+                  project
+                  (assoc project :files (filterv #(hits (str %)) files)))))
+         (remove #(empty? (:files %)))
+         vec)))
+
+(defn- grep-filter-projects
+  "I/O wrapper: grep the tree, then filter projects by hits."
+  [projects grep-pattern dir]
+  (filter-projects-by-hits projects (grep-tree grep-pattern dir)))
+
+(defn- safe-outline
+  "Run outline on a file, returning error map on parse errors."
+  [file]
+  (try
+    (outline/outline file)
+    (catch Exception e
+      {:file file :error (str (.getMessage e))})))
+
+(defn- outline-all-files
+  "Compute outlines for all files across projects, in parallel.
+   Returns projects with :outlines — a vec of [file outline] pairs."
+  [projects]
+  (let [;; Collect all [project-idx file] pairs
+        all-files (for [[pidx project] (map-indexed vector projects)
+                        f (:files project)]
+                    [pidx f])
+        ;; Parse all files in parallel
+        results (pmap (fn [[pidx f]]
+                        [pidx f (safe-outline f)])
+                      all-files)
+        ;; Group back by project index
+        by-project (group-by first results)]
+    (mapv (fn [[pidx project]]
+            (let [file-results (mapv (fn [[_ f outline]] [f outline])
+                                     (get by-project pidx []))]
+              (assoc project :outlines file-results)))
+          (map-indexed vector projects))))
+
+(defn format-file-text
+  "Pure: format a single file's outline map as compact text lines."
+  [result rel-path]
+  (let [lines (StringBuilder.)]
+    (.append lines (format "%s  %d lines, %d forms\n"
+                           rel-path
+                           (or (:lines result) 0)
+                           (or (:form-count result) 0)))
+    (when (:ns result)
+      (.append lines (format "  ns: %s\n" (:ns result))))
+    (when (seq (:requires result))
+      (.append lines (format "  requires: %s\n"
+                             (str/join " " (:requires result)))))
+    (when (:error result)
+      (.append lines (format "  ⚠ %s\n" (:error result))))
+    (doseq [form (:forms result)
+            :when (:name form)]
+      (let [line-range (if (and (:line form) (:end-line form)
+                                (not= (:line form) (:end-line form)))
+                         (format "%d-%d" (:line form) (:end-line form))
+                         (str (or (:line form) "?")))
+            type-str (str (:type form))
+            args-str (when (:args form) (str " " (:args form)))]
+        (.append lines (format "  %s: %s %s%s\n"
+                               line-range type-str (:name form)
+                               (or args-str "")))))
+    (str lines)))
+
+(defn format-ls-tree-text
+  "Pure: format ls-tree results as compact text for LLM/human scanning.
+   Expects projects with :outlines already computed."
+  [projects dir]
+  (let [sb (StringBuilder.)
+        multi-project? (> (count projects) 1)
+        total-files (reduce + (map #(count (:outlines %)) projects))
+        total-forms (reduce + (map (fn [p]
+                                     (reduce + (map #(or (:form-count (second %)) 0)
+                                                    (:outlines p))))
+                                   projects))]
+    (doseq [{:keys [name outlines]} projects
+            :let [project-forms (reduce + (map #(or (:form-count (second %)) 0) outlines))]]
+      (when multi-project?
+        (.append sb (format "── %s (%d files, %d forms)\n\n"
+                            name (count outlines) project-forms)))
+      (doseq [[f result] outlines
+              :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
+        (.append sb (format-file-text result rel-path))
+        (.append sb "\n")))
+    (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
+    (str sb)))
+
+(defn format-ls-tree-edn
+  "Pure: format ls-tree results as EDN vector.
+   Expects projects with :outlines already computed."
+  [projects dir]
+  (vec
+   (for [{:keys [outlines]} projects
+         [f result] outlines
+         :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
+     (-> result
+         (assoc :file rel-path)
+         (dissoc :forward-refs)))))
+
+(defn- find-nearest-build-file
+  "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
+  [file-path stop-at]
+  (loop [dir (fs/parent (fs/path file-path))]
+    (when (and dir (str/starts-with? (str dir) (str stop-at)))
+      (let [candidates [(str dir "/deps.edn") (str dir "/project.clj") (str dir "/bb.edn")]]
+        (if-let [found (first (filter #(fs/exists? %) candidates))]
+          {:build-file found :root (str dir)}
+          (recur (fs/parent dir)))))))
+
+(defn- discover-projects-grep
+  "Fast path: use rg/grep results to build project list without globbing.
+   For projects with matching deps.edn: find all their source files.
+   For individual matching source files: group by nearest project root."
+  [grep-hits dir]
+  (let [build-files #{"deps.edn" "project.clj" "bb.edn"}
+        {build-hits true src-hits false}
+        (group-by #(contains? build-files (str (fs/file-name %))) grep-hits)
+
+        ;; Projects with matching build files → find all their source files
+        build-projects
+        (->> (or build-hits [])
+             (map (fn [bf]
+                    (let [root (str (fs/parent (fs/path bf)))
+                          src-paths (extract-source-paths bf)
+                          clj-files (->> src-paths
+                                         (mapcat #(find-clj-files (str root "/" %)))
+                                         (remove nil?)
+                                         sort
+                                         vec)]
+                      {:name (str (fs/file-name (fs/path root)))
+                       :root root
+                       :files clj-files})))
+             (remove #(empty? (:files %))))
+
+        build-roots (set (map :root build-projects))
+
+        ;; Source file hits not in a build-matched project → group by nearest project root
+        orphan-src-hits (remove #(some (fn [r] (str/starts-with? (str %) (str r "/")))
+                                       build-roots)
+                                (or src-hits []))
+        src-projects
+        (->> orphan-src-hits
+             (map (fn [f]
+                    (let [info (find-nearest-build-file f dir)]
+                      (assoc info :file (str f)))))
+             (remove #(nil? (:root %)))
+             (group-by :root)
+             (map (fn [[root entries]]
+                    {:name (str (fs/file-name (fs/path root)))
+                     :root root
+                     :files (vec (sort (map :file entries)))})))]
+    (->> (concat build-projects src-projects)
+         (sort-by :name)
+         vec)))
+
+(defn run-ls-tree [{:keys [dir format grep] :as _opts}]
+  (when-not dir
+    (println "Error: :dir is required for :ls-tree")
+    (System/exit 1))
+  (let [dir (str (fs/absolutize dir))
+        projects (if grep
+                   ;; Fast path: rg first, skip expensive directory globbing
+                   (let [hits (grep-tree grep dir)]
+                     (discover-projects-grep hits dir))
+                   ;; Full scan: discover all projects
+                   (discover-projects dir))]
+    (if (empty? projects)
+      (do (println (format "No Clojure files found under %s%s"
+                           dir (when grep (str " matching '" grep "'"))))
+          (System/exit 1))
+      (let [projects (outline-all-files projects)]
+        (if (= format :edn)
+          (format-ls-tree-edn projects dir)
+          (format-ls-tree-text projects dir))))))
+
 (defn run [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
@@ -133,6 +473,10 @@
   (let [result (case op
                  :ls (run-outline opts)
                  :outline (run-outline opts)
+                 :ls-tree (run-ls-tree opts)
+                 :tree (run-ls-tree opts)
+                 :map (run-ls-tree opts)
+                 :outline-tree (run-ls-tree opts)
                  :mv (run-mv opts)
                  :declares (run-declares opts)
                  :deps (run-deps opts)

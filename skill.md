@@ -10,7 +10,9 @@ A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`
 
 ## When to Use
 
+- **Before exploring ANY Clojure codebase** — `:ls-tree` maps an entire directory of repos in seconds. "Which repo does X?" answered in one command instead of spawning Explore agents
 - **Before reading a large .clj/.cljs/.cljc file** — `:ls` first (50 tokens vs 2000+); the outline now surfaces forms inside `#?(:clj …)` / `#?@(:cljs […])` with `:platforms` tags
+- **When searching across multiple repos** — `:ls-tree :grep "pattern"` finds matching projects/files with full API surface, ~3 seconds across thousands of files
 - **When extracting forms to a new namespace** — `:extract!` does it in one command
 - **When you see a `declare`** — `:fix-declares!` eliminates removable ones
 - **When reordering forms** — `:mv` moves a defn above its caller
@@ -62,6 +64,33 @@ clj-surgeon :op :ls :file src/writer/state.clj
 ```
 
 Returns: `{:ns :lines :form-count :forms [{:type :name :line :end-line :args}] :forward-refs [...]}`
+
+### :ls-tree / :tree / :map — Map an entire directory tree of repos
+
+```bash
+# Map a single project
+clj-surgeon :op :ls-tree :dir .
+
+# THE KILLER FEATURE: surgical cross-repo search
+clj-surgeon :op :ls-tree :dir ~/src.local/ :grep "postgres|jdbc|next.jdbc"
+
+# EDN output for machine consumption
+clj-surgeon :op :ls-tree :dir . :format :edn
+```
+
+Discovers projects via `deps.edn`/`project.clj`/`bb.edn`, reads their `:paths`, outlines every `.clj/.cljs/.cljc` file. Returns ns names, requires, and all form signatures.
+
+**With `:grep`:** Uses ripgrep to find matching files first (~0.3s), then only parses those. Turns "search 4,444 files" from 90 seconds into 3 seconds.
+
+**When to reach for this:**
+- "Which of my repos does X?" (cross-repo capability discovery)
+- "What's the API surface of this project?" (onboarding)
+- "What depends on library Y?" (impact analysis)
+- Any time you'd spawn an Explore agent to scan multiple directories
+
+**Performance:** Single repo: 0.25s. 10 repos: 1.3s. `:grep` across 4,444 files: 3.4s.
+
+**Requires ripgrep (rg) for `:grep` fast path.** Falls back to system grep if not installed (much slower). Install: `brew install ripgrep`.
 
 ### :ls-deps — Transitive dependency tree
 
