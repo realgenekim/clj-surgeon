@@ -314,7 +314,138 @@
       (finally (rm-rf dir)))))
 
 ;; ============================================================
-;; Scenario 6: Subprocess CLI test — what the user actually sees
+;; Scenario 6: SCI fn returning a number (defmigration :version)
+;; ============================================================
+
+(def migration-config
+  "{:aliases
+ {\"defmigration\"
+  {:fields {:name ->defn-name
+            :version (fn [z] (-> z z/down z/right z/right z/sexpr))}}}}")
+
+(def migration-source
+  "(ns app.migrations)
+
+(defmigration add-users-table 1
+  (create-table :users [:id :serial]))
+
+(defmigration add-posts-table 2
+  (create-table :posts [:id :serial]))
+
+(defmigration add-index-on-email 3
+  (create-index :users :email))")
+
+(deftest test-sci-fn-extracts-number
+  (let [dir (mk-tmp-dir "migration-")]
+    (try
+      (spit-at dir
+               ".clj-surgeon.edn" migration-config
+               "src/migrations.clj" migration-source)
+      (let [src-path (str dir "/src/migrations.clj")]
+        (forms/init-from-file! src-path)
+        (let [result (outline/outline src-path)
+              forms (:forms result)]
+          (testing "all 3 migrations found"
+            (is (= 3 (count forms))))
+          (testing "version numbers extracted as integers"
+            (is (= 1 (:version (first forms))))
+            (is (= 2 (:version (second forms))))
+            (is (= 3 (:version (nth forms 2)))))
+          (testing "names extracted"
+            (is (= '[add-users-table add-posts-table add-index-on-email]
+                   (mapv :name forms))))))
+      (finally (rm-rf dir)))))
+
+;; ============================================================
+;; Scenario 7: Kind-only mapping gets legacy arglist extraction
+;; ============================================================
+
+(def kind-only-config
+  "{:aliases {\"defcommand\" :defn}}")
+
+(def kind-only-source
+  "(ns app.commands)
+
+(defcommand seed-db [opts]
+  (println \"Seeding...\"))
+
+(defcommand run-migrations [opts]
+  (println \"Running...\"))
+
+(defn helper [x] x)")
+
+(deftest test-kind-only-gets-legacy-extraction
+  (let [dir (mk-tmp-dir "kind-only-")]
+    (try
+      (spit-at dir
+               ".clj-surgeon.edn" kind-only-config
+               "src/commands.clj" kind-only-source)
+      (let [src-path (str dir "/src/commands.clj")]
+        (forms/init-from-file! src-path)
+        (let [result (outline/outline src-path)
+              by-name (into {} (map (juxt :name identity)) (:forms result))]
+          (testing "defcommand mapped to :defn gets name + arglist"
+            (let [form (by-name 'seed-db)]
+              (is (some? form))
+              (is (= "[opts]" (:args form)))))
+          (testing "regular defn coexists"
+            (is (some? (by-name 'helper))))))
+      (finally (rm-rf dir)))))
+
+;; ============================================================
+;; Scenario 8: Auto-detection (tier 4) coexists with config (tier 3)
+;; ============================================================
+
+(def coexist-config
+  "{:aliases {\"defsetting\" {:fields {:name ->defn-name}}}}")
+
+(def coexist-source
+  "(ns app.mixed
+  (:require [malli.util :as mu]
+            [guardrails.core :refer [>defn]]))
+
+(defsetting app-name
+  (deferred-tru \"The name\")
+  :default \"MyApp\")
+
+(mu/defn schema-fn :- :string
+  [x :- :int]
+  (str x))
+
+(>defn validated [x]
+  [int? => string?]
+  (str x))
+
+(defn plain [x] (inc x))")
+
+(deftest test-auto-detection-coexists-with-config
+  (let [dir (mk-tmp-dir "coexist-")]
+    (try
+      (spit-at dir
+               ".clj-surgeon.edn" coexist-config
+               "src/mixed.clj" coexist-source)
+      (let [src-path (str dir "/src/mixed.clj")]
+        (forms/init-from-file! src-path)
+        (let [result (outline/outline src-path)
+              by-name (into {} (map (juxt :name identity)) (:forms result))]
+          (testing "tier 3: defsetting from config"
+            (is (some? (by-name 'app-name))))
+          (testing "tier 4: mu/defn auto-detected despite config loaded"
+            (let [form (by-name 'schema-fn)]
+              (is (some? form))
+              (is (= 'mu/defn (:type form)))))
+          (testing "tier 2: >defn explicit alias still works"
+            (let [form (by-name 'validated)]
+              (is (some? form))
+              (is (= '>defn (:type form)))))
+          (testing "tier 1: regular defn always works"
+            (is (some? (by-name 'plain))))
+          (testing "all 4 named forms counted"
+            (is (= 4 (:form-count result))))))
+      (finally (rm-rf dir)))))
+
+;; ============================================================
+;; Scenario 9: Subprocess CLI test — what the user actually sees
 ;;
 ;; Shells out to `bb -m clj-surgeon.core` as a separate process.
 ;; No nested SCI — tests the real CLI end-to-end.
