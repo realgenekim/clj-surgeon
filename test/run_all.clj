@@ -11,6 +11,7 @@
             [clj-surgeon.cljc.split-test]
             [clj-surgeon.cljc.require-ops-test]
             [clj-surgeon.cljc.analyze-test]
+            [clj-surgeon.edn-config-integration-test]
             [clj-surgeon.cljc-existing-ops-test]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
@@ -24,5 +25,6 @@
                    'clj-surgeon.cljc.split-test
                    'clj-surgeon.cljc.require-ops-test
                    'clj-surgeon.cljc.analyze-test
+                   'clj-surgeon.edn-config-integration-test
                    'clj-surgeon.cljc-existing-ops-test)]
   (System/exit (+ (:fail r) (:error r))))

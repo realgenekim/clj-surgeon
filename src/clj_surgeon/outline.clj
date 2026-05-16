@@ -9,6 +9,28 @@
             [clj-surgeon.forms :as forms]
             [clojure.string :as str]))
 
+(defn- resolve-user-fields
+  "Run each user-supplied extractor fn against the form zloc. Returns a
+   map field-key -> value, omitting nil results.
+
+   When an extractor throws, attach context so the user can find the
+   broken field — which macro, which field key, which form line."
+  [user-fields zloc type-str line]
+  (into {} (for [[k f] user-fields
+                 :let [v (try (f zloc)
+                              (catch Exception e
+                                (throw (ex-info
+                                        (str ".clj-surgeon.edn: extractor for "
+                                             type-str " :fields " k
+                                             " threw at line " line ": "
+                                             (.getMessage e))
+                                        {:macro type-str
+                                         :field k
+                                         :line line}
+                                        e))))]
+                 :when (some? v)]
+             [k v])))
+
 (defn- extract-name
   "Get the name from the second child of a form. Handles metadata like ^:private.
    Walks past meta nodes to find the actual symbol name."
@@ -64,6 +86,25 @@
         i (.lastIndexOf s ".")]
     (when (pos? i) (subs s (inc i)))))
 
+(defn extract-ns-requires
+  "Extract require entries from a (ns ...) zipper location.
+   Returns a vector of strings like [\"[clojure.string :as str]\"]
+   or nil if no :require block found."
+  [ns-zloc]
+  (when ns-zloc
+    (let [require-form (->> (z/down ns-zloc)
+                            (iterate z/right)
+                            (take-while some?)
+                            (filter #(and (z/list? %)
+                                          (= ":require" (some-> % z/down z/string))))
+                            first)]
+      (when require-form
+        (->> (z/down require-form)
+             (iterate z/right)
+             (take-while some?)
+             (filter z/vector?)
+             (mapv z/string))))))
+
 (defn outline
   "Return outline of all top-level forms in a Clojure file.
    Returns EDN map with :ns, :file, :lines, :forms, :forward-refs.
@@ -85,18 +126,37 @@
                        (let [node (z/node zloc)
                              m (meta node)
                              type-str (some-> zloc z/down z/string)
-                             name-str (when (forms/defining-form? type-str)
+                             form-spec (forms/spec type-str)
+                             user-fields (:fields form-spec)
+                             extracted (when user-fields
+                                         (resolve-user-fields user-fields zloc
+                                                              type-str (:row m)))
+                             ;; If user provided :fields, respect their spec;
+                             ;; don't fall back to legacy extractors for
+                             ;; fields they didn't declare.
+                             name-val (cond
+                                        user-fields (:name extracted)
+                                        (forms/defining-form? type-str)
                                         (extract-name zloc))
-                             arglist (when name-str (extract-arglist zloc))
+                             arglist (cond
+                                       user-fields (:arglist extracted)
+                                       name-val (extract-arglist zloc))
                              form-line (:row m)
                              comment-start (when form-line
-                                             (preceding-comments lines form-line))]
+                                             (preceding-comments lines form-line))
+                             ;; Extra user-declared fields (everything except
+                             ;; :name and :arglist which are already merged)
+                             extras (when extracted
+                                      (dissoc extracted :name :arglist))]
                          (cond-> {:type (symbol (or type-str "?"))
                                   :platforms (vec (sort platforms))}
                            form-line (assoc :line form-line)
                            (:end-row m) (assoc :end-line (:end-row m))
-                           name-str (assoc :name (symbol name-str))
+                           name-val (assoc :name (if (symbol? name-val)
+                                                   name-val
+                                                   (symbol (str name-val))))
                            arglist (assoc :args arglist)
+                           (seq extras) (merge extras)
                            (and form-line comment-start (< comment-start form-line))
                            (assoc :comment-start comment-start))))
                      walked)
@@ -104,17 +164,16 @@
         def-lines (into {}
                         (for [f forms :when (:name f)]
                           [(:name f) (:line f)]))
-        ;; Extract ns name (special case — ns form name is always the direct second child)
-        ns-name (some-> zloc
+        ;; Find ns form once, extract name + requires from it
+        ns-zloc (some-> zloc
                         (z/find-value z/next 'ns)
-                        z/up       ;; back to (ns ...)
-                        z/down     ;; ns
-                        z/right    ;; writer.state
-                        z/string
-                        symbol)]
+                        z/up)
+        ns-name (some-> ns-zloc z/down z/right z/string symbol)
+        requires (extract-ns-requires ns-zloc)]
     {:ns ns-name
      :file file
      :lines total-lines
      :form-count (count (filter :name forms))
      :forms (vec (remove #(= 'ns (:type %)) forms))
+     :requires (or requires [])
      :forward-refs []})) ;; forward-refs filled in by core with clj-kondo data
