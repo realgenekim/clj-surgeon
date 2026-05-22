@@ -466,45 +466,271 @@
           (format-ls-tree-edn projects dir)
           (format-ls-tree-text projects dir))))))
 
+;; ============================================================
+;; Ops registry — single source of truth for dispatch + help
+;; ============================================================
+
+(def ops-registry
+  "Single source of truth for all operations.
+   Each key is the canonical op name. Drives dispatch, help, and error messages."
+  (sorted-map
+   :cljc-add-require {:handler   run-cljc-add-require
+                      :desc      "Add a platform-aware require to a CLJC file"
+                      :args      {:file     {:required true :desc "Input CLJC file"}
+                                  :platform {:required true :desc ":clj, :cljs, or :cljc"}
+                                  :ns       {:required true :desc "Namespace to require"}
+                                  :as       {:desc "Optional alias"}
+                                  :out      {:desc "Output path (default: stdout)"}}
+                      :examples  ["clj-surgeon :op :cljc-add-require :file src/foo.cljc :platform :cljs :ns goog.string :as gstr"]
+                      :category  :cljc}
+
+   :cljc-analyze     {:handler   (fn [{:keys [file clj cljs]}]
+                                   (cond
+                                     file           (cljc-analyze/analyze-cljc (slurp file))
+                                     (and clj cljs) (cljc-analyze/analyze-pair (slurp clj) (slurp cljs))
+                                     :else          {:error "supply :file or :clj + :cljs"}))
+                      :desc      "Classify forms by platform (shared/clj-only/cljs-only/divergent)"
+                      :args      {:file {:desc "A single CLJC file to analyze"}
+                                  :clj  {:desc "CLJ file (use with :cljs)"}
+                                  :cljs {:desc "CLJS file (use with :clj)"}}
+                      :examples  ["clj-surgeon :op :cljc-analyze :file src/foo.cljc"
+                                  "clj-surgeon :op :cljc-analyze :clj src/foo.clj :cljs src/foo.cljs"]
+                      :category  :cljc}
+
+   :cljc-merge       {:handler   run-cljc-merge
+                      :desc      "Combine CLJ + CLJS into a single CLJC"
+                      :args      {:clj  {:required true :desc "Input CLJ file"}
+                                  :cljs {:required true :desc "Input CLJS file"}
+                                  :out  {:desc "Output CLJC path (default: stdout)"}}
+                      :examples  ["clj-surgeon :op :cljc-merge :clj src/foo.clj :cljs src/foo.cljs :out src/foo.cljc"]
+                      :category  :cljc}
+
+   :cljc-split       {:handler   run-cljc-split
+                      :desc      "Split a CLJC into parallel CLJ + CLJS files"
+                      :args      {:file     {:required true :desc "Input CLJC file"}
+                                  :clj-out  {:desc "Output CLJ path"}
+                                  :cljs-out {:desc "Output CLJS path"}}
+                      :examples  ["clj-surgeon :op :cljc-split :file src/foo.cljc"]
+                      :category  :cljc}
+
+   :declares         {:handler   run-declares
+                      :desc      "Audit which forward declares are needed vs removable"
+                      :args      {:file {:required true :desc "Clojure source file"}}
+                      :examples  ["clj-surgeon :op :declares :file src/my/ns.clj"]
+                      :category  :read}
+
+   :deps             {:handler   run-deps
+                      :desc      "Intra-namespace call graph"
+                      :args      {:file {:required true :desc "Clojure source file"}
+                                  :form {:desc "Single form to show deps for"}}
+                      :examples  ["clj-surgeon :op :deps :file src/my/ns.clj"
+                                  "clj-surgeon :op :deps :file src/my/ns.clj :form sync-draft!"]
+                      :category  :read}
+
+   :extract          {:handler   extract/plan
+                      :desc      "Plan form extraction to new namespace (dry run)"
+                      :args      {:file  {:required true :desc "Source file"}
+                                  :forms {:required true :desc "EDN vector of form names, e.g. '[foo bar]'"}
+                                  :to    {:required true :desc "Target file path for new namespace"}}
+                      :examples  ["clj-surgeon :op :extract :file src/state.clj :forms '[distill refine]' :to src/distillery.clj"]
+                      :category  :write
+                      :pair      :extract!}
+
+   :extract!         {:handler   extract/execute!
+                      :desc      "Execute form extraction to new namespace"
+                      :args      {:file  {:required true :desc "Source file"}
+                                  :forms {:required true :desc "EDN vector of form names"}
+                                  :to    {:required true :desc "Target file path for new namespace"}}
+                      :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj"]
+                      :category  :write
+                      :pair      :extract}
+
+   :fix-declares     {:handler   (fn [opts] (fix-declares/plan (:file opts)))
+                      :desc      "Plan declare elimination (dry run)"
+                      :args      {:file {:required true :desc "Clojure source file"}}
+                      :examples  ["clj-surgeon :op :fix-declares :file src/my/ns.clj"]
+                      :category  :write
+                      :pair      :fix-declares!}
+
+   :fix-declares!    {:handler   (fn [opts] (fix-declares/execute! (:file opts)))
+                      :desc      "Execute declare elimination"
+                      :args      {:file {:required true :desc "Clojure source file"}}
+                      :examples  ["clj-surgeon :op :fix-declares! :file src/my/ns.clj"]
+                      :category  :write
+                      :pair      :fix-declares}
+
+   :ls               {:handler   run-outline
+                      :aliases   [:outline]
+                      :desc      "List forms in a namespace (line ranges, arglists, forward refs)"
+                      :args      {:file {:required true :desc "Clojure source file"}}
+                      :examples  ["clj-surgeon :op :ls :file src/my/ns.clj"]
+                      :category  :read}
+
+   :ls-deps          {:handler   run-ls-deps
+                      :desc      "Transitive dependency tree for a form"
+                      :args      {:file {:required true :desc "Clojure source file"}
+                                  :form {:required true :desc "Name of target form"}}
+                      :examples  ["clj-surgeon :op :ls-deps :file src/my/ns.clj :form transition!"]
+                      :category  :read}
+
+   :ls-extract       {:handler   run-closure
+                      :desc      "Minimal extractable unit (form + exclusive deps)"
+                      :args      {:file {:required true :desc "Clojure source file"}
+                                  :form {:required true :desc "Name of target form"}}
+                      :examples  ["clj-surgeon :op :ls-extract :file src/my/ns.clj :form rebuild!"]
+                      :category  :read}
+
+   :ls-tree          {:handler   run-ls-tree
+                      :aliases   [:tree :map :outline-tree]
+                      :desc      "Map namespaces across a directory tree"
+                      :args      {:dir    {:required true :desc "Root directory to scan"}
+                                  :grep   {:desc "Filter pattern (regex) — uses ripgrep"}
+                                  :format {:desc ":edn for machine-readable (default: text)"}}
+                      :examples  ["clj-surgeon :op :ls-tree :dir ."
+                                  "clj-surgeon :op :ls-tree :dir ~/src.local/ :grep \"postgres|jdbc\""]
+                      :category  :read}
+
+   :mv               {:handler   run-mv
+                      :desc      "Reorder a form within a file"
+                      :args      {:file    {:required true :desc "Clojure source file"}
+                                  :form    {:required true :desc "Name of form to move"}
+                                  :before  {:required true :desc "Name of form to place it before"}
+                                  :dry-run {:desc "true to preview without writing"}}
+                      :examples  ["clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar"]
+                      :category  :write}
+
+   :rename-ns        {:handler   rename/plan
+                      :desc      "Plan a namespace prefix rename (dry run)"
+                      :args      {:from {:required true :desc "Old namespace prefix"}
+                                  :to   {:required true :desc "New namespace prefix"}
+                                  :root {:desc "Project root (default: .)"}}
+                      :examples  ["clj-surgeon :op :rename-ns :from old.prefix :to new.prefix :root ."]
+                      :category  :write
+                      :pair      :rename-ns!}
+
+   :rename-ns!       {:handler   rename/execute!
+                      :desc      "Execute a namespace prefix rename"
+                      :args      {:from {:required true :desc "Old namespace prefix"}
+                                  :to   {:required true :desc "New namespace prefix"}
+                                  :root {:desc "Project root (default: .)"}}
+                      :examples  ["clj-surgeon :op :rename-ns! :from old.prefix :to new.prefix :root ."]
+                      :category  :write
+                      :pair      :rename-ns}
+
+   :topo             {:handler   run-topo
+                      :desc      "Topological sort (optimal form ordering)"
+                      :args      {:file {:required true :desc "Clojure source file"}}
+                      :examples  ["clj-surgeon :op :topo :file src/my/ns.clj"]
+                      :category  :read}))
+
+;; Alias resolution — derived from registry at load time
+
+(def ^:private alias->canonical
+  "Alias -> canonical op keyword."
+  (reduce-kv (fn [m canonical {:keys [aliases]}]
+               (reduce #(assoc %1 %2 canonical) m (or aliases [])))
+             {}
+             ops-registry))
+
+(defn resolve-op
+  "Resolve an op keyword to its canonical name, following aliases.
+   Returns nil for unknown ops."
+  [op]
+  (if (contains? ops-registry op)
+    op
+    (get alias->canonical op)))
+
+;; ============================================================
+;; Help formatting — pure functions, registry in, string out
+;; ============================================================
+
+(def ^:private category-order [:read :write :cljc])
+(def ^:private category-labels
+  {:read  "Read-only (analysis, no side effects)"
+   :write "Write (plan first, then execute with ! variant)"
+   :cljc  "CLJC"})
+
+(defn format-global-help
+  "Categorized command list with 1-line descriptions.
+   Pure: registry in, string out."
+  [registry]
+  (let [sb (StringBuilder.)
+        by-cat (group-by (fn [[_ v]] (:category v)) registry)]
+    (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
+    (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
+    (.append sb "       clj-surgeon --help              show this message\n")
+    (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n")
+    (doseq [cat category-order
+            :let [label (get category-labels cat)
+                  ops   (get by-cat cat)]]
+      (when (seq ops)
+        (.append sb (str "  " label ":\n"))
+        (doseq [[op-key {:keys [desc aliases pair]}] (sort-by first ops)]
+          (.append sb (format "    %-20s %s" (name op-key) desc))
+          (when (seq aliases)
+            (.append sb (format "  (aliases: %s)" (str/join ", " (map name aliases)))))
+          (when pair
+            (.append sb (format "  -> %s" (name pair))))
+          (.append sb "\n"))
+        (.append sb "\n")))
+    (.append sb "  Quick start:\n")
+    (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
+    (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
+    (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n\n")
+    (.append sb "  All ops return EDN. All analysis is pure — only ! variants write files.\n")
+    (str sb)))
+
+(defn format-op-help
+  "Per-command help: description, args, examples.
+   Pure: op-key + op-def in, string out."
+  [op-key {:keys [desc args examples pair aliases]}]
+  (let [sb (StringBuilder.)]
+    (.append sb (format "clj-surgeon :op %s\n\n" (name op-key)))
+    (.append sb (format "  %s\n" desc))
+    (when (seq aliases)
+      (.append sb (format "  Aliases: %s\n" (str/join ", " (map name aliases)))))
+    (.append sb "\n")
+    (when (seq args)
+      (.append sb "  Arguments:\n")
+      (let [sorted-args (sort-by (fn [[_ v]] (if (:required v) 0 1)) args)]
+        (doseq [[arg-key {:keys [required desc]}] sorted-args]
+          (.append sb (format "    %-16s %s%s\n"
+                              (str ":" (name arg-key))
+                              (if required "(required) " "")
+                              (or desc "")))))
+      (.append sb "\n"))
+    (when pair
+      (.append sb (format "  See also: :op %s\n\n" (name pair))))
+    (when (seq examples)
+      (.append sb "  Examples:\n")
+      (doseq [ex examples]
+        (.append sb (format "    %s\n" ex)))
+      (.append sb "\n"))
+    (str sb)))
+
+;; ============================================================
+;; Dispatch + CLI
+;; ============================================================
+
 (defn run [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
-  (let [result (case op
-                 :ls (run-outline opts)
-                 :outline (run-outline opts)
-                 :ls-tree (run-ls-tree opts)
-                 :tree (run-ls-tree opts)
-                 :map (run-ls-tree opts)
-                 :outline-tree (run-ls-tree opts)
-                 :mv (run-mv opts)
-                 :declares (run-declares opts)
-                 :deps (run-deps opts)
-                 :topo (run-topo opts)
-                 :ls-extract (run-closure opts)
-                 :ls-deps (run-ls-deps opts)
-                 :rename-ns (rename/plan opts)
-                 :rename-ns! (rename/execute! opts)
-                 :fix-declares (fix-declares/plan (:file opts))
-                 :fix-declares! (fix-declares/execute! (:file opts))
-                 :extract (extract/plan opts)
-                 :extract! (extract/execute! opts)
-                 :cljc-merge (run-cljc-merge opts)
-                 :cljc-split (run-cljc-split opts)
-                 :cljc-add-require (run-cljc-add-require opts)
-                 :cljc-analyze (cond
-                                 (:file opts) (cljc-analyze/analyze-cljc (slurp (:file opts)))
-                                 (and (:clj opts) (:cljs opts))
-                                 (cljc-analyze/analyze-pair (slurp (:clj opts))
-                                                            (slurp (:cljs opts)))
-                                 :else {:error "supply :file or :clj + :cljs"})
-                 {:error (str "Unknown op: " op
-                              ". Valid ops: :ls, :mv, :declares, :deps, :topo, :closure, :rename-ns, :fix-declares, :cljc-merge, :cljc-split, :cljc-add-require, :cljc-analyze")})]
-    (if (string? result)
-      (println result)
-      (pp/pprint result))))
+  (let [canonical (resolve-op op)
+        op-def   (get ops-registry canonical)]
+    (if op-def
+      (let [result ((:handler op-def) opts)]
+        (if (string? result)
+          (println result)
+          (pp/pprint result)))
+      (pp/pprint {:error (str "Unknown op: " op
+                              ". Valid ops: "
+                              (str/join ", " (keys ops-registry)))}))))
 
-(defn- parse-val [s]
+(defn parse-val
+  "Parse a single CLI value string into its Clojure equivalent.
+   Pure: string in, value out."
+  [s]
   (cond
     (= s "true") true
     (= s "false") false
@@ -513,11 +739,41 @@
     (.startsWith s "{") (read-string s)  ;; parse EDN maps
     :else s))
 
-(defn- parse-args [args]
-  (->> args
-       (partition 2)
-       (map (fn [[k v]] [(keyword (subs k 1)) (parse-val v)]))
-       (into {})))
+(defn parse-args
+  "Parse CLI arg strings into an opts map.
+   Pure: string sequence in, map out."
+  [args]
+  (let [help-flags #{"--help" "-h"}
+        has-help?  (some help-flags args)
+        kv-args    (remove help-flags args)]
+    (cond-> (->> kv-args
+                 (partition 2)
+                 (map (fn [[k v]] [(keyword (subs k 1)) (parse-val v)]))
+                 (into {}))
+      has-help? (assoc :help true))))
 
 (defn -main [& args]
-  (run (parse-args args)))
+  (cond
+    ;; No args → global help
+    (empty? args)
+    (println (format-global-help ops-registry))
+
+    :else
+    (let [opts (parse-args args)]
+      (cond
+        ;; --help with no op → global help
+        (and (:help opts) (nil? (:op opts)))
+        (println (format-global-help ops-registry))
+
+        ;; --help with an op → per-op help
+        (and (:help opts) (:op opts))
+        (let [canonical (resolve-op (:op opts))
+              op-def    (get ops-registry canonical)]
+          (if op-def
+            (println (format-op-help (or canonical (:op opts)) op-def))
+            (do (println (format "Unknown op: %s\n" (name (:op opts))))
+                (println (format-global-help ops-registry)))))
+
+        ;; Normal dispatch
+        :else
+        (run opts)))))
