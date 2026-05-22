@@ -435,8 +435,11 @@
         (->> orphan-src-hits
              (map (fn [f]
                     (let [info (find-nearest-build-file f dir)]
-                      (assoc info :file (str f)))))
-             (remove #(nil? (:root %)))
+                      (if info
+                        (assoc info :file (str f))
+                        ;; Loose file — no build file found; use parent dir as root
+                        {:root (str (fs/parent (fs/path f)))
+                         :file (str f)}))))
              (group-by :root)
              (map (fn [[root entries]]
                     {:name (str (fs/file-name (fs/path root)))
