@@ -86,10 +86,44 @@
         i (.lastIndexOf s ".")]
     (when (pos? i) (subs s (inc i)))))
 
+(defn- reader-cond-require?
+  "Is this zipper node a reader-conditional (#? or #?@) inside a :require?"
+  [zloc]
+  (and (= :reader-macro (some-> zloc z/node n/tag))
+       (#{"?" "?@"} (some-> zloc z/down z/string))))
+
+(defn- vectors-from-reader-cond
+  "Extract require vectors from a reader-conditional node.
+   Handles both #?(:clj [ns :as a]) and #?@(:cljs [[ns1 :as a] [ns2 :as b]])."
+  [rcond-zloc]
+  (let [splicing? (= "?@" (some-> rcond-zloc z/down z/string))
+        pair-list (-> rcond-zloc z/down z/right)
+        children  (->> (z/down pair-list)
+                       (iterate z/right)
+                       (take-while some?))
+        pairs     (partition 2 children)]
+    (mapcat (fn [[_platform-key v-zl]]
+              (cond
+                ;; #?@(:clj [[ns1 :as a] [ns2 :as b]]) — splice: v-zl is vector of vectors
+                splicing?
+                (->> (z/down v-zl)
+                     (iterate z/right)
+                     (take-while some?)
+                     (filter z/vector?))
+
+                ;; #?(:clj [ns :as a]) — single vector
+                (z/vector? v-zl)
+                [v-zl]
+
+                :else nil))
+            pairs)))
+
 (defn extract-ns-requires
   "Extract require entries from a (ns ...) zipper location.
    Returns a vector of strings like [\"[clojure.string :as str]\"]
-   or nil if no :require block found."
+   or nil if no :require block found.
+   Reader-conditional-aware: also extracts from #?(:clj [...]) and
+   #?@(:cljs [[...]]) within the :require block."
   [ns-zloc]
   (when ns-zloc
     (let [require-form (->> (z/down ns-zloc)
@@ -99,11 +133,17 @@
                                           (= ":require" (some-> % z/down z/string))))
                             first)]
       (when require-form
-        (->> (z/down require-form)
-             (iterate z/right)
-             (take-while some?)
-             (filter z/vector?)
-             (mapv z/string))))))
+        (let [children (->> (z/down require-form)
+                            (iterate z/right)
+                            (take-while some?))
+              ;; Direct vector children (shared requires)
+              direct   (->> children
+                            (filter z/vector?))
+              ;; Reader-conditional children (platform-specific requires)
+              rcond    (->> children
+                            (filter reader-cond-require?)
+                            (mapcat vectors-from-reader-cond))]
+          (mapv z/string (concat direct rcond)))))))
 
 (defn outline
   "Return outline of all top-level forms in a Clojure file.

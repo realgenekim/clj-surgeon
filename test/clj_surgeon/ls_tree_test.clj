@@ -34,6 +34,32 @@
     (is (= ["[clojure.test :refer [deftest is testing]]"]
            (outline/extract-ns-requires ns-z)))))
 
+(deftest test-extract-ns-requires-cljc-reader-conditional
+  (let [ns-z (ns-zloc-from-string
+              "(ns my.app
+  (:require [clojure.string :as str]
+            #?(:clj [clojure.java.io :as io])
+            #?(:cljs [goog.string :as gstr])))
+(defn foo [] :ok)")]
+    (testing "extracts both direct and reader-conditional requires"
+      (is (= ["[clojure.string :as str]"
+              "[clojure.java.io :as io]"
+              "[goog.string :as gstr]"]
+             (outline/extract-ns-requires ns-z))))))
+
+(deftest test-extract-ns-requires-cljc-splicing
+  (let [ns-z (ns-zloc-from-string
+              "(ns my.app
+  (:require [clojure.string :as str]
+            #?@(:clj [[clojure.java.io :as io]
+                       [clojure.edn :as edn]])))
+(defn foo [] :ok)")]
+    (testing "extracts splicing reader-conditional requires"
+      (is (= ["[clojure.string :as str]"
+              "[clojure.java.io :as io]"
+              "[clojure.edn :as edn]"]
+             (outline/extract-ns-requires ns-z))))))
+
 (deftest test-extract-ns-requires-no-require-block
   (let [ns-z (ns-zloc-from-string "(ns my.empty)")]
     (is (nil? (outline/extract-ns-requires ns-z)))))
@@ -270,6 +296,18 @@
         (is (str/includes? result "loose-fn")))
       (finally
         (fs/delete-tree tmp-dir)))))
+
+(deftest test-integration-no-deps-edn-grep-fallback
+  (testing "grep fast-path finds loose .clj files without a build file"
+    (let [tmp-dir (str (fs/create-temp-dir {:prefix "ls-tree-grep-loose"}))]
+      (try
+        (spit (str tmp-dir "/loose.clj")
+              "(ns loose)\n(defn postgres-query [] :query)")
+        (let [result (core/run-ls-tree {:dir tmp-dir :grep "postgres"})]
+          (is (some? result) "loose file matching grep should be found")
+          (is (str/includes? result "postgres-query")))
+        (finally
+          (fs/delete-tree tmp-dir))))))
 
 (deftest test-integration-parse-error-non-fatal
   (let [tmp-dir (str (fs/create-temp-dir {:prefix "ls-tree-test"}))]
