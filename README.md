@@ -48,7 +48,7 @@ Previously, Claude spent 15+ minutes in Whac-A-Mole: move `transition!` up → `
 ```bash
 git clone https://github.com/realgenekim/clj-surgeon.git
 cd clj-surgeon
-make install    # → ~/bin/clj-surgeon
+make install DEST=~/bin/clj-surgeon
 ```
 
 Requires [babashka](https://babashka.org/) (rewrite-clj and cheshire are built in).
