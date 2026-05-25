@@ -1,4 +1,5 @@
 CLJ_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+DEST ?= ~/bin/clj-surgeon
 
 .PHONY: test outline help install nrepl
 
@@ -6,7 +7,7 @@ help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test              Run all tests"
-	@echo "  make install           Install to ~/bin/clj-surgeon"
+	@echo "  make install           Install to $$DEST (default: ~/bin/clj-surgeon)"
 	@echo "  make nrepl             Start bb nREPL"
 	@echo ""
 	@echo "Direct usage:"
@@ -17,13 +18,13 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
 install:
-	@echo '#!/usr/bin/env bb' > ~/bin/clj-surgeon
-	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/clj-surgeon
-	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> ~/bin/clj-surgeon
-	@echo '(require (quote [clj-surgeon.core :as core]))' >> ~/bin/clj-surgeon
-	@echo '(apply core/-main *command-line-args*)' >> ~/bin/clj-surgeon
-	@chmod +x ~/bin/clj-surgeon
-	@echo "Installed ~/bin/clj-surgeon"
+	@echo '#!/usr/bin/env bb' > $(DEST)
+	@echo '(require (quote [babashka.classpath :as cp]))' >> $(DEST)
+	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> $(DEST)
+	@echo '(require (quote [clj-surgeon.core :as core]))' >> $(DEST)
+	@echo '(apply core/-main *command-line-args*)' >> $(DEST)
+	@chmod +x $(DEST)
+	@echo "Installed $(DEST)"
 
 nrepl:
 	cd $(CLJ_SURGEON_HOME) && bb nrepl-server 0
