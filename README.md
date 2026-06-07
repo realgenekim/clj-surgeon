@@ -51,7 +51,22 @@ cd clj-surgeon
 make install    # → ~/bin/clj-surgeon
 ```
 
-Requires [babashka](https://babashka.org/) (rewrite-clj and cheshire are built in).
+### Requirements
+
+Two binaries must be on `PATH`:
+
+- **[babashka](https://babashka.org/)** (`bb`) — the runtime. rewrite-clj and cheshire are built in.
+- **[clj-kondo](https://github.com/clj-kondo/clj-kondo)** — used by `:ls`, `:outline`, `:fix-declares!`, and any op that needs forward-reference detection. Without it those ops fail.
+
+No-sudo install (e.g. inside the Claude Code sandbox, where `sudo` is blocked):
+
+```bash
+mkdir -p ~/bin   # ~/.profile already prepends ~/bin to PATH on Ubuntu/Debian
+bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install) --dir ~/bin
+bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo) --dir ~/bin
+```
+
+`make install` will warn (but not fail) if either binary is missing.
 
 ## Teach Claude Code
 
