@@ -237,3 +237,196 @@
             ;; config is at line 3, destination is line 7
             ;; foo's dependency (config) is satisfied
             ))))))
+
+;; ============================================================
+;; Defining forms other than defn — defonce / def / defrecord
+;;
+;; The first reported regression was a (defonce ^:private cache (atom {}))
+;; used 60 lines above its definition. Cold compile failed; warm REPL
+;; masked it. `:mv` couldn't move the defonce up because find-form was
+;; mis-parsing the metadata-wrapped symbol. These tests pin the contract
+;; for ALL named top-level forms, with and without metadata.
+;; ============================================================
+
+(deftest test-move-defonce-no-metadata
+  (let [source "(ns my.app)
+
+(defn caller []
+  (reset! my-state {}))
+
+(defonce my-state (atom {}))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "plain defonce can be moved"
+          (let [result (move/move-form {:file path
+                                        :form "my-state"
+                                        :before "caller"})]
+            (is (:ok result))
+            (let [new-source (slurp path)
+                  state-pos (str/index-of new-source "(defonce my-state")
+                  caller-pos (str/index-of new-source "(defn caller")]
+              (is (some? state-pos))
+              (is (some? caller-pos))
+              (is (< state-pos caller-pos)))))))))
+
+(deftest test-move-def-no-metadata
+  (let [source "(ns my.app)
+
+(defn caller []
+  (use thing))
+
+(def thing 1)
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "plain def can be moved"
+          (let [result (move/move-form {:file path
+                                        :form "thing"
+                                        :before "caller"})]
+            (is (:ok result))
+            (let [new-source (slurp path)
+                  thing-pos (str/index-of new-source "(def thing")
+                  caller-pos (str/index-of new-source "(defn caller")]
+              (is (< thing-pos caller-pos)))))))))
+
+(deftest test-move-defonce-with-private-meta
+  ;; The regression-driver test: a private defonce used above its definition.
+  ;; Reflects a forward-reference bug that took down CI for ~20h in a downstream
+  ;; project, where :mv would have been the natural fix but rejected the form.
+  (let [source "(ns my.app)
+
+(defn invalidate! []
+  (reset! cache {}))
+
+(defonce ^:private cache (atom {}))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "metadata-wrapped defonce name is recognized"
+          (let [result (move/move-form {:file path
+                                        :form "cache"
+                                        :before "invalidate!"
+                                        :dry-run true})]
+            (is (:ok result) "dry-run plan should succeed, not error")
+            (is (= "cache" (-> result :plan :form)))))
+        (testing "metadata-wrapped defonce is actually moved"
+          (let [result (move/move-form {:file path
+                                        :form "cache"
+                                        :before "invalidate!"})]
+            (is (:ok result))
+            (let [new-source (slurp path)
+                  cache-pos (str/index-of new-source "(defonce ^:private cache")
+                  use-pos (str/index-of new-source "(defn invalidate!")]
+              (is (some? cache-pos) "defonce should still exist")
+              (is (< cache-pos use-pos) "defonce should now precede its use"))))))))
+
+(deftest test-move-defn-with-private-meta
+  (let [source "(ns my.app)
+
+(defn caller []
+  (helper 42))
+
+(defn ^:private helper [x]
+  (inc x))
+"]
+    (with-temp-file source
+      (fn [path]
+        (testing "private defn name is recognized"
+          (let [result (move/move-form {:file path
+                                        :form "helper"
+                                        :before "caller"
+                                        :dry-run true})]
+            (is (:ok result))
+            (is (= "helper" (-> result :plan :form)))))
+        (testing "private defn is moved, metadata travels with it"
+          (let [result (move/move-form {:file path
+                                        :form "helper"
+                                        :before "caller"})]
+            (is (:ok result))
+            (let [new-source (slurp path)
+                  ;; the ^:private MUST remain attached to the symbol
+                  helper-pos (str/index-of new-source "(defn ^:private helper")
+                  caller-pos (str/index-of new-source "(defn caller")]
+              (is (some? helper-pos)
+                  "the ^:private metadata must travel with the moved form")
+              (is (< helper-pos caller-pos)))))))))
+
+(deftest test-move-defn-with-map-meta
+  ;; Map-form metadata: ^{:doc "..."} is the same node tag as ^:private but
+  ;; with a richer payload. Used to live in the third-child fallback that
+  ;; never actually worked because the "third child" is the arglist.
+  (let [source "(ns my.app)
+
+(defn caller []
+  (doc-fn))
+
+(defn ^{:doc \"Has docstring meta\"} doc-fn []
+  :ok)
+"]
+    (with-temp-file source
+      (fn [path]
+        (let [result (move/move-form {:file path
+                                      :form "doc-fn"
+                                      :before "caller"
+                                      :dry-run true})]
+          (is (:ok result))
+          (is (= "doc-fn" (-> result :plan :form))))))))
+
+(deftest test-move-defonce-with-dynamic-meta-and-earmuffs
+  ;; ^:dynamic is the canonical earmuffed-var case.
+  (let [source "(ns my.app)
+
+(defn reset-env! []
+  (alter-var-root #'*my-var* (constantly nil)))
+
+(defonce ^:dynamic *my-var* 42)
+"]
+    (with-temp-file source
+      (fn [path]
+        (let [result (move/move-form {:file path
+                                      :form "*my-var*"
+                                      :before "reset-env!"
+                                      :dry-run true})]
+          (is (:ok result))
+          (is (= "*my-var*" (-> result :plan :form))))))))
+
+(deftest test-move-defrecord-with-private-meta
+  ;; defrecord is the third common defining form. Less common to mark
+  ;; private but the contract should hold uniformly.
+  (let [source "(ns my.app)
+
+(defn make-point [x y]
+  (->Point x y))
+
+(defrecord ^:private Point [x y])
+"]
+    (with-temp-file source
+      (fn [path]
+        (let [result (move/move-form {:file path
+                                      :form "Point"
+                                      :before "make-point"
+                                      :dry-run true})]
+          (is (:ok result))
+          (is (= "Point" (-> result :plan :form))))))))
+
+(deftest test-move-error-message-still-clear-for-truly-missing-form
+  ;; A correctness check: the metadata-handling improvement must not start
+  ;; reporting false positives. Asking for a form that doesn't exist must
+  ;; still produce the {:error "Form not found: ..."} response.
+  (let [source "(ns my.app)
+
+(defn ^:private real-fn []
+  :ok)
+
+(defn caller []
+  (real-fn))
+"]
+    (with-temp-file source
+      (fn [path]
+        (let [result (move/move-form {:file path
+                                      :form "fictional-fn"
+                                      :before "caller"
+                                      :dry-run true})]
+          (is (:error result))
+          (is (str/includes? (:error result) "fictional-fn")))))))
