@@ -1,6 +1,7 @@
 (ns clj-surgeon.help-test
   (:require [clojure.test :refer [deftest is testing]]
             [clj-surgeon.core :as core]
+            [clojure.edn :as edn]
             [clojure.string :as str]
             [clojure.java.io :as io]
             [babashka.process :as proc]))
@@ -48,6 +49,36 @@
   (testing "the documented CLI invocation `:op ls-tree` resolves end to end"
     (is (= :ls-tree (core/resolve-op (:op (core/parse-args [":op" "ls-tree"])))))
     (is (= :ls-tree (core/resolve-op (:op (core/parse-args [":op" ":ls-tree"])))))))
+
+(deftest dispatch-string-op-ls-tree-documented-usage
+  (testing "parse-args -> resolve-op -> run accepts the documented bare string op"
+    (let [opts (core/parse-args [":op" "ls-tree" ":dir" "src"])]
+      (is (= "ls-tree" (:op opts)))
+      (is (= :ls-tree (core/resolve-op (:op opts))))
+      (let [out (with-out-str (core/run opts))]
+        (is (str/includes? out "clj_surgeon/core.clj"))
+        (is (str/includes? out "ns: clj-surgeon.core"))))))
+
+(deftest dispatch-keyword-op-ls-tree
+  (testing "parse-args -> resolve-op -> run still accepts keyword ops"
+    (let [opts (core/parse-args [":op" ":ls-tree" ":dir" "src"])]
+      (is (= :ls-tree (:op opts)))
+      (is (= :ls-tree (core/resolve-op (:op opts))))
+      (let [out (with-out-str (core/run opts))]
+        (is (str/includes? out "clj_surgeon/core.clj"))
+        (is (str/includes? out "ns: clj-surgeon.core"))))))
+
+(deftest dispatch-unknown-ops-return-error-maps-not-exceptions
+  (testing "unknown bare string op returns a clean EDN error"
+    (let [out (with-out-str (core/run (core/parse-args [":op" "bogus"])))]
+      (is (= {:error (str "Unknown op: bogus. Valid ops: "
+                          (str/join ", " (keys core/ops-registry)))}
+             (edn/read-string out)))))
+  (testing "unknown keyword op returns a clean EDN error"
+    (let [out (with-out-str (core/run (core/parse-args [":op" ":bogus"])))]
+      (is (= {:error (str "Unknown op: :bogus. Valid ops: "
+                          (str/join ", " (keys core/ops-registry)))}
+             (edn/read-string out))))))
 
 ;; ============================================================
 ;; ops-registry completeness
@@ -109,6 +140,18 @@
             cmd-lines (filter #(re-find #"^\s{4}\S" %) lines)]
         (is (not (some #(re-find #"^\s{4}outline\s" %) cmd-lines))
             "alias 'outline' should not appear as its own command line")))))
+
+(deftest global-help-op-names-resolve
+  (let [help (core/format-global-help core/ops-registry)
+        help-op-names (->> (str/split-lines help)
+                           (keep #(second (re-matches #"\s{4}([a-z][a-z0-9!-]*)\s{2,}.+" %)))
+                           (remove #{"clj-surgeon"})
+                           set)]
+    (testing "every op name printed in global help resolves from the parser's string form"
+      (is (= (set (map name (keys core/ops-registry))) help-op-names))
+      (doseq [op-name help-op-names]
+        (is (some? (core/resolve-op op-name))
+            (str "global help prints unresolved op " op-name))))))
 
 ;; ============================================================
 ;; format-op-help
@@ -327,3 +370,10 @@
     (testing ":outline alias dispatches same as :ls"
       (is (zero? exit))
       (is (str/includes? out "clj-surgeon.forms")))))
+
+(deftest cli-documented-string-op-dispatch-works
+  (let [{:keys [exit out]} (run-cli ":op" "ls-tree" ":dir" "src")]
+    (testing "-main accepts documented bare op values"
+      (is (zero? exit))
+      (is (str/includes? out "clj_surgeon/core.clj"))
+      (is (str/includes? out "ns: clj-surgeon.core")))))
