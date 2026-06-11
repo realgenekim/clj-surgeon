@@ -5,9 +5,16 @@
             [cheshire.core :as json]))
 
 (defn- run-kondo [file]
-  (let [result (shell/sh "clj-kondo" "--lint" file
-                         "--config"
-                         "{:output {:format :json} :analysis {:var-definitions true :var-usages true}}")]
+  (let [result (try
+                 (shell/sh "clj-kondo" "--lint" file
+                           "--config"
+                           "{:output {:format :json} :analysis {:var-definitions true :var-usages true}}")
+                 (catch java.io.IOException e
+                   (binding [*out* *err*]
+                     (println "clj-surgeon: 'clj-kondo' not found on PATH (required for forward-ref analysis).")
+                     (println "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo) --dir ~/bin")
+                     (println "  Or see: https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md"))
+                   (System/exit 2)))]
     (when (str/blank? (:err result))
       (json/parse-string (:out result) true))))
 
