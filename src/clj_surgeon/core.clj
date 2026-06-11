@@ -636,12 +636,16 @@
              ops-registry))
 
 (defn resolve-op
-  "Resolve an op keyword to its canonical name, following aliases.
-   Returns nil for unknown ops."
+  "Resolve an op (keyword or bare string, e.g. `:op ls-tree`) to its
+   canonical name, following aliases. Returns nil for unknown ops.
+   Coerces to keyword before lookup: ops-registry is a sorted-map, so
+   contains? with a non-keyword key would throw ClassCastException."
   [op]
-  (if (contains? ops-registry op)
-    op
-    (get alias->canonical op)))
+  (let [op (if (string? op) (keyword op) op)]
+    (when (keyword? op)
+      (if (contains? ops-registry op)
+        op
+        (get alias->canonical op)))))
 
 ;; ============================================================
 ;; Help formatting — pure functions, registry in, string out

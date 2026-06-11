@@ -28,6 +28,27 @@
     (is (nil? (core/resolve-op :bogus)))
     (is (nil? (core/resolve-op :nope)))))
 
+(deftest resolve-op-string-ops
+  (testing "bare string ops (CLI value without leading colon) resolve like keywords"
+    ;; Regression: `clj-surgeon :op ls-tree` parses the value as the string
+    ;; "ls-tree"; contains? on the sorted-map registry then threw
+    ;; ClassCastException (Keyword vs String) instead of dispatching.
+    (is (= :ls-tree (core/resolve-op "ls-tree")))
+    (is (= :ls (core/resolve-op "ls")))
+    (is (= :ls-tree (core/resolve-op "tree")))
+    (is (= :ls (core/resolve-op "outline")))))
+
+(deftest resolve-op-non-keyword-junk-is-nil-not-crash
+  (testing "nil and unknown strings return nil instead of throwing"
+    (is (nil? (core/resolve-op nil)))
+    (is (nil? (core/resolve-op "bogus")))
+    (is (nil? (core/resolve-op 42)))))
+
+(deftest parse-args-then-resolve-op-documented-usage
+  (testing "the documented CLI invocation `:op ls-tree` resolves end to end"
+    (is (= :ls-tree (core/resolve-op (:op (core/parse-args [":op" "ls-tree"])))))
+    (is (= :ls-tree (core/resolve-op (:op (core/parse-args [":op" ":ls-tree"])))))))
+
 ;; ============================================================
 ;; ops-registry completeness
 ;; ============================================================
