@@ -6,25 +6,40 @@
             [rewrite-clj.node :as n]
             [clojure.string :as str]))
 
+(defn- form-name-of
+  "Return the defined-name (as a string) of the form at zloc, or nil.
+
+   Strips metadata wrappers so `(defn ^:private foo [] ...)`,
+   `(defonce ^{:doc \"…\"} bar (atom {}))`, and `(defonce ^:dynamic *baz* 1)`
+   all report their unwrapped name (\"foo\", \"bar\", \"*baz*\").
+
+   zloc must point at the form-list (a (defn …) / (defonce …) etc.). Returns
+   nil for non-list nodes and for lists with no second child."
+  [zloc]
+  (when (z/list? zloc)
+    (when-let [name-zloc (some-> zloc z/down z/right)]
+      (if (= :meta (n/tag (z/node name-zloc)))
+        ;; Meta-wrapped node: structurally (meta-value, target). The target
+        ;; (the actual symbol the metadata is attached to) is the rightmost
+        ;; child of the meta node. Drill in to get it.
+        (some-> name-zloc z/down z/rightmost z/string)
+        (z/string name-zloc)))))
+
 (defn- find-form
-  "Walk top-level forms to find one whose second child matches `form-name`."
+  "Walk top-level forms to find one whose defined-name matches `form-name`.
+
+   Handles metadata wrappers on the name (^:private, ^{:doc …}, ^:dynamic).
+   Skips `declare` forms so callers using `:mv :form my-fn` target the actual
+   defn body and not the forward-declaration."
   [zloc form-name]
   (let [target (str form-name)]
     (loop [zloc zloc]
       (when zloc
-        (let [first-child (some-> zloc z/down z/string)]
-          (if (and (z/list? zloc)
-                   ;; Skip declare forms — we want the actual defn
-                   (not= "declare" first-child)
-                   (let [second-child (some-> zloc z/down z/right z/string)]
-                     ;; Match defn name, stripping metadata prefix
-                     (and second-child
-                          (or (= second-child target)
-                              ;; Handle ^:private etc
-                              (let [third (some-> zloc z/down z/right z/right z/string)]
-                                (= third target))))))
-            zloc
-            (recur (z/right zloc))))))))
+        (if (and (z/list? zloc)
+                 (not= "declare" (some-> zloc z/down z/string))
+                 (= target (form-name-of zloc)))
+          zloc
+          (recur (z/right zloc)))))))
 
 (defn- preceding-comment-nodes
   "Collect comment/newline nodes immediately preceding a form."
