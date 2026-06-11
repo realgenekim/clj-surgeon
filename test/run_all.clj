@@ -14,7 +14,8 @@
             [clj-surgeon.edn-config-integration-test]
             [clj-surgeon.cljc-existing-ops-test]
             [clj-surgeon.ls-tree-test]
-            [clj-surgeon.help-test]))
+            [clj-surgeon.help-test]
+            [clj-surgeon.cli-dispatch-test]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
                    'clj-surgeon.outline-test
@@ -30,5 +31,6 @@
                    'clj-surgeon.edn-config-integration-test
                    'clj-surgeon.cljc-existing-ops-test
                    'clj-surgeon.ls-tree-test
-                   'clj-surgeon.help-test)]
+                   'clj-surgeon.help-test
+                   'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))
