@@ -53,6 +53,8 @@ make install    # → ~/bin/clj-surgeon
 
 Requires [babashka](https://babashka.org/) (rewrite-clj and cheshire are built in).
 
+What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
+
 ## Teach Claude Code
 
 Add this line to your project's `CLAUDE.md`:
