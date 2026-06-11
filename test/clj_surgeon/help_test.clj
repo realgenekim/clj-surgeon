@@ -72,12 +72,12 @@
   (testing "unknown bare string op returns a clean EDN error"
     (let [out (with-out-str (core/run (core/parse-args [":op" "bogus"])))]
       (is (= {:error (str "Unknown op: bogus. Valid ops: "
-                          (str/join ", " (keys core/ops-registry)))}
+                          (str/join ", " (sort (keys core/ops-registry))))}
              (edn/read-string out)))))
   (testing "unknown keyword op returns a clean EDN error"
     (let [out (with-out-str (core/run (core/parse-args [":op" ":bogus"])))]
       (is (= {:error (str "Unknown op: :bogus. Valid ops: "
-                          (str/join ", " (keys core/ops-registry)))}
+                          (str/join ", " (sort (keys core/ops-registry))))}
              (edn/read-string out))))))
 
 ;; ============================================================

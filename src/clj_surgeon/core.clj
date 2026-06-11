@@ -476,7 +476,10 @@
 (def ops-registry
   "Single source of truth for all operations.
    Each key is the canonical op name. Drives dispatch, help, and error messages."
-  (sorted-map
+  ;; hash-map, NOT sorted-map: sorted-map COMPARES keys on contains?/get, so any
+  ;; non-keyword lookup throws ClassCastException (the ed6ad99 bug class). Ordering
+  ;; for display is done at render time (format-global-help sort-by, error-msg sort).
+  (hash-map
    :cljc-add-require {:handler   run-cljc-add-require
                       :desc      "Add a platform-aware require to a CLJC file"
                       :args      {:file     {:required true :desc "Input CLJC file"}
@@ -638,10 +641,12 @@
 (defn resolve-op
   "Resolve an op (keyword or bare string, e.g. `:op ls-tree`) to its
    canonical name, following aliases. Returns nil for unknown ops.
-   Coerces to keyword before lookup: ops-registry is a sorted-map, so
-   contains? with a non-keyword key would throw ClassCastException."
+   Strings are coerced to keywords; a stray leading colon in a string
+   (\":ls-tree\") is forgiven. Non-keyword/string input resolves to nil."
   [op]
-  (let [op (if (string? op) (keyword op) op)]
+  (let [op (if (string? op)
+             (keyword (cond-> op (str/starts-with? op ":") (subs 1)))
+             op)]
     (when (keyword? op)
       (if (contains? ops-registry op)
         op
@@ -732,7 +737,7 @@
           (pp/pprint result)))
       (pp/pprint {:error (str "Unknown op: " op
                               ". Valid ops: "
-                              (str/join ", " (keys ops-registry)))}))))
+                              (str/join ", " (sort (keys ops-registry))))}))))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.
