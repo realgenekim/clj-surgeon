@@ -72,12 +72,14 @@
   (testing "unknown bare string op returns a clean EDN error"
     (let [out (with-out-str (core/run (core/parse-args [":op" "bogus"])))]
       (is (= {:error (str "Unknown op: bogus. Valid ops: "
-                          (str/join ", " (sort (keys core/ops-registry))))}
+                          (str/join ", " (sort (keys core/ops-registry))))
+              :error-type :unknown-operation}
              (edn/read-string out)))))
   (testing "unknown keyword op returns a clean EDN error"
     (let [out (with-out-str (core/run (core/parse-args [":op" ":bogus"])))]
       (is (= {:error (str "Unknown op: :bogus. Valid ops: "
-                          (str/join ", " (sort (keys core/ops-registry))))}
+                          (str/join ", " (sort (keys core/ops-registry))))
+              :error-type :unknown-operation}
              (edn/read-string out))))))
 
 ;; ============================================================
@@ -91,6 +93,7 @@
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
                      :extract :extract!
+                     :find-subform :replace-subform :replace-subform!
                      :cljc-merge :cljc-split :cljc-add-require :cljc-analyze}]
       (is (= expected (set (keys core/ops-registry)))))))
 
@@ -229,6 +232,14 @@
          (core/parse-args [":op" ":extract" ":file" "src/s.clj"
                            ":forms" "[distill refine]" ":to" "src/d.clj"]))))
 
+(deftest parse-args-preserves-structural-forms-for-the-lens-parser
+  (is (= "[:button {:onclick \"\\x27\"}]"
+         (:with (core/parse-args [":op" ":replace-subform"
+                                  ":with" "[:button {:onclick \"\\x27\"}]" ]))))
+  (is (= "(inc 1) (inc 2)"
+         (:match (core/parse-args [":op" ":find-subform"
+                                   ":match" "(inc 1) (inc 2)"])))))
+
 (deftest parse-args-help-flag-standalone
   (is (= {:help true}
          (core/parse-args ["--help"]))))
@@ -269,7 +280,7 @@
 (defn- run-cli
   "Run clj-surgeon CLI as subprocess, return {:exit :out :err}."
   [& args]
-  (apply proc/shell {:out :string :err :string}
+  (apply proc/shell {:out :string :err :string :continue true}
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
 ;; --- No args → global help ---
@@ -336,8 +347,9 @@
 
 (deftest cli-unknown-op-shows-error
   (let [{:keys [exit out]} (run-cli ":op" ":bogus")]
-    (testing "exits successfully (prints error as EDN)"
-      (is (zero? exit)))
+    (testing "returns a failing exit status and prints an EDN error"
+      (is (pos? exit))
+      (is (= :unknown-operation (:error-type (edn/read-string out)))))
     (testing "error message mentions the bad op"
       (is (str/includes? out "Unknown op: :bogus")))
     (testing "error lists valid ops from registry"
@@ -347,12 +359,11 @@
 
 ;; --- --help with unknown op ---
 
-(deftest cli-help-unknown-op-shows-global-help
+(deftest cli-help-unknown-op-is-an-error
   (let [{:keys [exit out]} (run-cli ":op" ":bogus" "--help")]
-    (testing "falls back to global help"
-      (is (zero? exit))
-      (is (str/includes? out "Unknown op: bogus"))
-      (is (str/includes? out "Usage:")))))
+    (testing "does not disguise an invalid command as successful help"
+      (is (pos? exit))
+      (is (= :unknown-operation (:error-type (edn/read-string out)))))))
 
 ;; --- Normal dispatch still works ---
 

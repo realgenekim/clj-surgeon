@@ -1,0 +1,4 @@
+interface:
+  display_name: "clj-surgeon"
+  short_description: "Structural Clojure exploration and precise AST edits"
+  default_prompt: "Use $clj-surgeon to inspect or modify this Clojure code structurally."

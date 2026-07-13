@@ -1,324 +1,161 @@
-# clj-surgeon: Vision & Roadmap
+# clj-surgeon: Vision
 
-## What We Proved Today (2026-03-28)
+## Purpose
 
-In one session, starting from zero, we built a babashka CLI that:
+clj-surgeon is a small structural kernel for Clojure agents. It exposes syntax,
+dependencies, and exact edit mechanics as fast, deterministic operations while
+leaving architectural judgment to the model and the human.
 
-1. **Outlines a 2768-line namespace in 200ms** — every form with exact line boundaries
-2. **Detects that 6 of 7 declares are removable** — topological sort separates band-aids from genuine mutual recursion
-3. **Moves forms structurally** — comment headers travel with their form, parens always balanced, declares skipped
-4. **Renamed itself** — `ns-surgeon` → `clj-surgeon`, 10 files, every ns declaration and `:require` entry updated by walking the AST. Not grep. Not sed. Symbol node replacement.
-5. **Maps the intra-namespace call graph** — `sync-draft!` depends on `{log-event! app-state sync-draft-tx}`, computed by walking the AST subtree
-6. **Infers requires for extraction** — if you pulled `sync-draft!` into a new namespace, it needs `[clojure.string :as str]` and `[taoensso.timbre :as log]`
-7. **Finds the minimal extractable unit** — the closure of a form plus all private helpers only it uses
+The division of labor is deliberate:
 
-**30 tests. 126 assertions. ~500 lines of Clojure. Zero dependencies beyond babashka.**
+- The model decides what the code should mean and which change is appropriate.
+- clj-surgeon finds, addresses, moves, and replaces syntax without guessing.
+- The compiler, linter, and tests validate the resulting program.
 
-All of this is possible because **Clojure code is data**. The parser is `read`. The AST is a list. A rename is `(z/replace node (symbol new-name))`. In Java this would be 50,000 lines of IntelliJ plugin code.
+This is the bitter lesson applied to developer tools: as models improve, the
+durable investment is not a growing catalog of encoded refactoring opinions. It
+is a small set of dependable primitives that give a smarter model inexpensive
+perception and precise action.
 
----
+## What We Proved
 
-## What's Next: Beyond Line-Level Operations
+The original session proved that a Babashka CLI could outline a 2,768-line
+namespace, map its dependency graph, identify removable declares, move forms
+with their comments, infer extraction boundaries, and rename the project
+structurally. The reason is Clojure's homoiconicity plus rewrite-clj: parsing,
+format-preserving traversal, and printing are already available.
 
-Everything we built today operates on **forms** — top-level `(defn ...)` blocks. But rewrite-clj gives us the full AST. We can go deeper.
+Production use subsequently established two distinct scales of value:
 
-### :extract — Move forms to a new namespace (the big one)
+1. Top-level operations reduce huge namespaces to small, relevant form sets.
+2. Structural lenses locate and replace exact nested syntax inside large forms.
 
-We have all the pieces:
-- `:closure` knows the minimal set of forms to extract
-- `required-aliases` knows what `:require` entries the extracted forms need
-- `:rename-ns` knows how to create files and update requires across a project
-- `:mv` knows how to cut forms precisely
+On a 4,036-line namespace with 322 top-level forms, `:ls` immediately exposed
+the relevant synchronization forms. Nested searches then proved that particular
+state calls and Hiccup elements occurred exactly once. In later work, agents
+used zero/one/many match counts as executable hypotheses about code shape and
+used hash-bound plans to edit active dirty worktrees safely.
 
-Wire them together:
+## Design Principles
 
-```bash
-clj-surgeon :op :extract \
-  :file src/writer/state.clj \
-  :forms '[distillery-add-ai-response! enter-distillery! rebuild-ai-paragraphs!]' \
-  :to src/writer/state/distillery.clj \
-  :dry-run true
-```
+### Bookkeeping, not judgment
 
-Returns: the new file content, the updated old file, all require changes across the project. Execute and it's done.
+A useful operation removes mechanics the model already knows it wants:
 
-**Effort: ~100 lines.** The hard parts (closure computation, require inference, file writing) already exist.
+- locating exact form boundaries;
+- computing and presenting dependency relationships;
+- moving syntax while preserving formatting and comments;
+- replaying one reviewed nested edit against an unchanged snapshot;
+- updating namespace references mechanically.
 
-### :reorder — Auto-eliminate all removable declares in one shot
+The operation should not decide the desired architecture, infer intent, name a
+new abstraction, or silently widen its scope.
 
-We have topological sort. We have `:mv`. Instead of moving forms one at a time:
+### Search may be broad; mutation must be singular
 
-```bash
-clj-surgeon :op :reorder :file src/writer/state.clj :dry-run true
-```
+`:find-subform` reports zero, one, or many matches because ambiguity is useful
+information during discovery. `:replace-subform` refuses unless exactly one
+complete pattern matches, and its replacement must also contain exactly one
+complete form. There is no “best match” heuristic.
 
-Computes the optimal form ordering, shows which forms move where, and how many declares become deletable. Execute and the entire file is reordered — every form after its dependencies, zero unnecessary declares.
+### Plans are durable interfaces
 
-**Effort: ~50 lines** on top of existing topo sort + move.
+A structural edit plan is not console decoration. It is a versioned artifact
+with stable fields:
 
-### :dead-code — Find unreferenced forms across an entire project
+- `:plan-version`
+- `:operation`
+- `:file`
+- `:selector`
+- `:source-hash`
+- `:result-hash`
+- `:edits`
+- `:diff`
+- `:provenance`
 
-Right now `unreferenced-forms` works within a single file. Scale it:
+Provenance records the tool/version, operation, selector, and both snapshot
+hashes. Application uses the recorded address; it does not rerun the selector.
 
-```bash
-clj-surgeon :op :dead-code :root src/
-```
+### Fail closed
 
-For every private function in every namespace: is it called by any form in any file? If not, it's dead. clj-kondo's analysis gives us cross-file var-usages for free.
+Errors are concise EDN and always produce a nonzero process exit status. A plan
+is refused if its schema is unknown, its source changed, its addressed subtree
+changed, its result hash differs, or its rewritten file cannot be parsed.
 
-**Effort: ~40 lines** (shell out to clj-kondo, cross-reference with outlines).
+The write contract is literal: applying a lens plan uses an atomic filesystem
+replacement. If the filesystem cannot provide it, clj-surgeon reports an error
+and leaves the target unreplaced. It does not silently fall back to a weaker
+write.
 
----
+### Small composable primitives age well
 
-## The Exotic Stuff: What Homoiconicity Uniquely Enables
+`rg` remains the right tool for broad textual discovery. `:ls` is better when a
+model needs a namespace's shape. `:find-subform` is better for repeated nested
+Hiccup, handlers, rules, routes, and state transitions. The goal is not to
+replace every tool; it is to make structural facts and exact actions cheap.
 
-These are things that are **impossible or prohibitively expensive** in non-homoiconic languages. In Clojure, they're tree walks.
+## Shipped Kernel
 
-### Structural Search (not grep — pattern matching on the AST)
+| Operation | Role |
+|---|---|
+| `:ls` / `:outline` | Top-level form boundaries and signatures |
+| `:ls-tree` | Cross-project structural map |
+| `:deps`, `:ls-deps`, `:topo` | Dependency visibility |
+| `:ls-extract` | Minimal mechanically extractable closure |
+| `:declares` | Forward-declare audit |
+| `:find-subform` | Scoped nested structural search |
+| `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
+| `:mv` | Exact within-file form movement |
+| `:fix-declares` / `!` | Mechanical declare cleanup |
+| `:extract` / `!` | Planned namespace extraction |
+| `:rename-ns` / `!` | Structural namespace rename |
+| CLJC operations | Deterministic merge, split, require, and analysis |
 
-```bash
-# Find every (swap! app-state (fn [st] ...)) pattern
-clj-surgeon :op :find :file state.clj :pattern '(swap! app-state (fn [_] ...))'
+## The Structural Lens Contract
 
-# Find every defn that calls log-event! but not transition!
-clj-surgeon :op :find :file state.clj :calls 'log-event!' :not-calls 'transition!'
-```
-
-Grep finds text. This finds **structure**. `(swap! app-state f)` and `(swap!  app-state  f)` and `(swap! app-state\n  f)` are all the same AST shape. Grep would need three different patterns. The zipper matches all three with one walk.
-
-This is the Clojure equivalent of `ast-grep` or Semgrep — but it's 20 lines because S-expressions ARE the AST.
-
-### Extract Pure from Impure (the -tx pattern, automated)
-
-You spent weeks manually extracting `-tx` pure functions from `swap!`-wrapping mutators. The AST can detect the pattern:
-
-```bash
-clj-surgeon :op :find-extractable-pure :file state.clj
-```
-
-Walks every `defn` ending in `!`. Finds `(swap! app-state ...)` calls. The lambda passed to `swap!` is the pure core. Returns:
-
-```clojure
-[{:mutator "save-session!"
-  :line 2400
-  :swap-body "(fn [st] (assoc-in st [:session :saved] true))"
-  :suggested-name "save-session-tx"
-  :deps #{:session}}
- ...]
-```
-
-The tool sees the structure because the structure is data. A `swap!` call is a list with `swap!` as the first element and a function as the third. The function's body is the pure logic. Extract it, name it, wire it up.
-
-### Macro Expansion Awareness
-
-`>defn` isn't `defn`. It has a spec vector between args and body:
-
-```clojure
-(>defn my-fn [x y] [int? string? => map?] {:x x :y y})
-;;                  ^^^^^^^^^^^^^^^^^^^^^^^^ this is the spec, not the body
-```
-
-Because we're walking the AST (not regex-matching), we can teach clj-surgeon about project-specific macros:
-
-```clojure
-;; In a config file:
-{:macro-forms {">defn"  {:name 1 :args 2 :spec 3 :body 4}
-               "defcache" {:name 1 :opts 2 :body 3}}}
-```
-
-Now `:outline` shows arglists correctly for `>defn`. `:extract` handles the spec vector. `:find` matches inside the body, not the spec. **The tool understands your macros because you told it the shape.**
-
-### Semantic Diff (not line diff — form diff)
+Planning:
 
 ```bash
-clj-surgeon :op :diff :file state.clj :against main
+clj-surgeon :op :replace-subform \
+  :file src/views.clj \
+  :inside render \
+  :match '(post! "/api/items" _)' \
+  :with '(items/actions surface)' \
+  :plan-out plan.edn
 ```
 
-Instead of "lines 1830-1870 changed", returns:
+The planner parses exactly one complete match and replacement form, requires
+exactly one match, produces a unified diff, computes source and result hashes,
+reparses the complete future file, and writes a versioned EDN plan.
 
-```clojure
-{:added [{:name "new-helper" :type defn :line 450}]
- :removed [{:name "old-util" :type defn- :line 890}]
- :moved [{:name "rebuild-ai-paragraphs!" :from 1830 :to 1018}]
- :modified [{:name "sync-draft!" :line 367
-             :changes [:body-changed :arglist-same]}]}
-```
-
-Git diff shows text changes. This shows **semantic changes**: which functions were added, removed, moved, modified. A move isn't a deletion + addition — it's the same form at a different location. The AST makes this trivial to detect (same name + same body = moved).
-
-### Dependency-Aware Splitting
+Application:
 
 ```bash
-clj-surgeon :op :suggest-split :file state.clj
+clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Uses the intra-ns call graph to find **natural partition boundaries** — clusters of forms that are tightly connected internally but loosely connected externally. Graph partitioning algorithms (even simple connected-component analysis) on the adjacency list from `:deps`:
+The applier validates plan version, source snapshot, recorded address, exact
+before text, complete result parse, and result hash before attempting an atomic
+replacement.
 
-```clojure
-{:clusters
- [{:name "distillery"
-   :forms ["distillery-add-ai-response!" "enter-distillery!" ...]
-   :internal-edges 23
-   :external-edges 4
-   :suggested-ns "writer.state.distillery"}
-  {:name "session"
-   :forms ["save-session!" "load-session!" "normalize-state" ...]
-   :internal-edges 12
-   :external-edges 3
-   :suggested-ns "writer.state.session"}]
- :shared-utilities ["get-state" "app-state" "log-event!"]
- :extraction-order ["distillery" "session"]}  ;; least coupled first
-```
+## DO NOT BUILD
 
-The call graph already contains this information. No AI needed — just graph algorithms on data we already compute.
+These are not backlog items. They are intentionally excluded because they
+encode judgment, duplicate a stronger general tool, or invite an unreliable
+compound operation.
 
-### The Holy Grail: Safe Auto-Refactor
-
-Combine everything:
-
-```bash
-clj-surgeon :op :refactor :file state.clj \
-  :strategy :split-by-cluster :dry-run true
-```
-
-1. `:suggest-split` identifies clusters
-2. `:closure` computes minimal extractable units
-3. `required-aliases` infers requires
-4. `:extract` creates new namespace files
-5. `:rename-ns` updates all cross-project references
-6. `:reorder` eliminates declares in each new file
-7. `clj-kondo --lint` validates everything compiles
-8. Returns the complete plan as EDN
-
-**One command to split a 2800-line monolith into well-structured modules.** Dry-run shows every file that would be created and modified. Execute and it's done.
-
-Is this ambitious? Yes. Is it feasible? **Every component already exists or is <100 lines from existing.** The homoiconicity dividend compounds — each new operation builds on the tree-walking primitives we already have.
-
----
-
-## The Meta-Insight
-
-The traditional refactoring toolchain:
-
-```
-Source → Parser → AST → Analysis → Transform → Printer → Source
-         ^^^^                                    ^^^^^^^
-         50K lines (language-specific)           50K lines (preserve formatting)
-```
-
-The Clojure refactoring toolchain:
-
-```
-Source → rewrite-clj → Zipper → Tree walk → Zipper → rewrite-clj → Source
-         ^^^^^^^^^^                                    ^^^^^^^^^^
-         already built                                 already built
-         (built into babashka)                         (preserves formatting)
-```
-
-**The parser and printer are free.** They're built into the language. The analysis is a `filter` on a `map`. The transform is a `z/replace` on a zipper. Everything between "read the file" and "write the file" is 10-50 lines of Clojure per operation.
-
-That's why clj-surgeon is 500 lines and does what 50,000-line IDE plugins do. Not because we're smarter. Because Clojure is homoiconic.
-
----
-
-## The Bitter Lesson: Build Tools for Bookkeeping, Not for Thinking
-
-After building 13 ops and using them on a real codebase, a clear pattern emerged:
-**the valuable ops eliminate mechanical work. The wasteful ops replace judgment.**
-
-### The Test: "Is This Bookkeeping or Judgment?"
-
-**Bookkeeping** = the AI knows what to do but the mechanics are slow, error-prone,
-or burn context window. These are the ops worth building:
-
-- `:ls` — reading a 2768-line file to find form boundaries (bookkeeping)
-- `:extract!` — cutting 18 forms, writing a new file, fixing requires (bookkeeping)
-- `:fix-declares!` — moving forms in topo order, deleting stale declares (bookkeeping)
-- `:rename-ns!` — updating ns declarations and requires across 10 files (bookkeeping)
-- `:mv` — precisely cutting a form with its comment header (bookkeeping)
-
-**Judgment** = the AI already has the information and can make the decision.
-Building a tool replaces flexible reasoning with rigid pattern matching:
-
-- `:diff` — the AI can read `git diff` and understand what changed
-- `:dead-code` — `clj-kondo` already warns; the AI can grep and check
-- `:suggest-split` — the AI can look at `:deps` + `:ls` and see the clusters
-- `:find-extractable-pure` — the AI knows the -tx pattern (it's in CLAUDE.md)
-
-### The -tx Extraction Example
-
-Consider extracting a pure `-tx` function from a `swap!` mutator:
-
-```clojure
-;; BEFORE: pure logic buried in swap!
-(defn archive-critique-pill! [idx]
-  (swap! app-state
-    (fn [st]
-      (let [pills (get-in st [:distillery :lanes 0 :pills])
-            pill (nth pills idx nil)]
-        (when pill
-          (-> st
-              (update-in [:distillery :lanes 0 :pills] ...)
-              (update-in [:distillery :archived] (fnil conj []) pill)
-              (update-in [:distillery :focus-index] ...)))))))
-
-;; AFTER: pure core extracted
-(defn archive-critique-pill-tx [st idx]
-  (let [pills (get-in st [:distillery :lanes 0 :pills])
-        pill (nth pills idx nil)]
-    (if pill
-      (-> st ...)
-      st)))  ;; when → if returning st (pure fns don't return nil)
-
-(defn archive-critique-pill! [idx]
-  (swap! app-state archive-critique-pill-tx idx))
-```
-
-Could a `:find-extractable-pure` op detect this pattern? Yes — find every
-`(swap! app-state (fn [st] ...))` and extract the lambda. ~40 lines of code.
-
-But the **judgment** is everything:
-- `when` must become `if` returning `st` (pure functions shouldn't return nil)
-- Should `idx` be a param or should the caller pass the pill directly?
-- Is the `focus-index` clamping logic correct? Should the test verify the edge case?
-- Does the extracted function need a Guardrails `>defn` spec?
-
-The detection (finding the pattern) is trivially useful. The extraction is
-30 seconds of editing guided by architectural judgment. A tool that automates
-the extraction would get the mechanics right but miss every judgment call.
-
-**Where clj-surgeon DOES help:** After you've manually extracted 20 `-tx`
-functions (judgment work), you want to move them all to `writer.state.transforms`
-(bookkeeping). That's `:extract!`.
-
-### The Principle
-
-> **Build tools that eliminate mechanical work. Don't build tools that
-> replace judgment. The AI is good at judgment. The AI is bad at precisely
-> cutting 18 forms from a 2768-line file.**
-
-The compiler catches what the tool doesn't detect. The AI fixes what the
-compiler reports. The tool does the bookkeeping in between.
-
----
-
-## Current State (13 ops, 58 tests)
-
-| Op | Status | Category |
+| Idea | Decision | Why |
 |---|---|---|
-| `:ls` / `:outline` | **DONE** | Visibility |
-| `:ls-deps` | **DONE** | Visibility |
-| `:ls-extract` | **DONE** | Visibility |
-| `:deps` | **DONE** | Visibility |
-| `:topo` | **DONE** | Visibility |
-| `:declares` | **DONE** | Visibility |
-| `:mv` | **DONE** | Action |
-| `:fix-declares!` | **DONE** | Compound action |
-| `:extract!` | **DONE** | Compound action |
-| `:rename-ns!` | **DONE** | Compound action |
-| `:dead-code` | BITTER LESSON | clj-kondo does this; AI can grep |
-| `:find` | BITTER LESSON | AI + grep handles 95% of cases |
-| `:suggest-split` | BITTER LESSON | AI + `:deps` + `:ls` = judgment |
-| `:diff` | BITTER LESSON | AI + `git diff` = judgment |
-| `:find-extractable-pure` | BITTER LESSON | Detection useful, extraction is judgment |
-| `:refactor` | BITTER LESSON | Compound ops + AI judgment = this already |
+| `:dead-code` | **DO NOT BUILD** | clj-kondo supplies evidence; a model can inspect reachability and runtime registration context. |
+| generic `:find` replacement | **DO NOT BUILD** | `rg` is superior for broad discovery; structural search should remain the narrow lens where syntax identity matters. |
+| `:suggest-split` | **DO NOT BUILD** | Cluster boundaries, ownership, naming, and API design are architectural judgment. Give the model `:ls` and `:deps`. |
+| semantic `:diff` | **DO NOT BUILD** | Git already produces the durable change artifact; a model can interpret it with surrounding context. Lens plans need only a real unified diff. |
+| `:find-extractable-pure` auto-extraction | **DO NOT BUILD** | Recognizing `swap!` is easy; deciding parameters, nil semantics, invariants, names, and tests is the actual work. |
+| `:refactor` / split-by-cluster | **DO NOT BUILD** | It compounds several judgment calls and makes the failure surface larger than the kernel. Compose primitives under model supervision. |
+| macro expansion / semantic inference in lenses | **DO NOT BUILD** | Lenses promise syntax identity. Pretending to know expansion, scope, or intent would weaken that understandable contract. |
+| fuzzy or best-match replacement | **DO NOT BUILD** | Ambiguity must be evidence, never an implicit mutation choice. Refine the selector instead. |
+| multi-edit lens plans | **DO NOT BUILD** | One plan, one edit keeps review, provenance, replay, and failure atomic. Sequence plans when several edits are needed. |
+
+The boundary is simple: improve the kernel when real use exposes a general
+mechanical weakness. Do not grow it merely because an AST makes a clever
+feature possible.
