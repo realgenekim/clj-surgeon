@@ -15,6 +15,7 @@
             [clj-surgeon.rename :as rename]
             [clj-surgeon.fix-declares :as fix-declares]
             [clj-surgeon.extract :as extract]
+            [clj-surgeon.structural-lens :as structural-lens]
             [clj-surgeon.cljc.merge :as cljc-merge]
             [clj-surgeon.cljc.split :as cljc-split]
             [clj-surgeon.cljc.require-ops :as cljc-req]
@@ -565,6 +566,14 @@
                       :category  :write
                       :pair      :fix-declares}
 
+   :find-subform     {:handler   structural-lens/find-file
+                      :desc      "Find nested syntax structurally within a named form"
+                      :args      {:file   {:required true :desc "Clojure source file"}
+                                  :inside {:desc "Restrict search to this top-level form"}
+                                  :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}}
+                      :examples  ["clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _ )'"]
+                      :category  :read}
+
    :ls               {:handler   run-outline
                       :aliases   [:outline]
                       :desc      "List forms in a namespace (line ranges, arglists, forward refs)"
@@ -604,6 +613,24 @@
                                   :dry-run {:desc "true to preview without writing"}}
                       :examples  ["clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar"]
                       :category  :write}
+
+   :replace-subform  {:handler   structural-lens/plan-file-replacement
+                      :desc      "Plan one hash-guarded nested structural replacement"
+                      :args      {:file   {:required true :desc "Clojure source file"}
+                                  :inside {:desc "Restrict search to this top-level form"}
+                                  :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}
+                                  :with   {:required true :desc "Replacement Clojure form"}
+                                  :plan-out {:desc "Write the replayable EDN plan to this path"}}
+                      :examples  ["clj-surgeon :op :replace-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)' :with '(items/actions surface)' :plan-out plan.edn"]
+                      :category  :write
+                      :pair      :replace-subform!}
+
+   :replace-subform! {:handler   structural-lens/execute-plan!
+                      :desc      "Apply a previously emitted structural replacement plan"
+                      :args      {:plan {:required true :desc "EDN plan file from :replace-subform"}}
+                      :examples  ["clj-surgeon :op :replace-subform! :plan plan.edn"]
+                      :category  :write
+                      :pair      :replace-subform}
 
    :rename-ns        {:handler   rename/plan
                       :desc      "Plan a namespace prefix rename (dry run)"
@@ -730,14 +757,24 @@
     (forms/init-from-file! anchor))
   (let [canonical (resolve-op op)
         op-def   (get ops-registry canonical)]
-    (if op-def
-      (let [result ((:handler op-def) opts)]
-        (if (string? result)
-          (println result)
-          (pp/pprint result)))
-      (pp/pprint {:error (str "Unknown op: " op
-                              ". Valid ops: "
-                              (str/join ", " (sort (keys ops-registry))))}))))
+    (let [result
+          (if op-def
+            (let [missing (->> (:args op-def)
+                               (keep (fn [[arg {:keys [required]}]]
+                                       (when (and required (not (contains? opts arg))) arg)))
+                               vec)]
+              (if (seq missing)
+                {:error (str "Missing required arguments: "
+                             (str/join ", " (map #(str ":" (name %)) missing)))
+                 :error-type :missing-arguments
+                 :missing missing}
+                ((:handler op-def) opts)))
+            {:error (str "Unknown op: " op
+                         ". Valid ops: "
+                         (str/join ", " (sort (keys ops-registry))))
+             :error-type :unknown-operation})]
+      (if (string? result) (println result) (pp/pprint result))
+      result)))
 
 (defn parse-val
   "Parse a single CLI value string into its Clojure equivalent.
@@ -758,34 +795,44 @@
   (let [help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
         kv-args    (remove help-flags args)]
+    (when (odd? (count kv-args))
+      (throw (ex-info "Arguments must be key-value pairs"
+                      {:error-type :invalid-arguments})))
     (cond-> (->> kv-args
                  (partition 2)
-                 (map (fn [[k v]] [(keyword (subs k 1)) (parse-val v)]))
+                 (map (fn [[k v]]
+                        (let [key (keyword (subs k 1))]
+                          [key (if (#{:match :with} key) v (parse-val v))])))
                  (into {}))
       has-help? (assoc :help true))))
 
 (defn -main [& args]
-  (cond
-    ;; No args → global help
-    (empty? args)
-    (println (format-global-help ops-registry))
+  (try
+    (let [result
+          (cond
+            (empty? args)
+            (println (format-global-help ops-registry))
 
-    :else
-    (let [opts (parse-args args)]
-      (cond
-        ;; --help with no op → global help
-        (and (:help opts) (nil? (:op opts)))
-        (println (format-global-help ops-registry))
+            :else
+            (let [opts (parse-args args)]
+              (cond
+                (and (:help opts) (nil? (:op opts)))
+                (println (format-global-help ops-registry))
 
-        ;; --help with an op → per-op help
-        (and (:help opts) (:op opts))
-        (let [canonical (resolve-op (:op opts))
-              op-def    (get ops-registry canonical)]
-          (if op-def
-            (println (format-op-help (or canonical (:op opts)) op-def))
-            (do (println (format "Unknown op: %s\n" (name (:op opts))))
-                (println (format-global-help ops-registry)))))
+                (and (:help opts) (:op opts))
+                (let [canonical (resolve-op (:op opts))
+                      op-def (get ops-registry canonical)]
+                  (if op-def
+                    (println (format-op-help canonical op-def))
+                    (let [error {:error (str "Unknown op: " (:op opts))
+                                 :error-type :unknown-operation}]
+                      (pp/pprint error)
+                      error)))
 
-        ;; Normal dispatch
-        :else
-        (run opts)))))
+                :else (run opts))))]
+      (when (and (map? result) (:error result))
+        (System/exit 1)))
+    (catch Exception e
+      (pp/pprint {:error (.getMessage e)
+                  :error-type (or (:error-type (ex-data e)) :invalid-arguments)})
+      (System/exit 1))))

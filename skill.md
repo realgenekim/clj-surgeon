@@ -1,12 +1,11 @@
 ---
 name: clj-surgeon
-description: "Clojure structural ops: outline, extract to new ns, fix-declares, deps tree, topo sort, form move, namespace rename, CLJC merge/split/add-require/analyze — babashka + rewrite-clj"
-user-invocable: true
+description: "Clojure structural ops: outline, nested find/replace, extract to new ns, fix-declares, deps tree, topo sort, form move, namespace rename, and CLJC operations — babashka + rewrite-clj"
 ---
 
 # clj-surgeon: Structural Operations on Clojure Namespaces
 
-A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`. 103 tests, 327 assertions.
+A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`.
 
 ## When to Use
 
@@ -18,12 +17,55 @@ A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`
 - **When reordering forms** — `:mv` moves a defn above its caller
 - **When renaming a namespace** — `:rename-ns!` for structural AST rename
 - **When understanding dependencies** — `:ls-deps` shows the full transitive tree
+- **When a small target is buried inside a large form** — use `:find-subform`,
+  then the versioned `:replace-subform` / `:replace-subform!` plan workflow
 - **When converting a CLJ + CLJS pair to CLJC** — `:cljc-merge` does it deterministically (handles divergent aliases like `dom`/`dom-server`, npm requires, body-form collisions)
 - **When splitting an unwieldy CLJC back into separate files** — `:cljc-split`
 - **Before deciding what surgery to apply to CLJC** — `:cljc-analyze` returns a classification map (shared / one-sided / divergent requires + per-platform forms)
 - **When adding a require to a CLJC file** — `:cljc-add-require` (refuses to introduce alias collisions; preserves npm string literals)
 
 ## All Operations
+
+### :find-subform — Find nested syntax without editing
+
+Use this inside a large `defn`, Hiccup tree, route table, schema, rules map,
+`let`, or state transformation. Matching ignores formatting. The symbol `_`
+matches exactly one arbitrary subtree.
+
+```bash
+clj-surgeon :op :find-subform \
+  :file src/writer/views/book_workshop.clj \
+  :inside book-workshop-pane \
+  :match '(ds/post-action* "/api/book/new-node" _)'
+```
+
+It reports every match with source, location, semantic path, replay address,
+and source hash. Zero or many matches are useful discovery results.
+
+### :replace-subform / :replace-subform! — Plan and apply one nested edit
+
+```bash
+clj-surgeon :op :replace-subform \
+  :file src/writer/views/book_workshop.clj \
+  :inside book-workshop-pane \
+  :match '(ds/post-action* "/api/book/new-node" _)' \
+  :with '(book-tree/creation-actions surface)' \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+Planning refuses unless `:match` and `:with` each contain exactly one complete
+form and the selector finds exactly one subtree. Review the unified `:diff` in
+the saved, versioned plan. Applying replays the recorded address rather than
+rerunning the selector; it validates source/result hashes and reparses the
+complete future file before atomically replacing the target. Any error is EDN
+with a nonzero exit status. If atomic replacement is unavailable, application
+fails without weakening the write contract.
+
+For nested Clojure-to-JavaScript strings, single-quote the complete shell
+argument and use `pr-str` to generate JavaScript literals. JavaScript `\xNN`
+escapes are not Clojure/EDN escapes.
 
 ### :extract / :extract! — Move forms to a new namespace (THE BIG ONE)
 
@@ -174,6 +216,18 @@ Returns a map with `{:requires {:shared … :clj-only … :cljs-only … :diverg
 
 ## Workflows
 
+### Change syntax nested inside a large form
+
+1. Run `:find-subform`; inspect `:match-count`, paths, and source.
+2. Match the complete subtree you intend to replace.
+3. Run `:replace-subform` with `:plan-out plan.edn`.
+4. Review `:selector`, `:edits`, `:diff`, hashes, and `:provenance`.
+5. Apply only that artifact with `:replace-subform! :plan plan.edn`.
+6. Run the project's formatter, linter, and tests.
+
+If search is ambiguous, refine `:inside` or the pattern. Never choose an
+occurrence by line number or weaken the exactly-one guard.
+
 ### Extract forms to a new namespace
 
 ```bash
@@ -233,6 +287,10 @@ If the merge throws (e.g. ns docstring), the source has something the tool refus
 
 - **~5ms startup** — babashka, not JVM. Call it freely.
 - **Returns EDN** — pipe through `bb -e '(let [d (read)] ...)'` to filter
+- **Errors are EDN and nonzero** — treat any nonzero status as a failed operation
+- **Use `:plan-out` for lens plans** — do not depend on shell redirection
+- **Quote nested match/replacement forms** — single shell quotes preserve their syntax
+- **One lens plan, one edit** — sequence reviewed plans for multiple changes
 - **All analysis is pure** — side effects only in `!` variants
 - **`:forms` arg takes EDN vector** — `:forms '[foo bar baz]'`
 - **After `:extract!`, always run tests** — the compiler catches bare references instantly
