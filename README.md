@@ -48,8 +48,13 @@ Previously, Claude spent 15+ minutes in Whac-A-Mole: move `transition!` up → `
 ```bash
 git clone https://github.com/realgenekim/clj-surgeon.git
 cd clj-surgeon
-make install    # → ~/bin/clj-surgeon
+make install    # → ~/bin/clj-surgeon and ~/.codex/skills/clj-surgeon
 ```
+
+`make install` installs the CLI and symlinks the repository-owned Codex skill
+from `skills/clj-surgeon` into `${CODEX_HOME:-$HOME/.codex}/skills`. Run
+`make install-codex-skill` when only the skill needs refreshing. Installation
+refuses to overwrite an existing non-symlink skill directory.
 
 ### Requirements
 
