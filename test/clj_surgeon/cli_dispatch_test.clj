@@ -130,10 +130,51 @@
 (deftest cli-bare-string-unknown-op-clean-error
   (let [{:keys [exit out err]} (run-cli ":op" "bogus")]
     (testing "the pre-fix crash shape now exits clean with the friendly error"
-      (is (zero? exit))
+      (is (pos? exit))
       (is (str/includes? out "Unknown op"))
       (is (not (str/includes? (str out err) "ClassCastException"))
           "ClassCastException leaked to the user again"))))
+
+(deftest cli-structural-errors-are-edn-and-exit-nonzero
+  (let [tmp (java.io.File/createTempFile "clj-surgeon-cli-lens" ".clj")]
+    (spit tmp "(ns x)\n(defn f [] [(inc 1) (inc 1)])\n")
+    (try
+      (testing "ambiguous replacement is a shell failure"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" "replace-subform"
+                       ":file" (.getAbsolutePath tmp)
+                       ":inside" "f"
+                       ":match" "(inc 1)"
+                       ":with" "(bump 1)")
+              result (edn/read-string out)]
+          (is (pos? exit))
+          (is (= 2 (:match-count result)))
+          (is (contains? result :error))
+          (is (str/blank? err))))
+      (testing "reader errors are concise data, not stack traces"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" "replace-subform"
+                       ":file" (.getAbsolutePath tmp)
+                       ":inside" "f"
+                       ":match" "(inc 1)"
+                       ":with" "[:button {:onclick \"\\x27\"}]")
+              result (edn/read-string out)]
+          (is (pos? exit))
+          (is (= :invalid-replacement (:error-type result)))
+          (is (not (str/includes? (str out err) "Stack trace")))
+          (is (not (str/includes? (str out err) "ExceptionInfo")))))
+      (testing "missing required lens forms are shell failures"
+        (let [{:keys [exit out]}
+              (run-cli ":op" "replace-subform"
+                       ":file" (.getAbsolutePath tmp)
+                       ":inside" "f"
+                       ":match" "(inc 1)")
+              result (edn/read-string out)]
+          (is (pos? exit))
+          (is (= :missing-arguments (:error-type result)))
+          (is (= [:with] (:missing result)))))
+      (finally
+        (.delete tmp)))))
 
 (deftest cli-bare-string-op-help-resolves
   (let [{:keys [exit out]} (run-cli ":op" "tree" "--help")]

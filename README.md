@@ -256,6 +256,76 @@ The compound extraction operation:
 
 Planning is pure — only `:extract!` writes files. The compiler catches bare refs instantly. The AI fixes what the compiler reports.
 
+#### `:find-subform` / `:replace-subform` — Nested structural edits
+
+Find syntax inside a named top-level form. Matching ignores formatting, and `_`
+matches exactly one subtree:
+
+```bash
+clj-surgeon :op :find-subform :file src/views.clj :inside render \
+  :match '(post! "/api/items" _)'
+```
+
+Plan exactly one replacement, review the EDN and diff, then apply that exact
+hash-guarded plan:
+
+```bash
+clj-surgeon :op :replace-subform :file src/views.clj :inside render \
+  :match '(post! "/api/items" _)' \
+  :with '(items/actions surface)' \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+Search reports every match; replacement refuses zero or multiple matches.
+`:match` and `:with` must each contain exactly one complete Clojure form—trailing
+syntax is an error. The plan is a versioned EDN artifact with stable
+`:operation`, `:selector`, hash, edit, diff, and provenance fields. Its `:diff`
+is a standard unified diff, suitable for human or agent review.
+
+Application validates the plan version, unchanged source snapshot, recorded
+address, exact before text, complete rewritten-file parse, and result hash. It
+then atomically replaces the target file. If atomic replacement is unavailable,
+the command fails and does not fall back to a weaker write. Every error is
+concise EDN and every error exits nonzero.
+
+In its [first production use](docs/observations/2026-07-11-subform-first-real-use.md),
+`:ls` reduced a 4,036-line, 322-form namespace to the relevant synchronization
+and admission forms. Three `:find-subform` queries then uniquely located the
+Save Draft Hiccup vector, an unsafe browser-sync mutation, and a session-save
+call by semantic path. The practical division was clear: `rg` remained faster
+for broad discovery, while structural search was substantially safer for
+repeated Hiccup actions and large handler forms. This first report validated
+discovery; the follow-up below validated the replacement workflow separately.
+
+A follow-up production edit supplied that proof: `:find-subform` uniquely
+selected a 13-line inline-JavaScript “Edit in Draft” button, and the reviewed
+plan replaced it with a shared single-flight command call. `:replace-subform!`
+returned the exact result hash recorded by the plan.
+
+When a replacement contains Clojure that generates JavaScript, quote the whole
+`:with` form with single shell quotes and use `pr-str` for generated JavaScript
+string literals:
+
+```bash
+clj-surgeon :op :replace-subform \
+  :file src/writer/views/book_workshop.clj \
+  :inside editor-panel \
+  :match '[:button {:style _ :onclick _} "Edit in Draft →" [:span.kbd-hint _ "^Enter"]]' \
+  :with '[:button {:onclick (str "editBookNodeInDraft(" (pr-str id) ",this.closest(" (pr-str ".bw-editor-panel") "))")} "Edit in Draft →"]' \
+  :plan-out plan.edn
+```
+
+JavaScript `\xNN` escapes are not valid EDN/Clojure string escapes. Prefer
+`pr-str`, or valid Clojure escapes such as `\"`, `\\`, and `\u0027`.
+
+A broader [session-history ethnography](docs/observations/2026-07-12-lenses-in-the-wild.md)
+found 38 direct production lens invocations across UI, state, storage, and route
+work. Beyond replacement, agents used zero/one match results as executable
+hypotheses about code shape and used sequential hash-bound plans to refactor a
+fast-moving dirty worktree safely.
+
 ## Custom Defining Forms
 
 Real-world Clojure codebases don't just use `defn`. Libraries like [Guardrails](https://github.com/fulcrologic/guardrails) (`>defn`, `>defn-`), [Malli](https://github.com/metosin/malli) (`mu/defn`), and [Schema](https://github.com/plumatic/schema) (`s/defn`) define their own `defn`-like macros. Large projects add their own: `defendpoint`, `defenterprise`, `defsetting`.
@@ -391,25 +461,16 @@ Eric's talk on [ECA](https://github.com/editor-code-assistant/eca) (Editor Code 
 
 [cclsp](https://github.com/dazld/cclsp) by Dan Peddle ([@dazld](https://github.com/dazld)) — Claude Code LSP integration — was also eye-opening. Even just reading the list of clojure-lsp commands available through it (`clean-ns`, `extract-function`, `inline-symbol`, `move-to-let`, `cycle-privacy`, `create-test`...) was mind-bending. These structural operations are *possible*. I had trouble using them reliably, especially given the aforementioned clojure-lsp move-form issue, but seeing what the LSP could do shaped what clj-surgeon tries to do — the same structural manipulations, via rewrite-clj, without the LSP's edge-case fragility.
 
-## Roadmap: Stay Dumb, Stay Useful
+## Design Principle: Stay Dumb, Stay Useful
 
-After building 13 ops and watching the AI use them, a clear principle emerged: **build tools for bookkeeping, not for thinking.**
+After watching agents use the kernel in production, a clear principle emerged: **build tools for bookkeeping, not for thinking.**
 
 The valuable ops eliminate mechanical work — precisely cutting 18 forms from a 2768-line file, rewriting requires across 10 namespaces, topologically sorting a dependency graph. The AI knows *what* to do but the mechanics are slow, error-prone, or burn context window. clj-surgeon does bookkeeping and manipulation.
-
-The tempting-but-wrong ops replace judgment — detecting patterns, suggesting splits, finding dead code. The AI is *good* at judgment. It can read `:deps` output and see the clusters. It can read `git diff` and understand what changed. Building a tool for that replaces flexible reasoning with rigid pattern matching.
-
-| Considered | Why not | What to do instead |
-|---|---|---|
-| `:suggest-split` | AI + `:deps` + `:ls` = judgment | AI reads the dep graph and decides |
-| `:dead-code` | clj-kondo already warns | AI greps and checks |
-| `:diff` (semantic) | AI reads `git diff` | AI compares form names across versions |
-| `:find-extractable-pure` | Detection easy, extraction is judgment | AI knows the pattern, uses `:extract!` after |
 
 The principle:
 
 > **The tool does the mechanical work. The AI decides what to do. The compiler catches mistakes. The AI fixes what the compiler reports.**
 
-Future ops will stay on the bookkeeping side of this line. clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
+clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
 
 Also: I keep thinking the project name should be `clj-scalpel`, because you the programmer are the surgeon, and this is just a tool.  But it's just harder to type, I have `clj-surgeon` referenced everywhere already, so I guess I'm sticking with this name.  I guess the tool is the surgeon, and you're head of the medical ward!

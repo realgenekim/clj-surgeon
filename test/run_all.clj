@@ -7,6 +7,7 @@
             [clj-surgeon.rename-test]
             [clj-surgeon.fix-declares-test]
             [clj-surgeon.extract-test]
+            [clj-surgeon.structural-lens-test]
             [clj-surgeon.cljc.merge-test]
             [clj-surgeon.cljc.split-test]
             [clj-surgeon.cljc.require-ops-test]
@@ -24,6 +25,7 @@
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
                    'clj-surgeon.extract-test
+                   'clj-surgeon.structural-lens-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test
                    'clj-surgeon.cljc.require-ops-test
