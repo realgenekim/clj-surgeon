@@ -1,17 +1,23 @@
 CLJ_SURGEON_HOME := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CLI_DEST ?= $(HOME)/bin/clj-surgeon
 CODEX_HOME ?= $(HOME)/.codex
 CODEX_SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
 CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
 
-.PHONY: test outline help install install-codex-skill nrepl
+.PHONY: test outline help install install-cli install-codex-skill nrepl
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
-	@echo "  make test              Run all tests"
-	@echo "  make install           Install CLI and Codex skill"
+	@echo "  make test                 Run all tests"
+	@echo "  make install              Install CLI and Codex skill"
+	@echo "  make install-cli          Install only the CLI"
 	@echo "  make install-codex-skill  Install only the Codex skill"
-	@echo "  make nrepl             Start bb nREPL"
+	@echo "  make nrepl                Start bb nREPL"
+	@echo ""
+	@echo "Installation overrides:"
+	@echo "  CLI_DEST=/path/to/clj-surgeon  CLI path (default: $(CLI_DEST))"
+	@echo "  CODEX_HOME=/path/to/.codex     Codex home (default: $(CODEX_HOME))"
 	@echo ""
 	@echo "Direct usage:"
 	@echo "  bb -m clj-surgeon.core :op :ls :file src/my/ns.clj"
@@ -20,8 +26,10 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
-install: install-codex-skill
-	@mkdir -p ~/bin
+install: install-cli install-codex-skill
+
+install-cli:
+	@mkdir -p "$$(dirname "$(CLI_DEST)")"
 	@command -v bb >/dev/null 2>&1 || { \
 	  echo "Warning: 'bb' (babashka) not found on PATH."; \
 	  echo "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/babashka/babashka/master/install) --dir ~/bin"; \
@@ -31,13 +39,13 @@ install: install-codex-skill
 	  echo "Warning: 'clj-kondo' not found on PATH (required for :ls / :outline / :fix-declares!)."; \
 	  echo "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo) --dir ~/bin"; \
 	}
-	@echo '#!/usr/bin/env bb' > ~/bin/clj-surgeon
-	@echo '(require (quote [babashka.classpath :as cp]))' >> ~/bin/clj-surgeon
-	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> ~/bin/clj-surgeon
-	@echo '(require (quote [clj-surgeon.core :as core]))' >> ~/bin/clj-surgeon
-	@echo '(apply core/-main *command-line-args*)' >> ~/bin/clj-surgeon
-	@chmod +x ~/bin/clj-surgeon
-	@echo "Installed ~/bin/clj-surgeon"
+	@echo '#!/usr/bin/env bb' > "$(CLI_DEST)"
+	@echo '(require (quote [babashka.classpath :as cp]))' >> "$(CLI_DEST)"
+	@echo '(cp/add-classpath "$(CLJ_SURGEON_HOME)src")' >> "$(CLI_DEST)"
+	@echo '(require (quote [clj-surgeon.core :as core]))' >> "$(CLI_DEST)"
+	@echo '(apply core/-main *command-line-args*)' >> "$(CLI_DEST)"
+	@chmod +x "$(CLI_DEST)"
+	@echo "Installed $(CLI_DEST)"
 
 install-codex-skill:
 	@mkdir -p "$(CODEX_HOME)/skills"

@@ -12,6 +12,7 @@
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
+   [clj-surgeon.install-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
@@ -37,5 +38,6 @@
                    'clj-surgeon.cljc-existing-ops-test
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.help-test
+                   'clj-surgeon.install-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))

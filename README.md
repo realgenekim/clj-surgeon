@@ -53,8 +53,24 @@ make install    # → ~/bin/clj-surgeon and ~/.codex/skills/clj-surgeon
 
 `make install` installs the CLI and symlinks the repository-owned Codex skill
 from `skills/clj-surgeon` into `${CODEX_HOME:-$HOME/.codex}/skills`. Run
-`make install-codex-skill` when only the skill needs refreshing. Installation
-refuses to overwrite an existing non-symlink skill directory.
+`make install-cli` or `make install-codex-skill` to install only one artifact.
+Installation refuses to overwrite an existing non-symlink skill directory.
+
+To put the CLI somewhere else, pass its complete file path as `CLI_DEST`. The
+installer creates the parent directory and handles paths containing spaces:
+
+```bash
+make install-cli CLI_DEST="$HOME/.local/bin/clj-surgeon"
+```
+
+`CLI_DEST` affects only the CLI. Set `CODEX_HOME` independently when the Codex
+skill also needs a non-default home:
+
+```bash
+make install \
+  CLI_DEST="$HOME/.local/bin/clj-surgeon" \
+  CODEX_HOME="$HOME/.config/codex"
+```
 
 ### Requirements
 

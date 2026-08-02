@@ -10,6 +10,8 @@ is cut.
 
 ### Added
 
+- `make install-cli` and the explicit `CLI_DEST=/path/to/clj-surgeon`
+  override, including parent-directory creation and paths containing spaces.
 - Dependency-aware `:mv` planning plus `:mv-with-deps`, an opt-in alias for
   `:mv :with-deps true` that discloses and moves the minimum required
   transitive dependency closure.
