@@ -1,6 +1,6 @@
 (ns myapp.model.posts
   "Post model — heavy use of #?(:clj ...) for server-side resolvers.
-   Mirrors the production-project post_model.cljc pattern."
+   Mirrors a production Fulcro post-model pattern."
   (:require
    [clojure.string :as str]
    #?(:clj [myapp.db.queries :as queries])

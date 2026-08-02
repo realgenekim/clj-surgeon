@@ -4,7 +4,7 @@
    extraction-closure) and document the limitations of write ops (mv, extract)
    on platform-gated forms.
 
-   Fixtures modeled on real Fulcro RAD patterns from production-project project:
+   Fixtures modeled on real Fulcro RAD patterns from a production project:
    46 .cljc files, divergent dom/dom-server aliases, mutation splits,
    cross-platform dependency chains, spliced requires.
 
