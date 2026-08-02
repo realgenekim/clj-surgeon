@@ -9,10 +9,12 @@
    Reader-conditional aware: top-level walking descends into #?(:clj ...) and
    #?@(:cljs [...]) branches so that defs inside reader conditionals participate
    in dependency analysis, topological sort, and extraction."
-  (:require [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]
-            [clj-surgeon.forms :as forms]
-            [clojure.string :as str]))
+  (:require
+   [clj-surgeon.forms :as forms]
+   [clojure.set :as set]
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; Core: Parse a file into a zipper (the one I/O boundary)
@@ -124,6 +126,205 @@
                          results)]
           (recur (z/next loc) results'))))))
 
+(defn- binding-symbols
+  "Return symbols introduced by a Clojure binding or destructuring form."
+  [binding]
+  (cond
+    (symbol? binding)
+    (if (= '& binding) #{} #{(str binding)})
+
+    (vector? binding)
+    (->> binding
+         (remove keyword?)
+         (mapcat binding-symbols)
+         set)
+
+    (map? binding)
+    (reduce-kv
+      (fn [result k v]
+        (let [directive (when (keyword? k) (keyword (name k)))]
+          (cond
+            (#{:keys :syms :strs} directive)
+            (into result (map (comp name symbol str) v))
+
+            (= :as directive)
+            (into result (binding-symbols v))
+
+            (= :or directive)
+            result
+
+            :else
+            (into result (binding-symbols k)))))
+      #{} binding)
+
+    :else #{}))
+
+(declare free-symbols*)
+
+(defn- free-symbols-many [forms bound]
+  (reduce into #{} (map #(free-symbols* % bound) forms)))
+
+(defn- binding-reference-symbols
+  "Return free references evaluated by a binding form itself, notably values
+   in map-destructuring :or defaults."
+  [binding bound]
+  (cond
+    (vector? binding)
+    (reduce into #{}
+            (map #(binding-reference-symbols % bound)
+                 (remove keyword? binding)))
+
+    (map? binding)
+    (reduce-kv
+      (fn [result k v]
+        (let [directive (when (keyword? k) (keyword (name k)))]
+          (cond
+            (= :or directive) (into result (free-symbols-many (vals v) bound))
+            (#{:keys :syms :strs :as} directive) result
+            :else (into result (binding-reference-symbols k bound)))))
+      #{} binding)
+
+    :else #{}))
+
+(defn- analyze-sequential-bindings [bindings bound]
+  (loop [remaining (seq bindings)
+         current-bound bound
+         free #{}]
+    (if (empty? remaining)
+      {:bound current-bound :free free}
+      (let [binding (first remaining)
+            init (second remaining)]
+        (recur (nnext remaining)
+               (into current-bound (binding-symbols binding))
+               (into free
+                     (concat (free-symbols* init current-bound)
+                             (binding-reference-symbols binding
+                                                        current-bound))))))))
+
+(defn- fn-body-free-symbols [tail bound]
+  (let [tail (loop [remaining tail]
+               (cond
+                 (empty? remaining) remaining
+                 (or (string? (first remaining)) (map? (first remaining)))
+                 (recur (rest remaining))
+                 (= :- (first remaining))
+                 (recur (nnext remaining))
+                 :else remaining))]
+    (cond
+      (vector? (first tail))
+      (let [args (first tail)]
+        (into (binding-reference-symbols args bound)
+              (free-symbols-many (rest tail)
+                                 (into bound (binding-symbols args)))))
+
+      :else
+      (reduce into #{}
+              (for [arity tail
+                    :when (and (seq? arity) (vector? (first arity)))]
+                (let [args (first arity)]
+                  (into (binding-reference-symbols args bound)
+                        (free-symbols-many
+                          (rest arity)
+                          (into bound (binding-symbols args))))))))))
+
+(defn- comprehension-bindings [bindings bound]
+  (loop [remaining (seq bindings)
+         current-bound bound
+         free #{}]
+    (if (empty? remaining)
+      {:bound current-bound :free free}
+      (let [item (first remaining)
+            value (second remaining)]
+        (cond
+          (= :let item)
+          (let [{next-bound :bound next-free :free}
+                (analyze-sequential-bindings value current-bound)]
+            (recur (nnext remaining) next-bound (into free next-free)))
+
+          (#{:when :while} item)
+          (recur (nnext remaining) current-bound
+                 (into free (free-symbols* value current-bound)))
+
+          :else
+          (recur (nnext remaining)
+                 (into current-bound (binding-symbols item))
+                 (into free (free-symbols* value current-bound))))))))
+
+(defn- free-symbols*
+  "Collect free symbol names from an s-expression with common Clojure lexical
+   binding forms accounted for. Quoted data contributes no references."
+  [form bound]
+  (cond
+    (symbol? form)
+    (if (contains? bound (str form)) #{} #{(str form)})
+
+    (map? form)
+    (free-symbols-many (concat (keys form) (vals form)) bound)
+
+    (coll? form)
+    (if-not (seq? form)
+      (free-symbols-many form bound)
+      (let [op (first form)
+            args (rest form)
+            defining-kind (when (symbol? op) (forms/classify (str op)))]
+        (cond
+          (#{'quote 'clojure.core/quote} op)
+          #{}
+
+          (#{:defn :defn- :defmacro} defining-kind)
+          (fn-body-free-symbols (rest args) bound)
+
+          (#{'fn 'fn*} op)
+          (let [[fn-name tail] (if (symbol? (first args))
+                                 [(first args) (rest args)]
+                                 [nil args])
+                fn-bound (cond-> bound fn-name (conj (str fn-name)))]
+            (fn-body-free-symbols tail fn-bound))
+
+          (#{'let 'let* 'loop 'loop* 'binding 'with-open} op)
+          (let [{body-bound :bound binding-free :free}
+                (analyze-sequential-bindings (first args) bound)]
+            (into binding-free (free-symbols-many (rest args) body-bound)))
+
+          (#{'if-let 'when-let 'if-some 'when-some} op)
+          (let [{body-bound :bound binding-free :free}
+                (analyze-sequential-bindings (first args) bound)]
+            (into binding-free (free-symbols-many (rest args) body-bound)))
+
+          (= 'letfn op)
+          (let [bindings (first args)
+                names (set (keep #(when (and (seq? %) (symbol? (first %)))
+                                    (str (first %)))
+                                 bindings))
+                body-bound (into bound names)
+                binding-free (reduce into #{}
+                                     (for [binding bindings
+                                           :when (seq? binding)]
+                                       (fn-body-free-symbols (rest binding)
+                                                             body-bound)))]
+            (into binding-free (free-symbols-many (rest args) body-bound)))
+
+          (#{'for 'doseq} op)
+          (let [{body-bound :bound binding-free :free}
+                (comprehension-bindings (first args) bound)]
+            (into binding-free (free-symbols-many (rest args) body-bound)))
+
+          (= 'catch op)
+          (let [[_class local & body] args]
+            (free-symbols-many body (into bound (binding-symbols local))))
+
+          :else
+          (free-symbols-many form bound))))
+
+    :else #{}))
+
+(defn free-symbols-in-form
+  "Return free symbol names referenced by a form, excluding locals and quoted
+   data. This is the dependency-analysis view; `symbols-in-form` remains the
+   raw token inventory used by qualified-symbol analysis."
+  [form-zloc]
+  (free-symbols* (z/sexpr form-zloc) #{}))
+
 ;; ============================================================
 ;; Qualified symbols: namespace-qualified references in a form
 ;; ============================================================
@@ -234,8 +435,8 @@
     (->> forms
          (filter :name-str)
          (mapv (fn [f]
-                 (let [syms (symbols-in-form (:zloc f))
-                       deps (disj (clojure.set/intersection syms all-names)
+                 (let [syms (free-symbols-in-form (:zloc f))
+                       deps (disj (set/intersection syms all-names)
                                   (:name-str f))] ;; don't count self-reference
                    {:name (:name-str f)
                     :type (:type-str f)

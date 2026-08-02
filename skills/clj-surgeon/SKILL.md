@@ -109,9 +109,37 @@ clj-surgeon :op :rename-ns :from old-prefix :to new-prefix :root .
 clj-surgeon :op :rename-ns! :from old-prefix :to new-prefix :root .
 ```
 
-Use `:mv` with `:dry-run true` before moving a form within a file. After
-`:extract!`, compile and test; resolve bare references through qualification or
-parameters rather than introducing circular dependencies.
+### Move forms safely
+
+Always begin with the narrow, non-mutating operation:
+
+```bash
+clj-surgeon :op :ls :file src/my/ns.clj
+clj-surgeon :op :mv :file src/my/ns.clj \
+  :form foo :before bar :dry-run true
+```
+
+Branch on the exit status and EDN result:
+
+- On `:ok true`, inspect `:plan/:diff`, then run the returned
+  `:apply-command`. It moves only the requested form.
+- On `:error-type :would-strand-dependencies`, run the returned
+  `:recommended-command`. It is a non-mutating `:mv-with-deps` preview.
+  Review `:plan/:requested-forms`, `:added-forms`, `:move-order`, and `:diff`.
+  Show every added form to the user and obtain explicit consent before running
+  that preview's `:apply-command`.
+- On `:would-strand-users`, a cycle, ambiguity, unsupported layout, or any
+  other refusal, stop. Choose another destination or refactor; do not force the
+  dependency alias.
+
+`:mv-with-deps` is exactly `:mv :with-deps true` and always forces that option.
+It never moves callers or adds declarations. Both previews leave the file
+unchanged. A move dry run is not a saved, hash-bound plan, so preview again
+after any source change. After writing, rerun `:ls`, audit declarations with
+`:declares`, and run the repository formatter, linter, compiler, and tests.
+
+After `:extract!`, compile and test; resolve bare references through
+qualification or parameters rather than introducing circular dependencies.
 
 ## Work with CLJC
 

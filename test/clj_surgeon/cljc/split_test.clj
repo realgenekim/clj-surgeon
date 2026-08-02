@@ -1,9 +1,11 @@
 (ns clj-surgeon.cljc.split-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.tools.reader :as r]
-            [clojure.tools.reader.reader-types :as rt]
-            [clj-surgeon.cljc.merge :as m]
-            [clj-surgeon.cljc.split :as s]))
+  (:require
+   [clj-surgeon.cljc.merge :as m]
+   [clj-surgeon.cljc.split :as s]
+   [clj-surgeon.core :as core]
+   [clojure.test :refer [deftest is testing]]
+   [clojure.tools.reader :as r]
+   [clojure.tools.reader.reader-types :as rt]))
 
 (defn- parse-forms [src]
   (let [rdr (rt/string-push-back-reader src)]
@@ -103,3 +105,25 @@
              "refer-asymmetric" "no-requires" "unmatched-counts"]]
     (testing (str "double round-trip stable for fixture: " f)
       (is (double-round-trip-stable? f)))))
+
+(deftest cli-wrapper-writes-both-requested-split-outputs
+  (let [clj-src (read-fixture "identical-requires/in.clj")
+        cljs-src (read-fixture "identical-requires/in.cljs")
+        input (java.io.File/createTempFile "clj-surgeon-split" ".cljc")
+        clj-out (java.io.File/createTempFile "clj-surgeon-split" ".clj")
+        cljs-out (java.io.File/createTempFile "clj-surgeon-split" ".cljs")]
+    (spit input (m/merge-files clj-src cljs-src))
+    (try
+      (let [result (core/run-cljc-split {:file (.getAbsolutePath input)
+                                         :clj-out (.getAbsolutePath clj-out)
+                                         :cljs-out (.getAbsolutePath cljs-out)})]
+        (is (= (.getAbsolutePath clj-out) (:wrote-clj result)))
+        (is (= (.getAbsolutePath cljs-out) (:wrote-cljs result)))
+        (is (= (normalize-forms (parse-forms (:clj result)))
+               (normalize-forms (parse-forms (slurp clj-out)))))
+        (is (= (normalize-forms (parse-forms (:cljs result)))
+               (normalize-forms (parse-forms (slurp cljs-out))))))
+      (finally
+        (.delete input)
+        (.delete clj-out)
+        (.delete cljs-out)))))

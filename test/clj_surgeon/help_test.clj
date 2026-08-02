@@ -1,10 +1,11 @@
 (ns clj-surgeon.help-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.core :as core]
-            [clojure.edn :as edn]
-            [clojure.string :as str]
-            [clojure.java.io :as io]
-            [babashka.process :as proc]))
+  (:require
+   [babashka.process :as proc]
+   [clj-surgeon.core :as core]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================
 ;; resolve-op
@@ -22,7 +23,9 @@
     (is (= :ls (core/resolve-op :outline)))
     (is (= :ls-tree (core/resolve-op :tree)))
     (is (= :ls-tree (core/resolve-op :map)))
-    (is (= :ls-tree (core/resolve-op :outline-tree)))))
+    (is (= :ls-tree (core/resolve-op :outline-tree)))
+    (is (= :mv (core/resolve-op :mv-with-deps)))
+    (is (= :mv (core/resolve-op "mv-with-deps")))))
 
 (deftest resolve-op-unknown
   (testing "unknown ops return nil"
@@ -132,7 +135,10 @@
     (testing "contains usage line"
       (is (str/includes? help "Usage:")))
     (testing "contains quick start examples"
-      (is (str/includes? help "Quick start:")))))
+      (is (str/includes? help "Quick start:")))
+    (testing "does not make the false only-bang-ops-write claim"
+      (is (not (str/includes? help "only ! variants write files")))
+      (is (str/includes? help ":mv writes unless :dry-run true")))))
 
 (deftest global-help-excludes-aliases
   (let [help (core/format-global-help core/ops-registry)]
@@ -227,6 +233,31 @@
          (core/parse-args [":op" ":mv" ":file" "state.clj"
                            ":form" "foo" ":before" "bar" ":dry-run" "true"]))))
 
+(deftest parse-args-with-deps-boolean
+  (is (= {:op :mv :file "state.clj" :form "foo" :before "bar"
+          :with-deps true}
+         (core/parse-args [":op" ":mv" ":file" "state.clj"
+                           ":form" "foo" ":before" "bar"
+                           ":with-deps" "true"]))))
+
+(deftest mv-help-documents-guard-and-dependency-alias
+  (let [help (core/format-op-help :mv (get core/ops-registry :mv))]
+    (is (str/includes? help "with-deps"))
+    (is (str/includes? help "mv-with-deps"))
+    (is (str/includes? help "presets :with-deps true"))
+    (is (str/includes? help "dependency guards"))
+    (is (str/includes? help "Safe workflow:"))
+    (is (str/includes? help "Always preview plain :mv"))
+    (is (str/includes? help ":would-strand-dependencies"))
+    (is (str/includes? help ":would-strand-users"))
+    (is (str/includes? help ":recommended-command"))
+    (is (str/includes? help ":apply-command"))
+    (is (str/includes? help ":added-forms"))
+    (is (str/includes? help ":move-order"))
+    (is (str/includes? help "not a saved, hash-bound plan"))
+    (is (str/includes? help
+                       ":mv :file src/my/ns.clj :form foo :before bar :dry-run true"))))
+
 (deftest parse-args-edn-vector-arg
   (is (= {:op :extract :file "src/s.clj" :forms '[distill refine] :to "src/d.clj"}
          (core/parse-args [":op" ":extract" ":file" "src/s.clj"
@@ -235,7 +266,7 @@
 (deftest parse-args-preserves-structural-forms-for-the-lens-parser
   (is (= "[:button {:onclick \"\\x27\"}]"
          (:with (core/parse-args [":op" ":replace-subform"
-                                  ":with" "[:button {:onclick \"\\x27\"}]" ]))))
+                                  ":with" "[:button {:onclick \"\\x27\"}]"]))))
   (is (= "(inc 1) (inc 2)"
          (:match (core/parse-args [":op" ":find-subform"
                                    ":match" "(inc 1) (inc 2)"])))))
@@ -275,7 +306,7 @@
   "Absolute path to this project's src/ dir, for subprocess classpath."
   (let [this-file (io/file "test/clj_surgeon/help_test.clj")]
     (str (.getAbsolutePath
-          (io/file (.getParentFile (.getParentFile (.getParentFile this-file))) "src")))))
+           (io/file (.getParentFile (.getParentFile (.getParentFile this-file))) "src")))))
 
 (defn- run-cli
   "Run clj-surgeon CLI as subprocess, return {:exit :out :err}."

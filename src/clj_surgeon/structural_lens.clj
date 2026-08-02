@@ -1,12 +1,14 @@
 (ns clj-surgeon.structural-lens
   "Exact, fail-closed structural search and replacement below a named form."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.pprint :as pprint]
-            [clojure.string :as str]
-            [rewrite-clj.zip :as z])
-  (:import [java.nio.file CopyOption Files StandardCopyOption]
-           [java.security MessageDigest]))
+  (:require
+   [clj-surgeon.file-ops :as file-ops]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.pprint :as pprint]
+   [clojure.string :as str]
+   [rewrite-clj.zip :as z])
+  (:import
+   (java.security MessageDigest)))
 
 (def plan-version 1)
 (def tool-version "0.1.0")
@@ -237,17 +239,6 @@
             {:error (str "Could not write plan: " (.getMessage e))
              :error-type :plan-write-failed :plan-out plan-out}))))))
 
-(defn- atomic-write! [file source]
-  (let [target (io/file file)
-        parent (.getParentFile (.getAbsoluteFile target))
-        tmp (java.io.File/createTempFile ".clj-surgeon-" ".tmp" parent)
-        options (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
-                                        StandardCopyOption/REPLACE_EXISTING])]
-    (try
-      (spit tmp source)
-      (Files/move (.toPath tmp) (.toPath target) options)
-      (finally (when (.exists tmp) (.delete tmp))))))
-
 (defn- read-plan [plan]
   (cond (map? plan) plan
         (string? plan) (edn/read-string (slurp plan))
@@ -262,7 +253,7 @@
           (if (:error result)
             result
             (try
-              (atomic-write! file (:source result))
+              (file-ops/atomic-write! file (:source result))
               (dissoc result :source)
               (catch Exception e
                 {:error (str "Atomic replacement failed; target was not replaced: " (.getMessage e))

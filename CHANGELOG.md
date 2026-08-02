@@ -10,6 +10,9 @@ is cut.
 
 ### Added
 
+- Dependency-aware `:mv` planning plus `:mv-with-deps`, an opt-in alias for
+  `:mv :with-deps true` that discloses and moves the minimum required
+  transitive dependency closure.
 - `:ls-tree` / `:tree` / `:map` — map every Clojure project under a directory:
   namespaces, form counts, line counts. Supports `:grep` filtering to find
   projects by content (e.g. `:grep "postgres|jdbc"`).
@@ -27,6 +30,19 @@ is cut.
 
 ### Fixed
 
+- `:cljc-split` now writes both requested output files and returns their paths;
+  the previous threaded side-effect form produced invalid `assoc` calls.
+- `:mv` no longer reports success after introducing unresolved dependencies or
+  stranding callers during a downward move. Refusals return stable EDN,
+  recommend `:mv-with-deps` when applicable, and leave the file unchanged.
+- `:mv` dependency refusals now recommend a non-mutating preview and expose a
+  separate `:apply-command`; stranded dependency evidence distinguishes the
+  original `:defined-at` line from its rejected-candidate `:would-be-at` line.
+  Successful dry runs repeat `:apply-command` so each preview is self-contained.
+- Global and `:mv` help no longer claim that only `!` operations write. The
+  move help now gives an LLM-safe preview/refusal/review/apply workflow.
+- Intra-namespace dependency analysis no longer treats common lexical bindings
+  or quoted data as top-level var dependencies.
 - ClassCastException on bare string ops: `clj-surgeon :op ls-tree` (value
   without leading colon) crashed instead of dispatching. Ops now accept both
   `:ls-tree` and `ls-tree`; unknown ops get a friendly error.

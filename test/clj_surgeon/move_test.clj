@@ -1,7 +1,8 @@
 (ns clj-surgeon.move-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.move :as move]
-            [clojure.string :as str]))
+  (:require
+   [clj-surgeon.move :as move]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 (def test-source
   "(ns my.app)
@@ -44,17 +45,17 @@
   (with-temp-file test-source
     (fn [path]
       (let [result (move/move-form {:file path
-                                    :form "third-fn"
+                                    :form "second-fn"
                                     :before "first-fn"})]
         (testing "move succeeds"
           (is (:ok result)))
-        (testing "third-fn now appears before first-fn"
+        (testing "second-fn now appears before first-fn"
           (let [new-source (slurp path)
-                third-pos (str/index-of new-source "third-fn")
+                second-pos (str/index-of new-source "second-fn")
                 first-pos (str/index-of new-source "first-fn")]
-            (is (some? third-pos))
+            (is (some? second-pos))
             (is (some? first-pos))
-            (is (< third-pos first-pos))))
+            (is (< second-pos first-pos))))
         (testing "all forms still present"
           (let [new-source (slurp path)]
             (is (str/includes? new-source "first-fn"))
@@ -164,7 +165,7 @@
   :help)
 
 (defn main []
-  (helper))
+  :main)
 "]
     (with-temp-file source
       (fn [path]
@@ -173,14 +174,14 @@
                                       :before "helper"})]
           (is (:ok result))
           (testing "comments stay with their form"
-            (let [new-source (slurp path)]
-              ;; helper's comments should still precede helper
-              (let [comment-pos (str/index-of new-source ";; Helper function")
-                    helper-pos (str/index-of new-source "(defn helper")]
-                (is (< comment-pos helper-pos))))))))))
+            (let [new-source (slurp path)
+                  ;; helper's comments should still precede helper
+                  comment-pos (str/index-of new-source ";; Helper function")
+                  helper-pos (str/index-of new-source "(defn helper")]
+              (is (< comment-pos helper-pos)))))))))
 
 ;; ============================================================
-;; Dependency validation: :mv should warn when destination
+;; Dependency validation: :mv refuses when the destination
 ;; creates new unresolved references (the Whac-A-Mole bug)
 ;; ============================================================
 
@@ -202,16 +203,15 @@
         (testing "moving foo above bar creates new forward ref to config"
           ;; foo depends on config (line 8). Moving foo to before bar (line 5)
           ;; means foo references config before it's defined.
-          ;; The tool should detect this and warn.
+          ;; The tool detects this, refuses, and recommends :mv-with-deps.
           (let [result (move/move-form {:file path
                                         :form "foo"
                                         :before "bar"
                                         :dry-run true})]
-            (is (:ok result))
-            ;; TODO: once we add :unresolved-deps to dry-run output,
-            ;; test that it warns about config
-            ;; (is (contains? (set (:unresolved-deps (:plan result))) "config"))
-            ))))))
+            (is (= :would-strand-dependencies (:error-type result)))
+            (is (= ["config"] (mapv :name (:stranded result))))
+            (is (str/includes? (:recommended-command result)
+                               ":op :mv-with-deps"))))))))
 
 (deftest test-move-safe-when-deps-above
   (let [source "(ns my.app)
@@ -229,14 +229,13 @@
     (with-temp-file source
       (fn [path]
         (testing "moving foo above bar is safe because config is above both"
+          ;; config is at line 3, destination is line 7, so foo's dependency
+          ;; is already satisfied at the destination.
           (let [result (move/move-form {:file path
                                         :form "foo"
                                         :before "bar"
                                         :dry-run true})]
-            (is (:ok result))
-            ;; config is at line 3, destination is line 7
-            ;; foo's dependency (config) is satisfied
-            ))))))
+            (is (:ok result))))))))
 
 ;; ============================================================
 ;; Defining forms other than defn — defonce / def / defrecord

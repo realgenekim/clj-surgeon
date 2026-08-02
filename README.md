@@ -223,12 +223,64 @@ The compound operation:
 
 #### `:mv` — Reorder a form within a file
 
+`mv` writes its input file directly unless `:dry-run true` is present. An LLM
+should use this branching workflow, not jump straight to `:mv-with-deps`:
+
 ```bash
+# 1. Orient and preview the exact requested move. Neither command writes.
+clj-surgeon :op :ls :file state.clj
 clj-surgeon :op :mv :file state.clj :form foo :before bar :dry-run true
+
+# 2a. Only when the preview returns :ok true, review :plan/:diff and execute.
 clj-surgeon :op :mv :file state.clj :form foo :before bar
 ```
 
-Moves a named form (including preceding comment header) before another form. Skips `declare` forms — always targets the actual `defn`. Always dry-run first.
+Moves a named form (including its preceding comment header) before another
+form. Before writing, `:mv` validates the complete candidate. If the move would
+strand a dependency or caller, it refuses with structured EDN, changes no
+bytes, and exits nonzero.
+
+A dependency refusal is a decision point for an agent:
+
+```clojure
+{:error-type :would-strand-dependencies
+ :form "foo"
+ :before "bar"
+ :stranded [{:name "config"
+             :defined-at 80       ; original source line
+             :would-be-at 94      ; line in the rejected candidate
+             :required-before 40}]
+ :recommended-action :preview-dependency-closure
+ :recommended-command
+ "clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar :dry-run true"
+ :apply-command
+ "clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar"}
+```
+
+Run the safe `:recommended-command`, then inspect all of
+`:plan/:added-forms`, `:move-order`, and `:diff`. Execute `:apply-command` only
+after consenting to every added form. The successful preview repeats
+`:apply-command`, so it is self-contained. `:mv-with-deps` always forces
+`:with-deps true`, even if a caller also supplies `:with-deps false`.
+
+```bash
+# 2b. Dependency refusal only: preview the widened move, then apply after review.
+clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar :dry-run true
+clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar
+```
+
+`:mv-with-deps` is the opt-in alias for `:mv :with-deps true`. It moves only
+the minimum transitive dependency closure required at the selected destination,
+lists every added form in the plan, and never silently adds declarations or
+moves callers. For `:would-strand-users`, cycles, ambiguity, unsupported source
+layouts, or any other refusal, stop and choose a different destination or
+refactor; do not force the alias.
+
+A dry run is an informational preview, not a saved hash-bound application
+artifact. Preview again after any source change. After writing, rerun `:ls`,
+audit any now-redundant declaration with `:declares` or `:fix-declares`, and run
+the target repository's formatter, linter, compiler, and tests. Shell-quote
+names containing special characters, for example `:form '*state*'`.
 
 #### `:rename-ns` / `:rename-ns!` — Rename a namespace prefix
 

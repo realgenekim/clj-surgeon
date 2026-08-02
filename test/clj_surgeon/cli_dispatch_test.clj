@@ -9,12 +9,13 @@
      print a clean EDN error map and never throw.
    - subprocess CLI with BARE STRING ops — the exact invocation shape that
      threw ClassCastException before ed6ad99 (`:op ls-tree`, no leading colon)."
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.core :as core]
-            [clojure.string :as str]
-            [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [babashka.process :as proc]))
+  (:require
+   [babashka.process :as proc]
+   [clj-surgeon.core :as core]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================
 ;; help/parser anti-drift — every op the help text shows must resolve
@@ -82,10 +83,10 @@
         (is (str/includes? (:error parsed) "Unknown op"))))))
 
 (deftest run-unknown-keyword-op-prints-error-map-no-throw
-  (let [out (run->output {:op :bogus})]
-    (let [parsed (edn/read-string out)]
-      (is (map? parsed))
-      (is (str/includes? (:error parsed) "Unknown op")))))
+  (let [out (run->output {:op :bogus})
+        parsed (edn/read-string out)]
+    (is (map? parsed))
+    (is (str/includes? (:error parsed) "Unknown op"))))
 
 (deftest run-nil-and-junk-ops-print-error-no-throw
   (testing "nil, numbers, and garbage strings all reach the friendly error"
@@ -108,7 +109,7 @@
 (def ^:private project-src
   (let [this-file (io/file "test/clj_surgeon/cli_dispatch_test.clj")]
     (str (.getAbsolutePath
-          (io/file (.getParentFile (.getParentFile (.getParentFile this-file))) "src")))))
+           (io/file (.getParentFile (.getParentFile (.getParentFile this-file))) "src")))))
 
 (defn- run-cli
   [& args]
@@ -181,3 +182,84 @@
     (testing "--help with a bare-string alias shows the canonical op's help"
       (is (zero? exit))
       (is (str/includes? out "Map namespaces across a directory tree")))))
+
+(deftest cli-mv-refusal-is-edn-nonzero-and-preserves-source
+  (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
+        tmp (java.io.File/createTempFile "clj-surgeon-cli-mv-guard" ".clj")]
+    (spit tmp source)
+    (try
+      (let [{:keys [exit out err]}
+            (run-cli ":op" "mv"
+                     ":file" (.getAbsolutePath tmp)
+                     ":form" "walk-files"
+                     ":before" "run-kondo")
+            result (edn/read-string out)]
+        (is (pos? exit))
+        (is (= :would-strand-dependencies (:error-type result)))
+        (is (= ["skip-dirs"] (mapv :name (:stranded result))))
+        (is (str/includes? (:recommended-command result)
+                           ":op :mv-with-deps"))
+        (is (str/ends-with? (:recommended-command result) ":dry-run true"))
+        (is (= :preview-dependency-closure (:recommended-action result)))
+        (is (str/includes? (:apply-command result) ":op :mv-with-deps"))
+        (is (str/blank? err))
+        (is (= source (slurp tmp))))
+      (finally (.delete tmp)))))
+
+(deftest cli-mv-with-deps-alias-injects-the-same-option-as-the-flag
+  (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
+        alias-file (java.io.File/createTempFile "clj-surgeon-cli-mv-alias" ".clj")
+        flag-file (java.io.File/createTempFile "clj-surgeon-cli-mv-flag" ".clj")]
+    (spit alias-file source)
+    (spit flag-file source)
+    (try
+      (let [alias-run (run-cli ":op" "mv-with-deps"
+                               ":file" (.getAbsolutePath alias-file)
+                               ":form" "walk-files"
+                               ":before" "run-kondo"
+                               ":dry-run" "true")
+            flag-run (run-cli ":op" "mv"
+                              ":file" (.getAbsolutePath flag-file)
+                              ":form" "walk-files"
+                              ":before" "run-kondo"
+                              ":with-deps" "true"
+                              ":dry-run" "true")
+            alias-result (edn/read-string (:out alias-run))
+            flag-result (edn/read-string (:out flag-run))
+            contract-keys [:requested-forms :added-forms :move-order
+                           :before :direction :with-deps :source-hash
+                           :result-hash]]
+        (is (zero? (:exit alias-run)))
+        (is (zero? (:exit flag-run)))
+        (is (= (select-keys (:plan alias-result) contract-keys)
+               (select-keys (:plan flag-result) contract-keys)))
+        (is (= ["skip-dirs"] (get-in alias-result [:plan :added-forms])))
+        (is (true? (get-in alias-result [:plan :with-deps])))
+        (is (str/includes? (:apply-command alias-result) ":op :mv-with-deps"))
+        (is (= source (slurp alias-file)))
+        (is (= source (slurp flag-file))))
+      (finally
+        (.delete alias-file)
+        (.delete flag-file)))))
+
+(deftest cli-mv-with-deps-alias-executes-the-disclosed-group
+  (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
+        tmp (java.io.File/createTempFile "clj-surgeon-cli-mv-execute" ".clj")]
+    (spit tmp source)
+    (try
+      (let [{:keys [exit out err]}
+            (run-cli ":op" ":mv-with-deps"
+                     ":file" (.getAbsolutePath tmp)
+                     ":form" "walk-files"
+                     ":before" "run-kondo")
+            result (edn/read-string out)
+            moved (slurp tmp)]
+        (is (zero? exit))
+        (is (:ok result))
+        (is (= ["skip-dirs"] (get-in result [:plan :added-forms])))
+        (is (< (str/index-of moved "(def skip-dirs")
+               (str/index-of moved "(defn walk-files")))
+        (is (< (str/index-of moved "(defn walk-files")
+               (str/index-of moved "(defn run-kondo")))
+        (is (str/blank? err)))
+      (finally (.delete tmp)))))

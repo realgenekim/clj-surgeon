@@ -105,7 +105,7 @@ replace every tool; it is to make structural facts and exact actions cheap.
 | `:declares` | Forward-declare audit |
 | `:find-subform` | Scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
-| `:mv` | Exact within-file form movement |
+| `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |
 | `:fix-declares` / `!` | Mechanical declare cleanup |
 | `:extract` / `!` | Planned namespace extraction |
 | `:rename-ns` / `!` | Structural namespace rename |

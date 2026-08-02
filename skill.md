@@ -173,7 +173,21 @@ clj-surgeon :op :declares :file state.clj
 ```bash
 clj-surgeon :op :mv :file state.clj :form foo :before bar :dry-run true
 clj-surgeon :op :mv :file state.clj :form foo :before bar
+clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar :dry-run true
+clj-surgeon :op :mv-with-deps :file state.clj :form foo :before bar
 ```
+
+Plain `:mv` fails closed if the candidate would strand dependencies or callers
+and writes only when `:dry-run true` is absent. On `:ok true`, review
+`:plan/:diff` and run the returned `:apply-command`. On
+`:would-strand-dependencies`, run the safe `:recommended-command`, review
+`:plan/:requested-forms`, `:added-forms`, `:move-order`, and `:diff`, show all
+added forms to the user, and obtain explicit consent before running that
+preview's `:apply-command`. Stop on `:would-strand-users` or any other refusal.
+The alias is exactly `:mv :with-deps true`; it never moves callers or adds
+declarations. Preview again after any source change, because move dry runs are
+not saved hash-bound plans. After writing, rerun `:ls`, audit `:declares`, and
+run the repository formatter, linter, compiler, and tests.
 
 ### :rename-ns / :rename-ns! — Rename namespace prefix
 

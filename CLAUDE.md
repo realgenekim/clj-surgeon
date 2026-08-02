@@ -2,12 +2,36 @@
 
 Babashka CLI tool for structural operations on Clojure namespaces.
 
+## Required reading
+
+Before non-trivial feature or refactoring work, read:
+
+- [docs/vision.md](docs/vision.md) for the bookkeeping-versus-judgment boundary,
+  plan contracts, and fail-closed design principles.
+- [docs/testing-guidelines.md](docs/testing-guidelines.md) for the one-shot
+  feature standard and required test layers.
+- The applicable plan in [docs/plans/](docs/plans/) when one exists.
+
+If a non-trivial feature has no plan, write one in `docs/plans/` before
+implementation. A useful plan fixes the observable contract, non-goals,
+failure data, exhaustive behavior matrix, real-program evidence, documentation
+updates, and verification gates. It is not a chronological coding diary.
+
 ## Testing
 
 - Run: `make test`
 - **Read [docs/testing-guidelines.md](docs/testing-guidelines.md)** before writing tests.
 - Core rule: pure functions take data and return data. Test them with literals, not temp files.
 - If you need a temp file to test a function, the function needs refactoring, not the test.
+- Every field failure gets a named regression test and a faithful fixture or
+  source literal that records its provenance.
+- Exhaust the pure behavior matrix; use filesystem and subprocess tests only
+  for contracts that genuinely require those boundaries.
+- A CLI feature is incomplete until help, parsing, dispatch, EDN output,
+  nonzero error exits, and the documented invocation are tested.
+- A write feature is incomplete until refusal leaves bytes unchanged and a
+  successful candidate is reparsed, linted or compiled as appropriate, and
+  exercised on a real-program-derived fixture.
 
 ## Architecture
 
@@ -19,5 +43,14 @@ Babashka CLI tool for structural operations on Clojure namespaces.
 ## Key conventions
 
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`
-- Private I/O wrappers that delegate to pure functions: `extract-source-paths`, `grep-filter-projects`
+- Private I/O wrappers delegate immediately to pure functions; for example,
+  `extract-source-paths` delegates to `source-paths-from-config`.
 - All ops return EDN data, not side effects (except `!`-suffixed ops which write files)
+- Errors use a human-readable `:error` string plus a stable keyword
+  `:error-type` and structured diagnostic fields.
+- Format changed Clojure files before linting or testing. Use the repository's
+  formatter when configured; otherwise run
+  `npx @chrisoakman/standard-clojure-style fix <changed-files>`.
+- Do not declare a feature complete from a green legacy suite alone. Show the
+  new tests that fail before the implementation, pass afterward, and cover the
+  real invocation that motivated the work.
