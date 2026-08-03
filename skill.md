@@ -10,7 +10,12 @@ A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`
 ## When to Use
 
 - **Before exploring ANY Clojure codebase** — `:ls-tree` maps an entire directory of repos in seconds. "Which repo does X?" answered in one command instead of spawning Explore agents
-- **Before reading a large .clj/.cljs/.cljc file** — `:ls` first (50 tokens vs 2000+); the outline now surfaces forms inside `#?(:clj …)` / `#?@(:cljs […])` with `:platforms` tags
+- **Before exploring an unknown large .clj/.cljs/.cljc file** — `:ls` first
+  (50 tokens vs 2000+); the outline surfaces forms inside `#?(:clj …)` /
+  `#?@(:cljs […])` with `:platforms` tags
+- **When you know a top-level form name or containing line** — use
+  `:show-form` as the first source inspection instead of reconstructing a
+  `sed` range. Do not run `:ls` solely as a preflight
 - **When searching across multiple repos** — `:ls-tree :grep "pattern"` finds matching projects/files with full API surface, ~3 seconds across thousands of files
 - **When extracting forms to a new namespace** — `:extract!` does it in one command
 - **When you see a `declare`** — `:fix-declares!` eliminates removable ones
@@ -26,11 +31,45 @@ A babashka CLI tool at `~/bin/clj-surgeon`. Source at `~/src.local/clj-surgeon/`
 
 ## All Operations
 
-### :find-subform — Find nested syntax without editing
+### :show-form / :cat — Read one complete top-level form
 
-Use this inside a large `defn`, Hiccup tree, route table, schema, rules map,
-`let`, or state transformation. Matching ignores formatting. The symbol `_`
-matches exactly one arbitrary subtree.
+```bash
+clj-surgeon :op :show-form :file src/writer/state.clj :form transition!
+clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
+clj-surgeon :op :cat :file src/writer/state.clj :form transition!
+```
+
+Supply exactly one of `:form` or `:line`. Add `:platform :clj` or
+`:platform :cljs` only to disambiguate reader-conditional definitions. The
+result contains exact source, location, platforms, and the complete-file source
+hash. The command never writes and never chooses the first ambiguous match.
+
+`:cat` is a strict alias for `:show-form`. It never dumps the complete file,
+and its result retains `:operation :show-form`.
+
+Use `:show-form` instead of `sed` when a name or containing line identifies the
+needed top-level form. Continue to use `rg` for broad discovery,
+`:find-subform` for nested syntax, and bounded text reads for context that
+genuinely spans forms.
+
+When distinctive text is known but its containing form is not, use `rg -n` to
+get one line number, then call `:show-form :line`. Do not print a large `:ls`
+outline merely to discover that line.
+
+### :grep-form / :find-subform — Find nested syntax without editing
+
+Use `:grep-form` for file-wide structural search. It is a strict alias for
+`:find-subform`, not a text regular expression. Matching ignores formatting.
+The symbol `_` matches exactly one arbitrary subtree.
+
+```bash
+clj-surgeon :op :grep-form \
+  :file src/writer/views/book_workshop.clj \
+  :match '(ds/post-action* "/api/book/new-node" _)'
+```
+
+Add `:inside` only when the containing top-level form is already known or when
+you need to narrow multiple matches:
 
 ```bash
 clj-surgeon :op :find-subform \
@@ -62,6 +101,17 @@ rerunning the selector; it validates source/result hashes and reparses the
 complete future file before atomically replacing the target. Any error is EDN
 with a nonzero exit status. If atomic replacement is unavailable, application
 fails without weakening the write contract.
+
+Apply the reviewed plan directly with `:replace-subform!`. Do not edit the plan
+with `apply_patch` or another text tool. If the intended edit changes, generate
+a new plan.
+
+A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
+syntax, not a synthetic wrapper list. Until sibling-span operations exist,
+match an independently readable contained value or expression.
+
+Run plan generation as a standalone shell command. Observe and review its
+result before a separate apply command; never chain planning and application.
 
 For nested Clojure-to-JavaScript strings, single-quote the complete shell
 argument and use `pr-str` to generate JavaScript literals. JavaScript `\xNN`
@@ -276,7 +326,8 @@ make runtests-once                                  # verify
 
 ```bash
 clj-surgeon :op :ls :file state.clj
-# => 236 forms, 2768 lines — now Read only the lines you need
+clj-surgeon :op :show-form :file state.clj :form transition!
+# => exact source and snapshot hash without a separate sed/read command
 ```
 
 ### Convert a CLJ + CLJS pair into one CLJC file
@@ -313,7 +364,12 @@ If the merge throws (e.g. ns docstring), the source has something the tool refus
 
 ## Proactive Usage
 
-**Before reading any .clj/.cljs/.cljc file over 500 lines, run `:ls` first.**
+**For a .clj/.cljs/.cljc file over 500 lines, run `:ls` first only when the
+relevant form name or containing line is unknown.**
+
+**When the form name or containing line is already known, use `:show-form` as
+the first source inspection. Do not run `:ls` solely as a preflight or
+reconstruct a `sed` range.**
 
 **When the user asks to split a large file,** use `:ls-deps` to see the dependency tree, `:ls-extract` to find natural extraction units, then `:extract!` to execute.
 

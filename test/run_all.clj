@@ -18,6 +18,7 @@
    [clj-surgeon.move-test]
    [clj-surgeon.outline-test]
    [clj-surgeon.rename-test]
+   [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
    [clojure.test :refer [run-tests]]))
 
@@ -29,6 +30,7 @@
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
                    'clj-surgeon.extract-test
+                   'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test

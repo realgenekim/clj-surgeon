@@ -11,7 +11,8 @@ Use `clj-surgeon` from `PATH`. Its source is normally at
 
 ## Orient efficiently
 
-Run `:ls` before reading a large Clojure file:
+When you do not yet know the relevant form name or containing line, start a
+large Clojure file with `:ls`:
 
 ```bash
 clj-surgeon :op :ls :file src/writer/state.clj
@@ -25,13 +26,43 @@ clj-surgeon :op :ls-tree :dir .
 clj-surgeon :op :ls-tree :dir ~/src.local :grep 'postgres|jdbc'
 ```
 
-Use `rg` for broad textual discovery. Use structural search when syntax identity
-or repeated nested code makes textual matches ambiguous.
+Use `rg` for broad textual discovery. When you know distinctive text but not
+the containing form, use `rg -n` to get one line number, then call
+`:show-form :line`; do not print a large `:ls` outline just to discover that
+line. Use structural search when syntax identity or repeated nested code makes
+textual matches ambiguous.
+
+When you already know a top-level form name or a line inside it, make
+`:show-form` the first source inspection. Do not run `:ls` solely as a
+preflight. Use `:show-form` instead of reconstructing a `sed` range or using
+another text reader:
+
+```bash
+clj-surgeon :op :show-form :file src/writer/state.clj :form transition!
+clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
+clj-surgeon :op :cat :file src/writer/state.clj :form transition!
+```
+
+Supply exactly one of `:form` or `:line`. For an ambiguous CLJC definition,
+add `:platform :clj` or `:platform :cljs`. Inspect the exact `:source`, form
+location, platforms, and complete-file `:source-hash`. Stop on ambiguity; the
+command never selects the first match. Use a bounded text read only when the
+needed context genuinely spans forms or is not structurally addressable.
+`:cat` is a strict alias for `:show-form`; it never dumps the complete file.
 
 ## Find nested syntax
 
-Use `:find-subform` when the target is inside a large `defn`, Hiccup tree, route
-table, schema, rule map, `let`, or state transformation:
+Use `:grep-form` for file-wide structural search. It is a strict alias for
+`:find-subform`, not a text regular expression:
+
+```bash
+clj-surgeon :op :grep-form \
+  :file src/writer/views/book_workshop.clj \
+  :match '(ds/post-action* "/api/book/new-node" _)'
+```
+
+Add `:inside` only when you already know the containing top-level form or need
+to narrow multiple matches:
 
 ```bash
 clj-surgeon :op :find-subform \
@@ -67,7 +98,14 @@ Honor these invariants:
 - Supply exactly one complete Clojure form in both `:match` and `:with`.
 - Refine `:inside` or the pattern until replacement finds exactly one subtree.
 - Match the complete boundary intended for replacement.
+- A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
+  syntax, not a synthetic wrapper list. Until sibling-span operations exist,
+  match an independently readable contained value or expression.
+- Run plan generation as a standalone shell command. Observe and review its
+  result before a separate apply command; never chain planning and application.
 - Apply the saved plan; do not rerun the selector as an implicit mutation.
+- Do not edit the plan with `apply_patch` or another text tool. If the intended
+  edit changes, generate a new plan.
 - Use one plan per edit and sequence plans for multiple edits.
 - Stop on nonzero status or an EDN `:error`.
 - Run the project's formatter, linter, and tests afterward.

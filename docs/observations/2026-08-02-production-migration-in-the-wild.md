@@ -303,16 +303,20 @@ clj-surgeon :op :show-form :file state.clj :form transition!
 clj-surgeon :op :show-form :file state.clj :line 1134
 ```
 
-Return source, type, name, line range, semantic owner, and source hash. Refuse
-ambiguity. This removes the recurring `:ls` → filter → bounded `sed` bridge
-without pretending to replace broad search.
+Require `:file` plus exactly one of `:form` or `:line`; accept optional
+`:platform` only for reader-conditional disambiguation. Return exact form
+source, type, name when present, platforms, line range, attached-comment start,
+selector, and complete-file source hash. Refuse ambiguity. This removes the
+recurring `:ls` → filter → bounded `sed` bridge without pretending to replace
+broad search.
 
 ### P0 — Make errors recommend executable remedies
 
-Unknown `:get` should return a closest-operation/remedy field pointing to
-`:show-form` or `:ls`. A line-only `:find-subform` error should explain that the
-operation searches syntax patterns and point to the containing-form command.
-Keep the EDN machine-readable and the exit status nonzero.
+Unknown `:get` with explicit `:file` plus `:form` or `:line` should return an
+executable remedy for `:show-form`. A line-only `:find-subform` error should
+explain that the operation searches syntax patterns and point to the exact
+containing-form command. Base remedies on supplied arguments, not fuzzy intent
+inference. Keep the EDN machine-readable and the exit status nonzero.
 
 ### P0 — Teach the skill that plan application is the write step
 
@@ -335,12 +339,13 @@ If batching is added, make it a manifest of explicit, independently reviewed
 exact edits with per-file hashes. Do not let a batch operation infer additional
 edits.
 
-### P1 — Add a usage receipt suitable for ethnography and CI
+### P2 — Research an opt-in usage receipt only if process logs prove insufficient
 
-Optionally emit one compact record per operation containing tool version,
+Canonical process logs were sufficient for this study, including the apply
+that never launched. Do not add default telemetry. If repeated studies expose
+a concrete evidence gap, consider an opt-in receipt containing tool version,
 operation, file, selector, source/result hashes, match count, outcome, and
-elapsed time. This would distinguish help, refusal, planning, successful apply,
-and an apply that was never launched without mining prose transcripts.
+elapsed time, with explicit privacy and retention rules.
 
 ## Host Repository Recommendations
 
@@ -393,6 +398,46 @@ Each stage should report what it could not run and why. New features then
 inherit the repository's standard in one shot instead of relying on an agent to
 reconstruct it from multiple instruction files.
 
+## Follow-up: the transcript became an executable product test
+
+The proposed read primitive was implemented as `:show-form`, with strict
+`:form` and `:line` selectors and `:cat` as a structural-shell alias. The
+operation returns the exact parsed top-level source plus its location,
+platforms, and complete-file hash. It fails closed on invalid, absent, or
+ambiguous selectors. Bare `:cat :file ...` refuses rather than reverting to a
+whole-file dump.
+
+The first clean-context retest exposed an instruction defect rather than an
+implementation defect. Fresh agents correctly chose `:show-form` and avoided
+textual ranges, but both ran `:ls` first because the installed skill still said
+to outline every large namespace before reading it. The skill, README, command
+help, legacy skill, and repository instructions now distinguish discovery from
+retrieval: use `:ls` when the relevant form is unknown; when a form name or
+containing line is already known, make `:show-form` the first source inspection
+and do not run `:ls` solely as a preflight.
+
+Two new ephemeral Codex sessions then completed the named-form and line-form
+tasks with one Clojure-source command each. They used neither `:ls` nor a text
+range reader. Both selectors returned the same complete `format-op-help` form
+and file hash. A recovery session guessed `:get`, received a nonzero structured
+error, and executed the supplied `:show-form` remedy successfully without
+consulting help. A final clean session applied an already reviewed replacement
+plan with one direct `:replace-subform! :plan` command; it did not inspect,
+edit, or regenerate the plan.
+
+The important result is not merely that the command works. The product test
+found and removed a contradictory instruction that deterministic unit tests
+could not see. The transcript is now summarized in the
+[Captain's Log](2026-08-02-captains-log-the-file-became-a-structural-shell.md),
+and its decisive wording is protected by anti-drift assertions.
+
+A final adversarial pass then challenged the contracts rather than the happy
+path. It forced option-specific parsing, validated-only remedies, bounded
+candidate evidence, explicit immutable alias input to the pure core, canonical
+missing-file errors, legal `/` selection, and stronger boundary, `.cljs`, and
+CLI-refusal tests. The green suite grew because critiques became regressions;
+no assertion was removed or relaxed.
+
 ## Acceptance Tests for the Next clj-surgeon Improvement
 
 The transcript itself supplies the clean-context evaluation set:
@@ -405,10 +450,13 @@ The transcript itself supplies the clean-context evaluation set:
    `:replace-subform!`, never `apply_patch`.
 4. Unknown `:get` should fail nonzero and return a named remedy the agent can
    execute without opening global help.
-5. Duplicate names, comment forms, reader conditionals, a line between forms,
-   and stale hashes should refuse with specific EDN.
+5. Duplicate names must refuse. Comment forms and reader conditionals must
+   return exact structural results when uniquely selected. A line between
+   forms must refuse with specific EDN.
 6. The README, `--help`, repository skill, and tests should all use the same
    operation name and fields, with anti-drift tests enforcing that contract.
+7. Stale-hash refusal remains a separate `:replace-subform!` plan-application
+   contract; a read-only `:show-form` call does not accept a stale plan.
 
 This is how a new capability becomes one-shot: the production failure becomes
 a fixture, the desired recovery becomes an executable clean-context scenario,
@@ -423,7 +471,8 @@ map a huge namespace, prove one nested target, bind one reviewed edit to one
 snapshot, then get out of the way while tests and live data judged correctness.
 
 Its next highest-leverage feature is not more autonomous refactoring. It is the
-small read primitive agents already tried to invoke, plus remedy-rich errors
+small read primitive one agent tried to invoke through two sequential command
+guesses, plus remedy-rich errors
 and plan-application guidance. The larger quality gap belongs in the host
 repository: preserve excellent live migration evidence as durable pure tests,
 and replace stale environment assumptions with executable capability checks.

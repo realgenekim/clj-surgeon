@@ -3,11 +3,12 @@
    For CLJC files (and any file containing reader conditionals), forms inside
    #?(:clj ...) / #?@(:cljs [...]) are surfaced too, each tagged with the
    platforms it applies to."
-  (:require [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]
-            [clj-surgeon.cljc.walk :as cwalk]
-            [clj-surgeon.forms :as forms]
-            [clojure.string :as str]))
+  (:require
+   [clj-surgeon.cljc.walk :as cwalk]
+   [clj-surgeon.forms :as forms]
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]))
 
 (defn- resolve-user-fields
   "Run each user-supplied extractor fn against the form zloc. Returns a
@@ -20,14 +21,14 @@
                  :let [v (try (f zloc)
                               (catch Exception e
                                 (throw (ex-info
-                                        (str ".clj-surgeon.edn: extractor for "
-                                             type-str " :fields " k
-                                             " threw at line " line ": "
-                                             (.getMessage e))
-                                        {:macro type-str
-                                         :field k
-                                         :line line}
-                                        e))))]
+                                         (str ".clj-surgeon.edn: extractor for "
+                                              type-str " :fields " k
+                                              " threw at line " line ": "
+                                              (.getMessage e))
+                                         {:macro type-str
+                                          :field k
+                                          :line line}
+                                         e))))]
                  :when (some? v)]
              [k v])))
 
@@ -145,75 +146,85 @@
                             (mapcat vectors-from-reader-cond))]
           (mapv z/string (concat direct rcond)))))))
 
-(defn outline
-  "Return outline of all top-level forms in a Clojure file.
-   Returns EDN map with :ns, :file, :lines, :forms, :forward-refs.
+(defn top-level-form-records
+  "Return every parsed top-level list form in source order.
 
-   Each form includes :platforms — the set of platforms (#{:clj}, #{:cljs},
-   #{:clj :cljs}, etc.) under which it appears. For .clj/.cljs files this
-   reflects the file extension; for .cljc files it surfaces reader-conditional
-   structure, so a `#?(:clj (defn foo ...))` shows up as a real form with
-   :platforms #{:clj}."
+   Pure: filename, source string, and an explicit project-alias map in;
+   records out. The two-argument arity uses no project aliases. Records include
+   exact `:source` for structural readers. Public outline output removes that
+   field to preserve the compact `:ls` contract."
+  ([file source]
+   (top-level-form-records file source {}))
+  ([file source project-aliases]
+   (let [lines (str/split-lines source)
+         defaults (cwalk/platforms-for-extension (file-extension file))
+         walked (cwalk/top-level-forms source defaults)]
+     (mapv (fn [{:keys [zloc platforms]}]
+             (let [node (z/node zloc)
+                   m (meta node)
+                   type-str (some-> zloc z/down z/string)
+                   form-spec (forms/spec-with-project-aliases
+                               project-aliases type-str)
+                   user-fields (:fields form-spec)
+                   extracted (when user-fields
+                               (resolve-user-fields user-fields zloc
+                                                    type-str (:row m)))
+                   ;; If user provided :fields, respect their spec; don't fall
+                   ;; back to legacy extractors for fields they omitted.
+                   name-val (cond
+                              user-fields (:name extracted)
+                              (some? form-spec) (extract-name zloc))
+                   arglist (cond
+                             user-fields (:arglist extracted)
+                             name-val (extract-arglist zloc))
+                   form-line (:row m)
+                   comment-start (when form-line
+                                   (preceding-comments lines form-line))
+                   extras (when extracted
+                            (dissoc extracted :name :arglist))]
+               (cond-> {:type (symbol (or type-str "?"))
+                        :platforms (vec (sort platforms))
+                        :source (z/string zloc)}
+                 form-line (assoc :line form-line)
+                 (:end-row m) (assoc :end-line (:end-row m))
+                 name-val (assoc :name (if (symbol? name-val)
+                                         name-val
+                                         (symbol (str name-val))))
+                 arglist (assoc :args arglist)
+                 (seq extras) (merge extras)
+                 (and form-line comment-start (< comment-start form-line))
+                 (assoc :comment-start comment-start))))
+           walked))))
+
+(defn outline-source
+  "Return the existing compact outline for a filename and source string.
+
+   Pure counterpart to `outline`. Each public form includes platform data but
+   not the complete `:source` retained by `top-level-form-records`."
+  ([file source]
+   (outline-source file source {}))
+  ([file source project-aliases]
+   (let [records (top-level-form-records file source project-aliases)
+         zloc (z/of-string source {:track-position? true})
+         ns-zloc (some-> zloc
+                         (z/find-value z/next 'ns)
+                         z/up)
+         ns-name (some-> ns-zloc z/down z/right z/string symbol)
+         requires (extract-ns-requires ns-zloc)]
+     {:ns ns-name
+      :file file
+      :lines (count (str/split-lines source))
+      :form-count (count (filter :name records))
+      :forms (->> records
+                  (remove #(= 'ns (:type %)))
+                  (mapv #(dissoc % :source)))
+      :requires (or requires [])
+      :forward-refs []})))
+
+(defn outline
+  "Return the compact outline of all top-level forms in a Clojure file.
+
+   Thin I/O wrapper over `outline-source`. For CLJC files, reader-conditional
+  forms retain the exact platform sets returned by the shared walker."
   [file]
-  (let [source (slurp file)
-        lines (str/split-lines source)
-        total-lines (count lines)
-        zloc (z/of-string source {:track-position? true})
-        ext   (file-extension file)
-        defaults (cwalk/platforms-for-extension ext)
-        walked (cwalk/top-level-forms source defaults)
-        forms  (mapv (fn [{:keys [zloc platforms]}]
-                       (let [node (z/node zloc)
-                             m (meta node)
-                             type-str (some-> zloc z/down z/string)
-                             form-spec (forms/spec type-str)
-                             user-fields (:fields form-spec)
-                             extracted (when user-fields
-                                         (resolve-user-fields user-fields zloc
-                                                              type-str (:row m)))
-                             ;; If user provided :fields, respect their spec;
-                             ;; don't fall back to legacy extractors for
-                             ;; fields they didn't declare.
-                             name-val (cond
-                                        user-fields (:name extracted)
-                                        (forms/defining-form? type-str)
-                                        (extract-name zloc))
-                             arglist (cond
-                                       user-fields (:arglist extracted)
-                                       name-val (extract-arglist zloc))
-                             form-line (:row m)
-                             comment-start (when form-line
-                                             (preceding-comments lines form-line))
-                             ;; Extra user-declared fields (everything except
-                             ;; :name and :arglist which are already merged)
-                             extras (when extracted
-                                      (dissoc extracted :name :arglist))]
-                         (cond-> {:type (symbol (or type-str "?"))
-                                  :platforms (vec (sort platforms))}
-                           form-line (assoc :line form-line)
-                           (:end-row m) (assoc :end-line (:end-row m))
-                           name-val (assoc :name (if (symbol? name-val)
-                                                   name-val
-                                                   (symbol (str name-val))))
-                           arglist (assoc :args arglist)
-                           (seq extras) (merge extras)
-                           (and form-line comment-start (< comment-start form-line))
-                           (assoc :comment-start comment-start))))
-                     walked)
-        ;; Build definition line lookup
-        def-lines (into {}
-                        (for [f forms :when (:name f)]
-                          [(:name f) (:line f)]))
-        ;; Find ns form once, extract name + requires from it
-        ns-zloc (some-> zloc
-                        (z/find-value z/next 'ns)
-                        z/up)
-        ns-name (some-> ns-zloc z/down z/right z/string symbol)
-        requires (extract-ns-requires ns-zloc)]
-    {:ns ns-name
-     :file file
-     :lines total-lines
-     :form-count (count (filter :name forms))
-     :forms (vec (remove #(= 'ns (:type %)) forms))
-     :requires (or requires [])
-     :forward-refs []})) ;; forward-refs filled in by core with clj-kondo data
+  (outline-source file (slurp file) @forms/project-aliases))

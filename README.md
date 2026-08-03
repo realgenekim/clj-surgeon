@@ -6,6 +6,7 @@ A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST
 - Need to split up giant `.clj` files that Claude Code is prone to creating — deterministically move forms (within and between files), along with their dependencies
 - Want to get rid of `(declare ...)` forms (which Claude Code is prone to creating) by automatically reordering `defn`s and `def`s
 - Want Claude Code to explore a Clojure codebase via the AST instead of reading entire files — 100x faster, 150x fewer tokens
+- Want one exact top-level form by name or containing line without reconstructing a `sed` range
 
 **Origin story:** I watched Claude Code spend 45 minutes refactoring a 5,000-line `views.clj` file — painfully extracting functions, moving them, reading and re-reading to get the ordering right, burning through context window. It was doing the right things, just agonizingly slowly. So I asked it: *"What would the ideal tool be to help you manipulate beautiful Clojure homoiconic EDN files?"* clj-surgeon was born 45 minutes later.
 
@@ -103,7 +104,7 @@ Read <path-to-clj-surgeon>/skill.md — it teaches you when and how to use clj-s
 
 I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same. Here's what I put in mine:
 
-> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` outline before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for form boundaries (~50 tokens per file), then `Read` only the specific line ranges you need. Only spawn Explore agents for targeted follow-up questions with specific file paths.
+> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for an unknown file's form boundaries (~50 tokens per file). When a top-level name or containing line is already known, use `:show-form` as the first source inspection; do not run `:ls` solely as a preflight. When only distinctive text is known, use `rg -n` to find its line and then `:show-form :line`. Use `:grep-form` for file-wide structural search, and a bounded text read only when context genuinely spans forms. Only spawn Explore agents for targeted follow-up questions with specific file paths.
 
 ## Operations
 
@@ -116,6 +117,40 @@ clj-surgeon :op :ls :file src/writer/state.clj
 ```
 
 Every top-level form with exact line boundaries, types, names, arglists, and forward reference detection. 236 forms in a 2768-line file, returned in ~200ms.
+
+#### `:show-form` / `:cat` — Read one complete top-level form
+
+Use a name:
+
+```bash
+clj-surgeon :op :show-form :file src/writer/state.clj :form transition!
+# Equivalent structural-shell spelling:
+clj-surgeon :op :cat :file src/writer/state.clj :form transition!
+```
+
+Or use a line contained by the form:
+
+```bash
+clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
+```
+
+Supply exactly one of `:form` or `:line`. For ambiguous reader-conditional
+definitions, add `:platform :clj` or `:platform :cljs`. Success returns the
+exact parsed form source, type, name when present, platforms, line range,
+attached-comment start, and complete-file source hash. Missing or ambiguous
+selectors return structured EDN and exit nonzero; the command never chooses
+the first match.
+
+`:cat` is a strict alias. It never dumps the complete file, and its result
+retains the canonical machine identity `:operation :show-form`.
+
+When a top-level name or containing line is known, use `:show-form` as the first
+source inspection instead of reconstructing a `sed` range. Do not run `:ls`
+solely as a preflight. Continue to use `rg` for broad textual discovery,
+`:grep-form` for nested structural syntax, and bounded text reads for context
+that genuinely spans forms. When distinctive text is known but the form name
+is not, use `rg -n` to find one line and then `:show-form :line`; do not print a
+large outline merely to discover the line.
 
 #### `:ls-tree` / `:tree` / `:map` — Map an entire directory of repos
 
@@ -329,10 +364,19 @@ The compound extraction operation:
 
 Planning is pure — only `:extract!` writes files. The compiler catches bare refs instantly. The AI fixes what the compiler reports.
 
-#### `:find-subform` / `:replace-subform` — Nested structural edits
+#### `:grep-form` / `:find-subform` / `:replace-subform` — Nested structural edits
 
-Find syntax inside a named top-level form. Matching ignores formatting, and `_`
-matches exactly one subtree:
+Use `:grep-form` for file-wide structural search. It is a strict alias for
+`:find-subform`, not a text regular expression. Matching ignores formatting,
+and `_` matches exactly one subtree:
+
+```bash
+clj-surgeon :op :grep-form :file src/views.clj \
+  :match '(post! "/api/items" _)'
+```
+
+Add `:inside` only when the containing top-level form is already known or when
+you need to narrow multiple matches:
 
 ```bash
 clj-surgeon :op :find-subform :file src/views.clj :inside render \
@@ -362,6 +406,18 @@ address, exact before text, complete rewritten-file parse, and result hash. It
 then atomically replaces the target file. If atomic replacement is unavailable,
 the command fails and does not fall back to a weaker write. Every error is
 concise EDN and every error exits nonzero.
+
+Apply the reviewed plan directly with `:replace-subform!`. Do not edit the plan
+with `apply_patch` or another text tool. If the intended edit changes, generate
+a new plan.
+
+A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
+syntax, not a synthetic wrapper list. Until a sibling-span lens exists, match
+an independently readable contained value or expression. See
+[issue #21](https://github.com/realgenekim/clj-surgeon/issues/21).
+
+Run plan generation as a standalone shell command. Observe and review its
+result before a separate apply command; never chain planning and application.
 
 In its [first production use](docs/observations/2026-07-11-subform-first-real-use.md),
 `:ls` reduced a 4,036-line, 322-form namespace to the relevant synchronization

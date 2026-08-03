@@ -16,13 +16,14 @@
    2. Explicit aliases — `>defn`, `>defn-` (ecosystem macros)
    3. Project aliases — from `.clj-surgeon.edn`
    4. Namespace-qualified split-on-/ — `mu/defn` → `defn` → tier 1-3"
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
-            [clj-surgeon.fields :as fields]
-            [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]
-            [sci.core :as sci]))
+  (:require
+   [clj-surgeon.fields :as fields]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]
+   [sci.core :as sci]))
 
 ;; ============================================================
 ;; Core defining forms — these map to themselves
@@ -271,6 +272,21 @@
     (or (lookup-spec type-str)
         (when-let [idx (str/index-of type-str "/")]
           (lookup-spec (subs type-str (inc idx)))))))
+
+(defn spec-with-project-aliases
+  "Pure form-spec lookup using an explicit project-alias map.
+
+   Built-in and explicit aliases retain precedence. Namespaced macro names
+   fall back to their local name, matching `spec`."
+  [aliases type-str]
+  (letfn [(lookup [s]
+            (or (when-let [k (core-forms s)] {:kind k})
+                (when-let [k (explicit-aliases s)] {:kind k})
+                (get aliases s)))]
+    (when type-str
+      (or (lookup type-str)
+          (when-let [idx (str/index-of type-str "/")]
+            (lookup (subs type-str (inc idx))))))))
 
 ;; ============================================================
 ;; Derived predicates — used across outline, analyze, extract

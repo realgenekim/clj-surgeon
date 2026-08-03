@@ -22,6 +22,7 @@
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.rename :as rename]
+   [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
@@ -561,11 +562,16 @@
                        :pair      :fix-declares}
 
     :find-subform     {:handler   structural-lens/find-file
-                       :desc      "Find nested syntax structurally within a named form"
+                       :aliases   [:grep-form]
+                       :desc      "Find nested syntax structurally across a file or within a named form"
                        :args      {:file   {:required true :desc "Clojure source file"}
                                    :inside {:desc "Restrict search to this top-level form"}
                                    :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}}
-                       :examples  ["clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _ )'"]
+                       :workflow  ["Omit :inside for file-wide structural search; add it only to narrow the search."
+                                   "Use :grep-form as the structural-shell alias; patterns are Clojure forms, not regular expressions."
+                                   "Zero and multiple matches are useful read evidence; mutation still requires exactly one match."]
+                       :examples  ["clj-surgeon :op :grep-form :file src/views.clj :match '(post! \"/api/items\" _)'"
+                                   "clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
                        :category  :read}
 
     :ls               {:handler   run-outline
@@ -574,6 +580,25 @@
                        :args      {:file {:required true :desc "Clojure source file"}}
                        :examples  ["clj-surgeon :op :ls :file src/my/ns.clj"]
                        :category  :read}
+
+    :show-form        {:handler  show-form/show-file
+                       :desc     "Show one complete top-level form by name or containing line"
+                       :aliases  [:cat]
+                       :args     {:file     {:required true :desc "Clojure source file"}
+                                  :form     {:desc "Unqualified top-level name; supply exactly one of :form or :line"}
+                                  :line     {:desc "Positive one-based line; supply exactly one of :form or :line"}
+                                  :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}}
+                       :workflow ["Supply exactly one selector: :form or :line."
+                                  "Use :show-form instead of reconstructing a sed range when a top-level name or containing line is known."
+                                  "Make :show-form the first source inspection; do not run :ls solely as a preflight."
+                                  "With distinctive text but no form name, use rg -n to find one line, then :show-form :line instead of printing the full outline."
+                                  "Use :platform only to select a reader-conditional branch."
+                                  "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
+                                  "On ambiguity, stop and refine the selector; the command never chooses the first match."]
+                       :examples ["clj-surgeon :op :show-form :file src/my/ns.clj :form transition!"
+                                  "clj-surgeon :op :show-form :file src/my/ns.clj :line 1134"
+                                  "clj-surgeon :op :show-form :file src/my/ns.cljc :form transition! :platform :cljs"]
+                       :category :read}
 
     :ls-deps          {:handler   run-ls-deps
                        :desc      "Transitive dependency tree for a form"
@@ -627,6 +652,10 @@
                                    :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}
                                    :with   {:required true :desc "Replacement Clojure form"}
                                    :plan-out {:desc "Write the replayable EDN plan to this path"}}
+                       :workflow  ["Inspect or find the exact parsed subtree before planning."
+                                   "A case clause, cond branch, map entry, or binding pair is adjacent syntax, not a synthetic wrapper list; match its contained value or expression."
+                                   "Run plan generation as its own command; never chain planning and application in one shell invocation."
+                                   "Review the returned match, diff, address, source hash, and result hash before applying the saved plan."]
                        :examples  ["clj-surgeon :op :replace-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)' :with '(items/actions surface)' :plan-out plan.edn"]
                        :category  :write
                        :pair      :replace-subform!}
@@ -634,6 +663,12 @@
     :replace-subform! {:handler   structural-lens/execute-plan!
                        :desc      "Apply a previously emitted structural replacement plan"
                        :args      {:plan {:required true :desc "EDN plan file from :replace-subform"}}
+                       :workflow  ["Run plan generation as a separate command; never chain it with application."
+                                   "Review the saved plan and its diff before application."
+                                   "Apply the reviewed plan directly with :replace-subform!."
+                                   "Do not edit the plan with apply_patch or another text tool."
+                                   "If the intended edit changes, generate a new plan."
+                                   "Stop on nonzero status, then run the repository formatter, linter, and tests after success."]
                        :examples  ["clj-surgeon :op :replace-subform! :plan plan.edn"]
                        :category  :write
                        :pair      :replace-subform}
@@ -762,6 +797,12 @@
 ;; Dispatch + CLI
 ;; ============================================================
 
+(defn- with-show-form-remedy
+  [result opts]
+  (if-let [remedy (show-form/invocation-remedy opts)]
+    (assoc-in result [:remedies :show-form] remedy)
+    result))
+
 (defn run [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
@@ -774,15 +815,22 @@
                                             (when (and required (not (contains? opts arg))) arg)))
                                     vec)]
                    (if (seq missing)
-                     {:error (str "Missing required arguments: "
-                                  (str/join ", " (map #(str ":" (name %)) missing)))
-                      :error-type :missing-arguments
-                      :missing missing}
+                     (cond-> {:error (str "Missing required arguments: "
+                                          (str/join ", " (map #(str ":" (name %)) missing)))
+                              :error-type :missing-arguments
+                              :missing missing}
+                       (= canonical :show-form)
+                       (merge (show-form/refusal-context opts))
+
+                       (and (= canonical :find-subform) (contains? opts :line))
+                       (with-show-form-remedy opts))
                      ((:handler op-def) opts)))
-                 {:error (str "Unknown op: " op
-                              ". Valid ops: "
-                              (str/join ", " (sort (keys ops-registry))))
-                  :error-type :unknown-operation})]
+                 (with-show-form-remedy
+                   {:error (str "Unknown op: " op
+                                ". Valid ops: "
+                                (str/join ", " (sort (keys ops-registry))))
+                    :error-type :unknown-operation}
+                   opts))]
     (if (string? result) (println result) (pp/pprint result))
     result))
 
@@ -794,7 +842,7 @@
     (= s "true") true
     (= s "false") false
     (.startsWith s ":") (keyword (subs s 1))
-    (.startsWith s "[") (read-string s)  ;; parse EDN vectors like '[foo bar]
+    (.startsWith s "[") (read-string s)  ;; parse EDN vectors after shell unquoting
     (.startsWith s "{") (read-string s)  ;; parse EDN maps
     :else s))
 

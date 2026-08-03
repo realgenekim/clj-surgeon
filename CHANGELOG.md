@@ -10,6 +10,17 @@ is cut.
 
 ### Added
 
+- `:show-form`, a read-only one-shot that returns one complete top-level form
+  by unqualified name or containing line, with CLJC platform disambiguation,
+  exact source, location, and a complete-file source hash. `:cat` is its strict
+  structural-shell alias and never dumps the complete file.
+- Executable `:show-form` remedies for the historically guessed `:get` command
+  and line-only `:find-subform` invocation.
+- `:grep-form`, a strict structural-shell alias for file-wide or optionally
+  scoped `:find-subform` search.
+- Agent-facing routing guidance for `rg -n` to `:show-form :line`, structural
+  sibling-pair boundaries, and a mandatory review boundary between replacement
+  planning and application.
 - `make install-cli` and the explicit `CLI_DEST=/path/to/clj-surgeon`
   override, including parent-directory creation and paths containing spaces.
 - Dependency-aware `:mv` planning plus `:mv-with-deps`, an opt-in alias for

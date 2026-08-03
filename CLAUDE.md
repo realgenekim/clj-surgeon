@@ -48,6 +48,17 @@ updates, and verification gates. It is not a chronological coding diary.
 - All ops return EDN data, not side effects (except `!`-suffixed ops which write files)
 - Errors use a human-readable `:error` string plus a stable keyword
   `:error-type` and structured diagnostic fields.
+- For a large Clojure file, use `:ls` first when the relevant form is unknown.
+  When a top-level name or containing line is already known, use `:show-form`
+  as the first source inspection; do not run `:ls` solely as a preflight or
+  reconstruct a `sed` range.
+- When distinctive text is known but its containing form is not, use `rg -n`
+  to get a line and then `:show-form :line`; do not print a large outline merely
+  to discover that line. Use `:grep-form` for file-wide structural patterns;
+  add `:inside` only when the parent is known or ambiguity needs narrowing.
+- Generate a replacement plan in a standalone shell command. Observe and
+  review it before running a separate apply command; never chain planning and
+  application.
 - Format changed Clojure files before linting or testing. Use the repository's
   formatter when configured; otherwise run
   `npx @chrisoakman/standard-clojure-style fix <changed-files>`.

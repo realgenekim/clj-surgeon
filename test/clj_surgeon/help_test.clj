@@ -24,6 +24,10 @@
     (is (= :ls-tree (core/resolve-op :tree)))
     (is (= :ls-tree (core/resolve-op :map)))
     (is (= :ls-tree (core/resolve-op :outline-tree)))
+    (is (= :show-form (core/resolve-op :cat)))
+    (is (= :show-form (core/resolve-op "cat")))
+    (is (= :find-subform (core/resolve-op :grep-form)))
+    (is (= :find-subform (core/resolve-op "grep-form")))
     (is (= :mv (core/resolve-op :mv-with-deps)))
     (is (= :mv (core/resolve-op "mv-with-deps")))))
 
@@ -91,7 +95,7 @@
 
 (deftest registry-has-all-ops
   (testing "registry contains every canonical op"
-    (let [expected #{:ls :ls-tree :mv :declares :deps :topo
+    (let [expected #{:ls :ls-tree :show-form :mv :declares :deps :topo
                      :ls-extract :ls-deps
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
@@ -196,6 +200,42 @@
     (testing "shows aliases"
       (is (str/includes? help "Aliases: outline")))))
 
+(deftest show-form-help-documents-the-one-shot-read-contract
+  (let [help (core/format-op-help :show-form
+                                  (get core/ops-registry :show-form))]
+    (testing "both selectors and CLJC disambiguation are discoverable"
+      (is (str/includes? help ":form"))
+      (is (str/includes? help ":line"))
+      (is (str/includes? help ":platform"))
+      (is (str/includes? help "exactly one selector"))
+      (is (str/includes? help "instead of reconstructing a sed range"))
+      (is (str/includes? help "do not run :ls solely as a preflight"))
+      (is (str/includes? help "distinctive text"))
+      (is (str/includes? help "rg -n")))
+    (testing "the exact documented invocations are printed"
+      (is (str/includes? help ":op :show-form :file src/my/ns.clj :form transition!"))
+      (is (str/includes? help ":op :show-form :file src/my/ns.clj :line 1134")))
+    (testing "the structural-shell alias is discoverable"
+      (is (str/includes? help "Aliases: cat")))
+    (testing "ambiguity fails closed"
+      (is (str/includes? help "never chooses the first match")))))
+
+(deftest replace-subform-apply-help-forbids-plan-editing
+  (let [help (core/format-op-help :replace-subform!
+                                  (get core/ops-registry :replace-subform!))]
+    (is (str/includes? help "Do not edit the plan"))
+    (is (str/includes? help "never chain it with application"))
+    (is (str/includes? help "generate a new plan"))
+    (is (str/includes? help ":replace-subform!"))))
+
+(deftest find-subform-help-teaches-one-shot-file-wide-structural-grep
+  (let [help (core/format-op-help :find-subform
+                                  (get core/ops-registry :find-subform))]
+    (is (str/includes? help "Aliases: grep-form"))
+    (is (str/includes? help "Omit :inside for file-wide structural search"))
+    (is (str/includes? help ":op :grep-form"))
+    (is (str/includes? help "not regular expressions"))))
+
 ;; ============================================================
 ;; parse-val — string to value (pure)
 ;; ============================================================
@@ -208,6 +248,13 @@
 (deftest parse-val-booleans
   (is (= true (core/parse-val "true")))
   (is (= false (core/parse-val "false"))))
+
+(deftest parse-val-preserves-numeric-strings-for-operation-specific-meaning
+  (testing "the generic parser does not corrupt numeric grep terms or identifiers"
+    (is (= "1134" (core/parse-val "1134")))
+    (is (= "-7" (core/parse-val "-7")))
+    (is (= "12.5" (core/parse-val "12.5")))
+    (is (= "12a" (core/parse-val "12a")))))
 
 (deftest parse-val-edn-vectors
   (is (= '[foo bar] (core/parse-val "[foo bar]")))

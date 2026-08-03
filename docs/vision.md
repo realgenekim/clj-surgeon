@@ -94,16 +94,44 @@ model needs a namespace's shape. `:find-subform` is better for repeated nested
 Hiccup, handlers, rules, routes, and state transitions. The goal is not to
 replace every tool; it is to make structural facts and exact actions cheap.
 
+## The Structural X-Ray Loop
+
+clj-surgeon should be the preferred structural instrument for an agent that
+must inspect and change Clojure. Compilers, linters, tests, and live REPLs
+remain the semantic authorities.
+
+```text
+x-ray exact structure
+  → view exact source and relationships
+  → select one unambiguous target
+  → plan one exact change
+  → review diff and hashes
+  → apply only to the unchanged snapshot
+  → verify with parser, linter, compiler, tests, or live REPL
+```
+
+The ideal lens minimizes fallback to line-oriented reading when syntax already
+provides a better address. Use `:show-form` instead of reconstructing a `sed`
+range when a top-level name or containing line is known. When only distinctive
+text is known, use `rg -n` to locate one line, then `:show-form :line`. Use
+`:grep-form` for file-wide structural syntax and optional `:inside` narrowing.
+Keep bounded text reads for context that genuinely spans forms.
+
+Perfection here means lossless perception, singular guarded action, and an
+executable recovery path after refusal. It does not mean autonomous design or
+an expanding catalog of inferred refactorings.
+
 ## Shipped Kernel
 
 | Operation | Role |
 |---|---|
 | `:ls` / `:outline` | Top-level form boundaries and signatures |
+| `:show-form` | Exact top-level source by name or containing line |
 | `:ls-tree` | Cross-project structural map |
 | `:deps`, `:ls-deps`, `:topo` | Dependency visibility |
 | `:ls-extract` | Minimal mechanically extractable closure |
 | `:declares` | Forward-declare audit |
-| `:find-subform` | Scoped nested structural search |
+| `:grep-form` / `:find-subform` | File-wide or scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
 | `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |
 | `:fix-declares` / `!` | Mechanical declare cleanup |
