@@ -8,6 +8,7 @@
    [clj-surgeon.cljc.require-ops-test]
    [clj-surgeon.cljc.split-test]
    [clj-surgeon.edn-config-integration-test]
+   [clj-surgeon.edit-test]
    [clj-surgeon.extract-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
@@ -41,6 +42,7 @@
                    'clj-surgeon.cljc.require-ops-test
                    'clj-surgeon.cljc.analyze-test
                    'clj-surgeon.edn-config-integration-test
+                   'clj-surgeon.edit-test
                    'clj-surgeon.cljc-existing-ops-test
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
