@@ -33,10 +33,9 @@ range; a distinctive text selector refuses zero or multiple forms. Reserve
 
 ## X-ray ordinary Clojure data
 
-Plain paths return exact source; `analyze` receives
-one vector of ordinary Clojure data and returns compact `:value` plus hashes;
-`expect-count` refuses before analysis; `initializer` selects a `def`
-right-hand side unevaluated.
+Plain paths return exact source; `analyze` receives one vector of ordinary Clojure data
+and returns compact `:value` plus hashes; `expect-count` refuses before
+analysis; `initializer` selects a `def` right-hand side unevaluated.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
@@ -55,8 +54,10 @@ and `partition-all`. For CLJC use `(form 'name :clj)` or `:cljs`; use
 
 ## Plan and apply separately
 
-`:edit` never changes source. Supply `:plan-out` and exactly one of `:query` or
-`:expr`; it may be the first source-bearing command when intent is exact.
+Supply `:plan-out` and exactly one of `:query` or `:expr`; `:edit` may be the first
+source-bearing command when intent is exact, and never changes source without `:expect`.
+Optional `:expect BEFORE-FORM` makes it one guarded call: the plan saves and applies only
+when the selection structurally equals the declared form; a difference refuses and changes nothing.
 
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
@@ -69,15 +70,14 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
 The plan saves `transform`'s concrete replacement, never executable code.
-
-`transform` receives the selection as quoted syntax: a call is a list, not
-its runtime value, so never `assoc` into it. To change one element inside a
-call, navigate to it — `(match :done) (replace :complete)`.
-Do not preflight whether the plan path exists. Review diff and hashes after
-plan generation; never chain plan and application. Do not edit the plan; when
-intent changes, generate a new plan. Apply returns `:verified` read-back hash
-and whole-file parse evidence. Trust it; never reproduce the plan with
-`apply_patch`.
+`transform` receives the selection as quoted syntax: a call is a list, not its
+runtime value, so never `assoc` into it. To change one element inside a call,
+navigate to it — `(match :done) (replace :complete)`.
+Do not preflight whether the plan path exists. Review the returned diff and
+hashes; do not reopen the plan file. Do not edit the plan; generate a new plan
+when intent changes. Never chain plan generation and application. Apply returns
+`:verified` read-back hash and whole-file parse evidence. Trust it; never
+reproduce the plan with `apply_patch`.
 
 A `case` clause, `cond` branch, map entry, or binding pair is sibling syntax,
 not a synthetic wrapper list: `right` selects one peer, `span 2` one pair,
