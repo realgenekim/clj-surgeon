@@ -139,10 +139,38 @@ make_peer_edit_fixture() {
     >> "$destination"
 }
 
+make_xray_fixture() {
+  local destination=$1
+  {
+    printf '%s\n\n' '(ns bench.xray)'
+    local i category points
+    for i in $(seq 1 105); do
+      printf '(defn filler-before-%03d [x]\n  (+ x %d))\n\n' "$i" "$i"
+    done
+    printf '%s\n' '(def audit-report' '  {:events ['
+    for i in $(seq 1 60); do
+      case $((i % 3)) in
+        0) category=deny ;;
+        1) category=allow ;;
+        2) category=review ;;
+      esac
+      points=$(((i * 7 % 11) + 1))
+      printf '            {:category :%s :points %d}\n' "$category" "$points"
+    done
+    printf '%s\n\n' \
+      '            ]' \
+      '   :unrelated-event {:category :deny :points 10000}})'
+    for i in $(seq 106 210); do
+      printf '(defn filler-after-%03d [x]\n  (- x %d))\n\n' "$i" "$i"
+    done
+  } > "$destination"
+}
+
 make_structural_fixture "$setup_root/templates/structural.clj"
 make_edit_fixture "$setup_root/templates/state.clj"
 make_computed_edit_fixture "$setup_root/templates/policy.clj"
 make_peer_edit_fixture "$setup_root/templates/peer_edit.clj"
+make_xray_fixture "$setup_root/templates/xray.clj"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :find-subform \
   :file "$setup_root/templates/structural.clj" \
   :match '(select-keys _ [:status :attempts])' \
@@ -216,7 +244,7 @@ task_prompt() {
       printf '%s' 'In src/bench/pair_view.clj, return every top-level binding name/initializer pair in the let binding vector inside prepare-request, in source order. Exclude later symbol uses and the returned map. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source nil :commands ["command summaries"]}.'
       ;;
     xray-summary)
-      printf '%s' 'In src/bench/pair_view.clj, inspect the outer cond in classify-request and return a frequency map of its result categories. Map results contribute their :decision value. A nested cond result contributes :conditional; do not count its internal branches. Do not modify files or read the whole file. Your final answer must be exactly this EDN map with no prose or code fence: {:deny 3 :allow 3 :conditional 1}'
+      printf '%s' 'In src/bench/xray.clj, sum :points by :category for the values in the :events vector inside audit-report. Ignore :unrelated-event. Do not modify files or read the whole file. Your final answer must be exactly one EDN map from category keywords to integer totals, with no prose or code fence.'
       ;;
     *)
       echo "Unknown task: $task" >&2
@@ -232,7 +260,8 @@ target_for_task() {
     case-edit) printf '%s' 'src/bench/state.clj' ;;
     computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
-    case-inventory|cond-inventory|binding-inventory|xray-summary) printf '%s' 'src/bench/pair_view.clj' ;;
+    case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
+    xray-summary) printf '%s' 'src/bench/xray.clj' ;;
   esac
 }
 
@@ -256,8 +285,11 @@ prepare_workspace() {
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
       ;;
-    case-inventory|cond-inventory|binding-inventory|xray-summary)
+    case-inventory|cond-inventory|binding-inventory)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
+      ;;
+    xray-summary)
+      cp "$setup_root/templates/xray.clj" "$workspace/src/bench/xray.clj"
       ;;
   esac
 }
@@ -490,7 +522,7 @@ run_one() {
       correct=$(bb "$repo_root/bench/score_pair_inventory.clj" binding "$setup_root/expected/binding-inventory.edn" "$run_dir/final.txt" normalized) || correct=false
       ;;
     xray-summary)
-      exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= {:deny 3 :allow 3 :conditional 1} (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
+      exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= {:deny 129 :allow 113 :review 121} (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
       correct=$exact_correct
       ;;
     case-edit)
