@@ -28,6 +28,8 @@
     (is (= :show-form (core/resolve-op "cat")))
     (is (= :find-subform (core/resolve-op :grep-form)))
     (is (= :find-subform (core/resolve-op "grep-form")))
+    (is (= :lens (core/resolve-op :q)))
+    (is (= :lens (core/resolve-op "q")))
     (is (= :mv (core/resolve-op :mv-with-deps)))
     (is (= :mv (core/resolve-op "mv-with-deps")))))
 
@@ -100,7 +102,7 @@
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
                      :extract :extract!
-                     :find-subform :replace-subform :replace-subform!
+                     :find-subform :lens :replace-subform :replace-subform!
                      :cljc-merge :cljc-split :cljc-add-require :cljc-analyze}]
       (is (= expected (set (keys core/ops-registry)))))))
 
@@ -244,6 +246,17 @@
     (is (str/includes? help ":cat :contains"))
     (is (str/includes? help "owner and context in one read"))))
 
+(deftest lens-help-teaches-the-getter-updater-algebra-and-review-boundary
+  (let [help (core/format-op-help :lens (get core/ops-registry :lens))]
+    (is (str/includes? help "Aliases: q"))
+    (is (str/includes? help "EDN pipeline"))
+    (is (str/includes? help "[:form transition]"))
+    (is (str/includes? help "[:find :finish]"))
+    (is (str/includes? help ":right"))
+    (is (str/includes? help "[:replace (assoc state :status :complete)]"))
+    (is (str/includes? help "emits a plan and never writes source"))
+    (is (str/includes? help "Apply the reviewed plan separately"))))
+
 (deftest find-subform-help-teaches-one-shot-file-wide-structural-grep
   (let [help (core/format-op-help :find-subform
                                   (get core/ops-registry :find-subform))]
@@ -333,6 +346,12 @@
   (is (= "(inc 1) (inc 2)"
          (:match (core/parse-args [":op" ":find-subform"
                                    ":match" "(inc 1) (inc 2)"])))))
+
+(deftest parse-args-preserves-query-for-one-bounded-lens-parser
+  (let [query "[[:form transition] [:find :finish] :right]"]
+    (is (= query
+           (:query (core/parse-args [":op" ":q" ":file" "state.clj"
+                                     ":query" query]))))))
 
 (deftest parse-args-preserves-contains-as-literal-text
   (testing "EDN-shaped search text is not reinterpreted"

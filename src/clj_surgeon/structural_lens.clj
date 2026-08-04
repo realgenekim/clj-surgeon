@@ -511,19 +511,46 @@
     (catch Exception e
       (query-error-result source query e))))
 
+(defn- write-plan-file [plan plan-out]
+  (try
+    (with-open [writer (io/writer plan-out)]
+      (binding [*out* writer] (pprint/pprint plan)))
+    (assoc plan :plan-out plan-out)
+    (catch Exception e
+      {:error (str "Could not write plan: " (.getMessage e))
+       :error-type :plan-write-failed
+       :plan-out plan-out})))
+
+(defn lens-file
+  "Read a file and evaluate one getter/updater lens. A terminal replacement
+   may write a plan artifact; this function never changes source bytes."
+  [{:keys [file plan-out] :as opts}]
+  (if-not file
+    {:operation :lens
+     :error ":file is required"
+     :error-type :missing-arguments}
+    (try
+      (let [result (evaluate-lens (slurp file) opts)
+            result (cond-> result
+                     (= :lens (:operation result)) (assoc :file file))]
+        (if (and (= :replace-subform (:operation result))
+                 (nil? (:error result))
+                 plan-out)
+          (write-plan-file result plan-out)
+          result))
+      (catch Exception e
+        {:operation :lens
+         :file file
+         :error (str "Cannot read source file: " file " (" (.getMessage e) ")")
+         :error-type :file-read-failed}))))
+
 (defn plan-file-replacement [{:keys [file plan-out] :as opts}]
   (if-not file
     {:error ":file is required" :error-type :missing-arguments}
     (let [plan (plan-replacement (slurp file) opts)]
       (if (or (:error plan) (nil? plan-out))
         plan
-        (try
-          (with-open [writer (io/writer plan-out)]
-            (binding [*out* writer] (pprint/pprint plan)))
-          (assoc plan :plan-out plan-out)
-          (catch Exception e
-            {:error (str "Could not write plan: " (.getMessage e))
-             :error-type :plan-write-failed :plan-out plan-out}))))))
+        (write-plan-file plan plan-out)))))
 
 (defn- read-plan [plan]
   (cond (map? plan) plan

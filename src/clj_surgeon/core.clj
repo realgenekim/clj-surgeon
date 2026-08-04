@@ -575,6 +575,22 @@
                                    "clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
                        :category  :read}
 
+    :lens             {:handler  structural-lens/lens-file
+                       :aliases  [:q]
+                       :desc     "Query Clojure syntax with an EDN pipeline or emit one guarded replacement plan"
+                       :args     {:file     {:required true :desc "Clojure source file"}
+                                  :query    {:required true :desc "EDN vector of structural navigation steps, optionally ending in [:replace FORM]"}
+                                  :plan-out {:desc "Write the replayable EDN plan when the query ends in [:replace FORM]"}}
+                       :workflow ["Pipe located syntax through [:form NAME], [:find PATTERN], [:where {:tag TAG}] or [:where {:parent-tag TAG}], and :right/:left/:up/:down."
+                                  "Navigation-only queries are read-only and report zero, one, or many matches plus a per-step count trace."
+                                  "Use semantic sibling navigation for case clauses, cond branches, map entries, and bindings; do not reconstruct textual context."
+                                  "A final [:replace FORM] reuses the same structural path as an updater, emits a plan and never writes source."
+                                  "Review the one edit, diff, selector, trace, and hashes. Apply the reviewed plan separately with :replace-subform!."
+                                  "Writes refuse zero or multiple selected nodes. Arbitrary evaluation, fuzzy choice, and implicit bulk updates are unsupported."]
+                       :examples ["clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] :right]'"
+                                  "clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"]
+                       :category :read}
+
     :ls               {:handler   run-outline
                        :aliases   [:outline]
                        :desc      "List forms in a namespace (line ranges, arglists, forward refs)"
@@ -763,6 +779,7 @@
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
+    (.append sb "    clj-surgeon :op :q :file src/my/ns.clj :query '[[:form transition] [:find :finish] :right]'\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")
     (.append sb "  All ops return EDN. Read-only operations never write.\n  Write operations differ: :mv writes unless :dry-run true; paired operations use their documented ! executor.\n")
@@ -868,7 +885,7 @@
                  (partition 2)
                  (map (fn [[k v]]
                         (let [key (keyword (subs k 1))]
-                          [key (if (#{:match :with :contains} key) v (parse-val v))])))
+                          [key (if (#{:match :with :contains :query} key) v (parse-val v))])))
                  (into {}))
       has-help? (assoc :help true))))
 

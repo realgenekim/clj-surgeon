@@ -1,6 +1,10 @@
 (ns clj-surgeon.lens-query-test
   (:require
+   [babashka.fs :as fs]
+   [babashka.process :as proc]
    [clj-surgeon.structural-lens :as lens]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [rewrite-clj.zip :as z]))
@@ -205,7 +209,70 @@
   (let [source (slurp "src/clj_surgeon/core.clj")
         result (lens/evaluate-query source
                                     [[:form 'parse-args]
-                                     [:find #{:match :with :contains}]])]
+                                     [:find #{:match :with :contains :query}]])]
     (is (= 1 (:match-count result)))
-    (is (= "#{:match :with :contains}" (-> result :matches first :source)))
+    (is (= "#{:match :with :contains :query}" (-> result :matches first :source)))
     (is (= "parse-args" (-> result :matches first :inside)))))
+
+(def ^:private project-root
+  (.getCanonicalPath (io/file ".")))
+
+(defn- run-cli [& args]
+  @(proc/process
+     (into ["bb" "-m" "clj-surgeon.core"] args)
+     {:dir project-root :err :string :out :string}))
+
+(deftest cli-lens-and-q-read-plan-and-apply-the-documented-expression
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon q "})
+        source-file (fs/path tmp-dir "state fixture.clj")
+        plan-file (fs/path tmp-dir "lens plan.edn")
+        source (str target-source
+                    "\n(defn unrelated-finish [state]\n"
+                    "  (assoc state :status :done))\n")
+        read-query "[[:form transition] [:find :finish] :right]"
+        edit-query (str "[[:form transition] [:find :finish] :right "
+                        "[:replace (assoc state :status :complete)]]")]
+    (try
+      (spit (str source-file) source)
+      (testing "canonical and short operations return identical read evidence"
+        (let [canonical (run-cli ":op" ":lens" ":file" (str source-file)
+                                 ":query" read-query)
+              short (run-cli ":op" ":q" ":file" (str source-file)
+                             ":query" read-query)
+              canonical-result (edn/read-string (:out canonical))
+              short-result (edn/read-string (:out short))]
+          (is (zero? (:exit canonical)) (:err canonical))
+          (is (zero? (:exit short)) (:err short))
+          (is (= canonical-result short-result))
+          (is (= :lens (:operation canonical-result)))
+          (is (= "(assoc state :status :done)"
+                 (-> canonical-result :matches first :source)))))
+      (testing "the updater emits a saved plan, then the existing applier emits proof"
+        (let [planned (run-cli ":op" ":q" ":file" (str source-file)
+                               ":query" edit-query
+                               ":plan-out" (str plan-file))
+              plan (edn/read-string (:out planned))
+              saved (edn/read-string (slurp (str plan-file)))
+              applied (run-cli ":op" ":replace-subform!"
+                               ":plan" (str plan-file))
+              receipt (edn/read-string (:out applied))]
+          (is (zero? (:exit planned)) (:err planned))
+          (is (= (dissoc plan :plan-out) saved))
+          (is (= :replace-subform (:operation plan)))
+          (is (= (edn/read-string edit-query) (get-in plan [:selector :query])))
+          (is (zero? (:exit applied)) (:err applied))
+          (is (= (:result-hash plan) (get-in receipt [:verified :read-back-hash])))
+          (is (= 1 (count (re-seq #"status :complete"
+                                  (slurp (str source-file))))))
+          (is (= 1 (count (re-seq #"status :done"
+                                  (slurp (str source-file))))))))
+      (testing "invalid pipelines are nonzero structured EDN"
+        (let [result (run-cli ":op" ":q" ":file" (str source-file)
+                              ":query" "[:sideways]")
+              refusal (edn/read-string (:out result))]
+          (is (pos? (:exit result)))
+          (is (= :invalid-query (:error-type refusal)))
+          (is (= 0 (:step-index refusal)))
+          (is (str/blank? (:err result)))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
