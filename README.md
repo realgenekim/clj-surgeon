@@ -14,6 +14,72 @@ A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST
 
 All CLI commands are available to [Claude Code](https://claude.ai/claude-code) as a [skill](https://code.claude.com/docs/en/skills) — you don't need to learn all the commands, because Claude Code already knows how to use them. See [Teach Claude Code](#teach-claude-code).
 
+## The Vision: a structural editor for agents
+
+Clojure should be the best language in the world for an agent to edit. The
+source is already data: named forms, nested expressions, dependency edges, and
+reader conditionals. Yet coding agents are usually forced to treat it as an
+undifferentiated stream of bytes—search for text, recover a line number, print
+a range, patch punctuation, then reread the file to see whether the edit worked.
+That throws away homoiconicity at exactly the moment it is most valuable.
+
+clj-surgeon is becoming the structural `ed`, REPL, and microscope for coding
+agents: a small, composable microkernel for seeing and changing Clojure in the
+objects the language actually contains.
+
+```text
+ls  →  cat  →  grep/deps  →  plan  →  apply  →  receipt
+```
+
+`ls` inventories a namespace without dumping it. `cat` returns one complete,
+explicitly selected form. `grep-form` finds syntax rather than textual
+lookalikes and reports who owns each match. Dependency operations expose the
+graph. A mutation first produces a hash-bound plan and exact diff; a later
+command applies only that reviewed artifact and returns machine-readable proof
+of the write, read-back hash, and whole-file parse.
+
+The ideal is not “hide an entire refactor behind one magic command.” It is
+**one command per honest judgment boundary**:
+
+```text
+one structural discovery  →  one inspectable plan  →  one verified apply
+```
+
+Each command should own all of its mechanical bookkeeping—parsing, locating,
+ordering, ambiguity detection, hashing, atomic writing, and verification. The
+agent keeps the work that requires judgment: deciding intent, choosing scope,
+reviewing the plan, and consenting to the change. When certainty is missing,
+the tool refuses loudly with bounded evidence and executable remedies. It never
+silently widens scope, chooses the first ambiguous match, or pulls additional
+code into an edit without consent.
+
+This is also the Bitter Lesson boundary. clj-surgeon should grow general
+structural primitives and trustworthy feedback, not an expanding catalog of
+special cases that tries to outguess the caller. Give the agent a perfect lens
+over the real program representation; let the agent reason with it.
+
+The product standard is behavioral, not aspirational: give a clean agent a real
+task and inspect every command it uses. If it reaches for `rg` merely to obtain
+a line number, rereads source already proved by a receipt, guesses an invocation,
+or calls help for a documented route, the transcript is evidence of a product
+defect. We repair the CLI, help, skill, or contract and rerun the task in a fresh
+context until the shortest safe route is the obvious route.
+
+That standard is already measurable. In the final clean-context edit
+replication, the old workflow used 10 shell calls and 157,481 cumulative input
+tokens. The structural route used four calls—read the skill, `:cat :contains`,
+plan, apply—and 77,421 tokens, with an exact edit and a verified receipt. No
+`rg`, `sed`, outline preflight, help detour, Git probe, or post-apply reread.
+
+The end state is simple: agents should rarely need line-number choreography or
+text surgery for structural Clojure work. A `.clj` file should feel less like a
+blob to slice with `sed` and more like a live collection of addressable forms
+that can be queried, reasoned about, and transformed safely.
+
+The experiments, wrong turns, and clean-agent transcripts behind this vision
+are preserved in the
+[captain's log](docs/observations/2026-08-02-captains-log-the-file-became-a-structural-shell.md).
+
 ## Measured Performance
 
 In a planning session (writer, 5 files, ~5000 lines), two approaches explored the same codebase simultaneously — clj-surgeon outlines vs. Explore agents reading the files:
