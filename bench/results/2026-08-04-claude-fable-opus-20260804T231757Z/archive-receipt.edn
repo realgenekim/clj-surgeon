@@ -1,0 +1,4 @@
+{:retention-version 1
+ :archive "2026-08-04/2026-08-04-claude-fable-opus-20260804T231757Z.tar.gz"
+ :archive-sha256 "205f2ef3c583b11a648f47110beb595bb378456883a729c22c1ba795efacd340"
+ :git-content :structured-only}

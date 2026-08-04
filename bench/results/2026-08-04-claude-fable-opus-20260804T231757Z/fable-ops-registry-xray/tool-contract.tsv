@@ -1,0 +1,11 @@
+skill_loaded	true
+route_used	true
+separate_plan_apply	false
+tool_calls	2
+skill_calls	1
+xray_calls	1
+edit_plan_calls	0
+expect_edit_calls	0
+expect_mismatch_seen	false
+apply_calls	0
+true_one_shot	true

@@ -1,0 +1,8 @@
+requested_model	fable
+task	pair-view-expect-edit
+deadline_seconds	90
+max_budget_usd	2.00
+skill_file_sha256	33d3a018cfae6b1a6ff3a21e26572420960b7a54b3492eaeab0b08ff11ee801f
+skill_source_sha256	49b7a3852426d7f0f04334d74423961d30e785cd318b945ac998175752487a47
+cli_source_sha256	aac7a20a82e04aafc8a71db08c091e95f0b1995cad4920801b80bab52d6fa7d1
+workspace	/Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-20260804T231757Z/fable-pair-view-expect-edit/workspace

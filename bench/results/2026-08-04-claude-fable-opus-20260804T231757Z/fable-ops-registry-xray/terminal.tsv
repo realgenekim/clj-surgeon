@@ -1,0 +1,8 @@
+state	passed
+command_state	completed
+exit_code	0
+requested_model	fable
+resolved_model	claude-fable-5
+wall_ms	35389
+correct	true
+result_dir	/Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-20260804T231757Z/fable-ops-registry-xray

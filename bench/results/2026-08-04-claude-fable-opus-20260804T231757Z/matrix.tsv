@@ -1,0 +1,10 @@
+source_commit	396a92ccb851bb7825472cf57fbaff4a556e4dcc
+installed_skill	/Users/genekim/.claude/skills/clj-surgeon
+skill_file_sha256	33d3a018cfae6b1a6ff3a21e26572420960b7a54b3492eaeab0b08ff11ee801f
+skill_source_sha256	49b7a3852426d7f0f04334d74423961d30e785cd318b945ac998175752487a47
+immutable_cli_package	/Users/genekim/.local/share/clj-surgeon/versions/396a92ccb851bb7825472cf57fbaff4a556e4dcc/cli-aac7a20a82e04aafc8a71db08c091e95f0b1995cad4920801b80bab52d6fa7d1
+cli_source_sha256	aac7a20a82e04aafc8a71db08c091e95f0b1995cad4920801b80bab52d6fa7d1
+deadline_seconds	90
+requested_models	fable opus
+requested_tasks	ops-registry-xray pair-view-edit pair-view-expect-edit
+claude_version	2.1.219 (Claude Code)

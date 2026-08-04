@@ -1,0 +1,7 @@
+run_id	state	requested_model	resolved_model	wall_ms	correct
+fable-ops-registry-xray	passed	fable	claude-fable-5	35389	true
+fable-pair-view-edit	passed	fable	claude-fable-5	30339	true
+fable-pair-view-expect-edit	passed	fable	claude-fable-5	52579	true
+opus-ops-registry-xray	passed	opus	claude-opus-5	65174	true
+opus-pair-view-edit	passed	opus	claude-opus-5	29492	true
+opus-pair-view-expect-edit	passed	opus	claude-opus-5	34817	true
