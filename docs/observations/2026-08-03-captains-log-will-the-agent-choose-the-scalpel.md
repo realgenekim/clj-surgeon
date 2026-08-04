@@ -336,3 +336,10 @@ Three of four post agents used the ideal three-command sequence: read skill,
 plan, apply. One added a plan-path existence probe. The next small hill-climb is
 to state that a task-specific plan path needs no preflight: successful planning
 atomically replaces it, while any refusal preserves the existing artifact.
+
+The four-run guidance replication revealed a better explanation. Every agent
+used the correct first-source transform, but all four made two skill reads. The
+skill had grown to 241 lines; the standard first command read lines 1–240, then
+the agent fetched the final line. The product fix is not more edit guidance. It
+is a 240-line ceiling, now enforced by a permanent test so the complete skill
+fits in one standard read.

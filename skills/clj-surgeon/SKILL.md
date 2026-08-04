@@ -237,5 +237,4 @@ before moving or extracting forms, fixing declares, renaming namespaces, or
 performing CLJC operations. Those workflows have additional preview,
 dependency, and verification requirements.
 
-For every operation, stop on nonzero status or EDN `:error`. Format changed
-Clojure files before linting or testing.
+For every operation, stop on nonzero status or EDN `:error`. Format changed Clojure files before linting or testing.

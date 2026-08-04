@@ -49,8 +49,8 @@ apart from their requested plan paths. The same existing executor applies both
 plans.
 
 The pure and SCI tests pass 21 tests with 367 assertions. The CLI edit tests
-pass 11 tests with 153 assertions. The combined edit, help, and structural-lens
-suite passes 99 tests with 960 assertions. The tests cover these boundaries:
+pass 11 tests with 154 assertions. The combined edit, help, and structural-lens
+suite passes 99 tests with 961 assertions. The tests cover these boundaries:
 
 - broad pure Clojure collection and higher-order composition;
 - every structural builder;
@@ -65,6 +65,7 @@ suite passes 99 tests with 960 assertions. The tests cover these boundaries:
 - missing, conflicting, unsafe, multiple, and non-vector expressions;
 - refusal before source or plan I/O;
 - agent-facing help, README, vision, changelog, and both skills.
+- installed skill fits in one standard 240-line read.
 
 ## Stage B clean-agent result
 
