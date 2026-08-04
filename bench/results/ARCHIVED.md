@@ -33,7 +33,21 @@ housing (GCS bucket) is the intended follow-up home for these tarballs.
 ## Policy for future benchmark runs
 
 Harness runs may write full evidence locally, but commits keep only the
-structured files above; raw bulk is tarred to the archive before commit.
-Rationale: benchmark cadence produces multiple result trees per day;
-structured scores serve regression testing, while transcripts serve
-forensics and belong in an immutable archive, not the working tree.
+structured files above. For an in-repository result directory, both harnesses
+now archive and prune raw bulk automatically after scoring. Use
+`BENCH_RETENTION=local` only for temporary diagnosis; ignored raw files remain
+local and cannot be swept into a normal commit.
+
+For a completed result that predates automatic retention, run:
+
+```bash
+make retain-benchmark-result RESULT_DIR=bench/results/RESULT_NAME
+```
+
+`make verify-benchmark-retention` fails when Git tracks a transcript,
+workspace, prompt, final-answer file, or other raw bulk. `make test` runs that
+check and a no-service archive/prune self-test.
+
+Benchmark cadence produces multiple result trees per day. Structured scores
+serve regression testing; transcripts serve forensics and belong in an
+immutable archive, not the working tree.

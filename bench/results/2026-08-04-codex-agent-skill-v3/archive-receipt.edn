@@ -1,0 +1,4 @@
+{:retention-version 1
+ :archive "2026-08-04/2026-08-04-codex-agent-skill-v3.tar.gz"
+ :archive-sha256 "80434d51ca1cde9a7f0e3aac9c0385ef120460147a449cd1e737fd638c73afca"
+ :git-content :structured-only}

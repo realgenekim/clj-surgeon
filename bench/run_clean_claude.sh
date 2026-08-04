@@ -6,7 +6,7 @@ timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir=${CLAUDE_BENCH_RESULT_DIR:-$repo_root/bench/results/2026-08-04-claude-fable-opus-$timestamp}
 deadline_seconds=${CLAUDE_BENCH_DEADLINE_SECONDS:-90}
 models=${CLAUDE_BENCH_MODELS:-fable opus}
-tasks=${CLAUDE_BENCH_TASKS:-ops-registry-xray pair-view-edit}
+tasks=${CLAUDE_BENCH_TASKS:-ops-registry-xray pair-view-edit pair-view-expect-edit}
 
 now_ms() {
   perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000'
@@ -216,6 +216,9 @@ write_prompt() {
     pair-view-edit)
       printf '%s\n' 'Load and follow the installed clj-surgeon skill. In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment and every unrelated byte. Generate and review an :edit plan at plan.edn, then apply that plan in a separate shell command with :replace-subform!. Do not combine planning and application. Do not read the whole file. In the final answer, state whether the plan and apply both succeeded.' > "$destination"
       ;;
+    pair-view-expect-edit)
+      printf '%s\n' 'Load and follow the installed clj-surgeon skill. In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment and every unrelated byte. Complete the change with a single guarded edit call that declares the expected before-state so the tool itself refuses if your declaration is wrong; do not use a separate apply command. If the guard refuses, recover using the refusal'"'"'s evidence and finish with a corrected guarded call. Do not read the whole file. In the final answer, state whether your first declaration matched.' > "$destination"
+      ;;
     *)
       echo "Unknown Claude benchmark task: $task" >&2
       return 2
@@ -246,11 +249,17 @@ tool_call_contract() {
   local task=$2
   local skill_loaded=false route_used=false separate_plan_apply=false
   local tool_calls skill_calls xray_calls edit_plan_calls apply_calls true_one_shot=false
+  local expect_edit_calls expect_mismatch_seen=false
   tool_calls=$(jq -s 'length' "$run_dir/tool-calls.jsonl")
   skill_calls=$(jq -s '[.[] | select(.name == "Skill" and (.input | tostring | contains("clj-surgeon")))] | length' "$run_dir/tool-calls.jsonl")
   xray_calls=$(jq -s '[.[] | select(.name == "Bash" and ((.input.command // "") | contains(":op :xray")))] | length' "$run_dir/tool-calls.jsonl")
   edit_plan_calls=$(jq -s '[.[] | select(.name == "Bash" and ((.input.command // "") | test(":op :edit([^a-zA-Z!-]|$)")))] | length' "$run_dir/tool-calls.jsonl")
   apply_calls=$(jq -s '[.[] | select(.name == "Bash" and ((.input.command // "") | contains(":op :replace-subform!")))] | length' "$run_dir/tool-calls.jsonl")
+  expect_edit_calls=$(jq -s '[.[] | select(.name == "Bash" and ((.input.command // "") | test(":op :edit([^a-zA-Z!-]|$)")) and ((.input.command // "") | contains(":expect")))] | length' "$run_dir/tool-calls.jsonl")
+  if jq -e -s '[.. | objects | select(.type? == "tool_result") | tostring] | any(contains(":error-type :expect-mismatch"))' \
+    "$run_dir/raw.jsonl" >/dev/null 2>&1; then
+    expect_mismatch_seen=true
+  fi
   if jq -e 'select(.name == "Skill") | .input | tostring | contains("clj-surgeon")' \
     "$run_dir/tool-calls.jsonl" >/dev/null 2>&1; then
     skill_loaded=true
@@ -283,6 +292,18 @@ tool_call_contract() {
         true_one_shot=true
       fi
       ;;
+    pair-view-expect-edit)
+      # The guarded route is one :edit call carrying :expect and no separate
+      # apply; separate_plan_apply does not apply and stays false.
+      separate_plan_apply=false
+      if [ "$expect_edit_calls" -ge 1 ] && [ "$apply_calls" -eq 0 ]; then
+        route_used=true
+      fi
+      if [ "$expect_edit_calls" -eq 1 ] && [ "$apply_calls" -eq 0 ] \
+        && [ "$route_used" = true ]; then
+        true_one_shot=true
+      fi
+      ;;
   esac
   write_state "$run_dir/tool-contract.tsv" \
     skill_loaded "$skill_loaded" \
@@ -292,6 +313,8 @@ tool_call_contract() {
     skill_calls "$skill_calls" \
     xray_calls "$xray_calls" \
     edit_plan_calls "$edit_plan_calls" \
+    expect_edit_calls "$expect_edit_calls" \
+    expect_mismatch_seen "$expect_mismatch_seen" \
     apply_calls "$apply_calls" \
     true_one_shot "$true_one_shot"
 }
@@ -318,7 +341,7 @@ score_run() {
         source_unchanged=true
       fi
       ;;
-    pair-view-edit)
+    pair-view-edit|pair-view-expect-edit)
       if cmp -s "$run_dir/expected.clj" "$source_file"; then
         bytes_correct=true
       fi
@@ -453,4 +476,19 @@ manifest_stage="$result_dir/MANIFEST.sha256.tmp.$$"
 mv "$manifest_stage" "$result_dir/MANIFEST.sha256"
 
 printf '%s\n' "Claude benchmark receipts: $result_dir"
+case "${BENCH_RETENTION:-archive}" in
+  archive)
+    result_abs="$(cd "$(dirname "$result_dir")" && pwd -P)/$(basename "$result_dir")"
+    case "$result_abs" in
+      "$repo_root/bench/results/"*)
+        bash "$repo_root/bench/retain_benchmark_result.sh" "$result_abs"
+        ;;
+    esac
+    ;;
+  local) ;;
+  *)
+    echo "BENCH_RETENTION must be archive or local: ${BENCH_RETENTION}" >&2
+    exit 2
+    ;;
+esac
 exit "$matrix_exit"

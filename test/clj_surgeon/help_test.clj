@@ -264,6 +264,13 @@
     (is (str/includes? help "emits a plan and never writes source"))
     (is (str/includes? help "Apply the reviewed plan separately"))))
 
+(deftest edit-and-apply-help-do-not-teach-redundant-plan-rereads
+  (let [edit-help (core/format-op-help :edit (get core/ops-registry :edit))
+        apply-help (core/format-op-help :replace-subform!
+                                        (get core/ops-registry :replace-subform!))]
+    (is (str/includes? edit-help "do not reread the saved plan file"))
+    (is (str/includes? apply-help "do not reopen the saved plan"))))
+
 (deftest find-subform-help-teaches-one-shot-file-wide-structural-grep
   (let [help (core/format-op-help :find-subform
                                   (get core/ops-registry :find-subform))]

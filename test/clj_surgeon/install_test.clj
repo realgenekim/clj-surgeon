@@ -16,16 +16,16 @@
 (defn- run-make
   [& args]
   @(proc/process
-    (into ["make" "--no-print-directory"] args)
-    {:dir project-root
-     :err :string
-     :out :string}))
+     (into ["make" "--no-print-directory"] args)
+     {:dir project-root
+      :err :string
+      :out :string}))
 
 (defn- run-installed-cli
   [path & args]
   @(proc/process
-    (into ["bb" (str path)] args)
-    {:err :string :out :string}))
+     (into ["bb" (str path)] args)
+     {:err :string :out :string}))
 
 (defn- slurp-path
   [path]
@@ -59,6 +59,7 @@
                     ":op :replace-subform!"
                     "There is no variadic wildcard"
                     "(loop _ _)"
+                    "do not reopen the plan file"
                     "refuses"
                     ":verified"]]
     (is (str/includes? skill contract)
@@ -69,8 +70,8 @@
         claude-native (slurp ".claude/skills/clj-surgeon/SKILL.md")
         legacy (-> (slurp "skill.md")
                    (str/replace
-                    "[the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md)"
-                    "[references/advanced-operations.md](references/advanced-operations.md)"))]
+                     "[the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md)"
+                     "[references/advanced-operations.md](references/advanced-operations.md)"))]
     (testing "the native Claude package is byte-identical to the canonical package"
       (is (= canonical claude-native))
       (is (= (slurp-path canonical-reference-path)
@@ -104,7 +105,9 @@
       (doseq [target ["benchmark-codex-skill"
                       "benchmark-claude-skill"
                       "benchmark-agent-skills"
-                      "benchmark-agent-skills-self-test"]]
+                      "benchmark-agent-skills-self-test"
+                      "retain-benchmark-result"
+                      "verify-benchmark-retention"]]
         (is (str/includes? out target))))))
 
 (deftest benchmark-agent-skill-targets-are-bounded-and-composable

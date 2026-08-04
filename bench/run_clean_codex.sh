@@ -473,7 +473,7 @@ if [ "${BENCH_RESUME:-false}" != true ] && [ -f "$result_dir/runs.tsv" ]; then
 fi
 if [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -494,6 +494,9 @@ task_prompt() {
       ;;
     pair-view-edit)
       printf '%s' 'Load and follow the installed clj-surgeon skill. In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment and every unrelated byte. Generate and review an :edit plan at plan.edn, then apply that plan in a separate shell command with :replace-subform!. Do not combine planning and application. Do not read the whole file. In the final answer, state whether the plan and apply both succeeded.'
+      ;;
+    pair-view-expect-edit)
+      printf '%s' 'Load and follow the installed clj-surgeon skill. In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment and every unrelated byte. Complete the change with a single guarded edit call that declares the expected before-state so the tool itself refuses if your declaration is wrong; do not use a separate apply command. If the guard refuses, recover using the refusal'"'"'s evidence and finish with a corrected guarded call. Do not read the whole file. In the final answer, state whether your first declaration matched.'
       ;;
     computed-edit)
       printf '%s' 'In src/bench/policy.clj, add 100 to every number in the :retry-delays vector inside retry-policy. Preserve every unrelated byte, including the identical vector in unrelated-policy. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
@@ -536,7 +539,7 @@ target_for_task() {
     case-edit) printf '%s' 'src/bench/state.clj' ;;
     computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
-    case-inventory|cond-inventory|binding-inventory|pair-view-edit) printf '%s' 'src/bench/pair_view.clj' ;;
+    case-inventory|cond-inventory|binding-inventory|pair-view-edit|pair-view-expect-edit) printf '%s' 'src/bench/pair_view.clj' ;;
     xray-summary|xray-checksum) printf '%s' 'src/bench/xray.clj' ;;
     ops-registry-xray) printf '%s' 'src/bench/ops_registry.clj' ;;
   esac
@@ -562,7 +565,7 @@ prepare_workspace() {
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
       ;;
-    case-inventory|cond-inventory|binding-inventory|pair-view-edit)
+    case-inventory|cond-inventory|binding-inventory|pair-view-edit|pair-view-expect-edit)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
       ;;
     xray-summary|xray-checksum)
@@ -744,6 +747,7 @@ run_one() {
   local skill_read show_form grep_form ls_used help_used text_reader q_used xray_used partition_all_used
   local edit_used expr_used first_source_edit
   local plan_generated plan_applied chained_plan_apply plan_apply_separate verified
+  local expect_used expect_route separate_apply_seen
   skill_read=$(jq '[.[] | select(.command | contains("/skills/clj-surgeon/SKILL.md"))] | length > 0' "$run_dir/commands.json")
   show_form=$(jq '[.[] | select((.command | contains("clj-surgeon")) and ((.command | contains("show-form")) or (.command | test(":cat([^a-zA-Z]|$)"))))] | length > 0' "$run_dir/commands.json")
   grep_form=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("grep-form")))] | length > 0' "$run_dir/commands.json")
@@ -786,8 +790,35 @@ run_one() {
     plan_apply_separate=false
   fi
 
+  # The guarded one-call route: an :edit command carrying :expect, and no
+  # separate :replace-subform! apply anywhere in the run.
+  expect_used=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+    and (.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)"))
+    and (.command | contains(":expect"))
+    and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
+  separate_apply_seen=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+    and (.command | contains("replace-subform!"))
+    and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
+  if [ "$expect_used" = true ] && [ "$separate_apply_seen" = false ]; then
+    expect_route=true
+  else
+    expect_route=false
+  fi
+
   verified=false
-  if [[ "$task" == *-edit ]]; then
+  if [ "$task" = pair-view-expect-edit ]; then
+    # The guarded call is its own apply receipt: plan evidence and the
+    # :replace-subform! verification arrive in one command output.
+    verified=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+      and (.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)"))
+      and (.command | contains(":expect"))
+      and (.command | contains("--help") | not)
+      and ((.exit_code // 1) == 0)
+      and ((.aggregated_output // "") | contains(":verified"))
+      and ((.aggregated_output // "") | contains(":whole-file-parsed true"))
+      and ((.aggregated_output // "") | contains(":read-back-hash")))] | length > 0' \
+      "$run_dir/commands.json")
+  elif [[ "$task" == *-edit ]]; then
     verified=$(jq --arg target "$target_rel" '
       ([.[] | .command] | to_entries) as $commands
       | ($commands | map(select((.value | contains("clj-surgeon")) and (.value | contains("replace-subform!")) and (.value | contains("--help") | not))) | first | .key) as $apply
@@ -845,7 +876,7 @@ run_one() {
       fi
       diff -u "$setup_root/templates/state.clj" "$target" > "$run_dir/target.diff" || true
       ;;
-    pair-view-edit)
+    pair-view-edit|pair-view-expect-edit)
       if cmp -s "$target" "$setup_root/expected/pair-view-edit.clj"; then
         exact_correct=true
         correct=true
@@ -880,13 +911,14 @@ run_one() {
   fi
 
   local row
-  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
+  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$file_changes" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
     "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$xray_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
-    "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct"
+    "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
+    "$expect_used" "$expect_route"
   append_result_row "$run_id" "$row"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
@@ -926,7 +958,7 @@ run_one_with_receipt() (
 )
 
 order=0
-tasks=${BENCH_TASKS:-'named-form semantic-form structural-find case-edit'}
+tasks=${BENCH_TASKS:-'named-form semantic-form structural-find case-edit pair-view-expect-edit'}
 contexts=${BENCH_CONTEXTS:-'no-skill matched-skill explicit-no-skill'}
 include_compact=${BENCH_INCLUDE_COMPACT:-true}
 replicates=${BENCH_REPLICATES:-1}
@@ -1034,3 +1066,19 @@ fi
 
 printf '\nResults: %s\n' "$result_dir"
 printf 'Summary: %s\n' "$result_dir/summary.md"
+
+case "${BENCH_RETENTION:-archive}" in
+  archive)
+    result_abs="$(cd "$(dirname "$result_dir")" && pwd -P)/$(basename "$result_dir")"
+    case "$result_abs" in
+      "$repo_root/bench/results/"*)
+        bash "$repo_root/bench/retain_benchmark_result.sh" "$result_abs"
+        ;;
+    esac
+    ;;
+  local) ;;
+  *)
+    echo "BENCH_RETENTION must be archive or local: ${BENCH_RETENTION}" >&2
+    exit 2
+    ;;
+esac

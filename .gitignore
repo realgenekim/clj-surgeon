@@ -1,0 +1,19 @@
+# Benchmark harnesses emit complete local transcripts for diagnosis. The
+# retention command archives these files outside Git and commits only compact,
+# structured evidence. See bench/results/ARCHIVED.md.
+bench/results/**/events.jsonl
+bench/results/**/raw.jsonl
+bench/results/**/workspace/
+bench/results/**/prompt.txt
+bench/results/**/final.txt
+bench/results/**/stderr.txt
+bench/results/**/commands.json
+bench/results/**/started-items.json
+bench/results/**/command.txt
+bench/results/**/result.json
+bench/results/**/source.start.clj
+bench/results/**/source.diff
+bench/results/**/expected.clj
+bench/results/**/jq-errors.txt
+bench/results/**/tool-calls.jsonl
+bench/results/**/SKILL.md

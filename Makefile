@@ -13,7 +13,7 @@ VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
 CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
 SKILL_PACKAGE := $(VERSION_ROOT)/skill-$(SKILL_SOURCE_HASH)
 
-.PHONY: test outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl benchmark-clean-codex benchmark-harness-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test verify-benchmark-evidence
+.PHONY: test outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl benchmark-clean-codex benchmark-harness-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -31,6 +31,8 @@ help:
 	@echo "  make benchmark-claude-skill    Run the bounded 4-session Fable/Opus skill battery"
 	@echo "  make benchmark-agent-skills    Run both bounded clean-agent skill batteries"
 	@echo "  make benchmark-agent-skills-self-test Test both skill harnesses without model calls"
+	@echo "  make retain-benchmark-result RESULT_DIR=... Archive raw logs; retain structured evidence"
+	@echo "  make verify-benchmark-retention Refuse tracked raw benchmark logs"
 	@echo "  make verify-benchmark-evidence Verify archived evidence paths and hashes"
 	@echo ""
 	@echo "Installation overrides:"
@@ -233,7 +235,7 @@ benchmark-codex-skill:
 	BENCH_POST_COMMIT="$${BENCH_POST_COMMIT:-HEAD}" \
 	BENCH_VERSIONS="$${BENCH_VERSIONS:-post}" \
 	BENCH_CONTEXTS="$${BENCH_CONTEXTS:-matched-skill}" \
-	BENCH_TASKS="$${BENCH_TASKS:-ops-registry-xray pair-view-edit}" \
+	BENCH_TASKS="$${BENCH_TASKS:-ops-registry-xray pair-view-edit pair-view-expect-edit}" \
 	BENCH_INCLUDE_COMPACT="$${BENCH_INCLUDE_COMPACT:-false}" \
 	BENCH_REPLICATES="$${BENCH_REPLICATES:-1}" \
 	bash bench/run_clean_codex.sh
@@ -255,6 +257,16 @@ benchmark-agent-skills-self-test:
 	$(MAKE) benchmark-codex-skill-self-test
 	$(MAKE) benchmark-claude-skill-self-test
 
+retain-benchmark-result:
+	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
+	bash bench/retain_benchmark_result.sh "$(RESULT_DIR)"
+
+verify-benchmark-retention:
+	bash bench/retain_benchmark_result.sh --verify-tracked
+
+benchmark-retention-self-test:
+	bash bench/retain_benchmark_result.sh --self-test
+
 verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
@@ -265,6 +277,8 @@ test:
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
 	CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh
+	bash bench/retain_benchmark_result.sh --self-test
+	bash bench/retain_benchmark_result.sh --verify-tracked
 	bb bench/verify_evidence_manifest.clj --self-test
 	bb bench/verify_evidence_manifest.clj
 

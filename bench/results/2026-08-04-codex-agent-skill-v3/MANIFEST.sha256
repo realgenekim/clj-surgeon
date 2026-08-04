@@ -1,0 +1,12 @@
+48cb662483bb7b03ed9696609e32e6d7ee21a0c0cf551ffce354ca255651d475  ./01-r01-ops-registry-xray-matched-skill-post/commands.tsv
+38f1a883787a9d2bef9cd38a664c838e61a2b550de9f6a76d03ac319828c7168  ./01-r01-ops-registry-xray-matched-skill-post/final.sha256
+38f1a883787a9d2bef9cd38a664c838e61a2b550de9f6a76d03ac319828c7168  ./01-r01-ops-registry-xray-matched-skill-post/start.sha256
+c6f03f667ff4e3e8ead437430e1664bb2afe3daeca556198308d336e4e058eff  ./01-r01-ops-registry-xray-matched-skill-post/terminal.tsv
+8d8358c9da5b64b9af660c97f5cc3d18ac32dd847089210ff101f2c370822b64  ./03-r01-pair-view-edit-matched-skill-post/commands.tsv
+92582de872dd9ed7ac6bbc3414ccf93487efc33f44ffd91b9a11ab76d4ae4cdb  ./03-r01-pair-view-edit-matched-skill-post/final.sha256
+c193eaad8ed9c8d3664876a69f1cf1763804954fc1f2e0bf93715e123107a7c6  ./03-r01-pair-view-edit-matched-skill-post/start.sha256
+d2b19d523740b96d557953b726d7fdbc01834fe047423d3688b32765b5479c31  ./03-r01-pair-view-edit-matched-skill-post/target.diff
+4d38b7c1c675bb70ec476a5ab1780319f33da6ae06e7fc865446ffa0918013cd  ./03-r01-pair-view-edit-matched-skill-post/terminal.tsv
+b115a348f4bf98bfc5107e743b86f0d11d9b41bd25f7ee7bbf95b9237f78e30f  ./archive-receipt.edn
+988367fe6cda5740ef1c2cb0f61090304fbacd725c44dc7e21a5acb46d236bb0  ./runs.tsv
+267dd4612dfebb159eba8c91ea5c5588e98af7e9bd573e41988335361f90e39c  ./summary.md

@@ -37,6 +37,17 @@ without a model call with:
 make benchmark-agent-skills-self-test
 ```
 
+When a harness writes under `bench/results/`, it archives the complete result
+outside Git and retains only structured scores, receipts, usage, hashes, and
+summaries. Raw transcripts, prompts, final answers, and workspaces are ignored
+by Git. Set `BENCH_RETENTION=local` only when you need temporary local forensic
+files. For a completed older run, use:
+
+```bash
+make retain-benchmark-result RESULT_DIR=bench/results/RESULT_NAME
+make verify-benchmark-retention
+```
+
 The Claude self-test deliberately stalls one fake child and proves that the
 other success and failure receipts are emitted and preserved before that child
 hits its independent deadline.
