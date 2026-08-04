@@ -59,6 +59,8 @@ PATH="$setup_root/bin/post:$PATH" clj-surgeon --help >/dev/null
 
 git -C "$repo_root" show "$pre_commit:src/clj_surgeon/core.clj" \
   > "$setup_root/templates/core.clj"
+git -C "$repo_root" show "$post_commit:bench/fixtures/bench/pair_view.clj" \
+  > "$setup_root/templates/pair_view.clj"
 
 mkdir -p "$setup_root/expected"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :show-form \
@@ -107,6 +109,18 @@ PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :find-subform \
   :file "$setup_root/templates/structural.clj" \
   :match '(select-keys _ [:status :attempts])' \
   > "$setup_root/expected/structural.edn"
+PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :q \
+  :file "$setup_root/templates/pair_view.clj" \
+  :query '[[:form route-event] [:find case] :up :down :right :right [:partition-all 2]]' \
+  > "$setup_root/expected/case-inventory.edn"
+PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :q \
+  :file "$setup_root/templates/pair_view.clj" \
+  :query '[[:form classify-request] [:find (nil? actor)] [:partition-all 2]]' \
+  > "$setup_root/expected/cond-inventory.edn"
+PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :q \
+  :file "$setup_root/templates/pair_view.clj" \
+  :query '[[:form prepare-request] [:find let] :up :down :right :down [:partition-all 2]]' \
+  > "$setup_root/expected/binding-inventory.edn"
 bb -e "(require '[clojure.edn :as edn]) (let [r (edn/read-string (slurp \"$setup_root/expected/structural.edn\"))] (print (get-in r [:matches 0 :source])))" \
   > "$setup_root/expected/structural-1.clj"
 bb -e "(require '[clojure.edn :as edn]) (let [r (edn/read-string (slurp \"$setup_root/expected/structural.edn\"))] (print (get-in r [:matches 1 :source])))" \
@@ -117,7 +131,7 @@ perl -0pi -e 's/\(assoc state :status :done\)/\(assoc state :status :complete\)/
 
 if [ "${BENCH_RESUME:-false}" != true ] || [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\tpartition_all_used\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -136,6 +150,15 @@ task_prompt() {
     case-edit)
       printf '%s' 'In src/bench/state.clj, change only the :finish case result from (assoc state :status :done) to (assoc state :status :complete). Preserve every unrelated byte, including the similar expression in unrelated-finish. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
       ;;
+    case-inventory)
+      printf '%s' 'In src/bench/pair_view.clj, return every test/result pair in the case expression inside route-event, in source order, plus its optional default. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source "exact source or nil" :commands ["command summaries"]}.'
+      ;;
+    cond-inventory)
+      printf '%s' 'In src/bench/pair_view.clj, return every outer guard/result pair beginning with (nil? actor) in the cond expression inside classify-request, in source order. Keep the nested cond as one outer result; do not count its internal branches. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source nil :commands ["command summaries"]}.'
+      ;;
+    binding-inventory)
+      printf '%s' 'In src/bench/pair_view.clj, return every top-level binding name/initializer pair in the let binding vector inside prepare-request, in source order. Exclude later symbol uses and the returned map. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source nil :commands ["command summaries"]}.'
+      ;;
     *)
       echo "Unknown task: $task" >&2
       exit 2
@@ -148,6 +171,7 @@ target_for_task() {
     named-form|semantic-form) printf '%s' 'src/clj_surgeon/core.clj' ;;
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
+    case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
   esac
 }
 
@@ -164,6 +188,9 @@ prepare_workspace() {
       ;;
     case-edit)
       cp "$setup_root/templates/state.clj" "$workspace/src/bench/state.clj"
+      ;;
+    case-inventory|cond-inventory|binding-inventory)
+      cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
       ;;
   esac
 }
@@ -188,7 +215,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/compact-v2-clj-surgeon-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon/SKILL.md"
       ;;
-    no-skill|explicit-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -207,8 +234,9 @@ run_one() {
   local context=$2
   local task=$3
   local order=$4
+  local replicate=${5:-1}
   local run_id
-  run_id=$(printf '%02d-%s-%s-%s' "$order" "$task" "$context" "$version")
+  run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
   if [ "${BENCH_RESUME:-false}" = true ] \
     && awk -F '\t' -v id="$run_id" '$1 == id {found=1} END {exit !found}' "$result_dir/runs.tsv"; then
     printf '%-58s %s\n' "$run_id" 'already complete; skipping'
@@ -238,6 +266,18 @@ run_one() {
   task_prompt "$task" > "$run_dir/prompt.txt"
   if [ "$context" = 'explicit-no-skill' ]; then
     printf '%s\n' '' 'Use the installed clj-surgeon as your primary lens for Clojure source. Optimize for the fewest commands and least irrelevant output. Preserve a human review boundary before any write.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'choice-no-skill' ]; then
+    printf '%s\n' '' 'You may use ordinary shell readers and patch editing, or the installed clj-surgeon CLI. Choose whichever route you expect to be fastest, safest, and least wasteful; briefly explain the choice after completing the task.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'aware-no-skill' ]; then
+    printf '%s\n' '' 'The clj-surgeon CLI is installed and available.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'partition-hint-no-skill' ]; then
+    printf '%s\n' '' 'You may use ordinary shell readers and patch editing, or the installed clj-surgeon CLI. For sibling inventories, clj-surgeon has a [:partition-all 2] query step. Choose whichever route you expect to be fastest, safest, and least wasteful; briefly explain the choice after completing the task.' \
       >> "$run_dir/prompt.txt"
   fi
 
@@ -293,7 +333,7 @@ run_one() {
   total_tool_output_bytes=$(jq '[.[] | (.aggregated_output // "" | utf8bytelength)] | add // 0' \
     "$run_dir/commands.json")
 
-  local skill_read show_form grep_form ls_used help_used text_reader
+  local skill_read show_form grep_form ls_used help_used text_reader q_used partition_all_used
   local plan_generated plan_applied chained_plan_apply plan_apply_separate verified
   skill_read=$(jq '[.[] | select(.command | contains("/skills/clj-surgeon/SKILL.md"))] | length > 0' "$run_dir/commands.json")
   show_form=$(jq '[.[] | select((.command | contains("clj-surgeon")) and ((.command | contains("show-form")) or (.command | test(":cat([^a-zA-Z]|$)"))))] | length > 0' "$run_dir/commands.json")
@@ -303,6 +343,8 @@ run_one() {
   text_reader=$(jq --arg target "$target_rel" \
     '[.[] | select((.command | contains($target)) and (.command | test("(^|[ /])(sed|awk|head|tail|cat)( |$)")))] | length > 0' \
     "$run_dir/commands.json")
+  q_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":(q|lens)([^a-zA-Z]|$)")))] | length > 0' "$run_dir/commands.json")
+  partition_all_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("partition-all")))] | length > 0' "$run_dir/commands.json")
   plan_generated=$(jq '[.[] | select((.exit_code == 0)
     and (.command | contains("clj-surgeon"))
     and (((.command | contains("replace-subform")) and ((.command | contains("replace-subform!")) | not))
@@ -345,6 +387,18 @@ run_one() {
       exact_correct=$(bb -e "(require '[clojure.string :as str]) (let [s (slurp \"$run_dir/final.txt\")] (println (boolean (and (str/includes? s (slurp \"$setup_root/expected/structural-1.clj\")) (str/includes? s (slurp \"$setup_root/expected/structural-2.clj\")) (re-find #\"(?i)(found|match count)[^0-9]{0,40}2\" s)))))") || exact_correct=false
       correct=$(bb -e "(require '[clojure.string :as str]) (let [normalize #(str/replace % #\"\\s+\" \" \") s (normalize (slurp \"$run_dir/final.txt\")) a (normalize (slurp \"$setup_root/expected/structural-1.clj\")) b (normalize (slurp \"$setup_root/expected/structural-2.clj\"))] (println (boolean (and (str/includes? s a) (str/includes? s b) (re-find #\"(?i)(found|match count)[^0-9]{0,40}2\" s)))))") || correct=false
       ;;
+    case-inventory)
+      exact_correct=$(bb "$repo_root/bench/score_pair_inventory.clj" case "$setup_root/expected/case-inventory.edn" "$run_dir/final.txt" exact) || exact_correct=false
+      correct=$(bb "$repo_root/bench/score_pair_inventory.clj" case "$setup_root/expected/case-inventory.edn" "$run_dir/final.txt" normalized) || correct=false
+      ;;
+    cond-inventory)
+      exact_correct=$(bb "$repo_root/bench/score_pair_inventory.clj" cond "$setup_root/expected/cond-inventory.edn" "$run_dir/final.txt" exact) || exact_correct=false
+      correct=$(bb "$repo_root/bench/score_pair_inventory.clj" cond "$setup_root/expected/cond-inventory.edn" "$run_dir/final.txt" normalized) || correct=false
+      ;;
+    binding-inventory)
+      exact_correct=$(bb "$repo_root/bench/score_pair_inventory.clj" binding "$setup_root/expected/binding-inventory.edn" "$run_dir/final.txt" exact) || exact_correct=false
+      correct=$(bb "$repo_root/bench/score_pair_inventory.clj" binding "$setup_root/expected/binding-inventory.edn" "$run_dir/final.txt" normalized) || correct=false
+      ;;
     case-edit)
       if cmp -s "$target" "$setup_root/expected/state.clj"; then
         exact_correct=true
@@ -354,12 +408,12 @@ run_one() {
       ;;
   esac
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
-    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" \
+    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$partition_all_used" \
     "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
     >> "$result_dir/runs.tsv"
 
@@ -371,19 +425,18 @@ order=0
 tasks=${BENCH_TASKS:-'named-form semantic-form structural-find case-edit'}
 contexts=${BENCH_CONTEXTS:-'no-skill matched-skill explicit-no-skill'}
 include_compact=${BENCH_INCLUDE_COMPACT:-true}
+replicates=${BENCH_REPLICATES:-1}
+versions=${BENCH_VERSIONS:-'pre post'}
 
-for context in $contexts; do
-  for task in $tasks; do
-    order=$((order + 1))
-    if [ $((order % 2)) -eq 0 ]; then
-      run_one post "$context" "$task" "$order"
+for replicate in $(seq 1 "$replicates"); do
+  for context in $contexts; do
+    for task in $tasks; do
       order=$((order + 1))
-      run_one pre "$context" "$task" "$order"
-    else
-      run_one pre "$context" "$task" "$order"
-      order=$((order + 1))
-      run_one post "$context" "$task" "$order"
-    fi
+      for version in $versions; do
+        run_one "$version" "$context" "$task" "$order" "$replicate"
+        order=$((order + 1))
+      done
+    done
   done
 done
 
