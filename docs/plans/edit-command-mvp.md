@@ -91,7 +91,15 @@ refusal is using an edit-intent command without a terminal transformation.
 
 ### Clean context
 
-Give blank Codex the exact `case-edit` outcome in a neutral fixture:
+Give blank Codex three exact outcomes in neutral fixtures:
+
+- a `case` result with an identical expression in another form;
+- an outer `cond` result with an identical map in another form and a nested
+  `cond` that must stay one subtree;
+- a `let` initializer with an identical expression in another form and later
+  uses of the binding name.
+
+For each outcome, use these contexts:
 
 1. outcome only;
 2. only “The clj-surgeon CLI is installed and available”;

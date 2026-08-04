@@ -68,7 +68,7 @@
    :first-edit (percent :first-source-edit rows)
    :text-reader (percent :text-reader rows)
    :show-form (percent :show-form rows)
-   :plan-separate (when (= "case-edit" task)
+   :plan-separate (when (str/ends-with? task "-edit")
                     (percent :plan-apply-separate rows))})
 
 (defn markdown [runs]

@@ -103,8 +103,22 @@ make_edit_fixture() {
   } > "$destination"
 }
 
+make_peer_edit_fixture() {
+  local destination=$1
+  cp "$setup_root/templates/pair_view.clj" "$destination"
+  printf '%s\n' \
+    '' \
+    '(defn unrelated-public [resource]' \
+    '  {:decision :allow :reason :public})' \
+    '' \
+    '(defn unrelated-timeout [request defaults]' \
+    '  (or (:timeout-ms request) (:timeout-ms defaults)))' \
+    >> "$destination"
+}
+
 make_structural_fixture "$setup_root/templates/structural.clj"
 make_edit_fixture "$setup_root/templates/state.clj"
+make_peer_edit_fixture "$setup_root/templates/peer_edit.clj"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :find-subform \
   :file "$setup_root/templates/structural.clj" \
   :match '(select-keys _ [:status :attempts])' \
@@ -128,6 +142,12 @@ bb -e "(require '[clojure.edn :as edn]) (let [r (edn/read-string (slurp \"$setup
 cp "$setup_root/templates/state.clj" "$setup_root/expected/state.clj"
 perl -0pi -e 's/\(assoc state :status :done\)/\(assoc state :status :complete\)/' \
   "$setup_root/expected/state.clj"
+cp "$setup_root/templates/peer_edit.clj" "$setup_root/expected/cond-edit.clj"
+perl -0pi -e 's/\{:decision :allow :reason :public\}/\{:decision :allow :reason :public-resource\}/' \
+  "$setup_root/expected/cond-edit.clj"
+cp "$setup_root/templates/peer_edit.clj" "$setup_root/expected/binding-edit.clj"
+perl -0pi -e 's/\(or \(:timeout-ms request\) \(:timeout-ms defaults\)\)/\(or \(:timeout-ms request\) 5000\)/' \
+  "$setup_root/expected/binding-edit.clj"
 
 if [ "${BENCH_RESUME:-false}" != true ] || [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
@@ -150,6 +170,12 @@ task_prompt() {
     case-edit)
       printf '%s' 'In src/bench/state.clj, change only the :finish case result from (assoc state :status :done) to (assoc state :status :complete). Preserve every unrelated byte, including the similar expression in unrelated-finish. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
       ;;
+    cond-edit)
+      printf '%s' 'In src/bench/peer_edit.clj, change only the outer cond result paired with (:public? resource) inside classify-request from {:decision :allow :reason :public} to {:decision :allow :reason :public-resource}. Preserve every unrelated byte, including the identical map in unrelated-public and the nested cond. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
+      ;;
+    binding-edit)
+      printf '%s' 'In src/bench/peer_edit.clj, change only the timeout-ms initializer in the let binding vector inside prepare-request from (or (:timeout-ms request) (:timeout-ms defaults)) to (or (:timeout-ms request) 5000). Preserve every unrelated byte, including the identical expression in unrelated-timeout and later binding uses. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
+      ;;
     case-inventory)
       printf '%s' 'In src/bench/pair_view.clj, return every test/result pair in the case expression inside route-event, in source order, plus its optional default. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source "exact source or nil" :commands ["command summaries"]}.'
       ;;
@@ -171,6 +197,7 @@ target_for_task() {
     named-form|semantic-form) printf '%s' 'src/clj_surgeon/core.clj' ;;
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
+    cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
     case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
   esac
 }
@@ -188,6 +215,9 @@ prepare_workspace() {
       ;;
     case-edit)
       cp "$setup_root/templates/state.clj" "$workspace/src/bench/state.clj"
+      ;;
+    cond-edit|binding-edit)
+      cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
       ;;
     case-inventory|cond-inventory|binding-inventory)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
@@ -288,7 +318,7 @@ run_one() {
   local start_ms end_ms wall_ms exit_code sandbox
   start_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
   sandbox=read-only
-  [ "$task" = 'case-edit' ] && sandbox='workspace-write'
+  [[ "$task" == *-edit ]] && sandbox='workspace-write'
 
   set +e
   PATH="$bin_dir:$PATH" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
@@ -381,7 +411,7 @@ run_one() {
   fi
 
   verified=false
-  if [ "$task" = 'case-edit' ]; then
+  if [[ "$task" == *-edit ]]; then
     verified=$(jq --arg target "$target_rel" '
       ([.[] | .command] | to_entries) as $commands
       | ($commands | map(select((.value | contains("clj-surgeon")) and (.value | contains("replace-subform!")) and (.value | contains("--help") | not))) | first | .key) as $apply
@@ -426,6 +456,13 @@ run_one() {
         correct=true
       fi
       diff -u "$setup_root/templates/state.clj" "$target" > "$run_dir/target.diff" || true
+      ;;
+    cond-edit|binding-edit)
+      if cmp -s "$target" "$setup_root/expected/$task.clj"; then
+        exact_correct=true
+        correct=true
+      fi
+      diff -u "$setup_root/templates/peer_edit.clj" "$target" > "$run_dir/target.diff" || true
       ;;
   esac
 
