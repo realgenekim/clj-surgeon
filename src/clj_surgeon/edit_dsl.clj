@@ -46,7 +46,8 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down outermost span partition-all replace
-    replace-span transform xray xray-one compute aggregate inspect one all])
+    replace-span transform xray xray-one compute aggregate inspect one all
+    expect-count analyze])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -79,8 +80,8 @@
                     (str/starts-with? % "(transform")
                     (str/starts-with? % "(xray")))
        (into ["A path returns literal evidence."
-              "(one path pure-function)"
-              "(all path pure-function)"])))
+              "(expect-count path n)"
+              "(analyze path pure-function)"])))
 
 (def ^:private max-expression-characters 32768)
 (def ^:private max-xray-result-characters 65536)
@@ -243,6 +244,38 @@
   [path analyzer]
   (xray path analyzer))
 
+(defn expect-count
+  "Refine a selection path with one exact, non-negative match count."
+  [path n]
+  (validate-path path)
+  (when-not (and (integer? n) (not (neg? n)))
+    (throw (ex-info "Expected match count must be a non-negative integer"
+                    {:error-type :invalid-xray-cardinality
+                     :expected-count n})))
+  {:kind :selection
+   :query path
+   :expected-count n})
+
+(defn analyze
+  "Analyze a stable vector of selected values, optionally count-refined."
+  [selection analyzer]
+  (when-not (fn? analyzer)
+    (throw (ex-info "X-ray analyzer must be a function"
+                    {:error-type :invalid-xray-analyzer})))
+  (let [{:keys [query expected-count]}
+        (cond
+          (vector? selection) {:query (validate-path selection)}
+          (and (map? selection)
+               (= :selection (:kind selection))
+               (vector? (:query selection))) selection
+          :else (throw (ex-info "Analyze input must be a structural path"
+                                {:error-type :invalid-xray-path})))]
+    {:kind :xray
+     :query query
+     :analyzer analyzer
+     :expected-count expected-count
+     :input-shape :selected-values}))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -263,7 +296,9 @@
    'aggregate aggregate
    'inspect inspect
    'one one
-   'all all})
+   'all all
+   'expect-count expect-count
+   'analyze analyze})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -290,8 +325,8 @@
                     :allowed-symbol-count (count allowed-symbols)
                     :allowed-capabilities allowed-capabilities
                     :allowed-forms xray-expression-reference
-                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""
-                    :remedy "Return a path, or end it with one or all."}
+                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""
+                    :remedy "Return a path, or end it with analyze; add expect-count when cardinality must be exact."}
                    cause))))
 
 (defn- evaluate-expression
@@ -417,7 +452,7 @@
        :error-type :unsupported-arguments
        :unsupported unsupported
        :allowed (vec (sort xray-allowed-arguments))
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""}
 
       (not (contains? opts :expr))
       {:operation :xray
@@ -425,7 +460,7 @@
        :error "Supply :expr"
        :error-type :missing-xray-input
        :missing [:expr]
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""}
 
       (and (contains? opts :evidence)
            (not (#{:compact :full} evidence)))
@@ -508,7 +543,7 @@
 (defn- evaluate-computed-xray
   "Evaluate one read-only xray program against source. Pure: data in, EDN out."
   [source {:keys [expression xray evidence]}]
-  (let [{:keys [query analyzer cardinality input-shape]} xray
+  (let [{:keys [query analyzer cardinality input-shape expected-count]} xray
         found (structural-lens/evaluate-query source query)
         evidence-mode (or evidence :compact)
         evidence (-> (xray-evidence found evidence-mode)
@@ -517,7 +552,10 @@
                             :xray {:input-shape (or input-shape
                                                     :selected-values)
                                    :input-count (:match-count found)
-                                   :cardinality (or cardinality :any)
+                                   :cardinality (cond
+                                                  expected-count [:exactly expected-count]
+                                                  cardinality cardinality
+                                                  :else :any)
                                    :evidence evidence-mode}))]
     (cond
       (:error found)
@@ -528,6 +566,14 @@
                     (str "X-ray selection has " (:match-count found)
                          " matches; narrow it to at most "
                          structural-lens/query-result-limit))
+
+      (and expected-count
+           (not= expected-count (:match-count found)))
+      (-> (xray-refusal evidence expression :xray-cardinality-mismatch
+                        (str "X-ray expected exactly " expected-count
+                             " matches, found " (:match-count found)))
+          (assoc :expected-match-count expected-count
+                 :actual-match-count (:match-count found)))
 
       (and (= :one cardinality)
            (not= 1 (:match-count found)))

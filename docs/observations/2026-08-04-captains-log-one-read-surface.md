@@ -278,6 +278,83 @@ This is smaller than both previous pairs and directly answers the human
 question that rejected `compute` / `aggregate`. Compatibility aliases remain
 available during the test.
 
+## Candidate v5: `one` / `all` also lost
+
+The one-pair pilot favored `one` / `all` by 26%, with eight calls on both
+sides. The four-run gate rejected that attractive pilot:
+
+```text
+                              compute / aggregate    one / all
+correct                               4/4               4/4
+median wall                          63.0 s              89.1 s
+median shell calls                    7                  9
+median input tokens                 147,671            190,071
+median output tokens                  2,223              2,880
+```
+
+The cardinality words were human-readable and clean agents used them without
+syntax confusion. They did not improve the primary metric. This is the third
+warning against trying to solve a structural navigation bottleneck by renaming
+the analysis terminal.
+
+## Stop naming; define the algebra
+
+The next human question was more important: why have two terminals at all?
+Could the tool simply return either a singleton or a vector?
+
+It must not return an untagged dynamic union. One selected vector-valued form
+and two selected scalar forms can both be represented as `[1 2]`. A function
+cannot distinguish them. A query that broadens from one match to two would
+silently change the analyzer input type and could produce a plausible wrong
+answer.
+
+The first type sketch still had two eliminators. The stronger simplification is
+to keep the selection representation stable:
+
+```text
+select        : Path a -> Source -> Either Refusal (Selection a)
+Selection a   = ordered Vector a plus evidence
+expect-count  : Nat -> Selection a -> Either CardinalityError (SelectionN n a)
+analyze       : Selection a -> (Vector a -> b) -> Either AnalysisError b
+result        : Either Refusal (Evidence x ConcreteEDN b)
+```
+
+The laws are more important than the spelling:
+
+1. Never infer scalar versus vector from the runtime match count.
+2. Always pass a vector; one selected vector is `[[...]]`, never `[...]`.
+3. Validate any requested cardinality before invoking user computation without
+   changing the vector representation.
+4. Preserve source order for every selection.
+5. Never invoke the analyzer after truncation, parse failure, or cardinality
+   refusal.
+6. Require bounded concrete EDN output; keep evidence independent of the
+   computed value.
+7. Make writes unrepresentable in the X-ray program.
+
+Candidate v6 follows directly:
+
+```clojure
+(-> path (analyze f))
+(-> path (expect-count 1) (analyze (fn [[value]] ...)))
+```
+
+`analyze` is the only computation terminal. `expect-count` is an optional
+refinement in the compiled selection program. It checks cardinality before the
+function runs but never unwraps the selection. The LLM retains the semantic
+work of interpreting source data; the kernel retains parsing, source order,
+evidence, optional count validation, and fail-closed execution.
+
+The key example distinguishes the formerly ambiguous cases:
+
+```text
+one selected vector [1 2] -> analyzer input [[1 2]]
+two selected scalars 1, 2 -> analyzer input [1 2]
+```
+
+This is the Bitter Lesson boundary: make the substrate uniform and let the
+model interpret it. Do not ask the runtime to guess a sum type from cardinality.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

@@ -67,17 +67,17 @@
   (is (= [[:form 'load-starred-post :cljs]]
          (dsl/form 'load-starred-post :cljs))))
 
-(deftest one-xray-algebra-covers-literal-one-and-all
+(deftest one-xray-algebra-covers-literal-stable-selection-and-count-refinement
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
         computed (dsl/compile-xray
-                  "(-> (form 'data) (match :xs) right (one count))")
+                  "(-> (form 'data) (match :xs) right (expect-count 1) (analyze (fn [[xs]] (count xs))))")
         aggregated (dsl/compile-xray
-                    "(-> (form 'data) (match '_) (where {:tag :vector}) (all #(mapv count %)))")]
+                    "(-> (form 'data) (match '_) (where {:tag :vector}) (analyze #(mapv count %)))")]
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
-    (is (= :one (:cardinality computed)))
-    (is (= :selected-value (:input-shape computed)))
-    (is (= 2 ((:analyzer computed) [1 2])))
+    (is (= 1 (:expected-count computed)))
+    (is (= :selected-values (:input-shape computed)))
+    (is (= 2 ((:analyzer computed) [[1 2]])))
     (is (nil? (:cardinality aggregated)))
     (is (= [2 2] ((:analyzer aggregated) [[1 2] [3 4]])))
     (is (= :one (:cardinality (dsl/compute (dsl/form 'data) identity))))
@@ -116,7 +116,7 @@
         (is (= :invalid-xray-expression (:error-type error)))
         (is (= reason (:reason error)))
         (is (= expression (:expression error)))
-        (is (some #{"(one path pure-function)"} (:allowed-forms error)))
+        (is (some #{"(analyze path pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
 
 (deftest literal-xray-returns-full-structural-evidence
@@ -197,6 +197,37 @@
     (is (= [1 2] @seen))
     (is (= 3 (:value result)))
     (is (= :selected-value (get-in result [:xray :input-shape])))))
+
+(deftest expect-count-refines-cardinality-without-changing-analyzer-input
+  (let [seen (atom nil)
+        expression (str "(-> (form 'data) (match :xs) right "
+                        "(expect-count 1) (analyze identity))")
+        program (dsl/compile-xray expression)
+        result (dsl/evaluate-xray
+                source
+                {:expression expression
+                 :xray (assoc program :analyzer #(do (reset! seen %) %))})]
+    (is (= [[1 2]] @seen))
+    (is (= [[1 2]] (:value result)))
+    (is (= [:exactly 1] (get-in result [:xray :cardinality])))
+    (is (= :selected-values (get-in result [:xray :input-shape]))))
+  (let [calls (atom 0)
+        program (-> (dsl/form 'data)
+                    (dsl/match '_)
+                    (dsl/where {:tag :vector})
+                    (dsl/expect-count 1)
+                    (dsl/analyze #(swap! calls inc)))
+        result (dsl/evaluate-xray source {:expression "refusal"
+                                          :xray program})]
+    (is (= :xray-cardinality-mismatch (:error-type result)))
+    (is (= 1 (:expected-match-count result)))
+    (is (= 2 (:actual-match-count result)))
+    (is (zero? @calls)))
+  (let [error (try
+                (dsl/expect-count (dsl/form 'data) -1)
+                nil
+                (catch Exception exception (ex-data exception)))]
+    (is (= :invalid-xray-cardinality (:error-type error)))))
 
 (deftest compact-evidence-preserves-provenance-without-repeating-source
   (let [query [[:form 'data] [:find :ys] :right]
@@ -488,8 +519,8 @@
       (testing (str surface " teaches computed aggregation and exact-one input")
         (let [text (get surfaces surface)]
           (is (str/includes? text "frequencies"))
-          (is (str/includes? text "(one") surface)
-          (is (re-find #"(?:`all`|\(all )" text) surface))))
+          (is (str/includes? text "analyze") surface)
+          (is (str/includes? text "expect-count") surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

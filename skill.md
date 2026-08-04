@@ -64,14 +64,16 @@ preserves them in the file. Compose `form`, `match`, `where`, and navigation
 builders. `_` matches one subtree. A plain path reports zero, one, or many
 matches and a count trace.
 
-End the path with `one` for one value or `all` for many:
+End the path with `analyze`; its function always receives a selection vector.
+Add `expect-count` when cardinality must be exact:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (one #(frequencies (map :category %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (expect-count 1) (analyze (fn [[events]] (frequencies (map :category events)))))"
 ```
 
-`one` receives one value and refuses zero or many. `all` receives a vector.
+`analyze` receives a vector for zero, one, or many matches. `expect-count`
+refuses before analysis and never changes that vector type.
 Computed `:value` has compact hash evidence; a plain path returns full
 source. Values are parsed syntax, not evaluated code: a selected `def` is the
 whole list. Return concrete EDN, not a lazy sequence. It never writes. In CLJC,

@@ -143,12 +143,13 @@ does not gain an interpreter.
 
 The read-only surface is `:xray :expr`. A plain Clojure path such as
 `(-> (form 'transition) (match :finish) right)` returns exact literal source
-evidence. `(one path pure-function)` refuses zero or many and receives one
-value; `(all path pure-function)` receives a selection vector. Computed results
-return bounded EDN `:value` with compact addresses, ranges, trace, cardinality,
-and hashes. Computation never replaces evidence. X-ray never writes source or a
-plan. Former read spellings remain compatibility inputs while the unified
-surface is tested.
+evidence. `(analyze path pure-function)` always passes an ordered selection
+vector, including for zero or one match. `(expect-count path n)` refines
+cardinality without changing that input representation and refuses before
+analysis. Computed results return bounded EDN `:value` with compact addresses,
+ranges, trace, cardinality, and hashes. Computation never replaces evidence.
+X-ray never writes source or a plan. Former spellings remain compatibility
+inputs while the unified surface is tested.
 
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and

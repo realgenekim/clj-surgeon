@@ -267,17 +267,18 @@ clj-surgeon :op :xray :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right)"
 ```
 
-End the same path with `one` when exactly one selected value determines a
-derived answer:
+End the same path with `analyze` to derive an answer from the ordered selection
+vector. Add `expect-count` when cardinality must be exact:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (one #(frequencies (map :category %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (expect-count 1) (analyze (fn [[events]] (frequencies (map :category events)))))"
 ```
 
-`one` refuses zero or many matches before calling the function and passes the
-selected Clojure value directly. Use `all` for a vector of zero, one, or many
-selected values in query order.
+`analyze` always passes a vector of zero, one, or many selected values in query
+order. `expect-count` refuses before calling the function and does not change
+that input type. Therefore one selected vector is `[[...]]`, which remains
+distinct from multiple selected scalar forms.
 
 The value is parsed source syntax, not evaluated program state. Selecting a
 `def` returns its complete defining list; selecting `(hash-map :a 1)` returns a
