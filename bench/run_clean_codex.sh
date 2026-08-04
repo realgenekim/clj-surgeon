@@ -516,14 +516,20 @@ run_one() {
       ;;
   esac
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  local row lock_dir
+  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$file_changes" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
     "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$xray_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
-    "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
-    >> "$result_dir/runs.tsv"
+    "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct"
+  lock_dir="$result_dir/.runs-lock"
+  until mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.05
+  done
+  printf '%s\n' "$row" >> "$result_dir/runs.tsv"
+  rmdir "$lock_dir"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
     "$run_id" "$correct" "$wall_ms" "$input_tokens" "$shell_calls"
@@ -535,13 +541,37 @@ contexts=${BENCH_CONTEXTS:-'no-skill matched-skill explicit-no-skill'}
 include_compact=${BENCH_INCLUDE_COMPACT:-true}
 replicates=${BENCH_REPLICATES:-1}
 versions=${BENCH_VERSIONS:-'pre post'}
+parallelism=${BENCH_PARALLELISM:-4}
+active_pids=()
+
+if ! [[ "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
+  echo "BENCH_PARALLELISM must be a positive integer: $parallelism" >&2
+  exit 2
+fi
+
+schedule_run() {
+  run_one "$@" &
+  active_pids+=("$!")
+  if [ "${#active_pids[@]}" -ge "$parallelism" ]; then
+    wait "${active_pids[0]}"
+    active_pids=("${active_pids[@]:1}")
+  fi
+}
+
+wait_for_runs() {
+  local pid
+  for pid in "${active_pids[@]}"; do
+    wait "$pid"
+  done
+  active_pids=()
+}
 
 for replicate in $(seq 1 "$replicates"); do
   for context in $contexts; do
     for task in $tasks; do
       order=$((order + 1))
       for version in $versions; do
-        run_one "$version" "$context" "$task" "$order" "$replicate"
+        schedule_run "$version" "$context" "$task" "$order" "$replicate"
         order=$((order + 1))
       done
     done
@@ -552,10 +582,12 @@ if [ "$include_compact" = true ]; then
   for compact_context in compact-skill compact-v2-skill; do
     for task in $tasks; do
       order=$((order + 1))
-      run_one post "$compact_context" "$task" "$order"
+      schedule_run post "$compact_context" "$task" "$order"
     done
   done
 fi
+
+wait_for_runs
 
 bb "$repo_root/bench/summarize_clean_codex.clj" "$result_dir/runs.tsv" \
   > "$result_dir/summary.md"

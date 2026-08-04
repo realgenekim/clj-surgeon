@@ -7,12 +7,14 @@ make benchmark-clean-codex
 ```
 
 The run starts 32 ephemeral Codex sessions and can consume substantial tokens.
-Override the pinned defaults only when intentionally creating a separate
-benchmark series:
+It runs four sessions in parallel by default. Set `BENCH_PARALLELISM=1` only
+when a serial control is intentional. Override the pinned defaults only when
+intentionally creating a separate benchmark series:
 
 ```bash
 BENCH_MODEL=gpt-5.6-sol \
 BENCH_REASONING=medium \
+BENCH_PARALLELISM=4 \
 BENCH_RESULT_DIR=/tmp/clj-surgeon-benchmark \
 make benchmark-clean-codex
 ```
