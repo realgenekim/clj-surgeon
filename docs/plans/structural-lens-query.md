@@ -1,6 +1,6 @@
 # Structural Lens Query Hill Climb
 
-**Status:** Single-node lens validated; sibling-span v2 experiment in progress
+**Status:** Complete — single-node and sibling-span paths validated in clean context
 
 **Rollback tag:** `lens-hillclimb-v0-baseline`
 
@@ -273,3 +273,11 @@ separate verified apply. It used no preliminary read, text search, outline,
 help, Git probe, or reread; the internal comment and unrelated duplicate both
 survived. Its only critique was that the generic executor receipt did not name
 the planned span operation, so receipts now include `:planned-operation`.
+
+The adjacent automated case-edit replication was exact and verified on both
+sides. Including the skill read, the baseline used 4 shell calls and 77,320
+cumulative input tokens; the lens used 3 calls and 63,514 tokens. Uncached input
+fell 17,160 → 15,386 and source output 1,602 → 1,380 bytes. The post run was
+slower (42.3s versus 33.3s), so completion claims only the measured call/context
+reduction. Evidence SHA-256:
+`a23fbda2540f856e13866018cb5909d43d27eb76a1e494e963246a955c5d15c7`.

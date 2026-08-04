@@ -305,7 +305,7 @@ run_one() {
     "$run_dir/commands.json")
   plan_generated=$(jq '[.[] | select((.exit_code == 0)
     and (.command | contains("clj-surgeon"))
-    and ((.command | contains("replace-subform") and (.command | contains("replace-subform!") | not))
+    and (((.command | contains("replace-subform")) and ((.command | contains("replace-subform!")) | not))
          or ((.command | test(":(q|lens)([^a-zA-Z]|$)")) and (.command | contains("[:replace"))))
     and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   plan_applied=$(jq '[.[] | select((.exit_code == 0) and (.command | contains("clj-surgeon")) and (.command | contains("replace-subform!")) and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")

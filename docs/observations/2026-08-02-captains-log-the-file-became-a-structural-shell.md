@@ -282,3 +282,18 @@ is the immutable edit buffer, and apply is explicit consent fenced by hashes.
 It feels Unix-native because the commands are small and pipe-shaped, jq-native
 because paths are also updaters, and Clojure-native because no syntax needs to
 pretend it is text or a wrapper form that does not exist.
+
+The final adjacent Codex replication quantified the single-node version of the
+same win. Both baseline and lens sessions were exact, kept plan and apply
+separate, and returned verified receipts. The prior skill route used four shell
+calls including its skill read, 77,320 cumulative input tokens, 17,160 uncached
+input tokens, and 1,602 source-output bytes. The lens route used three calls
+including its skill read—one `q` plan and one apply—63,514 cumulative input,
+15,386 uncached input, and 1,380 source-output bytes. Wall time regressed from
+33.3 to 42.3 seconds in this one pair, so no latency claim is warranted. The
+durable result is one fewer mechanical call and 13,806 fewer context tokens
+without surrendering a judgment boundary.
+
+Raw evidence is in `/tmp/clj-surgeon-lens-final-20260803`; the SHA-256 of
+`runs.tsv` is
+`a23fbda2540f856e13866018cb5909d43d27eb76a1e494e963246a955c5d15c7`.

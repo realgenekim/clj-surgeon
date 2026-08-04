@@ -83,6 +83,16 @@ tokens. The structural route used four calls—read the skill, `:cat :contains`,
 plan, apply—and 77,421 tokens, with an exact edit and a verified receipt. No
 `rg`, `sed`, outline preflight, help detour, Git probe, or post-apply reread.
 
+The jq-like lens shaved the remaining mechanical bridge in an adjacent clean
+Codex replication. Both versions made the exact edit with separate planning,
+verified apply, and no textual fallback. The previous paved road used four
+shell calls including the skill read (`cat → plan → apply`), 77,320 cumulative
+input tokens, and 1,602 source-output bytes. The lens route used three calls
+including the skill read (`q plan → apply`), 63,514 input tokens, and 1,380
+source-output bytes. Uncached input fell from 17,160 to 15,386. This single-pair
+run was slower in wall time (33.3s versus 42.3s), so the claim is fewer calls
+and less context—not a speedup.
+
 The end state is simple: agents should rarely need line-number choreography or
 text surgery for structural Clojure work. A `.clj` file should feel less like a
 blob to slice with `sed` and more like a live collection of addressable forms
