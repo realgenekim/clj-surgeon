@@ -22,6 +22,7 @@
    [:where {:parent-tag :TAG}]
    :right :left :up :down
    [:span 'POSITIVE-COUNT]
+   [:partition-all 'POSITIVE-COUNT]
    [:replace 'FORM]
    [:replace-span 'FORM 'FORM]])
 
@@ -213,24 +214,40 @@
             (invalid-query! "[:span N] requires a positive integer and must end a read or immediately precede [:replace-span ...]"
                             {:step-index index :step step})))
 
+        (= :partition-all (first step))
+        (let [terminal-index (if (and allow-transform?
+                                      (vector? (last parsed))
+                                      (= :replace-span (first (last parsed))))
+                               (- (count parsed) 2)
+                               (dec (count parsed)))]
+          (when-not (and (= 2 (count step))
+                         (integer? (second step))
+                         (pos? (second step))
+                         (= index terminal-index))
+            (invalid-query! "[:partition-all N] requires a positive integer and must end a read or immediately precede [:replace-span ...]"
+                            {:step-index index :step step})))
+
         (= :replace (first step))
         (let [previous (when (pos? index) (nth parsed (dec index)))]
           (when-not (and (= 2 (count step))
                          (not (and (vector? previous)
-                                   (= :span (first previous)))))
+                                   (#{:span :partition-all}
+                                    (first previous)))))
             (invalid-query! "[:replace FORM] requires exactly one node selection and one replacement form"
                             {:step-index index :step step})))
 
         (= :replace-span (first step))
-        (let [span-step (when (pos? index) (nth parsed (dec index)))
-              span-count (when (and (vector? span-step)
-                                    (= :span (first span-step)))
-                           (second span-step))
+        (let [selection-step (when (pos? index) (nth parsed (dec index)))
+              selection-op (when (vector? selection-step)
+                             (first selection-step))
+              span-count (when (= :span selection-op)
+                           (second selection-step))
               replacement-count (dec (count step))]
-          (when-not (and span-count (pos? replacement-count))
-            (invalid-query! "[:replace-span FORM ...] must immediately follow [:span N] and contain replacement forms"
+          (when-not (and (#{:span :partition-all} selection-op)
+                         (pos? replacement-count))
+            (invalid-query! "[:replace-span FORM ...] must immediately follow [:span N] or [:partition-all N] and contain replacement forms"
                             {:step-index index :step step}))
-          (when (not= span-count replacement-count)
+          (when (and span-count (not= span-count replacement-count))
             (throw (ex-info (str "Span contains " span-count
                                  " forms but replacement contains " replacement-count)
                             {:error-type :span-arity-mismatch
@@ -273,6 +290,25 @@
            :zlocs zlocs
            :address (:address (first items))
            :addresses (mapv :address items)})))))
+
+(defn- semantic-partitions [{:keys [by-location]} {:keys [zloc]} size]
+  (->> (iterate z/right zloc)
+    (take-while some?)
+    (partition-all size)
+    (map-indexed
+      (fn [index zlocs]
+        (let [zlocs (vec zlocs)
+              items (mapv #(get by-location (location-key %)) zlocs)]
+          (when (every? some? items)
+            {:kind :span
+             :zloc (first zlocs)
+             :zlocs zlocs
+             :address (:address (first items))
+             :addresses (mapv :address items)
+             :partition {:size size
+                         :index index
+                         :complete? (= size (count zlocs))}}))))
+    (keep identity)))
 
 (defn- raw-span-source [zlocs]
   (let [end-key (location-key (last zlocs))]
@@ -356,14 +392,26 @@
       (filter #(where-match? (:zloc %) (second step)) items)
 
       (= :span (first step))
-      (keep #(semantic-span {:by-location by-location} % (second step)) items))))
+      (keep #(semantic-span {:by-location by-location} % (second step)) items)
 
-(defn- query-match [top-levels {:keys [address addresses kind zloc zlocs]}]
+      (= :partition-all (first step))
+      (mapcat #(semantic-partitions {:by-location by-location}
+                                    % (second step))
+              items))))
+
+(defn- query-match
+  [top-levels {:keys [address addresses kind partition zloc zlocs]}]
   (let [{:keys [row]} (meta (z/node zloc))
         {end-row :end-row} (meta (z/node (or (last zlocs) zloc)))
         owner (enclosing-form-name top-levels zloc)]
     (cond-> {:path (cond-> (semantic-path zloc owner)
-                     (= :span kind) (conj {:span {:count (count zlocs)}}))
+                     (= :span kind)
+                     (conj (if partition
+                             {:partition-all
+                              {:size (:size partition)
+                               :index (:index partition)
+                               :count (count zlocs)}}
+                             {:span {:count (count zlocs)}})))
              :tag (if (= :span kind) :span (z/tag zloc))
              :address (if (= :span kind)
                         {:preorders addresses}
@@ -374,6 +422,7 @@
       (= :span kind) (assoc :count (count zlocs)
                             :forms (mapv z/string zlocs)
                             :gaps (span-gaps zlocs))
+      partition (assoc :partition partition)
       owner (assoc :inside owner))))
 
 (defn- query-error-result [source query exception]
@@ -386,7 +435,8 @@
           :source-hash (source-hash source)}
          (select-keys (ex-data exception)
                       [:step-index :step :step-count :max-query-steps
-                       :supported-query-steps])))
+                       :supported-query-steps :span-count
+                       :replacement-count])))
 
 (defn evaluate-query
   "Evaluate a read-only EDN zipper pipeline against source. Pure: source and
@@ -647,7 +697,18 @@
                             :selection-query selection-query
                             :expected-match-count 1}]
               (if (= :replace-span (first transform))
-                (build-span-plan source found selector replacement-sources file)
+                (let [span-count (get-in found [:matches 0 :count])
+                      replacement-count (count replacement-sources)]
+                  (if (not= span-count replacement-count)
+                    (assoc found
+                           :error (str "Span contains " span-count
+                                       " forms but replacement contains "
+                                       replacement-count)
+                           :error-type :span-arity-mismatch
+                           :span-count span-count
+                           :replacement-count replacement-count)
+                    (build-span-plan source found selector
+                                     replacement-sources file)))
                 (build-replacement-plan source found selector
                                         (first replacement-sources) file
                                         {:query-trace (:trace found)})))))))

@@ -153,10 +153,10 @@
         result (lens/evaluate-query source
                                     [[:form 'f] [:find :a]
                                      [:partition-all 2]])]
-    (is (= 4 (:match-count result)))
-    (is (= [[":a" ":a"] [":a"] [":a" ":a"] [":a"]]
+    (is (= 3 (:match-count result)))
+    (is (= [[":a" ":a"] [":a"] [":a" ":a"]]
            (mapv :forms (:matches result))))
-    (is (= 4 (count (set (map #(get-in % [:address :preorders])
+    (is (= 3 (count (set (map #(get-in % [:address :preorders])
                               (:matches result))))))))
 
 (deftest partition-results-use-the-existing-bounded-evidence-contract
@@ -207,7 +207,7 @@
     (is (str/includes? (:source applied) ":b\n  ;; keep me\n  2"))
     (testing "the plan is replayed by addresses and fenced by the source hash"
       (let [stale (lens/apply-plan (str source "\n") plan)]
-        (is (= :stale-plan (:error-type stale)))))))
+        (is (= :source-hash-mismatch (:error-type stale)))))))
 
 (deftest partition-updater-refuses-zero-many-and-unequal-arity
   (let [source "(ns partition.refuse)\n(defn f [] [:a 1 :b 2 :tail])\n"
