@@ -1,17 +1,63 @@
 (ns clj-surgeon.edit-dsl
   "Pure Clojure builders for clj-surgeon's existing structural query data."
   (:refer-clojure :exclude [partition-all replace])
-  (:require [sci.core :as sci]))
+  (:require
+   [clojure.string :as str]
+   [sci.core :as sci]))
 
 (def ^:private terminal-steps
   #{:replace :replace-span})
 
-(def ^:private allowed-symbols
-  '[-> quote form match where right left up down span partition-all replace
-    replace-span])
+(def pure-core-symbols
+  '[* + - / < <= = == > >=
+    and or not boolean true? false? nil? some?
+    bit-and bit-or bit-xor bit-not bit-shift-left bit-shift-right
+    inc dec max min mod quot rem zero? pos? neg? even? odd? number? integer?
+    int? nat-int? pos-int? neg-int? ratio? rational? float? decimal?
+    compare comparator hash
+    -> ->> as-> some-> some->> cond-> cond->>
+    if if-let if-some when when-not when-let when-some cond condp case
+    let let* fn fn* quote do
+    identity constantly comp complement partial juxt fnil every-pred some-fn
+    apply
+    vector vec list list* hash-map array-map sorted-map sorted-map-by
+    hash-set sorted-set sorted-set-by set
+    conj cons disj pop peek subvec concat into merge merge-with select-keys
+    assoc assoc-in dissoc update update-in
+    seq first ffirst nfirst second fnext next rest last butlast nth nthnext
+    nthrest get get-in find contains? keys vals count empty empty? not-empty
+    seq? sequential? associative? coll? counted? indexed? reversible? map?
+    vector? set? list? map-entry?
+    map mapv mapcat filter filterv remove keep keep-indexed map-indexed
+    reduce reduce-kv reductions transduce sequence eduction
+    take take-last take-nth take-while drop drop-last drop-while split-at
+    split-with partition partition-by interleave interpose flatten distinct
+    dedupe sort sort-by group-by frequencies zipmap
+    some every? not-every? not-any?
+    range
+    str subs format name namespace keyword symbol simple-symbol?
+    simple-keyword? qualified-symbol? qualified-keyword?
+    pr-str print-str println-str
+    meta with-meta vary-meta
+    re-pattern re-find re-matches re-seq
+    clojure.core/partition-all clojure.core/replace])
 
-(def ^:private allowed-call-symbols
-  (set (remove #{'quote} allowed-symbols)))
+(def ^:private builder-symbols
+  '[form match where right left up down span partition-all replace replace-span])
+
+(def ^:private allowed-symbols
+  (vec (distinct (concat pure-core-symbols builder-symbols))))
+
+(def ^:private allowed-capabilities
+  [:pure-control
+   :collection-construction
+   :collection-navigation
+   :collection-transformation
+   :higher-order-functions
+   :predicates
+   :numbers-and-strings
+   :metadata
+   :structural-builders])
 
 (def ^:private expression-reference
   ["(form name)"
@@ -131,43 +177,10 @@
                     :reason reason
                     :expression expression
                     :allowed-symbols allowed-symbols
+                    :allowed-capabilities allowed-capabilities
                     :allowed-forms expression-reference
-                    :remedy "Use one thread-first expression made only from the allowed forms."}
+                    :remedy "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector."}
                    cause))))
-
-(declare validate-expression-form!)
-
-(defn- validate-sequential-values!
-  [expression values]
-  (doseq [value values]
-    (validate-expression-form! expression value)))
-
-(defn- validate-expression-form!
-  [expression form]
-  (cond
-    (seq? form)
-    (let [operator (first form)]
-      (cond
-        (= 'quote operator)
-        (when-not (= 2 (count form))
-          (invalid-expression! expression :unsupported-form))
-
-        (contains? allowed-call-symbols operator)
-        (validate-sequential-values! expression (rest form))
-
-        :else
-        (invalid-expression! expression :unsupported-form)))
-
-    (symbol? form)
-    (when-not (contains? allowed-call-symbols form)
-      (invalid-expression! expression :unsupported-symbol))
-
-    (map? form)
-    (validate-sequential-values! expression (mapcat identity form))
-
-    (coll? form)
-    (validate-sequential-values! expression form))
-  form)
 
 (defn compile-query
   "Compile one capability-limited Clojure expression into query-vector data."
@@ -179,15 +192,15 @@
   (let [context (sci/init {:namespaces {'user sci-bindings}
                            :classes {}
                            :allow allowed-symbols})
-        reader (sci/reader expression)]
+        reader (sci/reader expression)
+        user-ns (sci/create-ns 'user)]
     (try
       (let [form (sci/parse-next context reader)
             trailing (sci/parse-next context reader)]
         (when (or (= :sci.core/eof form)
                   (not= :sci.core/eof trailing))
           (invalid-expression! expression :expected-one-form))
-        (validate-expression-form! expression form)
-        (let [query (sci/eval-form context form)]
+        (let [query (:val (sci/eval-string+ context expression {:ns user-ns}))]
           (when-not (vector? query)
             (invalid-expression! expression :query-must-be-vector))
           query))
@@ -195,4 +208,47 @@
         (if (= :invalid-edit-expression
                (:error-type (ex-data exception)))
           (throw exception)
-          (invalid-expression! expression :evaluation-failed exception))))))
+          (invalid-expression! expression
+                               (if (or (str/includes? (.getMessage exception)
+                                                      "is not allowed")
+                                       (str/includes? (.getMessage exception)
+                                                      "Unable to resolve symbol"))
+                                 :disallowed-symbol
+                                 :evaluation-failed)
+                               exception))))))
+
+(defn prepare-edit-options
+  "Compile :expr into :query or return a structured one-of-input refusal."
+  [{:keys [file expr] :as opts}]
+  (let [provided (->> [:expr :query]
+                      (filter #(contains? opts %))
+                      vec)]
+    (cond
+      (= 2 (count provided))
+      {:operation :edit
+       :file file
+       :error "Supply exactly one of :query and :expr"
+       :error-type :edit-input-conflict
+       :provided provided
+       :required-one-of [:query :expr]}
+
+      (empty? provided)
+      {:operation :edit
+       :file file
+       :error "Supply exactly one of :query and :expr"
+       :error-type :missing-edit-input
+       :provided provided
+       :required-one-of [:query :expr]}
+
+      (= [:expr] provided)
+      (try
+        (-> opts
+            (dissoc :expr)
+            (assoc :query (compile-query expr)))
+        (catch Exception exception
+          (assoc (ex-data exception)
+                 :operation :edit
+                 :file file
+                 :error (.getMessage exception))))
+
+      :else opts)))

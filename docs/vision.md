@@ -120,6 +120,13 @@ guards/results, map entries, bindings, and alternating function arguments. The
 model supplies the starting node and interprets the neutral `:forms`. The
 kernel supplies boundaries, source, cardinality, and addresses.
 
+The plan-only `:edit` front door can compile its capability-limited pure
+Clojure `:expr` into the same path data. SCI exposes collection computation and the
+structural builders, but not I/O, processes, namespaces, mutable references,
+classes, or host interop. This gives the model Clojure for composing Clojure
+edits without adding another selector, planner, plan schema, or executor.
+Literal EDN paths remain available when they are shorter.
+
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a

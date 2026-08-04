@@ -77,12 +77,32 @@ clj-surgeon :op :edit :file src/state.clj \
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-`:edit` requires `:file`, `:query`, and `:plan-out`. It writes only the atomic
-review artifact and never changes source. A terminal replacement refuses unless
-the path selects exactly one node, then returns that node, the trace, one diff,
-and the source/result hashes. Review the plan before the separate apply command.
-Never chain plan generation and application. Use `:q` first only when the
-choice still requires judgment.
+`:edit` also accepts a sandboxed pure Clojure expression instead of the EDN
+query. Use `:expr` when collection operations, local bindings, or higher-order
+functions make the path or replacement clearer:
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
+  :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+Supply exactly one of `:query` and `:expr`. For a literal path, `:query` is
+often shorter. `:expr` provides pure `clojure.core` collection functions such as
+`let`, `assoc`, `update`, `mapv`, `filter`, `reduce`, `comp`, and `juxt`, plus
+`form`, `match`, `where`, navigation, span, partition, and replacement
+builders. SCI does not expose I/O, processes, namespaces, mutable references,
+or host interop. An invalid expression returns its allowed capabilities,
+symbols, builder signatures, and remedy in the refusal EDN. Do not call help
+only to recover that information.
+
+`:edit` requires `:file`, `:plan-out`, and exactly one authoring surface. It
+writes only the atomic review artifact and never changes source. A terminal
+replacement refuses unless the path selects exactly one node, then returns that
+node, the trace, one diff, and the source/result hashes. Review the plan before
+the separate apply command. Never chain plan generation and application. Use
+`:q` first only when the choice still requires judgment.
 
 When the returned diff is exact, apply that saved plan next with
 `:replace-subform!`. Never reproduce the plan with `apply_patch`, a text edit,

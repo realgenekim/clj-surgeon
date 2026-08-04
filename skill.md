@@ -82,6 +82,21 @@ chain plan generation and application. When the requested relationship and
 replacement are already exact, the updater can be the first non-mutating call.
 Run a read query first when the choice still requires judgment.
 
+Use `:edit :expr` when pure Clojure collection operations make the path or
+replacement clearer:
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
+  :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+Supply exactly one of `:query` and `:expr`. `:expr` provides pure
+`clojure.core` collection functions and structural builders through sandboxed
+SCI. It does not expose I/O, processes, namespaces, mutable references, or host
+interop. Both authoring surfaces save the same plan and use the same executor.
+
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 
 ```bash

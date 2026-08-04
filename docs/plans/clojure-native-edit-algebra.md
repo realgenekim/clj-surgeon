@@ -1,6 +1,6 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Stage A builders and sandboxed SCI compiler pass. CLI probe next.
+**Status:** Native CLI and pure Clojure core pass. Clean-agent benchmark next.
 
 ## Stage B CLI probe contract
 
@@ -40,6 +40,29 @@ This probe intentionally keeps `:plan-out` explicit. A generated plan path is
 a separate experiment because it changes artifact ownership and cleanup. First
 measure whether native authoring improves clean-agent behavior while every
 other workflow variable remains fixed.
+
+## Stage B implementation result
+
+`:edit :expr` now compiles through SCI and delegates to the existing edit
+planner. The legacy query and native expression produce identical plan data
+apart from their requested plan paths. The same existing executor applies both
+plans.
+
+The pure and SCI tests pass 17 tests with 319 assertions. The CLI edit tests
+pass 10 tests with 123 assertions. The combined edit, help, and structural-lens
+suite passes 94 tests with 882 assertions. The tests cover these boundaries:
+
+- broad pure Clojure collection and higher-order composition;
+- every structural builder;
+- exact legacy/native plan equivalence;
+- real CLI parsing and verbatim expression transport;
+- compiler independence from the caller's current namespace;
+- unchanged source during planning;
+- the unchanged saved plan schema;
+- verified application through `:replace-subform!`;
+- missing, conflicting, unsafe, multiple, and non-vector expressions;
+- refusal before source or plan I/O;
+- agent-facing help, README, vision, changelog, and both skills.
 
 ## Product hypothesis
 

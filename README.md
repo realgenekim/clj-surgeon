@@ -300,6 +300,32 @@ hash. Review it, then run the separate apply command. Never chain plan and
 apply. Invalid queries return the compact supported-step grammar in the error,
 so an agent does not need a second `--help` call or a wall of generic help.
 
+The plan-only `:edit` front door can author the same query with sandboxed pure
+Clojure:
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+This is Clojure manipulating Clojure data. `:expr` provides pure
+`clojure.core` collection functions—including `let`, destructuring, `assoc`,
+`update`, `mapv`, `filter`, `reduce`, `comp`, and `juxt`—plus structural query
+builders. SCI compiles the result to the existing query vector. The unchanged
+planner still enforces exact-one selection, one terminal edit, complete-file
+parse, diff, and hashes.
+
+The SCI environment does not expose filesystem or process operations,
+namespace loading, mutable references, Java classes, or host interop. Supply
+exactly one of `:query` and `:expr`. Use the literal EDN query when it is
+shorter. Use pure Clojure when computation makes the selector or replacement
+clearer. Both surfaces save the same plan and use the same separate verified
+executor. A refusal includes the allowed capabilities and signatures, so a
+caller can repair the expression without a second help command.
+
 When adjacent forms are themselves the meaningful object, promote the current
 node and its next semantic peer into a lossless slice with `[:span 2]`:
 

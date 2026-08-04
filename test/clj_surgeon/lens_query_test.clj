@@ -209,9 +209,10 @@
   (let [source (slurp "src/clj_surgeon/core.clj")
         result (lens/evaluate-query source
                                     [[:form 'parse-args]
-                                     [:find #{:match :with :contains :query}]])]
+                                     [:find #{:match :with :contains :query :expr}]])]
     (is (= 1 (:match-count result)))
-    (is (= "#{:match :with :contains :query}" (-> result :matches first :source)))
+    (is (= "#{:match :with :contains :query :expr}"
+           (-> result :matches first :source)))
     (is (= "parse-args" (-> result :matches first :inside)))))
 
 (deftest sibling-spans-address-peer-shaped-and-flattened-syntax

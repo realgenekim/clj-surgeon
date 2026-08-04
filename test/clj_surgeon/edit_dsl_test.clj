@@ -150,6 +150,15 @@
          (dsl/compile-query
           "(-> (form 'transition)\n     (match :finish)\n     right\n     (replace '(assoc state :status :complete)))"))))
 
+(deftest sci-compilation-does-not-depend-on-the-callers-current-namespace
+  (binding [*ns* (the-ns 'clj-surgeon.edit-dsl-test)]
+    (is (= [[:form 'transition]
+            [:find :finish]
+            :right
+            [:replace :complete]]
+           (dsl/compile-query
+            "(-> (form 'transition) (match :finish) right (replace :complete))")))))
+
 (deftest sci-exposes-every-builder-and-no-unrelated-function
   (is (= [[:form 'f]
           [:find :anchor]
@@ -294,7 +303,7 @@
     (is (= :edit (:operation result)))
     (is (= "/missing/source.clj" (:file result)))
     (is (= :invalid-edit-expression (:error-type result)))
-    (is (= :unsupported-form (:reason result)))
+    (is (= :disallowed-symbol (:reason result)))
     (is (= expression (:expression result)))
     (is (some #{"(replace path form)"} (:allowed-forms result)))
     (is (re-find #"thread-first" (:remedy result)))

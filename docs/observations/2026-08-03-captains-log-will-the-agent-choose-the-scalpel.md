@@ -261,8 +261,30 @@ they are not clj-surgeon. The same latent fluency that makes the syntax feel
 natural also creates a larger space of plausible programs.
 
 This is not a reason to abandon the path. It is a reason to make the path
-smaller. SCI provides two safety fences: a pre-evaluation syntax validator and
-an execution allowlist. Structured errors now return every valid signature and
-a one-sentence remedy. The next clean-session benchmark must test whether that
-compact contract produces first-pass use or merely makes second-pass repair
-pleasant.
+smaller. SCI provides an explicit execution allowlist. Structured errors return
+the capability groups, allowed symbols, builder signatures, and a one-sentence
+remedy. The next clean-session benchmark must test whether that compact contract
+produces first-pass use or merely makes second-pass repair pleasant.
+
+## Give it Clojure
+
+Gene cut through an overdesigned turn in the experiment: “Let it use all of
+Clojure. Or rather pure functions. Give it Clojure.” That changed the native
+surface from ten renamed query constructors into an actual algebra.
+
+The SCI context now includes broad pure `clojure.core` collection, control, and
+higher-order operations. An expression can use `let`, destructuring, `fn`,
+`assoc`, `update`, `mapv`, `filterv`, `reduce`, `comp`, `juxt`, predicates,
+sequence operations, and the structural builders. It still cannot access I/O,
+processes, namespaces, mutable references, classes, or host interop.
+
+This is the important product hypothesis. The value is not parentheses instead
+of brackets. The value is that an agent can calculate a selector or replacement
+with the same data language already active while editing Clojure.
+
+The real CLI boundary passes. `:edit :expr` and `:edit :query` emit identical
+saved plan data for the motivating `case` edit. Planning preserves the source,
+and the old `:replace-subform!` executor applies the native plan with its normal
+read-back hash and whole-file parse receipt. Unsafe expressions refuse before
+the tool reads source or changes an existing plan. The next hill is voluntary
+clean-agent use, not more syntax design.

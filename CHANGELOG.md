@@ -10,6 +10,11 @@ is cut.
 
 ### Added
 
+- `:edit :expr`, a sandboxed SCI authoring surface that gives agents pure
+  `clojure.core` collection functions and structural builders. The expression
+  compiles to the existing lens query, saves the unchanged hash-bound review
+  plan, and applies later through `:replace-subform!`. I/O, processes,
+  namespaces, mutable references, and host interop remain unavailable.
 - `:lens` / `:q`, a jq-like EDN pipeline over the concrete Clojure syntax
   tree. A getter such as
   `[[:form transition] [:find :finish] :right]` reads a peer value across

@@ -111,6 +111,32 @@
                   (map #(get-in core/ops-registry [:edit :args %])
                        [:query :expr])))))
 
+(deftest agent-facing-surfaces-teach-the-native-edit-boundary
+  (let [help (core/format-op-help :edit (get core/ops-registry :edit))
+        operational {"README" (slurp "README.md")
+                     "installed skill" (slurp "skills/clj-surgeon/SKILL.md")
+                     "legacy skill" (slurp "skill.md")
+                     "edit help" help}
+        durable (assoc operational
+                       "vision" (slurp "docs/vision.md")
+                       "changelog" (slurp "CHANGELOG.md"))]
+    (doseq [[surface text] durable]
+      (testing surface
+        (let [normalized (-> text
+                             str/lower-case
+                             (str/replace "`" "")
+                             (str/replace #"\s+" " "))]
+          (is (str/includes? text ":edit"))
+          (is (str/includes? text ":expr"))
+          (is (str/includes? normalized "pure clojure"))
+          (is (str/includes? text ":replace-subform!")))))
+    (doseq [[surface text] operational]
+      (testing surface
+        (is (str/includes? text "(-> (form 'transition)"))
+        (is (str/includes? text "(match :finish)"))
+        (is (str/includes? text "(replace '(assoc state"))
+        (is (str/includes? text ":plan-out plan.edn"))))))
+
 (def project-root
   (str (fs/normalize (fs/path (System/getProperty "user.dir")))))
 
@@ -178,7 +204,7 @@
           (is (zero? (:exit applied)) (:err applied))
           (is (= (:result-hash expr-plan)
                  (get-in receipt [:verified :read-back-hash])))
-          (is (true? (get-in receipt [:verified :whole-file-parsed]))))
+          (is (true? (get-in receipt [:verified :whole-file-parsed])))))
       (finally
         (fs/delete-tree tmp-dir)))))
 
@@ -226,7 +252,7 @@
                     (core/parse-args [":op" ":edit"
                                       ":file" "src/state.clj"
                                       ":expr" expression
-                                      ":plan-out" "plan.edn"]))))))
+                                      ":plan-out" "plan.edn"])))))))
 
 (deftest cli-edit-refuses-unsafe-or-incomplete-requests-without-changing-bytes
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon edit refusal "})
