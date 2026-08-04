@@ -136,7 +136,7 @@ refuse direct nonterminating `loop` / `recur` source before file I/O.
 
 ### 7. Compact primary skill
 
-Replace the 240-line always-loaded skill with a compact task router under 120
+Replace the 240-line always-loaded skill with a compact task router under 90
 lines. Keep direct read, X-ray, guarded edit, sibling, refusal, and receipt
 contracts in the primary file. Route dependency, extraction, move, rename, and
 CLJC details to the existing advanced-operations reference. The compact skill
@@ -167,7 +167,7 @@ All prior tests remain. Add tests for:
     direct loop refusal, macro-expansion isolation, help and skill propagation,
     and the exact clean-agent expressions that previously failed.
 11. canonical skill validation, every safety-critical surface assertion, a
-    hard 120-line budget, and clean-context comparison against the full skill.
+    hard 90-line budget, and clean-context comparison against the full skill.
 
 Use the existing real-program-derived CLJC fixture and `ops-registry` in
 `src/clj_surgeon/core.clj`; do not replace them with toy-only evidence.

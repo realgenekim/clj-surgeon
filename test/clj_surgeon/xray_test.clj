@@ -590,7 +590,7 @@
               surface))))
     (is (<= (count (str/split-lines
                      (get surfaces "canonical skill")))
-            120))))
+            90))))
 
 (deftest parse-args-preserves-xray-expression-verbatim
   (let [expression "(-> (form 'data) (xray #(mapv count %)))"]

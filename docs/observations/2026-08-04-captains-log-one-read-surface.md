@@ -691,6 +691,35 @@ the skill validator accepts the package. The permanent ceiling tightens from
 240 to 120 lines. The candidate survives only if clean agents remain exact and
 beat or match v10 on wall time; brevity cannot purchase forgotten safety.
 
+### Candidate v12 result: compact context pays rent
+
+The 107-line skill preserved exactness and source hashes in all four runs while
+crossing the plan's compact-evidence gate:
+
+```text
+                              v10 240 lines    v12 107 lines       change
+correct                           4/4             4/4             tied
+median wall                      28.285 s          26.004 s         8% faster
+median shell calls                3                2              1 fewer
+median input tokens              66,217           44,819          32% fewer
+median uncached tokens           12,637           11,795           7% fewer
+median output tokens                984              874          11% fewer
+median source output              2.7 KB           1.5 KB         43% fewer
+```
+
+Three of four compact-skill agents were truly one-shot after the required skill
+read. The fourth made one validation call. The wall gain is below the automatic
+10% rule, but the treatment wins every secondary measure, removes 133 always-
+loaded lines, passes all safety-surface tests, and makes the documented product
+smaller. Under the audit tie-break, v12 replaces v10 as the product leader.
+
+Candidate v13 is the final compression neighbor. It removes another 103 words
+and 711 bytes while preserving every tested route and safety contract: 89
+lines, 563 words, and 4,050 bytes. The permanent line ceiling becomes 90. If
+this final trim does not deliver another 10% wall win, the hill is locally
+maximal under the audit rule; keep the fastest compact variant and stop shaving
+prompt prose.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

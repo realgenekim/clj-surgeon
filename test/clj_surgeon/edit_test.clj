@@ -121,8 +121,8 @@
                        "vision" (slurp "docs/vision.md")
                        "changelog" (slurp "CHANGELOG.md"))]
     (is (<= (count (str/split-lines (get operational "installed skill")))
-            120)
-        "The installed skill must fit in one compact 1-120 line read")
+            90)
+        "The installed skill must fit in one compact 1-90 line read")
     (doseq [[surface text] durable]
       (testing surface
         (let [normalized (-> text
