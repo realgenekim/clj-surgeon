@@ -159,6 +159,14 @@ that the working-tree skill supersedes installed snapshots. This laptop moved
 to `make install-dev` branch-live links so the skill under test is always the
 skill being edited; stable copies remain for benchmark pinning.
 
+Same-day sequel: the make-driven benchmark scored Opus correct-but-not-one-shot
+(shape probes before aggregating; a transform that treated call syntax as its
+runtime value). Two skill iterations later — fused shape echoes with
+predicates never `type`, counts scoped to named keys, transform-receives-
+quoted-syntax — the third verification run hit true one-shot: Skill load plus
+exactly one X-ray, correct, 32.7 s. The transcripts that diagnosed it came
+from the bench archive; the skill held its 90-line budget throughout.
+
 **Recommendations, in priority order:**
 
 1. **Add `:expect` — one-call guarded edit with `Edit`'s semantics,

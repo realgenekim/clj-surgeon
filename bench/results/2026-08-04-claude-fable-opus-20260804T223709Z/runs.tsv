@@ -1,0 +1,2 @@
+run_id	state	requested_model	resolved_model	wall_ms	correct
+opus-ops-registry-xray	passed	opus	claude-opus-5	32695	true

@@ -1,0 +1,8 @@
+state	passed
+command_state	completed
+exit_code	0
+requested_model	opus
+resolved_model	claude-opus-5
+wall_ms	32695
+correct	true
+result_dir	/Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-20260804T223709Z/opus-ops-registry-xray
