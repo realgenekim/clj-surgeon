@@ -153,3 +153,32 @@ source-bearing call. It does not alter the task prompt, skill, query grammar, or
 planner. Four new neutral-awareness sessions will test whether this small
 onboarding correction changes voluntary choice. If it does not, remove the
 facade rather than adding more persuasion.
+
+## v2: help taught adoption, but one action too late
+
+Four new neutral-awareness sessions compared the first prototype with only the
+global-help correction. Exactness remained 4/4 in both versions. The help
+example moved eventual `:edit` use from 1/4 to 4/4, proving that a single copied
+route was sufficient syntax teaching.
+
+It did not make the route one-shot:
+
+- first-source `:edit` remained 0/4;
+- every v2 agent ran `rg` in the same first command as `clj-surgeon --help`;
+- every agent then opened `edit --help` before planning;
+- median source-bearing commands did not fall;
+- median output from source-bearing commands increased from 4.7 KB to 13.2 KB;
+- one agent spent 12 shell calls, 255k cumulative input tokens, and 106 seconds
+  after trying to reconstruct Git-based verification in a neutral workspace.
+
+The apparent paradox is temporal. Global help cannot teach the agent until the
+agent chooses to call it. Clean agents hedged that latency by launching their
+familiar `rg` inspection concurrently. A better global example cannot travel
+backward in the event stream.
+
+The next legitimate coaxing level is the installed skill. It is visible before
+the first action and is the repository's normal onboarding surface. The v3
+skill makes one distinction: `:q` reads; `:edit` plans when the supplied
+relationship and replacement are already exact. If that does not make the
+plan the first source-bearing command and remove help/text detours, the facade
+has no remaining evidence-based iteration.

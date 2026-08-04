@@ -48,10 +48,10 @@ keyword-shaped literals such as `:finish` need no EDN-string workaround.
 Use `rg` for broad cross-file discovery. Do not use `rg -n` merely to convert
 distinctive text into a line for `:show-form`.
 
-## Navigate and update syntax like data
+## Read and edit syntax like data
 
-Use `:q` when one piece of syntax identifies a related node. The query is an
-EDN pipeline over the concrete syntax tree, not evaluated Clojure:
+Use `:q` to read when one piece of syntax identifies a related node. The query
+is an EDN pipeline over the concrete syntax tree, not evaluated Clojure:
 
 ```bash
 clj-surgeon :op :q :file src/state.clj \
@@ -66,26 +66,28 @@ preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
 `:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
 pattern. A read reports zero, one, or many matches and a per-step count trace.
 
-End that same path with `[:replace FORM]` to emit one guarded plan:
+When the path and replacement are already exact, use `:edit` with that same
+path ending in `[:replace FORM]`. The plan can be the first source-bearing
+command. Do not pre-read only to reconstruct the supplied relationship.
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
   :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-`:q` never writes source. A terminal replacement refuses unless the path
-selects exactly one node, then returns that node, the trace, one diff, and the
-source/result hashes. Review the plan before the separate apply command. Never
-chain plan generation and application. When the requested relationship and
-replacement are already exact, the updater can be the first non-mutating call.
-Run a read query first when the choice still requires judgment.
+`:edit` requires `:file`, `:query`, and `:plan-out`. It writes only the atomic
+review artifact and never changes source. A terminal replacement refuses unless
+the path selects exactly one node, then returns that node, the trace, one diff,
+and the source/result hashes. Review the plan before the separate apply command.
+Never chain plan generation and application. Use `:q` first only when the
+choice still requires judgment.
 
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
   :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
@@ -139,9 +141,9 @@ clj-surgeon :op :grep-form :file src/views.clj :inside render \
 ```
 
 When a peer key, guard, or binding identifies the intended subtree, prefer one
-`:q` pipeline over reading its owner and reconstructing a separate match. Do
-not grep a repeated expression and then cat its owner merely to recover sibling
-context.
+`:q` read or `:edit` plan. Do not read its owner and reconstruct a separate
+match. Do not grep a repeated expression and then cat its owner only to recover
+sibling context.
 
 ## Replace one exact subtree
 
@@ -180,9 +182,9 @@ worktree or explicitly requests that review. Never probe
 `.git` solely to decide whether to repeat the edit-level evidence.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
-syntax, not a synthetic wrapper list. Use `:q` peer navigation when the sibling
-relationship identifies the target. Use `:replace-subform` when one independent
-subtree pattern already identifies it exactly.
+syntax, not a synthetic wrapper list. Use `:edit` peer navigation when the
+sibling relationship identifies the edit target. Use `:replace-subform` when
+one independent subtree pattern already identifies it exactly.
 
 ## Advanced operations
 

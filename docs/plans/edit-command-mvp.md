@@ -1,6 +1,6 @@
 # `:edit` Command MVP
 
-**Status:** v1 adoption gate failed; one global-help iteration pending
+**Status:** v2 help adopted but was not first; version-matched skill study pending
 
 ## Hypothesis
 
