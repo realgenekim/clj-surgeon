@@ -1,6 +1,6 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Stage A pure builders implemented. Authoring benchmark next.
+**Status:** Stage A pure builders pass. SCI compiler contract is red.
 
 ## Product hypothesis
 
@@ -108,6 +108,22 @@ programmatically. Symbols such as `right` are functions, so thread-first syntax
 remains ordinary Clojure.
 
 ## Stage B: one planning call
+
+### SCI bridge
+
+Babashka already embeds the Small Clojure Interpreter (SCI). Use SCI to compile
+one native expression at the CLI boundary without requiring callers to set a
+classpath or load a namespace. Configure SCI with an explicit allowlist that
+contains only thread-first composition, quoting, and the Stage A builders.
+
+The compiler must accept exactly one expression and return query-vector data.
+It must refuse host I/O, namespace loading, evaluation, concurrency, class
+access, interop, multiple expressions, and non-vector results. Quoted patterns
+and replacements remain inert Clojure data. Do not use unrestricted SCI mode.
+
+This bridge changes the earlier architectural boundary. clj-surgeon may
+interpret a tightly capability-limited edit expression, but it must never call
+Clojure `eval` or expose a general Babashka environment.
 
 Only after Stage A wins query-authoring probes, test:
 

@@ -141,3 +141,61 @@
              dsl/right
              dsl/right
              (dsl/partition-all 2)))))
+
+(deftest sci-compiles-the-native-expression-without-host-setup
+  (is (= [[:form 'transition]
+          [:find :finish]
+          :right
+          [:replace '(assoc state :status :complete)]]
+         (dsl/compile-query
+          "(-> (form 'transition)\n     (match :finish)\n     right\n     (replace '(assoc state :status :complete)))"))))
+
+(deftest sci-exposes-every-builder-and-no-unrelated-function
+  (is (= [[:form 'f]
+          [:find :anchor]
+          [:where {:parent-tag :vector}]
+          :right
+          :left
+          :up
+          :down
+          [:span 2]
+          [:partition-all 2]
+          [:replace-span :a :b]]
+         (dsl/compile-query
+          "(-> (form 'f) (match :anchor) (where {:parent-tag :vector}) right left up down (span 2) (partition-all 2) (replace-span :a :b))")))
+  (doseq [expression ["(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"
+                      "(slurp \"secret\")"
+                      "(require '[clojure.java.shell :as shell])"
+                      "(eval '(form 'f))"
+                      "(resolve 'spit)"
+                      "(future (form 'f))"
+                      "(java.io.File. \"secret\")"
+                      "#=(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"]]
+    (testing expression
+      (let [error (try
+                    (dsl/compile-query expression)
+                    nil
+                    (catch Exception e (ex-data e)))]
+        (is (= :invalid-edit-expression (:error-type error)))
+        (is (= expression (:expression error)))
+        (is (seq (:allowed-symbols error)))))))
+
+(deftest sci-requires-exactly-one-expression-and-a-query-result
+  (doseq [[expression reason] [["" :expected-one-form]
+                               ["(form 'a) (form 'b)" :expected-one-form]
+                               [":not-a-query" :query-must-be-vector]]]
+    (testing (pr-str expression)
+      (let [error (try
+                    (dsl/compile-query expression)
+                    nil
+                    (catch Exception e (ex-data e)))]
+        (is (= :invalid-edit-expression (:error-type error)))
+        (is (= reason (:reason error)))
+        (is (= expression (:expression error)))))))
+
+(deftest sci-treats-replacement-code-as-inert-data
+  (let [path (str "/tmp/clj-surgeon-must-not-write-" (random-uuid))
+        query (dsl/compile-query
+               (str "(-> (form 'f) (replace '(spit \"" path "\" \"bad\")))"))]
+    (is (= [[:form 'f] [:replace (list 'spit path "bad")]] query))
+    (is (not (.exists (java.io.File. path))))))
