@@ -60,17 +60,19 @@ preserves them in the file. Compose `form`, `match`, `where`, `right`, `left`,
 `up`, `down`, `outermost`, `span`, and `partition-all`. `_` matches one subtree.
 A plain path reports zero, one, or many matches and a count trace.
 
-End the path with `compute` for one selected value or `aggregate` for many:
+End the path with `inspect :one` for one selected value or `inspect :all` for
+many:
 
 ```bash
-clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))"
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (inspect :one #(frequencies (map :category %))))"
 ```
 
-`compute` receives one value and refuses zero or many. `aggregate` receives a
-vector. Computed `:value` has compact hash evidence; a plain path returns full
-source. Values are parsed syntax, not evaluated code: a selected `def` is the
-whole list. Return concrete EDN, not a lazy sequence. X-ray never writes. In
-CLJC, select with `(form 'name :clj)`.
+`:one` receives one value and refuses zero or many. `:all` receives a vector.
+Computed `:value` has compact hash evidence; a plain path returns full source.
+Values are parsed syntax, not evaluated code: a selected `def` is the whole
+list. Return concrete EDN, not a lazy sequence. X-ray never writes. In CLJC,
+select with `(form 'name :clj)`. On refusal, repair from `:input-summary`
+instead of reading the selected form separately.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing

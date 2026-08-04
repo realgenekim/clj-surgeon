@@ -146,6 +146,80 @@ program, independent scorer, private workspaces, counterbalanced order, and
 parallel execution. The candidate earns promotion only if every run remains
 correct and source-preserving while median wall time and command count improve.
 
+The terminal names encode cardinality, not different engines:
+
+```text
+compute    exactly one  -> f(value)       refuse zero or many
+aggregate  zero or more -> f([values...]) preserve source order
+```
+
+Both are read-only and receive parsed syntax-as-data.
+
+## Candidate v2: simplification won a near-tie
+
+A one-replicate pilot favored the unified surface by 21%, 37.5 seconds versus
+47.7 seconds, with four calls on each side. Because agent variance is large,
+the keep decision used four counterbalanced replicates run with parallelism
+four. Every run was independently exact and preserved the source hash.
+
+```text
+                              candidate v1    unified X-ray    change
+correct                           4/4             4/4          tied
+median wall                      75.2 s            69.0 s       8% faster
+median shell calls                8                7           1 fewer
+median input tokens             170,596          143,640       16% fewer
+median output tokens              2,693            2,070       23% fewer
+```
+
+The wall improvement is below the 10% threshold for a decisive neighboring
+win. It is nevertheless a favorable near-tie on the primary metric and better
+on every secondary metric. Because candidate v2 also removes a command
+boundary, a second query language, a redundant terminal name, and an evidence
+flag from the primary mental model, the evidence supports keeping the
+conceptual simplification. It does not yet support deleting compatibility
+inputs from the runtime.
+
+The paired runs were noisy. Unified X-ray was 26% and 39% faster in the first
+two pairs, then 19% and 65% slower in the next two. Medians are more honest than
+choosing the appealing pairs, but four replicates are not a precision timing
+study.
+
+More importantly, no clean agent achieved the ideal skill-read plus one X-ray
+answer. Agents still guessed the `def` shape, treated `(hash-map ...)` syntax
+as a map, or returned a lazy sequence. Some used a literal `:cat`; others used
+small computed probes such as `count`, a shape map, or `vec (take 7 value)`.
+The surviving bottleneck is discovery after the first incorrect computation,
+not the distinction between `compute` and `aggregate`.
+
+The next hill-climb candidate should make a failed computation locally
+instructive. Instead of dumping full help or forcing a second source read, an
+analyzer refusal can return a bounded structural summary of the selected input:
+its collection kind, count, child kinds, and list heads. For example, the
+summary should reveal that a selected definition is a four-element list whose
+last child is a list headed by `hash-map`, without repeating the 29 KB form.
+That is specific repair evidence, not task-specific policy.
+
+## The human naming test rejected `compute` / `aggregate`
+
+Before another clean run, a human reader asked what the two terminals meant.
+That question is evidence: the names described implementation but hid their
+cardinality contract. `compute` did not say “exactly one.” `aggregate` sounded
+like a SQL reduction even though its function could return any concrete EDN.
+
+Five alternatives were considered: `inspect-one` / `inspect-all`, `query-one`
+/ `query-all`, `analyze-one` / `analyze-all`, `one` / `all`, and `expect-one` /
+`collect-all`. The next candidate collapses the pair into one CLI-flavored verb
+with database-flavored cardinality:
+
+```clojure
+(-> path (inspect :one f)) ; refuse zero or many, then call f(value)
+(-> path (inspect :all f)) ; call f([values...]) in source order
+```
+
+`inspect` signals read-only code examination. `:one` and `:all` are data, not
+two more magic terminal names. The old terminal spellings remain compatibility
+aliases until the candidate earns promotion.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

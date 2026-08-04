@@ -67,19 +67,27 @@
   (is (= [[:form 'load-starred-post :cljs]]
          (dsl/form 'load-starred-post :cljs))))
 
-(deftest one-xray-algebra-covers-literal-compute-and-aggregate
+(deftest one-xray-algebra-covers-literal-inspect-one-and-inspect-all
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
         computed (dsl/compile-xray
-                  "(-> (form 'data) (match :xs) right (compute count))")
+                  "(-> (form 'data) (match :xs) right (inspect :one count))")
         aggregated (dsl/compile-xray
-                    "(-> (form 'data) (match '_) (where {:tag :vector}) (aggregate #(mapv count %)))")]
+                    "(-> (form 'data) (match '_) (where {:tag :vector}) (inspect :all #(mapv count %)))")]
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
     (is (= :one (:cardinality computed)))
     (is (= :selected-value (:input-shape computed)))
     (is (= 2 ((:analyzer computed) [1 2])))
     (is (nil? (:cardinality aggregated)))
-    (is (= [2 2] ((:analyzer aggregated) [[1 2] [3 4]])))))
+    (is (= [2 2] ((:analyzer aggregated) [[1 2] [3 4]])))
+    (is (= :one (:cardinality (dsl/compute (dsl/form 'data) identity))))
+    (is (nil? (:cardinality (dsl/aggregate (dsl/form 'data) identity))))
+    (let [error (try
+                  (dsl/inspect (dsl/form 'data) :maybe identity)
+                  nil
+                  (catch Exception exception (ex-data exception)))]
+      (is (= :invalid-xray-cardinality (:error-type error)))
+      (is (= [:one :all] (:allowed error))))))
 
 (deftest sci-compiles-one-capability-limited-xray-program
   (let [expression (str "(-> (form 'data) (match '_) "
@@ -108,7 +116,7 @@
         (is (= :invalid-xray-expression (:error-type error)))
         (is (= reason (:reason error)))
         (is (= expression (:expression error)))
-        (is (some #{"(compute path pure-function)"} (:allowed-forms error)))
+        (is (some #{"(inspect path :one pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
 
 (deftest literal-xray-returns-full-structural-evidence
@@ -317,6 +325,30 @@
         (is (nil? (:value result)))
         (is (not (str/includes? (str result) "#object")))))))
 
+(deftest xray-analysis-refusal-summarizes-selected-syntax-for-local-repair
+  (let [shaped-source (str "(ns bench.shape)\n"
+                           "(def registry\n"
+                           "  \"Operation registry.\"\n"
+                           "  (hash-map :read {:category :read}\n"
+                           "            :write {:category :write}))\n")
+        result (dsl/evaluate-xray
+                shaped-source
+                {:expression "shape repair"
+                 :xray (one-spec [[:form 'registry]]
+                                 #(throw (ex-info "not a map" {})))})
+        summary (:input-summary result)]
+    (is (= :xray-analysis-failed (:error-type result)))
+    (is (= :list (:kind summary)))
+    (is (= 4 (:count summary)))
+    (is (= 'def (:head summary)))
+    (is (= [:symbol :symbol :string :list]
+           (mapv :kind (:children summary))))
+    (is (= 'hash-map (get-in summary [:children 3 :head])))
+    (is (= 5 (get-in summary [:children 3 :count])))
+    (is (str/includes? (:remedy result) "parsed syntax"))
+    (is (not (str/includes? (str result) "hash-map :read")))
+    (is (< (count (pr-str result)) 2000))))
+
 (deftest xray-refuses-to-compute-from-truncated-evidence
   (let [forms (str/join " " (map #(keyword (str "k" %)) (range 101)))
         many-source (str "(ns bench.many)\n(def many [" forms "])\n")
@@ -460,8 +492,9 @@
       (testing (str surface " teaches computed aggregation and exact-one input")
         (let [text (get surfaces surface)]
           (is (str/includes? text "frequencies"))
-          (is (str/includes? text "compute") surface)
-          (is (str/includes? text "aggregate") surface))))
+          (is (str/includes? text "inspect") surface)
+          (is (str/includes? text ":one") surface)
+          (is (str/includes? text ":all") surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

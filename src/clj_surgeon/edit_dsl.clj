@@ -46,7 +46,7 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down outermost span partition-all replace
-    replace-span transform xray xray-one compute aggregate])
+    replace-span transform xray xray-one compute aggregate inspect])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -78,9 +78,9 @@
        (remove #(or (str/starts-with? % "(replace")
                     (str/starts-with? % "(transform")
                     (str/starts-with? % "(xray")))
-       (into ["A path expression returns literal structural evidence."
-              "(compute path pure-function)"
-              "(aggregate path pure-function)"])))
+       (into ["A path returns literal evidence."
+              "(inspect path :one pure-function)"
+              "(inspect path :all pure-function)"])))
 
 (def ^:private max-expression-characters 32768)
 (def ^:private max-xray-result-characters 65536)
@@ -222,6 +222,17 @@
   [path analyzer]
   (xray path analyzer))
 
+(defn inspect
+  "Inspect exactly one selected value or all selected values."
+  [path cardinality analyzer]
+  (case cardinality
+    :one (xray-one path analyzer)
+    :all (xray path analyzer)
+    (throw (ex-info "Inspect cardinality must be :one or :all"
+                    {:error-type :invalid-xray-cardinality
+                     :cardinality cardinality
+                     :allowed [:one :all]}))))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -239,7 +250,8 @@
    'xray xray
    'xray-one xray-one
    'compute compute
-   'aggregate aggregate})
+   'aggregate aggregate
+   'inspect inspect})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -266,8 +278,8 @@
                     :allowed-symbol-count (count allowed-symbols)
                     :allowed-capabilities allowed-capabilities
                     :allowed-forms xray-expression-reference
-                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""
-                    :remedy "Return a structural path for literal evidence, or end it with compute or aggregate."}
+                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""
+                    :remedy "Return a path, or end it with inspect :one or :all."}
                    cause))))
 
 (defn- evaluate-expression
@@ -393,7 +405,7 @@
        :error-type :unsupported-arguments
        :unsupported unsupported
        :allowed (vec (sort xray-allowed-arguments))
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""}
 
       (not (contains? opts :expr))
       {:operation :xray
@@ -401,7 +413,7 @@
        :error "Supply :expr"
        :error-type :missing-xray-input
        :missing [:expr]
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""}
 
       (and (contains? opts :evidence)
            (not (#{:compact :full} evidence)))
@@ -455,6 +467,66 @@
                                 (concrete-edn? item)))
                          value)
     :else false))
+
+(def ^:private input-summary-child-limit 6)
+(def ^:private input-summary-depth 2)
+(def ^:private input-summary-preview-limit 80)
+
+(defn- bounded-preview
+  [value]
+  (let [text (str value)]
+    (if (<= (count text) input-summary-preview-limit)
+      text
+      (str (subs text 0 input-summary-preview-limit) "…"))))
+
+(defn- input-summary
+  "Describe selected syntax without evaluating it or repeating the source."
+  [value]
+  (letfn [(summarize [item depth]
+            (cond
+              (nil? item) {:kind :nil}
+              (boolean? item) {:kind :boolean :value item}
+              (char? item) {:kind :character :value item}
+              (string? item) {:kind :string
+                              :characters (count item)
+                              :preview (bounded-preview item)}
+              (symbol? item) {:kind :symbol :value item}
+              (keyword? item) {:kind :keyword :value item}
+              (number? item) {:kind :number :value item}
+
+              (map? item)
+              (cond-> {:kind :map :count (count item)}
+                (pos? depth)
+                (assoc :sample-keys
+                       (mapv #(summarize % (dec depth))
+                             (take input-summary-child-limit (keys item))))
+
+                (and (pos? depth)
+                     (> (count item) input-summary-child-limit))
+                (assoc :children-truncated? true))
+
+              (or (vector? item) (list? item) (set? item))
+              (let [kind (cond
+                           (vector? item) :vector
+                           (list? item) :list
+                           :else :set)
+                    item-count (count item)]
+                (cond-> {:kind kind :count item-count}
+                  (and (list? item) (symbol? (first item)))
+                  (assoc :head (first item))
+
+                  (pos? depth)
+                  (assoc :children
+                         (mapv #(summarize % (dec depth))
+                               (take input-summary-child-limit item)))
+
+                  (and (pos? depth)
+                       (> item-count input-summary-child-limit))
+                  (assoc :children-truncated? true)))
+
+              :else {:kind :unknown
+                     :preview (bounded-preview item)}))]
+    (summarize value input-summary-depth)))
 
 (defn- xray-refusal
   [found expression error-type error]
@@ -529,13 +601,20 @@
                         (catch Exception exception exception))]
             (cond
               (instance? Exception value)
-              (xray-refusal evidence expression :xray-analysis-failed
-                            (str "Pure xray analysis failed: "
-                                 (.getMessage ^Exception value)))
+              (-> (xray-refusal evidence expression :xray-analysis-failed
+                                (str "Pure xray analysis failed: "
+                                     (.getMessage ^Exception value)))
+                  (assoc :input-summary (input-summary analyzer-input)
+                         :remedy (str "Use :input-summary to correct the pure "
+                                      "function. Selected values are parsed "
+                                      "syntax, not evaluated program state.")))
 
               (not (concrete-edn? value))
-              (xray-refusal evidence expression :invalid-xray-result
-                            "Pure xray analysis must return concrete EDN data")
+              (-> (xray-refusal evidence expression :invalid-xray-result
+                                "Pure xray analysis must return concrete EDN data")
+                  (assoc :input-summary (input-summary analyzer-input)
+                         :remedy (str "Return concrete EDN. Realize lazy results "
+                                      "with vec or another collection constructor.")))
 
               (> (count (pr-str value)) max-xray-result-characters)
               (xray-refusal evidence expression :xray-result-too-large

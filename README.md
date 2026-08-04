@@ -267,22 +267,25 @@ clj-surgeon :op :xray :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right)"
 ```
 
-End the same path with `compute` when exactly one selected value determines a
-derived answer:
+End the same path with `inspect :one` when exactly one selected value determines
+a derived answer:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (inspect :one #(frequencies (map :category %))))"
 ```
 
-`compute` refuses zero or many matches before calling the function and passes
-the selected Clojure value directly. Use `aggregate` for a vector of zero, one,
-or many selected values in query order.
+`inspect :one` refuses zero or many matches before calling the function and
+passes the selected Clojure value directly. Use `inspect :all` for a vector of
+zero, one, or many selected values in query order.
 
 The value is parsed source syntax, not evaluated program state. Selecting a
 `def` returns its complete defining list; selecting `(hash-map :a 1)` returns a
 list headed by the symbol `hash-map`, not a constructed map. Return concrete
 EDN from computation; realize lazy results with `vec` or another collection.
+If computation refuses, its bounded `:input-summary` reports the collection
+kind, count, child kinds, and list heads needed to repair the expression without
+another source read.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the
