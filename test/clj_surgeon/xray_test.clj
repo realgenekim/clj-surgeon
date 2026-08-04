@@ -216,13 +216,18 @@
 
 (deftest real-nested-cond-xray-composes-with-outermost-and-partitions
   (let [real-source (slurp "bench/fixtures/bench/pair_view.clj")
-        query [[:form 'classify-request] [:find 'cond] :up :outermost
-               :down :right [:partition-all 2]]
+        expression (str "(-> (form 'classify-request) (match 'cond) up "
+                        "outermost down right (partition-all 2) "
+                        "(xray #(mapv first %)))")
+        compiled (dsl/compile-xray expression)
         result (dsl/evaluate-xray
                 real-source
                 {:file "bench/fixtures/bench/pair_view.clj"
-                 :expression "real nested cond"
-                 :xray (spec query #(mapv first %))})]
+                 :expression expression
+                 :xray compiled})]
+    (is (= [[:form 'classify-request] [:find 'cond] :up :outermost
+            :down :right [:partition-all 2]]
+           (:query compiled)))
     (is (= 7 (:match-count result)))
     (is (= '(nil? actor) (first (:value result))))
     (is (= :else (last (:value result))))

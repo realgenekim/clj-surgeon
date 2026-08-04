@@ -217,6 +217,7 @@ Prototype only these functions:
 (left path)             ; append :left
 (up path)               ; append :up
 (down path)              ; append :down
+(outermost path)         ; append :outermost
 (span path n)            ; append [:span n]
 (partition-all path n)   ; append [:partition-all n]
 (replace path form)      ; append [:replace form]

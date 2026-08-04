@@ -45,8 +45,8 @@
     clojure.core/partition-all clojure.core/replace])
 
 (def ^:private builder-symbols
-  '[form match where right left up down span partition-all replace replace-span
-    transform xray])
+  '[form match where right left up down outermost span partition-all replace
+    replace-span transform xray])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -66,7 +66,7 @@
   ["(form name)"
    "(match path pattern)"
    "(where path predicates)"
-   "(right path)" "(left path)" "(up path)" "(down path)"
+   "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)"
    "(span path n)" "(partition-all path n)"
    "(replace path form)" "(replace-span path & forms)"
    "(transform path pure-function)"
@@ -141,6 +141,11 @@
   [path]
   (append-step path :down))
 
+(defn outermost
+  "Retain current nodes that have no current ancestor."
+  [path]
+  (append-step path :outermost))
+
 (defn span
   "Select the current form and the next n-1 structural siblings."
   [path n]
@@ -196,6 +201,7 @@
    'left left
    'up up
    'down down
+   'outermost outermost
    'span span
    'partition-all partition-all
    'replace replace
