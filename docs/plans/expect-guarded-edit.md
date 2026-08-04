@@ -14,8 +14,9 @@ Decided 2026-08-04. Motivation and competitive analysis:
 - **With `:expect`** the command becomes a one-call guarded edit: it
   computes the plan exactly as today, then compares the selected form
   (the plan's before, parsed as Clojure data) against the parsed
-  `:expect` form using structural equality (whitespace- and
-  comment-insensitive). On equality it saves the plan artifact to
+  `:expect` form using a lossless syntax comparison. Whitespace is ignored.
+  Comments, metadata, reader macros, and token spelling must match. On equality
+  it saves the plan artifact to
   `:plan-out` AND applies it atomically in the same invocation, returning
   the union of plan evidence and the `:replace-subform!` apply receipt
   plus `:mode :expect-guarded`. On inequality it refuses.
@@ -30,6 +31,8 @@ rather than textual matching. The saved plan remains the audit artifact.
 - No `:expect` on any other operation.
 - No wildcard, pattern, or partial `:expect` matching; exact structural
   equality only.
+- No `:expect` with a computed `transform`; its generated after-state requires
+  review through the two-command route.
 - No change to `:replace-subform!`.
 - No skill text change in this plan (line budget; revisit separately).
 
@@ -54,8 +57,11 @@ one-call structured refusal showing both forms.
 | 5 | `:expect` unparseable (zero or multiple forms, reader error) | exit nonzero; `:error-type :invalid-expect`; refused before selection/source read where feasible |
 | 6 | `:expect` with zero/ambiguous selection | existing selection refusals win, unchanged error types |
 | 7 | `:expect` with a getter-only pipeline (no replace/transform) | existing invalid-edit refusal, unchanged |
-| 8 | `:expect` equal modulo whitespace/comments in source | equality holds (structural comparison of parsed forms) |
+| 8 | `:expect` equal modulo whitespace | equality holds |
 | 9 | apply-stage failure after match (hash race, parse failure) | existing `:replace-subform!` refusal semantics; source restored/untouched per current atomic-write guarantees |
+| 10 | selected source has an undeclared comment, metadata, reader macro, or token spelling | `:expect-mismatch`; exact `:actual-source`; no write; narrow the selector or declare the exact before-source |
+| 11 | `:expect` with `transform` | `:expect-requires-literal-replacement`; no source or plan write; use plan, review, apply |
+| 12 | `:plan-out` does not end in `.edn` | `:invalid-plan-out`; no source or plan write |
 
 ## Real-program evidence
 

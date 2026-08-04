@@ -404,7 +404,7 @@ hash. Review it, then run the separate apply command. Never chain plan and
 apply. Invalid queries return the compact supported-step grammar in the error,
 so an agent does not need a second `--help` call or a wall of generic help.
 
-The plan-only `:edit` front door can author the same query with sandboxed pure
+By default, the `:edit` front door authors the same plan with sandboxed pure
 Clojure:
 
 ```bash
@@ -438,14 +438,16 @@ existing EDN executor can therefore read and replay the plan without SCI. Use
 `replace` when the new form is already known. Use `transform` when the new form
 depends on the selected code or data.
 
-Do not preflight whether the task-specific `:plan-out` path exists. A
-successful plan atomically replaces that artifact. A refusal leaves an existing
-plan unchanged.
+Use an `.edn` suffix for the task-specific `:plan-out` path. Do not preflight whether that
+path exists. A successful plan atomically replaces that artifact. A refusal
+leaves an existing plan unchanged.
 
 `:expect` is the optional one-call guarded form. It is the caller's declared
-before-state: exactly one Clojure form, compared structurally—whitespace and
-comments cannot change the verdict—against the selected form. On equality
-`:edit` saves the plan and applies it in the same invocation, returning the plan
+before-state for a literal replacement. The comparison ignores whitespace.
+It does not ignore comments, metadata, reader macros, or token spelling. Those
+elements can affect behavior or preserve design intent.
+
+On equality, `:edit` saves the plan and applies it in the same invocation. It returns the plan
 evidence merged with the verified apply receipt and `:mode :expect-guarded`. On
 any difference it exits nonzero with `:error-type :expect-mismatch`, reports
 `:expected`, `:actual`, and `:actual-source`, and leaves both the source bytes
@@ -454,15 +456,42 @@ and an existing plan artifact untouched:
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
-  :expect "(assoc state :status :done)" \
+  :expect '(assoc state :status :done)' \
   :plan-out plan.edn
 ```
+
+Use shell single quotes around `:expect` source when possible. They prevent the
+shell from expanding `$`, backticks, and other source characters.
+
+If the selected subtree contains a comment or metadata that is absent from
+`:expect`, the command refuses with `:expect-mismatch`. It returns the lossless
+`:actual-source`. Prefer a narrower replacement that leaves the surrounding
+syntax in place:
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :done) (replace :complete))" \
+  :expect :done \
+  :plan-out plan.edn
+```
+
+This command replaces only `:done`. A comment elsewhere in the enclosing form
+stays in place. Do not rely on automatic comment migration. The tool refuses an
+undeclared comment because it cannot infer the correct destination after a
+larger rewrite.
+
+`:expect` refuses a terminal `transform`. A transform computes its after-state,
+so the before-state alone cannot replace review of the generated diff. Remove
+`:expect`, review the saved plan, and apply it separately. Use a literal
+`replace` when both the before-state and after-state are known.
 
 Without `:expect` nothing changes: `:edit` stays plan-only and the documented
 default remains plan first, review, then apply separately with
 `:replace-subform!`. `:expect` mechanizes that review gate rather than removing
 it—the saved plan is still the audit artifact—so use it when the before-state is
-already known exactly, and the two-command flow when it is not.
+already known exactly, and the two-command flow when it is not. The guarded
+receipt verifies the source write and the saved plan artifact. Atomic source
+writes preserve the existing file permissions, including the executable bit.
 
 The SCI environment does not expose filesystem or process operations,
 namespace loading, mutable references, Java classes, or host interop. Supply

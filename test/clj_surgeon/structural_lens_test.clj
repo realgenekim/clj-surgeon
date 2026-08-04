@@ -222,6 +222,25 @@
           (finally
             (.delete plan-file)))))))
 
+(deftest every-planner-refuses-to-use-a-source-file-as-a-plan-artifact
+  (with-temp-file sample-source
+    (fn [source-path]
+      (let [victim (java.io.File/createTempFile "clj-surgeon-victim" ".clj")
+            victim-source "(ns preserve.me)\n(def untouched true)\n"]
+        (try
+          (spit victim victim-source)
+          (let [result (lens/plan-file-replacement
+                         {:file source-path
+                          :inside 'book-workshop-pane
+                          :match target-pattern
+                          :with "(book-tree/creation-actions surface)"
+                          :plan-out (.getAbsolutePath victim)})]
+            (is (= :invalid-plan-out (:error-type result)))
+            (is (= victim-source (slurp victim)))
+            (is (= sample-source (slurp source-path))))
+          (finally
+            (.delete victim)))))))
+
 (deftest execute-plan-writes-only-after-validation
   (with-temp-file sample-source
     (fn [source-path]
@@ -268,30 +287,50 @@
           (is (string? (:error result)))
           (is (nil? (:expect result))))))))
 
-(deftest expect-comparison-is-whitespace-and-comment-insensitive
+(deftest expect-comparison-ignores-whitespace-but-preserves-source-significant-syntax
   (testing "row 2/3: identical structure matches"
-    (let [comparison (lens/expect-comparison '(assoc state :status :done)
+    (let [expect (lens/parse-expect "(assoc state :status :done)")
+          comparison (lens/expect-comparison expect
                                              "(assoc state :status :done)")]
       (is (true? (:match? comparison)))
       (is (= '(assoc state :status :done) (:actual comparison)))
       (is (= "(assoc state :status :done)" (:actual-source comparison)))))
-  (testing "row 8: source comments and odd whitespace do not change the verdict"
-    (let [before "(assoc    state\n  ;; keep the audit note\n  :status\n\n  :done)"
-          comparison (lens/expect-comparison '(assoc state :status :done) before)]
+  (testing "whitespace alone does not change the verdict"
+    (let [expect (lens/parse-expect "(assoc state :status :done)")
+          before "(assoc    state\n  :status\n\n  :done)"
+          comparison (lens/expect-comparison expect before)]
       (is (true? (:match? comparison)))
       (is (= '(assoc state :status :done) (:actual comparison)))
       (is (= before (:actual-source comparison))
           "the exact selected bytes are still reported")))
+  (testing "an undeclared comment refuses even when the Clojure data is equal"
+    (let [expect (lens/parse-expect "(assoc state :status :done)")
+          before "(assoc state\n  ;; keep the audit note\n  :status :done)"
+          comparison (lens/expect-comparison expect before)]
+      (is (false? (:match? comparison)))
+      (is (= :source-syntax-mismatch (:reason comparison)))
+      (is (= '(assoc state :status :done) (:actual comparison)))
+      (is (= before (:actual-source comparison)))))
+  (testing "a declared comment matches losslessly"
+    (let [before "(assoc state\n  ;; keep the audit note\n  :status :done)"
+          comparison (lens/expect-comparison (lens/parse-expect before) before)]
+      (is (true? (:match? comparison)))))
+  (testing "undeclared metadata refuses because metadata can affect behavior"
+    (let [comparison (lens/expect-comparison (lens/parse-expect "foo")
+                                             "^:private foo")]
+      (is (false? (:match? comparison)))
+      (is (= :source-syntax-mismatch (:reason comparison)))
+      (is (= 'foo (:actual comparison)))))
   (testing "row 4: the audit-payload trap refuses"
     (let [comparison (lens/expect-comparison
-                       '(assoc state :status :done)
+                       (lens/parse-expect "(assoc state :status :done)")
                        "(assoc state :status :done :audit (:audit payload))")]
       (is (false? (:match? comparison)))
       (is (= '(assoc state :status :done :audit (:audit payload))
              (:actual comparison)))))
   (testing "row 4: a multi-form span selection never matches one :expect form"
     (let [comparison (lens/expect-comparison
-                       :finish
+                       (lens/parse-expect ":finish")
                        ":finish\n;; comment\n(assoc state :status :done)")]
       (is (false? (:match? comparison)))
       (is (= 2 (:actual-form-count comparison)))
@@ -303,8 +342,9 @@
               :selector {:query [[:form 'transition]]}
               :source-hash "abc"
               :edits [{:line 8 :before "(assoc state :status :done)"}]}
-        comparison (lens/expect-comparison '(assoc state :status :complete)
-                                           "(assoc state :status :done)")
+        comparison (lens/expect-comparison
+                     (lens/parse-expect "(assoc state :status :complete)")
+                     "(assoc state :status :done)")
         result (lens/expect-mismatch-result plan comparison)]
     (is (= :expect-mismatch (:error-type result)))
     (is (= :edit (:operation result)))

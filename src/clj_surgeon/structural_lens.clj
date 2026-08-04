@@ -854,6 +854,21 @@
   [source]
   (mapv node/sexpr (read-form-nodes source)))
 
+(defn- lossless-node-fingerprint
+  "A rewrite-clj node fingerprint that ignores whitespace but retains comments,
+   metadata, reader macros, token spelling, and tree position."
+  [form-node]
+  (when-not (node/whitespace? form-node)
+    [(node/tag form-node)
+     (if (node/inner? form-node)
+       (vec (keep lossless-node-fingerprint (node/children form-node)))
+       (node/string form-node))]))
+
+(defn- lossless-source-fingerprint [source]
+  (->> (node/children (parser/parse-string-all source))
+       (keep lossless-node-fingerprint)
+       vec))
+
 (defn parse-expect
   "Parse the caller's declared before-state into exactly one Clojure form.
    Pure: a source string (or an already-read form) in, data out. Returns
@@ -876,20 +891,29 @@
          :error-type :invalid-expect}))))
 
 (defn expect-comparison
-  "Compare a parsed :expect form with a plan edit's selected source.
-   Pure: form plus source string in, data out. Equality is structural:
-   both sides are read with the same reader, so whitespace and comments in
-   the source cannot change the verdict. A selection that is not exactly
-   one form (a :replace-span selection) never matches a single :expect."
-  [expect-form before-source]
+  "Compare parsed :expect data and syntax with a plan edit's selected source.
+   Whitespace is ignored. Comments, metadata, reader macros, and token spelling
+   remain part of the guard. A selection that is not exactly one form (a
+   :replace-span selection) never matches a single :expect."
+  [{:keys [expect expect-source]} before-source]
   (let [forms (try (read-all-forms before-source)
                    (catch Exception _ nil))
         one? (= 1 (count forms))
-        actual (if one? (first forms) (vec forms))]
-    (cond-> {:match? (boolean (and one? (= expect-form actual)))
-             :expected expect-form
+        actual (if one? (first forms) (vec forms))
+        data-match? (boolean (and one? (= expect actual)))
+        syntax-match? (boolean
+                        (and data-match?
+                             (= (lossless-source-fingerprint expect-source)
+                                (lossless-source-fingerprint before-source))))
+        reason (cond
+                 (not one?) :selection-is-not-one-form
+                 (not data-match?) :form-mismatch
+                 (not syntax-match?) :source-syntax-mismatch)]
+    (cond-> {:match? syntax-match?
+             :expected expect
              :actual actual
              :actual-source before-source}
+      reason (assoc :reason reason)
       (not one?) (assoc :actual-form-count (count forms)))))
 
 (defn expect-mismatch-result
@@ -909,47 +933,116 @@
              :selector (:selector plan)
              :source-hash (:source-hash plan)}
       (:line edit) (assoc :line (:line edit))
+      (:reason comparison) (assoc :reason (:reason comparison))
       (:actual-form-count comparison)
       (assoc :actual-form-count (:actual-form-count comparison)))))
 
 (declare execute-plan!)
 
+(defn- edn-plan-path? [plan-out]
+  (and (string? plan-out)
+       (str/ends-with? (str/lower-case plan-out) ".edn")))
+
 (defn- write-plan-file [plan plan-out]
-  (try
-    (file-ops/atomic-write! plan-out (with-out-str (pprint/pprint plan)))
-    (assoc plan :plan-out plan-out)
-    (catch Exception e
-      {:error (str "Could not write plan: " (.getMessage e))
-       :error-type :plan-write-failed
-       :plan-out plan-out})))
+  (if-not (edn-plan-path? plan-out)
+    {:operation (:operation plan)
+     :file (:file plan)
+     :plan-out plan-out
+     :error ":plan-out must name an .edn audit artifact"
+     :error-type :invalid-plan-out}
+    (try
+      (file-ops/atomic-write! plan-out (with-out-str (pprint/pprint plan)))
+      (assoc plan :plan-out plan-out)
+      (catch Exception e
+        {:error (str "Could not write plan: " (.getMessage e))
+         :error-type :plan-write-failed
+         :plan-out plan-out}))))
 
 (defn- canonical-path [file]
   (.getCanonicalPath (io/file file)))
 
+(defn- guarded-plan-source [saved-plan]
+  (with-out-str
+    (pprint/pprint (dissoc saved-plan :plan-out))))
+
+(defn- inspect-plan-artifact [saved-plan]
+  (let [expected-source (guarded-plan-source saved-plan)
+        expected-hash (source-hash expected-source)]
+    (try
+      (let [actual-hash (source-hash (slurp (:plan-out saved-plan)))]
+        {:verified (= expected-hash actual-hash)
+         :expected-hash expected-hash
+         :actual-hash actual-hash})
+      (catch Exception exception
+        {:verified false
+         :expected-hash expected-hash
+         :error (.getMessage exception)}))))
+
+(defn- repair-plan-artifact [saved-plan]
+  (try
+    (file-ops/atomic-write! (:plan-out saved-plan)
+                            (guarded-plan-source saved-plan))
+    (assoc (inspect-plan-artifact saved-plan) :repaired true)
+    (catch Exception exception
+      {:verified false
+       :repaired false
+       :expected-hash (source-hash (guarded-plan-source saved-plan))
+       :error (.getMessage exception)})))
+
 (defn- apply-guarded-plan
   "Apply an already-saved plan through the shared :replace-subform! executor
-   and merge the plan evidence with its receipt."
+   and merge the plan evidence with its receipt. Verify that the saved audit
+   artifact still names this exact plan before and after source mutation."
   [saved-plan]
-  (let [receipt (execute-plan! {:plan saved-plan})]
-    (if (:error receipt)
-      (assoc receipt
-             :mode :expect-guarded
-             :plan-out (:plan-out saved-plan))
-      (assoc (merge saved-plan receipt) :mode :expect-guarded))))
+  (let [before (inspect-plan-artifact saved-plan)]
+    (if-not (:verified before)
+      {:operation :edit
+       :mode :expect-guarded
+       :file (:file saved-plan)
+       :plan-out (:plan-out saved-plan)
+       :error "The saved plan artifact changed before guarded apply; no source bytes changed"
+       :error-type :plan-artifact-changed
+       :source-unchanged true
+       :plan-artifact before}
+      (let [receipt (execute-plan! {:plan saved-plan})]
+        (if (:error receipt)
+          (assoc receipt
+                 :mode :expect-guarded
+                 :plan-out (:plan-out saved-plan)
+                 :plan-artifact (inspect-plan-artifact saved-plan))
+          (let [after (inspect-plan-artifact saved-plan)
+                artifact (if (:verified after)
+                           (assoc after :repaired false)
+                           (repair-plan-artifact saved-plan))
+                result (assoc (merge saved-plan receipt)
+                              :mode :expect-guarded
+                              :plan-artifact artifact)]
+            (if (:verified artifact)
+              result
+              (assoc result
+                     :ok false
+                     :source-applied true
+                     :error "Source was applied, but the audit plan artifact could not be restored"
+                     :error-type :plan-artifact-repair-failed))))))))
 
 (defn- guarded-edit
   "Save and apply one plan whose selection equals the declared :expect form.
    A mismatch refuses before the plan artifact is written."
-  [plan {:keys [expect expect-source]} plan-out]
-  (let [comparison (expect-comparison expect (:before (first (:edits plan))))]
+  [plan parsed-expect plan-out]
+  (let [comparison (expect-comparison parsed-expect
+                                      (:before (first (:edits plan))))]
     (if-not (:match? comparison)
       (assoc (expect-mismatch-result plan comparison)
              :plan-out plan-out
-             :expect-source expect-source)
+             :expect-source (:expect-source parsed-expect))
       (let [saved (write-plan-file plan plan-out)]
         (if (:error saved)
           saved
           (apply-guarded-plan saved))))))
+
+(defn- transform-query? [query]
+  (let [terminal (when (vector? query) (peek query))]
+    (and (vector? terminal) (= :transform (first terminal)))))
 
 (defn edit-file-with-evaluator
   "Plan one edit with evaluator after path checks and the single source read.
@@ -969,12 +1062,29 @@
        :error ":plan-out must not resolve to the source file"
        :error-type :plan-overwrites-source}
 
+      (not (edn-plan-path? plan-out))
+      {:operation :edit
+       :file file
+       :plan-out plan-out
+       :error ":plan-out must name an .edn audit artifact"
+       :error-type :invalid-plan-out}
+
       (:error parsed-expect)
       (assoc parsed-expect
              :operation :edit
              :file file
              :plan-out plan-out
              :expect expect)
+
+      (and parsed-expect (transform-query? (:query opts)))
+      {:operation :edit
+       :file file
+       :plan-out plan-out
+       :mode :expect-guarded
+       :error ":expect requires a literal replacement; a computed transform must be planned and reviewed before apply"
+       :error-type :expect-requires-literal-replacement
+       :remedy {:mode :plan-and-review
+                :instruction "Remove :expect, review the concrete diff, then apply the saved plan with :replace-subform!"}}
 
       :else
       (try

@@ -11,6 +11,7 @@
    [clj-surgeon.edit-test]
    [clj-surgeon.edn-config-integration-test]
    [clj-surgeon.extract-test]
+   [clj-surgeon.file-ops-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
@@ -37,6 +38,7 @@
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
                    'clj-surgeon.extract-test
+                   'clj-surgeon.file-ops-test
                    'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
                    'clj-surgeon.lens-query-test

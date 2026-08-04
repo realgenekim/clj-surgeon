@@ -83,7 +83,7 @@
           (is (= error-type
                  (:error-type (lens/evaluate-edit edit-source opts)))))))))
 
-(deftest edit-help-is-a-prominent-plan-only-front-door
+(deftest edit-help-distinguishes-the-default-plan-from-the-guarded-one-call-route
   (let [global (core/format-global-help core/ops-registry)
         help (core/format-op-help :edit (get core/ops-registry :edit))]
     (is (contains? core/ops-registry :edit))
@@ -91,8 +91,9 @@
     (is (str/includes? global "clj-surgeon :op :edit"))
     (is (str/includes? global ":expr"))
     (is (str/includes? global ":plan-out plan.edn"))
+    (is (str/includes? help "Without :expect"))
     (is (str/includes? help "PLAN ONLY"))
-    (is (str/includes? help "never changes source"))
+    (is (str/includes? help "modified only by a successful :expect-guarded edit"))
     (is (str/includes? help "Use :q to read"))
     (is (str/includes? help "first source-bearing call"))
     (is (str/includes? help "never reproduce it with apply_patch"))
@@ -509,26 +510,112 @@
 (def comment-laden-source
   "(ns bench.expect)\n\n(defn transition [state event]\n  (case event\n    :finish\n    (assoc    state\n      ;; the status key must survive review\n      :status\n\n      :done)\n    state))\n")
 
-(deftest expect-row-8-source-comments-and-whitespace-do-not-defeat-equality
+(deftest expect-row-8-whitespace-matches-but-undeclared-comments-refuse
   (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect ws "})]
     (try
       (let [source-file (str (fs/path dir "source.clj"))
             plan-file (str (fs/path dir "plan.edn"))]
         (spit source-file comment-laden-source)
+        (spit plan-file pre-existing-plan)
         (let [result (core/run-edit {:file source-file
                                      :expr expect-replacement-expr
                                      :plan-out plan-file
                                      :expect true-expect})
               source (slurp source-file)]
-          (is (true? (:ok result)))
+          (is (= :expect-mismatch (:error-type result)))
           (is (= :expect-guarded (:mode result)))
-          (is (str/includes? (get-in result [:edits 0 :before])
-                             ";; the status key must survive review")
-              "the selected bytes really did contain a comment")
-          (is (str/includes? source "(assoc state :status :complete)"))
+          (is (= :source-syntax-mismatch (:reason result)))
+          (is (str/includes? (:actual-source result)
+                             ";; the status key must survive review"))
+          (is (= comment-laden-source source))
+          (is (= pre-existing-plan (slurp plan-file))))
+        (let [result (core/run-edit
+                       {:file source-file
+                        :expr "(-> (form 'transition) (match :done) (replace :complete))"
+                        :plan-out plan-file
+                        :expect ":done"})
+              source (slurp source-file)]
+          (is (true? (:ok result)))
+          (is (str/includes? source
+                             ";; the status key must survive review"))
+          (is (str/includes? source ":complete"))
           (is (not (str/includes? source ":done")))))
       (finally
         (fs/delete-tree dir)))))
+
+(deftest expect-refuses-undeclared-metadata-and-accepts-declared-metadata
+  (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect metadata "})]
+    (try
+      (let [source-file (str (fs/path dir "source.clj"))
+            plan-file (str (fs/path dir "plan.edn"))
+            source "(ns bench.metadata)\n(def x ^:private foo)\n"
+            route {:file source-file
+                   :expr "(-> (form 'x) initializer (replace 'bar))"
+                   :plan-out plan-file}]
+        (spit source-file source)
+        (spit plan-file pre-existing-plan)
+        (let [refusal (core/run-edit (assoc route :expect "foo"))]
+          (is (= :expect-mismatch (:error-type refusal)))
+          (is (= :source-syntax-mismatch (:reason refusal)))
+          (is (= "^:private foo" (:actual-source refusal)))
+          (is (= source (slurp source-file)))
+          (is (= pre-existing-plan (slurp plan-file))))
+        (let [receipt (core/run-edit (assoc route :expect "^:private foo"))]
+          (is (true? (:ok receipt)))
+          (is (= "(ns bench.metadata)\n(def x bar)\n"
+                 (slurp source-file)))))
+      (finally
+        (fs/delete-tree dir)))))
+
+(deftest expect-refuses-a-computed-transform-without-reviewing-its-after-state
+  (with-expect-workspace
+    (fn [{:keys [source-file plan-file]}]
+      (let [result
+            (core/run-edit
+              {:file source-file
+               :expr "(-> (form 'transition) (match :finish) right (transform (constantly :destroyed)))"
+               :plan-out plan-file
+               :expect true-expect})]
+        (is (= :expect-requires-literal-replacement (:error-type result)))
+        (is (= :plan-and-review (get-in result [:remedy :mode])))
+        (is (= edit-source (slurp source-file)))
+        (is (= pre-existing-plan (slurp plan-file)))))))
+
+(deftest edit-refuses-a-plan-path-that-is-not-an-edn-artifact
+  (with-expect-workspace
+    (fn [{:keys [dir source-file]}]
+      (let [victim (str (fs/path dir "unrelated.clj"))
+            victim-source "(ns unrelated)\n(def keep-me true)\n"]
+        (spit victim victim-source)
+        (let [result (core/run-edit {:file source-file
+                                     :expr expect-replacement-expr
+                                     :plan-out victim
+                                     :expect true-expect})]
+          (is (= :invalid-plan-out (:error-type result)))
+          (is (= edit-source (slurp source-file)))
+          (is (= victim-source (slurp victim))))))))
+
+(deftest expect-verifies-and-repairs-a-concurrently-changed-plan-artifact
+  (with-expect-workspace
+    (fn [{:keys [source-file plan-file]}]
+      (let [original-executor lens/execute-plan!
+            result
+            (with-redefs
+              [lens/execute-plan!
+               (fn [{:keys [plan] :as request}]
+                 (spit (:plan-out plan) "{:concurrent-writer :won}\n")
+                 (original-executor request))]
+              (core/run-edit {:file source-file
+                              :expr expect-replacement-expr
+                              :plan-out plan-file
+                              :expect true-expect}))
+            saved (edn/read-string (slurp plan-file))]
+        (is (true? (:ok result)))
+        (is (true? (get-in result [:plan-artifact :verified])))
+        (is (true? (get-in result [:plan-artifact :repaired])))
+        (is (= (:result-hash result) (:result-hash saved)))
+        (is (= (:result-hash result)
+               (lens/source-hash (slurp source-file))))))))
 
 (deftest expect-row-9-apply-failure-keeps-the-existing-executor-refusal
   (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect apply "})
@@ -560,13 +647,17 @@
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))]
     (is (str/includes? help ":expect"))
     (is (str/includes? help "PLAN ONLY"))
-    (is (str/includes? help "never changes source"))
+    (is (str/includes? help "Without :expect"))
     (is (str/includes?
           help
           ":expect is optional; without it the default flow is unchanged"))
     (is (str/includes? help ":expect-mismatch"))
     (is (str/includes? help ":actual-source"))
+    (is (str/includes? help "comments, metadata, reader macros"))
+    (is (str/includes? help "computed transforms"))
+    (is (str/includes? help "non-.edn plan paths"))
     (is (some #(and (str/includes? % ":expect")
+                    (str/includes? % ":expect '")
                     (str/includes? % ":plan-out plan.edn"))
               (get-in core/ops-registry [:edit :examples]))
         "one documented example shows the guarded invocation")))

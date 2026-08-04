@@ -12,8 +12,9 @@ is cut.
 
 - `:edit :expect FORM`, the optional one-call guarded edit. `:expect` is the
   caller's declared before-state: exactly one Clojure form, compared with the
-  selected form structurally, so whitespace and comments cannot change the
-  verdict. On equality `:edit` saves the plan artifact and applies it in the
+  selected form losslessly. Whitespace does not change the verdict. Comments,
+  metadata, reader macros, and token spelling must match. On equality `:edit`
+  saves the plan artifact and applies it in the
   same invocation through the existing `:replace-subform!` executor, returning
   the plan evidence merged with the verified apply receipt and
   `:mode :expect-guarded`. Any difference refuses with
@@ -23,7 +24,10 @@ is cut.
   `:error-type :invalid-expect` before the source read. Selection refusals keep
   their existing error types. `:expect` is optional and the default flow is
   unchanged: without it `:edit` remains plan-only, reviewed, then applied
-  separately.
+  separately. `:expect` refuses computed `transform` replacements because their
+  generated after-state still requires review. Plan paths must use an `.edn`
+  suffix. Guarded receipts verify the plan artifact, and atomic writes preserve
+  the source file's existing permissions.
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
   A plain path such as `(form 'transition)` returns literal source;
   `(analyze path pure-function)` receives one stable ordered vector of ordinary

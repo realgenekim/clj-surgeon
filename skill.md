@@ -52,27 +52,27 @@ Return concrete EDN, not a lazy sequence. X-ray never writes source or a plan. C
 and `partition-all`. For CLJC use `(form 'name :clj)` or `:cljs`; use
 `:up :outermost`, not `:outermost :up`.
 
-## Plan and apply separately
+## Guarded edit or plan and apply
 
-Supply `:plan-out` and exactly one of `:query` or `:expr`; `:edit` may be the first
-source-bearing command when intent is exact, and never changes source without `:expect`.
-Optional `:expect BEFORE-FORM` makes it one guarded call: the plan saves and applies only
-when the selection structurally equals the declared form; a difference refuses and changes nothing.
+Supply `:plan-out` and one of `:query` or `:expr`; `:edit` may be the first source-bearing command and never changes source without `:expect`.
+Use optional `:expect BEFORE-FORM` only with a literal replacement. It makes one guarded
+call that saves and applies only when the selection equals the declared source.
 
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
-  :plan-out plan.edn
+  :expect '(assoc state :status :done)' :plan-out plan.edn
 clj-surgeon :op :edit :file src/policy.clj \
   :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
   :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-The plan saves `transform`'s concrete replacement, never executable code.
-`transform` receives the selection as quoted syntax: a call is a list, not its
-runtime value, so never `assoc` into it. To change one element inside a call,
-navigate to it — `(match :done) (replace :complete)`.
+Whitespace does not affect `:expect`; comments, metadata, and reader syntax must match.
+On mismatch, narrow the selection—`(match :done) (replace :complete)` preserves its
+surroundings—or use plan and review. Never use `:expect` with `transform`: its generated
+after-state requires review. The plan stores concrete replacement data, never executable code.
+`transform` receives quoted syntax: a call is a list, not its runtime value.
 Do not preflight whether the plan path exists. Review the returned diff and
 hashes; do not reopen the plan file. Do not edit the plan; generate a new plan
 when intent changes. Never chain plan generation and application. Apply returns

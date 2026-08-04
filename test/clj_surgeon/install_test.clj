@@ -117,13 +117,13 @@
         (run-make "--dry-run" "benchmark-claude-skill")
         {aggregate-exit :exit aggregate-out :out aggregate-err :err}
         (run-make "--dry-run" "benchmark-agent-skills")]
-    (testing "Codex defaults to one post-version matched-skill read/edit pair"
+    (testing "Codex defaults to one post-version matched-skill read/edit/guarded-edit trio"
       (is (zero? codex-exit) (str codex-out codex-err))
       (is (str/includes? codex-out "BENCH_POST_COMMIT=\"${BENCH_POST_COMMIT:-HEAD}\""))
       (is (str/includes? codex-out "BENCH_VERSIONS=\"${BENCH_VERSIONS:-post}\""))
       (is (str/includes? codex-out "BENCH_CONTEXTS=\"${BENCH_CONTEXTS:-matched-skill}\""))
       (is (str/includes? codex-out
-                         "BENCH_TASKS=\"${BENCH_TASKS:-ops-registry-xray pair-view-edit}\""))
+                         "BENCH_TASKS=\"${BENCH_TASKS:-ops-registry-xray pair-view-edit pair-view-expect-edit}\""))
       (is (str/includes? codex-out "BENCH_REPLICATES=\"${BENCH_REPLICATES:-1}\"")))
     (testing "Claude owns its prompts, grading, models, and deadlines in one harness"
       (is (zero? claude-exit) (str claude-out claude-err))

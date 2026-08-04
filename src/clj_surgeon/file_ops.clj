@@ -3,7 +3,19 @@
   (:require
    [clojure.java.io :as io])
   (:import
-   (java.nio.file CopyOption Files StandardCopyOption)))
+   (java.nio.file CopyOption Files LinkOption StandardCopyOption)))
+
+(defn- preserve-existing-permissions! [target tmp]
+  (when (.exists target)
+    (try
+      (let [link-options (make-array LinkOption 0)
+            permissions (Files/getPosixFilePermissions (.toPath target)
+                          link-options)]
+        (Files/setPosixFilePermissions (.toPath tmp) permissions))
+      (catch UnsupportedOperationException _
+        (.setReadable tmp (.canRead target) false)
+        (.setWritable tmp (.canWrite target) false)
+        (.setExecutable tmp (.canExecute target) false)))))
 
 (defn atomic-write!
   "Atomically replace file with UTF-8 source or throw without replacing it."
@@ -15,6 +27,7 @@
                                         StandardCopyOption/REPLACE_EXISTING])]
     (try
       (spit tmp source)
+      (preserve-existing-permissions! target tmp)
       (Files/move (.toPath tmp) (.toPath target) options)
       (finally
         (when (.exists tmp)
