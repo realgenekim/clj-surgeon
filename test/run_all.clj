@@ -13,6 +13,7 @@
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
    [clj-surgeon.install-test]
+   [clj-surgeon.lens-query-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
@@ -32,6 +33,7 @@
                    'clj-surgeon.extract-test
                    'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
+                   'clj-surgeon.lens-query-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test
                    'clj-surgeon.cljc.require-ops-test

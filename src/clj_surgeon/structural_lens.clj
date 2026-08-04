@@ -13,6 +13,15 @@
 
 (def plan-version 1)
 (def tool-version "0.1.0")
+(def max-query-steps 32)
+(def query-result-limit 100)
+(def supported-query-steps
+  [[:form 'NAME]
+   [:find 'PATTERN]
+   [:where {:tag :TAG}]
+   [:where {:parent-tag :TAG}]
+   :right :left :up :down
+   [:replace 'FORM]])
 
 (defn source-hash [source]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
@@ -110,6 +119,223 @@
               :else nil)]
         (recur (z/up current) current (cond-> path descriptor (conj descriptor)))))))
 
+(def ^:private navigation-steps #{:right :left :up :down})
+(def ^:private where-keys #{:tag :parent-tag})
+
+(defn- invalid-query!
+  ([message]
+   (invalid-query! message {}))
+  ([message data]
+   (throw (ex-info message
+                   (merge {:error-type :invalid-query
+                           :supported-query-steps supported-query-steps}
+                          data)))))
+
+(defn- parse-query [query allow-transform?]
+  (let [parsed (cond
+                 (vector? query) query
+                 (string? query)
+                 (if (str/blank? query)
+                   (invalid-query! "Query must be a nonempty EDN vector")
+                   (:sexpr (one-complete-form query :invalid-query "Query")))
+                 :else (invalid-query! "Query must be a nonempty EDN vector"))]
+    (when-not (vector? parsed)
+      (invalid-query! "Query must be an EDN vector"))
+    (when (empty? parsed)
+      (invalid-query! "Query must contain at least one step"))
+    (when (> (count parsed) max-query-steps)
+      (invalid-query! (str "Query exceeds the " max-query-steps " step limit")
+                      {:step-count (count parsed)
+                       :max-query-steps max-query-steps}))
+    (let [replace-indexes (keep-indexed
+                            (fn [index step]
+                              (when (and (vector? step)
+                                         (= :replace (first step)))
+                                index))
+                            parsed)]
+      (when (and (seq replace-indexes) (not allow-transform?))
+        (invalid-query! "Read queries cannot contain a transformation"
+                        {:step-index (first replace-indexes)
+                         :step (nth parsed (first replace-indexes))}))
+      (when (> (count replace-indexes) 1)
+        (invalid-query! "A query may contain only one transformation"
+                        {:step-index (second replace-indexes)
+                         :step (nth parsed (second replace-indexes))}))
+      (when (and (seq replace-indexes)
+                 (not= (first replace-indexes) (dec (count parsed))))
+        (invalid-query! "A transformation must be the final query step"
+                        {:step-index (first replace-indexes)
+                         :step (nth parsed (first replace-indexes))})))
+    (doseq [[index step] (map-indexed vector parsed)]
+      (cond
+        (navigation-steps step) nil
+
+        (not (vector? step))
+        (invalid-query! (str "Unsupported query step: " (pr-str step))
+                        {:step-index index :step step})
+
+        (= :form (first step))
+        (when-not (and (zero? index)
+                       (= 2 (count step))
+                       (or (symbol? (second step))
+                           (and (string? (second step))
+                                (not (str/blank? (second step))))))
+          (invalid-query! "[:form NAME] must be the first step and NAME must be a symbol or nonblank string"
+                          {:step-index index :step step}))
+
+        (= :find (first step))
+        (when-not (= 2 (count step))
+          (invalid-query! "[:find PATTERN] requires exactly one pattern"
+                          {:step-index index :step step}))
+
+        (= :where (first step))
+        (let [predicates (second step)]
+          (when-not (and (= 2 (count step))
+                         (map? predicates)
+                         (seq predicates)
+                         (every? where-keys (keys predicates))
+                         (every? keyword? (vals predicates)))
+            (invalid-query! "[:where PREDICATES] supports nonempty :tag and :parent-tag keyword predicates"
+                            {:step-index index :step step})))
+
+        (= :replace (first step))
+        (when-not (= 2 (count step))
+          (invalid-query! "[:replace FORM] requires exactly one replacement form"
+                          {:step-index index :step step}))
+
+        :else
+        (invalid-query! (str "Unsupported query step: " (pr-str step))
+                        {:step-index index :step step})))
+    parsed))
+
+(defn- location-key [zloc]
+  (let [{:keys [row col end-row end-col]} (meta (z/node zloc))]
+    [row col end-row end-col (z/tag zloc)]))
+
+(defn- unique-items [items]
+  (second
+    (reduce (fn [[seen result] item]
+              (let [address (:address item)]
+                (if (contains? seen address)
+                  [seen result]
+                  [(conj seen address) (conj result item)])))
+            [#{} []]
+            items)))
+
+(defn- source-index [root]
+  (let [locations (vec (zipper-locations root))
+        entries (mapv (fn [address zloc]
+                        {:address address :zloc zloc})
+                      (range)
+                      locations)
+        by-location (into {} (map (fn [item]
+                                    [(location-key (:zloc item)) item])
+                                  entries))]
+    {:entries entries
+     :by-location by-location
+     :top-levels (vec (top-level-locations root))
+     :initial (into [] (keep #(get by-location (location-key %)))
+                    (top-level-locations root))}))
+
+(defn- subtree-items [entries {:keys [address zloc]}]
+  (let [subtree-size (count (zipper-locations (z/subzip zloc)))
+        end (min (count entries) (+ address subtree-size))]
+    (subvec entries address end)))
+
+(defn- matching-descendants [entries item pattern]
+  (keep (fn [candidate]
+          (when (try
+                  (wildcard-match? pattern (z/sexpr (:zloc candidate)))
+                  (catch Exception _ false))
+            candidate))
+        (subtree-items entries item)))
+
+(defn- where-match? [zloc predicates]
+  (and (if-let [tag (:tag predicates)]
+         (= tag (z/tag zloc))
+         true)
+       (if-let [parent-tag (:parent-tag predicates)]
+         (= parent-tag (some-> zloc z/up z/tag))
+         true)))
+
+(defn- navigate [zloc step]
+  (case step
+    :right (z/right zloc)
+    :left (z/left zloc)
+    :up (z/up zloc)
+    :down (z/down zloc)))
+
+(defn- apply-query-step [{:keys [entries by-location]} items step]
+  (unique-items
+    (cond
+      (navigation-steps step)
+      (keep (fn [item]
+              (some->> (navigate (:zloc item) step)
+                       location-key
+                       (get by-location)))
+            items)
+
+      (= :form (first step))
+      (filter #(= (str (second step)) (defining-form-name (:zloc %))) items)
+
+      (= :find (first step))
+      (mapcat #(matching-descendants entries % (second step)) items)
+
+      (= :where (first step))
+      (filter #(where-match? (:zloc %) (second step)) items))))
+
+(defn- query-match [top-levels {:keys [address zloc]}]
+  (let [{:keys [row end-row]} (meta (z/node zloc))
+        owner (enclosing-form-name top-levels zloc)]
+    (cond-> {:path (semantic-path zloc owner)
+             :tag (z/tag zloc)
+             :address {:preorder address}
+             :line row
+             :end-line end-row
+             :source (z/string zloc)}
+      owner (assoc :inside owner))))
+
+(defn- query-error-result [source query exception]
+  (merge {:operation :lens
+          :query query
+          :error (.getMessage exception)
+          :error-type (or (:error-type (ex-data exception)) :invalid-source)
+          :match-count 0
+          :matches []
+          :source-hash (source-hash source)}
+         (select-keys (ex-data exception)
+                      [:step-index :step :step-count :max-query-steps
+                       :supported-query-steps])))
+
+(defn evaluate-query
+  "Evaluate a read-only EDN zipper pipeline against source. Pure: source and
+   query data/string in; bounded match records and a per-step trace out."
+  [source query]
+  (try
+    (let [query (parse-query query false)
+          root (z/of-string source {:track-position? true})
+          {:keys [initial top-levels] :as index} (source-index root)
+          {:keys [items trace]}
+          (reduce (fn [{:keys [items trace]} step]
+                    (let [next-items (apply-query-step index items step)]
+                      {:items next-items
+                       :trace (conj trace {:step step
+                                           :input-count (count items)
+                                           :output-count (count next-items)})}))
+                  {:items initial :trace []}
+                  query)
+          matches (mapv #(query-match top-levels %) items)
+          match-count (count matches)]
+      (cond-> {:operation :lens
+               :query query
+               :trace trace
+               :match-count match-count
+               :matches (vec (take query-result-limit matches))
+               :source-hash (source-hash source)}
+        (> match-count query-result-limit) (assoc :matches-truncated? true)))
+    (catch Exception e
+      (query-error-result source query e))))
+
 (defn find-subforms [source {:keys [inside match]}]
   (try
     (let [{pattern :sexpr match-source :source}
@@ -202,6 +428,34 @@
         {:error (.getMessage e)
          :error-type (or (:error-type (ex-data e)) :invalid-result-source)}))))
 
+(defn- build-replacement-plan
+  [source found selector replacement-source file extra-fields]
+  (let [matched (first (:matches found))
+        edit {:path (:path matched) :address (:address matched)
+              :line (:line matched) :before (:source matched)
+              :after replacement-source}
+        provisional (merge {:plan-version plan-version
+                            :operation :replace-subform
+                            :file file
+                            :selector selector
+                            :source-hash (:source-hash found)
+                            :match-count 1
+                            :edits [edit]
+                            :diff (edit-diff (or file "source.clj") edit)}
+                           extra-fields)
+        applied (apply-plan source provisional)]
+    (if (:error applied)
+      applied
+      (let [result-hash (:result-hash applied)]
+        (assoc provisional
+               :result-hash result-hash
+               :provenance {:tool "clj-surgeon"
+                            :tool-version tool-version
+                            :operation :replace-subform
+                            :selector selector
+                            :source-hash (:source-hash found)
+                            :result-hash result-hash})))))
+
 (defn plan-replacement [source {:keys [inside match with file]}]
   (try
     (let [{replacement-source :source}
@@ -214,30 +468,48 @@
         (assoc found :error (str "Expected exactly one match, found " match-count)
                      :error-type (if (zero? match-count) :no-match :ambiguous-match))
         :else
-        (let [matched (first (:matches found))
-              selector {:inside (:inside found) :match (:match found)
-                        :expected-match-count 1}
-              edit {:path (:path matched) :address (:address matched)
-                    :line (:line matched) :before (:source matched)
-                    :after replacement-source}
-              provisional {:plan-version plan-version :operation :replace-subform
-                           :file file :selector selector
-                           :source-hash (:source-hash found) :match-count 1
-                           :edits [edit]
-                           :diff (edit-diff (or file "source.clj") edit)}
-              applied (apply-plan source provisional)]
-          (if (:error applied)
-            applied
-            (let [result-hash (:result-hash applied)]
-              (assoc provisional
-                     :result-hash result-hash
-                     :provenance {:tool "clj-surgeon" :tool-version tool-version
-                                  :operation :replace-subform :selector selector
-                                  :source-hash (:source-hash found)
-                                  :result-hash result-hash}))))))
+        (let [selector {:inside (:inside found) :match (:match found)
+                        :expected-match-count 1}]
+          (build-replacement-plan source found selector replacement-source file {}))))
     (catch Exception e
       {:error (.getMessage e)
        :error-type (or (:error-type (ex-data e)) :invalid-replacement)})))
+
+(defn evaluate-lens
+  "Evaluate a getter/updater lens expression. Navigation-only queries return
+   read evidence; a terminal [:replace FORM] returns a guarded plan. Pure."
+  [source {:keys [query file]}]
+  (try
+    (let [query (parse-query query true)
+          transform (when (and (vector? (last query))
+                               (= :replace (first (last query))))
+                      (last query))]
+      (if-not transform
+        (cond-> (evaluate-query source query)
+          file (assoc :file file))
+        (let [selection-query (pop query)
+              {replacement-source :source}
+              (one-complete-form (second transform)
+                                 :invalid-replacement
+                                 "Replacement")
+              found (evaluate-query source selection-query)
+              match-count (:match-count found)]
+          (cond
+            (:error found) found
+            (not= 1 match-count)
+            (assoc found
+                   :error (str "Expected exactly one match, found " match-count)
+                   :error-type (if (zero? match-count)
+                                 :no-match
+                                 :ambiguous-match))
+            :else
+            (let [selector {:query query
+                            :selection-query selection-query
+                            :expected-match-count 1}]
+              (build-replacement-plan source found selector replacement-source file
+                                      {:query-trace (:trace found)}))))))
+    (catch Exception e
+      (query-error-result source query e))))
 
 (defn plan-file-replacement [{:keys [file plan-out] :as opts}]
   (if-not file
