@@ -1,6 +1,6 @@
 # Structural Lens Query Hill Climb
 
-**Status:** Implemented through CLI/documentation summit; clean-context hill climb in progress
+**Status:** Single-node lens validated; sibling-span v2 experiment in progress
 
 **Rollback tag:** `lens-hillclimb-v0-baseline`
 
@@ -175,6 +175,43 @@ source hash; it never reruns the query. Every refusal leaves bytes unchanged.
 - No claim that reader-conditional platform filtering is solved. Raw CST
   queries may return multiple branches, and writes then refuse.
 - No removal of existing high-frequency commands.
+
+## V2 sibling-span experiment
+
+The single-node updater resolves the motivating “replace the value to the right
+of this key” task, but issue #21 also requires meaningful adjacent forms to be
+addressable as one slice. Extend the same algebra rather than adding a separate
+recursive search language:
+
+```clojure
+[[:form transition] [:find :finish] [:span 2]]
+
+[[:form transition]
+ [:find :finish]
+ [:span 2]
+ [:replace-span :finish (assoc state :status :complete)]]
+```
+
+`[:span N]` selects the current semantic node and its next `N-1` semantic
+siblings without crossing their parent. Trivia is skipped while counting but
+remains part of the exact span source. A span is a first-class located slice,
+not a synthetic Clojure form.
+
+V2 replacement requires the same number of semantic forms as the selected
+span. It replaces corresponding nodes while preserving every intervening
+comment and whitespace byte. Leading trivia before the first form and trailing
+trivia after the last form remain outside the span. Planning still requires one
+result, records all complete-file addresses and exact before forms, and applies
+through the unchanged-source hash fence without rerunning the query.
+
+This covers case, cond, map, and binding pairs uniformly. It also exposes a
+flattened anonymous-function body as
+`[[:find select-keys] [:where {:parent-tag :fn}] [:span 3]]`.
+
+V2 excludes recursive `[:find-span ...]` convenience matching, unequal-arity
+splicing, insertion, deletion, variable-length wildcards, automatic comment
+ownership, cross-parent spans, computed transforms, overlapping or bulk writes,
+and reader-conditional platform selection.
 
 ## Test matrix
 
