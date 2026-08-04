@@ -7,6 +7,8 @@ A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST
 - Want to get rid of `(declare ...)` forms (which Claude Code is prone to creating) by automatically reordering `defn`s and `def`s
 - Want Claude Code to explore a Clojure codebase via the AST instead of reading entire files — 100x faster, 150x fewer tokens
 - Want one exact top-level form by name or containing line without reconstructing a `sed` range
+- Want a jq-like path that reads or safely edits the peer value after a `case`
+  key, `cond` guard, map key, or binding name
 
 **Origin story:** I watched Claude Code spend 45 minutes refactoring a 5,000-line `views.clj` file — painfully extracting functions, moving them, reading and re-reading to get the ordering right, burning through context window. It was doing the right things, just agonizingly slowly. So I asked it: *"What would the ideal tool be to help you manipulate beautiful Clojure homoiconic EDN files?"* clj-surgeon was born 45 minutes later.
 
@@ -23,26 +25,30 @@ undifferentiated stream of bytes—search for text, recover a line number, print
 a range, patch punctuation, then reread the file to see whether the edit worked.
 That throws away homoiconicity at exactly the moment it is most valuable.
 
-clj-surgeon is becoming the structural `ed`, REPL, and microscope for coding
-agents: a small, composable microkernel for seeing and changing Clojure in the
-objects the language actually contains.
+clj-surgeon is becoming the structural `ed`, REPL, jq, and microscope for
+coding agents: a small, composable microkernel for seeing and changing Clojure
+in the objects the language actually contains. `ed` contributes explicit,
+scriptable edits; jq contributes one composable path language whose filters are
+both getters and updaters. Clojure contributes a tree that can be rewritten
+without discarding comments and formatting.
 
 ```text
-ls  →  cat  →  grep/deps  →  plan  →  apply  →  receipt
+ls / cat / q / grep / deps  →  plan  →  apply  →  receipt
 ```
 
 `ls` inventories a namespace without dumping it. `cat` returns one complete,
-explicitly selected form. `grep-form` finds syntax rather than textual
-lookalikes and reports who owns each match. Dependency operations expose the
-graph. A mutation first produces a hash-bound plan and exact diff; a later
-command applies only that reviewed artifact and returns machine-readable proof
-of the write, read-back hash, and whole-file parse.
+explicitly selected form. `q` composes structural navigation: the same EDN path
+can read a node or end in a guarded replacement plan. `grep-form` finds syntax
+rather than textual lookalikes and reports who owns each match. Dependency
+operations expose the graph. A mutation first produces a hash-bound plan and
+exact diff; a later command applies only that reviewed artifact and returns
+machine-readable proof of the write, read-back hash, and whole-file parse.
 
 The ideal is not “hide an entire refactor behind one magic command.” It is
 **one command per honest judgment boundary**:
 
 ```text
-one structural discovery  →  one inspectable plan  →  one verified apply
+one structural read or plan  →  one verified apply
 ```
 
 Each command should own all of its mechanical bookkeeping—parsing, locating,
@@ -52,6 +58,12 @@ reviewing the plan, and consenting to the change. When certainty is missing,
 the tool refuses loudly with bounded evidence and executable remedies. It never
 silently widens scope, chooses the first ambiguous match, or pulls additional
 code into an edit without consent.
+
+When the target relationship and replacement are already explicit, a `q`
+updater may be the first non-mutating call: its plan contains the selected
+source, trace, exact diff, and hashes. When intent depends on what the source
+contains, run a read query first. The safety boundary is always plan versus
+apply, never an artificial requirement to spend an extra shell call.
 
 This is also the Bitter Lesson boundary. clj-surgeon should grow general
 structural primitives and trustworthy feedback, not an expanding catalog of
@@ -232,6 +244,54 @@ solely as a preflight. Continue to use `rg` for broad textual discovery,
 that genuinely spans forms or files. Inside one Clojure file, use
 `:show-form :contains` instead of `rg -n` followed by `:show-form :line`; do not
 print a large outline merely to discover the line.
+
+#### `:lens` / `:q` — Query and update the concrete syntax tree
+
+`:q` is a jq-like structural lens expressed as EDN. It navigates parsed Clojure
+syntax without evaluating it. Read the value paired with `:finish` in one call:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right]'
+```
+
+The same relationship works across the common peer shapes:
+
+- `case` key → clause value
+- `cond` guard → branch result
+- map key → map value
+- binding name → initializer
+
+Compose `[:form NAME]`, `[:find PATTERN]`,
+`[:where {:tag TAG}]`, `[:where {:parent-tag TAG}]`, and semantic
+`:right`/`:left`/`:up`/`:down` steps. `_` matches one subtree in a `:find`
+pattern. Navigation skips whitespace and comments while addresses still refer
+to the lossless rewrite-clj tree. Each read returns the exact source, semantic
+path, stable address, owner, source range, complete-file hash, and a per-step
+cardinality trace. Zero and many matches are useful read results; output is
+bounded.
+
+Make the same path an updater by ending it with `[:replace FORM]`:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+The first command never writes source. It refuses unless the path selects
+exactly one node, reparses the candidate file, and emits the existing versioned,
+hash-bound single-edit plan with selector, trace, diff, source hash, and result
+hash. Review it, then run the separate apply command. Never chain plan and
+apply. Invalid queries return the compact supported-step grammar in the error,
+so an agent does not need a second `--help` call or a wall of generic help.
+
+This algebra removes the `cat owner → reconstruct peer match → plan` bridge.
+The existing commands remain useful standard-library spellings: `:cat` is the
+fastest exact top-level read, and `:grep-form` / `:replace-subform` are concise
+when an independent subtree pattern already identifies the target.
 
 #### `:ls-tree` / `:tree` / `:map` — Map an entire directory of repos
 
@@ -503,10 +563,10 @@ with `apply_patch` or another text tool. If the intended edit changes, generate
 a new plan.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
-syntax, not a synthetic wrapper list. Until a sibling-span lens exists, match
-an independently readable contained value or expression. When sibling text
-identifies the target, use `:cat :contains` on that key, guard, or name to get
-its owner and surrounding form in one read. See
+syntax, not a synthetic wrapper list. When one peer identifies another, use
+`:q` navigation rather than reconstructing a match from the whole owner. Use
+`:replace-subform` when an independently readable value or expression already
+identifies the target exactly. See
 [issue #21](https://github.com/realgenekim/clj-surgeon/issues/21).
 
 Run plan generation as a standalone shell command. Observe and review its

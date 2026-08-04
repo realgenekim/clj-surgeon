@@ -209,3 +209,44 @@ Raw result directories remain on the benchmark host at
 `/tmp/clj-surgeon-one-shot-20260803-v1` through `v4`. The final replication's
 `runs.tsv` SHA-256 is
 `8e8ce927c057fd96065cc4c1f8135e052cb6916617e64af30c951b84b0b30159`.
+
+## Log entry: the path became both getter and updater
+
+The sibling-span question led to a more general answer than a span command.
+jq's durable idea is not its punctuation; it is that a filter is both a getter
+and an updater. Clojure gives us an even better substrate for an agent-facing
+version: an EDN pipeline over the lossless concrete syntax tree. The first
+algebra is deliberately small—locate a named form, find a subtree, filter by
+node or parent tag, then navigate left, right, up, or down. A navigation-only
+pipeline reads. The same pipeline ending in `[:replace FORM]` emits the existing
+single-edit, hash-bound plan. It never writes source.
+
+The self-hosting probe was the delightful proof. One command located the exact
+set inside clj-surgeon's own `parse-args` that keeps selected CLI values raw:
+
+```bash
+clj-surgeon :op :q :file src/clj_surgeon/core.clj \
+  :query '[[:form parse-args] [:find #{:match :with :contains :query}]]'
+```
+
+The result included the exact source, complete semantic path through nested
+`let`, `cond->`, `map`, `fn`, binding, and `if` forms, stable address, line,
+owner, source hash, and a two-stage cardinality trace. clj-surgeon had become
+capable of explaining its own CLI parser without a text-to-line-number bridge.
+
+The first blank-context comparison gave us the next hill rather than a victory
+lap. Before the skill taught the algebra, a clean agent needed seven calls to
+find that same raw-argument set: outline, wrong form, help, wrong scoped search,
+owner read, then final search. A second clean agent made a peer edit perfectly
+with the prior paved road, but still needed `cat → plan → apply`. The new updater
+can make the exact task `query-plan → apply`: two structural calls, with the
+review boundary fully intact because the first call is non-mutating and contains
+the selected source, trace, diff, and hashes.
+
+This corrects our slogan. “Discovery, plan, apply” is right when discovery
+changes the decision. When the user's target and replacement are already exact,
+forcing a separate discovery call is theater. The stronger standard remains
+one command per honest judgment boundary: read when judgment needs evidence,
+always review a non-mutating plan, then apply separately. The clean-context
+replication after the skill update will decide whether the jq-shaped model is
+obvious enough to become the paved road.

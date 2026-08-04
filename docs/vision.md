@@ -94,6 +94,23 @@ model needs a namespace's shape. `:find-subform` is better for repeated nested
 Hiccup, handlers, rules, routes, and state transitions. The goal is not to
 replace every tool; it is to make structural facts and exact actions cheap.
 
+### One path should read and update
+
+The most durable interface is jq-like: a composable path is both a getter and
+an updater. In clj-surgeon, `:q` runs an EDN pipeline over rewrite-clj's concrete
+syntax tree. For example,
+`[[:form transition] [:find :finish] :right]` selects the value paired with a
+`case` key. The same relationship works for a `cond` guard, map key, or binding
+name. Ending the path with `[:replace FORM]` changes its role from read evidence
+to a single hash-bound plan; it still never writes source. The reviewed plan is
+applied separately with `:replace-subform!`.
+
+This is the Bitter Lesson boundary in API form. The kernel supplies general
+navigation, exact addresses, concrete-syntax preservation, cardinality, and
+safe replay. The model supplies the path and replacement. We do not encode a
+special operation for every kind of peer edit, and we do not evaluate arbitrary
+Clojure to obtain apparent generality.
+
 ## The Structural X-Ray Loop
 
 clj-surgeon should be the preferred structural instrument for an agent that
@@ -116,7 +133,11 @@ range when a top-level name or containing line is known. When only distinctive
 text is known, use literal `:show-form :contains` to select its enclosing form
 without manufacturing a line number. Use `:grep-form` for file-wide structural
 syntax; each match exposes reusable enclosing-form ownership for optional
-`:inside` narrowing. Keep `rg` for broad cross-file discovery and bounded text
+`:inside` narrowing. Use
+`:q :query '[[:form transition] [:find :finish] :right]' when structural
+relationship—not textual containment—identifies the desired node. Add a
+terminal `[:replace FORM]` to emit a plan and apply it later with
+`:replace-subform!`. Keep `rg` for broad cross-file discovery and bounded text
 reads for context that genuinely spans forms.
 
 Perfection here means lossless perception, singular guarded action, and an
@@ -133,6 +154,7 @@ an expanding catalog of inferred refactorings.
 | `:deps`, `:ls-deps`, `:topo` | Dependency visibility |
 | `:ls-extract` | Minimal mechanically extractable closure |
 | `:declares` | Forward-declare audit |
+| `:lens` / `:q` | Composable concrete-syntax getter and single-edit plan updater |
 | `:grep-form` / `:find-subform` | File-wide or scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
 | `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |
@@ -142,6 +164,22 @@ an expanding catalog of inferred refactorings.
 | CLJC operations | Deterministic merge, split, require, and analysis |
 
 ## The Structural Lens Contract
+
+The composable form uses one path for reading and planning:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right]'
+
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+```
+
+Navigation-only queries report zero, one, or many results and a per-step
+cardinality trace. A terminal replacement requires exactly one result. Both
+operate on syntax, preserve comments and whitespace outside the selected node,
+and never write source.
 
 Planning:
 
@@ -177,7 +215,7 @@ compound operation.
 | Idea | Decision | Why |
 |---|---|---|
 | `:dead-code` | **DO NOT BUILD** | clj-kondo supplies evidence; a model can inspect reachability and runtime registration context. |
-| generic `:find` replacement | **DO NOT BUILD** | `rg` is superior for broad discovery; structural search should remain the narrow lens where syntax identity matters. |
+| unstructured cross-project `:find` replacement | **DO NOT BUILD** | `rg` is superior for broad discovery; `:q` and `:find-subform` should remain narrow lenses where syntax identity matters. |
 | `:suggest-split` | **DO NOT BUILD** | Cluster boundaries, ownership, naming, and API design are architectural judgment. Give the model `:ls` and `:deps`. |
 | semantic `:diff` | **DO NOT BUILD** | Git already produces the durable change artifact; a model can interpret it with surrounding context. Lens plans need only a real unified diff. |
 | `:find-extractable-pure` auto-extraction | **DO NOT BUILD** | Recognizing `swap!` is easy; deciding parameters, nil semantics, invariants, names, and tests is the actual work. |

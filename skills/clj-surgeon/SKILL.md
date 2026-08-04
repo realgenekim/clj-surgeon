@@ -1,6 +1,6 @@
 ---
 name: clj-surgeon
-description: Inspect and modify Clojure, ClojureScript, and CLJC structurally with the clj-surgeon CLI. Use for outlining large namespaces, selecting a complete form by name, line, or distinctive text, finding or replacing nested forms, mapping dependencies, extracting forms, eliminating declares, moving forms, renaming namespaces, or deterministic CLJC operations. Prefer it when textual reads or patches would be ambiguous, formatting-sensitive, or context-expensive.
+description: Inspect and modify Clojure, ClojureScript, and CLJC structurally with the clj-surgeon CLI. Use for outlining large namespaces, selecting a complete form, navigating from a case key, cond guard, map key, or binding to its peer value, finding or replacing nested forms, mapping dependencies, extracting forms, eliminating declares, moving forms, renaming namespaces, or deterministic CLJC operations. Prefer it when textual reads or patches would be ambiguous, formatting-sensitive, or context-expensive.
 ---
 
 # clj-surgeon
@@ -40,6 +40,40 @@ keyword-shaped literals such as `:finish` need no EDN-string workaround.
 Use `rg` for broad cross-file discovery. Do not use `rg -n` merely to convert
 distinctive text into a line for `:show-form`.
 
+## Navigate and update syntax like data
+
+Use `:q` when one piece of syntax identifies a related node. The query is an
+EDN pipeline over the concrete syntax tree, not evaluated Clojure:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right]'
+```
+
+This reads the value paired with `:finish`. The same `:right` step moves from a
+`cond` guard to its result, a map key to its value, or a binding name to its
+initializer. Semantic navigation skips whitespace and comments but the tool
+preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
+`[:where {:tag TAG}]`, `[:where {:parent-tag TAG}]`, and
+`:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
+pattern. A read reports zero, one, or many matches and a per-step count trace.
+
+End that same path with `[:replace FORM]` to emit one guarded plan:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+`:q` never writes source. A terminal replacement refuses unless the path
+selects exactly one node, then returns that node, the trace, one diff, and the
+source/result hashes. Review the plan before the separate apply command; never
+chain them. When the requested relationship and replacement are already exact,
+the updater can be the first non-mutating call. Run a read query first when the
+choice still requires judgment.
+
 ## Find nested syntax
 
 Use file-wide structural search when the enclosing form is unknown:
@@ -58,15 +92,16 @@ clj-surgeon :op :grep-form :file src/views.clj :inside render \
   :match '(post! "/api/items" _)'
 ```
 
-When sibling text identifies the intended subtree—a `case` key, `cond` guard,
-map key, or binding name—use `:cat :contains` on that text first. It returns the
-owner and surrounding form in one read. Do not grep an expression that may
-repeat elsewhere and then cat its owner merely to recover sibling context.
+When a peer key, guard, or binding identifies the intended subtree, prefer one
+`:q` pipeline over reading its owner and reconstructing a separate match. Do
+not grep a repeated expression and then cat its owner merely to recover sibling
+context.
 
 ## Replace one exact subtree
 
-Run discovery, planning, and application as separate commands. Never chain
-plan generation and application.
+Keep planning and application as separate commands. Never chain them. Use a
+read command first only when selecting the intended replacement requires a
+separate judgment.
 
 ```bash
 clj-surgeon :op :replace-subform :file src/views.clj :inside render \
@@ -94,8 +129,9 @@ establishes a Git worktree or explicitly requests that review; never probe
 `.git` solely to decide whether to repeat the edit-level evidence.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
-syntax, not a synthetic wrapper list. Match an independently readable contained
-expression until sibling-span operations exist.
+syntax, not a synthetic wrapper list. Use `:q` peer navigation when the sibling
+relationship identifies the target; use `:replace-subform` when one independent
+subtree pattern already identifies it exactly.
 
 ## Advanced operations
 

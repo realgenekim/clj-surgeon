@@ -1,6 +1,7 @@
 # Structural Lens Query Hill Climb
 
-**Status:** Experimental contract, iteration v1  
+**Status:** Implemented through CLI/documentation summit; clean-context hill climb in progress
+
 **Rollback tag:** `lens-hillclimb-v0-baseline`
 
 ## Outcome
@@ -15,7 +16,7 @@ do not have a standalone subtree wrapper.
 The target is behavioral:
 
 ```text
-one structural query → one reviewed plan → one verified apply
+one structural read when judgment requires it → one reviewed plan → one verified apply
 ```
 
 jq is the reference model because its filters compose both traversal and
@@ -26,6 +27,11 @@ write, but it should keep that same compositional property.
 
 A clean agent must choose that route without `rg`, `sed`, line-number recovery,
 help detours, source rereads, plan editing, or chained plan/application.
+
+When the requested target relationship and replacement are already exact, the
+query ending in `[:replace FORM]` may be the first non-mutating call. Its output
+is both the selection evidence and reviewed plan. Requiring a separate getter
+in that case would add ceremony, not a judgment boundary.
 
 ## Why this experiment exists
 
@@ -201,3 +207,21 @@ Completion requires formatter, clj-kondo, the complete test suite,
 `make install`, real-program dogfood, benchmark evidence, updated README/help/
 skill/changelog/vision, a captain's-log entry, and an annotated final summit
 tag.
+
+## Experiment record
+
+| Summit | Commit/tag | Evidence |
+|---|---|---|
+| Baseline | `lens-hillclimb-v0-baseline` | Existing `:cat` plus subtree selector workflow. |
+| Contract | `lens-hillclimb-v1-contract` | Getter/updater EDN algebra, failure matrix, and non-goals fixed before implementation. |
+| Pure algebra | `lens-hillclimb-v2-pure-algebra` | Red-first exhaustive pure tests; case, cond, map, binding, comments, duplicates, bounds, refusals, planning, and apply. |
+| CLI | `lens-hillclimb-v3-cli` | `:lens` / `:q`, raw query parsing, help, plan persistence, subprocess exits, and self-hosting query. |
+
+The first clean read agent, before the skill taught `:q`, needed seven calls:
+instructions, `:ls`, a wrong `:cat`, help, a wrong scoped search, the correct
+owner read, and a final scoped search. One `:q` expression returned the same
+exact node and semantic path during dogfood. A clean edit agent followed the
+old skill perfectly in three structural calls (`:cat`, plan, apply); the
+terminal updater can preserve the review boundary in two (plan, apply). These
+transcripts are the input to the next fresh-context replication, not a claimed
+final result.

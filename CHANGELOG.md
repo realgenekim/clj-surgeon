@@ -10,6 +10,13 @@ is cut.
 
 ### Added
 
+- `:lens` / `:q`, a jq-like EDN pipeline over the concrete Clojure syntax
+  tree. A getter such as
+  `[[:form transition] [:find :finish] :right]` reads a peer value across
+  `case`, `cond`, map, and binding shapes with exact source, semantic path,
+  address, ownership, source hash, and per-step cardinality. Ending the same
+  path in `[:replace FORM]` emits one existing hash-bound replacement plan,
+  never writes source, and applies later through `:replace-subform!`.
 - `:show-form`, a read-only one-shot that returns one complete top-level form
   by unqualified name, containing line, or case-sensitive literal `:contains`
   selector, with CLJC platform disambiguation,

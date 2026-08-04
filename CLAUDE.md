@@ -59,12 +59,18 @@ updates, and verification gates. It is not a chronological coding diary.
   match reports reusable `:inside` ownership. Add `:inside` only when the
   parent is known or ambiguity needs narrowing.
 - When sibling text identifies an edit—a `case` key, `cond` guard, map key, or
-  binding name—use `:show-form :contains` on that text to recover the owner and
-  context in one read. Do not grep a repeated expression and then read its
-  owner merely to recover sibling context.
+  binding name—use the structural lens getter
+  `:q :query '[[:form transition] [:find :finish] :right]'`. Add
+  `[:replace FORM]` to the same pipeline to emit one hash-bound plan, then apply
+  it separately with `:replace-subform!`. The query never writes source. Do not
+  grep a repeated expression and then read its owner merely to recover sibling
+  context.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
-  application. A successful verified apply receipt proves exact replay,
+  application. When the intended relationship and replacement are already
+  exact, a `:q` query ending in `[:replace ...]` may be the first non-mutating
+  call; read first only when the choice requires a separate judgment. A
+  successful verified apply receipt proves exact replay,
   read-back hash, atomic write, and whole-file parse; do not reread the edited
   or neighboring forms solely to reproduce that evidence. Review an aggregate
   Git diff only when task context already establishes a worktree or explicitly

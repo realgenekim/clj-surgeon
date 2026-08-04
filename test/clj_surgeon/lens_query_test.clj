@@ -214,6 +214,22 @@
     (is (= "#{:match :with :contains :query}" (-> result :matches first :source)))
     (is (= "parse-args" (-> result :matches first :inside)))))
 
+(deftest agent-facing-surfaces-teach-one-jq-like-getter-updater-route
+  (let [surfaces {"README" (slurp "README.md")
+                  "repository instructions" (slurp "CLAUDE.md")
+                  "vision" (slurp "docs/vision.md")
+                  "installed skill" (slurp "skills/clj-surgeon/SKILL.md")
+                  "legacy skill" (slurp "skill.md")
+                  "changelog" (slurp "CHANGELOG.md")}]
+    (doseq [[surface body] surfaces]
+      (testing surface
+        (is (str/includes? body ":q"))
+        (is (str/includes? body "[:form transition]"))
+        (is (str/includes? body "[:find :finish]"))
+        (is (str/includes? body ":right"))
+        (is (str/includes? body "[:replace"))
+        (is (str/includes? body ":replace-subform!"))))))
+
 (def ^:private project-root
   (.getCanonicalPath (io/file ".")))
 
