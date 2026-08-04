@@ -426,7 +426,9 @@ receipt includes `:applied-edit` plus `:verified` whole-file parse,
 `:read-back-hash`, and atomic-write evidence. Do not repeat those exact checks
 with `rg`, `:show-form`, `git diff`, or `shasum`; the reviewed plan is the
 edit-level diff. Proceed to relevant formatter, linter, compiler, and test
-commands, then review the aggregate repository diff once. If atomic replacement is unavailable,
+commands. Review an aggregate Git diff only when the surrounding task already
+establishes a worktree or explicitly requests it; do not probe `.git` merely to
+repeat edit-level evidence. If atomic replacement is unavailable,
 the command fails and does not fall back to a weaker write. Every error is
 concise EDN and every error exits nonzero.
 

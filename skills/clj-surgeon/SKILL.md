@@ -86,9 +86,12 @@ returns `:applied-edit` and a `:verified` read-back receipt. Trust that receipt
 for exact replay/hash/parse evidence; do not repeat it with `rg`, `show-form`,
 `git diff`, or `shasum`. The reviewed plan diff is the edit-level change review;
 the receipt proves that exact result was atomically written and reparsed. Do not
-reread related forms solely to verify byte preservation. Still run relevant
-repository formatters, linters, compilers, and tests, and review the aggregate
-workspace diff once when a repository is available.
+reread related forms solely to verify byte preservation. When a task asks only
+to verify this exact edit, the reviewed plan plus successful receipt completes
+that request. Still run relevant repository formatters, linters, compilers, and
+tests. Review an aggregate Git diff only when the surrounding task already
+establishes a Git worktree or explicitly requests that review; never probe
+`.git` solely to decide whether to repeat the edit-level evidence.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
 syntax, not a synthetic wrapper list. Match an independently readable contained

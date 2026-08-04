@@ -672,6 +672,7 @@
                                    "Review the saved plan and its diff before application."
                                    "Apply the reviewed plan directly with :replace-subform!."
                                    "A successful receipt includes :verified read-back hash and whole-file parse evidence; the reviewed plan is the edit-level diff, so do not repeat those checks with rg, show-form, git diff, or shasum."
+                                   "When the task asks only to verify this exact edit, the reviewed plan plus successful receipt completes that request; do not probe for a Git worktree merely to repeat it."
                                    "Do not edit the plan with apply_patch or another text tool."
                                    "If the intended edit changes, generate a new plan."
                                    "Stop on nonzero status, then run the repository formatter, linter, and tests after success."]

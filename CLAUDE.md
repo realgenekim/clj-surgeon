@@ -66,7 +66,9 @@ updates, and verification gates. It is not a chronological coding diary.
   review it before running a separate apply command; never chain planning and
   application. A successful verified apply receipt proves exact replay,
   read-back hash, atomic write, and whole-file parse; do not reread the edited
-  or neighboring forms solely to reproduce that evidence.
+  or neighboring forms solely to reproduce that evidence. Review an aggregate
+  Git diff only when task context already establishes a worktree or explicitly
+  requests it; do not probe `.git` merely to repeat edit-level evidence.
 - Format changed Clojure files before linting or testing. Use the repository's
   formatter when configured; otherwise run
   `npx @chrisoakman/standard-clojure-style fix <changed-files>`.

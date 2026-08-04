@@ -81,8 +81,9 @@ A read-back mismatch returns nonzero failure data. Planning and application
 remain separate commands. The receipt proves exact structural replay; it does
 not replace repository formatting, linting, compilation, or tests. The reviewed
 plan is the edit-level diff; do not reread the edited or neighboring forms to
-reproduce receipt evidence. Review the aggregate workspace diff once when a
-repository is available.
+reproduce receipt evidence. Review an aggregate Git diff only when task context
+already establishes a worktree or explicitly requests it; do not probe `.git`
+merely to repeat edit-level evidence.
 
 ## Behavior Matrix
 

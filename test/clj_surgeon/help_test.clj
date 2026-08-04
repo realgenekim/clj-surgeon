@@ -234,6 +234,7 @@
     (is (str/includes? help "generate a new plan"))
     (is (str/includes? help "reviewed plan is the edit-level diff"))
     (is (str/includes? help "git diff"))
+    (is (str/includes? help "do not probe for a Git worktree"))
     (is (str/includes? help ":replace-subform!"))))
 
 (deftest replace-subform-help-teaches-one-shot-sibling-context
