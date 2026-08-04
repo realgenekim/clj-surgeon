@@ -145,22 +145,22 @@ inspection. Use `:right` when only the peer value is the target.
 
 ## Enumerate sibling pairs in one read
 
-When the task asks for every pair, use `[:partition-all 2]`. Do not read the
-owner and manually count children. Do not issue one `:q` call per key.
+When the first sibling is known, enumerate every pair with `[:partition-all 2]`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
 ```
 
-The step starts at the current node and partitions it with all following
-semantic siblings. Each result contains neutral `:forms`, exact source,
-addresses, gaps, and `:partition` evidence. A shorter final span is explicit;
-the tool never drops it or guesses what it means. In a `case`, the caller can
-interpret a one-form remainder as the optional default. In a `cond`, a nested
-`cond` result remains one subtree when the query starts at the first outer
-guard.
+When repeated nested heads make the first outer sibling unknown, promote heads
+to owners before retaining maximal owners:
 
+```bash
+clj-surgeon :op :q :file src/policy.clj :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+```
+
+Use `:up :outermost`, not `:outermost :up`; head symbols do not contain one
+another. When the first outer guard is known, anchor there because it is
+shorter. Results contain exact source, addresses, gaps, and partition evidence.
 Use `:right` for one known value. Use `[:span 2]` for one known pair. Use
 `[:partition-all 2]` for all pairs in a sibling suffix. Multiple partitions are
 read evidence and refuse mutation. Use an exact anchor and `[:span 2]` for a

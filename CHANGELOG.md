@@ -36,6 +36,11 @@ is cut.
   binding, and alternating-argument inventories one structural read, retains
   a shorter final span without semantic inference, and reuses the guarded
   equal-arity `:replace-span` updater when exactly one partition is selected.
+- `:outermost` filters the current query stream to maximal concrete-syntax
+  subtrees while retaining disjoint roots. Use `[:find cond] :up :outermost`
+  when repeated nested heads make the first outer guard unknown; placement is
+  explicit (`:outermost :up` cannot remove contained owners), and a known first
+  guard remains the shorter anchor.
 - Machine-readable `clj-surgeon --version`, plus `:planned-operation` in apply
   receipts so the generic executor identifies node versus span plans.
 - `:show-form`, a read-only one-shot that returns one complete top-level form

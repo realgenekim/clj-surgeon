@@ -120,6 +120,13 @@ guards/results, map entries, bindings, and alternating function arguments. The
 model supplies the starting node and interprets the neutral `:forms`. The
 kernel supplies boundaries, source, cardinality, and addresses.
 
+The generic `:outermost` stream filter closes the nested-owner case without
+teaching the kernel macro semantics. After `[:find cond] :up`, it keeps every
+current owner that has no current ancestor; disjoint outer owners remain
+disjoint. Placement is part of the algebra: use `:up :outermost`, not
+`:outermost :up`, because head symbols do not contain one another. When a first
+outer guard is known, anchoring there remains the shorter expression.
+
 The plan-only `:edit` front door can compile its capability-limited pure
 Clojure `:expr` into the same path data. SCI exposes collection computation and the
 structural builders, but not I/O, processes, namespaces, mutable references,

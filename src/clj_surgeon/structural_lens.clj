@@ -20,7 +20,7 @@
    [:find 'PATTERN]
    [:where {:tag :TAG}]
    [:where {:parent-tag :TAG}]
-   :right :left :up :down
+   :right :left :up :down :outermost
    [:span 'POSITIVE-COUNT]
    [:partition-all 'POSITIVE-COUNT]
    [:replace 'FORM]
@@ -173,6 +173,8 @@
       (cond
         (navigation-steps step) nil
 
+        (= :outermost step) nil
+
         (not (vector? step))
         (invalid-query! (str "Unsupported query step: " (pr-str step))
                         {:step-index index :step step})
@@ -276,6 +278,14 @@
                   [(conj seen address) (conj result item)])))
             [#{} []]
             items)))
+
+(defn- outermost-items [items]
+  (let [items (unique-items items)
+        current-locations (set (map (comp location-key :zloc) items))]
+    (filterv (fn [{:keys [zloc]}]
+               (not-any? #(contains? current-locations (location-key %))
+                         (take-while some? (iterate z/up (z/up zloc)))))
+             items)))
 
 (defn- semantic-span [{:keys [by-location]} {:keys [zloc]} span-count]
   (let [zlocs (->> (iterate z/right zloc)
@@ -381,6 +391,9 @@
                        location-key
                        (get by-location)))
             items)
+
+      (= :outermost step)
+      (outermost-items items)
 
       (= :form (first step))
       (filter #(= (str (second step)) (defining-form-name (:zloc %))) items)

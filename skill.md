@@ -131,8 +131,7 @@ inspection. Use `:right` when only the peer value is the target.
 
 ## Enumerate sibling pairs in one read
 
-When the task asks for every pair, use `[:partition-all 2]`. Do not read the
-owner and manually count children. Do not issue one `:q` call per key.
+When the first sibling is known, enumerate every pair with `[:partition-all 2]`:
 
 ```bash
 clj-surgeon :op :q :file src/state.clj \
@@ -146,6 +145,18 @@ the tool never drops it or guesses what it means. In a `case`, the caller can
 interpret a one-form remainder as the optional default. In a `cond`, a nested
 `cond` result remains one subtree when the query starts at the first outer
 guard.
+
+When repeated nested heads make that first outer sibling unknown, promote each
+head to its owner before retaining maximal owners:
+
+```bash
+clj-surgeon :op :q :file src/policy.clj \
+  :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+```
+
+Use `:up :outermost`, not `:outermost :up`; head symbols do not contain one
+another. If the first outer guard is known, anchor there directly because that
+query is shorter.
 
 Use `:right` for one known value. Use `[:span 2]` for one known pair. Use
 `[:partition-all 2]` for all pairs in a sibling suffix. Multiple partitions are

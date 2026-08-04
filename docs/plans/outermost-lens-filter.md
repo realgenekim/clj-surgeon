@@ -1,6 +1,7 @@
 # Outermost Lens Filter
 
-**Status:** Accepted bounded experiment; contract fixed before tests or code
+**Status:** Kept; implemented, fully verified, and independently one-shot on
+the nested-`cond` and disjoint nested-`case` shapes
 **Motivating evidence:** The post-`[:partition-all 2]` clean nested-`cond`
 inventory required a second structural query solely to remove contained owner
 matches.
@@ -136,3 +137,17 @@ All focused and full tests must pass with a larger assertion count. If either
 agent still needs a source read or positional choice, improve the instruction
 once and repeat. If the second shape does not need the same relation, remove
 the operator and retain the negative evidence.
+
+## Verification Result
+
+The focused suite passed 37 tests and 415 assertions. The full suite passed 409
+tests and 2,789 assertions, with no weakened tests. clj-kondo reported zero
+errors and zero warnings. The installed CLI exposed the documented help and
+returned the expected trace for both motivating fixtures.
+
+Two clean-context agents independently read the complete 240-line skill and
+then chose `:up :outermost` without design history. The nested-`cond` agent
+returned all seven outer pairs in its first and only source invocation. The
+disjoint nested-`case` agent returned all four outer pairs from both owners in
+its first and only source invocation. Neither read an owner, chose a position,
+or retried. The operator therefore passes the keep gate.

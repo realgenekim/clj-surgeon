@@ -385,6 +385,19 @@ the parent and never drops a remainder. For a `case`, a final one-form span can
 be the default expression. The tool reports only that the span is incomplete;
 the caller decides what it means. A nested branch result remains one subtree.
 
+If repeated nested heads make the first outer sibling unknown, promote every
+head to its owner and retain the maximal owners before partitioning:
+
+```bash
+clj-surgeon :op :q :file src/policy.clj \
+  :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+```
+
+Placement matters: the symbol nodes selected by `[:find cond]` do not contain
+one another, but their owner lists do. Thus use `:up :outermost`, not
+`:outermost :up`. If the first outer guard is already known, anchor on it
+directly; that remains the shorter route.
+
 Use `:right` for one known value, `[:span 2]` for one known pair, and
 `[:partition-all 2]` for all pairs in a sibling suffix. A terminal
 `[:replace-span FORM ...]` can update one unambiguous partition with equal

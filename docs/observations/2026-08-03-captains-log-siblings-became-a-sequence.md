@@ -119,3 +119,45 @@ remove contained matches without choosing an arbitrary first result or knowing
 what `cond` means. We will not hide the second call with a benchmark average or
 add the operator from one appealing example. The next experiment must show
 that the same contained-match detour recurs across independent shapes.
+
+## The second query disappeared
+
+The bounded `:outermost` experiment passed. Its semantics stayed deliberately
+smaller than the motivating macros: given the current stream of concrete-syntax
+nodes, retain every node that has no strict ancestor in that same stream.
+Disjoint maximal roots remain; the operator never chooses one match.
+
+That one relation closes both independent shapes:
+
+```clojure
+[[:form classify-request]
+ [:find cond] :up :outermost :down :right
+ [:partition-all 2]]
+
+[[:form route-two-dimensions]
+ [:find case] :up :outermost :down :right :right
+ [:partition-all 2]]
+```
+
+The implementation added 15 lines to the structural kernel. The permanent
+suite covers zero, one, duplicates, ancestry chains, siblings, cousins,
+multiple disjoint roots, different tags, reader conditionals, metadata,
+comments, stable trace counts, guarded updates, ambiguous updates, malformed
+grammar, and the exact nested `cond` and `case` fixtures. Focused verification
+passed 37 tests and 415 assertions. The full suite passed 409 tests and 2,789
+assertions. clj-kondo reported zero errors and zero warnings.
+
+Then two blank-context agents read the 240-line installed skill. The first used
+`:up :outermost` in its first source-bearing call and returned all seven outer
+`cond` pairs, preserving the nested `cond` as one result. The second
+independently used the same relation and returned all four pairs from two
+disjoint outer `case` owners, preserving both nested cases. Each task took one
+clj-surgeon source invocation. Neither agent read an owner, selected a position,
+or retried.
+
+This is a particularly clean Bitter Lesson result. We did not teach the tool
+what a `cond` branch or `case` clause means. We added maximal-tree filtering,
+then let the model compose it with promotion, navigation, and partitioning.
+When the first outer guard is already known, that direct anchor remains
+shorter. When it is unknown, the general algebra now removes the entire second
+query.

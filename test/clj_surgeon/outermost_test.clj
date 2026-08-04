@@ -160,3 +160,17 @@
         (is (= :invalid-query (:error-type result)))
         (is (integer? (:step-index result)))
         (is (vector? (:supported-query-steps result)))))))
+
+(deftest operational-surfaces-preserve-the-placement-contract
+  (doseq [[surface path]
+          {"README" "README.md"
+           "canonical skill" "skills/clj-surgeon/SKILL.md"
+           "legacy skill" "skill.md"
+           "repository instructions" "CLAUDE.md"
+           "vision" "docs/vision.md"
+           "changelog" "CHANGELOG.md"}]
+    (testing surface
+      (let [text (slurp path)]
+        (is (str/includes? text ":outermost"))
+        (is (str/includes? text ":up :outermost"))
+        (is (str/includes? text ":outermost :up"))))))

@@ -75,6 +75,11 @@ updates, and verification gates. It is not a chronological coding diary.
   `[:partition-all 2]`. Do not read the owner and manually count children or
   issue one query per key. The final shorter span is explicit and must be
   interpreted by the caller. clj-surgeon does not infer a default or error.
+- When repeated nested heads make that first outer member unknown, promote the
+  heads to their owner nodes and filter contained owners with
+  `[:find cond] :up :outermost` before navigating to the children. Placement is
+  significant: use `:up :outermost`, not `:outermost :up`. When the first outer
+  guard is already known, anchor there directly because that route is shorter.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already
