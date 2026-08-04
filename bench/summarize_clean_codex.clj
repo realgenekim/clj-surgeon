@@ -6,7 +6,7 @@
 
 (def numeric-fields
   #{:wall-ms :input-tokens :cached-input-tokens :uncached-input-tokens
-    :output-tokens :reasoning-output-tokens :shell-calls :atomic-commands
+    :output-tokens :reasoning-output-tokens :shell-calls :file-changes :atomic-commands
     :clj-invocations :source-commands :source-output-bytes
     :total-tool-output-bytes})
 
@@ -59,6 +59,7 @@
    :uncached (median (map :uncached-input-tokens rows))
    :output (median (map :output-tokens rows))
    :commands (median (map :shell-calls rows))
+   :file-changes (median (map :file-changes rows))
    :source-bytes (median (map :source-output-bytes rows))
    :skill-read (percent :skill-read rows)
    :q-used (percent :q-used rows)
@@ -79,17 +80,17 @@
       "# Clean Codex benchmark summary\n\n"
       "Correctness is a gate. Token counts are the final cumulative usage "
       "reported by each Codex session.\n\n"
-      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | Source output | Skill read | q | partition-all | edit | First source edit | Text reader | show-form | Separate plan/apply |\n"
-      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | File changes | Source output | Skill read | q | partition-all | edit | First source edit | Text reader | show-form | Separate plan/apply |\n"
+      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
       (str/join
         ""
         (for [{:keys [task context version runs correct exact wall input uncached output
-                      commands source-bytes skill-read q-used partition-all edit-used
+                      commands file-changes source-bytes skill-read q-used partition-all edit-used
                       first-edit text-reader show-form plan-separate]}
               summaries]
-          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
+          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
                   task context version runs correct exact (fmt-int wall) (fmt-int input)
-                  (fmt-int uncached) (fmt-int output) (fmt-int commands)
+                  (fmt-int uncached) (fmt-int output) (fmt-int commands) (fmt-int file-changes)
                   (fmt-int source-bytes) skill-read q-used partition-all edit-used first-edit
                   text-reader show-form
                   (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))

@@ -1,6 +1,6 @@
 # `:edit` Command MVP
 
-**Status:** Prototype implemented; clean-agent keep/remove benchmark pending
+**Status:** v1 adoption gate failed; one global-help iteration pending
 
 ## Hypothesis
 

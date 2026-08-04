@@ -553,6 +553,7 @@
                                    :query    {:required true :desc "Existing lens pipeline ending in [:replace FORM] or [:replace-span FORM ...]"}
                                    :plan-out {:required true :desc "New or replaceable EDN review artifact; must not alias :file"}}
                        :workflow  ["Use :q to read. Use :edit only when the complete selection and replacement are already known."
+                                   "When a named form plus an exact key, guard, map key, or binding identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
                                    "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
                                    "Review the returned selector, one edit, diff, source hash, and result hash."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
@@ -800,6 +801,7 @@
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
     (.append sb "    clj-surgeon :op :q :file src/my/ns.clj :query '[[:form transition] [:find :finish] :right]'\n")
+    (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :query '[[:form transition] [:find :finish] :right [:replace NEW-FORM]]' :plan-out plan.edn\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")
     (.append sb "  All ops return EDN. Read-only operations never write.\n  Write operations differ: :mv writes unless :dry-run true; paired operations use their documented ! executor.\n")

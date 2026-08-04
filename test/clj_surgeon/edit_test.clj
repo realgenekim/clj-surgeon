@@ -87,9 +87,12 @@
         help (core/format-op-help :edit (get core/ops-registry :edit))]
     (is (contains? core/ops-registry :edit))
     (is (str/includes? global "edit"))
+    (is (str/includes? global "clj-surgeon :op :edit"))
+    (is (str/includes? global ":plan-out plan.edn"))
     (is (str/includes? help "PLAN ONLY"))
     (is (str/includes? help "never changes source"))
     (is (str/includes? help "Use :q to read"))
+    (is (str/includes? help "first source-bearing call"))
     (is (str/includes? help "[:replace"))
     (is (str/includes? help "[:replace-span"))
     (is (str/includes? help ":replace-subform!"))

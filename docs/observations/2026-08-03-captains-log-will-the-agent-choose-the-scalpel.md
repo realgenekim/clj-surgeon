@@ -111,3 +111,45 @@ and lens suites also pass: 70 tests and 657 assertions. clj-kondo reports no
 errors in the changed production and test namespaces. These facts establish
 the safety contract, not product value. The name earns permanence only if the
 neutral-awareness Codex study changes voluntary behavior.
+
+## First voluntary-choice result: the noun did not win
+
+The first valid study ran four independent repetitions in each stable/prototype
+× hidden/aware cell. The only prompt difference in the aware condition was:
+“The clj-surgeon CLI is installed and available.” No skill or operation name
+was supplied.
+
+| Context | Stable exact | Prototype exact | Stable median calls | Prototype median calls |
+|---|---:|---:|---:|---:|
+| Outcome only | 1/4 | 0/4 | 5 shell + 1 file change | 3 shell + 1 file change |
+| Neutral awareness | 4/4 | 4/4 | 6 shell | 7 shell |
+
+Awareness, not the new command, produced the large correctness gain. Seven of
+eight hidden-tool agents used text reads plus a file-change patch and changed
+an unrelated byte: the final blank line disappeared. All eight aware agents
+used guarded structural plans and preserved every byte.
+
+The prototype did not meet its adoption gate:
+
+- `:edit` appeared in only 1 of 4 aware prototype runs;
+- it was the first source-bearing operation in 0 of 4;
+- that agent first used `rg`, then `:q`, then `:edit`;
+- the other agents chose `:replace-subform` twice and `:q` once;
+- prototype medians rose from 6 to 7 shell calls, 4.6 KB to 8.3 KB of output
+  from source-bearing commands, 39.2 s to 46.0 s wall time, and 109.2k to
+  111.6k cumulative input.
+
+This is a clean negative result for “add the obvious noun.” The stable global
+help already exposed two credible editing routes. Adding a third fragmented
+choice and made the help scan larger. The lone `:edit` user proved that the
+facade works safely, but not that it is preferred.
+
+One fair iteration remains before removal. The global quick start taught `:q`
+but did not show `:edit`, so agents who scanned only the orientation page could
+not copy the new one-shot spelling. The v2 experiment adds exactly one global
+quick-start example and one general rule: when a named form plus exact sibling
+anchor and replacement are already supplied, the edit plan may be the first
+source-bearing call. It does not alter the task prompt, skill, query grammar, or
+planner. Four new neutral-awareness sessions will test whether this small
+onboarding correction changes voluntary choice. If it does not, remove the
+facade rather than adding more persuasion.
