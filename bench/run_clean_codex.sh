@@ -160,6 +160,19 @@ make_xray_fixture() {
     printf '%s\n\n' \
       '            ]' \
       '   :unrelated-event {:category :deny :points 10000}})'
+    printf '%s\n' '(def checksum-report' '  {:events ['
+    for i in $(seq 1 300); do
+      case $((i % 3)) in
+        0) category=deny ;;
+        1) category=allow ;;
+        2) category=review ;;
+      esac
+      points=$(((i * 7 % 11) + 1))
+      printf '            {:category :%s :points %d}\n' "$category" "$points"
+    done
+    printf '%s\n\n' \
+      '            ]' \
+      '   :unrelated-event {:category :deny :points 10000}})'
     for i in $(seq 106 210); do
       printf '(defn filler-after-%03d [x]\n  (- x %d))\n\n' "$i" "$i"
     done
@@ -246,6 +259,9 @@ task_prompt() {
     xray-summary)
       printf '%s' 'In src/bench/xray.clj, sum :points by :category for the values in the :events vector inside audit-report. Ignore :unrelated-event. Do not modify files or read the whole file. Your final answer must be exactly one EDN map from category keywords to integer totals, with no prose or code fence.'
       ;;
+    xray-checksum)
+      printf '%s' 'In src/bench/xray.clj, compute this checksum over the :events vector inside checksum-report. In source order with indexes starting at 1, multiply index * :points * category weight, where :deny is 3, :allow is 5, and :review is 7. Sum those products and take modulo 1000003. Ignore :unrelated-event. Do not modify files or read the whole file. Your final answer must be exactly one integer with no prose or code fence.'
+      ;;
     *)
       echo "Unknown task: $task" >&2
       exit 2
@@ -261,7 +277,7 @@ target_for_task() {
     computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
     case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
-    xray-summary) printf '%s' 'src/bench/xray.clj' ;;
+    xray-summary|xray-checksum) printf '%s' 'src/bench/xray.clj' ;;
   esac
 }
 
@@ -288,7 +304,7 @@ prepare_workspace() {
     case-inventory|cond-inventory|binding-inventory)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
       ;;
-    xray-summary)
+    xray-summary|xray-checksum)
       cp "$setup_root/templates/xray.clj" "$workspace/src/bench/xray.clj"
       ;;
   esac
@@ -523,6 +539,10 @@ run_one() {
       ;;
     xray-summary)
       exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= {:deny 129 :allow 113 :review 121} (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
+      correct=$exact_correct
+      ;;
+    xray-checksum)
+      exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= 358967 (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
       correct=$exact_correct
       ;;
     case-edit)
