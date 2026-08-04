@@ -1,6 +1,6 @@
 # Pair-View Evidence Experiment
 
-**Status:** Evidence gathering; no feature authorized by this plan
+**Status:** H1 accepted; `[:partition-all N]` contract fixed before implementation
 
 ## Question
 
@@ -120,11 +120,169 @@ Implement only if:
 Otherwise record the negative result, retain `:right` and `[:span 2]`, and do
 not grow the query language.
 
-## If implementation is earned
+## Clean-context evidence
 
-Before code, fix an observable contract for empty/singleton/even/odd streams,
-offsets, tails, nested and overlapping sequences, comments, reader
-conditionals, ambiguity, result bounding, path replay, and every malformed
-option. Add red pure tests, one real-program-derived fixture, CLI/help/skill
-anti-drift tests, clean-context replication, formatter/lint/full-suite gates,
-and a reversible annotated tag.
+Three clean agents independently completed the inventory correctly. None saw a
+candidate syntax or expected command route. Each agent received only the
+repository instructions, installed skill, task, and fixture.
+
+| Shape | Structural reads | Source returned | Mechanical work outside the tool | Requested primitive |
+|---|---:|---:|---|---|
+| `case` plus optional default | 10 (`:cat` + 9 `:q`) | ~1.3 KB | Issued one query per branch and one for the tail | Ordered case pairs plus an explicitly tagged default |
+| outer `cond` with nested `cond` result | 2 (`:cat` + `:q`) | ~1.4 KB | Counted seven pairs, converted that to a 14-child span | Outer guard/result pairs |
+| `let` binding vector | 2 overlapping `:q` reads | ~980 B | Counted 16 children and manually split eight pairs | `[:partition 2]` or binding pairs |
+
+The `case` agent used `:right` correctly for every singular relation. That is
+positive control evidence: the existing primitive is clear, but repetition is
+the cost. The `cond` and binding agents used `[:span N]` correctly. That is a
+second positive control: spans preserve boundaries, but callers must already
+know and count the extent.
+
+The same missing operation therefore appeared in three syntax shapes: group a
+selected node and its following semantic siblings into consecutive located
+spans. The operation does not need to know what `case`, `cond`, or `let` means.
+
+### Threshold decision
+
+H1 passes all five build gates:
+
+1. Three independent contexts exposed the same pairing detour across three
+   syntax shapes.
+2. One pair view replaces either nine repeated reads or a redundant owner/span
+   read plus manual counting.
+3. Suffix partitioning from an explicit structural anchor is mechanical,
+   macro-agnostic, and compositional.
+4. Singular mutation remains the shipped read-or-plan path through `:right` or
+   `[:span 2]`; pair inventory does not authorize silent bulk mutation.
+5. The contract and refusal matrix below require no semantic inference.
+
+The agents' macro-specific names are evidence about the user need, not the API
+design. We will not add `:case-branches`, `:cond-branches`, or
+`:binding-pairs`.
+
+## Earned contract: `[:partition-all N]`
+
+The smallest addition is not a semantic `:pairs` view. It is the enumeration
+counterpart to the shipped singular `[:span N]`:
+
+```clojure
+[:partition-all POSITIVE-COUNT]
+```
+
+Given each current semantic node, the step:
+
+1. starts with that node;
+2. takes it and every following semantic sibling under the same parent;
+3. partitions that suffix into consecutive located spans of size `N`;
+4. emits a final shorter span when a remainder exists;
+5. never crosses the parent;
+6. preserves the exact concrete-syntax addresses and trivia of every span.
+
+It is valid only as the final read step or immediately before
+`[:replace-span FORM ...]`. The existing result limit bounds returned evidence;
+`:match-count` remains authoritative and truncation remains explicit.
+
+Each result reuses the existing span schema and adds only partition evidence:
+
+```clojure
+{:tag :span
+ :address {:preorders [101 102]}
+ :count 2
+ :forms [":start" "(assoc state :status :running)"]
+ :gaps ["\n      "]
+ :source ":start\n      (assoc state :status :running)"
+ :partition {:size 2 :index 0 :complete? true}}
+```
+
+An odd suffix is never silently dropped and never interpreted by the tool. A
+`case` default, malformed `cond`, or arbitrary trailing function argument all
+have the same mechanical representation:
+
+```clojure
+{:count 1
+ :forms ["(assoc state :last-unknown-event event-type)"]
+ :partition {:size 2 :index 8 :complete? false}
+ ...}
+```
+
+This is intentionally Clojure's `partition-all`, not `partition`: retaining the
+remainder is the safe behavior. The caller decides what that remainder means.
+
+### One-shot routes
+
+No owner-form read or known branch name is required:
+
+```clojure
+;; `case`: skip list head and dispatch expression, then enumerate the suffix.
+[[:form route-event] [:find case] :up :down :right :right
+ [:partition-all 2]]
+
+;; `cond`: skip only the list head.
+[[:form classify-request] [:find cond] :up :down :right
+ [:partition-all 2]]
+
+;; `let`: enter the binding vector and enumerate from its first child.
+[[:form prepare-request] [:find let] :up :down :right :down
+ [:partition-all 2]]
+```
+
+The tool still does not claim those forms are maps. It exposes their shared
+flat sibling structure. In the `case` interpretation, callers may treat the
+first and second `:forms` entries as test/result or key/value; in a `let`, they
+are name/initializer.
+
+### Getter/updater boundary
+
+`[:partition-all N]` returns located spans, so the existing
+`[:replace-span FORM ...]` is its updater without a second mutation language.
+The existing gates remain unchanged:
+
+- zero partitions: `:no-match`;
+- multiple partitions: `:ambiguous-match`;
+- one partition with different replacement arity: `:span-arity-mismatch`;
+- one equal-arity partition: one hash-bound `:replace-span` plan.
+
+Normal singular edits should continue to use an anchored `[:span 2]`. The new
+step earns its place by making bounded inventories one shot, not by replacing
+the clearer singular operation.
+
+### Deliberate exclusions
+
+- No `:drop`, `:take`, `:tail`, `:nth`, arbitrary slicing, or computed-update
+  sublanguage.
+- No `:key`/`:value`, `:test`/`:result`, or binding labels in generic output.
+- No macro expansion, default detection, validation, or semantic inference.
+- No silent bulk mutation: multiple produced spans still refuse planning.
+- No ownership guess for trivia between adjacent partitions. Trivia inside a
+  partition is retained exactly; trivia between partitions belongs to neither.
+
+### Required refusal and boundary matrix
+
+Tests must fix:
+
+- zero, negative, string, missing, and surplus arguments;
+- nonterminal use, transformations other than `:replace-span`, and application
+  after an existing span;
+- empty, singleton, even, and odd sibling suffixes;
+- multiple input anchors and overlapping suffixes;
+- comments inside versus between partitions;
+- maps, binding vectors, `case`, outer `cond` with a nested result, flattened
+  `#(...)`, reader conditionals, discards, and metadata;
+- the 100-result truncation boundary and trace counts;
+- zero/many/one-match updater behavior, replacement arity, stale hashes, and
+  exact plan replay.
+
+## Implementation gates
+
+- [x] Fix the observable contract before code.
+- [x] Record a real-program-derived fixture and clean-context baseline.
+- [ ] Add red pure tests for the full grammar, boundary, trivia, and updater
+  matrix.
+- [ ] Implement the smallest contract without weakening existing tests.
+- [ ] Integrate CLI help, README, skill, vision, and changelog with anti-drift
+  assertions.
+- [ ] Format, lint, run focused and full tests, and run `make install`.
+- [ ] Replicate all three inventories in fresh clean contexts.
+- [ ] Record call/token/source-output deltas and the Captain's Log.
+- [ ] Tag every reversible hill-climb point, commit, push, merge to `main`, and
+  remove the experiment branch after verification.
