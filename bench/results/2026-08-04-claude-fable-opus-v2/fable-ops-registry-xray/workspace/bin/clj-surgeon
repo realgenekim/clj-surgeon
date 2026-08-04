@@ -1,0 +1,6 @@
+#!/usr/bin/env bb
+;; benchmark launcher pinned to an immutable installed package
+(require (quote [babashka.classpath :as cp]))
+(cp/add-classpath "/Users/genekim/.local/share/clj-surgeon/versions/477dca94120c74be378d84f836dbc7dc19a84783/cli-3e5b6ca0fcdf5fa1e5b433cc5d54140916fe7b38e5e4c42b073534430fca88a4/src")
+(require (quote [clj-surgeon.core :as core]))
+(apply core/-main *command-line-args*)

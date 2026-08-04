@@ -1,0 +1,19 @@
+Exact structural match count: **2**
+
+1. [src/bench/structural.clj:323](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/31-r03-structural-find-matched-skill-pre/src/bench/structural.clj:323)
+
+```clojure
+(select-keys state [:status :attempts])
+```
+
+2. [src/bench/structural.clj:327](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/31-r03-structural-find-matched-skill-pre/src/bench/structural.clj:327), lines 327–331
+
+```clojure
+(select-keys
+
+   job
+
+   [:status :attempts])
+```
+
+Commands used: `clj-surgeon :op :ls` to obtain the form outline, then `clj-surgeon :op :find-subform` with the requested pattern. No files were modified or read wholesale.

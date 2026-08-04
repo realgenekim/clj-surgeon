@@ -1,0 +1,7 @@
+Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.eNrmts/workspaces/03-r01-case-edit-matched-skill-post/src/bench/state.clj:322):
+
+```clojure
+(assoc state :status :complete)
+```
+
+Verified `unrelated-finish` still contains `(assoc state :status :done)` and the whole file parses. Used `clj-surgeon :grep-form`, `:edit`, and `:replace-subform!`; `git diff` was unavailable because the workspace was not recognized as a Git repository.

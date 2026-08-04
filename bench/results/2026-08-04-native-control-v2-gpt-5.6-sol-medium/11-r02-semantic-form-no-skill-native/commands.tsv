@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "rg -n -C 3 'Per-command help' src/clj_surgeon/core.clj"	0	239
+item_2	/bin/zsh -lc "sed -n '722,770p' src/clj_surgeon/core.clj | nl -ba -v 722"	0	2438

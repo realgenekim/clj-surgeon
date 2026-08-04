@@ -129,6 +129,44 @@
         (is (some #{"(analyze path pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
 
+(def macro-expansion-only-symbols
+  '[lazy-seq loop loop* recur unchecked-inc
+    chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
+
+(deftest quoted-macro-expansion-symbols-remain-searchable-structural-data
+  ;; Regression from the 2026-08-04 X-ray maximality review: the source guard
+  ;; walked through (quote ...), so `(match 'loop)` was refused before file I/O.
+  (doseq [symbol macro-expansion-only-symbols]
+    (testing (str "quoted " symbol " is structural data")
+      (let [expression (str "(-> (form 'data) (match '" symbol "))")
+            compiled (dsl/compile-xray expression)]
+        (is (= [[:form 'data] [:find symbol]] (:query compiled)))
+        (is (= :literal (:kind compiled)))))
+    (testing (str "executable " symbol " remains refused")
+      (let [expression (str "(" symbol ")")
+            error (try
+                    (dsl/compile-xray expression)
+                    nil
+                    (catch Exception exception (ex-data exception)))]
+        (is (= :invalid-xray-expression (:error-type error)))
+        (is (= :disallowed-symbol (:reason error)))
+        (is (= symbol (:symbol error)))
+        (is (str/includes? (:remedy error) (str symbol))))))
+  (testing "a quoted form remains inert data at every nested depth"
+    (let [compiled (dsl/compile-xray
+                    "(-> (form 'data) (analyze (fn [_] '(loop [] (recur)))))")]
+      (is (= '(loop [] (recur)) ((:analyzer compiled) [])))))
+  (testing "syntax quote remains inert and preserves its qualified symbol"
+    (let [compiled (dsl/compile-xray "(-> (form 'data) (match `loop))")]
+      (is (= [[:form 'data] [:find 'clojure.core/loop]] (:query compiled)))))
+  (testing "qualification cannot make an executable guarded symbol legal"
+    (let [error (try
+                  (dsl/compile-xray "(clojure.core/loop)")
+                  nil
+                  (catch Exception exception (ex-data exception)))]
+      (is (= :disallowed-symbol (:reason error)))
+      (is (= 'clojure.core/loop (:symbol error))))))
+
 (deftest sci-supports-idiomatic-pure-map-comprehension
   ;; Clean-context candidate-v9 agents first wrote these ordinary Clojure core
   ;; forms, then lost calls because the X-ray sandbox omitted for/key/val.
@@ -259,6 +297,8 @@
                         "(def literal {:a 1 :b 2})\n"
                         "(def hashed (hash-map :a 1 :b 2))\n"
                         "(def arrayed (array-map :a 1 :b 2))\n"
+                        "(def nested {:inner (hash-map :a 1)})\n"
+                        "(def duplicate (hash-map :a 1 :a 2))\n"
                         "(def unsupported (merge {:a 1} {:b 2}))\n"
                         "(def malformed (hash-map :a))\n")
         evaluate (fn [name]
@@ -277,6 +317,12 @@
     (testing "unsupported calls remain syntax"
       (is (= ['(merge {:a 1} {:b 2})]
              (:value (evaluate 'unsupported)))))
+    (testing "normalization is shallow and does not evaluate nested syntax"
+      (is (= [{:inner '(hash-map :a 1)}]
+             (:value (evaluate 'nested)))))
+    (testing "duplicate constructor keys use ordinary map replacement semantics"
+      (is (= [{:a 2}] (:value (evaluate 'duplicate))))
+      (is (= 1 (count (first (:value (evaluate 'duplicate)))))))
     (testing "literal read remains exact source"
       (let [expression "(-> (form 'hashed) initializer)"
             program (dsl/compile-xray expression)
@@ -521,8 +567,14 @@
       (let [run (run-cli ":op" ":xray"
                          ":file" (str source-file)
                          ":expr" expression)
-            result (edn/read-string (:out run))]
+            result (edn/read-string (:out run))
+            full-run (run-cli ":op" ":xray"
+                              ":file" (str source-file)
+                              ":expr" expression
+                              ":evidence" ":full")
+            full-result (edn/read-string (:out full-run))]
         (is (zero? (:exit run)) (:err run))
+        (is (zero? (:exit full-run)) (:err full-run))
         (is (= :xray (:operation result)))
         (is (= 500 (:value result)))
         (is (= 1 (:match-count result)))
@@ -530,6 +582,9 @@
         (is (re-matches #"[0-9a-f]{64}"
                         (get-in result [:matches 0 :source-hash])))
         (is (re-matches #"[0-9a-f]{64}" (:selection-hash result)))
+        (is (= "[100 250 500]"
+               (get-in full-result [:matches 0 :source])))
+        (is (= :full (get-in full-result [:xray :evidence])))
         (is (= original (slurp (str source-file))))
         (is (not (str/includes? (:out run) "#object"))))
       (finally
@@ -566,11 +621,14 @@
                   "help" help}]
     (is (contains? core/ops-registry :xray))
     (is (str/includes? global "clj-surgeon :op :xray"))
-    (is (= #{:file :expr}
+    (is (= #{:file :expr :evidence}
            (set (keys (get-in core/ops-registry [:xray :args])))))
     (is (every? :required
                 (map #(get-in core/ops-registry [:xray :args %])
                      [:file :expr])))
+    (is (not (get-in core/ops-registry [:xray :args :evidence :required])))
+    (is (str/includes? help ":evidence"))
+    (is (str/includes? help ":full"))
     (doseq [[surface text] surfaces]
       (testing surface
         (is (str/includes? text ":xray"))

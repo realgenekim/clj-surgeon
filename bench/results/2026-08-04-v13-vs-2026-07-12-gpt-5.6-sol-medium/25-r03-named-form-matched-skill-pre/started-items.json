@@ -1,0 +1,34 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/25-r03-named-form-matched-skill-pre/skills/clj-surgeon/SKILL.md\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'clj-surgeon --help'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_3",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'clj-surgeon :op :ls :file src/clj_surgeon/core.clj'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_4",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '722,748p' src/clj_surgeon/core.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]

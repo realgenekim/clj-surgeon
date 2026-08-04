@@ -63,11 +63,22 @@
   (set (map name macro-expansion-symbols)))
 
 (defn- forbidden-source-symbol [form]
-  (some (fn [node]
-          (when (and (symbol? node)
-                     (contains? forbidden-source-symbols (name node)))
-            node))
-        (tree-seq coll? seq form)))
+  (letfn [(walk [node]
+            (cond
+              (and (seq? node)
+                   (#{'quote 'clojure.core/quote} (first node)))
+              nil
+
+              (and (symbol? node)
+                   (contains? forbidden-source-symbols (name node)))
+              node
+
+              (coll? node)
+              (some walk node)
+
+              :else
+              nil))]
+    (walk form)))
 
 (def ^:private allowed-capabilities
   [:pure-control
@@ -328,30 +339,40 @@
   ([expression reason]
    (invalid-expression! expression reason nil))
   ([expression reason cause]
-   (throw (ex-info "Invalid Clojure edit expression"
-                   {:error-type :invalid-edit-expression
-                    :reason reason
-                    :expression expression
-                    :allowed-symbols allowed-symbols
-                    :allowed-capabilities allowed-capabilities
-                    :allowed-forms expression-reference
-                    :remedy "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector."}
-                   cause))))
+   (let [symbol (:symbol (ex-data cause))]
+     (throw (ex-info "Invalid Clojure edit expression"
+                     (cond-> {:error-type :invalid-edit-expression
+                              :reason reason
+                              :expression expression
+                              :allowed-symbols allowed-symbols
+                              :allowed-capabilities allowed-capabilities
+                              :allowed-forms expression-reference
+                              :remedy "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector."}
+                       symbol (assoc :symbol symbol
+                                     :remedy (str "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector. "
+                                                  "Do not execute " symbol
+                                                  "; quote it when it is Clojure data, or use a terminating pure collection operation for computation.")))
+                     cause)))))
 
 (defn- invalid-xray-expression!
   ([expression reason]
    (invalid-xray-expression! expression reason nil))
   ([expression reason cause]
-   (throw (ex-info "Invalid Clojure xray expression"
-                   {:error-type :invalid-xray-expression
-                    :reason reason
-                    :expression expression
-                    :allowed-symbol-count (count allowed-symbols)
-                    :allowed-capabilities allowed-capabilities
-                    :allowed-forms xray-expression-reference
-                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""
-                    :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
-                   cause))))
+   (let [symbol (:symbol (ex-data cause))]
+     (throw (ex-info "Invalid Clojure xray expression"
+                     (cond-> {:error-type :invalid-xray-expression
+                              :reason reason
+                              :expression expression
+                              :allowed-symbol-count (count allowed-symbols)
+                              :allowed-capabilities allowed-capabilities
+                              :allowed-forms xray-expression-reference
+                              :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""
+                              :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
+                       symbol (assoc :symbol symbol
+                                     :remedy (str "Return a path, or end with analyze; add expect-count for exact cardinality. "
+                                                  "Do not execute " symbol
+                                                  "; quote it when it is Clojure data, or use a terminating pure collection operation for computation.")))
+                     cause)))))
 
 (defn- evaluate-expression
   [expression invalid!]
@@ -370,8 +391,10 @@
         (when (or (= :sci.core/eof form)
                   (not= :sci.core/eof trailing))
           (invalid! expression :expected-one-form))
-        (when (forbidden-source-symbol form)
-          (invalid! expression :disallowed-symbol))
+        (when-let [symbol (forbidden-source-symbol form)]
+          (invalid! expression :disallowed-symbol
+                    (ex-info "Macro-expansion-only symbol used as executable source"
+                             {:symbol symbol})))
         (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception
         (if (#{:invalid-edit-expression :invalid-xray-expression}
@@ -585,9 +608,9 @@
 
 (defn- evaluate-computed-xray
   "Evaluate one read-only xray program against source. Pure: data in, EDN out."
-  [source {:keys [expression xray evidence]}]
+  [source {:keys [expression file xray evidence]}]
   (let [{:keys [query analyzer cardinality input-shape expected-count]} xray
-        found (structural-lens/evaluate-query source query)
+        found (structural-lens/evaluate-query source query {:file file})
         evidence-mode (or evidence :compact)
         evidence (-> (xray-evidence found evidence-mode)
                      (assoc :operation :xray
@@ -667,9 +690,9 @@
 
 (defn evaluate-xray
   "Evaluate a literal structural path or a terminal pure computation."
-  [source {:keys [expression xray] :as opts}]
+  [source {:keys [expression file xray] :as opts}]
   (if (= :literal (:kind xray))
-    (-> (structural-lens/evaluate-query source (:query xray))
+    (-> (structural-lens/evaluate-query source (:query xray) {:file file})
         (assoc :operation :xray
                :mode :literal
                :expression expression))
@@ -682,7 +705,8 @@
     (if-not (and (vector? terminal) (= :transform (first terminal)))
       (structural-lens/evaluate-edit source opts)
       (let [selection-query (pop query)
-            found (structural-lens/evaluate-query source selection-query)
+            found (structural-lens/evaluate-query source selection-query
+                                                  {:file file})
             match-count (:match-count found)]
         (cond
           (:error found) found

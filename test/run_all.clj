@@ -7,9 +7,9 @@
    [clj-surgeon.cljc.merge-test]
    [clj-surgeon.cljc.require-ops-test]
    [clj-surgeon.cljc.split-test]
-   [clj-surgeon.edn-config-integration-test]
-   [clj-surgeon.edit-test]
    [clj-surgeon.edit-dsl-test]
+   [clj-surgeon.edit-test]
+   [clj-surgeon.edn-config-integration-test]
    [clj-surgeon.extract-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
@@ -19,9 +19,10 @@
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
-   [clj-surgeon.outline-test]
    [clj-surgeon.outermost-test]
+   [clj-surgeon.outline-test]
    [clj-surgeon.partition-all-test]
+   [clj-surgeon.platform-selector-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
@@ -50,6 +51,7 @@
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.partition-all-test
+                   'clj-surgeon.platform-selector-test
                    'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test

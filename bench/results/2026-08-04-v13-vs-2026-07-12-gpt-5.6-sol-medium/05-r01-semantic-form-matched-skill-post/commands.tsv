@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/05-r01-semantic-form-matched-skill-post/skills/clj-surgeon/SKILL.md"	0	4050
+item_2	/bin/zsh -lc "clj-surgeon :op :cat :file src/clj_surgeon/core.clj :contains 'Per-command help'"	0	1531

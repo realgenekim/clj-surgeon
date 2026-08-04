@@ -1,0 +1,8 @@
+requested_model	opus
+task	pair-view-edit
+deadline_seconds	90
+max_budget_usd	5.00
+skill_file_sha256	2d9c5421480f047a66349d0af2cef399730ab9da5fb9d3d45b1ddea31d251775
+skill_source_sha256	23156b3dc2661bbf611c2a194dcfb35dc6e314bcdbcf23a999eae9411c25883f
+cli_source_sha256	3e5b6ca0fcdf5fa1e5b433cc5d54140916fe7b38e5e4c42b073534430fca88a4
+workspace	/Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-v2/opus-pair-view-edit/workspace

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"wc -l src/bench/structural.clj && rg -n --byte-offset 'select-keys|:status|:attempts' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '317,334p' src/bench/structural.clj | nl -ba -v317 && rg -n --column --byte-offset 'select-keys' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]

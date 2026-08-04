@@ -1,0 +1,6 @@
+Both the plan and the apply succeeded.
+
+- **Plan**: `:edit` selected exactly one match — the `:finish` result inside `route-event` at `src/bench/pair_view.clj:18` — and the reviewed diff changed only `:done` → `:complete` within `(assoc state :status :done :audit (:audit payload))`, leaving every other byte (including the attached comment) untouched.
+- **Apply**: `:replace-subform!` on the plan returned `:ok true` with a verified receipt: exact replay of the planned edit, read-back hash matching the plan's result hash, atomic write, and whole-file parse all confirmed.
+
+The `:finish` result in `route-event` now sets `:status :complete`.

@@ -1,21 +1,244 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_path=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+result_dir=${BENCH_RESULT_DIR:-/tmp/clj-surgeon-clean-codex-$timestamp}
+owner_dir="$result_dir/.benchmark-owner"
+owner_metadata="$owner_dir/owner.tsv"
+owner_token=""
+
+owner_field() {
+  local key=$1
+  local file=$2
+  awk -F '\t' -v key="$key" '$1 == key {print substr($0, length($1) + 2); exit}' "$file" 2>/dev/null || true
+}
+
+owner_is_live() {
+  local metadata=$1
+  local recorded_pid recorded_host recorded_start current_start
+  recorded_pid=$(owner_field pid "$metadata")
+  recorded_host=$(owner_field host "$metadata")
+  recorded_start=$(owner_field process_start "$metadata")
+  if [ "$recorded_host" != "$(hostname)" ] || ! [[ "$recorded_pid" =~ ^[1-9][0-9]*$ ]]; then
+    return 1
+  fi
+  kill -0 "$recorded_pid" 2>/dev/null || return 1
+  current_start=$(ps -p "$recorded_pid" -o lstart= 2>/dev/null | awk '{$1=$1; print}')
+  [ -n "$recorded_start" ] && [ "$current_start" = "$recorded_start" ]
+}
+
+print_owner_diagnostic() {
+  local state=$1
+  echo "Benchmark result directory has a $state owner: $result_dir" >&2
+  if [ -f "$owner_metadata" ]; then
+    sed 's/^/  /' "$owner_metadata" >&2
+  else
+    echo "  owner metadata is missing or incomplete" >&2
+  fi
+}
+
+release_result_owner() {
+  [ -n "$owner_token" ] || return 0
+  if [ -f "$owner_metadata" ] && [ "$(owner_field token "$owner_metadata")" = "$owner_token" ]; then
+    rm -f "$owner_metadata"
+    rmdir "$owner_dir" 2>/dev/null || true
+  fi
+  owner_token=""
+}
+
+acquire_result_owner() {
+  mkdir -p "$result_dir"
+  if ! mkdir "$owner_dir" 2>/dev/null; then
+    if owner_is_live "$owner_metadata"; then
+      print_owner_diagnostic live
+      echo "Refusing a concurrent writer before runs.tsv or run artifacts are changed." >&2
+      return 3
+    fi
+    print_owner_diagnostic stale-or-unverifiable
+    if [ "${BENCH_RECOVER_STALE_OWNER:-false}" != true ]; then
+      echo "Inspect the metadata, then recover explicitly with BENCH_RECOVER_STALE_OWNER=true and BENCH_RESUME=true." >&2
+      return 4
+    fi
+    local recovered_dir="$result_dir/.benchmark-owner.recovered-$timestamp-$$"
+    if ! mv "$owner_dir" "$recovered_dir" 2>/dev/null; then
+      echo "Owner changed while stale recovery was attempted; retry after inspecting $result_dir." >&2
+      return 4
+    fi
+    echo "Recovered stale benchmark ownership metadata to: $recovered_dir" >&2
+    if ! mkdir "$owner_dir" 2>/dev/null; then
+      echo "Another writer acquired benchmark ownership during recovery; refusing." >&2
+      return 3
+    fi
+  fi
+
+  owner_token="$timestamp-$$"
+  local process_start command_text metadata_tmp
+  process_start=$(ps -p $$ -o lstart= | awk '{$1=$1; print}')
+  command_text=$(ps -p $$ -o command= | tr '\t\n' '  ')
+  metadata_tmp="$owner_dir/owner.tsv.tmp.$$"
+  printf '%s\t%s\n' \
+    token "$owner_token" \
+    pid "$$" \
+    host "$(hostname)" \
+    process_start "$process_start" \
+    started_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    command "$command_text" \
+    > "$metadata_tmp"
+  mv "$metadata_tmp" "$owner_metadata"
+}
+
+row_exists() {
+  local file=$1
+  local run_id=$2
+  [ -f "$file" ] && awk -F '\t' -v id="$run_id" '$1 == id {found=1} END {exit !found}' "$file"
+}
+
+acquire_row_lock() {
+  local run_id=$1
+  local lock_dir="$result_dir/.runs-lock"
+  local timeout=${BENCH_ROW_LOCK_TIMEOUT_SECONDS:-10}
+  local attempts attempt=0
+  if ! [[ "$timeout" =~ ^[1-9][0-9]*$ ]]; then
+    echo "BENCH_ROW_LOCK_TIMEOUT_SECONDS must be a positive integer: $timeout" >&2
+    return 2
+  fi
+  attempts=$((timeout * 20))
+  until mkdir "$lock_dir" 2>/dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -ge "$attempts" ]; then
+      echo "Timed out after ${timeout}s waiting for row lock for $run_id: $lock_dir" >&2
+      if [ -f "$lock_dir/owner.tsv" ]; then
+        sed 's/^/  /' "$lock_dir/owner.tsv" >&2
+      else
+        echo "  row-lock owner metadata is missing; remove the lock only after confirming no child writer is active" >&2
+      fi
+      return 5
+    fi
+    sleep 0.05
+  done
+  printf '%s\t%s\n' pid "$$" run_id "$run_id" started_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$lock_dir/owner.tsv"
+}
+
+release_row_lock() {
+  local lock_dir="$result_dir/.runs-lock"
+  rm -f "$lock_dir/owner.tsv"
+  rmdir "$lock_dir" 2>/dev/null || true
+}
+
+append_result_row() {
+  local run_id=$1
+  local row=$2
+  acquire_row_lock "$run_id" || return
+  if ! row_exists "$result_dir/runs.tsv" "$run_id"; then
+    printf '%s\n' "$row" >> "$result_dir/runs.tsv"
+  fi
+  release_row_lock
+}
+
+make_native_bin() {
+  local destination=$1
+  local source_path=$2
+  local path_dir executable name
+  mkdir -p "$destination"
+  while IFS= read -r path_dir; do
+    [ -d "$path_dir" ] || continue
+    for executable in "$path_dir"/*; do
+      [ -x "$executable" ] || continue
+      [ -d "$executable" ] && continue
+      name=${executable##*/}
+      [ "$name" = clj-surgeon ] && continue
+      [ -e "$destination/$name" ] || ln -s "$executable" "$destination/$name"
+    done
+  done < <(printf '%s' "$source_path" | tr ':' '\n')
+}
+
 counterbalanced_versions() {
   local replicate=$1
   local configured_versions=$2
   if [ "$configured_versions" = "pre post" ] && ((replicate % 2 == 0)); then
     printf '%s\n' "post pre"
+  elif [ "$configured_versions" = "pre post native" ] && ((replicate % 2 == 0)); then
+    printf '%s\n' "post pre native"
   else
     printf '%s\n' "$configured_versions"
   fi
 }
 
+if [ "${BENCH_OWNER_PROBE_SELF_TEST:-false}" = true ]; then
+  acquire_result_owner
+  release_result_owner
+  printf '%s\n' "benchmark owner probe acquired and released"
+  exit 0
+fi
+
 if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   test "$(counterbalanced_versions 1 'pre post')" = "pre post"
   test "$(counterbalanced_versions 2 'pre post')" = "post pre"
+  test "$(counterbalanced_versions 2 'pre post native')" = "post pre native"
   test "$(counterbalanced_versions 3 'post')" = "post"
   printf '%s\n' "benchmark schedule self-test passed"
+  exit 0
+fi
+
+if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
+  self_test_root=$(mktemp -d /tmp/clj-surgeon-benchmark-self-test.XXXXXX)
+  original_result_dir=$result_dir
+  result_dir="$self_test_root/results"
+  owner_dir="$result_dir/.benchmark-owner"
+  owner_metadata="$owner_dir/owner.tsv"
+
+  acquire_result_owner
+  set +e
+  second_output=$(BENCH_RESULT_DIR="$result_dir" BENCH_OWNER_PROBE_SELF_TEST=true bash "$script_path" 2>&1)
+  second_status=$?
+  set -e
+  test "$second_status" -eq 3
+  [[ "$second_output" == *"Refusing a concurrent writer"* ]]
+  test ! -e "$result_dir/runs.tsv"
+  release_result_owner
+
+  mkdir "$owner_dir"
+  printf '%s\t%s\n' pid 999999 host "$(hostname)" process_start stale started_utc 1970-01-01T00:00:00Z command stale-fixture \
+    > "$owner_metadata"
+  set +e
+  stale_output=$(BENCH_RESULT_DIR="$result_dir" BENCH_OWNER_PROBE_SELF_TEST=true bash "$script_path" 2>&1)
+  stale_status=$?
+  set -e
+  test "$stale_status" -eq 4
+  [[ "$stale_output" == *"BENCH_RECOVER_STALE_OWNER=true"* ]]
+  recovery_output=$(BENCH_RESULT_DIR="$result_dir" BENCH_RECOVER_STALE_OWNER=true \
+    BENCH_OWNER_PROBE_SELF_TEST=true bash "$script_path" 2>&1)
+  [[ "$recovery_output" == *"Recovered stale benchmark ownership metadata"* ]]
+  test -n "$(find "$result_dir" -maxdepth 1 -type d -name '.benchmark-owner.recovered-*' -print -quit)"
+
+  mkdir "$result_dir/.runs-lock"
+  printf '%s\t%s\n' pid 999999 run_id killed-row-writer > "$result_dir/.runs-lock/owner.tsv"
+  set +e
+  BENCH_ROW_LOCK_TIMEOUT_SECONDS=1 acquire_row_lock blocked-row 2> "$self_test_root/row-lock.stderr"
+  row_status=$?
+  set -e
+  test "$row_status" -eq 5
+  grep -q "Timed out after 1s" "$self_test_root/row-lock.stderr"
+  release_row_lock
+
+  printf '%b\n' 'run_id\tvalue' > "$result_dir/runs.tsv"
+  append_result_row complete-row $'complete-row\tfirst'
+  append_result_row complete-row $'complete-row\tsecond'
+  test "$(awk -F '\t' '$1 == "complete-row" {n++} END {print n+0}' "$result_dir/runs.tsv")" -eq 1
+  test "$(awk -F '\t' '$1 == "complete-row" {print $2}' "$result_dir/runs.tsv")" = first
+
+  make_native_bin "$self_test_root/native-bin" "$PATH"
+  if PATH="$self_test_root/native-bin" command -v clj-surgeon >/dev/null 2>&1; then
+    echo "native self-test unexpectedly exposed clj-surgeon" >&2
+    exit 1
+  fi
+  PATH="$self_test_root/native-bin" command -v sh >/dev/null
+
+  result_dir=$original_result_dir
+  rm -rf "$self_test_root"
+  printf '%s\n' "benchmark harness self-test passed"
   exit 0
 fi
 
@@ -24,12 +247,11 @@ pre_commit=${BENCH_PRE_COMMIT:-19a20b0}
 post_commit=${BENCH_POST_COMMIT:-80154bc}
 model=${BENCH_MODEL:-gpt-5.6-sol}
 reasoning=${BENCH_REASONING:-medium}
-timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-result_dir=${BENCH_RESULT_DIR:-/tmp/clj-surgeon-clean-codex-$timestamp}
-setup_root=$(mktemp -d /tmp/clj-surgeon-benchmark-setup.XXXXXX)
+setup_root=""
 
 cleanup() {
-  rm -rf "$setup_root"
+  release_result_owner
+  [ -z "$setup_root" ] || rm -rf "$setup_root"
 }
 trap cleanup EXIT
 
@@ -48,6 +270,9 @@ test -f "$auth_file" || {
 
 git -C "$repo_root" cat-file -e "$pre_commit^{commit}"
 git -C "$repo_root" cat-file -e "$post_commit^{commit}"
+
+acquire_result_owner
+setup_root=$(mktemp -d /tmp/clj-surgeon-benchmark-setup.XXXXXX)
 
 mkdir -p "$result_dir" "$setup_root/tools/pre" "$setup_root/tools/post" \
   "$setup_root/bin/pre" "$setup_root/bin/post" "$setup_root/templates"
@@ -70,6 +295,7 @@ make_wrapper() {
 
 make_wrapper "$setup_root/tools/pre" "$setup_root/bin/pre/clj-surgeon"
 make_wrapper "$setup_root/tools/post" "$setup_root/bin/post/clj-surgeon"
+make_native_bin "$setup_root/bin/native" "$PATH"
 
 # Prewarm both versions outside the measured runs.
 PATH="$setup_root/bin/pre:$PATH" clj-surgeon --help >/dev/null
@@ -227,6 +453,9 @@ bb -e "(require '[clojure.edn :as edn]) (let [r (edn/read-string (slurp \"$setup
 cp "$setup_root/templates/state.clj" "$setup_root/expected/state.clj"
 perl -0pi -e 's/\(assoc state :status :done\)/\(assoc state :status :complete\)/' \
   "$setup_root/expected/state.clj"
+cp "$setup_root/templates/pair_view.clj" "$setup_root/expected/pair-view-edit.clj"
+perl -0pi -e 's/\(assoc state :status :done :audit/\(assoc state :status :complete :audit/' \
+  "$setup_root/expected/pair-view-edit.clj"
 cp "$setup_root/templates/policy.clj" "$setup_root/expected/computed-edit.clj"
 perl -0pi -e 's/\[100 250 500 1000\]/[200 350 600 1100]/' \
   "$setup_root/expected/computed-edit.clj"
@@ -237,7 +466,12 @@ cp "$setup_root/templates/peer_edit.clj" "$setup_root/expected/binding-edit.clj"
 perl -0pi -e 's/\(or \(:timeout-ms request\) \(:timeout-ms defaults\)\)/\(or \(:timeout-ms request\) 5000\)/' \
   "$setup_root/expected/binding-edit.clj"
 
-if [ "${BENCH_RESUME:-false}" != true ] || [ ! -f "$result_dir/runs.tsv" ]; then
+if [ "${BENCH_RESUME:-false}" != true ] && [ -f "$result_dir/runs.tsv" ]; then
+  echo "Refusing to replace existing benchmark rows: $result_dir/runs.tsv" >&2
+  echo "Choose a new BENCH_RESULT_DIR or set BENCH_RESUME=true." >&2
+  exit 2
+fi
+if [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
     'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
     > "$result_dir/runs.tsv"
@@ -257,6 +491,9 @@ task_prompt() {
       ;;
     case-edit)
       printf '%s' 'In src/bench/state.clj, change only the :finish case result from (assoc state :status :done) to (assoc state :status :complete). Preserve every unrelated byte, including the similar expression in unrelated-finish. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
+      ;;
+    pair-view-edit)
+      printf '%s' 'Load and follow the installed clj-surgeon skill. In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment and every unrelated byte. Generate and review an :edit plan at plan.edn, then apply that plan in a separate shell command with :replace-subform!. Do not combine planning and application. Do not read the whole file. In the final answer, state whether the plan and apply both succeeded.'
       ;;
     computed-edit)
       printf '%s' 'In src/bench/policy.clj, add 100 to every number in the :retry-delays vector inside retry-policy. Preserve every unrelated byte, including the identical vector in unrelated-policy. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
@@ -299,7 +536,7 @@ target_for_task() {
     case-edit) printf '%s' 'src/bench/state.clj' ;;
     computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
-    case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
+    case-inventory|cond-inventory|binding-inventory|pair-view-edit) printf '%s' 'src/bench/pair_view.clj' ;;
     xray-summary|xray-checksum) printf '%s' 'src/bench/xray.clj' ;;
     ops-registry-xray) printf '%s' 'src/bench/ops_registry.clj' ;;
   esac
@@ -325,7 +562,7 @@ prepare_workspace() {
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
       ;;
-    case-inventory|cond-inventory|binding-inventory)
+    case-inventory|cond-inventory|binding-inventory|pair-view-edit)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
       ;;
     xray-summary|xray-checksum)
@@ -384,8 +621,13 @@ run_one() {
   local replicate=${5:-1}
   local run_id
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
+  if [ "$version" = native ] && [ "$context" != no-skill ]; then
+    echo "The native version is valid only with BENCH_CONTEXTS=no-skill: $run_id" >&2
+    exit 2
+  fi
   if [ "${BENCH_RESUME:-false}" = true ] \
-    && awk -F '\t' -v id="$run_id" '$1 == id {found=1} END {exit !found}' "$result_dir/runs.tsv"; then
+    && row_exists "$result_dir/runs.tsv" "$run_id"; then
+    terminal_state=skipped
     printf '%-58s %s\n' "$run_id" 'already complete; skipping'
     return
   fi
@@ -402,11 +644,26 @@ run_one() {
   ln -s "$auth_file" "$codex_home/auth.json"
   install_treatment_skill "$version" "$context" "$codex_home"
   prepare_workspace "$task" "$workspace"
-  printf 'export PATH="%s:$%s"\n' "$bin_dir" PATH > "$zsh_dir/.zprofile"
+  local run_path
+  run_path="$bin_dir:$PATH"
+  if [ "$version" = native ]; then
+    run_path=$bin_dir
+    printf 'export PATH="%s"\n' "$bin_dir" > "$zsh_dir/.zprofile"
+  else
+    printf 'export PATH="%s:$%s"\n' "$bin_dir" PATH > "$zsh_dir/.zprofile"
+  fi
   local resolved_cli
-  resolved_cli=$(ZDOTDIR="$zsh_dir" /bin/zsh -lc 'command -v clj-surgeon')
-  if [ "$resolved_cli" != "$bin_dir/clj-surgeon" ]; then
+  resolved_cli=$(ZDOTDIR="$zsh_dir" /bin/zsh -lc 'command -v clj-surgeon' 2>/dev/null || true)
+  if [ "$version" = native ] && [ -n "$resolved_cli" ]; then
+    echo "Native-tools isolation exposed clj-surgeon for $run_id: $resolved_cli" >&2
+    exit 2
+  elif [ "$version" != native ] && [ "$resolved_cli" != "$bin_dir/clj-surgeon" ]; then
     echo "Version isolation failed for $run_id: $resolved_cli" >&2
+    exit 2
+  fi
+  if [ "$version" = native ] && [ -d "$codex_home/skills" ] \
+    && [ -n "$(find "$codex_home/skills" -iname '*clj-surgeon*' -print -quit)" ]; then
+    echo "Native-tools isolation exposed a clj-surgeon skill for $run_id" >&2
     exit 2
   fi
 
@@ -438,7 +695,7 @@ run_one() {
   [[ "$task" == *-edit ]] && sandbox='workspace-write'
 
   set +e
-  PATH="$bin_dir:$PATH" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
+  PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
     codex exec --json --ephemeral --ignore-user-config --ignore-rules \
     --skip-git-repo-check --sandbox "$sandbox" --color never \
     -m "$model" -c "model_reasoning_effort=\"$reasoning\"" \
@@ -588,6 +845,13 @@ run_one() {
       fi
       diff -u "$setup_root/templates/state.clj" "$target" > "$run_dir/target.diff" || true
       ;;
+    pair-view-edit)
+      if cmp -s "$target" "$setup_root/expected/pair-view-edit.clj"; then
+        exact_correct=true
+        correct=true
+      fi
+      diff -u "$setup_root/templates/pair_view.clj" "$target" > "$run_dir/target.diff" || true
+      ;;
     computed-edit)
       if cmp -s "$target" "$setup_root/expected/computed-edit.clj"; then
         exact_correct=true
@@ -609,7 +873,13 @@ run_one() {
     correct=false
   fi
 
-  local row lock_dir
+  if [ "$version" = native ] && { [ "$clj_invocations" -ne 0 ] || [ "$skill_read" != false ]; }; then
+    echo "Native-tools control invalid for $run_id: clj_invocations=$clj_invocations skill_read=$skill_read" >&2
+    exact_correct=false
+    correct=false
+  fi
+
+  local row
   printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
@@ -617,16 +887,43 @@ run_one() {
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
     "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$xray_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
     "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct"
-  lock_dir="$result_dir/.runs-lock"
-  until mkdir "$lock_dir" 2>/dev/null; do
-    sleep 0.05
-  done
-  printf '%s\n' "$row" >> "$result_dir/runs.tsv"
-  rmdir "$lock_dir"
+  append_result_row "$run_id" "$row"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
     "$run_id" "$correct" "$wall_ms" "$input_tokens" "$shell_calls"
 }
+
+write_terminal_receipt() {
+  local run_id=$1
+  local state=$2
+  local exit_code=$3
+  local run_dir="$result_dir/$run_id"
+  local receipt="$run_dir/terminal.tsv"
+  local receipt_tmp="$run_dir/.terminal.tsv.tmp.$$"
+  if [ "$state" = skipped ] && [ -f "$receipt" ]; then
+    return
+  fi
+  mkdir -p "$run_dir"
+  printf '%s\t%s\n' \
+    run_id "$run_id" \
+    state "$state" \
+    exit_code "$exit_code" \
+    finished_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$receipt_tmp"
+  mv "$receipt_tmp" "$receipt"
+}
+
+run_one_with_receipt() (
+  local version=$1
+  local context=$2
+  local task=$3
+  local order=$4
+  local replicate=${5:-1}
+  local run_id terminal_state=completed
+  run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
+  trap 'status=$?; [ "$status" -eq 0 ] || terminal_state=failed; write_terminal_receipt "$run_id" "$terminal_state" "$status"; trap - EXIT; exit "$status"' EXIT
+  run_one "$version" "$context" "$task" "$order" "$replicate"
+)
 
 order=0
 tasks=${BENCH_TASKS:-'named-form semantic-form structural-find case-edit'}
@@ -636,6 +933,9 @@ replicates=${BENCH_REPLICATES:-1}
 versions=${BENCH_VERSIONS:-'pre post'}
 parallelism=${BENCH_PARALLELISM:-4}
 active_pids=()
+active_run_ids=()
+all_run_ids=()
+benchmark_failed=0
 
 if ! [[ "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
   echo "BENCH_PARALLELISM must be a positive integer: $parallelism" >&2
@@ -643,20 +943,49 @@ if ! [[ "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 schedule_run() {
-  run_one "$@" &
+  local version=$1
+  local context=$2
+  local task=$3
+  local order=$4
+  local replicate=${5:-1}
+  local run_id
+  run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
+  run_one_with_receipt "$@" &
   active_pids+=("$!")
+  active_run_ids+=("$run_id")
+  all_run_ids+=("$run_id")
   if [ "${#active_pids[@]}" -ge "$parallelism" ]; then
-    wait "${active_pids[0]}"
+    wait_for_first_run
+  fi
+}
+
+wait_for_first_run() {
+  local pid=${active_pids[0]}
+  local run_id=${active_run_ids[0]}
+  local status=0
+  if wait "$pid"; then
+    status=0
+  else
+    status=$?
+    benchmark_failed=1
+  fi
+  if [ ! -f "$result_dir/$run_id/terminal.tsv" ]; then
+    write_terminal_receipt "$run_id" supervisor-failed "$status"
+    benchmark_failed=1
+  fi
+  if [ "${#active_pids[@]}" -eq 1 ]; then
+    active_pids=()
+    active_run_ids=()
+  else
     active_pids=("${active_pids[@]:1}")
+    active_run_ids=("${active_run_ids[@]:1}")
   fi
 }
 
 wait_for_runs() {
-  local pid
-  for pid in "${active_pids[@]}"; do
-    wait "$pid"
+  while [ "${#active_pids[@]}" -gt 0 ]; do
+    wait_for_first_run
   done
-  active_pids=()
 }
 
 for replicate in $(seq 1 "$replicates"); do
@@ -682,8 +1011,26 @@ fi
 
 wait_for_runs
 
-bb "$repo_root/bench/summarize_clean_codex.clj" "$result_dir/runs.tsv" \
-  > "$result_dir/summary.md"
+for run_id in "${all_run_ids[@]}"; do
+  if [ ! -f "$result_dir/$run_id/terminal.tsv" ]; then
+    echo "Missing terminal receipt after all children exited: $run_id" >&2
+    benchmark_failed=1
+  fi
+done
+
+if [ "$benchmark_failed" -ne 0 ]; then
+  echo "One or more benchmark children failed; all children were reaped and summary generation was skipped." >&2
+  exit 1
+fi
+
+summary_tmp="$result_dir/.summary.md.tmp.$$"
+if bb "$repo_root/bench/summarize_clean_codex.clj" "$result_dir/runs.tsv" > "$summary_tmp"; then
+  mv "$summary_tmp" "$result_dir/summary.md"
+else
+  rm -f "$summary_tmp"
+  echo "Summary generation failed after all terminal receipts; any existing summary.md was preserved." >&2
+  exit 1
+fi
 
 printf '\nResults: %s\n' "$result_dir"
 printf 'Summary: %s\n' "$result_dir/summary.md"

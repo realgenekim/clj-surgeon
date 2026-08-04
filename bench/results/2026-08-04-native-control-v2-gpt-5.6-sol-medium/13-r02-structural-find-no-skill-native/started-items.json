@@ -1,0 +1,34 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"wc -l src/bench/structural.clj && rg -n -F '(select-keys _ [:status :attempts])' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"rg -n -F 'select-keys' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_3",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '316,334p' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_5",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"awk 'NR==323 || (NR>=327 && NR<=331) { printf \\\"%d:%s\\\\n\\\", NR, \"'$0; printf \"  length=%d'\"\\\\n\\\", length(\"'$0) }'\"' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]

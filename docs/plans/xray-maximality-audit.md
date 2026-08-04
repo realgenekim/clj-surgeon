@@ -1,6 +1,12 @@
 # X-Ray Maximality Audit
 
-**Status:** Active on `audit/xray-maximality`; `main` is frozen pending proof
+**Status:** Audit stopping rule satisfied on `audit/xray-maximality`; v13 is
+the selected review candidate, v12 has the fastest compact-skill median, and
+`main` remains frozen pending release review
+
+Release blockers and individually testable review findings are tracked in
+[the must-fix register](../must-fix/README.md) and summarized in
+[the takeover handoff](xray-maximality-handoff.md).
 
 ## Why This Exists
 
@@ -215,6 +221,13 @@ Keep a candidate only if it:
 Call the hill locally maximal only after three consecutive bounded experiments
 fail to improve median wall time by 10% without weakening correctness, safety,
 or the permanent tests.
+
+That stopping rule is satisfied. After v10's final greater-than-10% wall win,
+the next three neighbors were: scoped-`for` guidance at 29% slower, a 107-line
+skill at 8% faster with compelling one-shot and simplicity gains, and an
+89-line skill within 3% of the 107-line version. The last comparison was exact
+and one-shot in all eight sessions. Keep the 89-line version under the
+close-result simplicity rule; do not describe it as faster than 107 lines.
 
 ## Release Discipline
 

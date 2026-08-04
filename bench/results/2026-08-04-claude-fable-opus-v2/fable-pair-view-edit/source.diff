@@ -1,0 +1,11 @@
+--- /Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-v2/fable-pair-view-edit/source.start.clj	2026-08-04 14:42:16
++++ /Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-v2/fable-pair-view-edit/workspace/src/bench/pair_view.clj	2026-08-04 14:42:37
+@@ -15,7 +15,7 @@
+ 
+       :finish
+       ;; Completion intentionally keeps the audit payload beside the status.
+-      (assoc state :status :done :audit (:audit payload))
++      (assoc state :status :complete :audit (:audit payload))
+ 
+       :cancel
+       (assoc state :status :cancelled :reason (:reason payload))

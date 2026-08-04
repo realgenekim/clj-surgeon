@@ -1,0 +1,66 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/11-r01-case-edit-matched-skill-post/skills/clj-surgeon/SKILL.md\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"clj-surgeon :op :edit :file src/bench/state.clj :expr \\\"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\\\" :plan-out /tmp/clj-surgeon-11-r01-finish-plan.edn\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_4",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'clj-surgeon :op :replace-subform! :plan /tmp/clj-surgeon-11-r01-finish-plan.edn'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_5",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'git diff --check -- src/bench/state.clj'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_6",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'git diff -- src/bench/state.clj'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_7",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'clj-surgeon :op :cat :file src/bench/state.clj :form unrelated-finish'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_9",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'sha256sum src/bench/state.clj'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_10",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"clj-surgeon :op :xray :file src/bench/state.clj :expr \\\"(-> (form 'transition) (match :finish) right (analyze identity))\\\"\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]

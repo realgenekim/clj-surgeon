@@ -1,0 +1,52 @@
+{:selector
+ {:query
+  [[:form route-event]
+   [:find :finish]
+   :right
+   [:find :status]
+   :right
+   [:replace :complete]],
+  :selection-query
+  [[:form route-event] [:find :finish] :right [:find :status] :right],
+  :expected-match-count 1},
+ :file "src/bench/pair_view.clj",
+ :operation :replace-subform,
+ :plan-version 1,
+ :result-hash
+ "05012ad4f42ebbbab074e01be60081caa9894c4b5f993c2e4ec86e91febb5c9a",
+ :edits
+ [{:path [{:form route-event} {:call let} {:call case} {:call assoc}],
+   :address {:preorder 58},
+   :line 18,
+   :before ":done",
+   :after ":complete"}],
+ :provenance
+ {:tool "clj-surgeon",
+  :tool-version "0.1.0",
+  :operation :replace-subform,
+  :selector
+  {:query
+   [[:form route-event]
+    [:find :finish]
+    :right
+    [:find :status]
+    :right
+    [:replace :complete]],
+   :selection-query
+   [[:form route-event] [:find :finish] :right [:find :status] :right],
+   :expected-match-count 1},
+  :source-hash
+  "3d24b439a00b8b5410011cf4ae565c13fa9f2ea9ff7dc6be4050d020ab71cd6e",
+  :result-hash
+  "05012ad4f42ebbbab074e01be60081caa9894c4b5f993c2e4ec86e91febb5c9a"},
+ :source-hash
+ "3d24b439a00b8b5410011cf4ae565c13fa9f2ea9ff7dc6be4050d020ab71cd6e",
+ :match-count 1,
+ :query-trace
+ [{:step [:form route-event], :input-count 6, :output-count 1}
+  {:step [:find :finish], :input-count 1, :output-count 1}
+  {:step :right, :input-count 1, :output-count 1}
+  {:step [:find :status], :input-count 1, :output-count 1}
+  {:step :right, :input-count 1, :output-count 1}],
+ :diff
+ "--- a/src/bench/pair_view.clj\n+++ b/src/bench/pair_view.clj\n@@ -18,1 +18,1 @@\n-:done\n+:complete\n"}

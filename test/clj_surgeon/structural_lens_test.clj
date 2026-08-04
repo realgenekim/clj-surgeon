@@ -47,6 +47,15 @@
     (is (= 1 (:match-count
                (lens/find-subforms source {:inside 'f :match "(+ 1 2)"}))))))
 
+(deftest structural-wildcard-matches-one-subtree-not-variadic-arity
+  (let [source "(ns x)\n(defn f [] (loop [i 0] (if (< i 3) (recur (inc i)) i)))\n"]
+    (testing "one wildcard cannot absorb both loop arguments"
+      (is (zero? (:match-count
+                   (lens/find-subforms source {:inside 'f :match "(loop _)"})))))
+    (testing "one wildcard per loop argument matches on the first attempt"
+      (is (= 1 (:match-count
+                 (lens/find-subforms source {:inside 'f :match "(loop _ _)"})))))))
+
 (deftest match-and-replacement-require-exactly-one-complete-form
   (testing "missing forms are not interpreted as the literal nil form"
     (is (= :invalid-match

@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "rg -n -C 2 '"'^'"\\\\(defn?\\\\s+format-op-help\\\\b' src/clj_surgeon/core.clj"	0	149
+item_2	/bin/zsh -lc "sed -n '722,780p' src/clj_surgeon/core.clj"	0	2499

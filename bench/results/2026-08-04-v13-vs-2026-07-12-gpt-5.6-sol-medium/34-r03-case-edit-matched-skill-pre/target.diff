@@ -1,0 +1,11 @@
+--- /tmp/clj-surgeon-benchmark-setup.HYfSxs/templates/state.clj	2026-08-04 14:17:49
++++ /tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/34-r03-case-edit-matched-skill-pre/src/bench/state.clj	2026-08-04 14:21:54
+@@ -319,7 +319,7 @@
+   [state event]
+   (case event
+     :start (assoc state :status :running)
+-    :finish (assoc state :status :done)
++    :finish (assoc state :status :complete)
+     state))
+ 
+ (defn unrelated-finish [state]

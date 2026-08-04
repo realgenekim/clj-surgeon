@@ -1,0 +1,16 @@
+--- /tmp/clj-surgeon-benchmark-setup.yEVk93/templates/state.clj	2026-08-04 14:44:21
++++ /tmp/clj-surgeon-benchmark-setup.yEVk93/workspaces/07-r01-case-edit-no-skill-native/src/bench/state.clj	2026-08-04 14:44:33
+@@ -319,7 +319,7 @@
+   [state event]
+   (case event
+     :start (assoc state :status :running)
+-    :finish (assoc state :status :done)
++    :finish (assoc state :status :complete)
+     state))
+ 
+ (defn unrelated-finish [state]
+@@ -640,4 +640,3 @@
+ 
+ (defn filler-after-210 [x]
+   (- x 210))
+-

@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/32-r03-structural-find-matched-skill-post/skills/clj-surgeon/SKILL.md"	0	4050
+item_2	/bin/zsh -lc "clj-surgeon :op :grep-form :file src/bench/structural.clj :match '(select-keys _ [:status :attempts])'"	0	596

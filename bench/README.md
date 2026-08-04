@@ -1,5 +1,48 @@
 # Clean Codex benchmark
 
+## Bounded clean-agent skill acceptance
+
+Use the six-session acceptance battery to exercise the installed Claude and
+Codex skill surfaces without starting the full 32-session Codex experiment:
+
+```bash
+make benchmark-agent-skills
+```
+
+It runs these two independently invokable batteries in sequence:
+
+- `make benchmark-codex-skill` starts one current-version Codex session for the
+  real `ops-registry` X-ray read and one for the same comment-preserving
+  `pair_view.clj` edit used by the Claude battery. Both agents receive the same
+  task contract and exact expected bytes. The target uses the existing clean
+  Codex runner, scorers, isolated home, and commit-specific CLI wrapper.
+  Override its ordinary `BENCH_MODEL`,
+  `BENCH_REASONING`, `BENCH_PARALLELISM`, or `BENCH_RESULT_DIR` settings as
+  needed. `BENCH_TASKS`, `BENCH_CONTEXTS`, `BENCH_VERSIONS`, and
+  `BENCH_REPLICATES` also replace the bounded defaults.
+- `make benchmark-claude-skill` starts Fable and Opus on the independently
+  scored real `ops-registry` X-ray read and comment-preserving `pair_view.clj`
+  plan/apply edit. Every child has its own 90-second deadline, workspace, raw
+  JSONL, state receipt, terminal receipt, hashes, and diff. Override
+  `CLAUDE_BENCH_RESULT_DIR`, `CLAUDE_BENCH_DEADLINE_SECONDS`,
+  `CLAUDE_BENCH_MODELS`, `CLAUDE_BENCH_TASKS`, or the per-model
+  `CLAUDE_BENCH_FABLE_MAX_BUDGET_USD` and
+  `CLAUDE_BENCH_OPUS_MAX_BUDGET_USD` limits only when intentionally creating a
+  separate series.
+
+Both are paid model-service targets. Run their fast process/isolation tests
+without a model call with:
+
+```bash
+make benchmark-agent-skills-self-test
+```
+
+The Claude self-test deliberately stalls one fake child and proves that the
+other success and failure receipts are emitted and preserved before that child
+hits its independent deadline.
+
+## Full controlled Codex comparison
+
 Run the controlled pre/post pilot:
 
 ```bash
@@ -27,6 +70,26 @@ BENCH_CONTEXTS=matched-skill \
 BENCH_INCLUDE_COMPACT=false \
 make benchmark-clean-codex
 ```
+
+For an old-versus-now comparison with a true native-tools control, use the
+`native` version only with the `no-skill` context. The pre and post arms expose
+their commit-specific CLI but no skill; the native arm uses the identical
+fixture, prompt, and scorer while exposing neither a `clj-surgeon` executable
+nor a clj-surgeon skill:
+
+```bash
+BENCH_PRE_COMMIT=19a20b0 \
+BENCH_POST_COMMIT=HEAD \
+BENCH_VERSIONS='pre post native' \
+BENCH_CONTEXTS=no-skill \
+BENCH_INCLUDE_COMPACT=false \
+BENCH_REPLICATES=4 \
+make benchmark-clean-codex
+```
+
+The native arm fails its correctness gate if its command log mentions a
+clj-surgeon invocation or records a skill read. Its isolated `PATH` is checked
+before Codex starts.
 
 The `computed-edit` task tests whether a clean agent can derive a replacement
 from an unknown selected value in one plan call. It is the keep gate for the
@@ -91,6 +154,34 @@ BENCH_RESULT_DIR=/tmp/clj-surgeon-benchmark \
 make benchmark-clean-codex
 ```
 
+One runner owns a result directory for its full lifetime. A concurrent runner
+refuses before changing `runs.tsv` or a run directory. The owner lock records
+PID, host, process start, UTC start, and command metadata in
+`.benchmark-owner/owner.tsv`. If an owner is dead or cannot be verified, the
+runner still refuses by default. After inspecting the receipt, recover it
+explicitly and preserve its metadata with:
+
+```bash
+BENCH_RECOVER_STALE_OWNER=true \
+BENCH_RESUME=true \
+BENCH_RESULT_DIR=/tmp/clj-surgeon-benchmark \
+make benchmark-clean-codex
+```
+
+Recovery moves the old lock to a timestamped
+`.benchmark-owner.recovered-*` directory. Row-lock waits are bounded to ten
+seconds by default; set `BENCH_ROW_LOCK_TIMEOUT_SECONDS` to another positive
+integer when slow storage requires it. Each scheduled child writes an atomic
+`terminal.tsv` receipt. The supervisor waits for every child and checks every
+receipt before summary generation; the summary is also replaced atomically so
+a failed summarizer preserves any prior summary.
+
+Run the fast harness tests without starting Codex model sessions:
+
+```bash
+make benchmark-harness-self-test
+```
+
 The output directory contains `runs.tsv`, `summary.md`, and one directory per
 run with the exact prompt, raw JSONL, stderr, final response, command list,
 fixture hashes, and diff. The runner uses isolated Codex homes and
@@ -98,3 +189,19 @@ commit-specific CLI wrappers. It never changes the checkout under test.
 
 See [the experiment plan](../docs/plans/clean-codex-benchmark.md) for the matrix,
 scoring contract, and confounds.
+
+## Archived evidence
+
+The raw X-Ray maximality archives have a machine-readable EDN manifest. Verify
+that every path is repository-relative, every archive is listed, excluded roots
+are absent, and every SHA-256 digest matches:
+
+```bash
+make verify-benchmark-evidence
+```
+
+Pass another manifest explicitly when checking a separate archive set:
+
+```bash
+bb bench/verify_evidence_manifest.clj path/to/manifest.edn
+```

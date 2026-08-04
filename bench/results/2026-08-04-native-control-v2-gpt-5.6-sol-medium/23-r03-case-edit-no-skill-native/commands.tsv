@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "rg -n -C 2 ':finish|unrelated-finish|assoc state :status :(done|complete)' src/bench/state.clj && git status --short -- src/bench/state.clj"	128	309
+item_3	/bin/zsh -lc "rg -n -C 2 ':finish|unrelated-finish|assoc state :status :(done|complete)' src/bench/state.clj && test \\""'$(rg -Fxc '"'    :finish (assoc state :status :complete)' src/bench/state.clj)\\" -eq 1 && test \\""'$(rg -Fxc '"'  (assoc state :status :done))' src/bench/state.clj)\\" -eq 1"	0	244

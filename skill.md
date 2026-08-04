@@ -2,104 +2,61 @@
 name: clj-surgeon
 description: >-
   Inspect and modify Clojure, ClojureScript, and CLJC structurally with the
-  clj-surgeon CLI. Use for outlines, exact form reads, peer navigation,
-  sibling-run enumeration, nested-form edits, dependency maps, extraction,
-  declare removal, moves, namespace renames, and deterministic CLJC operations.
-  Prefer it when textual reads or patches are ambiguous, formatting-sensitive,
-  or context-expensive.
+  clj-surgeon CLI. Use for compact reads, pure analysis, precise nested edits,
+  sibling navigation, dependencies, extraction, moves, and renames.
 ---
 
 # clj-surgeon
 
-Use `clj-surgeon` from `PATH`. Run `clj-surgeon --help` or
-`clj-surgeon :op OP --help` only when the exact routes below do not cover the
-task.
+Use `clj-surgeon` from `PATH`. Stop on nonzero exit or EDN `:error`; call
+`clj-surgeon :op OP --help` only when these routes do not cover the task.
 
-## Read the smallest structural object
+## Smallest structural route
 
-Use `:ls` only when the relevant form is unknown:
-
-```bash
-clj-surgeon :op :ls :file src/my/ns.clj
-```
-
-When a name, containing line, or distinctive literal is known, skip `:ls` and
-read the complete form directly:
+- Unknown top-level form: `clj-surgeon :op :ls :file FILE`.
+- Known name, line, or distinctive text: call `:cat` with exactly one of
+  `:form`, `:line`, or `:contains`; do not run `:ls` solely as a preflight.
+- Unknown owner, known pattern: call `:grep-form`; add `:inside` only to narrow.
+- Related nested syntax or computed facts: call `:xray`.
+- Exact nested edit: call `:edit`, review its plan, then apply separately;
+  derive a computed replacement with `transform` instead of retyping one.
 
 ```bash
-clj-surgeon :op :cat :file src/my/ns.clj :form transition!
-clj-surgeon :op :cat :file src/my/ns.clj :line 1134
-clj-surgeon :op :cat :file src/my/ns.clj :contains 'Per-command help'
-clj-surgeon :op :cat :file src/my/ns.clj :contains :finish
+clj-surgeon :op :cat :file src/app.clj :form transition
+clj-surgeon :op :cat :file src/app.clj :contains :finish
+clj-surgeon :op :grep-form :file src/app.clj :match '(post! "/api/items" _)'
 ```
 
-Use `:show-form` instead of reconstructing a `sed` range. Do not run `:ls`
-solely as a preflight when any direct selector is known.
+`_` matches exactly one subtree; pattern arity is exact, so use `(loop _ _)`
+for a two-argument loop. There is no variadic wildcard. `:cat` strictly aliases
+`:show-form` and never dumps a file. Use it instead of reconstructing a `sed`
+range. Distinctive text refuses zero or multiple forms. Reserve `rg` for broad
+cross-file discovery, not manufacturing a line number.
 
-`:cat` is a strict alias for canonical `:show-form`. It never dumps the file.
-Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
-case-sensitive literal, not a regex. It returns one containing top-level form
-or refuses on ambiguity.
+## X-ray ordinary Clojure data
 
-Add `:platform :clj` or `:platform :cljs` only to
-disambiguate CLJC branches. The CLI preserves the `:contains` value as text, so
-keyword-shaped literals such as `:finish` need no EDN-string workaround.
-
-Use `rg` for broad cross-file discovery. Do not use `rg -n` merely to convert
-distinctive text into a line for `:show-form`.
-
-## Navigate and update syntax like data
-
-Use `:xray :expr` when one piece of syntax identifies a related node:
-
-```bash
-clj-surgeon :op :xray :file src/state.clj \
-  :expr "(-> (form 'transition) (match :finish) right)"
-```
-
-This reads the value paired with `:finish`. The same `:right` step moves from a
-`cond` guard to its result, a map key to its value, or a binding name to its
-initializer. Semantic navigation skips whitespace and comments but the tool
-preserves them in the file. Compose `form`, `match`, `where`, and navigation
-builders. `initializer` selects a `def` right-hand side without evaluating it.
-`_` matches one subtree. A plain path reports zero, one, or many matches and a
-count trace.
-
-End the path with `analyze`; its function always receives a selection vector.
-Add `expect-count` when cardinality must be exact:
+Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data
+and returns compact `:value` plus hashes. `expect-count` refuses
+before analysis without changing that vector. `initializer` selects a `def`
+right-hand side without evaluating it.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
   :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
-`analyze` receives one vector of ordinary Clojure data for zero, one, or many
-matches; `expect-count` refuses without changing that type. Write one total
-function over this contract instead of a separate shape-discovery query.
-Computed `:value` has compact hash evidence; a plain path returns full source.
-Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
-one canonical map view while evidence stays exact. Identify descendants with
-`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a lazy
-sequence. It never writes. In CLJC, pass a platform for one branch.
+Write one total pure Clojure function instead of a shape-discovery query. Map
+literals and `hash-map` / `array-map` share a canonical map view. Identify
+shape-independent descendants with `(filter predicate (tree-seq coll? seq value))`.
+Return concrete EDN, not a lazy sequence. X-ray never writes source or a plan.
+Compose `form`, `match`, `where`, `right`, `left`, `up`, `down`, `outermost`,
+`initializer`, `span`, and `partition-all`. For CLJC use `(form 'name :clj)` or
+`:cljs`. Use `:up :outermost`, not `:outermost :up`.
 
-End that same path with `replace` to emit one guarded plan:
+## Plan and apply separately
 
-```bash
-clj-surgeon :op :edit :file src/state.clj \
-  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
-  :plan-out plan.edn
-clj-surgeon :op :replace-subform! :plan plan.edn
-```
-
-`:edit` never writes source. A terminal replacement refuses unless the path
-selects exactly one node, then returns that node, the trace, one diff, and the
-source/result hashes. Review the plan before the separate apply command. Never
-chain plan generation and application. When the requested relationship and
-replacement are already exact, the updater can be the first non-mutating call.
-Run a read query first when the choice still requires judgment.
-
-Use `:edit :expr` when pure Clojure collection operations make the path or
-replacement clearer:
+`:edit` never changes source. Supply `:plan-out` and exactly one of `:query` or
+`:expr`; it may be the first source-bearing command when intent is exact.
 
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
@@ -108,142 +65,26 @@ clj-surgeon :op :edit :file src/state.clj \
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Use `transform` when the replacement depends on the selected form:
+The plan saves `transform`'s concrete replacement, never executable code:
 
 ```bash
 clj-surgeon :op :edit :file src/policy.clj \
   :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
   :plan-out plan.edn
-clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-The function receives the exactly-one selected form as Clojure data. It does
-not run for zero or many matches. The saved plan contains only the concrete
-replacement, diff, and hashes. Use `replace` for a known replacement and
-`transform` for a replacement derived from the current form.
+Do not preflight whether the plan path exists. Review diff and hashes after
+plan generation. Never chain plan generation and application. Do not edit the
+plan; when intent changes, generate a new plan. Apply returns `:verified`
+read-back hash and whole-file parse evidence. Trust it; never reproduce the
+plan with `apply_patch`.
 
-Supply exactly one of `:query` and `:expr`. `:expr` provides pure
-`clojure.core` collection functions and structural builders through sandboxed
-SCI. It does not expose I/O, processes, namespaces, mutable references, or host
-interop. Both authoring surfaces save the same plan and use the same executor.
+A `case` clause, `cond` branch, map entry, or binding pair is sibling syntax,
+not a synthetic wrapper list. Use `right` for one peer, `span 2` for one pair,
+and `partition-all 2` for the run. Compatibility `:q` accepts
+`[[:form transition] [:find :finish] :right]`, `[:span 2]`, and
+`[:partition-all 2]`; `[:replace FORM]` or `[:replace-span FORM FORM]` plans
+for later `:replace-subform!`. Prefer the Clojure `:xray` / `:edit` surface.
 
-Do not preflight whether the task-specific `:plan-out` path exists. Successful
-planning atomically replaces that artifact. Any refusal preserves it.
-
-Select a meaningful peer pair as one lossless slice with `[:span 2]`:
-
-```bash
-clj-surgeon :op :edit :file src/state.clj \
-  :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
-  :plan-out plan.edn
-clj-surgeon :op :replace-subform! :plan plan.edn
-```
-
-`[:span N]` includes the current node and its next `N-1` semantic siblings and
-never crosses their parent. `[:replace-span FORM ...]` requires the same number
-of forms, so comments and whitespace between peers remain byte-for-byte intact.
-Use a span when the pair or flattened `#(...)` body is itself the object under
-inspection. Use `:right` when only the peer value is the target.
-
-## Enumerate sibling pairs in one read
-
-When the first sibling is known, enumerate every pair with `partition-all`:
-
-```bash
-clj-surgeon :op :xray :file src/state.clj \
-  :expr "(-> (form 'transition) (match 'case) up down right right (partition-all 2))"
-```
-
-The step starts at the current node and partitions it with all following
-semantic siblings. Each result contains neutral `:forms`, exact source,
-addresses, gaps, and `:partition` evidence. A shorter final span is explicit;
-the tool never drops it or guesses what it means. In a `case`, the caller can
-interpret a one-form remainder as the optional default. In a `cond`, a nested
-`cond` result remains one subtree when the query starts at the first outer
-guard.
-
-When repeated nested heads make that first outer sibling unknown, promote each
-head to its owner before retaining maximal owners:
-
-```bash
-clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2))"
-```
-
-Use `:up :outermost`, not `:outermost :up`; head symbols do not contain one
-another. If the first outer guard is known, anchor there directly because that
-query is shorter.
-
-Use `:right` for one known value. Use `[:span 2]` for one known pair. Use
-`[:partition-all 2]` for all pairs in a sibling suffix. Multiple partitions are
-read evidence and refuse mutation. Use an exact anchor and `[:span 2]` for a
-singular pair edit.
-
-## Find nested syntax
-
-Use file-wide structural search when the enclosing form is unknown:
-
-```bash
-clj-surgeon :op :grep-form :file src/views.clj \
-  :match '(post! "/api/items" _)'
-```
-
-`_` matches one subtree. Copy each named match's `:inside` value directly into
-a narrowed search or replacement. Add `:inside` only
-when already known or when choosing among multiple matches.
-
-When a peer key, guard, or binding identifies the intended subtree, prefer one
-X-ray path over reading its owner and reconstructing a separate match. Do
-not grep a repeated expression and then cat its owner merely to recover sibling
-context.
-
-## Replace one exact subtree
-
-Keep planning and application as separate commands. Never chain them. Use a
-read command first only when selecting the intended replacement requires a
-separate judgment.
-
-```bash
-clj-surgeon :op :replace-subform :file src/views.clj :inside render \
-  :match '(post! "/api/items" _)' \
-  :with '(items/actions surface)' :plan-out plan.edn
-```
-
-Review the selector, single edit, diff, source/result hashes, and provenance.
-Then apply the unchanged saved plan in a later command:
-
-```bash
-clj-surgeon :op :replace-subform! :plan plan.edn
-```
-
-Do not edit the plan. When intent changes, generate a new plan. Successful apply
-returns `:applied-edit` and a `:verified` read-back receipt.
-
-Trust that receipt for exact replay/hash/parse evidence. Do not repeat it with
-`rg`, `show-form`, `git diff`, or `shasum`.
-
-The reviewed plan diff is the edit-level change review. The receipt proves that
-clj-surgeon atomically wrote and reparsed that exact result. Do not reread
-related forms solely to verify byte preservation. When a task asks only to
-verify this exact edit, the reviewed plan plus successful receipt completes that
-request.
-
-Still run relevant repository formatters, linters, compilers, and tests. Review
-an aggregate Git diff only when the surrounding task already establishes a Git
-worktree or explicitly requests that review. Never probe
-`.git` solely to decide whether to repeat the edit-level evidence.
-
-A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
-syntax, not a synthetic wrapper list. Use X-ray peer navigation when the sibling
-relationship identifies the target. Use `:replace-subform` when one independent
-subtree pattern already identifies it exactly.
-
-## Advanced operations
-
-Read
-[the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md)
-before moving or extracting forms, fixing declares, renaming namespaces, or
-performing CLJC operations.
-
-For every operation, stop on nonzero status or EDN `:error`. Format changed
-Clojure files before linting or testing.
+For dependencies, extraction, declares, moves, renames, or CLJC operations,
+read [the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md).

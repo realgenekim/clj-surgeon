@@ -50,13 +50,10 @@ tests, install tests, and benchmark self-tests remained green.
 On clj-surgeon's own 292-line `ops-registry`, the exact same computed answer
 produced these local process results:
 
-```text
-                         full evidence     compact evidence
-median, 8 alternating        292 ms             193 ms
-output                        29.1 KB             1.4 KB
-change                                             -34% wall
-                                                   -95% bytes
-```
+| Metric | Full evidence | Compact evidence | Change |
+|---|---:|---:|---:|
+| Median, 8 alternating | 292 ms | 193 ms | 34% faster |
+| Output | 29.1 KB | 1.4 KB | 95% fewer bytes |
 
 That proved transport and printing improved. It did not prove agent wall time
 improved.
@@ -70,10 +67,10 @@ answer. Any source mutation failed the run.
 
 The first version-matched pilot was correct on both sides:
 
-```text
-released X-ray       72.7 s     5 shell calls     61.1 KB source output
-compact xray-one     75.3 s     8 shell calls      9.2 KB source output
-```
+| Treatment | Wall | Shell calls | Source output |
+|---|---:|---:|---:|
+| Released X-ray | 72.7 s | 5 | 61.1 KB |
+| Compact `xray-one` | 75.3 s | 8 | 9.2 KB |
 
 Candidate v1 lost the primary metric. The transcript explained why. The agent
 first selected the definition's docstring, then the `(hash-map ...)` syntax,
@@ -97,11 +94,11 @@ another concrete collection constructor before it is returned.
 Two clean agents received a 756-byte skill that taught one source-bearing
 pipeline: structural `:q` output into Babashka. Both were correct.
 
-```text
-:q | bb          median 101.2 s     9 shell calls
-released X-ray          72.7 s      5 shell calls
-compact candidate       75.3 s      8 shell calls
-```
+| Treatment | Median wall | Shell calls |
+|---|---:|---:|
+| `:q \| bb` | 101.2 s | 9 |
+| Released X-ray | 72.7 s | 5 |
+| Compact candidate | 75.3 s | 8 |
 
 The direct composition is an important escape hatch, but it did not displace
 the integrated interpreter. One agent needed twelve commands to discover the
@@ -148,10 +145,10 @@ correct and source-preserving while median wall time and command count improve.
 
 The terminal names encode cardinality, not different engines:
 
-```text
-compute    exactly one  -> f(value)       refuse zero or many
-aggregate  zero or more -> f([values...]) preserve source order
-```
+| Terminal | Cardinality | Analyzer input | Behavior |
+|---|---|---|---|
+| `compute` | Exactly one | `f(value)` | Refuse zero or many |
+| `aggregate` | Zero or more | `f([values...])` | Preserve source order |
 
 Both are read-only and receive parsed syntax-as-data.
 
@@ -162,14 +159,13 @@ A one-replicate pilot favored the unified surface by 21%, 37.5 seconds versus
 the keep decision used four counterbalanced replicates run with parallelism
 four. Every run was independently exact and preserved the source hash.
 
-```text
-                              candidate v1    unified X-ray    change
-correct                           4/4             4/4          tied
-median wall                      75.2 s            69.0 s       8% faster
-median shell calls                8                7           1 fewer
-median input tokens             170,596          143,640       16% fewer
-median output tokens              2,693            2,070       23% fewer
-```
+| Metric | Candidate v1 | Unified X-ray | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 75.2 s | 69.0 s | 8% faster |
+| Median shell calls | 8 | 7 | 1 fewer |
+| Median input tokens | 170,596 | 143,640 | 16% fewer |
+| Median output tokens | 2,693 | 2,070 | 23% fewer |
 
 The wall improvement is below the 10% threshold for a decisive neighboring
 win. It is nevertheless a favorable near-tie on the primary metric and better
@@ -226,14 +222,13 @@ Candidate v3 combined the naming change with bounded `:input-summary` repair.
 The one-run pilot was neutral: both versions were exact in six calls, and the
 candidate finished 4% faster. The four-run parallel gate reversed that result:
 
-```text
-                              unified v2    inspect + summary    change
-correct                           4/4             4/4            tied
-median wall                      59.8 s            69.6 s         16% slower
-median shell calls                8                9             1 more
-median input tokens             143,579          183,126         28% more
-median source output             35.3 KB           16.2 KB       54% less
-```
+| Metric | Unified v2 | `inspect` + summary | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 59.8 s | 69.6 s | 16% slower |
+| Median shell calls | 8 | 9 | 1 more |
+| Median input tokens | 143,579 | 183,126 | 28% more |
+| Median source output | 35.3 KB | 16.2 KB | 54% fewer |
 
 The summary did what it promised mechanically: agents stopped dumping the full
 form as often, and source output fell by more than half. That did not satisfy
@@ -252,13 +247,12 @@ The one-pair pilot had `inspect` 24% slower but one call shorter. Four
 counterbalanced replicates again kept correctness perfect and rejected the
 candidate on efficiency:
 
-```text
-                              compute / aggregate    inspect :one / :all
-correct                               4/4                    4/4
-median wall                          67.7 s                   78.4 s
-median shell calls                    8                       9
-median input tokens                 176,696                 189,374
-```
+| Metric | `compute` / `aggregate` | `inspect :one` / `:all` |
+|---|---:|---:|
+| Correct | 4/4 | 4/4 |
+| Median wall | 67.7 s | 78.4 s |
+| Median shell calls | 8 | 9 |
+| Median input tokens | 176,696 | 189,374 |
 
 Three of four paired `inspect` runs were slower. Agents accepted the syntax
 without naming errors; they still spent time navigating to and interpreting
@@ -283,14 +277,13 @@ available during the test.
 The one-pair pilot favored `one` / `all` by 26%, with eight calls on both
 sides. The four-run gate rejected that attractive pilot:
 
-```text
-                              compute / aggregate    one / all
-correct                               4/4               4/4
-median wall                          63.0 s              89.1 s
-median shell calls                    7                  9
-median input tokens                 147,671            190,071
-median output tokens                  2,223              2,880
-```
+| Metric | `compute` / `aggregate` | `one` / `all` |
+|---|---:|---:|
+| Correct | 4/4 | 4/4 |
+| Median wall | 63.0 s | 89.1 s |
+| Median shell calls | 7 | 9 |
+| Median input tokens | 147,671 | 190,071 |
+| Median output tokens | 2,223 | 2,880 |
 
 The cardinality words were human-readable and clean agents used them without
 syntax confusion. They did not improve the primary metric. This is the third
@@ -361,14 +354,13 @@ The one-pair pilot favored stable selection: 53.7 seconds and four calls versus
 58.4 seconds and seven calls. Four parallel replicates rejected promotion on
 the primary metric:
 
-```text
-                              compute / aggregate    stable Selection
-correct                               4/4                  4/4
-median wall                          83.9 s                102.2 s
-median shell calls                   10                    11
-median input tokens                 212,366               230,472
-median source output                 30.6 KB                19.2 KB
-```
+| Metric | `compute` / `aggregate` | Stable selection |
+|---|---:|---:|
+| Correct | 4/4 | 4/4 |
+| Median wall | 83.9 s | 102.2 s |
+| Median shell calls | 10 | 11 |
+| Median input tokens | 212,366 | 230,472 |
+| Median source output | 30.6 KB | 19.2 KB |
 
 As in the prior candidates, smaller output did not buy lower wall time. The
 transcripts nevertheless showed that agents understood the stable vector
@@ -399,13 +391,12 @@ helper would still require a choice. Every repeated choice costs wall time.
 
 Candidate v7 therefore adds a canonical computed-data view:
 
-```text
-exact source                     computed analyzer value
-{:a 1}                           {:a 1}
-(hash-map :a 1)                  {:a 1}
-(array-map :a 1)                 {:a 1}
-(merge a b)                      (merge a b)
-```
+| Exact source | Computed analyzer value |
+|---|---|
+| `{:a 1}` | `{:a 1}` |
+| `(hash-map :a 1)` | `{:a 1}` |
+| `(array-map :a 1)` | `{:a 1}` |
+| `(merge a b)` | `(merge a b)` |
 
 This is syntactic normalization, not evaluation. The implementation pairs
 already-parsed key/value forms only for known map-shaped constructors. It never
@@ -426,15 +417,14 @@ The one-pair pilot was exact on both sides and favored canonical initializer
 data by 40%: 70.5 seconds versus 117.1 seconds, six calls versus twelve, and
 roughly half the input tokens. The four-run parallel gate confirmed the result:
 
-```text
-                              best prior    canonical initializer    change
-correct                           4/4                 4/4             tied
-median wall                      75.5 s                51.5 s          32% faster
-median shell calls                8                    5              3 fewer
-median input tokens             157,515              104,269          34% fewer
-median output tokens              2,366                1,665          30% fewer
-median source output              8.5 KB                5.3 KB        38% fewer
-```
+| Metric | Best prior | Canonical initializer | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 75.5 s | 51.5 s | 32% faster |
+| Median shell calls | 8 | 5 | 3 fewer |
+| Median input tokens | 157,515 | 104,269 | 34% fewer |
+| Median output tokens | 2,366 | 1,665 | 30% fewer |
+| Median source output | 8.5 KB | 5.3 KB | 38% fewer |
 
 Every run preserved the source hash and produced the independently scored exact
 answer. The post times were also comparatively tight: 46.8, 62.4, 51.9, and
@@ -512,16 +502,15 @@ route is possible, not timing evidence.
 
 The clean four-replicate parallel gate was much closer:
 
-```text
-                              v7 leader       v8 tree-seq         change
-correct                           4/4             4/4             tied
-median wall                      47.626 s          43.805 s         8% faster
-median shell calls                5                5              tied
-median input tokens             103,588           94,241           9% fewer
-median uncached tokens           19,201           18,302           5% fewer
-median output tokens              1,619            1,562           4% fewer
-median source output              5.3 KB           5.1 KB          2% fewer
-```
+| Metric | v7 leader | v8 `tree-seq` | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 47.626 s | 43.805 s | 8% faster |
+| Median shell calls | 5 | 5 | Tied |
+| Median input tokens | 103,588 | 94,241 | 9% fewer |
+| Median uncached tokens | 19,201 | 18,302 | 5% fewer |
+| Median output tokens | 1,619 | 1,562 | 4% fewer |
+| Median source output | 5.3 KB | 5.1 KB | 2% fewer |
 
 Every run was independently exact and preserved the source hash. However, only
 one of four v8 agents used `tree-seq`, and it did so after other attempts. The
@@ -548,16 +537,15 @@ native traversal as optional Clojure capability rather than the headline.
 The clarified instruction made every clean agent use `tree-seq`, compared with
 one of four under v8. The four-replicate gate against v7 was exact throughout:
 
-```text
-                              v7 leader       v9 contract         change
-correct                           4/4             4/4             tied
-median wall                      50.299 s          39.432 s        22% faster
-median shell calls                5                5              tied
-median input tokens             104,339           94,271          10% fewer
-median uncached tokens           15,966           14,783           7% fewer
-median output tokens              1,568            1,382          12% fewer
-median source output              5.5 KB           4.5 KB         17% fewer
-```
+| Metric | v7 leader | v9 contract | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 50.299 s | 39.432 s | 22% faster |
+| Median shell calls | 5 | 5 | Tied |
+| Median input tokens | 104,339 | 94,271 | 10% fewer |
+| Median uncached tokens | 15,966 | 14,783 | 7% fewer |
+| Median output tokens | 1,568 | 1,382 | 12% fewer |
+| Median source output | 5.5 KB | 4.5 KB | 17% fewer |
 
 Every source hash was unchanged. One v9 agent read the skill, issued one X-ray,
 and returned the exact result in 31.6 seconds. The wording therefore crossed
@@ -602,16 +590,15 @@ rejecting the Clojure already nearest in the model's latent space.
 The four-run parallel comparison against v9 was exact and source-preserving on
 both sides:
 
-```text
-                              v9 leader       v10 pure Clojure     change
-correct                           4/4             4/4             tied
-median wall                      50.025 s          37.552 s        25% faster
-median shell calls                5                3              2 fewer
-median input tokens             104,470           65,982          37% fewer
-median uncached tokens           20,810           14,782          29% fewer
-median output tokens              1,488            1,188          20% fewer
-median source output              5.9 KB           2.7 KB         53% fewer
-```
+| Metric | v9 leader | v10 pure Clojure | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 50.025 s | 37.552 s | 25% faster |
+| Median shell calls | 5 | 3 | 2 fewer |
+| Median input tokens | 104,470 | 65,982 | 37% fewer |
+| Median uncached tokens | 20,810 | 14,782 | 29% fewer |
+| Median output tokens | 1,488 | 1,188 | 20% fewer |
+| Median source output | 5.9 KB | 2.7 KB | 53% fewer |
 
 One v10 agent was exactly one-shot after reading the skill: one X-ray, 22.9
 seconds, and 1.4 KB of source output. None of the four happened to use `for`;
@@ -648,15 +635,14 @@ slowing the v10 leader.
 The scoped-comprehension treatment was exact in all four runs, and every agent
 used `for`. It nevertheless lost decisively:
 
-```text
-                              v10 leader       v11 scoped for      change
-correct                           4/4             4/4             tied
-median wall                      27.529 s          35.411 s        29% slower
-median shell calls                3                4              1 more
-median input tokens              56,458           75,547          34% more
-median output tokens                947            1,300          37% more
-median source output              2.1 KB           3.4 KB         60% more
-```
+| Metric | v10 leader | v11 scoped `for` | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 27.529 s | 35.411 s | 29% slower |
+| Median shell calls | 3 | 4 | 1 more |
+| Median input tokens | 56,458 | 75,547 | 34% more |
+| Median output tokens | 947 | 1,300 | 37% more |
+| Median source output | 2.1 KB | 3.4 KB | 60% more |
 
 The example activated syntax, not semantics. One agent wrote a nested `for`
 directly over `(:args spec)`. Because that value was a map, each iteration
@@ -696,16 +682,15 @@ beat or match v10 on wall time; brevity cannot purchase forgotten safety.
 The 107-line skill preserved exactness and source hashes in all four runs while
 crossing the plan's compact-evidence gate:
 
-```text
-                              v10 240 lines    v12 107 lines       change
-correct                           4/4             4/4             tied
-median wall                      28.285 s          26.004 s         8% faster
-median shell calls                3                2              1 fewer
-median input tokens              66,217           44,819          32% fewer
-median uncached tokens           12,637           11,795           7% fewer
-median output tokens                984              874          11% fewer
-median source output              2.7 KB           1.5 KB         43% fewer
-```
+| Metric | v10, 240 lines | v12, 107 lines | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 28.285 s | 26.004 s | 8% faster |
+| Median shell calls | 3 | 2 | 1 fewer |
+| Median input tokens | 66,217 | 44,819 | 32% fewer |
+| Median uncached tokens | 12,637 | 11,795 | 7% fewer |
+| Median output tokens | 984 | 874 | 11% fewer |
+| Median source output | 2.7 KB | 1.5 KB | 43% fewer |
 
 Three of four compact-skill agents were truly one-shot after the required skill
 read. The fourth made one validation call. The wall gain is below the automatic
@@ -719,6 +704,50 @@ lines, 563 words, and 4,050 bytes. The permanent line ceiling becomes 90. If
 this final trim does not deliver another 10% wall win, the hill is locally
 maximal under the audit rule; keep the fastest compact variant and stop shaving
 prompt prose.
+
+### Candidate v13 result: the hill is locally maximal
+
+All eight sessions in the final adjacent comparison were exact, unchanged, and
+one-shot after the required skill read:
+
+| Metric | v12, 107 lines | v13, 89 lines | Change |
+|---|---:|---:|---:|
+| Correct | 4/4 | 4/4 | Tied |
+| Median wall | 23.764 s | 24.462 s | 3% slower |
+| Median shell calls | 2 | 2 | Tied |
+| Median input tokens | 44,702 | 44,480 | <1% fewer |
+| Median uncached tokens | 9,630 | 7,360 | 24% fewer |
+| Median output tokens | 723 | 802 | 11% more |
+| Median source output | 1.4 KB | 1.4 KB | 2% more |
+| Median total tool output | 6.2 KB | 5.5 KB | 11% fewer |
+
+There is no wall-clock win to claim. The 698 ms difference is small relative
+to model-service variance, while both treatments achieved the ideal two-command
+session in every run. v13 retains every tested concept and safety contract in
+18 fewer lines and 711 fewer bytes. Under the close-result rule, keep v13 for
+the smaller always-loaded artifact; do not claim it is faster than v12.
+
+The local-maximality condition is now satisfied. After v10 became the last
+candidate to improve median wall by more than 10%, three bounded neighbors did
+not produce another such gain: prescriptive scoped `for` lost by 29%, the
+107-line skill won by 8% plus compelling one-shot/simplicity evidence, and the
+89-line skill tied within noise. Every candidate preserved correctness and
+source bytes, and rejected designs remain tagged and documented.
+
+The final product shape is therefore:
+
+```text
+:xray        one structural read plus one caller-supplied terminating function
+analyze      Vector<ordinary Clojure data> -> bounded EDN
+tree-seq     shape-independent nested traversal
+:edit        the same Clojure path, producing a reviewed immutable plan
+skill        89-line router; advanced workflows load on demand
+```
+
+This is not proof that clj-surgeon can never improve. It is proof that this
+bounded hill climb has reached its stopping rule. Further work needs a new
+task, a new field failure, or a stronger competing design—not more prose
+shaving on this benchmark.
 
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
@@ -744,3 +773,89 @@ fail to improve median wall by at least 10% without weakening correctness,
 safety, or the permanent tests.
 
 The feature was worth building. The product is not done.
+
+## The current release beats the July baseline
+
+The release comparison used the newest origin commit available on or before
+July 28. That commit was `cc0f306` from July 12; there was no newer commit in
+the requested interval. The current candidate was `477dca9`. Each lane used
+GPT-5.6 sol at medium reasoning, four independent clean sessions per task, and
+the skill that matched its executable. The native control had neither the
+clj-surgeon executable nor its skill.
+
+Correctness is a gate. The efficiency medians below include only correct runs.
+“Exact” also checks the requested presentation for reads and every source byte
+for edits.
+
+| Task | Lane | Correct | Exact | Median wall | Shell calls | Input tokens | Source output |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Named-form read | July baseline | 4/4 | 4/4 | 28.792 s | 4 | 72,000 | 6,720 B |
+| Named-form read | Current | 4/4 | 4/4 | 22.709 s | 2 | 43,971 | 1,461 B |
+| Named-form read | Native control | 4/4 | 4/4 | 23.949 s | 2 | 41,379 | 2,322 B |
+| Semantic form read | July baseline | 4/4 | 4/4 | 39.444 s | 5 | 82,806 | 7,883 B |
+| Semantic form read | Current | 4/4 | 4/4 | 28.384 s | 2 | 44,016 | 1,531 B |
+| Semantic form read | Native control | 4/4 | 4/4 | 27.347 s | 3 | 56,778 | 4,244 B |
+| Structural search | July baseline | 4/4 | 3/4 | 35.959 s | 4 | 76,213 | 663 B |
+| Structural search | Current | 4/4 | 2/4 | 24.222 s | 2 | 43,672 | 596 B |
+| Structural search | Native control | 4/4 | 3/4 | 40.627 s | 3 | 56,285 | 844 B |
+| Guarded edit | July baseline | 4/4 | 4/4 | 53.502 s | 8 | 176,294 | 37,443 B |
+| Guarded edit | Current | 4/4 | 4/4 | 52.832 s | 8 | 116,114 | 10,542 B |
+| Guarded edit | Native control | 0/4 | 0/4 | — | — | — | — |
+
+For the three read tasks, current clj-surgeon was 21%, 28%, and 33% faster
+than the July baseline. It cut median source output by 78% and 81% on the two
+form-read tasks. The guarded edit tied on wall time while using 34% fewer input
+tokens and 72% less source output.
+
+The native control is the important check against self-congratulation. It tied
+current clj-surgeon on the easy named-form read and was 4% faster on the
+semantic read, although it used one more call and 2.8 times as much source
+output. Current clj-surgeon was 40% faster on structural search. On the edit,
+all four native agents changed the requested token but also deleted an
+unrelated trailing blank byte. The exact-byte preservation gate therefore
+scored all four runs incorrect. Both clj-surgeon lanes were exact in all eight
+edit runs.
+
+The structural-search presentation regression also remains visible: current
+returned the requested exact presentation in two of four runs, versus three of
+four for both comparators. The answers were structurally correct, but this is
+not a metric to hide.
+
+## Claude validates the same safety contract
+
+A separate 2-by-2 clean-context matrix exercised one computed read and one
+guarded edit with both Claude Fable and Claude Opus. All four runs were exact.
+
+| Model | Task | Correct | Wall time |
+|---|---|---:|---:|
+| Fable | Guarded edit | yes | 25.677 s |
+| Opus | Guarded edit | yes | 26.220 s |
+| Fable | Computed X-ray | yes | 36.971 s |
+| Opus | Computed X-ray | yes | 41.274 s |
+
+The edit prompt asked only for the `:status` value to change from `:done` to
+`:complete`; the fixture deliberately retained an adjacent audit payload and
+comment. Each agent planned and applied in separate commands, produced the
+exact expected bytes, and left the repository source unchanged. These timings
+are not yet a Claude-versus-Codex comparison because the existing Codex runs
+used different fixtures. The repository-owned matched-agent Make targets close
+that measurement gap.
+
+## Audit checkpoint
+
+The earlier audit boundaries are now remediated:
+
+1. The 20 valid raw-run directories are archived with hashes, and the evidence
+   verifier checks the manifest, archive set, hashes, and explicit exclusions.
+2. Fable and Opus have passed the clean-context read/edit matrix.
+3. Stable installation now creates content-addressed, read-only copies with
+   receipts. `make install-dev` is the explicit branch-live mode.
+4. `skills/clj-surgeon/` is the single authoritative skill package. The native
+   Claude package is byte-identical, and the compact root file is a legacy
+   entrance with only its valid relative reference changed.
+5. The quoted-data regression has a permanent exhaustive test: executable
+   sandbox symbols refuse before source I/O, while the same symbols inside
+   quoted program data remain searchable.
+
+The exact branch state, benchmark manifest, review findings, and takeover
+instructions remain in [the maximality handoff](../plans/xray-maximality-handoff.md).

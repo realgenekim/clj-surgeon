@@ -7,6 +7,7 @@
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
+   [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
@@ -16,6 +17,7 @@
 (def tool-version "0.1.0")
 (def max-query-steps 32)
 (def query-result-limit 100)
+(def supported-platform-file-extensions [".clj" ".cljs" ".cljc"])
 (def supported-query-steps
   [[:form 'NAME]
    [:find 'PATTERN]
@@ -342,13 +344,28 @@
   (mapv (fn [[left right]] (raw-between left right))
         (partition 2 1 zlocs)))
 
-(defn- source-index [root]
+(defn platform-context-for-file
+  "Return the platforms valid for ordinary forms in a known Clojure source
+   file. Nil means the file context is absent or unsupported. Pure."
+  [file]
+  (when file
+    (case (some->> (re-find #"(?i)\.([^.\\/]+)$" (str file))
+                   second
+                   str/lower-case)
+      "clj" #{:clj}
+      "cljs" #{:cljs}
+      "cljc" #{:clj :cljs}
+      nil)))
+
+(defn- source-index [root default-platforms]
   (let [locations (vec (zipper-locations root))
         entries (mapv (fn [address zloc]
                         {:address address :zloc zloc})
                       (range)
                       locations)
-        walked (cwalk/top-level-forms-from-zloc root #{:clj :cljs})
+        walked (->> (cwalk/top-level-forms-from-zloc root default-platforms)
+                    (mapv #(update % :platforms set/intersection
+                                   default-platforms)))
         walked-by-location (into {}
                                  (map (fn [{:keys [zloc platforms]}]
                                         [(location-key zloc) platforms]))
@@ -368,9 +385,9 @@
      :by-location by-location
      :top-levels (vec walked-top-levels)
      :initial (unique-items
-               (into []
-                     (keep #(get by-location (location-key %)))
-                     (concat ordinary-top-levels walked-top-levels)))}))
+                (into []
+                      (keep #(get by-location (location-key %)))
+                      (concat ordinary-top-levels walked-top-levels)))}))
 
 (defn- subtree-items [entries {:keys [address zloc]}]
   (let [subtree-size (count (zipper-locations (z/subzip zloc)))
@@ -484,36 +501,56 @@
          (select-keys (ex-data exception)
                       [:step-index :step :step-count :max-query-steps
                        :supported-query-steps :span-count
-                       :replacement-count])))
+                       :replacement-count :file :platform
+                       :supported-file-extensions])))
 
 (defn evaluate-query
   "Evaluate a read-only EDN zipper pipeline against source. Pure: source and
-   query data/string in; bounded match records and a per-step trace out."
-  [source query]
-  (try
-    (let [query (parse-query query false)
-          root (z/of-string source {:track-position? true})
-          {:keys [initial top-levels] :as index} (source-index root)
-          {:keys [items trace]}
-          (reduce (fn [{:keys [items trace]} step]
-                    (let [next-items (apply-query-step index items step)]
-                      {:items next-items
-                       :trace (conj trace {:step step
-                                           :input-count (count items)
-                                           :output-count (count next-items)})}))
-                  {:items initial :trace []}
-                  query)
-          matches (mapv #(query-match top-levels %) items)
-          match-count (count matches)]
-      (cond-> {:operation :lens
-               :query query
-               :trace trace
-               :match-count match-count
-               :matches (vec (take query-result-limit matches))
-               :source-hash (source-hash source)}
-        (> match-count query-result-limit) (assoc :matches-truncated? true)))
-    (catch Exception e
-      (query-error-result source query e))))
+   query data/string and optional file context in; bounded match records and a
+   per-step trace out. Platform-qualified form selection requires a known
+   .clj, .cljs, or .cljc file context."
+  ([source query]
+   (evaluate-query source query nil))
+  ([source query {:keys [file]}]
+   (try
+     (let [query (parse-query query false)
+           platform (when (and (vector? (first query))
+                               (= :form (ffirst query))
+                               (= 3 (count (first query))))
+                      (nth (first query) 2))
+           file-platforms (platform-context-for-file file)]
+       (when (and platform (nil? file-platforms))
+         (throw (ex-info
+                  "Platform-qualified form selection requires a .clj, .cljs, or .cljc file"
+                  {:error-type :platform-context-required
+                   :file file
+                   :platform platform
+                   :supported-file-extensions supported-platform-file-extensions})))
+       (let [default-platforms (or file-platforms #{:clj :cljs})
+             root (z/of-string source {:track-position? true})
+             {:keys [initial top-levels] :as index}
+             (source-index root default-platforms)
+             {:keys [items trace]}
+             (reduce (fn [{:keys [items trace]} step]
+                       (let [next-items (apply-query-step index items step)]
+                         {:items next-items
+                          :trace (conj trace {:step step
+                                              :input-count (count items)
+                                              :output-count (count next-items)})}))
+                     {:items initial :trace []}
+                     query)
+             matches (mapv #(query-match top-levels %) items)
+             match-count (count matches)]
+         (cond-> {:operation :lens
+                  :query query
+                  :trace trace
+                  :match-count match-count
+                  :matches (vec (take query-result-limit matches))
+                  :source-hash (source-hash source)}
+           (> match-count query-result-limit)
+           (assoc :matches-truncated? true))))
+     (catch Exception e
+       (query-error-result source query e)))))
 
 (defn find-subforms [source {:keys [inside match]}]
   (try
@@ -721,7 +758,7 @@
                                 (first (last query))))
                       (last query))]
       (if-not transform
-        (cond-> (evaluate-query source query)
+        (cond-> (evaluate-query source query {:file file})
           file (assoc :file file))
         (let [selection-query (pop query)
               replacement-sources
@@ -730,7 +767,7 @@
                                                   :invalid-replacement
                                                   "Replacement")))
                     (rest transform))
-              found (evaluate-query source selection-query)
+              found (evaluate-query source selection-query {:file file})
               match-count (:match-count found)]
           (cond
             (:error found) found

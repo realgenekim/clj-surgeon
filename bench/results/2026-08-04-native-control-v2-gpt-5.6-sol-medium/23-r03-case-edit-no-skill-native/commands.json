@@ -1,0 +1,18 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"rg -n -C 2 ':finish|unrelated-finish|assoc state :status :(done|complete)' src/bench/state.clj && git status --short -- src/bench/state.clj\"",
+    "aggregated_output": "320-  (case event\n321-    :start (assoc state :status :running)\n322:    :finish (assoc state :status :done)\n323-    state))\n324-\n325:(defn unrelated-finish [state]\n326-\n327:  (assoc state :status :done))\n328-\n329-(defn filler-after-106 [x]\nfatal: not a git repository (or any of the parent directories): .git\n",
+    "exit_code": 128,
+    "status": "failed"
+  },
+  {
+    "id": "item_3",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"rg -n -C 2 ':finish|unrelated-finish|assoc state :status :(done|complete)' src/bench/state.clj && test \\\"\"'$(rg -Fxc '\"'    :finish (assoc state :status :complete)' src/bench/state.clj)\\\" -eq 1 && test \\\"\"'$(rg -Fxc '\"'  (assoc state :status :done))' src/bench/state.clj)\\\" -eq 1\"",
+    "aggregated_output": "320-  (case event\n321-    :start (assoc state :status :running)\n322:    :finish (assoc state :status :complete)\n323-    state))\n324-\n325:(defn unrelated-finish [state]\n326-\n327:  (assoc state :status :done))\n328-\n329-(defn filler-after-106 [x]\n",
+    "exit_code": 0,
+    "status": "completed"
+  }
+]

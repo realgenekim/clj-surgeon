@@ -1,0 +1,8 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/47-r04-case-edit-matched-skill-pre/skills/clj-surgeon/SKILL.md"	0	4962
+item_2	/bin/zsh -lc 'clj-surgeon :op :ls :file src/bench/state.clj'	0	23910
+item_3	/bin/zsh -lc "clj-surgeon :op :find-subform :file src/bench/state.clj :inside transition :match '(assoc state :status :done)'"	0	365
+item_4	/bin/zsh -lc "clj-surgeon :op :replace-subform :file src/bench/state.clj :inside transition :match '(assoc state :status :done)' :with '(assoc state :status :complete)' :plan-out /tmp/bench-state-finish-plan.edn"	0	1130
+item_6	/bin/zsh -lc 'clj-surgeon :op :replace-subform! :plan /tmp/bench-state-finish-plan.edn'	0	94
+item_7	/bin/zsh -lc 'git diff --no-ext-diff --unified=0 -- src/bench/state.clj && git diff --check -- src/bench/state.clj'	129	7365
+item_8	/bin/zsh -lc "clj-surgeon :op :find-subform :file src/bench/state.clj :inside unrelated-finish :match '(assoc state :status :done)'"	0	364
+item_9	/bin/zsh -lc "clj-surgeon :op :find-subform :file src/bench/state.clj :inside transition :match '(assoc state :status :complete)'"	0	373

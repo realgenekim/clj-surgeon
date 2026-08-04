@@ -12,6 +12,10 @@ Before non-trivial feature or refactoring work, read:
   feature standard and required test layers.
 - The applicable plan in [docs/plans/](docs/plans/) when one exists.
 
+When working in this repository, the working-tree [skill.md](skill.md)
+supersedes any installed clj-surgeon skill; installed copies are stable
+snapshots that may lag the branch.
+
 If a non-trivial feature has no plan, write one in `docs/plans/` before
 implementation. A useful plan fixes the observable contract, non-goals,
 failure data, exhaustive behavior matrix, real-program evidence, documentation
@@ -88,9 +92,11 @@ updates, and verification gates. It is not a chronological coding diary.
   not change its input type. The computed `:value` has compact hash evidence;
   literal paths retain full source. X-ray never writes source or a plan. For
   a selected `def`, use `initializer` to select its right-hand side without
-  evaluating it. Computed X-ray canonicalizes map literals and
-  `hash-map`/`array-map` syntax to one map view while exact evidence remains
-  source-shaped. For CLJC, pass `:clj` or `:cljs` to `form`.
+  evaluating it. Computed X-ray shallowly normalizes a selected map literal or
+  top-level `hash-map`/`array-map` syntax to one map view; nested constructor
+  syntax and exact evidence remain source-shaped. The SCI sandbox limits
+  capabilities but does not prove termination, so analyzers must perform
+  bounded work. For CLJC, pass `:clj` or `:cljs` to `form`.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already

@@ -1,0 +1,7 @@
+Updated [src/bench/state.clj](/private/tmp/clj-surgeon-benchmark-setup.yEVk93/workspaces/07-r01-case-edit-no-skill-native/src/bench/state.clj:322):
+
+```clojure
+:finish (assoc state :status :complete)
+```
+
+Verified `unrelated-finish` remains `:done` at line 327. Used `rg`, `apply_patch`, and targeted `perl`; Git diff was unavailable because the workspace has no recognized Git metadata.

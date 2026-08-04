@@ -1,0 +1,2 @@
+item_1	/bin/zsh -lc "rg -n -C 2 ':finish|unrelated-finish|assoc state :status' src/bench/state.clj && git diff -- src/bench/state.clj"	129	7625
+item_3	/bin/zsh -lc "rg -n '"'^    :finish '"\\\\(assoc state :status :(done|complete)\\\\)"'$|''^'"\\\\(defn unrelated-finish \\\\[state\\\\]\\\\)"'$|''^  '"\\\\(assoc state :status :done\\\\)\\\\)"'$'"' src/bench/state.clj"	0	83

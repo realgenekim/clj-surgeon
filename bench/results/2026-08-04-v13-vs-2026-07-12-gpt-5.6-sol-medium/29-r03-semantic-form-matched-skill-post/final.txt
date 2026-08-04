@@ -1,0 +1,41 @@
+Name: `format-op-help`  
+Boundaries: `src/clj_surgeon/core.clj`, lines **722–748**  
+Phrase occurrence: line 723, column 4
+
+```clojure
+(defn format-op-help
+  "Per-command help: description, args, examples.
+   Pure: op-key + op-def in, string out."
+  [op-key {:keys [desc args examples pair aliases]}]
+  (let [sb (StringBuilder.)]
+    (.append sb (format "clj-surgeon :op %s\n\n" (name op-key)))
+    (.append sb (format "  %s\n" desc))
+    (when (seq aliases)
+      (.append sb (format "  Aliases: %s\n" (str/join ", " (map name aliases)))))
+    (.append sb "\n")
+    (when (seq args)
+      (.append sb "  Arguments:\n")
+      (let [sorted-args (sort-by (fn [[_ v]] (if (:required v) 0 1)) args)]
+        (doseq [[arg-key {:keys [required desc]}] sorted-args]
+          (.append sb (format "    %-16s %s%s\n"
+                              (str ":" (name arg-key))
+                              (if required "(required) " "")
+                              (or desc "")))))
+      (.append sb "\n"))
+    (when pair
+      (.append sb (format "  See also: :op %s\n\n" (name pair))))
+    (when (seq examples)
+      (.append sb "  Examples:\n")
+      (doseq [ex examples]
+        (.append sb (format "    %s\n" ex)))
+      (.append sb "\n"))
+    (str sb)))
+```
+
+Commands used: `sed` to read the applicable skill instructions, then:
+
+```bash
+clj-surgeon :op :cat :file src/clj_surgeon/core.clj :contains 'Per-command help'
+```
+
+No files were modified, and the whole source file was not read.

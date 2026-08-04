@@ -1,0 +1,12 @@
+Both steps succeeded.
+
+**Plan** (`clj-surgeon :op :edit`, separate command): one match, `match-count 1`. The edit is `:done` → `:complete` at line 18, path `route-event → let → case → assoc`. Diff is a single token:
+
+```
+-:done
++:complete
+```
+
+Note on the route: my first attempt selected the whole `:finish` result form and replaced it with `(assoc state :status :complete)`. Its plan diff showed that would have dropped `:audit (:audit payload)`, so I discarded it and generated a narrower plan that navigates `[:find :status] :right` and rewrites only the value. That's why the applied edit touches one keyword rather than the result expression.
+
+**Apply** (`clj-surgeon :op :replace-subform!`, separate command): `:ok true`, with `:verified {:whole-file-parsed true, :atomic-write true}` and a read-back hash matching the plan's `:result-hash` (`05012ad4…`). Since exactly one keyword token changed, the attached comment and every unrelated byte are preserved by construction.

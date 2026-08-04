@@ -1,0 +1,4 @@
+item_1	/bin/zsh -lc "wc -l src/bench/structural.clj && rg -n -F '(select-keys _ [:status :attempts])' src/bench/structural.clj"	1	34
+item_2	/bin/zsh -lc "rg -n -F 'select-keys' src/bench/structural.clj"	0	195
+item_3	/bin/zsh -lc "sed -n '316,334p' src/bench/structural.clj"	0	248
+item_5	/bin/zsh -lc "awk 'NR==323 || (NR>=327 && NR<=331) { printf \\"%d:%s\\\\n\\", NR, "'$0; printf "  length=%d'"\\\\n\\", length("'$0) }'"' src/bench/structural.clj"	0	185

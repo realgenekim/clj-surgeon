@@ -1,0 +1,7 @@
+Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/35-r03-case-edit-matched-skill-post/src/bench/state.clj:322):
+
+- `:finish` now returns `(assoc state :status :complete)`.
+- `unrelated-finish` remains `(assoc state :status :done)`.
+- No unrelated bytes changed.
+
+Commands used: `clj-surgeon :grep-form`, `:edit`, and `:replace-subform!`. Verification confirmed one exact match of each expression. `git diff` was unavailable because the workspace lacks repository metadata.

@@ -12,14 +12,22 @@ is cut.
 
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
   A plain path such as `(form 'transition)` returns literal source;
-  `(analyze path pure-function)` receives a stable ordered selection vector;
+  `(analyze path pure-function)` receives one stable ordered vector of ordinary
+  Clojure data;
   `(expect-count path n)` optionally refines cardinality without changing that
   input type. `initializer` selects a `def` right-hand side without evaluating
-  it. Computed analysis gives map literals and `hash-map` / `array-map` syntax
-  one non-evaluating canonical view while exact evidence remains source-shaped.
-  Computation returns `:value` with compact hash evidence.
-  Former read spellings remain compatibility inputs while this unified surface
-  is measured. Named selection now sees `#?`
+  it. Computed analysis gives a selected map literal or top-level
+  `hash-map` / `array-map` syntax one shallow, non-evaluating canonical view
+  while nested constructor syntax and exact evidence remain source-shaped.
+  `tree-seq` supports shape-independent traversal without a separate schema
+  probe. Pure `key`, `val`, and `for` work in SCI, while direct loop and private
+  macro-expansion internals remain refused. The sandbox is capability-limited,
+  not termination-proof; callers remain responsible for bounded work.
+  Computation returns `:value` with
+  compact hash evidence. The canonical agent skill is a validated 89-line task
+  router with advanced workflows loaded on demand.
+  Former read spellings remain compatibility inputs but are not the primary
+  surface. Named selection now sees `#?`
   and `#?@` branch-local forms and accepts an optional platform. X-ray never
   writes source or a plan and refuses truncated evidence, analyzer failure,
   non-EDN results, and oversized output.
@@ -75,6 +83,11 @@ is cut.
   and atomic-write evidence.
 - `make install-cli` and the explicit `CLI_DEST=/path/to/clj-surgeon`
   override, including parent-directory creation and paths containing spaces.
+- One vendor-neutral canonical agent skill, exposed as byte-identical native
+  Claude and Codex packages with a drift-tested compact legacy entrance.
+  Stable installation now uses content-addressed, read-only CLI and skill
+  copies with commit/hash receipts; `make install-dev` is the explicitly
+  branch-coupled development mode.
 - Dependency-aware `:mv` planning plus `:mv-with-deps`, an opt-in alias for
   `:mv :with-deps true` that discloses and moves the minimum required
   transitive dependency closure.
@@ -95,6 +108,10 @@ is cut.
 
 ### Fixed
 
+- Platform-qualified X-ray and lens form selection now derives ordinary-form
+  platforms from `.clj`, `.cljs`, or `.cljc`. Cross-platform plain-file reads
+  return zero evidence, while missing or unsupported file context refuses with
+  structured EDN instead of matching a plausible wrong form.
 - `:cljc-split` now writes both requested output files and returns their paths;
   the previous threaded side-effect form produced invalid `assoc` calls.
 - `:mv` no longer reports success after introducing unresolved dependencies or

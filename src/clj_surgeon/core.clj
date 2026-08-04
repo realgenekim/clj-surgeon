@@ -603,12 +603,14 @@
                        :desc      "Find nested syntax structurally across a file or within a named form"
                        :args      {:file   {:required true :desc "Clojure source file"}
                                    :inside {:desc "Restrict search to this top-level form"}
-                                   :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}}
+                                   :match  {:required true :desc "Clojure form pattern; _ matches exactly one subtree and pattern arity is exact"}}
                        :workflow  ["Omit :inside for file-wide structural search; add it only to narrow the search."
                                    "Use :grep-form as the structural-shell alias; patterns are Clojure forms, not regular expressions."
+                                   "The _ wildcard matches exactly one subtree. There is no variadic wildcard; use (loop _ _) for a two-argument loop form."
                                    "Each match names its enclosing form in :inside when available; reuse that value to narrow a plan without a line-number lookup."
                                    "Zero and multiple matches are useful read evidence; mutation still requires exactly one match."]
                        :examples  ["clj-surgeon :op :grep-form :file src/views.clj :match '(post! \"/api/items\" _)'"
+                                   "clj-surgeon :op :grep-form :file src/runtime.clj :match '(loop _ _)'"
                                    "clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
                        :category  :read}
 
@@ -638,16 +640,18 @@
     :xray             {:handler run-xray
                        :desc "Compute one read-only EDN value from structurally selected Clojure data"
                        :args {:file {:required true :desc "Clojure source file; never modified"}
-                              :expr {:required true :desc "One sandboxed pure Clojure path, optionally count-refined and analyzed"}}
+                              :expr {:required true :desc "One sandboxed pure Clojure path, optionally count-refined and analyzed"}
+                              :evidence {:desc ":compact (default) or :full for computed reads; literal paths always return exact source"}}
                        :workflow ["Use one Clojure path for every structural read. A path without a terminal returns literal source evidence."
-                                  "End with (analyze pure-function). The function always receives one vector of ordinary Clojure data in match order, including for zero or one match. Write one total function over this contract instead of a separate shape-discovery query."
+                                  "End with (analyze pure-function). The function always receives one vector of ordinary Clojure data in match order, including for zero or one match. Write one terminating pure function over this contract instead of a separate shape-discovery query."
                                   "Add (expect-count n) before analyze when cardinality must be exact. It refuses before calling the function and never changes the vector input type."
                                   "After selecting a def, use initializer to select its right-hand side without evaluating it. An unbound def or non-def produces zero matches."
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
-                                  "Selected values are never evaluated. Computed X-ray gives map literals and hash-map/array-map syntax one canonical map view while exact source remains in evidence."
+                                  "Use :evidence :full when a computed read also needs exact selected source; :compact remains the default."
+                                  "Selected values are never evaluated. Computed X-ray shallowly normalizes a selected map literal or top-level hash-map/array-map syntax; nested constructor syntax and exact evidence remain source-shaped."
                                   "Identify nested descendants inside that function with (filter predicate (tree-seq coll? seq value))."
                                   "Return concrete EDN, not a lazy sequence. Malformed map constructor syntax refuses."
-                                  "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
+                                  "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop. This limits capabilities, not execution time; analyzers must perform bounded work."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]
                        :examples ["clj-surgeon :op :xray :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right)\""
@@ -675,7 +679,7 @@
                                   "Make :show-form the first source inspection; do not run :ls solely as a preflight."
                                   "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command; keyword-shaped values such as :finish remain literal text."
                                   "Literal search includes attached comments, strings, and docstrings; it never interprets a regular expression."
-                                  "Use :platform only to select a reader-conditional branch."
+                                  "Platform-qualified form selection follows the .clj, .cljs, or .cljc file extension; unknown extensions refuse."
                                   "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
                        :examples ["clj-surgeon :op :show-form :file src/my/ns.clj :form transition!"

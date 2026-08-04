@@ -1,0 +1,7 @@
+Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.yEVk93/workspaces/15-r02-case-edit-no-skill-native/src/bench/state.clj:322):
+
+- `:finish` now sets `:complete`.
+- `unrelated-finish` remains `:done`.
+- No unrelated bytes changed.
+
+Used `rg` for targeted inspection/verification and `apply_patch` for the edit. (`git diff` was unavailable because the workspace is not a Git repository.)

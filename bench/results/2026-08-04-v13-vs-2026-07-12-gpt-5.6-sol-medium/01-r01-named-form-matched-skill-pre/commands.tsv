@@ -1,0 +1,4 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/01-r01-named-form-matched-skill-pre/skills/clj-surgeon/SKILL.md"	0	4962
+item_2	/bin/zsh -lc 'clj-surgeon :op :ls :file src/clj_surgeon/core.clj'	0	5606
+item_3	/bin/zsh -lc 'clj-surgeon --help'	0	2197
+item_4	/bin/zsh -lc "sed -n '722,748p' src/clj_surgeon/core.clj"	0	1114

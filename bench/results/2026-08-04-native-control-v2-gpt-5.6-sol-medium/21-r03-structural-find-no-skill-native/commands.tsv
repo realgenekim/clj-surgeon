@@ -1,0 +1,3 @@
+item_1	/bin/zsh -lc "rg -n -C 2 --fixed-strings '(select-keys' src/bench/structural.clj"	0	353
+item_2	/bin/zsh -lc "sed -n '318,342p' src/bench/structural.clj"	0	344
+item_3	/bin/zsh -lc "awk 'NR==323 || (NR>=327 && NR<=331) { printf \\"%d:%d:%s\\\\n\\", NR, length("'$0), $0 }'"' src/bench/structural.clj"	0	131

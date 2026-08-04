@@ -136,10 +136,13 @@
 (deftest named-form-selection-sees-reader-conditional-branches
   (let [source (slurp "test/fixtures/show_form_migration.cljc")
         both (lens/evaluate-query source [[:form 'load-starred-post]])
-        clj (lens/evaluate-query source [[:form 'load-starred-post :clj]])
-        cljs (lens/evaluate-query source [[:form 'load-starred-post :cljs]])
+        clj (lens/evaluate-query source [[:form 'load-starred-post :clj]]
+                                 {:file "test/fixtures/show_form_migration.cljc"})
+        cljs (lens/evaluate-query source [[:form 'load-starred-post :cljs]]
+                                  {:file "test/fixtures/show_form_migration.cljc"})
         absent (lens/evaluate-query source
-                                    [[:form 'load-starred-post :bb]])]
+                                    [[:form 'load-starred-post :bb]]
+                                    {:file "test/fixtures/show_form_migration.cljc"})]
     (is (= 2 (:match-count both)))
     (is (= [30 37] (mapv :line (:matches both))))
     (is (= [30] (mapv :line (:matches clj))))
@@ -151,9 +154,11 @@
                     "(def shared :shared)\n"
                     "#?@(:clj [(def branch-value :clj) (def clj-only true)] "
                     ":cljs [(def branch-value :cljs)])\n")
-        shared (lens/evaluate-query source [[:form 'shared :cljs]])
+        shared (lens/evaluate-query source [[:form 'shared :cljs]]
+                                    {:file "branch_splice.cljc"})
         both (lens/evaluate-query source [[:form 'branch-value]])
-        clj (lens/evaluate-query source [[:form 'branch-value :clj]])]
+        clj (lens/evaluate-query source [[:form 'branch-value :clj]]
+                                 {:file "branch_splice.cljc"})]
     (is (= ["(def shared :shared)"] (mapv :source (:matches shared))))
     (is (= ["(def branch-value :clj)" "(def branch-value :cljs)"]
            (mapv :source (:matches both))))

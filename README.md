@@ -1,65 +1,61 @@
 # clj-surgeon
 
-A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST and making structural refactorings — move forms, fix declares, rename namespaces, extract to new files. Parses Clojure code as data (not text) using [rewrite-clj](https://github.com/clj-commons/rewrite-clj), returning EDN.
+clj-surgeon is a Babashka CLI for structural reads and refactors in Clojure,
+ClojureScript, and CLJC files. It parses source with
+[rewrite-clj](https://github.com/clj-commons/rewrite-clj) and returns EDN.
+Claude Code and Codex skills teach coding agents the shortest safe commands.
 
-**You'll want this if you:**
-- Need to split up giant `.clj` files that Claude Code is prone to creating — deterministically move forms (within and between files), along with their dependencies
-- Want to get rid of `(declare ...)` forms (which Claude Code is prone to creating) by automatically reordering `defn`s and `def`s
-- Want Claude Code to explore a Clojure codebase via the AST instead of reading entire files — 100x faster, 150x fewer tokens
-- Want one exact top-level form by name or containing line without reconstructing a `sed` range
-- Want a jq-like path that reads or safely edits the peer value after a `case`
-  key, `cond` guard, map key, or binding name
-- Want one structural read that returns every `case`, `cond`, map, or binding
-  pair without manual counting
+Use clj-surgeon to:
 
-**Origin story:** I watched Claude Code spend 45 minutes refactoring a 5,000-line `views.clj` file — painfully extracting functions, moving them, reading and re-reading to get the ordering right, burning through context window. It was doing the right things, just agonizingly slowly. So I asked it: *"What would the ideal tool be to help you manipulate beautiful Clojure homoiconic EDN files?"* clj-surgeon was born 45 minutes later.
+- inspect a namespace without reading the complete file
+- select one top-level form by name, line, or distinctive text
+- search and compute over nested Clojure forms
+- create a reviewed, hash-bound replacement plan and apply it separately
+- move forms with explicit dependency handling
+- reorder definitions to remove unnecessary `(declare ...)` forms
+- rename namespaces or extract forms to new files
+- inspect or transform reader-conditional code
 
-**Built in one session. From zero to production use in 4 hours.** 13 ops, ~1500 lines of Clojure, zero dependencies beyond babashka.
+The project began after a coding agent spent 45 minutes refactoring a
+5,000-line `views.clj` file. The agent repeatedly read source to find, move, and
+order forms. The initial four-hour prototype had 13 operations and about 1,500
+lines. The current implementation is larger and requires Babashka and
+clj-kondo. Those counts describe the prototype, not the current product.
 
-All CLI commands are available to [Claude Code](https://claude.ai/claude-code) as a [skill](https://code.claude.com/docs/en/skills) — you don't need to learn all the commands, because Claude Code already knows how to use them. See [Teach Claude Code](#teach-claude-code).
+## A structural editor for agents
 
-## The Vision: a structural editor for agents
+Clojure source already contains named forms, nested expressions, dependency
+edges, and reader conditionals. A text-only workflow discards that structure.
+It searches for text, recovers a line number, prints a range, patches syntax,
+and rereads the file.
 
-Clojure should be the best language in the world for an agent to edit. The
-source is already data: named forms, nested expressions, dependency edges, and
-reader conditionals. Yet coding agents are usually forced to treat it as an
-undifferentiated stream of bytes—search for text, recover a line number, print
-a range, patch punctuation, then reread the file to see whether the edit worked.
-That throws away homoiconicity at exactly the moment it is most valuable.
+clj-surgeon gives coding agents a composable structural interface. `:ls`
+inventories a namespace. `:cat` returns one selected form. `:xray` reads or
+computes over a Clojure path.
 
-clj-surgeon is becoming the structural `ed`, REPL, jq, and microscope for
-coding agents: a small, composable microkernel for seeing and changing Clojure
-in the objects the language actually contains. `ed` contributes explicit,
-scriptable edits; jq contributes one composable path language whose filters are
-both getters and updaters. Clojure contributes a tree that can be rewritten
-without discarding comments and formatting.
+`:grep-form` finds syntax instead of textual lookalikes. Dependency operations
+expose the graph. Write operations separate planning from application.
 
 ```text
 ls / cat / q / grep / deps  →  plan  →  apply  →  receipt
 ```
 
-`ls` inventories a namespace without dumping it. `cat` returns one complete,
-explicitly selected form. `q` composes structural navigation: the same EDN path
-can read a node or end in a guarded replacement plan. `grep-form` finds syntax
-rather than textual lookalikes and reports who owns each match. Dependency
-operations expose the graph. A mutation first produces a hash-bound plan and
-exact diff; a later command applies only that reviewed artifact and returns
-machine-readable proof of the write, read-back hash, and whole-file parse.
+A write first produces a hash-bound plan and exact diff. A later command applies
+only that reviewed artifact. The apply receipt records the write, read-back
+hash, and whole-file parse.
 
-The ideal is not “hide an entire refactor behind one magic command.” It is
-**one command per honest judgment boundary**:
+The design target is one command for each judgment boundary:
 
 ```text
 one structural read or plan  →  one verified apply
 ```
 
-Each command should own all of its mechanical bookkeeping—parsing, locating,
-ordering, ambiguity detection, hashing, atomic writing, and verification. The
-agent keeps the work that requires judgment: deciding intent, choosing scope,
-reviewing the plan, and consenting to the change. When certainty is missing,
-the tool refuses loudly with bounded evidence and executable remedies. It never
-silently widens scope, chooses the first ambiguous match, or pulls additional
-code into an edit without consent.
+Each command owns its mechanical work: parsing, selection, ordering, ambiguity
+detection, hashing, atomic writing, and verification. The agent decides intent
+and scope, reviews the plan, and consents to the change. If the tool cannot
+select safely, it refuses with bounded evidence and executable remedies. It
+does not silently widen scope, choose an ambiguous match, or move additional
+code without consent.
 
 When the target relationship and replacement are already explicit, a `q`
 updater may be the first non-mutating call: its plan contains the selected
@@ -67,57 +63,88 @@ source, trace, exact diff, and hashes. When intent depends on what the source
 contains, run a read query first. The safety boundary is always plan versus
 apply, never an artificial requirement to spend an extra shell call.
 
-This is also the Bitter Lesson boundary. clj-surgeon should grow general
-structural primitives and trustworthy feedback, not an expanding catalog of
-special cases that tries to outguess the caller. Give the agent a perfect lens
-over the real program representation; let the agent reason with it.
+This is the project's Bitter Lesson boundary. clj-surgeon adds general
+structural primitives and trustworthy feedback. It does not add special cases
+that try to infer the caller's intent.
 
-The product standard is behavioral, not aspirational: give a clean agent a real
-task and inspect every command it uses. If it reaches for `rg` merely to obtain
-a line number, rereads source already proved by a receipt, guesses an invocation,
-or calls help for a documented route, the transcript is evidence of a product
-defect. We repair the CLI, help, skill, or contract and rerun the task in a fresh
-context until the shortest safe route is the obvious route.
+The product standard is behavioral. Give a clean agent a real task and inspect
+every command. A transcript exposes a product defect when the agent:
 
-That standard is already measurable. In the final clean-context edit
-replication, the old workflow used 10 shell calls and 157,481 cumulative input
-tokens. The structural route used four calls—read the skill, `:cat :contains`,
-plan, apply—and 77,421 tokens, with an exact edit and a verified receipt. No
-`rg`, `sed`, outline preflight, help detour, Git probe, or post-apply reread.
+- uses `rg` only to obtain a line number
+- rereads evidence that an apply receipt already proves
+- guesses a documented invocation
+- calls help for a route that the skill should make clear
 
-The jq-like lens shaved the remaining mechanical bridge in an adjacent clean
-Codex replication. Both versions made the exact edit with separate planning,
-verified apply, and no textual fallback. The previous paved road used four
-shell calls including the skill read (`cat → plan → apply`), 77,320 cumulative
-input tokens, and 1,602 source-output bytes. The lens route used three calls
-including the skill read (`q plan → apply`), 63,514 input tokens, and 1,380
-source-output bytes. Uncached input fell from 17,160 to 15,386. This single-pair
-run was slower in wall time (33.3s versus 42.3s), so the claim is fewer calls
-and less context—not a speedup.
+After a defect, update the CLI, help, skill, or contract. Then rerun the task in
+a fresh context.
 
-The end state is simple: agents should rarely need line-number choreography or
-text surgery for structural Clojure work. A `.clj` file should feel less like a
-blob to slice with `sed` and more like a live collection of addressable forms
-that can be queried, reasoned about, and transformed safely.
+One clean-context edit replication reduced the workflow from 10 shell calls and
+157,481 cumulative input tokens to four calls and 77,421 tokens. The four calls
+read the skill, selected with `:cat :contains`, planned, and applied. The edit
+was exact, and the apply returned a verified receipt.
+
+An adjacent single-pair replication compared the previous paved road with the
+jq-like lens. Both routes made the exact edit, planned and applied separately,
+and avoided textual fallback.
+
+The previous route used four shell calls,
+77,320 cumulative input tokens, and 1,602 source-output bytes. The lens used
+three calls, 63,514 input tokens, and 1,380 source-output bytes. Uncached input
+fell from 17,160 to 15,386. Wall time increased from 33.3 to 42.3 seconds, so
+this result supports fewer calls and less context, not a speed claim.
+
+The target state is simple: agents should rarely need line-number choreography
+or text surgery for structural Clojure work.
 
 The experiments, wrong turns, and clean-agent transcripts behind this vision
 are preserved in the
 [captain's log](docs/observations/2026-08-02-captains-log-the-file-became-a-structural-shell.md).
 
-## Measured Performance
+## Measured performance
 
-In a planning session (writer, 5 files, ~5000 lines), two approaches explored the same codebase simultaneously — clj-surgeon outlines vs. Explore agents reading the files:
+The original planning observation compared clj-surgeon outlines with Explore
+agents that read five files containing about 5,000 lines:
 
-- **150x more token-efficient.** clj-surgeon outlined 5 files (command_center.clj 821 lines, routes.clj 2894 lines, state.clj 614 lines, processes.clj 508 lines, process_handlers.clj 198 lines) in ~1,000 tokens total. The Explore agents burned ~150K tokens producing similar information.
-- **100x faster.** clj-surgeon returned in milliseconds. The Explore agents took ~100 seconds.
+- clj-surgeon used about 1,000 tokens. The Explore agents used about 150,000
+  tokens for similar information.
+- clj-surgeon returned in milliseconds. The Explore agents took about
+  100 seconds.
 
-~5,000 lines of code, fully mapped — namespace structure, function signatures, dependency relationships — in ~200 tokens per file.
+The files were `command_center.clj` (821 lines), `routes.clj` (2,894 lines),
+`state.clj` (614 lines), `processes.clj` (508 lines), and
+`process_handlers.clj` (198 lines). This dated observation was not a controlled
+comparison against current models.
 
-The result: Claude explores a codebase without reading entire files, so it stays fast and doesn't fill up its context window.
+A later clean-context benchmark compared commit `cc0f306`, commit `477dca9`,
+and a native control that used ordinary source tools without clj-surgeon. Each
+version ran each task four times. Efficiency values are medians of runs that
+passed the task's correctness gate.
 
-## Headline Feats
+| Task | Version | Correct | Wall | Calls | Input tokens | Source output |
+|---|---|---:|---:|---:|---:|---:|
+| Named form | `cc0f306` | 4/4 | 28.792 s | 4 | 72,000 | 6,720 B |
+|  | `477dca9` | 4/4 | 22.709 s | 2 | 43,971 | 1,461 B |
+|  | Native control | 4/4 | 23.949 s | 2 | 41,379 | 2,322 B |
+| Semantic form | `cc0f306` | 4/4 | 39.444 s | 5 | 82,806 | 7,883 B |
+|  | `477dca9` | 4/4 | 28.384 s | 2 | 44,016 | 1,531 B |
+|  | Native control | 4/4 | 27.347 s | 3 | 56,778 | 4,244 B |
+| Structural find | `cc0f306` | 4/4 | 35.959 s | 4 | 76,213 | 663 B |
+|  | `477dca9` | 4/4 | 24.222 s | 2 | 43,672 | 596 B |
+|  | Native control | 4/4 | 40.627 s | 3 | 56,285 | 844 B |
+| Case edit | `cc0f306` | 4/4 exact bytes | 53.502 s | 8 | 176,294 | 37,443 B |
+|  | `477dca9` | 4/4 exact bytes | 52.832 s | 8 | 116,114 | 10,542 B |
+|  | Native control | 0/4 exact bytes | — | — | — | — |
 
-**Self-surgery:** Renaming namespaces is something I often want to do but avoid because it's so invasive. But I was able to rename this project from `ns-surgeon` to `clj-surgeon` in less than one second — 10 files, 10 file moves, every ns declaration and `:require` entry updated by walking and manipulating the EDN data structure. No more painful watching Claude do grep-and-replace. Symbol node replacement in the parse tree. Aliases preserved, string literals untouched, parens always balanced.
+All native case-edit runs changed the requested token but deleted an unrelated
+trailing blank byte. Because no native run passed the exact-byte correctness
+gate, the table does not report native efficiency medians for that task.
+
+## Production examples
+
+clj-surgeon renamed this project from `ns-surgeon` to `clj-surgeon` in less
+than one second. It changed 10 files, moved 10 files, and updated namespace
+declarations and `:require` entries structurally. It preserved aliases and
+string literals.
 
 **One-command declare cleanup:** A 2768-line production namespace with 7 forward declares. One command:
 
@@ -130,22 +157,33 @@ $ make runtests-once
 337 tests, 1056 assertions, 0 failures.
 ```
 
-5 declares eliminated (3 direct moves + 2 with leaf deps pulled along), 2 unsafe moves correctly skipped (they have non-leaf dependency chains).
-
-Previously, Claude spent 15+ minutes in Whac-A-Mole: move `transition!` up → `"Unable to resolve symbol: app-state"` → add a declare → `"Unable to resolve symbol: active-project-file"` → each fix creates a new forward ref. The [ethnographic observation](docs/observations/2026-03-28-first-real-use.md) captured it: *"clj-surgeon's analysis is excellent. Its actions are too atomic."* So we built `:fix-declares` — a compound operation that moves leaves first in topological order, never creating a new unresolved reference.
+The command removed five declarations. Three required direct moves, and two
+required their leaf dependencies. It skipped two moves with non-leaf dependency
+chains. The [first-use observation](docs/observations/2026-03-28-first-real-use.md)
+records the failure pattern that led to `:fix-declares`.
 
 ## Install
 
 ```bash
 git clone https://github.com/realgenekim/clj-surgeon.git
 cd clj-surgeon
-make install    # → ~/bin/clj-surgeon and ~/.codex/skills/clj-surgeon
+make install    # → CLI plus Codex and Claude skills
 ```
 
-`make install` installs the CLI and symlinks the repository-owned Codex skill
-from `skills/clj-surgeon` into `${CODEX_HOME:-$HOME/.codex}/skills`. Run
-`make install-cli` or `make install-codex-skill` to install only one artifact.
-Installation refuses to overwrite an existing non-symlink skill directory.
+`make install` creates content-addressed, read-only copies of the CLI runtime
+and the canonical `skills/clj-surgeon` package under
+`${INSTALL_ROOT:-$HOME/.local/share/clj-surgeon}`. The CLI launcher and the
+Codex and Claude skill entrances point to those stable copies, never to the
+active checkout. Switching this repository's branch therefore cannot silently
+change an installed version.
+
+The default entrances are `~/bin/clj-surgeon`,
+`${CODEX_HOME:-$HOME/.codex}/skills/clj-surgeon`, and
+`${CLAUDE_HOME:-$HOME/.claude}/skills/clj-surgeon`. Each gets a neighboring
+`.receipt.edn` file that records the source commit, source hash, destination,
+and immutable package path. Run `make install-cli`,
+`make install-codex-skill`, or `make install-claude-skill` to install one
+surface. Installation refuses to replace unrelated files or skill directories.
 
 To put the CLI somewhere else, pass its complete file path as `CLI_DEST`. The
 installer creates the parent directory and handles paths containing spaces:
@@ -154,14 +192,22 @@ installer creates the parent directory and handles paths containing spaces:
 make install-cli CLI_DEST="$HOME/.local/bin/clj-surgeon"
 ```
 
-`CLI_DEST` affects only the CLI. Set `CODEX_HOME` independently when the Codex
-skill also needs a non-default home:
+`CLI_DEST` affects only the CLI. Set `CODEX_HOME`, `CLAUDE_HOME`, and
+`INSTALL_ROOT` independently when the skill homes or stable package root need
+non-default locations:
 
 ```bash
 make install \
   CLI_DEST="$HOME/.local/bin/clj-surgeon" \
-  CODEX_HOME="$HOME/.config/codex"
+  CODEX_HOME="$HOME/.config/codex" \
+  CLAUDE_HOME="$HOME/.config/claude" \
+  INSTALL_ROOT="$HOME/.local/share/clj-surgeon"
 ```
+
+For tool development only, `make install-dev` deliberately creates a
+branch-coupled CLI launcher and direct skill links to the current checkout.
+Its output and receipts use `:mode :development-link`. Run stable
+`make install` again before benchmarks or release validation.
 
 ### Requirements
 
@@ -182,22 +228,23 @@ bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/scri
 
 What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 
-## Teach Claude Code
+## Teach coding agents
 
-Add this line to your project's `CLAUDE.md`:
+This repository ships a native project skill at
+`.claude/skills/clj-surgeon/SKILL.md`. `make install` copies the same canonical
+package to `~/.claude/skills/clj-surgeon` for use outside this checkout. The
+root `skill.md` remains a compact legacy entrance for configurations that
+explicitly read a Markdown file. A test checks it against the canonical skill,
+with only its repository-relative advanced-reference link allowed to differ.
 
-```
-Read <path-to-clj-surgeon>/skill.md — it teaches you when and how to use clj-surgeon for Clojure structural operations.
-```
+The canonical package keeps uncommon move, extraction, dependency, and CLJC
+guidance in `references/advanced-operations.md`. Simple tasks load only the
+one-shot read and edit routes.
 
-`skill.md` contains the exact one-shot read/edit routes and points uncommon
-move, extraction, dependency, and CLJC work to the repository-owned advanced
-reference. One line, and Claude reaches for clj-surgeon automatically without
-loading every operation into each simple task.
-
-I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same. Here's what I put in mine:
-
-> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for an unknown file's form boundaries (~50 tokens per file). When a top-level name, containing line, or distinctive literal text is known, use `:show-form` as the first source inspection; do not run `:ls` solely as a preflight. Use `:show-form :contains` instead of an `rg -n` line-number bridge inside one Clojure file. Use `:grep-form` for file-wide structural search, and a bounded text read only when context genuinely spans forms. Keep `rg` for broad cross-file discovery. Only spawn Explore agents for targeted follow-up questions with specific file paths.
+`make install` also installs the same canonical package for Codex at
+`${CODEX_HOME:-$HOME/.codex}/skills/clj-surgeon`. Do not maintain separate
+vendor copies. Tests require the installed Claude and Codex skill content to
+match the canonical package.
 
 ## Operations
 
@@ -233,17 +280,19 @@ Or select the one form containing distinctive literal text:
 clj-surgeon :op :cat :file src/writer/state.clj :contains :finish
 ```
 
-Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
-case-sensitive literal substring, not a regular expression. It searches form
-source, strings, docstrings, and attached comments. Multiple occurrences in
-one form succeed; occurrences in multiple forms refuse with bounded candidate
-evidence. CLI values remain literal text, so keyword-shaped searches such as
-`:finish` do not need an EDN-string workaround. For ambiguous reader-conditional
-definitions, add `:platform :clj` or `:platform :cljs`. Success returns the
-exact parsed form source, type, name when present, platforms, line range,
-attached-comment start, and complete-file source hash. Missing or ambiguous
-selectors return structured EDN and exit nonzero; the command never chooses
-the first match.
+Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` searches for
+a case-sensitive literal substring, not a regular expression. It searches form
+source, strings, docstrings, and attached comments.
+
+Multiple occurrences in one form succeed. Occurrences in multiple forms refuse
+with bounded candidate evidence. CLI values remain literal text, so a search
+such as `:finish` does not need an EDN-string workaround. For ambiguous
+reader-conditional definitions, add `:platform :clj` or `:platform :cljs`.
+
+Success returns the exact parsed form source, type, optional name, platforms,
+line range, attached-comment start, and complete-file source hash. A missing or
+ambiguous selector returns structured EDN and exits nonzero. The command never
+chooses the first match.
 
 `:cat` is a strict alias. It never dumps the complete file, and its result
 retains the canonical machine identity `:operation :show-form`.
@@ -254,7 +303,7 @@ source inspection instead of reconstructing a `sed` range. Do not run `:ls`
 solely as a preflight. Continue to use `rg` for broad textual discovery,
 `:grep-form` for nested structural syntax, and bounded text reads for context
 that genuinely spans forms or files. Inside one Clojure file, use
-`:show-form :contains` instead of `rg -n` followed by `:show-form :line`; do not
+`:show-form :contains` instead of `rg -n` followed by `:show-form :line`. Do not
 print a large outline merely to discover the line.
 
 #### `:xray` — Read and compute with one Clojure path
@@ -284,48 +333,58 @@ Use `initializer` after a named `def` to select its right-hand side directly.
 It returns zero matches for an unbound `def` or a non-`def` form and never
 evaluates constructor syntax.
 
-The value is parsed source syntax, not evaluated program state. For computed
-X-ray, map literals and `hash-map` / `array-map` constructor syntax share one
-canonical map view. This pairs already-parsed key/value forms; it never invokes
-the constructor or its arguments. Unsupported calls remain lists, malformed
-map constructors refuse, and literal X-ray plus evidence retain exact source.
-Return concrete EDN from computation; realize lazy results with `vec` or another
-collection.
+The value contains parsed source syntax, not evaluated program state. For computed
+X-ray, a selected value that is itself a map literal or `hash-map` /
+`array-map` constructor receives one shallow canonical map view. Nested
+constructor syntax remains syntax.
 
-`analyze` always receives one vector of ordinary Clojure data. Write one total
-function over that contract instead of a separate shape-discovery query. When
-a predicate identifies the desired descendants, use
+The tool pairs already-parsed key/value
+forms. It never invokes a constructor or argument. Unsupported calls remain
+lists, malformed map constructors refuse, and literal X-ray plus evidence
+retain exact source. Return concrete EDN from computation. Realize lazy results
+with `vec` or another collection.
+
+`analyze` always receives one vector of ordinary Clojure data. Write one
+terminating pure function over that contract instead of a separate
+shape-discovery query. When a predicate identifies the desired descendants, use
 `(filter predicate (tree-seq coll? seq value))` inside that function.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the
-complete-file hash without repeating selected source. The old `:q`, EDN paths,
-`xray`, and `xray-one` remain compatibility inputs during the experiment.
+complete-file hash without repeating selected source. Add `:evidence :full`
+when a computed read must also return exact selected source. Compact evidence
+is the default. The old `:q`, EDN paths, `xray`, and `xray-one` remain supported
+compatibility inputs but are not the primary agent surface.
 
-Named paths are CLJC-aware. `(form 'load-starred-post :cljs)` and the EDN step
-`[:form load-starred-post :cljs]` select one reader-conditional branch. Without
-a platform, duplicate branch-local definitions remain honest multiple matches.
+Named paths are file-aware. `(form 'load-starred-post :cljs)` and the EDN step
+`[:form load-starred-post :cljs]` select one reader-conditional branch in a
+`.cljc` file. The extension also constrains ordinary forms: a plain `.clj` form
+cannot match `:cljs`, and a plain `.cljs` form cannot match `:clj`. A platform
+selector without a `.clj`, `.cljs`, or `.cljc` context refuses. Without a
+platform, duplicate branch-local definitions remain honest multiple matches.
 
 `:xray` uses the same sandboxed pure Clojure functions and structural builders
 as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
 input, analyzer failure, lazy or non-EDN output, and output over 65,536
 characters. SCI does not expose I/O, processes, namespaces, mutable references,
-classes, or host interop.
+classes, or host interop. This is a capability boundary, not a termination
+proof: analyzers remain responsible for bounded work.
 
 The same `right` relationship moves from a `case` key, `cond` guard, map key,
 or binding name to its paired value. Navigation skips whitespace and comments
 while returned addresses still refer to the lossless concrete-syntax tree.
 
-Compatibility: `:lens` / `:q` accepts the former jq-like EDN query pipeline.
+Compatibility: the `:lens` and `:q` operations accept the legacy jq-like EDN
+query pipeline.
 Existing invocations remain supported, but new read workflows should use the
 single Clojure X-ray surface above.
 
-In the initial unprimed four-run checksum keep gate, `:xray` was exact in four of four
-runs versus three of four before the feature. Median wall time fell 21%, shell
-calls 33%, input tokens 45%, and output tokens 43%. Routine literal reads remain
-cheaper than computation. This established a compelling feature, not a local maximum;
-the [maximality audit](docs/plans/xray-maximality-audit.md) now compares compact
-X-ray with `:q | bb` and direct execution. See the original
+In the initial unprimed four-run checksum experiment, `:xray` was exact in four
+of four runs. The preceding workflow was exact in three of four. Median wall
+time fell 21%, shell calls 33%, input tokens 45%, and output tokens 43%.
+Routine literal reads remain cheaper than computation. The
+[maximality audit](docs/plans/xray-maximality-audit.md) then compared compact
+X-ray with `:q | bb` and direct execution. See the
 [experiment record](docs/observations/2026-08-04-captains-log-source-became-data.md).
 
 Make the same path an updater by ending it with `[:replace FORM]`:
@@ -377,7 +436,7 @@ The function runs only after the selector finds exactly one form. The review
 plan contains the concrete replacement as `[:replace ...]`, never the function. The
 existing EDN executor can therefore read and replay the plan without SCI. Use
 `replace` when the new form is already known. Use `transform` when the new form
-must be calculated from the selected code or data.
+depends on the selected code or data.
 
 Do not preflight whether the task-specific `:plan-out` path exists. A
 successful plan atomically replaces that artifact. A refusal leaves an existing
@@ -438,10 +497,10 @@ clj-surgeon :op :q :file src/policy.clj \
   :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
 ```
 
-Placement matters: the symbol nodes selected by `[:find cond]` do not contain
+Placement matters. The symbol nodes selected by `[:find cond]` do not contain
 one another, but their owner lists do. Thus use `:up :outermost`, not
 `:outermost :up`. If the first outer guard is already known, anchor on it
-directly; that remains the shorter route.
+directly. That route is shorter.
 
 Use `:right` for one known value, `[:span 2]` for one known pair, and
 `[:partition-all 2]` for all pairs in a sibling suffix. A terminal
@@ -464,9 +523,12 @@ clj-surgeon :op :ls-tree :dir .
 clj-surgeon :op :ls-tree :dir ~/src.local/ :grep "postgres|jdbc"
 ```
 
-Discovers projects via `deps.edn`/`project.clj`, reads their `:paths`, outlines every `.clj` file. With `:grep`, uses ripgrep to find matching files first — turns a 90-second full scan into a 3-second surgical search.
-
-**The value:** "Which of my 20 repos talks to Postgres?" answered in one command, 3 seconds, ~3K tokens. An Explore agent takes 80+ seconds and 55K tokens for the same question.
+The operation discovers projects through `deps.edn` or `project.clj`, reads
+their `:paths`, and outlines each `.clj` file. With `:grep`, it uses ripgrep to
+select matching files before parsing. In one observed search across 20
+repositories, this reduced a 90-second full scan to 3 seconds and about 3,000
+tokens. An Explore agent took more than 80 seconds and 55,000 tokens for the
+same question.
 
 See [docs/ls-tree.md](docs/ls-tree.md) for full documentation.
 
@@ -476,7 +538,8 @@ See [docs/ls-tree.md](docs/ls-tree.md) for full documentation.
 clj-surgeon :op :ls-deps :file state.clj :form transition!
 ```
 
-The full dependency chain as a nested tree — shows which deps are leaves, which have their own deps, and which are circular. Use this to check whether a form can be safely moved — if all its deps are leaves, it's a clean extraction.
+The result shows the dependency chain as a nested tree. It identifies leaves,
+transitive dependencies, and cycles. Use it to assess a move or extraction.
 
 ```
 transition! (line 2655)
@@ -495,7 +558,8 @@ transition! (line 2655)
 clj-surgeon :op :ls-extract :file state.clj :form rebuild-ai-paragraphs!
 ```
 
-The target form + all private helpers it exclusively depends on. This is the smallest set you could extract to a new namespace without breaking anything.
+The result contains the target form and each private helper used only by that
+form. This is the minimum extraction set that preserves those dependencies.
 
 #### `:declares` — Audit which declares are needed
 
@@ -515,13 +579,17 @@ clj-surgeon :op :deps :file state.clj :form sync-draft!
 clj-surgeon :op :topo :file state.clj
 ```
 
-### CLJ / CLJS / CLJC operations
+### CLJ, CLJS, and CLJC operations
 
-LLMs and humans both struggle with reader conditionals. Forms inside `#?(:clj ...)` aren't lists — pre-existing AST tools silently miss them, and free-form LLM editing produces malformed splices, divergent aliases that don't line up, and silently-dropped `:refer` lists.
+Reader conditionals require structural handling. A form inside `#?(:clj ...)`
+is not an ordinary list at the top level. Free-form edits can create malformed
+splices, inconsistent aliases, or missing `:refer` lists.
 
-These ops are **deterministic**: same input always produces the same output, and the tool refuses to emit malformed reader conditionals.
-
-The pre-existing read-only ops (`:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extract`, `:declares`) are **reader-conditional-aware** — `(defn foo …)` inside `#?(:clj …)` shows up in the outline with `:platforms [:clj]` and participates in dependency analysis.
+These operations are deterministic and refuse to emit malformed reader
+conditionals. The read-only operations `:ls`, `:deps`, `:topo`, `:ls-deps`,
+`:ls-extract`, and `:declares` are reader-conditional-aware. For example, a
+`(defn foo …)` inside `#?(:clj …)` has `:platforms [:clj]` in the outline and
+participates in dependency analysis.
 
 #### `:cljc-merge` — Combine parallel CLJ + CLJS files into one CLJC
 
@@ -529,7 +597,11 @@ The pre-existing read-only ops (`:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extrac
 clj-surgeon :op :cljc-merge :clj src/foo.clj :cljs src/foo.cljs :out src/foo.cljc
 ```
 
-Handles shared requires, one-sided requires (`#?@(:clj […])` / `#?@(:cljs […])`), divergent aliases (the `dom`/`dom-server` pattern: same alias bound to different namespaces), divergent `:refer` lists, npm string requires routed to `:cljs`, and per-form body collisions emitted as `#?(:clj … :cljs …)`. Throws clearly on ns docstrings, attr-maps, unsupported sub-forms, name mismatches, and body-count mismatches rather than producing wrong output.
+The operation handles shared and one-sided requires, including
+`#?@(:clj […])` and `#?@(:cljs […])`. It handles divergent aliases, divergent
+`:refer` lists, npm string requires for `:cljs`, and per-form body collisions as
+`#?(:clj … :cljs …)`. It refuses namespace docstrings, attribute maps,
+unsupported subforms, name mismatches, and body-count mismatches.
 
 #### `:cljc-split` — Inverse of merge
 
@@ -546,7 +618,9 @@ clj-surgeon :op :cljc-add-require :file src/foo.cljc \
   :platform :cljs :ns goog.string :as gstr :out src/foo.cljc
 ```
 
-`:platform` is `:clj`, `:cljs`, or `:cljc`. Detects alias collisions (refuses to bind one alias to two namespaces on the same platform). Preserves npm string literals (`:ns "react"` stays a string, doesn't get coerced to a symbol).
+`:platform` is `:clj`, `:cljs`, or `:cljc`. The operation refuses to bind one
+alias to two namespaces on the same platform. It preserves npm string literals,
+so `:ns "react"` remains a string.
 
 #### `:cljc-analyze` — Structured classification for LLM consumption
 
@@ -555,7 +629,8 @@ clj-surgeon :op :cljc-analyze :clj src/foo.clj :cljs src/foo.cljs    # pair
 clj-surgeon :op :cljc-analyze :file src/foo.cljc                      # single CLJC
 ```
 
-Returns EDN with shared / one-sided / divergent require buckets and per-platform top-level form summaries — everything an LLM needs to plan an edit.
+The result contains EDN buckets for shared, one-sided, and divergent requires.
+It also contains per-platform top-level form summaries.
 
 ### Write operations
 
@@ -627,7 +702,7 @@ the minimum transitive dependency closure required at the selected destination,
 lists every added form in the plan, and never silently adds declarations or
 moves callers. For `:would-strand-users`, cycles, ambiguity, unsupported source
 layouts, or any other refusal, stop and choose a different destination or
-refactor; do not force the alias.
+refactor. Do not force the alias.
 
 A dry run is an informational preview, not a saved hash-bound application
 artifact. Preview again after any source change. After writing, rerun `:ls`,
@@ -657,14 +732,16 @@ clj-surgeon :op :extract! :file src/writer/state.clj \
 ```
 
 The compound extraction operation:
+
 1. Finds named forms and their exclusive private helpers (`:ls-extract` closure)
-2. Copies the source ns form as a template (over-include requires, don't under-include)
+2. Copies the source namespace form as a template and initially retains extra requires
 3. Writes forms to the new file in topological order
 4. Removes extracted forms from the source file
 5. Adds a require for the new namespace to the source file
 6. Reports callers that may need updating
 
-Planning is pure — only `:extract!` writes files. The compiler catches bare refs instantly. The AI fixes what the compiler reports.
+Planning is pure. Only `:extract!` writes files. After extraction, use the
+compiler to find unresolved bare references and correct them.
 
 #### `:grep-form` / `:find-subform` / `:replace-subform` — Nested structural edits
 
@@ -697,27 +774,29 @@ clj-surgeon :op :replace-subform :file src/views.clj :inside render \
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Search reports every match; replacement refuses zero or multiple matches.
+Search reports every match. Replacement refuses zero or multiple matches.
 Each search match includes its enclosing top-level name in `:inside` when one
-is mechanically available. Reuse that value directly to narrow a replacement;
-do not run `:show-form :line` merely to recover the owner.
+is mechanically available. Reuse that value directly to narrow a replacement.
+Do not run `:show-form :line` merely to recover the owner.
+
 `:match` and `:with` must each contain exactly one complete Clojure form—trailing
 syntax is an error. The plan is a versioned EDN artifact with stable
 `:operation`, `:selector`, hash, edit, diff, and provenance fields. Its `:diff`
 is a standard unified diff, suitable for human or agent review.
 
-Application validates the plan version, unchanged source snapshot, recorded
-address, exact before text, complete rewritten-file parse, and result hash. It
-then atomically replaces the target file and reads it back. A successful EDN
-receipt includes `:applied-edit` plus `:verified` whole-file parse,
-`:read-back-hash`, and atomic-write evidence. Do not repeat those exact checks
-with `rg`, `:show-form`, `git diff`, or `shasum`; the reviewed plan is the
-edit-level diff. Proceed to relevant formatter, linter, compiler, and test
-commands. Review an aggregate Git diff only when the surrounding task already
-establishes a worktree or explicitly requests it; do not probe `.git` merely to
-repeat edit-level evidence. If atomic replacement is unavailable,
-the command fails and does not fall back to a weaker write. Every error is
-concise EDN and every error exits nonzero.
+Application validates the plan version, source snapshot, recorded address,
+exact before text, complete rewritten-file parse, and result hash. It then
+atomically replaces the target file and reads it back.
+
+A successful EDN receipt includes `:applied-edit`, `:verified` whole-file parse,
+`:read-back-hash`, and atomic-write evidence. Do not repeat those checks with
+`rg`, `:show-form`, `git diff`, or `shasum`. The reviewed plan is the edit-level
+diff. Continue with the relevant formatter, linter, compiler, and tests.
+
+Review an aggregate Git diff only if the task already establishes a worktree or
+explicitly requests the diff. Do not probe `.git` only to repeat edit-level
+evidence. If atomic replacement is unavailable, the command fails. It does not
+fall back to a weaker write. Every error is concise EDN and exits nonzero.
 
 Apply the reviewed plan directly with `:replace-subform!`. Do not edit the plan
 with `apply_patch` or another text tool. If the intended edit changes, generate
@@ -731,16 +810,16 @@ identifies the target exactly. See
 [issue #21](https://github.com/realgenekim/clj-surgeon/issues/21).
 
 Run plan generation as a standalone shell command. Observe and review its
-result before a separate apply command; never chain planning and application.
+result before a separate apply command. Never chain planning and application.
 
 In its [first production use](docs/observations/2026-07-11-subform-first-real-use.md),
 `:ls` reduced a 4,036-line, 322-form namespace to the relevant synchronization
 and admission forms. Three `:find-subform` queries then uniquely located the
 Save Draft Hiccup vector, an unsafe browser-sync mutation, and a session-save
-call by semantic path. The practical division was clear: `rg` remained faster
+call by semantic path. The practical division was clear. `rg` remained faster
 for broad discovery, while structural search was substantially safer for
 repeated Hiccup actions and large handler forms. This first report validated
-discovery; the follow-up below validated the replacement workflow separately.
+discovery. The follow-up below validated the replacement workflow separately.
 
 A follow-up production edit supplied that proof: `:find-subform` uniquely
 selected a 13-line inline-JavaScript “Edit in Draft” button, and the reviewed
@@ -769,19 +848,30 @@ work. Beyond replacement, agents used zero/one match results as executable
 hypotheses about code shape and used sequential hash-bound plans to refactor a
 fast-moving dirty worktree safely.
 
-## Custom Defining Forms
+## Custom defining forms
 
-Real-world Clojure codebases don't just use `defn`. Libraries like [Guardrails](https://github.com/fulcrologic/guardrails) (`>defn`, `>defn-`), [Malli](https://github.com/metosin/malli) (`mu/defn`), and [Schema](https://github.com/plumatic/schema) (`s/defn`) define their own `defn`-like macros. Large projects add their own: `defendpoint`, `defenterprise`, `defsetting`.
+Clojure codebases can define forms with macros such as
+[Guardrails](https://github.com/fulcrologic/guardrails) `>defn` and `>defn-`,
+[Malli](https://github.com/metosin/malli) `mu/defn`, and
+[Schema](https://github.com/plumatic/schema) `s/defn`. Projects can also define
+macros such as `defendpoint`, `defenterprise`, and `defsetting`.
 
-clj-surgeon recognizes all of these. Every operation — `:ls`, `:deps`, `:topo`, `:ls-deps`, `:ls-extract`, `:extract`, `:fix-declares` — uses a single classification module (`forms.clj`) to decide what counts as a definition, what has arglists, and what is private.
+The `forms.clj` classification module defines what counts as a definition, what
+has arglists, and what is private. The operations `:ls`, `:deps`, `:topo`,
+`:ls-deps`, `:ls-extract`, `:extract`, and `:fix-declares` use this module.
 
-**How it works:**
+Classification has three rules:
 
-1. **Core forms** — `defn`, `defn-`, `def`, `defonce`, `defmacro`, etc. — matched exactly.
-2. **Namespace-qualified forms** — `mu/defn`, `s/defn`, `malli.util/defn-` — the alias is stripped and the local name is matched against core forms. This works regardless of what alias the project uses (`mu/defn`, `m/defn`, `malli/defn` all resolve to `:defn`).
-3. **Explicit aliases** — forms with non-standard names (`>defn`, `>defn-`) that can't be auto-detected from the local name. These are listed in `forms.clj`.
+1. Match core forms such as `defn`, `defn-`, `def`, `defonce`, and `defmacro`
+   exactly.
+2. For a qualified form such as `mu/defn`, `s/defn`, or `malli.util/defn-`,
+   remove the qualifier and match the local name. Thus `mu/defn`, `m/defn`, and
+   `malli/defn` all classify as `:defn`.
+3. List non-standard names such as `>defn` and `>defn-` in `forms.clj` as
+   explicit aliases.
 
-**To add support for a new macro,** check whether it's already handled:
+Before you add support for a macro, check whether qualification already handles
+it:
 
 ```clojure
 ;; Namespace-qualified forms just work — no config needed
@@ -790,7 +880,8 @@ clj-surgeon recognizes all of these. Every operation — `:ls`, `:deps`, `:topo`
 (my.lib/defn- baz ..) ; ✓ auto-detected: local name "defn-" → :defn- (private)
 ```
 
-If the macro has a non-standard name (doesn't end in a core form name after `/`), add one line to `explicit-aliases` in `src/clj_surgeon/forms.clj`:
+If the macro has a non-standard local name, add one entry to `explicit-aliases`
+in `src/clj_surgeon/forms.clj`:
 
 ```clojure
 (def explicit-aliases
@@ -800,54 +891,70 @@ If the macro has a non-standard name (doesn't end in a core form name after `/`)
    "defenterprise"  :defn})
 ```
 
-## How Claude Code Uses This
+## Agent workflow
 
-clj-surgeon ships as a Claude Code [skill](https://code.claude.com/docs/en/skills) — a markdown file that tells Claude when to run each command. In practice:
+The Claude Code and Codex entrances load one canonical skill package. That
+skill teaches five common routes:
 
-**Before reading a large file,** Claude runs `:ls` to get form boundaries in ~50 tokens instead of reading 2000+ lines blind. It then `Read`s only the specific line ranges it needs.
+- For an unknown large file, use `:ls`, then read only the required forms.
+- For a known form, line, or distinctive text, start with `:show-form` or
+  `:cat`.
+- For a declaration, run `:fix-declares` before deciding whether to apply
+  `:fix-declares!`.
+- For an extraction, inspect `:ls-deps` and `:ls-extract` before planning the
+  write.
+- For a namespace rename, review `:rename-ns` before running `:rename-ns!`.
 
-**When it sees a `declare`,** Claude runs `:fix-declares!` instead of manually moving forms one by one. The tool handles dependency checking, leaf-pulling, and declare deletion — the AI just runs one command and verifies with tests.
+The tool performs parsing, selection, movement, and require rewriting. The
+agent decides scope and intent.
 
-**When planning an extraction,** Claude runs `:ls-deps` to see the full dependency tree, then `:ls-extract` to find the minimal extraction unit. It uses this information to decide whether to extract to a new namespace or just reorder within the file.
+## Development method
 
-**When renaming,** Claude runs `:rename-ns` to see the plan (every file that would change, every require that would update), then `:rename-ns!` to execute. No grep-and-replace, no missed references.
+Features begin with observed agent behavior on real tasks:
 
-The pattern: the tool does mechanical work (parsing, moving, rewriting requires). Claude decides what to move and where.
+1. Give a clean agent a bounded task.
+2. Record unnecessary reads, guesses, help calls, unsafe plans, and repeated
+   work.
+3. Separate mechanical bookkeeping from decisions that require judgment.
+4. Add the smallest general structural primitive that removes the mechanical
+   work.
+5. Add a named regression, exhaustive pure tests, CLI contract tests, and a
+   real-program-derived fixture.
+6. Repeat the clean-context task and preserve the transcript.
 
-## How This Tool Was Designed
+The [observation records](docs/observations/) contain the resulting experiments
+and failure reports.
 
-Each feature was created by watching Claude Code work on real refactoring tasks and identifying where it struggled.
+## Why structural operations help
 
-1. **Watch the AI work.** Give Claude Code a real refactoring task on a real codebase. Don't help.
-2. **Identify the pain.** Where does it burn tokens re-reading files? Where does it play Whac-A-Mole? Where does each fix create a new problem?
-3. **Separate bookkeeping from judgment.** The AI knows *what* to move and *where*. It struggles with *precisely cutting forms from a 2768-line file without breaking anything*.
-4. **Build the smallest tool.** `:ls` was first — form boundaries in 50 tokens instead of reading 2000 lines. Then `:mv`, then `:fix-declares`, each born from watching the AI hit the next mechanical bottleneck.
-5. **Use it, break it, fix it.** Every bug in [The Journey](#the-journey-built-used-broken-fixed) was found by watching the AI hit it in real time. Tests came after.
+[rewrite-clj](https://github.com/clj-commons/rewrite-clj) provides a
+position-aware concrete-syntax tree. clj-surgeon can therefore walk and replace
+syntax nodes while preserving comments and formatting.
 
-The full session transcripts are in [docs/observations/](docs/observations/). If you're building tools for AI-assisted development, start there.
-
-## Why This Works
-
-Everyone knows Clojure code is data. A namespace form isn't text to grep — it's a list to walk. [rewrite-clj](https://github.com/clj-commons/rewrite-clj) gives us the AST with position tracking. Every operation is a tree walk:
-
-| Operation | Lines of Clojure | In a non-homoiconic language |
-|-----------|:---:|---|
-| Namespace rename | ~170 | 50,000+ (IntelliJ plugin) |
-| Dependency graph | ~30 | Full language server |
-| Topological sort | ~40 | (on top of dep graph) |
-| Dep tree visualization | ~30 | (on top of dep graph) |
+| Operation | Structural leverage | Typical alternative |
+|-----------|---|---|
+| Namespace rename | Symbol-node replacement | IDE or language-server refactor |
+| Dependency graph | Walk resolved form references | Full language server |
+| Topological sort | Reuse the dependency graph | Separate semantic analysis |
+| Dep tree visualization | Project the same graph | Separate indexing layer |
 | Forward ref detection | 1 clj-kondo call | Custom parser + resolver |
 | Form boundaries | Built into rewrite-clj | Tree-sitter + custom queries |
-| Require inference | ~10 | Module resolution engine |
-| Leaf dep-pulling | ~30 | (on top of dep graph + form mover) |
+| Require inference | Namespace/form data | Module resolution engine |
+| Leaf dep-pulling | Reuse dep graph + form mover | Compound IDE refactor |
 
-This is the homoiconicity dividend: the parser and printer are free (built into babashka), analysis is a `filter` on a `map`, transforms are `z/replace` on a zipper. ~1500 lines total does what 50,000-line IDE plugins do.
+Babashka bundles the parser and printer. Analysis composes collection
+operations, and transforms use zipper replacements. This provides reusable
+structural leverage without requiring a complete language-server refactor.
 
-clojure-lsp's `move-form` issue has been open since 2021 ([issue #566](https://github.com/clojure-lsp/clojure-lsp/issues/566)). We sidestep all the issues they highlight, by leaving that to the coding agent.
+The long-open clojure-lsp
+[`move-form` issue #566](https://github.com/clojure-lsp/clojure-lsp/issues/566)
+shows the broader problem. clj-surgeon handles bounded bookkeeping and leaves
+scope decisions to the caller.
 
-## The Journey: Built, Used, Broken, Fixed
+## Failures that shaped the tool
 
-I guess Claude Code wants to brag about this.  We found a bunch of bugs through real-world use on a 2768-line production file, not synthetic tests. Tests were written after each bug to prevent regression:
+Real use on a 2,768-line production file exposed these defects. Each fix added
+a regression test:
 
 1. **`:mv` matches declare, not defn** — `find-form` hit the first name occurrence. Fixed: skip `declare` forms.
 2. **`z/next` infinite walk** — traversed entire file, not just one form. Fixed: scope zipper to form subtree.
@@ -855,7 +962,8 @@ I guess Claude Code wants to brag about this.  We found a bunch of bugs through 
 4. **Metadata blindness** — `(def ^:private events-file ...)` returned `"^:private"` as the name. Fixed: detect `:meta` node tag, walk to rightmost child.
 5. **Declares in dep graph** — `(declare foo)` returned empty deps, masking real `(defn foo)` deps. Fixed: exclude declares from analysis.
 
-See [docs/observations/](docs/observations/) for full ethnographic studies of the build-use-fix cycle.  (I now do this with all my projects, so Claude Code can figure out what might make work easier.)
+See [docs/observations/](docs/observations/) for the complete build-use-fix
+records.
 
 ## Testing
 
@@ -863,7 +971,12 @@ See [docs/observations/](docs/observations/) for full ethnographic studies of th
 make test
 ```
 
-All analysis functions are pure (string/zipper in, data out). Side effects are isolated to `!` variants. Tests use temp files and temp directories — no fixture pollution.
+Pure analysis functions take strings, zippers, or data and return data. Tests
+exercise those functions with literals. Filesystem and subprocess tests cover
+only contracts that require those boundaries. Write tests verify that refusal
+does not change bytes and that a successful candidate parses and passes the
+appropriate lint or compile check. See
+[docs/testing-guidelines.md](docs/testing-guidelines.md).
 
 ## Architecture
 
@@ -886,34 +999,32 @@ src/clj_surgeon/
     analyze.clj      # structured CLJC classification for LLM consumption
 ```
 
-Zero dependencies beyond babashka.
+The installed CLI requires Babashka and clj-kondo. Babashka supplies
+rewrite-clj and Cheshire in its runtime. clj-kondo supplies the static
+forward-reference boundary.
 
-## Prior Art & Acknowledgments
+## Prior art and acknowledgments
 
-clj-surgeon exists because of the incredible tools it builds on:
+- [rewrite-clj](https://github.com/clj-commons/rewrite-clj), created by Yannick
+  Scherer ([@xsc](https://github.com/xsc)) and maintained by Lee Read
+  ([@lread](https://github.com/lread)), provides the zipper and concrete-syntax
+  tree.
+- [Babashka](https://github.com/babashka/babashka), created by Michiel Borkent
+  ([@borkdude](https://github.com/borkdude)), supplies the runtime, rewrite-clj,
+  and Cheshire.
+- [clj-kondo](https://github.com/clj-kondo/clj-kondo), also created by Michiel
+  Borkent, supplies forward-reference analysis.
+- Eric Dallo's [ECA](https://github.com/editor-code-assistant/eca) work and the
+  long-open [clojure-lsp#566](https://github.com/clojure-lsp/clojure-lsp/issues/566)
+  helped define the boundary between bookkeeping and judgment.
+- Dan Peddle's [cclsp](https://github.com/dazld/cclsp) showed how many structural
+  operations an agent-facing Clojure tool can expose.
 
-- **[rewrite-clj](https://github.com/clj-commons/rewrite-clj)** by Yannick Scherer ([@xsc](https://github.com/xsc)), maintained by Lee Read ([@lread](https://github.com/lread)) — the foundation. Every operation in clj-surgeon is a tree walk on the zipper that rewrite-clj provides. Without it, this project would be 50,000 lines instead of 1,500.
-- **[babashka](https://github.com/babashka/babashka)** by Michiel Borkent ([@borkdude](https://github.com/borkdude)) — rewrite-clj and cheshire are built in, so clj-surgeon has zero external dependencies. Startup in milliseconds, not seconds.
-- **[clj-kondo](https://github.com/clj-kondo/clj-kondo)** by Michiel Borkent ([@borkdude](https://github.com/borkdude)) — forward reference detection is a single shell-out to clj-kondo. We get static analysis for free.
+## Design principle: bookkeeping, not judgment
 
-Two things from Eric Dallo ([@ericdallo](https://github.com/ericdallo)) were especially catalytic:
+clj-surgeon performs bounded mechanical work. The caller decides what to move,
+where to move it, and whether to apply a reviewed plan. The compiler and tests
+then provide external feedback.
 
-The long-open [clojure-lsp#566](https://github.com/clojure-lsp/clojure-lsp/issues/566) ("Moving vars/function to a different namespace," filed 2021, still open) was thought-provoking. It's a genuinely hard problem in a language server — you need to handle every edge case correctly, because the tool acts alone. But it's also a perfect example of the bitter lesson: the hard part isn't cutting forms and rewriting requires — that's bookkeeping. The hard part is *deciding what to move and where* — that's judgment. A language server has to solve both. clj-surgeon only solves the bookkeeping and leaves the judgment to the LLM, which is why it's 1,500 lines instead of an open issue for 5 years.
-
-Eric's talk on [ECA](https://github.com/editor-code-assistant/eca) (Editor Code Assistant) at Clojure/Conj 2025 was mind-expanding — it got me thinking about the problem of AI-assisted code manipulation with fresh eyes. The idea that AI pair programming should be editor-agnostic and work at the structural level resonated deeply with what became clj-surgeon's approach.
-
-[cclsp](https://github.com/dazld/cclsp) by Dan Peddle ([@dazld](https://github.com/dazld)) — Claude Code LSP integration — was also eye-opening. Even just reading the list of clojure-lsp commands available through it (`clean-ns`, `extract-function`, `inline-symbol`, `move-to-let`, `cycle-privacy`, `create-test`...) was mind-bending. These structural operations are *possible*. I had trouble using them reliably, especially given the aforementioned clojure-lsp move-form issue, but seeing what the LSP could do shaped what clj-surgeon tries to do — the same structural manipulations, via rewrite-clj, without the LSP's edge-case fragility.
-
-## Design Principle: Stay Dumb, Stay Useful
-
-After watching agents use the kernel in production, a clear principle emerged: **build tools for bookkeeping, not for thinking.**
-
-The valuable ops eliminate mechanical work — precisely cutting 18 forms from a 2768-line file, rewriting requires across 10 namespaces, topologically sorting a dependency graph. The AI knows *what* to do but the mechanics are slow, error-prone, or burn context window. clj-surgeon does bookkeeping and manipulation.
-
-The principle:
-
-> **The tool does the mechanical work. The AI decides what to do. The compiler catches mistakes. The AI fixes what the compiler reports.**
-
-clj-surgeon stays dumb. The AI stays smart (and is getting smarter all the time: the bitter lesson).
-
-Also: I keep thinking the project name should be `clj-scalpel`, because you the programmer are the surgeon, and this is just a tool.  But it's just harder to type, I have `clj-surgeon` referenced everywhere already, so I guess I'm sticking with this name.  I guess the tool is the surgeon, and you're head of the medical ward!
+This boundary keeps the tool general. It also prevents the tool from silently
+guessing intent or expanding the requested scope.

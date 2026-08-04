@@ -1,0 +1,3 @@
+item_1	/bin/zsh -lc "rg -n -C 2 ':finish|unrelated-finish|assoc state :status' src/bench/state.clj"	0	260
+item_3	/bin/zsh -lc "git diff --check -- src/bench/state.clj && git diff --unified=1 -- src/bench/state.clj && rg -n ':finish \\\\(assoc state :status|unrelated-finish|assoc state :status :done' src/bench/state.clj"	129	7365
+item_5	/bin/zsh -lc "pwd -P; ls -ld .git 2>/dev/null || true; rg -n ':finish \\\\(assoc state :status|unrelated-finish|assoc state :status :done' src/bench/state.clj; perl -ne 'if ("'$. == 322 || $. == 327) { print "$.:$_" }'"' src/bench/state.clj"	0	293

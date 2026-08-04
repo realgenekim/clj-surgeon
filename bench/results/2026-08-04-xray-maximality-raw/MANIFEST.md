@@ -1,0 +1,50 @@
+# X-Ray Maximality Raw Evidence Manifest
+
+These archives preserve the valid raw result roots used by the X-Ray
+maximality audit. Each archive contains the original `runs.tsv`, generated
+summary, prompts, raw JSONL events, stderr, final answers, command receipts,
+fixture hashes, and diffs produced by the benchmark runner.
+
+The archives are byte-for-byte copies compressed without redaction. They were
+scanned before archival for prohibited project-context terms; none were found.
+Candidate source is preserved by the Git tags named in the Captain's Log and
+inside the recorded run metadata.
+
+| Archive | SHA-256 |
+|---|---|
+| `clj-surgeon-q-bb-pilot-20260804.tar.gz` | `143f4bc0ecbb1c3332ea01e5b13547d7c649e41e33ae1a12cb0dc133ec87783f` |
+| `clj-surgeon-xray-canonical-initializer-final-20260804.tar.gz` | `172cc80ae83d39adcec56d70e22a03d61021b51e9fba7549c3b98033b0742492` |
+| `clj-surgeon-xray-canonical-initializer-pilot-20260804.tar.gz` | `8ff10f24956656350b121bff7f080e69b53c69af4c3a6caf9f7f014148ae4212` |
+| `clj-surgeon-xray-compact-skill-final-20260804.tar.gz` | `99b0f13bd41d0d2b3bf81770be8df60f140d85dd2e35834197b0b7103dbbf2ba` |
+| `clj-surgeon-xray-inspect-final-20260804.tar.gz` | `d21edb660eb99acd1801607b086a708cba6585298ab76c78a2d5d85ede7730d7` |
+| `clj-surgeon-xray-inspect-pilot-20260804.tar.gz` | `940b051a89df209c0ed1abbc426dc290b83d0d355cfd239acce3802cb0947213` |
+| `clj-surgeon-xray-one-all-final-20260804.tar.gz` | `7905fd25be9b818b54dc66d9ffe2f9ce405fee54bcdeed639c0653504f934f52` |
+| `clj-surgeon-xray-one-all-pilot-20260804.tar.gz` | `29a291d9a2de894d621f1242ddcfdcae6fd51e343333adaa3d96dd3b6a0f57b1` |
+| `clj-surgeon-xray-pure-clojure-final-20260804.tar.gz` | `b97d4e7b17f4d7447ceb2064d5af17248a578b7fd40f6173cc3d9451a7ca4c91` |
+| `clj-surgeon-xray-scoped-traversal-final-20260804.tar.gz` | `285a3d52754eb5ee46a9c21ea3509876f03de7978268cff55b919708cc009762` |
+| `clj-surgeon-xray-self-repair-final-20260804.tar.gz` | `29c6d56bc016998a3865a43b64803761e9ff78f626c7ab2a139110cfc5e0fe22` |
+| `clj-surgeon-xray-self-repair-pilot-20260804.tar.gz` | `698b7bfb127eb4d57d87ca1de55394605607fd5e755c21190f9dea85ca35b2fd` |
+| `clj-surgeon-xray-stable-selection-final-20260804.tar.gz` | `e200d82cfe1586c3616804604ac188eccec9bc5f12da92e6efe38db75e5281c4` |
+| `clj-surgeon-xray-stable-selection-pilot-20260804.tar.gz` | `a02c88d27bf18af91a83758278ed3fb66c2a8c007e86a3356910e5a5f1d447bd` |
+| `clj-surgeon-xray-tree-seq-activation-final-20260804.tar.gz` | `03923e101527307e6fb9e7f8651391a4803988e11f66171e4ba15b3b13eeedd1` |
+| `clj-surgeon-xray-tree-seq-final-20260804.tar.gz` | `5a778e182c6a2a955492da85de221f62784ddb5853e8be40bb1506dbdff98ebc` |
+| `clj-surgeon-xray-tree-seq-pilot-v2-20260804.tar.gz` | `98c6e3d14cfef66183ede0313dcf344d6a37e218f4c791b40e538f23526119c2` |
+| `clj-surgeon-xray-ultra-compact-skill-final-20260804.tar.gz` | `601b1ccf915751efea441d3a893338fb3b6f9eab059e31829973937542349132` |
+| `clj-surgeon-xray-unified-final-20260804.tar.gz` | `4605879ab0cd1562f50224bf5d41616342e09f95857e3d8b3d913dcc373dcd8a` |
+| `clj-surgeon-xray-unified-pilot-20260804.tar.gz` | `d0b95980a7bbcf7d1e199e9dcacd9daf6f1b740f7aa3a77719c3f6cfccce6acd` |
+
+Two invalid roots are deliberately excluded:
+
+- `clj-surgeon-xray-tree-seq-pilot-20260804`: concurrent resume writers
+  corrupted the pilot.
+- `clj-surgeon-claude-fable-opus-20260804-v1`: the execution boundary never
+  launched a valid model trial.
+
+To inspect one archive without trusting its source directory:
+
+```bash
+tar -tzf bench/results/2026-08-04-xray-maximality-raw/ARCHIVE.tar.gz
+```
+
+Run `bb bench/verify_evidence_manifest.clj` to verify the archive set and every
+recorded digest.

@@ -270,7 +270,10 @@
     (is (str/includes? help "Aliases: grep-form"))
     (is (str/includes? help "Omit :inside for file-wide structural search"))
     (is (str/includes? help ":op :grep-form"))
-    (is (str/includes? help "not regular expressions"))))
+    (is (str/includes? help "not regular expressions"))
+    (is (str/includes? help "matches exactly one subtree"))
+    (is (str/includes? help "There is no variadic wildcard"))
+    (is (str/includes? help ":match '(loop _ _)'"))))
 
 ;; ============================================================
 ;; parse-val — string to value (pure)

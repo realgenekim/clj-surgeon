@@ -1,0 +1,17 @@
+Found **2** real structural matches in [structural.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/32-r03-structural-find-matched-skill-post/src/bench/structural.clj).
+
+1. [Line 323](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/32-r03-structural-find-matched-skill-post/src/bench/structural.clj:323), inside `summarize-state`:
+   ```clojure
+   (select-keys state [:status :attempts])
+   ```
+
+2. [Lines 327–331](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/32-r03-structural-find-matched-skill-post/src/bench/structural.clj:327), inside `summarize-job`:
+   ```clojure
+   (select-keys
+
+      job
+
+      [:status :attempts])
+   ```
+
+Command used: `clj-surgeon :op :grep-form ... :match '(select-keys _ [:status :attempts])'`. It parsed structural forms, excluding string and comment lookalikes, without reading the whole target file.

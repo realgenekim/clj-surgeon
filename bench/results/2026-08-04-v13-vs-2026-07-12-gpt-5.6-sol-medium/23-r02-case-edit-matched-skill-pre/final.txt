@@ -1,0 +1,9 @@
+Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/23-r02-case-edit-matched-skill-pre/src/bench/state.clj:322):
+
+```clojure
+:finish (assoc state :status :complete)
+```
+
+Verified the hash-bound plan contained exactly one replacement and `unrelated-finish` remains `:done`.
+
+Commands used: `clj-surgeon :ls`, `:find-subform`, `:replace-subform`, `:replace-subform!`, plus targeted `sed` and `test`.

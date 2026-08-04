@@ -1,0 +1,42 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.HYfSxs/homes/07-r01-structural-find-matched-skill-pre/skills/clj-surgeon/SKILL.md\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc 'clj-surgeon :op :find-subform --help'",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_3",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"clj-surgeon :op :find-subform :file src/bench/structural.clj :match '(select-keys _ [:status :attempts])'\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_5",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '323p;327,331p' src/bench/structural.clj | nl -ba -v323\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_6",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '323{=;p;};327,331{=;p;}' src/bench/structural.clj\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]

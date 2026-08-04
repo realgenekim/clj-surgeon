@@ -1,0 +1,1 @@
+{:category-frequencies {:cljc 4, :read 11, :write 10}, :required-arg-count 43, :paired-ops [:extract :extract! :fix-declares :fix-declares! :rename-ns :rename-ns! :replace-subform :replace-subform!]}

@@ -1,0 +1,19 @@
+Found **2** structural matches. Here `_` is treated as a single-form wildcard.
+
+1. **323:3–323:41**
+   ```clojure
+   (select-keys state [:status :attempts])
+   ```
+
+2. **327:3–331:23**
+   ```clojure
+   (select-keys
+
+      job
+
+      [:status :attempts])
+   ```
+
+Locations use inclusive line/column endpoints. The string on line 3 and comment on line 4 were excluded.
+
+Commands used: `wc -l`, `rg -n -F`, `sed -n`, and targeted `awk`. The whole file was not read.

@@ -1,0 +1,1 @@
+Find the top-level form in src/clj_surgeon/core.clj whose docstring contains the distinctive phrase “Per-command help”. Return its exact name, complete source, and boundaries. Do not modify files and do not read the whole file. Briefly name the commands used.

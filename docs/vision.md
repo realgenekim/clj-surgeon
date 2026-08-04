@@ -144,16 +144,28 @@ does not gain an interpreter.
 The read-only surface is `:xray :expr`. A plain Clojure path such as
 `(-> (form 'transition) (match :finish) right)` returns exact literal source
 evidence. `(analyze path pure-function)` always passes an ordered selection
-vector, including for zero or one match. `(expect-count path n)` refines
+vector of ordinary Clojure data, including for zero or one match. Write one
+terminating pure function over that a-priori contract; use collection predicates or
+`tree-seq` inside the same expression instead of a separate representation
+probe. `(expect-count path n)` refines
 cardinality without changing that input representation and refuses before
 analysis. Computed results return bounded EDN `:value` with compact addresses,
 ranges, trace, cardinality, and hashes. Computation never replaces evidence.
 X-ray never writes source or a plan. Former spellings remain compatibility
-inputs while the unified surface is tested. The general `initializer` path
+inputs but are not the primary surface. The general `initializer` path
 operator selects a `def` right-hand side without evaluating it; semantic
-interpretation remains with the model. Computed analysis canonicalizes map
-literals and `hash-map` / `array-map` syntax without executing source; evidence
-retains exact syntax.
+interpretation remains with the model. Computed analysis normalizes a selected
+value when that value itself is a map literal or `hash-map` / `array-map`
+syntax. It does not recursively normalize nested constructor syntax or execute
+source; evidence retains exact syntax.
+
+The sandbox should feel like Clojure, not an accidental smaller dialect. Pure
+`key`, `val`, and `for` are available. Macro expansion may use private loop and
+chunk machinery, while direct `loop`, `recur`, I/O, mutation, classes,
+processes, namespaces, and host interop remain refused. This prevents direct
+unbounded loop forms without rejecting idiomatic comprehensions. It is a
+capability boundary, not a proof of termination: callers must supply bounded
+work, and a pure expression over an unbounded input can still fail to finish.
 
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
