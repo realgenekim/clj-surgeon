@@ -93,6 +93,7 @@
     (is (str/includes? help "never changes source"))
     (is (str/includes? help "Use :q to read"))
     (is (str/includes? help "first source-bearing call"))
+    (is (str/includes? help "never reproduce it with apply_patch"))
     (is (str/includes? help "[:replace"))
     (is (str/includes? help "[:replace-span"))
     (is (str/includes? help ":replace-subform!"))

@@ -556,6 +556,7 @@
                                    "When a named form plus an exact key, guard, map key, or binding identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
                                    "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
                                    "Review the returned selector, one edit, diff, source hash, and result hash."
+                                   "When the diff is exact, apply that saved plan with :replace-subform!; never reproduce it with apply_patch, a text edit, or a second equivalent plan."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
                                    "Unknown flags, getter-only queries, ambiguous targets, and source/plan path aliasing refuse without changing source or an existing plan."]
                        :examples  ["clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"

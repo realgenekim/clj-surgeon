@@ -84,6 +84,11 @@ and the source/result hashes. Review the plan before the separate apply command.
 Never chain plan generation and application. Use `:q` first only when the
 choice still requires judgment.
 
+When the returned diff is exact, apply that saved plan next with
+`:replace-subform!`. Never reproduce the plan with `apply_patch`, a text edit,
+or a second equivalent plan. The verified executor is the source-changing
+step.
+
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 
 ```bash

@@ -182,3 +182,46 @@ skill makes one distinction: `:q` reads; `:edit` plans when the supplied
 relationship and replacement are already exact. If that does not make the
 plan the first source-bearing command and remove help/text detours, the facade
 has no remaining evidence-based iteration.
+
+## v3: the skill made `:edit` real
+
+The version-matched skill changed the result. Across four repetitions of three
+ambiguous edit shapes:
+
+| Shape | Old skill median calls | Edit-first median calls | Old median input | Edit-first median input | First-source `:edit` |
+|---|---:|---:|---:|---:|---:|
+| `case` peer result | 3 | 3 | 64.2k | 64.3k | 4/4 |
+| outer `cond` result | 6 | 5 | 110.7k | 102.3k | 3/4 |
+| `let` initializer | 4 | 3 | 73.6k | 65.1k | 4/4 |
+
+Both versions were exact in 12 of 12 runs. The new skill selected `:edit` in
+12 of 12. It made `:edit` the first source-bearing command in 11 of 12 and
+removed one median command in the two harder shapes. The case task was already
+at the floor, so its execution cost stayed flat.
+
+This quantifies coaxing:
+
+| Onboarding | Eventual `:edit` | First-source `:edit` |
+|---|---:|---:|
+| Executable hidden | 0/4 | 0/4 |
+| CLI named, v1 help | 1/4 | 0/4 |
+| CLI named, global edit example | 4/4 | 0/4 |
+| Installed edit-first skill, three shapes | 12/12 | 11/12 |
+
+The skill is part of the product. CLI help can teach syntax after discovery;
+only pre-action repository onboarding consistently changes the first action.
+
+One run remains a real failure despite its exact final bytes. The agent created
+a correct `:edit` plan, then used `apply_patch` to replay the diff, deleted the
+plan, and performed Ruby/hash/query verification. The skill said to apply the
+plan separately, but did not state the prohibition beside the first edit
+example. That field failure now requires an immediate rule: after an exact
+plan, the only source-changing command is `:replace-subform!`; never reproduce
+the plan with a text patch.
+
+The deeper opportunity is now clearer. `:edit` is a successful discoverability
+facade when the skill uploads it, but it still embeds an EDN vector inside shell
+syntax and exposes plan-file ceremony. The next hill is the Clojure-native
+expression in `docs/plans/clojure-native-edit-algebra.md`: ordinary pure
+Clojure combinators that compile to the same guarded planner. The kernel stays;
+the authoring surface competes against the measured 3/5-command baseline.
