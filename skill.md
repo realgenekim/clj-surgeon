@@ -24,6 +24,7 @@ read the complete form directly:
 clj-surgeon :op :cat :file src/my/ns.clj :form transition!
 clj-surgeon :op :cat :file src/my/ns.clj :line 1134
 clj-surgeon :op :cat :file src/my/ns.clj :contains 'Per-command help'
+clj-surgeon :op :cat :file src/my/ns.clj :contains :finish
 ```
 
 Use `:show-form` instead of reconstructing a `sed` range. Do not run `:ls`
@@ -33,7 +34,8 @@ solely as a preflight when any direct selector is known.
 Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
 case-sensitive literal, not a regex. It returns one containing top-level form
 or refuses on ambiguity. Add `:platform :clj` or `:platform :cljs` only to
-disambiguate CLJC branches.
+disambiguate CLJC branches. The CLI preserves the `:contains` value as text, so
+keyword-shaped literals such as `:finish` need no EDN-string workaround.
 
 Use `rg` for broad cross-file discovery. Do not use `rg -n` merely to convert
 distinctive text into a line for `:show-form`.
@@ -50,6 +52,11 @@ clj-surgeon :op :grep-form :file src/views.clj \
 `_` matches one subtree. Each named match reports an `:inside` value that can
 be copied directly into a narrowed search or replacement. Add `:inside` only
 when already known or when choosing among multiple matches.
+
+When sibling text identifies the intended subtree—a `case` key, `cond` guard,
+map key, or binding name—use `:cat :contains` on that text first. It returns the
+owner and surrounding form in one read. Do not grep an expression that may
+repeat elsewhere and then cat its owner merely to recover sibling context.
 
 ## Replace one exact subtree
 
@@ -72,8 +79,11 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 Do not edit the plan; when intent changes, generate a new plan. Successful apply
 returns `:applied-edit` and a `:verified` read-back receipt. Trust that receipt
 for exact replay/hash/parse evidence; do not repeat it with `rg`, `show-form`,
-or `shasum`. Still run the repository formatter, linter, compiler, tests, and
-final change review.
+`git diff`, or `shasum`. The reviewed plan diff is the edit-level change review;
+the receipt proves that exact result was atomically written and reparsed. Do not
+reread related forms solely to verify byte preservation. Still run relevant
+repository formatters, linters, compilers, and tests, and review the aggregate
+workspace diff once when a repository is available.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
 syntax, not a synthetic wrapper list. Match an independently readable contained

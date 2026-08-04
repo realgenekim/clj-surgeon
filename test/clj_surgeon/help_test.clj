@@ -219,7 +219,8 @@
     (testing "the exact documented invocations are printed"
       (is (str/includes? help ":op :show-form :file src/my/ns.clj :form transition!"))
       (is (str/includes? help ":op :show-form :file src/my/ns.clj :line 1134"))
-      (is (str/includes? help ":op :cat :file src/my/ns.clj :contains 'transition complete'")))
+      (is (str/includes? help ":op :cat :file src/my/ns.clj :contains :finish"))
+      (is (str/includes? help "keyword-shaped values such as :finish remain literal text")))
     (testing "the structural-shell alias is discoverable"
       (is (str/includes? help "Aliases: cat")))
     (testing "ambiguity fails closed"
@@ -231,7 +232,16 @@
     (is (str/includes? help "Do not edit the plan"))
     (is (str/includes? help "never chain it with application"))
     (is (str/includes? help "generate a new plan"))
+    (is (str/includes? help "reviewed plan is the edit-level diff"))
+    (is (str/includes? help "git diff"))
     (is (str/includes? help ":replace-subform!"))))
+
+(deftest replace-subform-help-teaches-one-shot-sibling-context
+  (let [help (core/format-op-help :replace-subform
+                                  (get core/ops-registry :replace-subform))]
+    (is (str/includes? help "case key"))
+    (is (str/includes? help ":cat :contains"))
+    (is (str/includes? help "owner and context in one read"))))
 
 (deftest find-subform-help-teaches-one-shot-file-wide-structural-grep
   (let [help (core/format-op-help :find-subform
@@ -322,6 +332,15 @@
   (is (= "(inc 1) (inc 2)"
          (:match (core/parse-args [":op" ":find-subform"
                                    ":match" "(inc 1) (inc 2)"])))))
+
+(deftest parse-args-preserves-contains-as-literal-text
+  (testing "EDN-shaped search text is not reinterpreted"
+    (doseq [literal [":finish" "nil" "42" "true" "[status]"]]
+      (is (= literal
+             (:contains (core/parse-args [":op" ":cat"
+                                          ":file" "state.clj"
+                                          ":contains" literal])))
+          literal))))
 
 (deftest parse-args-help-flag-standalone
   (is (= {:help true}

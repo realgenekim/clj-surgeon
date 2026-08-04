@@ -22,7 +22,8 @@ is cut.
 - One-shot literal routing that replaces the former `rg -n` to
   `:show-form :line` bridge, structural
   sibling-pair boundaries, and a mandatory review boundary between replacement
-  planning and application.
+  planning and application. CLI `:contains` values remain literal text even
+  when they look like EDN, so `:contains :finish` works directly.
 - Enclosing `:inside` ownership on every named file-wide structural match, plus
   read-back-verified `:replace-subform!` receipts with `:verified` hash, parse,
   and atomic-write evidence.

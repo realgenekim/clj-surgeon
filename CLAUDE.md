@@ -58,9 +58,15 @@ updates, and verification gates. It is not a chronological coding diary.
   discovery. Use `:grep-form` for file-wide structural patterns; each named
   match reports reusable `:inside` ownership. Add `:inside` only when the
   parent is known or ambiguity needs narrowing.
+- When sibling text identifies an edit—a `case` key, `cond` guard, map key, or
+  binding name—use `:show-form :contains` on that text to recover the owner and
+  context in one read. Do not grep a repeated expression and then read its
+  owner merely to recover sibling context.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
-  application.
+  application. A successful verified apply receipt proves exact replay,
+  read-back hash, atomic write, and whole-file parse; do not reread the edited
+  or neighboring forms solely to reproduce that evidence.
 - Format changed Clojure files before linting or testing. Use the repository's
   formatter when configured; otherwise run
   `npx @chrisoakman/standard-clojure-style fix <changed-files>`.

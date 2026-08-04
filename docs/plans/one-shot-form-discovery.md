@@ -27,11 +27,17 @@ or `:contains`:
 ```bash
 clj-surgeon :op :show-form :file src/my/ns.clj :contains 'distinctive text'
 clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'
+clj-surgeon :op :cat :file src/my/ns.clj :contains :finish
 ```
 
 `:contains` is a nonblank, case-sensitive literal substring. It is not a
 regular expression. It searches the exact source owned by top-level form
 records, including attached comments, strings, and docstrings.
+
+At the CLI boundary, the value following `:contains` remains raw literal text
+instead of going through generic EDN coercion. Keyword-, boolean-, number-, and
+collection-shaped text therefore works without an EDN-string workaround. The
+pure selector API remains strict and refuses non-string programmatic values.
 
 - If exactly one top-level form contains the literal, return the existing
   `:show-form` success record plus `:occurrence-count` and bounded occurrence
@@ -73,8 +79,10 @@ returns:
 
 A read-back mismatch returns nonzero failure data. Planning and application
 remain separate commands. The receipt proves exact structural replay; it does
-not replace repository formatting, linting, compilation, tests, or a final
-change review.
+not replace repository formatting, linting, compilation, or tests. The reviewed
+plan is the edit-level diff; do not reread the edited or neighboring forms to
+reproduce receipt evidence. Review the aggregate workspace diff once when a
+repository is available.
 
 ## Behavior Matrix
 

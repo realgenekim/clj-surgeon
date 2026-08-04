@@ -140,14 +140,15 @@ clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
 Or select the one form containing distinctive literal text:
 
 ```bash
-clj-surgeon :op :cat :file src/writer/state.clj :contains 'transition complete'
+clj-surgeon :op :cat :file src/writer/state.clj :contains :finish
 ```
 
 Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
 case-sensitive literal substring, not a regular expression. It searches form
 source, strings, docstrings, and attached comments. Multiple occurrences in
 one form succeed; occurrences in multiple forms refuse with bounded candidate
-evidence. For ambiguous reader-conditional
+evidence. CLI values remain literal text, so keyword-shaped searches such as
+`:finish` do not need an EDN-string workaround. For ambiguous reader-conditional
 definitions, add `:platform :clj` or `:platform :cljs`. Success returns the
 exact parsed form source, type, name when present, platforms, line range,
 attached-comment start, and complete-file source hash. Missing or ambiguous
@@ -423,8 +424,9 @@ address, exact before text, complete rewritten-file parse, and result hash. It
 then atomically replaces the target file and reads it back. A successful EDN
 receipt includes `:applied-edit` plus `:verified` whole-file parse,
 `:read-back-hash`, and atomic-write evidence. Do not repeat those exact checks
-with `rg`, `:show-form`, or `shasum`; proceed to the formatter, linter, compiler,
-tests, and final repository change review. If atomic replacement is unavailable,
+with `rg`, `:show-form`, `git diff`, or `shasum`; the reviewed plan is the
+edit-level diff. Proceed to relevant formatter, linter, compiler, and test
+commands, then review the aggregate repository diff once. If atomic replacement is unavailable,
 the command fails and does not fall back to a weaker write. Every error is
 concise EDN and every error exits nonzero.
 
@@ -434,7 +436,9 @@ a new plan.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
 syntax, not a synthetic wrapper list. Until a sibling-span lens exists, match
-an independently readable contained value or expression. See
+an independently readable contained value or expression. When sibling text
+identifies the target, use `:cat :contains` on that key, guard, or name to get
+its owner and surrounding form in one read. See
 [issue #21](https://github.com/realgenekim/clj-surgeon/issues/21).
 
 Run plan generation as a standalone shell command. Observe and review its

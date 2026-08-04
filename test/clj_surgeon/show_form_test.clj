@@ -411,13 +411,14 @@
 (deftest cli-show-form-selectors-and-cat-contains-are-one-shot-edn-reads
   (let [tmp-dir (fs/create-temp-dir {:prefix "show form cli "})
         file (fs/path tmp-dir "migration fixture.clj")
-        source "(ns field.case)\n\n;; target\n(defn target [x]\n  (inc x))\n"]
+        source "(ns field.case)\n\n;; :target\n(defn target [x]\n  (inc x))\n"]
     (try
       (spit (str file) source)
       (doseq [[op selector] [[":show-form" [":form" "target"]]
                              [":show-form" [":line" (str (line-containing source "(inc x)"))]]
                              [":show-form" [":contains" "(inc x)"]]
-                             [":cat" [":contains" "(inc x)"]]]]
+                             [":cat" [":contains" "(inc x)"]]
+                             [":cat" [":contains" ":target"]]]]
         (let [{:keys [exit out err]} (apply run-cli ":op" op
                                        ":file" (str file) selector)
               result (edn/read-string out)]

@@ -593,14 +593,14 @@
                        :workflow ["Supply exactly one selector: :form, :line, or :contains."
                                   "Use :show-form instead of reconstructing a sed range when a top-level name or containing line is known."
                                   "Make :show-form the first source inspection; do not run :ls solely as a preflight."
-                                  "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command."
+                                  "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command; keyword-shaped values such as :finish remain literal text."
                                   "Literal search includes attached comments, strings, and docstrings; it never interprets a regular expression."
                                   "Use :platform only to select a reader-conditional branch."
                                   "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
                        :examples ["clj-surgeon :op :show-form :file src/my/ns.clj :form transition!"
                                   "clj-surgeon :op :show-form :file src/my/ns.clj :line 1134"
-                                  "clj-surgeon :op :cat :file src/my/ns.clj :contains 'transition complete'"
+                                  "clj-surgeon :op :cat :file src/my/ns.clj :contains :finish"
                                   "clj-surgeon :op :show-form :file src/my/ns.cljc :form transition! :platform :cljs"]
                        :category :read}
 
@@ -657,6 +657,7 @@
                                    :with   {:required true :desc "Replacement Clojure form"}
                                    :plan-out {:desc "Write the replayable EDN plan to this path"}}
                        :workflow  ["Inspect or find the exact parsed subtree before planning."
+                                   "When a case key, cond guard, map key, or binding name identifies the target, use :cat :contains on that sibling text to recover its owner and context in one read."
                                    "A case clause, cond branch, map entry, or binding pair is adjacent syntax, not a synthetic wrapper list; match its contained value or expression."
                                    "Run plan generation as its own command; never chain planning and application in one shell invocation."
                                    "Review the returned match, diff, address, source hash, and result hash before applying the saved plan."]
@@ -670,7 +671,7 @@
                        :workflow  ["Run plan generation as a separate command; never chain it with application."
                                    "Review the saved plan and its diff before application."
                                    "Apply the reviewed plan directly with :replace-subform!."
-                                   "A successful receipt includes :verified read-back hash and whole-file parse evidence; do not repeat those checks with rg, show-form, or shasum."
+                                   "A successful receipt includes :verified read-back hash and whole-file parse evidence; the reviewed plan is the edit-level diff, so do not repeat those checks with rg, show-form, git diff, or shasum."
                                    "Do not edit the plan with apply_patch or another text tool."
                                    "If the intended edit changes, generate a new plan."
                                    "Stop on nonzero status, then run the repository formatter, linter, and tests after success."]
@@ -866,7 +867,7 @@
                  (partition 2)
                  (map (fn [[k v]]
                         (let [key (keyword (subs k 1))]
-                          [key (if (#{:match :with} key) v (parse-val v))])))
+                          [key (if (#{:match :with :contains} key) v (parse-val v))])))
                  (into {}))
       has-help? (assoc :help true))))
 
