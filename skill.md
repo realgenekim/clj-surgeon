@@ -73,14 +73,14 @@ clj-surgeon :op :xray :file src/policy.clj \
   :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
-`analyze` receives a vector for zero, one, or many matches; `expect-count`
-refuses before analysis without changing that type.
+`analyze` receives one vector of ordinary Clojure data for zero, one, or many
+matches; `expect-count` refuses without changing that type. Write one total
+function over this contract instead of a separate shape-discovery query.
 Computed `:value` has compact hash evidence; a plain path returns full source.
 Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
-one canonical map view while evidence stays exact. When a predicate identifies
-the desired descendants, skip a separate map-versus-vector query; use
-`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a lazy sequence.
-It never writes. In CLJC, pass a platform for one branch.
+one canonical map view while evidence stays exact. Identify descendants with
+`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a lazy
+sequence. It never writes. In CLJC, pass a platform for one branch.
 
 End that same path with `replace` to emit one guarded plan:
 

@@ -129,6 +129,20 @@
         (is (some #{"(analyze path pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
 
+(deftest sci-supports-idiomatic-pure-map-comprehension
+  ;; Clean-context candidate-v9 agents first wrote these ordinary Clojure core
+  ;; forms, then lost calls because the X-ray sandbox omitted for/key/val.
+  (let [compiled
+        (dsl/compile-xray
+          "(-> (form 'data) (analyze (fn [[registry]] {:keys (vec (sort (map key registry))) :categories (vec (sort (map (comp :category val) registry))) :paired (vec (sort (for [[op spec] registry :when (contains? spec :pair)] op)))})))")
+        registry (array-map :read {:category :read}
+                            :plan {:category :write :pair :plan!}
+                            :plan! {:category :write :pair :plan})]
+    (is (= {:keys [:plan :plan! :read]
+            :categories [:read :write :write]
+            :paired [:plan :plan!]}
+           ((:analyzer compiled) [registry])))))
+
 (deftest literal-xray-returns-full-structural-evidence
   (let [expression "(-> (form 'data) (match :ys) right)"
         program (dsl/compile-xray expression)

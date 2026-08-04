@@ -543,6 +543,60 @@ If that wording does not make the route reliable and improve wall time, stop
 trying to retrain the model. Keep v7 as the measured product leader and treat
 native traversal as optional Clojure capability rather than the headline.
 
+### Candidate v9 result: decisive activation win
+
+The clarified instruction made every clean agent use `tree-seq`, compared with
+one of four under v8. The four-replicate gate against v7 was exact throughout:
+
+```text
+                              v7 leader       v9 contract         change
+correct                           4/4             4/4             tied
+median wall                      50.299 s          39.432 s        22% faster
+median shell calls                5                5              tied
+median input tokens             104,339           94,271          10% fewer
+median uncached tokens           15,966           14,783           7% fewer
+median output tokens              1,568            1,382          12% fewer
+median source output              5.5 KB           4.5 KB         17% fewer
+```
+
+Every source hash was unchanged. One v9 agent read the skill, issued one X-ray,
+and returned the exact result in 31.6 seconds. The wording therefore crossed
+both gates: reliable activation and more than 10% median wall improvement. v9
+replaces v7 as the measured leader.
+
+The other transcripts exposed the next substrate defect. Two agents wrote
+idiomatic, pure Clojure on their first attempt, but SCI refused it because the
+allowlist omitted `for` in one run and `val` in another. Both agents recovered,
+but the tool had forced valid Clojure into a smaller undocumented dialect. That
+contradicts the product promise and the earlier instruction to let the model
+use Clojure rather than inventing another query language.
+
+Candidate v10 states the a-priori data contract directly:
+
+```text
+analyze input = one Vector of ordinary Clojure data
+```
+
+It tells the caller to write one total function over that contract instead of
+issuing a separate shape-discovery query. It also admits the missing general,
+pure core vocabulary—`for`, `key`, and `val`—and turns both rejected first
+expressions into permanent pure regressions. It does not expose `type`: class
+objects are not EDN, and collection predicates express the safe distinction.
+
+`for` required a real safety design rather than one allowlist entry. The macro
+expands into `lazy-seq`, `loop*`, `recur`, and chunk machinery. Admitting those
+symbols directly made the existing nontermination regression hang, exactly as
+that test was designed to reveal. Candidate v10 therefore separates public
+source vocabulary from private macro-expansion vocabulary. A pre-expansion
+check still refuses direct `loop`, `recur`, `lazy-seq`, and chunk internals;
+SCI may use them only behind an authored `for`. The exact comprehension now
+succeeds while `(loop [] (recur))` still refuses before source I/O.
+
+This is the sharper answer to “make probing unnecessary.” The tool cannot know
+every application's field semantics a priori. It can make representation fully
+predictable, let one function branch or traverse over ordinary data, and stop
+rejecting the Clojure already nearest in the model's latent space.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

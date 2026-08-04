@@ -14,11 +14,11 @@
   '[* + - / < <= = == > >=
     and or not boolean true? false? nil? some?
     bit-and bit-or bit-xor bit-not bit-shift-left bit-shift-right
-    inc dec max min mod quot rem zero? pos? neg? even? odd? number? integer?
+    inc dec int max min mod quot rem zero? pos? neg? even? odd? number? integer?
     int? nat-int? pos-int? neg-int? ratio? rational? float? decimal?
     compare comparator hash
     -> ->> as-> some-> some->> cond-> cond->>
-    if if-let if-some when when-not when-let when-some cond condp case
+    if if-let if-some when when-not when-let when-some cond condp case for
     let let* fn fn* quote do
     identity constantly comp complement partial juxt fnil every-pred some-fn
     apply
@@ -26,7 +26,7 @@
     hash-set sorted-set sorted-set-by set
     conj cons disj pop peek subvec concat into merge merge-with select-keys
     assoc assoc-in dissoc update update-in
-    seq first ffirst nfirst second fnext next rest last butlast nth nthnext
+    seq first ffirst nfirst second fnext next rest last butlast nth nthnext key val
     nthrest get get-in find contains? keys vals count empty empty? not-empty
     seq? sequential? associative? coll? counted? indexed? reversible? map?
     vector? set? list? map-entry?
@@ -44,6 +44,10 @@
     re-pattern re-find re-matches re-seq
     clojure.core/partition-all clojure.core/replace])
 
+(def ^:private macro-expansion-symbols
+  '[lazy-seq loop loop* recur unchecked-inc
+    chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
+
 (def ^:private builder-symbols
   '[form match where right left up down outermost initializer span partition-all replace
     replace-span transform xray xray-one compute aggregate inspect one all
@@ -51,6 +55,19 @@
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
+
+(def ^:private sci-allowed-symbols
+  (vec (distinct (concat allowed-symbols macro-expansion-symbols))))
+
+(def ^:private forbidden-source-symbols
+  (set (map name macro-expansion-symbols)))
+
+(defn- forbidden-source-symbol [form]
+  (some (fn [node]
+          (when (and (symbol? node)
+                     (contains? forbidden-source-symbols (name node)))
+            node))
+        (tree-seq coll? seq form)))
 
 (def ^:private allowed-capabilities
   [:pure-control
@@ -344,7 +361,7 @@
     (invalid! expression :expression-too-large))
   (let [context (sci/init {:namespaces {'user sci-bindings}
                            :classes {}
-                           :allow allowed-symbols})
+                           :allow sci-allowed-symbols})
         reader (sci/reader expression)
         user-ns (sci/create-ns 'user)]
     (try
@@ -353,6 +370,8 @@
         (when (or (= :sci.core/eof form)
                   (not= :sci.core/eof trailing))
           (invalid! expression :expected-one-form))
+        (when (forbidden-source-symbol form)
+          (invalid! expression :disallowed-symbol))
         (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception
         (if (#{:invalid-edit-expression :invalid-xray-expression}
@@ -402,7 +421,7 @@
 
       :else
       (invalid-xray-expression!
-       expression :xray-expression-must-return-path-or-computation))))
+        expression :xray-expression-must-return-path-or-computation))))
 
 (defn prepare-edit-options
   "Compile :expr into :query or return a structured one-of-input refusal."

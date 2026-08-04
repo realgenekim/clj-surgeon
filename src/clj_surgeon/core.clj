@@ -640,12 +640,12 @@
                        :args {:file {:required true :desc "Clojure source file; never modified"}
                               :expr {:required true :desc "One sandboxed pure Clojure path, optionally count-refined and analyzed"}}
                        :workflow ["Use one Clojure path for every structural read. A path without a terminal returns literal source evidence."
-                                  "End with (analyze pure-function). The function always receives a vector of selected values in match order, including for zero or one match."
+                                  "End with (analyze pure-function). The function always receives one vector of ordinary Clojure data in match order, including for zero or one match. Write one total function over this contract instead of a separate shape-discovery query."
                                   "Add (expect-count n) before analyze when cardinality must be exact. It refuses before calling the function and never changes the vector input type."
                                   "After selecting a def, use initializer to select its right-hand side without evaluating it. An unbound def or non-def produces zero matches."
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
                                   "Selected values are never evaluated. Computed X-ray gives map literals and hash-map/array-map syntax one canonical map view while exact source remains in evidence."
-                                  "When a predicate identifies the desired descendants, skip a separate query that asks whether nested containers are maps or vectors. Analyze with (filter predicate (tree-seq coll? seq value)) instead."
+                                  "Identify nested descendants inside that function with (filter predicate (tree-seq coll? seq value))."
                                   "Return concrete EDN, not a lazy sequence. Malformed map constructor syntax refuses."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."

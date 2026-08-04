@@ -292,9 +292,10 @@ map constructors refuse, and literal X-ray plus evidence retain exact source.
 Return concrete EDN from computation; realize lazy results with `vec` or another
 collection.
 
-When a predicate can identify the desired descendants, skip a separate query
-that asks whether nested containers are maps or vectors. Analyze with
-`(filter predicate (tree-seq coll? seq value))` instead.
+`analyze` always receives one vector of ordinary Clojure data. Write one total
+function over that contract instead of a separate shape-discovery query. When
+a predicate identifies the desired descendants, use
+`(filter predicate (tree-seq coll? seq value))` inside that function.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the
