@@ -141,13 +141,15 @@ Planning then discards the function and saves only the concrete replacement,
 diff, and hashes. The durable artifact stays data, and the trusted executor
 does not gain an interpreter.
 
-The read-only counterpart is `:xray`. Its terminal
-`(xray path pure-function)` receives selected values as Clojure data and returns
-a bounded EDN `:value`. Exact
-matches, addresses, trace, cardinality, and source hash remain beside that
-value. Computation never replaces evidence. `:xray` never writes source or a
-plan. Literal inspection remains `:q`. `:xray` is justified only when
-computation removes a later shell step.
+The read-only counterpart is `:xray`. Its exact-one terminal
+`(xray-one path pure-function)` refuses zero or many matches and receives the
+selected Clojure value directly. Generic `(xray path pure-function)` receives
+the selected values as a vector for intentional aggregation. Both return a
+bounded EDN `:value`. Compact evidence retains addresses, ranges, trace,
+cardinality, per-selection hashes, and the complete-file hash without repeating
+large source bodies; full exact source is opt-in. Computation never replaces
+evidence. `:xray` never writes source or a plan. Literal inspection remains
+`:q`. `:xray` is justified only when computation removes a later shell step.
 
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
@@ -206,7 +208,7 @@ safety advantage, use the faster native patch.
 | `:ls-extract` | Minimal mechanically extractable closure |
 | `:declares` | Forward-declare audit |
 | `:lens` / `:q` | Composable concrete-syntax getter and single-edit plan updater |
-| `:xray` | Pure Clojure computation over selected values with exact evidence retained |
+| `:xray` | Pure Clojure computation over selected values with compact hash-backed or full evidence |
 | `:grep-form` / `:find-subform` | File-wide or scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
 | `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |

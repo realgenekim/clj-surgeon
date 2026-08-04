@@ -29,6 +29,9 @@
 (defn- spec [query analyzer]
   (dsl/xray query analyzer))
 
+(defn- one-spec [query analyzer]
+  (dsl/xray-one query analyzer))
+
 (deftest xray-builder-is-an-ordinary-threadable-terminal
   (let [program (-> (dsl/form 'data)
                     (dsl/match '_)
@@ -51,6 +54,18 @@
                     nil
                     (catch Exception exception (ex-data exception)))]
         (is (= error-type (:error-type error)))))))
+
+(deftest xray-one-is-threadable-and-receives-one-value-directly
+  (let [program (-> (dsl/form 'data)
+                    (dsl/match :xs)
+                    dsl/right
+                    (dsl/xray-one #(reduce + %)))]
+    (is (= :xray (:kind program)))
+    (is (= :one (:cardinality program)))
+    (is (= :selected-value (:input-shape program)))
+    (is (= 3 ((:analyzer program) [1 2]))))
+  (is (= [[:form 'load-starred-post :cljs]]
+         (dsl/form 'load-starred-post :cljs))))
 
 (deftest sci-compiles-one-capability-limited-xray-program
   (let [expression (str "(-> (form 'data) (match '_) "
@@ -81,7 +96,7 @@
         (is (= reason (:reason error)))
         (is (= expression (:expression error)))
         (is (some #{"(xray path pure-function)"} (:allowed-forms error)))
-        (is (str/includes? (:remedy error) ":xray"))))))
+        (is (str/includes? (:usage error) ":xray"))))))
 
 (deftest xray-evaluates-zero-one-and-many-selected-values
   (doseq [{:keys [label query analyzer expected-input expected-value]}
@@ -114,10 +129,85 @@
         (is (= :xray (:operation result)))
         (is (= (count expected-input) (:match-count result)))
         (is (= {:input-shape :selected-values
-                :input-count (count expected-input)}
+                :input-count (count expected-input)
+                :cardinality :any
+                :evidence :compact}
                (:xray result)))
         (is (= "test expression" (:expression result)))
         (is (= (lens/source-hash source) (:source-hash result)))))))
+
+(deftest xray-one-refuses-zero-and-many-before-calling-the-analyzer
+  (doseq [[label query expected-count]
+          [["zero" [[:form 'missing]] 0]
+           ["many" vectors-query 2]]]
+    (testing label
+      (let [calls (atom 0)
+            result (dsl/evaluate-xray
+                    source
+                    {:expression label
+                     :xray (one-spec query (fn [_] (swap! calls inc)))})]
+        (is (= :xray-cardinality-mismatch (:error-type result)))
+        (is (= 1 (:expected-match-count result)))
+        (is (= expected-count (:actual-match-count result)))
+        (is (zero? @calls))
+        (is (nil? (:value result))))))
+  (let [seen (atom nil)
+        result (dsl/evaluate-xray
+                source
+                {:expression "one"
+                 :xray (one-spec [[:form 'data] [:find :xs] :right]
+                                 #(do (reset! seen %) (reduce + %)))})]
+    (is (= [1 2] @seen))
+    (is (= 3 (:value result)))
+    (is (= :selected-value (get-in result [:xray :input-shape])))))
+
+(deftest compact-evidence-preserves-provenance-without-repeating-source
+  (let [query [[:form 'data] [:find :ys] :right]
+        compact (dsl/evaluate-xray
+                 source
+                 {:expression "compact"
+                  :xray (one-spec query identity)})
+        full (dsl/evaluate-xray
+              source
+              {:expression "full"
+               :evidence :full
+               :xray (one-spec query identity)})
+        compact-match (get-in compact [:matches 0])]
+    (is (= [3 4] (:value compact) (:value full)))
+    (is (= :compact (get-in compact [:xray :evidence])))
+    (is (= :full (get-in full [:xray :evidence])))
+    (is (nil? (:source compact-match)))
+    (is (= "[3 4]" (get-in full [:matches 0 :source])))
+    (is (re-matches #"[0-9a-f]{64}" (:source-hash compact-match)))
+    (is (re-matches #"[0-9a-f]{64}" (:selection-hash compact)))
+    (is (= (:address compact-match) (get-in full [:matches 0 :address])))
+    (is (= (:trace compact) (:trace full))))
+  (let [large-source (str "(ns large.evidence)\n(def data "
+                          (pr-str (vec (range 1000))) ")\n")
+        query [[:form 'data]]
+        compact (dsl/evaluate-xray
+                 large-source
+                 {:expression "compact"
+                  :xray (one-spec query count)})
+        full (dsl/evaluate-xray
+              large-source
+              {:expression "full"
+               :evidence :full
+               :xray (one-spec query count)})]
+    (is (< (count (pr-str compact))
+           (/ (count (pr-str full)) 2))))
+  (let [first-result (dsl/evaluate-xray
+                      source
+                      {:expression "stable"
+                       :xray (one-spec [[:form 'data]] identity)})
+        changed-result (dsl/evaluate-xray
+                        (str/replace source "[3 4]" "[3 5]")
+                        {:expression "stable"
+                         :xray (one-spec [[:form 'data]] identity)})]
+    (is (not= (:selection-hash first-result)
+              (:selection-hash changed-result)))
+    (is (not= (get-in first-result [:matches 0 :source-hash])
+              (get-in changed-result [:matches 0 :source-hash])))))
 
 (deftest spans-and-partitions-arrive-as-vectors-of-clojure-values
   (let [span-result
@@ -125,12 +215,14 @@
          source
          {:file "bench/xray.clj"
           :expression "span"
+          :evidence :full
           :xray (spec [[:form 'choose] [:find :a] [:span 2]] first)})
         partition-result
         (dsl/evaluate-xray
          source
          {:file "bench/xray.clj"
           :expression "partitions"
+          :evidence :full
           :xray (spec [[:form 'choose] [:find 'case] :up :down :right :right
                        [:partition-all 2]]
                       #(mapv vec %))})]
@@ -146,6 +238,7 @@
                 source
                 {:file "bench/xray.clj"
                  :expression "evidence"
+                 :evidence :full
                  :xray (spec query first)})]
     (is (= (select-keys expected
                         [:query :trace :match-count :matches :source-hash])
@@ -222,8 +315,9 @@
         compiled (dsl/compile-xray expression)
         result (dsl/evaluate-xray
                 real-source
-                {:file "bench/fixtures/bench/pair_view.clj"
+                 {:file "bench/fixtures/bench/pair_view.clj"
                  :expression expression
+                 :evidence :full
                  :xray compiled})]
     (is (= [[:form 'classify-request] [:find 'cond] :up :outermost
             :down :right [:partition-all 2]]
@@ -247,7 +341,15 @@
                          (assoc base :expr valid :query [])))))
     (is (= :invalid-xray-expression
            (:error-type (dsl/prepare-xray-options
-                         (assoc base :expr "(slurp \"secret\")")))))))
+                         (assoc base :expr "(slurp \"secret\")")))))
+    (is (= :invalid-evidence-mode
+           (:error-type (dsl/prepare-xray-options
+                         (assoc base :expr valid :evidence :brief)))))
+    (is (= :compact
+           (:evidence (dsl/prepare-xray-options (assoc base :expr valid)))))
+    (is (= :full
+           (:evidence (dsl/prepare-xray-options
+                       (assoc base :expr valid :evidence :full)))))))
 
 (def ^:private project-root
   (str (fs/normalize (fs/path (System/getProperty "user.dir")))))
@@ -262,7 +364,7 @@
         source-file (fs/path tmp-dir "source.clj")
         original "(ns bench.retry)\n(def retry-policy {:delays [100 250 500]})\n"
         expression (str "(-> (form 'retry-policy) (match :delays) right "
-                        "(xray #(apply max (first %))))")]
+                        "(xray-one #(apply max %)))")]
     (try
       (spit (str source-file) original)
       (let [run (run-cli ":op" ":xray"
@@ -273,7 +375,10 @@
         (is (= :xray (:operation result)))
         (is (= 500 (:value result)))
         (is (= 1 (:match-count result)))
-        (is (= "[100 250 500]" (get-in result [:matches 0 :source])))
+        (is (nil? (get-in result [:matches 0 :source])))
+        (is (re-matches #"[0-9a-f]{64}"
+                        (get-in result [:matches 0 :source-hash])))
+        (is (re-matches #"[0-9a-f]{64}" (:selection-hash result)))
         (is (= original (slurp (str source-file))))
         (is (not (str/includes? (:out run) "#object"))))
       (finally
@@ -294,6 +399,8 @@
             result (edn/read-string (:out run))]
         (is (pos? (:exit run)) (:out run))
         (is (= expected (:error-type result)))
+        (is (str/includes? (:usage result) "clj-surgeon :op :xray"))
+        (is (< (count (:out run)) 1024))
         (is (not (str/includes? (:err run) "Exception")))))))
 
 (deftest xray-help-and-agent-surfaces-teach-the-computed-read-boundary
@@ -308,8 +415,12 @@
                   "help" help}]
     (is (contains? core/ops-registry :xray))
     (is (str/includes? global "clj-surgeon :op :xray"))
-    (is (= #{:file :expr} (set (keys (get-in core/ops-registry [:xray :args])))))
-    (is (every? :required (vals (get-in core/ops-registry [:xray :args]))))
+    (is (= #{:file :expr :evidence}
+           (set (keys (get-in core/ops-registry [:xray :args])))))
+    (is (every? :required
+                (map #(get-in core/ops-registry [:xray :args %])
+                     [:file :expr])))
+    (is (not (get-in core/ops-registry [:xray :args :evidence :required])))
     (doseq [[surface text] surfaces]
       (testing surface
         (is (str/includes? text ":xray"))
@@ -318,10 +429,10 @@
         (is (str/includes? text ":value"))
         (is (str/includes? (str/lower-case text) "never write"))))
     (doseq [surface ["README" "canonical skill" "legacy skill" "help"]]
-      (testing (str surface " teaches computed aggregation and singleton input")
+      (testing (str surface " teaches computed aggregation and exact-one input")
         (let [text (get surfaces surface)]
           (is (str/includes? text "frequencies"))
-          (is (str/includes? text "(first %)") surface))))
+          (is (str/includes? text "xray-one") surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

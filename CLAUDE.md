@@ -81,11 +81,15 @@ updates, and verification gates. It is not a chronological coding diary.
   significant: use `:up :outermost`, not `:outermost :up`. When the first outer
   guard is already known, anchor there directly because that route is shorter.
 - Use `:xray :expr` only when pure Clojure computation over selected values
-  removes a later shell command or manual reconstruction. The terminal
-  `(xray path pure-function)` receives a vector in match order. The command
-  returns computed `:value` beside exact matches, addresses, trace, and source
-  hash. It is read-only and never writes source or a plan. Use `:q` when no
-  computation is needed.
+  removes a later shell command or manual reconstruction. Use
+  `(xray-one path pure-function)` for an intended singular selection; it
+  receives that value directly and refuses zero or many. Generic `xray`
+  receives a vector in match order. The returned `:value` has compact
+  hash-backed evidence by default; add `:evidence :full` only when exact
+  selected source is required.
+  It is read-only and never writes source or a plan. Use `:q` when no
+  computation is needed. For a CLJC named form, pass `:clj` or `:cljs` to
+  `form`; never treat an unqualified branch ambiguity as absence.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already

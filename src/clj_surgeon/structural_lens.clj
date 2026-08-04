@@ -1,6 +1,7 @@
 (ns clj-surgeon.structural-lens
   "Exact, fail-closed structural search and replacement below a named form."
   (:require
+   [clj-surgeon.cljc.walk :as cwalk]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
    [clojure.edn :as edn]
@@ -181,11 +182,13 @@
 
         (= :form (first step))
         (when-not (and (zero? index)
-                       (= 2 (count step))
+                       (#{2 3} (count step))
                        (or (symbol? (second step))
                            (and (string? (second step))
-                                (not (str/blank? (second step))))))
-          (invalid-query! "[:form NAME] must be the first step and NAME must be a symbol or nonblank string"
+                                (not (str/blank? (second step)))))
+                       (or (= 2 (count step))
+                           (keyword? (nth step 2))))
+          (invalid-query! "[:form NAME] or [:form NAME PLATFORM] must be first; NAME is a symbol or nonblank string and PLATFORM is a keyword"
                           {:step-index index :step step}))
 
         (= :find (first step))
@@ -347,12 +350,30 @@
                       locations)
         by-location (into {} (map (fn [item]
                                     [(location-key (:zloc item)) item])
-                                  entries))]
+                                  entries))
+        walked (cwalk/top-level-forms-from-zloc root #{:clj :cljs})
+        walked-by-location (into {}
+                                 (map (fn [{:keys [zloc platforms]}]
+                                        [(location-key zloc) platforms]))
+                                 walked)
+        entries (mapv (fn [item]
+                        (if-let [platforms (get walked-by-location
+                                                (location-key (:zloc item)))]
+                          (assoc item :platforms platforms)
+                          item))
+                      entries)
+        by-location (into {} (map (fn [item]
+                                    [(location-key (:zloc item)) item])
+                                  entries))
+        ordinary-top-levels (top-level-locations root)
+        walked-top-levels (map :zloc walked)]
     {:entries entries
      :by-location by-location
-     :top-levels (vec (top-level-locations root))
-     :initial (into [] (keep #(get by-location (location-key %)))
-                    (top-level-locations root))}))
+     :top-levels (vec walked-top-levels)
+     :initial (unique-items
+               (into []
+                     (keep #(get by-location (location-key %)))
+                     (concat ordinary-top-levels walked-top-levels)))}))
 
 (defn- subtree-items [entries {:keys [address zloc]}]
   (let [subtree-size (count (zipper-locations (z/subzip zloc)))
@@ -396,7 +417,11 @@
       (outermost-items items)
 
       (= :form (first step))
-      (filter #(= (str (second step)) (defining-form-name (:zloc %))) items)
+      (let [[_ name platform] step]
+        (filter #(and (= (str name) (defining-form-name (:zloc %)))
+                      (or (nil? platform)
+                          (contains? (:platforms %) platform)))
+                items))
 
       (= :find (first step))
       (mapcat #(matching-descendants entries % (second step)) items)

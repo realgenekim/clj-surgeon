@@ -65,6 +65,8 @@ benchmark-clean-codex:
 
 test:
 	bb test/run_all.clj
+	bb bench/summarize_clean_codex.clj --self-test
+	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 
 outline:
 	bb -m clj-surgeon.core :op :outline :file $(FILE)

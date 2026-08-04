@@ -1,12 +1,9 @@
 ---
 name: clj-surgeon
 description: >-
-  Inspect and modify Clojure, ClojureScript, and CLJC structurally with the
-  clj-surgeon CLI. Use for outlines, exact form reads, peer navigation,
-  sibling-run enumeration, nested-form edits, dependency maps, extraction,
-  declare removal, moves, namespace renames, and deterministic CLJC operations.
-  Prefer it when textual reads or patches are ambiguous, formatting-sensitive,
-  or context-expensive.
+  Inspect and modify Clojure, ClojureScript, and CLJC structurally with the clj-surgeon CLI.
+  Use for outlines, form reads, peer navigation, nested edits, dependencies, extraction,
+  moves, renames, and CLJC operations when text is ambiguous or context-expensive.
 ---
 
 # clj-surgeon
@@ -68,12 +65,13 @@ pattern. A read reports zero, one, or many matches and a per-step count trace.
 Use `:xray` for counts, sums, frequencies, grouping, or other pure computation over selected source. Do not reconstruct those answers manually from `:q`:
 
 ```bash
-clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
 ```
 
-`xray` receives a vector of selected values. Use `(first values)` when one
-selected node is itself a collection. It keeps `:value` beside exact evidence
-and never writes. Use `:q` when no computation is needed.
+`xray-one` receives one intended value and refuses zero or many; generic `xray`
+receives a vector. The `:value` has compact hash evidence; use `:evidence :full`
+for source. It never writes. Use `:q` without computation. In CLJC, select a
+branch with `(form 'name :clj)` or `[:form name :cljs]`.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing

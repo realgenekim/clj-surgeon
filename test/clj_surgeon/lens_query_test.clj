@@ -108,6 +108,33 @@
       (is (= 100 (count (:matches result))))
       (is (true? (:matches-truncated? result))))))
 
+(deftest named-form-selection-sees-reader-conditional-branches
+  (let [source (slurp "test/fixtures/show_form_migration.cljc")
+        both (lens/evaluate-query source [[:form 'load-starred-post]])
+        clj (lens/evaluate-query source [[:form 'load-starred-post :clj]])
+        cljs (lens/evaluate-query source [[:form 'load-starred-post :cljs]])
+        absent (lens/evaluate-query source
+                                    [[:form 'load-starred-post :bb]])]
+    (is (= 2 (:match-count both)))
+    (is (= [30 37] (mapv :line (:matches both))))
+    (is (= [30] (mapv :line (:matches clj))))
+    (is (= [37] (mapv :line (:matches cljs))))
+    (is (zero? (:match-count absent)))
+    (is (= 7 (get-in both [:trace 0 :input-count])))
+    (is (= 2 (get-in both [:trace 0 :output-count]))))
+  (let [source (str "(ns branch.splice)\n"
+                    "(def shared :shared)\n"
+                    "#?@(:clj [(def branch-value :clj) (def clj-only true)] "
+                    ":cljs [(def branch-value :cljs)])\n")
+        shared (lens/evaluate-query source [[:form 'shared :cljs]])
+        both (lens/evaluate-query source [[:form 'branch-value]])
+        clj (lens/evaluate-query source [[:form 'branch-value :clj]])]
+    (is (= ["(def shared :shared)"] (mapv :source (:matches shared))))
+    (is (= ["(def branch-value :clj)" "(def branch-value :cljs)"]
+           (mapv :source (:matches both))))
+    (is (= ["(def branch-value :clj)"]
+           (mapv :source (:matches clj))))))
+
 (deftest invalid-query-matrix-refuses-with-stable-local-evidence
   (let [too-long (vec (repeat 33 :down))
         cases [{:label "nil" :query nil}
@@ -121,6 +148,8 @@
                 :query [[:find :finish] [:form 'transition]]
                 :step-index 1}
                {:label "malformed form" :query [[:form]] :step-index 0}
+               {:label "form platform must be a keyword"
+                :query [[:form 'transition "cljs"]] :step-index 0}
                {:label "malformed find" :query [[:find]] :step-index 0}
                {:label "where needs one map"
                 :query [[:where :vector]] :step-index 0}

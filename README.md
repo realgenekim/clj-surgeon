@@ -291,16 +291,23 @@ from `:q`. Keep `:q` as the shorter path for literal reads:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
+  :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
 ```
 
-The terminal `xray` function receives a vector of selected values in query
-order. A node match becomes one Clojure value. A span or partition match
-becomes a vector. Zero matches pass `[]`. One match still passes a one-element
-vector. The result returns computed `:value` beside the unchanged exact
-`:matches`, addresses, cardinality trace, and complete-file source hash.
-When one selected node is itself a collection, operate on `(first values)`;
-the outer vector represents the selection, not the source collection.
+Use `xray-one` when the path is intended to select exactly one node. It refuses
+zero or many matches before calling the analyzer and passes that node's Clojure
+value directly. Use generic `xray` to aggregate zero, one, or many selected
+values in query order; it receives a vector. A span or partition is one
+selected value represented as a vector.
+
+Compact evidence is the default. The result keeps `:value`, addresses, source
+ranges, cardinality trace, per-match hashes, a selection hash, and the
+complete-file hash without repeating selected source. Add `:evidence :full`
+when the exact selected source must accompany the computation.
+
+Named paths are CLJC-aware. `(form 'load-starred-post :cljs)` and the EDN step
+`[:form load-starred-post :cljs]` select one reader-conditional branch. Without
+a platform, duplicate branch-local definitions remain honest multiple matches.
 
 `:xray` uses the same sandboxed pure Clojure functions and structural builders
 as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
@@ -308,10 +315,12 @@ input, analyzer failure, lazy or non-EDN output, and output over 65,536
 characters. SCI does not expose I/O, processes, namespaces, mutable references,
 classes, or host interop.
 
-In the unprimed four-run checksum benchmark, `:xray` was exact in four of four
+In the initial unprimed four-run checksum keep gate, `:xray` was exact in four of four
 runs versus three of four before the feature. Median wall time fell 21%, shell
 calls 33%, input tokens 45%, and output tokens 43%. Routine literal reads still
-belong to `:q`. See the
+belong to `:q`. This established a compelling feature, not a local maximum;
+the [maximality audit](docs/plans/xray-maximality-audit.md) now compares compact
+X-ray with `:q | bb` and direct execution. See the original
 [experiment record](docs/observations/2026-08-04-captains-log-source-became-data.md).
 
 Make the same path an updater by ending it with `[:replace FORM]`:

@@ -62,6 +62,27 @@
     :else
     []))
 
+(defn top-level-forms-from-zloc
+  "Walk an existing tracked-position top-level zipper without reparsing it."
+  [zl default-platforms]
+  (loop [z zl out []]
+    (cond
+      (nil? z) out
+
+      (reader-cond? z)
+      (let [pairs (platform-pairs z)
+            splicing (splicing? z)
+            new-forms (mapcat (fn [[plat v]]
+                                (yield-from-value v #{plat} splicing))
+                              pairs)]
+        (recur (z/right z) (into out new-forms)))
+
+      (z/list? z)
+      (recur (z/right z) (conj out {:zloc z :platforms default-platforms}))
+
+      :else
+      (recur (z/right z) out))))
+
 (defn top-level-forms
   "Walk every top-level form in `src`, descending into reader conditionals.
    Returns vector of {:zloc <list-zloc>, :platforms <set>}.
@@ -70,21 +91,6 @@
    any reader conditional. Use `(platforms-for-extension ext)` to derive it
    from a file extension, or pass an explicit set."
   [src default-platforms]
-  (let [zl (z/of-string src {:track-position? true})]
-    (loop [z zl out []]
-      (cond
-        (nil? z) out
-
-        (reader-cond? z)
-        (let [pairs (platform-pairs z)
-              splicing (splicing? z)
-              new-forms (mapcat (fn [[plat v]]
-                                  (yield-from-value v #{plat} splicing))
-                                pairs)]
-          (recur (z/right z) (into out new-forms)))
-
-        (z/list? z)
-        (recur (z/right z) (conj out {:zloc z :platforms default-platforms}))
-
-        :else
-        (recur (z/right z) out)))))
+  (top-level-forms-from-zloc
+   (z/of-string src {:track-position? true})
+   default-platforms))

@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+counterbalanced_versions() {
+  local replicate=$1
+  local configured_versions=$2
+  if [ "$configured_versions" = "pre post" ] && ((replicate % 2 == 0)); then
+    printf '%s\n' "post pre"
+  else
+    printf '%s\n' "$configured_versions"
+  fi
+}
+
+if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
+  test "$(counterbalanced_versions 1 'pre post')" = "pre post"
+  test "$(counterbalanced_versions 2 'pre post')" = "post pre"
+  test "$(counterbalanced_versions 3 'post')" = "post"
+  printf '%s\n' "benchmark schedule self-test passed"
+  exit 0
+fi
+
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 pre_commit=${BENCH_PRE_COMMIT:-19a20b0}
 post_commit=${BENCH_POST_COMMIT:-80154bc}
@@ -622,7 +640,7 @@ for replicate in $(seq 1 "$replicates"); do
   for context in $contexts; do
     for task in $tasks; do
       order=$((order + 1))
-      for version in $versions; do
+      for version in $(counterbalanced_versions "$replicate" "$versions"); do
         schedule_run "$version" "$context" "$task" "$order" "$replicate"
         order=$((order + 1))
       done

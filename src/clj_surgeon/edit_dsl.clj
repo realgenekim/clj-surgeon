@@ -46,7 +46,7 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down outermost span partition-all replace
-    replace-span transform xray])
+    replace-span transform xray xray-one])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -63,14 +63,20 @@
    :structural-builders])
 
 (def ^:private expression-reference
-  ["(form name)"
+  ["(form name)" "(form name platform)"
    "(match path pattern)"
    "(where path predicates)"
    "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)"
    "(span path n)" "(partition-all path n)"
    "(replace path form)" "(replace-span path & forms)"
    "(transform path pure-function)"
-   "(xray path pure-function)"])
+   "(xray path pure-function)"
+   "(xray-one path pure-function)"])
+
+(def ^:private xray-expression-reference
+  (vec (remove #(or (str/starts-with? % "(replace")
+                    (str/starts-with? % "(transform"))
+               expression-reference)))
 
 (def ^:private max-expression-characters 32768)
 (def ^:private max-xray-result-characters 65536)
@@ -107,9 +113,11 @@
   (conj path [step value]))
 
 (defn form
-  "Start a query at the named top-level form."
-  [name]
-  [[:form name]])
+  "Start a query at the named top-level form, optionally on one CLJC platform."
+  ([name]
+   [[:form name]])
+  ([name platform]
+   [[:form name platform]]))
 
 (defn match
   "Append an exact structural find step."
@@ -193,6 +201,13 @@
    :query path
    :analyzer analyzer})
 
+(defn xray-one
+  "Compute from exactly one selected Clojure value; refuse zero or many."
+  [path analyzer]
+  (assoc (xray path analyzer)
+         :cardinality :one
+         :input-shape :selected-value))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -207,7 +222,8 @@
    'replace replace
    'replace-span replace-span
    'transform transform
-   'xray xray})
+   'xray xray
+   'xray-one xray-one})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -231,10 +247,11 @@
                    {:error-type :invalid-xray-expression
                     :reason reason
                     :expression expression
-                    :allowed-symbols allowed-symbols
+                    :allowed-symbol-count (count allowed-symbols)
                     :allowed-capabilities allowed-capabilities
-                    :allowed-forms expression-reference
-                    :remedy "Use one pure Clojure expression ending in (xray path pure-function). Run clj-surgeon :op :xray --help for the complete workflow."}
+                    :allowed-forms xray-expression-reference
+                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\""
+                    :remedy "Use one pure Clojure expression ending in (xray path pure-function) or (xray-one path pure-function)."}
                    cause))))
 
 (defn- evaluate-expression
@@ -330,11 +347,11 @@
       :else opts)))
 
 (def ^:private xray-allowed-arguments
-  #{:op :file :expr :help})
+  #{:op :file :expr :evidence :help})
 
 (defn prepare-xray-options
   "Compile :expr before source I/O and reject unsupported arguments."
-  [{:keys [file expr] :as opts}]
+  [{:keys [file expr evidence] :as opts}]
   (let [unsupported (->> (keys opts)
                          (remove xray-allowed-arguments)
                          sort
@@ -347,14 +364,26 @@
                    (str/join ", " (map #(str ":" (name %)) unsupported)))
        :error-type :unsupported-arguments
        :unsupported unsupported
-       :allowed (vec (sort xray-allowed-arguments))}
+       :allowed (vec (sort xray-allowed-arguments))
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\" [:evidence :full]"}
 
       (not (contains? opts :expr))
       {:operation :xray
        :file file
        :error "Supply :expr"
        :error-type :missing-xray-input
-       :missing [:expr]}
+       :missing [:expr]
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\""}
+
+      (and (contains? opts :evidence)
+           (not (#{:compact :full} evidence)))
+      {:operation :xray
+       :file file
+       :error ":evidence must be :compact or :full"
+       :error-type :invalid-evidence-mode
+       :evidence evidence
+       :allowed [:compact :full]
+       :usage "clj-surgeon :op :xray :file FILE :expr EXPR :evidence :full"}
 
       :else
       (try
@@ -362,6 +391,7 @@
             (dissoc :expr)
             (assoc :operation :xray
                    :expression expr
+                   :evidence (or evidence :compact)
                    :xray (compile-xray expr)))
         (catch Exception exception
           (assoc (ex-data exception)
@@ -407,16 +437,36 @@
              :error error)
       (dissoc :value)))
 
+(defn- compact-match
+  [match]
+  (-> (select-keys match [:path :tag :address :line :end-line :count
+                          :partition :inside])
+      (assoc :source-hash (structural-lens/source-hash (:source match)))))
+
+(defn- xray-evidence
+  [found mode]
+  (if (= :full mode)
+    found
+    (let [sources (mapv :source (:matches found))]
+      (cond-> (update found :matches #(mapv compact-match %))
+        (not (:matches-truncated? found))
+        (assoc :selection-hash
+               (structural-lens/source-hash (pr-str sources)))))))
+
 (defn evaluate-xray
   "Evaluate one read-only xray program against source. Pure: data in, EDN out."
-  [source {:keys [expression xray]}]
-  (let [{:keys [query analyzer]} xray
+  [source {:keys [expression xray evidence]}]
+  (let [{:keys [query analyzer cardinality input-shape]} xray
         found (structural-lens/evaluate-query source query)
-        evidence (-> found
+        evidence-mode (or evidence :compact)
+        evidence (-> (xray-evidence found evidence-mode)
                      (assoc :operation :xray
                             :expression expression
-                            :xray {:input-shape :selected-values
-                                   :input-count (:match-count found)}))]
+                            :xray {:input-shape (or input-shape
+                                                    :selected-values)
+                                   :input-count (:match-count found)
+                                   :cardinality (or cardinality :any)
+                                   :evidence evidence-mode}))]
     (cond
       (:error found)
       (assoc evidence :operation :xray :expression expression)
@@ -427,6 +477,14 @@
                          " matches; narrow it to at most "
                          structural-lens/query-result-limit))
 
+      (and (= :one cardinality)
+           (not= 1 (:match-count found)))
+      (-> (xray-refusal evidence expression :xray-cardinality-mismatch
+                        (str "X-ray expected exactly one match, found "
+                             (:match-count found)))
+          (assoc :expected-match-count 1
+                 :actual-match-count (:match-count found)))
+
       :else
       (let [values (try
                      (mapv match-value (:matches found))
@@ -435,8 +493,11 @@
           (xray-refusal evidence expression :xray-input-invalid
                         (str "Selected syntax cannot become Clojure data: "
                              (.getMessage ^Exception values)))
-          (let [value (try
-                        (analyzer values)
+          (let [analyzer-input (if (= :one cardinality)
+                                 (first values)
+                                 values)
+                value (try
+                        (analyzer analyzer-input)
                         (catch Exception exception exception))]
             (cond
               (instance? Exception value)

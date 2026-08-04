@@ -71,12 +71,13 @@ over selected source. Do not reconstruct those answers manually from `:q`:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
+  :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
 ```
 
-`xray` receives a vector of selected values. Use `(first values)` when one
-selected node is itself a collection. The result keeps computed `:value`
-beside exact evidence. It never writes. Use `:q` for literal reads.
+`xray-one` receives one intended value and refuses zero or many. Generic `xray`
+receives a vector for aggregation. The result keeps `:value` with compact
+hash-backed evidence; add `:evidence :full` for exact source. It never writes.
+Use `:q` for literal reads. In CLJC, pass a platform to `form` for one branch.
 
 End that same path with `[:replace FORM]` to emit one guarded plan:
 

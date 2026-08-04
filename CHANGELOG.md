@@ -11,10 +11,13 @@ is cut.
 ### Added
 
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
-  `(xray path pure-function)` returns bounded EDN `:value` beside exact matches,
-  addresses, trace, cardinality, and source hash. It never writes source or a
-  plan and refuses truncated evidence, analyzer failure, non-EDN results, and
-  oversized output.
+  `(xray-one path pure-function)` refuses zero or many matches and receives one
+  value directly; generic `(xray path pure-function)` aggregates a selection
+  vector. It returns `:value`; compact hash-backed evidence is the default and
+  full exact source is opt-in. Named selection now sees `#?`
+  and `#?@` branch-local forms and accepts an optional platform. X-ray never
+  writes source or a plan and refuses truncated evidence, analyzer failure,
+  non-EDN results, and oversized output.
 - `:edit :expr`, a sandboxed SCI authoring surface that gives agents pure
   `clojure.core` collection functions and structural builders. The expression
   compiles to the existing lens query, saves the unchanged hash-bound review
