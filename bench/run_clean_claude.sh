@@ -444,12 +444,13 @@ for terminal in "$result_dir"/*/terminal.tsv; do
     "$(terminal_field correct "$terminal")" >> "$result_dir/runs.tsv"
 done
 
+manifest_stage="$result_dir/MANIFEST.sha256.tmp.$$"
 (
   cd "$result_dir"
   find . -type f ! -name 'MANIFEST.sha256*' -print | LC_ALL=C sort \
     | while IFS= read -r file; do shasum -a 256 "$file"; done
-) > "$result_dir/MANIFEST.sha256.tmp.$BASHPID"
-mv "$result_dir/MANIFEST.sha256.tmp.$BASHPID" "$result_dir/MANIFEST.sha256"
+) > "$manifest_stage"
+mv "$manifest_stage" "$result_dir/MANIFEST.sha256"
 
 printf '%s\n' "Claude benchmark receipts: $result_dir"
 exit "$matrix_exit"

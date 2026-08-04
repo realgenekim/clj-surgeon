@@ -1,0 +1,6 @@
+{:artifact :claude-skill
+ :mode :stable-copy
+ :source-commit "b1aa20b1f77fe848356444e8d343755aafec0823"
+ :source-hash "f5beabfac7177cdf2c128af66a3eb1cf6d272d501e22ca83669b42a61b838b7a"
+ :destination "/Users/genekim/.claude/skills/clj-surgeon"
+ :package "/Users/genekim/.local/share/clj-surgeon/versions/b1aa20b1f77fe848356444e8d343755aafec0823/skill-f5beabfac7177cdf2c128af66a3eb1cf6d272d501e22ca83669b42a61b838b7a"}
