@@ -54,6 +54,35 @@ BENCH_REPLICATES=4 \
 make benchmark-clean-codex
 ```
 
+The `ops-registry-xray` task is the real irregular computed-read gate. It makes
+clj-surgeon analyze its own operation registry and independently scores category
+frequencies, required arguments, and paired operations. Compare the normal
+version-matched skill against the strongest composed baseline:
+
+```bash
+# Full-evidence release versus compact exact-one candidate.
+BENCH_PRE_COMMIT=fac340f \
+BENCH_POST_COMMIT=cd9244b \
+BENCH_TASKS=ops-registry-xray \
+BENCH_CONTEXTS=matched-skill \
+BENCH_INCLUDE_COMPACT=false \
+BENCH_REPLICATES=4 \
+make benchmark-clean-codex
+
+# One-command structural read piped to Babashka.
+BENCH_PRE_COMMIT=fac340f \
+BENCH_POST_COMMIT=cd9244b \
+BENCH_VERSIONS=pre \
+BENCH_TASKS=ops-registry-xray \
+BENCH_CONTEXTS=pipeline-skill \
+BENCH_INCLUDE_COMPACT=false \
+BENCH_REPLICATES=4 \
+make benchmark-clean-codex
+```
+
+Efficiency medians include only correct, unchanged-source runs. Replicates
+counterbalance pre/post scheduling while retaining parallel execution.
+
 Resume a stopped result directory without rerunning completed rows:
 
 ```bash

@@ -77,6 +77,8 @@ PATH="$setup_root/bin/post:$PATH" clj-surgeon --help >/dev/null
 
 git -C "$repo_root" show "$pre_commit:src/clj_surgeon/core.clj" \
   > "$setup_root/templates/core.clj"
+git -C "$repo_root" show "$post_commit:src/clj_surgeon/core.clj" \
+  > "$setup_root/templates/ops_registry.clj"
 git -C "$repo_root" show "$post_commit:bench/fixtures/bench/pair_view.clj" \
   > "$setup_root/templates/pair_view.clj"
 
@@ -280,6 +282,9 @@ task_prompt() {
     xray-checksum)
       printf '%s' 'In src/bench/xray.clj, compute this checksum over the :events vector inside checksum-report. In source order with indexes starting at 1, multiply index * :points * category weight, where :deny is 3, :allow is 5, and :review is 7. Sum those products and take modulo 1000003. Ignore :unrelated-event. Do not modify files or read the whole file. Your final answer must be exactly one integer with no prose or code fence.'
       ;;
+    ops-registry-xray)
+      printf '%s' 'In src/bench/ops_registry.clj, analyze the hash-map inside ops-registry. Return category frequencies, the total number of argument specs whose :required value is true, and the sorted operation keywords whose specs contain :pair. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with keys :category-frequencies, :required-arg-count, and :paired-ops, with no prose or code fence.'
+      ;;
     *)
       echo "Unknown task: $task" >&2
       exit 2
@@ -296,6 +301,7 @@ target_for_task() {
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
     case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
     xray-summary|xray-checksum) printf '%s' 'src/bench/xray.clj' ;;
+    ops-registry-xray) printf '%s' 'src/bench/ops_registry.clj' ;;
   esac
 }
 
@@ -325,6 +331,9 @@ prepare_workspace() {
     xray-summary|xray-checksum)
       cp "$setup_root/templates/xray.clj" "$workspace/src/bench/xray.clj"
       ;;
+    ops-registry-xray)
+      cp "$setup_root/templates/ops_registry.clj" "$workspace/src/bench/ops_registry.clj"
+      ;;
   esac
 }
 
@@ -347,6 +356,11 @@ install_treatment_skill() {
       mkdir -p "$codex_home/skills/clj-surgeon"
       cp "$repo_root/bench/compact-v2-clj-surgeon-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon/SKILL.md"
+      ;;
+    pipeline-skill)
+      mkdir -p "$codex_home/skills/clj-surgeon-q-bb"
+      cp "$repo_root/bench/q-bb-skill/SKILL.md" \
+        "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
     no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill) ;;
     *)
@@ -563,6 +577,10 @@ run_one() {
       exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= 358967 (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
       correct=$exact_correct
       ;;
+    ops-registry-xray)
+      exact_correct=$(bb "$repo_root/bench/score_ops_registry.clj" "$target" "$run_dir/final.txt") || exact_correct=false
+      correct=$exact_correct
+      ;;
     case-edit)
       if cmp -s "$target" "$setup_root/expected/state.clj"; then
         exact_correct=true
@@ -585,6 +603,11 @@ run_one() {
       diff -u "$setup_root/templates/peer_edit.clj" "$target" > "$run_dir/target.diff" || true
       ;;
   esac
+
+  if [[ "$task" != *-edit ]] && [ "$final_sha" != "$start_sha" ]; then
+    exact_correct=false
+    correct=false
+  fi
 
   local row lock_dir
   printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
