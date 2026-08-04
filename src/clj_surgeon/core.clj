@@ -565,6 +565,7 @@
                        :args      {:file     {:required true :desc "Clojure source file; never modified by this command"}
                                    :query    {:desc "EDN lens pipeline ending in [:replace FORM] or [:replace-span FORM ...]; supply exactly one of :query and :expr"}
                                    :expr     {:desc "Sandboxed pure Clojure edit program; supply exactly one of :query and :expr"}
+                                   :expect   {:desc "Optional declared before-state: exactly one Clojure form. When it structurally equals the selected form, this command saves the plan and applies it in the same call; any difference refuses"}
                                    :plan-out {:required true :desc "New or replaceable EDN review artifact; must not alias :file"}}
                        :workflow  ["Supply exactly one of :query and :expr. Use :expr for pure Clojure collection composition through sandboxed SCI."
                                    "Use (transform path pure-function) when the replacement must be derived from the selected form. The function runs only after exact-one selection; the saved plan contains only its concrete replacement."
@@ -573,14 +574,18 @@
                                    "When a named form plus an exact key, guard, map key, or binding identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
                                    "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
                                    "Do not preflight whether :plan-out exists. A successful plan atomically replaces that artifact; any refusal preserves it."
-                                   "Review the returned selector, one edit, diff, source hash, and result hash."
+                                   "Review the returned selector, one edit, diff, source hash, and result hash. The command already returns the review evidence; do not reread the saved plan file."
                                    "When the diff is exact, apply that saved plan with :replace-subform!; never reproduce it with apply_patch, a text edit, or a second equivalent plan."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
+                                   ":expect is optional; without it the default flow is unchanged: plan first, review, then apply separately."
+                                   "With :expect FORM the command is one guarded call: it compares the selected form with FORM structurally, ignoring whitespace and comments, then saves the plan and applies it only on equality."
+                                   "A different selection refuses with :expect-mismatch, returns :expected, :actual, and :actual-source, and leaves the source bytes and any existing plan artifact unchanged."
                                    "Unknown flags, getter-only queries, ambiguous targets, and source/plan path aliasing refuse without changing source or an existing plan."]
                        :examples  ["clj-surgeon :op :edit :file src/policy.clj :expr \"(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))\" :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"
+                                   "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :expect \"(assoc state :status :done)\" :plan-out plan.edn"
                                    "clj-surgeon :op :replace-subform! :plan plan.edn"]
                        :category  :write}
 
@@ -753,7 +758,7 @@
                        :desc      "Apply a previously emitted structural replacement plan"
                        :args      {:plan {:required true :desc "EDN plan file from :replace-subform"}}
                        :workflow  ["Run plan generation as a separate command; never chain it with application."
-                                   "Review the saved plan and its diff before application."
+                                   "Before this command, review the evidence returned by plan generation; do not reopen the saved plan only to repeat that review."
                                    "Apply the reviewed plan directly with :replace-subform!."
                                    "A successful receipt includes :verified read-back hash and whole-file parse evidence; the reviewed plan is the edit-level diff, so do not repeat those checks with rg, show-form, git diff, or shasum."
                                    "When the task asks only to verify this exact edit, the reviewed plan plus successful receipt completes that request; do not probe for a Git worktree merely to repeat it."
@@ -959,7 +964,7 @@
                  (partition 2)
                  (map (fn [[k v]]
                         (let [key (keyword (subs k 1))]
-                          [key (if (#{:match :with :contains :query :expr} key) v (parse-val v))])))
+                          [key (if (#{:match :with :contains :query :expr :expect} key) v (parse-val v))])))
                  (into {}))
       has-help? (assoc :help true))))
 

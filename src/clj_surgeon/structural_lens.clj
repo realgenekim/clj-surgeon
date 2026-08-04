@@ -9,6 +9,8 @@
    [clojure.pprint :as pprint]
    [clojure.set :as set]
    [clojure.string :as str]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z])
   (:import
    (java.security MessageDigest)))
@@ -294,9 +296,9 @@
 
 (defn- semantic-span [{:keys [by-location]} {:keys [zloc]} span-count]
   (let [zlocs (->> (iterate z/right zloc)
-                (take span-count)
-                (take-while some?)
-                vec)]
+                   (take span-count)
+                   (take-while some?)
+                   vec)]
     (when (= span-count (count zlocs))
       (let [items (mapv #(get by-location (location-key %)) zlocs)]
         (when (every? some? items)
@@ -308,22 +310,22 @@
 
 (defn- semantic-partitions [{:keys [by-location]} {:keys [zloc]} size]
   (->> (iterate z/right zloc)
-    (take-while some?)
-    (partition-all size)
-    (map-indexed
-      (fn [index zlocs]
-        (let [zlocs (vec zlocs)
-              items (mapv #(get by-location (location-key %)) zlocs)]
-          (when (every? some? items)
-            {:kind :span
-             :zloc (first zlocs)
-             :zlocs zlocs
-             :address (:address (first items))
-             :addresses (mapv :address items)
-             :partition {:size size
-                         :index index
-                         :complete? (= size (count zlocs))}}))))
-    (keep identity)))
+       (take-while some?)
+       (partition-all size)
+       (map-indexed
+         (fn [index zlocs]
+           (let [zlocs (vec zlocs)
+                 items (mapv #(get by-location (location-key %)) zlocs)]
+             (when (every? some? items)
+               {:kind :span
+                :zloc (first zlocs)
+                :zlocs zlocs
+                :address (:address (first items))
+                :addresses (mapv :address items)
+                :partition {:size size
+                            :index index
+                            :complete? (= size (count zlocs))}}))))
+       (keep identity)))
 
 (defn- raw-span-source [zlocs]
   (let [end-key (location-key (last zlocs))]
@@ -738,7 +740,7 @@
         (:error found) found
         (not= 1 match-count)
         (assoc found :error (str "Expected exactly one match, found " match-count)
-                     :error-type (if (zero? match-count) :no-match :ambiguous-match))
+               :error-type (if (zero? match-count) :no-match :ambiguous-match))
         :else
         (let [selector {:inside (:inside found) :match (:match found)
                         :expected-match-count 1}]
@@ -802,7 +804,7 @@
 
 (def edit-allowed-arguments
   "CLI arguments accepted by the plan-only :edit facade."
-  #{:op :file :query :plan-out})
+  #{:op :file :query :plan-out :expect})
 
 (defn evaluate-edit
   "Pure plan-only facade over evaluate-lens. Successful getter-only queries
@@ -838,6 +840,80 @@
                                      [:replace-span 'form '...]]}}
           result)))))
 
+(defn- read-form-nodes
+  "Every complete form node in source, with whitespace and comment nodes
+   dropped. One reader for both sides of an :expect comparison."
+  [source]
+  (->> (node/children (parser/parse-string-all source))
+       (remove node/whitespace-or-comment?)
+       vec))
+
+(defn- read-all-forms
+  "Every complete form in source, as Clojure data. Whitespace and comments
+   are not represented, so this is the whitespace-insensitive reading."
+  [source]
+  (mapv node/sexpr (read-form-nodes source)))
+
+(defn parse-expect
+  "Parse the caller's declared before-state into exactly one Clojure form.
+   Pure: a source string (or an already-read form) in, data out. Returns
+   {:expect FORM :expect-source SOURCE} or a refusal carrying
+   :error-type :invalid-expect for zero forms, several forms, or a reader
+   error."
+  [expect]
+  (let [source (if (string? expect) expect (pr-str expect))]
+    (try
+      (let [nodes (read-form-nodes source)]
+        (if (= 1 (count nodes))
+          {:expect (node/sexpr (first nodes))
+           :expect-source (node/string (first nodes))}
+          {:error (str ":expect must contain exactly one complete form; found "
+                       (count nodes))
+           :error-type :invalid-expect
+           :form-count (count nodes)}))
+      (catch Exception exception
+        {:error (str "Invalid :expect: " (.getMessage exception))
+         :error-type :invalid-expect}))))
+
+(defn expect-comparison
+  "Compare a parsed :expect form with a plan edit's selected source.
+   Pure: form plus source string in, data out. Equality is structural:
+   both sides are read with the same reader, so whitespace and comments in
+   the source cannot change the verdict. A selection that is not exactly
+   one form (a :replace-span selection) never matches a single :expect."
+  [expect-form before-source]
+  (let [forms (try (read-all-forms before-source)
+                   (catch Exception _ nil))
+        one? (= 1 (count forms))
+        actual (if one? (first forms) (vec forms))]
+    (cond-> {:match? (boolean (and one? (= expect-form actual)))
+             :expected expect-form
+             :actual actual
+             :actual-source before-source}
+      (not one?) (assoc :actual-form-count (count forms)))))
+
+(defn expect-mismatch-result
+  "Structured refusal for a plan whose selection differs from :expect.
+   Pure: plan and comparison in, refusal map out. No plan is saved and no
+   source byte changes, so the caller can re-declare :expect and retry."
+  [plan comparison]
+  (let [edit (first (:edits plan))]
+    (cond-> {:operation :edit
+             :file (:file plan)
+             :mode :expect-guarded
+             :error ":expect does not match the selected form; no plan was saved and no bytes changed"
+             :error-type :expect-mismatch
+             :expected (:expected comparison)
+             :actual (:actual comparison)
+             :actual-source (:actual-source comparison)
+             :selector (:selector plan)
+             :source-hash (:source-hash plan)}
+      (:line edit) (assoc :line (:line edit))
+      (:actual-form-count comparison)
+      (assoc :actual-form-count (:actual-form-count comparison)))))
+
+(declare execute-plan!)
+
 (defn- write-plan-file [plan plan-out]
   (try
     (file-ops/atomic-write! plan-out (with-out-str (pprint/pprint plan)))
@@ -850,10 +926,38 @@
 (defn- canonical-path [file]
   (.getCanonicalPath (io/file file)))
 
+(defn- apply-guarded-plan
+  "Apply an already-saved plan through the shared :replace-subform! executor
+   and merge the plan evidence with its receipt."
+  [saved-plan]
+  (let [receipt (execute-plan! {:plan saved-plan})]
+    (if (:error receipt)
+      (assoc receipt
+             :mode :expect-guarded
+             :plan-out (:plan-out saved-plan))
+      (assoc (merge saved-plan receipt) :mode :expect-guarded))))
+
+(defn- guarded-edit
+  "Save and apply one plan whose selection equals the declared :expect form.
+   A mismatch refuses before the plan artifact is written."
+  [plan {:keys [expect expect-source]} plan-out]
+  (let [comparison (expect-comparison expect (:before (first (:edits plan))))]
+    (if-not (:match? comparison)
+      (assoc (expect-mismatch-result plan comparison)
+             :plan-out plan-out
+             :expect-source expect-source)
+      (let [saved (write-plan-file plan plan-out)]
+        (if (:error saved)
+          saved
+          (apply-guarded-plan saved))))))
+
 (defn edit-file-with-evaluator
-  "Plan one edit with evaluator after path checks and the single source read."
-  [{:keys [file plan-out] :as opts} evaluator]
-  (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))]
+  "Plan one edit with evaluator after path checks and the single source read.
+   With :expect, the plan is also applied in the same invocation once the
+   selection structurally equals the declared form."
+  [{:keys [file plan-out expect] :as opts} evaluator]
+  (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))
+        parsed-expect (when (contains? opts :expect) (parse-expect expect))]
     (cond
       unsupported
       (evaluate-edit "" opts)
@@ -865,12 +969,21 @@
        :error ":plan-out must not resolve to the source file"
        :error-type :plan-overwrites-source}
 
+      (:error parsed-expect)
+      (assoc parsed-expect
+             :operation :edit
+             :file file
+             :plan-out plan-out
+             :expect expect)
+
       :else
       (try
         (let [plan (evaluator (slurp file) opts)]
           (if (and (#{:replace-subform :replace-span} (:operation plan))
                    (nil? (:error plan)))
-            (write-plan-file plan plan-out)
+            (if parsed-expect
+              (guarded-edit plan parsed-expect plan-out)
+              (write-plan-file plan plan-out))
             plan))
         (catch Exception e
           {:operation :edit

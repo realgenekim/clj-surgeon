@@ -65,8 +65,8 @@
     (let [case-query [[:form 'transition] [:find :finish] :up]
           parent (first (:matches (lens/evaluate-query target-source case-query)))
           head (first (:matches
-                        (lens/evaluate-query target-source
-                                             (conj case-query :down))))]
+                       (lens/evaluate-query target-source
+                                            (conj case-query :down))))]
       (is (= :list (:tag parent)))
       (is (str/starts-with? (:source parent) "(case event"))
       (is (= "case" (:source head)))))
@@ -268,9 +268,9 @@
   (let [source (slurp "src/clj_surgeon/core.clj")
         result (lens/evaluate-query source
                                     [[:form 'parse-args]
-                                     [:find #{:match :with :contains :query :expr}]])]
+                                     [:find #{:match :with :contains :query :expr :expect}]])]
     (is (= 1 (:match-count result)))
-    (is (= "#{:match :with :contains :query :expr}"
+    (is (= "#{:match :with :contains :query :expr :expect}"
            (-> result :matches first :source)))
     (is (= "parse-args" (-> result :matches first :inside)))))
 
@@ -380,8 +380,8 @@
 
 (defn- run-cli [& args]
   @(proc/process
-     (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+    (into ["bb" "-m" "clj-surgeon.core"] args)
+    {:dir project-root :err :string :out :string}))
 
 (deftest cli-lens-and-q-read-plan-and-apply-the-documented-expression
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon q "})

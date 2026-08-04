@@ -102,14 +102,14 @@
     (is (str/includes? help "exactly one of :query and :expr"))
     (is (str/includes? help "(-> (form 'transition)"))
     (is (str/includes? help ":replace-subform!"))
-    (is (= #{:file :query :expr :plan-out}
+    (is (= #{:file :query :expr :expect :plan-out}
            (set (keys (get-in core/ops-registry [:edit :args])))))
     (is (every? :required
                 (map #(get-in core/ops-registry [:edit :args %])
                      [:file :plan-out])))
     (is (not-any? :required
                   (map #(get-in core/ops-registry [:edit :args %])
-                       [:query :expr])))))
+                       [:query :expr :expect])))))
 
 (deftest agent-facing-surfaces-teach-the-native-edit-boundary
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))
@@ -339,5 +339,307 @@
           (is (= :missing-arguments (:error-type refusal)))
           (is (= [:plan-out] (:missing refusal)))
           (is (= edit-source (slurp (str source-file))))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+;; ============================================================
+;; :expect — the optional one-call guarded edit
+;; Every row of docs/plans/expect-guarded-edit.md is named below.
+;; ============================================================
+
+(def expect-replacement-expr
+  "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))")
+
+(def true-expect
+  "The selected form as it really reads in edit-source."
+  "(assoc state :status :done)")
+
+(def audit-payload-expect
+  "The 2026-08-04 field trap: a caller's belief that is not the source."
+  "(assoc state :status :done :audit (:audit payload))")
+
+(def pre-existing-plan "{:existing :review}\n")
+
+(defn- with-expect-workspace
+  "A temp dir holding the benchmark source and a pre-existing plan artifact."
+  [f]
+  (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect "})]
+    (try
+      (let [source-file (str (fs/path dir "source.clj"))
+            plan-file (str (fs/path dir "plan.edn"))]
+        (spit source-file edit-source)
+        (spit plan-file pre-existing-plan)
+        (f {:dir dir :source-file source-file :plan-file plan-file}))
+      (finally
+        (fs/delete-tree dir)))))
+
+(deftest expect-row-1-omitting-expect-is-todays-plan-only-behavior
+  (doseq [[label route] [["query" {:query node-query}]
+                         ["expr" {:expr expect-replacement-expr}]]]
+    (testing label
+      (with-expect-workspace
+        (fn [{:keys [source-file plan-file]}]
+          (let [result (core/run-edit (merge {:file source-file
+                                              :plan-out plan-file}
+                                             route))]
+            (is (= :replace-subform (:operation result)))
+            (is (nil? (:mode result)))
+            (is (nil? (:ok result)))
+            (is (nil? (:verified result)))
+            (is (= edit-source (slurp source-file))
+                "plan-only never changes source bytes")
+            (is (= (dissoc result :plan-out)
+                   (edn/read-string (slurp plan-file))))))))))
+
+(deftest expect-rows-2-and-3-matching-expect-saves-and-applies-in-one-call
+  (doseq [[label route] [["row 2: :expr route" {:expr expect-replacement-expr}]
+                         ["row 3: :query route" {:query node-query}]]]
+    (testing label
+      (with-expect-workspace
+        (fn [{:keys [source-file plan-file]}]
+          (let [result (core/run-edit (merge {:file source-file
+                                              :plan-out plan-file
+                                              :expect true-expect}
+                                             route))
+                source (slurp source-file)
+                saved (edn/read-string (slurp plan-file))]
+            (testing "one receipt carries the plan evidence and the apply proof"
+              (is (nil? (:error result)))
+              (is (true? (:ok result)))
+              (is (= :expect-guarded (:mode result)))
+              (is (= :replace-subform! (:operation result)))
+              (is (= :replace-subform (:planned-operation result)))
+              (is (= {:whole-file-parsed true
+                      :atomic-write true
+                      :read-back-hash (:result-hash result)}
+                     (:verified result)))
+              (is (= (first (:edits result)) (:applied-edit result)))
+              (is (= 1 (:plan-version result)))
+              (is (= 1 (:match-count result)))
+              (is (some? (:selector result)))
+              (is (some? (:diff result)))
+              (is (= plan-file (:plan-out result))))
+            (testing "the file changed exactly once and comments survive"
+              (is (= 1 (count (re-seq #"status :complete" source))))
+              (is (= 1 (count (re-seq #"status :done" source)))
+                  "the unrelated duplicate is untouched")
+              (is (str/includes?
+                    source
+                    ";; Keep this audit comment attached to the result.")))
+            (testing "the saved plan remains the audit artifact"
+              (is (= :replace-subform (:operation saved)))
+              (is (= (:result-hash result) (:result-hash saved)))
+              (is (= (:source-hash result) (:source-hash saved)))
+              (is (= (:result-hash saved)
+                     (lens/source-hash source))))))))))
+
+(deftest expect-row-4-mismatch-refuses-and-changes-nothing
+  (with-expect-workspace
+    (fn [{:keys [source-file plan-file]}]
+      (let [result (core/run-edit {:file source-file
+                                   :expr expect-replacement-expr
+                                   :plan-out plan-file
+                                   :expect audit-payload-expect})]
+        (is (= :expect-mismatch (:error-type result)))
+        (is (= :edit (:operation result)))
+        (is (= :expect-guarded (:mode result)))
+        (is (= '(assoc state :status :done :audit (:audit payload))
+               (:expected result)))
+        (is (= '(assoc state :status :done) (:actual result)))
+        (is (= "(assoc state :status :done)" (:actual-source result)))
+        (is (nil? (:ok result)))
+        (is (nil? (:verified result)))
+        (is (= edit-source (slurp source-file))
+            "row 4 leaves the source bytes unchanged")
+        (is (= pre-existing-plan (slurp plan-file))
+            "row 4 preserves a pre-existing plan artifact")))))
+
+(deftest expect-row-5-unparseable-expect-refuses-before-source-or-plan-io
+  (doseq [[label expect] [["zero forms" "   "]
+                          ["comment only" ";; nothing to declare\n"]
+                          ["two forms" ":finish (assoc state :status :done)"]
+                          ["reader error" "(assoc state :status"]]]
+    (testing label
+      (with-expect-workspace
+        (fn [{:keys [dir source-file plan-file]}]
+          (let [missing (str (fs/path dir "missing.clj"))
+                result (core/run-edit {:file missing
+                                       :expr expect-replacement-expr
+                                       :plan-out plan-file
+                                       :expect expect})]
+            (is (= :invalid-expect (:error-type result)))
+            (is (= :edit (:operation result)))
+            (is (= expect (:expect result)))
+            (is (not (fs/exists? missing))
+                "the refusal precedes the source read")
+            (is (= pre-existing-plan (slurp plan-file)))
+            (is (= edit-source (slurp source-file)))))))))
+
+(deftest expect-row-6-selection-refusals-keep-their-existing-error-types
+  (doseq [[label query expected]
+          [["zero matches" [[:find :absent] [:replace :done]] :no-match]
+           ["ambiguous matches"
+            [[:find '(assoc state :status :done)]
+             [:replace '(assoc state :status :complete)]]
+            :ambiguous-match]]]
+    (testing label
+      (with-expect-workspace
+        (fn [{:keys [source-file plan-file]}]
+          (let [result (core/run-edit {:file source-file
+                                       :query query
+                                       :plan-out plan-file
+                                       :expect true-expect})]
+            (is (= expected (:error-type result)))
+            (is (not= :expect-mismatch (:error-type result)))
+            (is (= edit-source (slurp source-file)))
+            (is (= pre-existing-plan (slurp plan-file)))))))))
+
+(deftest expect-row-7-getter-only-pipeline-keeps-the-existing-refusal
+  (with-expect-workspace
+    (fn [{:keys [source-file plan-file]}]
+      (let [result (core/run-edit {:file source-file
+                                   :query [[:find :finish]]
+                                   :plan-out plan-file
+                                   :expect true-expect})]
+        (is (= :edit-requires-transform (:error-type result)))
+        (is (= :q (get-in result [:remedy :read-operation])))
+        (is (= edit-source (slurp source-file)))
+        (is (= pre-existing-plan (slurp plan-file)))))))
+
+(def comment-laden-source
+  "(ns bench.expect)\n\n(defn transition [state event]\n  (case event\n    :finish\n    (assoc    state\n      ;; the status key must survive review\n      :status\n\n      :done)\n    state))\n")
+
+(deftest expect-row-8-source-comments-and-whitespace-do-not-defeat-equality
+  (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect ws "})]
+    (try
+      (let [source-file (str (fs/path dir "source.clj"))
+            plan-file (str (fs/path dir "plan.edn"))]
+        (spit source-file comment-laden-source)
+        (let [result (core/run-edit {:file source-file
+                                     :expr expect-replacement-expr
+                                     :plan-out plan-file
+                                     :expect true-expect})
+              source (slurp source-file)]
+          (is (true? (:ok result)))
+          (is (= :expect-guarded (:mode result)))
+          (is (str/includes? (get-in result [:edits 0 :before])
+                             ";; the status key must survive review")
+              "the selected bytes really did contain a comment")
+          (is (str/includes? source "(assoc state :status :complete)"))
+          (is (not (str/includes? source ":done")))))
+      (finally
+        (fs/delete-tree dir)))))
+
+(deftest expect-row-9-apply-failure-keeps-the-existing-executor-refusal
+  (let [dir (fs/create-temp-dir {:prefix "clj surgeon expect apply "})
+        source-dir (fs/path dir "readonly")
+        source-file (str (fs/path source-dir "source.clj"))
+        plan-file (str (fs/path dir "plan.edn"))]
+    (try
+      (fs/create-dir source-dir)
+      (spit source-file edit-source)
+      (.setWritable (java.io.File. (str source-dir)) false false)
+      (let [result (core/run-edit {:file source-file
+                                   :expr expect-replacement-expr
+                                   :plan-out plan-file
+                                   :expect true-expect})]
+        (is (:error result))
+        (is (= :atomic-write-failed (:error-type result)))
+        (is (= :expect-guarded (:mode result)))
+        (is (nil? (:ok result)))
+        (is (= edit-source (slurp source-file))
+            "the atomic write never partially replaced the target")
+        (is (= :replace-subform
+               (:operation (edn/read-string (slurp plan-file))))
+            "the audit artifact is saved before the apply attempt"))
+      (finally
+        (.setWritable (java.io.File. (str source-dir)) true false)
+        (fs/delete-tree dir)))))
+
+(deftest expect-help-documents-the-optional-one-call-guarded-edit
+  (let [help (core/format-op-help :edit (get core/ops-registry :edit))]
+    (is (str/includes? help ":expect"))
+    (is (str/includes? help "PLAN ONLY"))
+    (is (str/includes? help "never changes source"))
+    (is (str/includes?
+          help
+          ":expect is optional; without it the default flow is unchanged"))
+    (is (str/includes? help ":expect-mismatch"))
+    (is (str/includes? help ":actual-source"))
+    (is (some #(and (str/includes? % ":expect")
+                    (str/includes? % ":plan-out plan.edn"))
+              (get-in core/ops-registry [:edit :examples]))
+        "one documented example shows the guarded invocation")))
+
+(deftest parse-args-preserves-the-expect-form-verbatim
+  (let [expect "(assoc state :status :done)"]
+    (is (= expect
+           (:expect (core/parse-args [":op" ":edit" ":expect" expect]))))
+    (is (= "[100 250 500]"
+           (:expect (core/parse-args [":op" ":edit" ":expect" "[100 250 500]"])))
+        "a vector selection stays the caller's exact source text")))
+
+(defn- documented-expect-example []
+  (first (filter #(str/includes? % ":expect")
+                 (get-in core/ops-registry [:edit :examples]))))
+
+(deftest cli-expect-guarded-edit-refuses-then-applies-in-one-documented-call
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon cli expect "})
+        source-file (str (fs/path tmp-dir "source.clj"))
+        plan-file (str (fs/path tmp-dir "plan.edn"))
+        missing-file (str (fs/path tmp-dir "missing.clj"))]
+    (try
+      (spit source-file edit-source)
+      (spit plan-file pre-existing-plan)
+      (testing "row 5: an unparseable :expect exits nonzero before any I/O"
+        (doseq [expect ["   " ":finish (assoc state :status :done)" "(assoc state"]]
+          (let [result (run-cli ":op" ":edit"
+                                ":file" missing-file
+                                ":expr" expect-replacement-expr
+                                ":expect" expect
+                                ":plan-out" plan-file)
+                refusal (edn/read-string (:out result))]
+            (is (pos? (:exit result)) (:out result))
+            (is (= :invalid-expect (:error-type refusal)))
+            (is (not (str/includes? (:err result) "Exception")))
+            (is (not (fs/exists? missing-file)))
+            (is (= pre-existing-plan (slurp plan-file))))))
+      (testing "row 4: a mismatched :expect exits nonzero and changes nothing"
+        (let [result (run-cli ":op" ":edit"
+                              ":file" source-file
+                              ":expr" expect-replacement-expr
+                              ":expect" audit-payload-expect
+                              ":plan-out" plan-file)
+              refusal (edn/read-string (:out result))]
+          (is (pos? (:exit result)) (:out result))
+          (is (= :expect-mismatch (:error-type refusal)))
+          (is (= '(assoc state :status :done) (:actual refusal)))
+          (is (= '(assoc state :status :done :audit (:audit payload))
+                 (:expected refusal)))
+          (is (= "(assoc state :status :done)" (:actual-source refusal)))
+          (is (= edit-source (slurp source-file)))
+          (is (= pre-existing-plan (slurp plan-file)))))
+      (testing "row 2: the documented invocation applies and verifies in one call"
+        (let [example (documented-expect-example)]
+          (is (str/includes? example ":op :edit"))
+          (is (str/includes? example ":expect"))
+          (let [result (run-cli ":op" ":edit"
+                                ":file" source-file
+                                ":expr" expect-replacement-expr
+                                ":expect" true-expect
+                                ":plan-out" plan-file)
+                receipt (edn/read-string (:out result))
+                source (slurp source-file)
+                saved (edn/read-string (slurp plan-file))]
+            (is (zero? (:exit result)) (:err result))
+            (is (true? (:ok receipt)))
+            (is (= :expect-guarded (:mode receipt)))
+            (is (= :replace-subform! (:operation receipt)))
+            (is (= (:result-hash receipt)
+                   (get-in receipt [:verified :read-back-hash])))
+            (is (true? (get-in receipt [:verified :whole-file-parsed])))
+            (is (= 1 (count (re-seq #"status :complete" source))))
+            (is (= 1 (count (re-seq #"status :done" source))))
+            (is (= (:result-hash receipt) (:result-hash saved))))))
       (finally
         (fs/delete-tree tmp-dir)))))

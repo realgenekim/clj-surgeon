@@ -442,6 +442,28 @@ Do not preflight whether the task-specific `:plan-out` path exists. A
 successful plan atomically replaces that artifact. A refusal leaves an existing
 plan unchanged.
 
+`:expect` is the optional one-call guarded form. It is the caller's declared
+before-state: exactly one Clojure form, compared structurally—whitespace and
+comments cannot change the verdict—against the selected form. On equality
+`:edit` saves the plan and applies it in the same invocation, returning the plan
+evidence merged with the verified apply receipt and `:mode :expect-guarded`. On
+any difference it exits nonzero with `:error-type :expect-mismatch`, reports
+`:expected`, `:actual`, and `:actual-source`, and leaves both the source bytes
+and an existing plan artifact untouched:
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
+  :expect "(assoc state :status :done)" \
+  :plan-out plan.edn
+```
+
+Without `:expect` nothing changes: `:edit` stays plan-only and the documented
+default remains plan first, review, then apply separately with
+`:replace-subform!`. `:expect` mechanizes that review gate rather than removing
+it—the saved plan is still the audit artifact—so use it when the before-state is
+already known exactly, and the two-command flow when it is not.
+
 The SCI environment does not expose filesystem or process operations,
 namespace loading, mutable references, Java classes, or host interop. Supply
 exactly one of `:query` and `:expr`. Use the literal EDN query when it is

@@ -243,3 +243,78 @@
                (:verified result)))
         (is (str/includes? (slurp source-path)
                            "(book-tree/creation-actions surface)"))))))
+
+;; ============================================================
+;; :expect — the pure guard behind the one-call guarded edit
+;; ============================================================
+
+(deftest parse-expect-accepts-exactly-one-complete-form
+  (testing "one form parses to data plus its normalized source"
+    (is (= {:expect '(assoc state :status :done)
+            :expect-source "(assoc state :status :done)"}
+           (lens/parse-expect "(assoc state :status :done)"))))
+  (testing "an already-read form is accepted verbatim"
+    (is (= '(assoc state :status :done)
+           (:expect (lens/parse-expect '(assoc state :status :done))))))
+  (testing "row 5: zero, several, or unreadable forms refuse"
+    (doseq [[label value] [["zero forms" ""]
+                           ["whitespace only" "   \n  "]
+                           ["comment only" ";; nothing here\n"]
+                           ["two forms" "(assoc state :status :done) :extra"]
+                           ["reader error" "(assoc state"]]]
+      (testing label
+        (let [result (lens/parse-expect value)]
+          (is (= :invalid-expect (:error-type result)))
+          (is (string? (:error result)))
+          (is (nil? (:expect result))))))))
+
+(deftest expect-comparison-is-whitespace-and-comment-insensitive
+  (testing "row 2/3: identical structure matches"
+    (let [comparison (lens/expect-comparison '(assoc state :status :done)
+                                             "(assoc state :status :done)")]
+      (is (true? (:match? comparison)))
+      (is (= '(assoc state :status :done) (:actual comparison)))
+      (is (= "(assoc state :status :done)" (:actual-source comparison)))))
+  (testing "row 8: source comments and odd whitespace do not change the verdict"
+    (let [before "(assoc    state\n  ;; keep the audit note\n  :status\n\n  :done)"
+          comparison (lens/expect-comparison '(assoc state :status :done) before)]
+      (is (true? (:match? comparison)))
+      (is (= '(assoc state :status :done) (:actual comparison)))
+      (is (= before (:actual-source comparison))
+          "the exact selected bytes are still reported")))
+  (testing "row 4: the audit-payload trap refuses"
+    (let [comparison (lens/expect-comparison
+                       '(assoc state :status :done)
+                       "(assoc state :status :done :audit (:audit payload))")]
+      (is (false? (:match? comparison)))
+      (is (= '(assoc state :status :done :audit (:audit payload))
+             (:actual comparison)))))
+  (testing "row 4: a multi-form span selection never matches one :expect form"
+    (let [comparison (lens/expect-comparison
+                       :finish
+                       ":finish\n;; comment\n(assoc state :status :done)")]
+      (is (false? (:match? comparison)))
+      (is (= 2 (:actual-form-count comparison)))
+      (is (= [:finish '(assoc state :status :done)] (:actual comparison))))))
+
+(deftest expect-mismatch-result-reports-both-forms-and-the-exact-source
+  (let [plan {:operation :replace-subform
+              :file "src/state.clj"
+              :selector {:query [[:form 'transition]]}
+              :source-hash "abc"
+              :edits [{:line 8 :before "(assoc state :status :done)"}]}
+        comparison (lens/expect-comparison '(assoc state :status :complete)
+                                           "(assoc state :status :done)")
+        result (lens/expect-mismatch-result plan comparison)]
+    (is (= :expect-mismatch (:error-type result)))
+    (is (= :edit (:operation result)))
+    (is (= :expect-guarded (:mode result)))
+    (is (= "src/state.clj" (:file result)))
+    (is (= '(assoc state :status :complete) (:expected result)))
+    (is (= '(assoc state :status :done) (:actual result)))
+    (is (= "(assoc state :status :done)" (:actual-source result)))
+    (is (= 8 (:line result)))
+    (is (= "abc" (:source-hash result)))
+    (is (nil? (:actual-form-count result)))
+    (is (str/includes? (:error result) ":expect"))
+    (is (nil? (:ok result)))))
