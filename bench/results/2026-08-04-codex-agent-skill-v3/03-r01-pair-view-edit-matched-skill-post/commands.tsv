@@ -1,0 +1,4 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.dubLu7/homes/03-r01-pair-view-edit-matched-skill-post/skills/clj-surgeon/SKILL.md"	0	4050
+item_3	/bin/zsh -lc "clj-surgeon :op :edit :file src/bench/pair_view.clj :expr \\"(-> (form 'route-event) (match :finish) right (match :status) right (replace :complete))\\" :plan-out plan.edn"	0	1627
+item_5	/bin/zsh -lc "sed -n '1,240p' plan.edn"	0	1604
+item_6	/bin/zsh -lc 'clj-surgeon :op :replace-subform! :plan plan.edn'	0	595

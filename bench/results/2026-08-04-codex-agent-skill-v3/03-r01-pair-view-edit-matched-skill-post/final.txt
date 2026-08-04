@@ -1,0 +1,5 @@
+Both succeeded.
+
+- Plan: [plan.edn](/tmp/clj-surgeon-benchmark-setup.dubLu7/workspaces/03-r01-pair-view-edit-matched-skill-post/plan.edn) generated and reviewed—one edit only.
+- Apply: succeeded with verified parse and read-back hash.
+- Changed `:finish` status from `:done` to `:complete`; its comment and unrelated bytes were preserved.

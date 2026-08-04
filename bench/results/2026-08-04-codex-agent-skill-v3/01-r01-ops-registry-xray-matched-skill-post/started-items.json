@@ -1,0 +1,26 @@
+[
+  {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.dubLu7/homes/01-r01-ops-registry-xray-matched-skill-post/skills/clj-surgeon/SKILL.md\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_2",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"clj-surgeon :op :xray :file src/bench/ops_registry.clj :expr \\\"(-> (form 'ops-registry) initializer (expect-count 1) (analyze (fn [[registry]] {:category-frequencies (frequencies (map (comp :category val) registry)) :required-arg-count (count (filter (fn [arg] (true? (:required arg))) (mapcat (fn [[_ spec]] (:args spec)) registry))) :paired-ops (vec (sort (keep (fn [[op spec]] (when (some (fn [x] (and (map? x) (contains? x :pair))) (tree-seq coll? seq spec)) op)) registry)))})))\\\"\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  },
+  {
+    "id": "item_3",
+    "type": "command_execution",
+    "command": "/bin/zsh -lc \"clj-surgeon :op :xray :file src/bench/ops_registry.clj :expr \\\"(-> (form 'ops-registry) initializer (expect-count 1) (analyze (fn [[registry]] {:operation-spec-keys (frequencies (mapcat (comp keys val) registry)) :required-bearing-map-keys (frequencies (mapcat keys (filter (fn [x] (and (map? x) (contains? x :required))) (tree-seq coll? seq registry)))) :required-values (frequencies (map :required (filter (fn [x] (and (map? x) (contains? x :required))) (tree-seq coll? seq registry))))})))\\\"\"",
+    "aggregated_output": "",
+    "exit_code": null,
+    "status": "in_progress"
+  }
+]
