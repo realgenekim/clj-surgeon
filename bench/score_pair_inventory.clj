@@ -37,7 +37,7 @@
                       pairs)))
       (update :tail-source #(some-> % f))))
 
-(defn correct? [shape expected-path answer-path mode]
+(defn correct? [_shape expected-path answer-path mode]
   (let [transform (if (= mode "normalized") normalize identity)]
     (= (transform-value transform (expected-value expected-path))
        (transform-value transform (submitted-value answer-path)))))

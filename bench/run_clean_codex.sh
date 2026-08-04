@@ -131,7 +131,7 @@ perl -0pi -e 's/\(assoc state :status :done\)/\(assoc state :status :complete\)/
 
 if [ "${BENCH_RESUME:-false}" != true ] || [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\tpartition_all_used\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\tpartition_all_used\tedit_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -334,6 +334,7 @@ run_one() {
     "$run_dir/commands.json")
 
   local skill_read show_form grep_form ls_used help_used text_reader q_used partition_all_used
+  local edit_used first_source_edit
   local plan_generated plan_applied chained_plan_apply plan_apply_separate verified
   skill_read=$(jq '[.[] | select(.command | contains("/skills/clj-surgeon/SKILL.md"))] | length > 0' "$run_dir/commands.json")
   show_form=$(jq '[.[] | select((.command | contains("clj-surgeon")) and ((.command | contains("show-form")) or (.command | test(":cat([^a-zA-Z]|$)"))))] | length > 0' "$run_dir/commands.json")
@@ -345,10 +346,16 @@ run_one() {
     "$run_dir/commands.json")
   q_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":(q|lens)([^a-zA-Z]|$)")))] | length > 0' "$run_dir/commands.json")
   partition_all_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("partition-all")))] | length > 0' "$run_dir/commands.json")
+  edit_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":edit([^a-zA-Z!]|$)")))] | length > 0' "$run_dir/commands.json")
+  first_source_edit=$(jq --arg target "$target_rel" '
+    ([.[] | select(.command | contains($target))] | first | .command // "") as $first
+    | (($first | contains("clj-surgeon")) and ($first | test(":edit([^a-zA-Z!]|$)")))' \
+    "$run_dir/commands.json")
   plan_generated=$(jq '[.[] | select((.exit_code == 0)
     and (.command | contains("clj-surgeon"))
     and (((.command | contains("replace-subform")) and ((.command | contains("replace-subform!")) | not))
-         or ((.command | test(":(q|lens)([^a-zA-Z]|$)")) and (.command | contains("[:replace"))))
+         or ((.command | test(":(q|lens)([^a-zA-Z]|$)")) and (.command | contains("[:replace")))
+         or (.command | test(":edit([^a-zA-Z!]|$)")))
     and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   plan_applied=$(jq '[.[] | select((.exit_code == 0) and (.command | contains("clj-surgeon")) and (.command | contains("replace-subform!")) and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   chained_plan_apply=$(jq '[.[] | select((.command | contains("replace-subform ")) and (.command | contains("replace-subform!")))] | length > 0' \
@@ -408,12 +415,12 @@ run_one() {
       ;;
   esac
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
-    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$partition_all_used" \
+    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$partition_all_used" "$edit_used" "$first_source_edit" \
     "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
     >> "$result_dir/runs.tsv"
 

@@ -715,15 +715,86 @@
     (catch Exception e
       (query-error-result source query e))))
 
+(def edit-allowed-arguments
+  "CLI arguments accepted by the plan-only :edit facade."
+  #{:op :file :query :plan-out})
+
+(defn evaluate-edit
+  "Pure plan-only facade over evaluate-lens. Successful getter-only queries
+   refuse because :edit must include an existing terminal lens transform."
+  [source {:keys [file query] :as opts}]
+  (let [unsupported (->> (keys opts)
+                         (remove edit-allowed-arguments)
+                         sort
+                         vec)]
+    (if (seq unsupported)
+      {:operation :edit
+       :file file
+       :query query
+       :error (str "Unsupported :edit arguments: "
+                   (str/join ", " unsupported))
+       :error-type :unsupported-arguments
+       :unsupported unsupported
+       :supported (->> edit-allowed-arguments
+                       (remove #{:op})
+                       sort
+                       vec)}
+      (let [result (evaluate-lens source opts)]
+        (if (and (= :lens (:operation result))
+                 (nil? (:error result)))
+          {:operation :edit
+           :file file
+           :query query
+           :source-hash (:source-hash result)
+           :error ":edit requires a terminal [:replace FORM] or [:replace-span FORM ...] step; use :q for read-only queries"
+           :error-type :edit-requires-transform
+           :remedy {:read-operation :q
+                    :terminal-steps [[:replace 'form]
+                                     [:replace-span 'form '...]]}}
+          result)))))
+
 (defn- write-plan-file [plan plan-out]
   (try
-    (with-open [writer (io/writer plan-out)]
-      (binding [*out* writer] (pprint/pprint plan)))
+    (file-ops/atomic-write! plan-out (with-out-str (pprint/pprint plan)))
     (assoc plan :plan-out plan-out)
     (catch Exception e
       {:error (str "Could not write plan: " (.getMessage e))
        :error-type :plan-write-failed
        :plan-out plan-out})))
+
+(defn- canonical-path [file]
+  (.getCanonicalPath (io/file file)))
+
+(defn edit-file
+  "Plan exactly one existing lens transformation and atomically save its plan.
+   Source bytes are never changed."
+  [{:keys [file plan-out] :as opts}]
+  (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))]
+    (cond
+      unsupported
+      (evaluate-edit "" opts)
+
+      (= (canonical-path file) (canonical-path plan-out))
+      {:operation :edit
+       :file file
+       :plan-out plan-out
+       :error ":plan-out must not resolve to the source file"
+       :error-type :plan-overwrites-source}
+
+      :else
+      (try
+        (let [plan (evaluate-edit (slurp file) opts)]
+          (if (and (#{:replace-subform :replace-span} (:operation plan))
+                   (nil? (:error plan)))
+            (write-plan-file plan plan-out)
+            plan))
+        (catch Exception e
+          {:operation :edit
+           :file file
+           :plan-out plan-out
+           :error (str "Cannot plan edit for source file: " file
+                       " (" (.getMessage e) ")")
+           :error-type :file-read-failed})))))
 
 (defn lens-file
   "Read a file and evaluate one getter/updater lens. A terminal replacement

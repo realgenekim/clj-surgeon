@@ -1,6 +1,6 @@
 # `:edit` Command MVP
 
-**Status:** Experimental contract; implementation requires red tests
+**Status:** Prototype implemented; clean-agent keep/remove benchmark pending
 
 ## Hypothesis
 

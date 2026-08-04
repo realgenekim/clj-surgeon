@@ -102,7 +102,7 @@
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
                      :extract :extract!
-                     :find-subform :lens :replace-subform :replace-subform!
+                     :find-subform :lens :edit :replace-subform :replace-subform!
                      :cljc-merge :cljc-split :cljc-add-require :cljc-analyze}]
       (is (= expected (set (keys core/ops-registry)))))))
 

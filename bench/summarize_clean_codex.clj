@@ -12,8 +12,8 @@
 
 (def boolean-fields
   #{:correct :exact-correct :skill-read :show-form :grep-form :ls-used :help-used
-    :text-reader :q-used :partition-all-used :plan-generated :plan-applied
-    :plan-apply-separate :verified})
+    :text-reader :q-used :partition-all-used :edit-used :first-source-edit
+    :plan-generated :plan-applied :plan-apply-separate :verified})
 
 (defn parse-value [field value]
   (cond
@@ -63,6 +63,8 @@
    :skill-read (percent :skill-read rows)
    :q-used (percent :q-used rows)
    :partition-all (percent :partition-all-used rows)
+   :edit-used (percent :edit-used rows)
+   :first-edit (percent :first-source-edit rows)
    :text-reader (percent :text-reader rows)
    :show-form (percent :show-form rows)
    :plan-separate (when (= "case-edit" task)
@@ -77,18 +79,19 @@
       "# Clean Codex benchmark summary\n\n"
       "Correctness is a gate. Token counts are the final cumulative usage "
       "reported by each Codex session.\n\n"
-      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | Source output | Skill read | q | partition-all | Text reader | show-form | Separate plan/apply |\n"
-      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | Source output | Skill read | q | partition-all | edit | First source edit | Text reader | show-form | Separate plan/apply |\n"
+      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
       (str/join
         ""
         (for [{:keys [task context version runs correct exact wall input uncached output
-                      commands source-bytes skill-read q-used partition-all text-reader
-                      show-form plan-separate]}
+                      commands source-bytes skill-read q-used partition-all edit-used
+                      first-edit text-reader show-form plan-separate]}
               summaries]
-          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
+          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
                   task context version runs correct exact (fmt-int wall) (fmt-int input)
                   (fmt-int uncached) (fmt-int output) (fmt-int commands)
-                  (fmt-int source-bytes) skill-read q-used partition-all text-reader show-form
+                  (fmt-int source-bytes) skill-read q-used partition-all edit-used first-edit
+                  text-reader show-form
                   (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))
 
 (let [[path] *command-line-args*]

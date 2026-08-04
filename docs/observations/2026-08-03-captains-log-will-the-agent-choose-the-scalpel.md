@@ -89,3 +89,25 @@ This is lean startup for an agent tool. The MVP is not a miniature product
 roadmap. It is the cheapest truthful interface change that can falsify the
 adoption hypothesis. The clean Codex transcript is the customer interview;
 exact file bytes and receipts are the retention metric.
+
+## Prototype checkpoint
+
+The implementation remained as small as the hypothesis. `:edit` is a primary
+write-category command with three required arguments: `:file`, the existing
+lens `:query`, and `:plan-out`. It adds no query step and no plan field.
+Successful node and span requests return the same plans as `:q`.
+
+The façade adds four guards that a query-oriented entrypoint did not promise:
+
+- a getter-only pipeline refuses and points reads back to `:q`;
+- unknown consent-shaped flags such as `:force`, `:yes`, or `:apply` refuse
+  instead of being ignored;
+- the plan path may not canonically resolve to the source path;
+- plan artifacts use the same fail-closed atomic writer as source application,
+  so a failed plan cannot truncate the previous review artifact.
+
+The focused prototype suite passes 6 tests and 51 assertions. The existing help
+and lens suites also pass: 70 tests and 657 assertions. clj-kondo reports no
+errors in the changed production and test namespaces. These facts establish
+the safety contract, not product value. The name earns permanence only if the
+neutral-awareness Codex study changes voluntary behavior.

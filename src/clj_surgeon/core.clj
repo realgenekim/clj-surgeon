@@ -547,6 +547,21 @@
                        :category  :write
                        :pair      :extract}
 
+    :edit             {:handler   structural-lens/edit-file
+                       :desc      "PLAN ONLY. Save one hash-fenced structural edit; never changes source"
+                       :args      {:file     {:required true :desc "Clojure source file; never modified by this command"}
+                                   :query    {:required true :desc "Existing lens pipeline ending in [:replace FORM] or [:replace-span FORM ...]"}
+                                   :plan-out {:required true :desc "New or replaceable EDN review artifact; must not alias :file"}}
+                       :workflow  ["Use :q to read. Use :edit only when the complete selection and replacement are already known."
+                                   "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
+                                   "Review the returned selector, one edit, diff, source hash, and result hash."
+                                   "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
+                                   "Unknown flags, getter-only queries, ambiguous targets, and source/plan path aliasing refuse without changing source or an existing plan."]
+                       :examples  ["clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"
+                                   "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"
+                                   "clj-surgeon :op :replace-subform! :plan plan.edn"]
+                       :category  :write}
+
     :fix-declares     {:handler   (fn [opts] (fix-declares/plan (:file opts)))
                        :desc      "Plan declare elimination (dry run)"
                        :args      {:file {:required true :desc "Clojure source file"}}
