@@ -210,15 +210,17 @@ remainder is the safe behavior. The caller decides what that remainder means.
 
 ### One-shot routes
 
-No owner-form read or known branch name is required:
+No owner-form read or manually counted extent is required. When the owner
+contains a nested form with the same head, the caller still supplies a unique
+outer anchor; partitioning never guesses which occurrence was intended.
 
 ```clojure
 ;; `case`: skip list head and dispatch expression, then enumerate the suffix.
 [[:form route-event] [:find case] :up :down :right :right
  [:partition-all 2]]
 
-;; `cond`: skip only the list head.
-[[:form classify-request] [:find cond] :up :down :right
+;; `cond`: anchor the first outer guard so a nested `cond` is not widened in.
+[[:form classify-request] [:find (nil? actor)]
  [:partition-all 2]]
 
 ;; `let`: enter the binding vector and enumerate from its first child.
