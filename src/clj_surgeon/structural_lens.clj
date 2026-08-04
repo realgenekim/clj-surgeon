@@ -716,6 +716,7 @@
         (z/of-string read-back-source {:track-position? true})
         {:ok true
          :operation :replace-subform!
+         :planned-operation (:operation plan)
          :file (:file plan)
          :source-hash (:source-hash plan)
          :result-hash expected-result-hash

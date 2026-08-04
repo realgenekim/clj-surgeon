@@ -303,7 +303,11 @@ run_one() {
   text_reader=$(jq --arg target "$target_rel" \
     '[.[] | select((.command | contains($target)) and (.command | test("(^|[ /])(sed|awk|head|tail|cat)( |$)")))] | length > 0' \
     "$run_dir/commands.json")
-  plan_generated=$(jq '[.[] | select((.exit_code == 0) and (.command | contains("clj-surgeon")) and (.command | contains("replace-subform")) and (.command | contains("replace-subform!") | not) and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
+  plan_generated=$(jq '[.[] | select((.exit_code == 0)
+    and (.command | contains("clj-surgeon"))
+    and ((.command | contains("replace-subform") and (.command | contains("replace-subform!") | not))
+         or ((.command | test(":(q|lens)([^a-zA-Z]|$)")) and (.command | contains("[:replace"))))
+    and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   plan_applied=$(jq '[.[] | select((.exit_code == 0) and (.command | contains("clj-surgeon")) and (.command | contains("replace-subform!")) and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   chained_plan_apply=$(jq '[.[] | select((.command | contains("replace-subform ")) and (.command | contains("replace-subform!")))] | length > 0' \
     "$run_dir/commands.json")

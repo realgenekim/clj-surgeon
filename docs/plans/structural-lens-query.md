@@ -253,6 +253,10 @@ tag.
 | Contract | `lens-hillclimb-v1-contract` | Getter/updater EDN algebra, failure matrix, and non-goals fixed before implementation. |
 | Pure algebra | `lens-hillclimb-v2-pure-algebra` | Red-first exhaustive pure tests; case, cond, map, binding, comments, duplicates, bounds, refusals, planning, and apply. |
 | CLI | `lens-hillclimb-v3-cli` | `:lens` / `:q`, raw query parsing, help, plan persistence, subprocess exits, and self-hosting query. |
+| Agent contract | `lens-hillclimb-v4-agent-contract` | README, skill, help, vision, changelog, and executable anti-drift expectations teach one getter/updater path. |
+| Zero detour | `lens-hillclimb-v5-zero-detour` | Added machine-readable `--version` after a clean edit agent exposed the missing orientation call. |
+| Span contract | `lens-hillclimb-v6-span-contract` | Fixed node-to-span promotion, equal-arity trivia ownership, and explicit v2 non-goals before code. |
+| Span algebra | `lens-hillclimb-v7-span-algebra` | Case, cond, map, binding, overlap, boundary, comment, anonymous-function, plan/apply, CLI, help, and documentation tests. |
 
 The first clean read agent, before the skill taught `:q`, needed seven calls:
 instructions, `:ls`, a wrong `:cat`, help, a wrong scoped search, the correct
@@ -262,3 +266,10 @@ old skill perfectly in three structural calls (`:cat`, plan, apply); the
 terminal updater can preserve the review boundary in two (plan, apply). These
 transcripts are the input to the next fresh-context replication, not a claimed
 final result.
+
+The first clean span edit independently chose the two-call optimum: one
+non-writing `:q` plan with `[:span 2]` and `[:replace-span ...]`, then one
+separate verified apply. It used no preliminary read, text search, outline,
+help, Git probe, or reread; the internal comment and unrelated duplicate both
+survived. Its only critique was that the generic executor receipt did not name
+the planned span operation, so receipts now include `:planned-operation`.

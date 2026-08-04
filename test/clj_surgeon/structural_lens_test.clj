@@ -180,6 +180,7 @@
         mismatch (lens/verified-apply-receipt plan sample-source)]
     (is (= {:ok true
             :operation :replace-subform!
+            :planned-operation :replace-subform
             :file "src/demo/views.clj"
             :source-hash (:source-hash plan)
             :result-hash (:result-hash plan)

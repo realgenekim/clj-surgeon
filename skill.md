@@ -70,9 +70,9 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 `:q` never writes source. A terminal replacement refuses unless the path
 selects exactly one node, then returns that node, the trace, one diff, and the
 source/result hashes. Review the plan before the separate apply command; never
-chain them. When the requested relationship and replacement are already exact,
-the updater can be the first non-mutating call. Run a read query first when the
-choice still requires judgment.
+chain plan generation and application. When the requested relationship and
+replacement are already exact, the updater can be the first non-mutating call.
+Run a read query first when the choice still requires judgment.
 
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 

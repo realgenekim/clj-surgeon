@@ -250,3 +250,35 @@ one command per honest judgment boundary: read when judgment needs evidence,
 always review a non-mutating plan, then apply separately. The clean-context
 replication after the skill update will decide whether the jq-shaped model is
 obvious enough to become the paved road.
+
+## Log entry: jq slices resolved the missing peer object
+
+The first algebra could move from a `case` key to its right-hand value and edit
+that node safely, but issue #21 asked a stricter question: can the pair itself
+be addressed, including the flattened body of `#(...)` where no call-list node
+exists? jq supplied the next clue again. Paths are not limited to scalar nodes;
+arrays have slices.
+
+The concrete-syntax analogue is `[:span N]`: promote each selected semantic
+node into that node plus its next `N-1` siblings without crossing the parent.
+The updater is `[:replace-span FORM ...]`. V2 deliberately requires equal
+arity, which gives comments a wonderfully boring ownership rule: leading and
+trailing trivia remain outside the slice, and every gap between corresponding
+forms survives byte-for-byte. No insertion, deletion, fuzzy window, inferred
+branch, or bulk write entered the kernel.
+
+The clean-context result reached the physical optimum. Given a `:finish` key,
+an internal comment, its result expression, and an unrelated identical result,
+the agent independently chose exactly two structural calls: one non-writing
+span plan and one separate verified apply. It used no preliminary read, `rg`,
+`sed`, outline, help, Git probe, or reread. The plan selected the pair once; the
+comment and unrelated peer survived. Its sole critique was that the generic
+`:replace-subform!` receipt did not repeat `:replace-span`; that observation
+became the `:planned-operation` receipt field.
+
+This is the strongest version of the editor metaphor so far. `cat` is a named
+structural read, `q` is the composable path language, a span is a slice, a plan
+is the immutable edit buffer, and apply is explicit consent fenced by hashes.
+It feels Unix-native because the commands are small and pipe-shaped, jq-native
+because paths are also updaters, and Clojure-native because no syntax needs to
+pretend it is text or a wrapper form that does not exist.

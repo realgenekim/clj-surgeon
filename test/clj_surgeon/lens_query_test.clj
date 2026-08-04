@@ -395,6 +395,7 @@
         (is (= :replace-span (:operation plan)))
         (is (= [18 19] (-> plan :edits first :addresses)))
         (is (zero? (:exit applied)) (:err applied))
+        (is (= :replace-span (:planned-operation receipt)))
         (is (= (:result-hash plan) (get-in receipt [:verified :read-back-hash])))
         (is (str/includes? (slurp (str source-file))
                            ";; Preserve this comment between the pair.")))

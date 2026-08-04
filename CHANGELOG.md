@@ -21,6 +21,8 @@ is cut.
   slice. A terminal `[:replace-span FORM FORM]` plans an equal-arity peer edit
   while preserving all internal comments and whitespace, including flattened
   sibling bodies inside `#(...)`; plans apply through `:replace-subform!`.
+- Machine-readable `clj-surgeon --version`, plus `:planned-operation` in apply
+  receipts so the generic executor identifies node versus span plans.
 - `:show-form`, a read-only one-shot that returns one complete top-level form
   by unqualified name, containing line, or case-sensitive literal `:contains`
   selector, with CLJC platform disambiguation,
