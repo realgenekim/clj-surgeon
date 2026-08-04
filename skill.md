@@ -92,6 +92,20 @@ clj-surgeon :op :edit :file src/state.clj \
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
+Use `transform` when the replacement depends on the selected form:
+
+```bash
+clj-surgeon :op :edit :file src/policy.clj \
+  :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
+  :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+The function receives the exactly-one selected form as Clojure data. It does
+not run for zero or many matches. The saved plan contains only the concrete
+replacement, diff, and hashes. Use `replace` for a known replacement and
+`transform` for a replacement derived from the current form.
+
 Supply exactly one of `:query` and `:expr`. `:expr` provides pure
 `clojure.core` collection functions and structural builders through sandboxed
 SCI. It does not expose I/O, processes, namespaces, mutable references, or host

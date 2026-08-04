@@ -765,10 +765,9 @@
 (defn- canonical-path [file]
   (.getCanonicalPath (io/file file)))
 
-(defn edit-file
-  "Plan exactly one existing lens transformation and atomically save its plan.
-   Source bytes are never changed."
-  [{:keys [file plan-out] :as opts}]
+(defn edit-file-with-evaluator
+  "Plan one edit with evaluator after path checks and the single source read."
+  [{:keys [file plan-out] :as opts} evaluator]
   (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))]
     (cond
       unsupported
@@ -783,7 +782,7 @@
 
       :else
       (try
-        (let [plan (evaluate-edit (slurp file) opts)]
+        (let [plan (evaluator (slurp file) opts)]
           (if (and (#{:replace-subform :replace-span} (:operation plan))
                    (nil? (:error plan)))
             (write-plan-file plan plan-out)
@@ -795,6 +794,12 @@
            :error (str "Cannot plan edit for source file: " file
                        " (" (.getMessage e) ")")
            :error-type :file-read-failed})))))
+
+(defn edit-file
+  "Plan exactly one existing lens transformation and atomically save its plan.
+   Source bytes are never changed."
+  [opts]
+  (edit-file-with-evaluator opts evaluate-edit))
 
 (defn lens-file
   "Read a file and evaluate one getter/updater lens. A terminal replacement

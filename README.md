@@ -318,6 +318,22 @@ builders. SCI compiles the result to the existing query vector. The unchanged
 planner still enforces exact-one selection, one terminal edit, complete-file
 parse, diff, and hashes.
 
+The important native operation is `transform`. It receives the selected form
+as Clojure data, so an agent can derive a replacement without first reading and
+copying the current value:
+
+```bash
+clj-surgeon :op :edit :file src/policy.clj \
+  :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
+  :plan-out plan.edn
+```
+
+The function runs only after the selector finds exactly one form. The review
+plan contains the concrete replacement as `[:replace ...]`, never the function. The
+existing EDN executor can therefore read and replay the plan without SCI. Use
+`replace` when the new form is already known. Use `transform` when the new form
+must be calculated from the selected code or data.
+
 The SCI environment does not expose filesystem or process operations,
 namespace loading, mutable references, Java classes, or host interop. Supply
 exactly one of `:query` and `:expr`. Use the literal EDN query when it is

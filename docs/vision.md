@@ -127,6 +127,13 @@ classes, or host interop. This gives the model Clojure for composing Clojure
 edits without adding another selector, planner, plan schema, or executor.
 Literal EDN paths remain available when they are shorter.
 
+The native `transform` terminal is the stronger form of this idea. It gives a
+pure function the exactly-one selected form as Clojure data. The function can
+derive a new form with `mapv`, `assoc`, `update`, or other allowed operations.
+Planning then discards the function and saves only the concrete replacement,
+diff, and hashes. The durable artifact stays data, and the trusted executor
+does not gain an interpreter.
+
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a

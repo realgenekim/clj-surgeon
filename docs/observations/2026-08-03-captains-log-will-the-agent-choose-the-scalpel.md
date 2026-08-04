@@ -288,3 +288,27 @@ and the old `:replace-subform!` executor applies the native plan with its normal
 read-back hash and whole-file parse receipt. Unsafe expressions refuse before
 the tool reads source or changes an existing plan. The next hill is voluntary
 clean-agent use, not more syntax design.
+
+## The first A/B says “not yet”
+
+Twenty-four clean Codex edit runs compared the pre-native checkpoint with the
+pure-Clojure CLI. Four replicates each covered a `case` result, an outer `cond`
+result, and a `let` initializer. Every run was byte-exact. Clean agents chose
+`:expr` in only one of the 12 post runs.
+
+The median `case` and binding runs stayed at three shell calls. The post
+`cond` runs regressed from five to six calls, from 101,630 to 125,395 input
+tokens, and from 46.96 to 61.67 seconds. The single native attempt took eight
+calls. This surface failed its voluntary-use keep gate for literal edits.
+
+That failure identified the missing capability. The native expression could
+construct a query from constants, but it could not receive the selected form.
+It was Clojure-shaped query syntax, not yet Clojure transforming Clojure. For a
+known literal replacement, the EDN vector remained shorter and clearer.
+
+The next MVP adds a terminal `transform`. Its pure function receives the
+exactly-one selected form as Clojure data. Planning evaluates it once, then
+saves only the concrete replacement, diff, and hashes. Zero or many matches do
+not invoke the function. The durable plan remains inert EDN, and the existing
+executor remains the only write path. This creates a real one-shot hypothesis:
+derive a replacement from source without a preliminary read.

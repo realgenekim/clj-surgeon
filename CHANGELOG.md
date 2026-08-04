@@ -15,6 +15,10 @@ is cut.
   compiles to the existing lens query, saves the unchanged hash-bound review
   plan, and applies later through `:replace-subform!`. I/O, processes,
   namespaces, mutable references, and host interop remain unavailable.
+- Native `(transform path pure-function)` edits. The function receives the
+  exactly-one selected form as Clojure data. Planning saves its concrete
+  replacement, not executable code, so the existing EDN executor remains the
+  only apply path.
 - `:lens` / `:q`, a jq-like EDN pipeline over the concrete Clojure syntax
   tree. A getter such as
   `[[:form transition] [:find :finish] :right]` reads a peer value across

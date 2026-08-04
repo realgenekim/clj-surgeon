@@ -2,11 +2,13 @@
   "Pure Clojure builders for clj-surgeon's existing structural query data."
   (:refer-clojure :exclude [partition-all replace])
   (:require
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]
+   [rewrite-clj.zip :as z]
    [sci.core :as sci]))
 
 (def ^:private terminal-steps
-  #{:replace :replace-span})
+  #{:replace :replace-span :transform})
 
 (def pure-core-symbols
   '[* + - / < <= = == > >=
@@ -43,7 +45,8 @@
     clojure.core/partition-all clojure.core/replace])
 
 (def ^:private builder-symbols
-  '[form match where right left up down span partition-all replace replace-span])
+  '[form match where right left up down span partition-all replace replace-span
+    transform])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -65,7 +68,8 @@
    "(where path predicates)"
    "(right path)" "(left path)" "(up path)" "(down path)"
    "(span path n)" "(partition-all path n)"
-   "(replace path form)" "(replace-span path & forms)"])
+   "(replace path form)" "(replace-span path & forms)"
+   "(transform path pure-function)"])
 
 (def ^:private max-expression-characters 32768)
 
@@ -155,6 +159,15 @@
   [path & replacements]
   (append-step path (into [:replace-span] replacements)))
 
+(defn transform
+  "Derive one terminal replacement from the selected form's Clojure data."
+  [path transformer]
+  (when-not (ifn? transformer)
+    (throw (ex-info "Edit transform must be a function"
+                    {:error-type :invalid-edit-transform
+                     :transform transformer})))
+  (append-step path [:transform transformer]))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -166,7 +179,8 @@
    'span span
    'partition-all partition-all
    'replace replace
-   'replace-span replace-span})
+   'replace-span replace-span
+   'transform transform})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -252,3 +266,49 @@
                  :error (.getMessage exception))))
 
       :else opts)))
+
+(defn evaluate-edit
+  "Materialize a pure transform against one selected form, then build a concrete plan."
+  [source {:keys [file query] :as opts}]
+  (let [terminal (when (vector? query) (peek query))]
+    (if-not (and (vector? terminal) (= :transform (first terminal)))
+      (structural-lens/evaluate-edit source opts)
+      (let [selection-query (pop query)
+            found (structural-lens/evaluate-query source selection-query)
+            match-count (:match-count found)]
+        (cond
+          (:error found) found
+
+          (not= 1 match-count)
+          (assoc found
+                 :error (str "Expected exactly one match, found " match-count)
+                 :error-type (if (zero? match-count)
+                               :no-match
+                               :ambiguous-match))
+
+          (not= 2 (count terminal))
+          (assoc found
+                 :error "Transform requires exactly one pure function"
+                 :error-type :invalid-edit-transform)
+
+          (not (ifn? (second terminal)))
+          (assoc found
+                 :error "Transform requires a pure function"
+                 :error-type :invalid-edit-transform)
+
+          :else
+          (let [matched (first (:matches found))]
+            (try
+              (let [before (z/sexpr (z/of-string (:source matched)))
+                    after ((second terminal) before)
+                    concrete-query (conj selection-query [:replace after])]
+                (structural-lens/evaluate-edit source
+                                               (assoc opts :query concrete-query)))
+              (catch Exception exception
+                {:operation :edit
+                 :file file
+                 :query selection-query
+                 :source-hash (:source-hash found)
+                 :match-count match-count
+                 :error (str "Pure edit transform failed: " (.getMessage exception))
+                 :error-type :edit-transform-failed}))))))))

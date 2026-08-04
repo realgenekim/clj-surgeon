@@ -1,6 +1,8 @@
 (ns clj-surgeon.edit-dsl-test
   (:require
    [clj-surgeon.edit-dsl :as dsl]
+   [clj-surgeon.structural-lens :as lens]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (deftest native-expression-compiles-to-the-existing-case-query
@@ -14,17 +16,19 @@
              (dsl/replace '(assoc state :status :complete))))))
 
 (def builder-cases
-  [["match" #(dsl/match % '(call _)) [:find '(call _)]]
-   ["where" #(dsl/where % {:parent-tag :vector})
-    [:where {:parent-tag :vector}]]
-   ["right" dsl/right :right]
-   ["left" dsl/left :left]
-   ["up" dsl/up :up]
-   ["down" dsl/down :down]
-   ["span" #(dsl/span % 2) [:span 2]]
-   ["partition" #(dsl/partition-all % 2) [:partition-all 2]]
-   ["replace" #(dsl/replace % '(inc x)) [:replace '(inc x)]]
-   ["replace span" #(dsl/replace-span % :a :b) [:replace-span :a :b]]])
+  (let [transformer identity]
+    [["match" #(dsl/match % '(call _)) [:find '(call _)]]
+     ["where" #(dsl/where % {:parent-tag :vector})
+      [:where {:parent-tag :vector}]]
+     ["right" dsl/right :right]
+     ["left" dsl/left :left]
+     ["up" dsl/up :up]
+     ["down" dsl/down :down]
+     ["span" #(dsl/span % 2) [:span 2]]
+     ["partition" #(dsl/partition-all % 2) [:partition-all 2]]
+     ["replace" #(dsl/replace % '(inc x)) [:replace '(inc x)]]
+     ["replace span" #(dsl/replace-span % :a :b) [:replace-span :a :b]]
+     ["transform" #(dsl/transform % transformer) [:transform transformer]]]))
 
 (deftest every-builder-appends-one-existing-step-to-every-valid-path-shape
   (doseq [start [[]
@@ -41,7 +45,10 @@
   (is (= [[:form 'f] [:span 2] [:replace-span :finish '(inc x)]]
          (-> (dsl/form 'f)
              (dsl/span 2)
-             (dsl/replace-span :finish '(inc x))))))
+             (dsl/replace-span :finish '(inc x)))))
+  (let [transformer #(mapv inc %)]
+    (is (= [[:form 'f] [:transform transformer]]
+           (dsl/transform (dsl/form 'f) transformer)))))
 
 (deftest builders-preserve-clojure-data-without-evaluation
   (let [effect-count (atom 0)
@@ -78,7 +85,8 @@
 
 (deftest every-builder-refuses-composition-after-a-terminal-step
   (doseq [terminal [[[:replace :done]]
-                    [[:replace-span :a :b]]]
+                    [[:replace-span :a :b]]
+                    [[:transform identity]]]
           [label build _] builder-cases]
     (testing (str label " after " (pr-str terminal))
       (let [error (try
@@ -88,6 +96,16 @@
         (is (= {:error-type :terminal-edit-step
                 :terminal-step (last terminal)}
                error))))))
+
+(deftest transform-requires-a-function
+  (doseq [value [nil 1 "not callable" '(not callable)]]
+    (let [error (try
+                  (dsl/transform (dsl/form 'f) value)
+                  nil
+                  (catch Exception exception
+                    (ex-data exception)))]
+      (is (= :invalid-edit-transform (:error-type error)))
+      (is (= value (:transform error))))))
 
 (deftest counted-builders-require-positive-integers
   (doseq [[builder step] [[dsl/span :span]
@@ -234,6 +252,60 @@
           "(do (form 'ignored)
                (-> (form 'f)
                    (replace (if (and true (not false)) :yes :no))))"))))
+
+(deftest sci-transform-computes-from-the-selected-clojure-form
+  (let [source "(ns bench.transform)\n\n(def retry-policy\n  {:delays [100 250 500]})\n\n(def decoy [100 250 500])\n"
+        expression "(-> (form 'retry-policy)\n    (match :delays)\n    right\n    (transform #(mapv (partial + 100) %)))"
+        query (dsl/compile-query expression)
+        plan (dsl/evaluate-edit source
+                                {:file "src/bench/transform.clj"
+                                 :query query
+                                 :plan-out "review.edn"})
+        applied (lens/apply-plan source plan)]
+    (is (= [[:form 'retry-policy] [:find :delays] :right]
+           (pop query)))
+    (is (ifn? (-> query peek second)))
+    (is (= :replace-subform (:operation plan)))
+    (is (= "[100 250 500]" (get-in plan [:edits 0 :before])))
+    (is (= "[200 350 600]" (get-in plan [:edits 0 :after])))
+    (is (= [[:form 'retry-policy]
+            [:find :delays]
+            :right
+            [:replace [200 350 600]]]
+           (get-in plan [:selector :query])))
+    (is (:ok applied))
+    (is (str/includes? (:source applied) ":delays [200 350 600]"))
+    (is (str/includes? (:source applied) "(def decoy [100 250 500])"))))
+
+(deftest transform-runs-only-after-an-exact-selection
+  (let [source "(ns bench.transform)\n(def a {:x [1]})\n(def b {:x [1]})\n"
+        calls (atom 0)
+        transformer (fn [value]
+                      (swap! calls inc)
+                      value)]
+    (doseq [[query error-type] [[(dsl/transform [[:find :missing]] transformer)
+                                 :no-match]
+                                [(dsl/transform [[:find :x] :right] transformer)
+                                 :ambiguous-match]]]
+      (is (= error-type
+             (:error-type (dsl/evaluate-edit source
+                                             {:file "source.clj"
+                                              :query query
+                                              :plan-out "review.edn"}))))
+      (is (zero? @calls)))))
+
+(deftest transform-failure-is-structured-and-never-builds-a-plan
+  (let [source "(ns bench.transform)\n(def a {:x [1]})\n"
+        query (dsl/transform [[:form 'a] [:find :x] :right]
+                             (fn [_]
+                               (throw (ex-info "boom" {}))))
+        result (dsl/evaluate-edit source
+                                  {:file "source.clj"
+                                   :query query
+                                   :plan-out "review.edn"})]
+    (is (= :edit-transform-failed (:error-type result)))
+    (is (str/includes? (:error result) "boom"))
+    (is (nil? (:result-hash result)))))
 
 (deftest sci-requires-exactly-one-expression-and-a-query-result
   (doseq [[expression reason] [["" :expected-one-form]

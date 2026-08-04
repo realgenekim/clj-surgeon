@@ -129,12 +129,15 @@
           (is (str/includes? text ":edit"))
           (is (str/includes? text ":expr"))
           (is (str/includes? normalized "pure clojure"))
+          (is (str/includes? text "transform"))
+          (is (str/includes? normalized "concrete replacement"))
           (is (str/includes? text ":replace-subform!")))))
     (doseq [[surface text] operational]
       (testing surface
         (is (str/includes? text "(-> (form 'transition)"))
         (is (str/includes? text "(match :finish)"))
         (is (str/includes? text "(replace '(assoc state"))
+        (is (str/includes? text "(transform #(mapv"))
         (is (str/includes? text ":plan-out plan.edn"))))))
 
 (def project-root
@@ -205,6 +208,42 @@
           (is (= (:result-hash expr-plan)
                  (get-in receipt [:verified :read-back-hash])))
           (is (true? (get-in receipt [:verified :whole-file-parsed])))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest cli-native-transform-derives-a-concrete-replayable-plan
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon transform edit "})
+        source-file (fs/path tmp-dir "source.clj")
+        plan-file (fs/path tmp-dir "plan.edn")
+        source "(ns bench.retry)\n\n(def retry-policy {:delays [100 250 500]})\n\n(def decoy [100 250 500])\n"
+        expression "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))"]
+    (try
+      (spit (str source-file) source)
+      (let [planned (run-cli ":op" ":edit"
+                             ":file" (str source-file)
+                             ":expr" expression
+                             ":plan-out" (str plan-file))
+            plan (edn/read-string (:out planned))]
+        (is (zero? (:exit planned)) (:err planned))
+        (is (= source (slurp (str source-file))))
+        (is (= [[:form 'retry-policy]
+                [:find :delays]
+                :right
+                [:replace [200 350 600]]]
+               (get-in plan [:selector :query])))
+        (is (= "[100 250 500]" (get-in plan [:edits 0 :before])))
+        (is (= "[200 350 600]" (get-in plan [:edits 0 :after])))
+        (is (= (dissoc plan :plan-out)
+               (edn/read-string (slurp (str plan-file)))))
+        (let [applied (run-cli ":op" ":replace-subform!"
+                               ":plan" (str plan-file))
+              receipt (edn/read-string (:out applied))]
+          (is (zero? (:exit applied)) (:err applied))
+          (is (= (:result-hash plan)
+                 (get-in receipt [:verified :read-back-hash])))
+          (is (true? (get-in receipt [:verified :whole-file-parsed])))
+          (is (= "(ns bench.retry)\n\n(def retry-policy {:delays [200 350 600]})\n\n(def decoy [100 250 500])\n"
+                 (slurp (str source-file))))))
       (finally
         (fs/delete-tree tmp-dir)))))
 

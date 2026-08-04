@@ -103,6 +103,29 @@ make_edit_fixture() {
   } > "$destination"
 }
 
+make_computed_edit_fixture() {
+  local destination=$1
+  {
+    printf '%s\n\n' '(ns bench.policy)'
+    local i
+    for i in $(seq 1 105); do
+      printf '(defn filler-before-%03d [x]\n  (+ x %d))\n\n' "$i" "$i"
+    done
+    printf '%s\n' \
+      '(def retry-policy' \
+      '  {:retry-delays [100 250 500 1000]' \
+      '   :max-attempts 4})' \
+      '' \
+      '(def unrelated-policy' \
+      '  {:retry-delays [100 250 500 1000]' \
+      '   :max-attempts 4})' \
+      ''
+    for i in $(seq 106 210); do
+      printf '(defn filler-after-%03d [x]\n  (- x %d))\n\n' "$i" "$i"
+    done
+  } > "$destination"
+}
+
 make_peer_edit_fixture() {
   local destination=$1
   cp "$setup_root/templates/pair_view.clj" "$destination"
@@ -118,6 +141,7 @@ make_peer_edit_fixture() {
 
 make_structural_fixture "$setup_root/templates/structural.clj"
 make_edit_fixture "$setup_root/templates/state.clj"
+make_computed_edit_fixture "$setup_root/templates/policy.clj"
 make_peer_edit_fixture "$setup_root/templates/peer_edit.clj"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :find-subform \
   :file "$setup_root/templates/structural.clj" \
@@ -142,6 +166,9 @@ bb -e "(require '[clojure.edn :as edn]) (let [r (edn/read-string (slurp \"$setup
 cp "$setup_root/templates/state.clj" "$setup_root/expected/state.clj"
 perl -0pi -e 's/\(assoc state :status :done\)/\(assoc state :status :complete\)/' \
   "$setup_root/expected/state.clj"
+cp "$setup_root/templates/policy.clj" "$setup_root/expected/computed-edit.clj"
+perl -0pi -e 's/\[100 250 500 1000\]/[200 350 600 1100]/' \
+  "$setup_root/expected/computed-edit.clj"
 cp "$setup_root/templates/peer_edit.clj" "$setup_root/expected/cond-edit.clj"
 perl -0pi -e 's/\{:decision :allow :reason :public\}/\{:decision :allow :reason :public-resource\}/' \
   "$setup_root/expected/cond-edit.clj"
@@ -170,6 +197,9 @@ task_prompt() {
     case-edit)
       printf '%s' 'In src/bench/state.clj, change only the :finish case result from (assoc state :status :done) to (assoc state :status :complete). Preserve every unrelated byte, including the similar expression in unrelated-finish. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
       ;;
+    computed-edit)
+      printf '%s' 'In src/bench/policy.clj, add 100 to every number in the :retry-delays vector inside retry-policy. Preserve every unrelated byte, including the identical vector in unrelated-policy. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
+      ;;
     cond-edit)
       printf '%s' 'In src/bench/peer_edit.clj, change only the outer cond result paired with (:public? resource) inside classify-request from {:decision :allow :reason :public} to {:decision :allow :reason :public-resource}. Preserve every unrelated byte, including the identical map in unrelated-public and the nested cond. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
       ;;
@@ -197,6 +227,7 @@ target_for_task() {
     named-form|semantic-form) printf '%s' 'src/clj_surgeon/core.clj' ;;
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
+    computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
     case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
   esac
@@ -215,6 +246,9 @@ prepare_workspace() {
       ;;
     case-edit)
       cp "$setup_root/templates/state.clj" "$workspace/src/bench/state.clj"
+      ;;
+    computed-edit)
+      cp "$setup_root/templates/policy.clj" "$workspace/src/bench/policy.clj"
       ;;
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
@@ -457,6 +491,13 @@ run_one() {
         correct=true
       fi
       diff -u "$setup_root/templates/state.clj" "$target" > "$run_dir/target.diff" || true
+      ;;
+    computed-edit)
+      if cmp -s "$target" "$setup_root/expected/computed-edit.clj"; then
+        exact_correct=true
+        correct=true
+      fi
+      diff -u "$setup_root/templates/policy.clj" "$target" > "$run_dir/target.diff" || true
       ;;
     cond-edit|binding-edit)
       if cmp -s "$target" "$setup_root/expected/$task.clj"; then

@@ -1,6 +1,7 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Native CLI and pure Clojure core pass. Clean-agent benchmark next.
+**Status:** Literal authoring failed the voluntary-use gate. Source-derived
+`transform` hill climb in progress.
 
 ## Stage B CLI probe contract
 
@@ -48,21 +49,53 @@ planner. The legacy query and native expression produce identical plan data
 apart from their requested plan paths. The same existing executor applies both
 plans.
 
-The pure and SCI tests pass 17 tests with 319 assertions. The CLI edit tests
-pass 10 tests with 123 assertions. The combined edit, help, and structural-lens
-suite passes 94 tests with 882 assertions. The tests cover these boundaries:
+The pure and SCI tests pass 21 tests with 367 assertions. The CLI edit tests
+pass 11 tests with 149 assertions. The combined edit, help, and structural-lens
+suite passes 99 tests with 956 assertions. The tests cover these boundaries:
 
 - broad pure Clojure collection and higher-order composition;
 - every structural builder;
 - exact legacy/native plan equivalence;
 - real CLI parsing and verbatim expression transport;
 - compiler independence from the caller's current namespace;
+- transform execution only after exact-one selection;
+- concrete, function-free transform plans and existing-executor replay;
 - unchanged source during planning;
 - the unchanged saved plan schema;
 - verified application through `:replace-subform!`;
 - missing, conflicting, unsafe, multiple, and non-vector expressions;
 - refusal before source or plan I/O;
 - agent-facing help, README, vision, changelog, and both skills.
+
+## Stage B clean-agent result
+
+The 24-run matched-skill A/B was byte-exact in every run, but clean agents used
+`:expr` only once in 12 post runs. Literal `case` and binding edits stayed at a
+median three shell calls. Outer `cond` edits regressed from five to six calls,
+101,630 to 125,395 input tokens, and 46.96 to 61.67 seconds. The one native
+attempt took eight calls.
+
+This rejects the hypothesis that Clojure-shaped query construction alone is a
+better default. Literal EDN remains the right surface for literal paths and
+replacements.
+
+## Stage C source-derived transform contract
+
+Add `(transform path pure-function)` as a terminal native builder. After the
+selection returns exactly one form, pass that form's Clojure data to the
+function. Do not invoke the function for zero or many matches. Convert its
+result into the existing concrete `[:replace FORM]` query and build the normal
+plan.
+
+The saved plan must contain no SCI function or executable expression. It must
+contain the concrete replacement, one diff, source and result hashes, and the
+existing provenance. `:replace-subform!` remains the only executor and must not
+load SCI. This preserves the inert-EDN review boundary.
+
+The clean-agent task must require a replacement derived from an unknown current
+value. The post surface earns a keep only if agents can plan directly with
+`transform`, while the pre surface needs a read before it can author the
+replacement.
 
 ## Product hypothesis
 

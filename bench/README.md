@@ -26,6 +26,18 @@ BENCH_INCLUDE_COMPACT=false \
 make benchmark-clean-codex
 ```
 
+The `computed-edit` task tests whether a clean agent can derive a replacement
+from an unknown selected value in one plan call. It is the keep gate for the
+native `transform` builder:
+
+```bash
+BENCH_TASKS=computed-edit \
+BENCH_CONTEXTS=matched-skill \
+BENCH_INCLUDE_COMPACT=false \
+BENCH_REPLICATES=4 \
+make benchmark-clean-codex
+```
+
 Resume a stopped result directory without rerunning completed rows:
 
 ```bash

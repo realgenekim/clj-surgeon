@@ -42,7 +42,7 @@
   (let [prepared (edit-dsl/prepare-edit-options opts)]
     (if (:error prepared)
       prepared
-      (structural-lens/edit-file prepared))))
+      (structural-lens/edit-file-with-evaluator prepared edit-dsl/evaluate-edit))))
 
 (defn run-declares [{:keys [file]}]
   (let [;; Get declares from the OUTLINE (not deps — deps excludes declares)
@@ -558,18 +558,20 @@
                        :desc      "PLAN ONLY. Save one hash-fenced structural edit; never changes source"
                        :args      {:file     {:required true :desc "Clojure source file; never modified by this command"}
                                    :query    {:desc "EDN lens pipeline ending in [:replace FORM] or [:replace-span FORM ...]; supply exactly one of :query and :expr"}
-                                   :expr     {:desc "Sandboxed pure Clojure that returns the same lens pipeline; supply exactly one of :query and :expr"}
+                                   :expr     {:desc "Sandboxed pure Clojure edit program; supply exactly one of :query and :expr"}
                                    :plan-out {:required true :desc "New or replaceable EDN review artifact; must not alias :file"}}
                        :workflow  ["Supply exactly one of :query and :expr. Use :expr for pure Clojure collection composition through sandboxed SCI."
+                                   "Use (transform path pure-function) when the replacement must be derived from the selected form. The function runs only after exact-one selection; the saved plan contains only its concrete replacement."
                                    "SCI exposes pure clojure.core collection functions and clj-surgeon builders. It does not expose I/O, processes, namespaces, mutable references, or host interop."
-                                   "Use :q to read. Use :edit only when the complete selection and replacement are already known."
+                                   "Use :q to read. Use :edit when the complete selection and either the replacement or its pure transformation rule are known."
                                    "When a named form plus an exact key, guard, map key, or binding identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
                                    "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
                                    "Review the returned selector, one edit, diff, source hash, and result hash."
                                    "When the diff is exact, apply that saved plan with :replace-subform!; never reproduce it with apply_patch, a text edit, or a second equivalent plan."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
                                    "Unknown flags, getter-only queries, ambiguous targets, and source/plan path aliasing refuse without changing source or an existing plan."]
-                       :examples  ["clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :plan-out plan.edn"
+                       :examples  ["clj-surgeon :op :edit :file src/policy.clj :expr \"(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))\" :plan-out plan.edn"
+                                   "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"
                                    "clj-surgeon :op :replace-subform! :plan plan.edn"]
