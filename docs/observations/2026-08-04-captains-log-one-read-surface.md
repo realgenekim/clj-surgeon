@@ -501,6 +501,48 @@ source output, and tokens as secondary evidence. Until that parallel benchmark
 passes, v7 remains the proven maximum and this section records an experiment,
 not a product claim.
 
+### Candidate v8 result: near win, weak activation
+
+The first valid adjacent pilot lost badly: v8 was exact but took 89.9 seconds
+and eight calls versus v7 at 62.6 seconds and five calls. A different pilot
+showed a tantalizing exact v8 route in one source call and 23.2 seconds, but its
+control collided with an accidentally concurrent benchmark resume. Exclude
+that entire directory from comparisons. It is qualitative evidence that the
+route is possible, not timing evidence.
+
+The clean four-replicate parallel gate was much closer:
+
+```text
+                              v7 leader       v8 tree-seq         change
+correct                           4/4             4/4             tied
+median wall                      47.626 s          43.805 s         8% faster
+median shell calls                5                5              tied
+median input tokens             103,588           94,241           9% fewer
+median uncached tokens           19,201           18,302           5% fewer
+median output tokens              1,619            1,562           4% fewer
+median source output              5.3 KB           5.1 KB          2% fewer
+```
+
+Every run was independently exact and preserved the source hash. However, only
+one of four v8 agents used `tree-seq`, and it did so after other attempts. The
+other three followed schema-specific routes despite reading the skill. The 8%
+wall improvement therefore cannot be attributed confidently to the new
+capability and does not clear the 10% neighboring-win rule.
+
+This exposes an activation gap, not an algebra gap. The capability is general,
+small, and safe, but the instruction “traverse with `tree-seq coll? seq`” does
+not reliably turn into action. One final bounded neighbor will state the route
+as executable policy:
+
+```text
+When a predicate identifies the desired descendants, skip a separate
+map-versus-vector query. Use (filter predicate (tree-seq coll? seq value)).
+```
+
+If that wording does not make the route reliable and improve wall time, stop
+trying to retrain the model. Keep v7 as the measured product leader and treat
+native traversal as optional Clojure capability rather than the headline.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

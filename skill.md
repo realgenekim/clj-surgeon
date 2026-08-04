@@ -77,9 +77,10 @@ clj-surgeon :op :xray :file src/policy.clj \
 refuses before analysis without changing that type.
 Computed `:value` has compact hash evidence; a plain path returns full source.
 Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
-one canonical map view while evidence stays exact. When nested container shape
-is irrelevant, traverse with `tree-seq coll? seq`. Return concrete EDN, not a
-lazy sequence. It never writes. In CLJC, pass a platform for one branch.
+one canonical map view while evidence stays exact. When a predicate identifies
+the desired descendants, skip a separate map-versus-vector query; use
+`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a lazy sequence.
+It never writes. In CLJC, pass a platform for one branch.
 
 End that same path with `replace` to emit one guarded plan:
 

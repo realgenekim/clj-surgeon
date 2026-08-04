@@ -71,11 +71,11 @@
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
         initializer (dsl/compile-xray "(-> (form 'data) initializer)")
         traversal (dsl/compile-xray
-                   "(-> (form 'data) (analyze #(count (filter (fn [x] (and (map? x) (= true (:required x)))) (tree-seq coll? seq %)))))")
+                    "(-> (form 'data) (analyze #(count (filter (fn [x] (and (map? x) (= true (:required x)))) (tree-seq coll? seq %)))))")
         computed (dsl/compile-xray
-                  "(-> (form 'data) (match :xs) right (expect-count 1) (analyze (fn [[xs]] (count xs))))")
+                   "(-> (form 'data) (match :xs) right (expect-count 1) (analyze (fn [[xs]] (count xs))))")
         aggregated (dsl/compile-xray
-                    "(-> (form 'data) (match '_) (where {:tag :vector}) (analyze #(mapv count %)))")]
+                     "(-> (form 'data) (match '_) (where {:tag :vector}) (analyze #(mapv count %)))")]
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
     (is (= [[:form 'data] :initializer] (:query initializer)))
@@ -191,9 +191,9 @@
     (testing label
       (let [calls (atom 0)
             result (dsl/evaluate-xray
-                    source
-                    {:expression label
-                     :xray (one-spec query (fn [_] (swap! calls inc)))})]
+                     source
+                     {:expression label
+                      :xray (one-spec query (fn [_] (swap! calls inc)))})]
         (is (= :xray-cardinality-mismatch (:error-type result)))
         (is (= 1 (:expected-match-count result)))
         (is (= expected-count (:actual-match-count result)))
@@ -201,10 +201,10 @@
         (is (nil? (:value result))))))
   (let [seen (atom nil)
         result (dsl/evaluate-xray
-                source
-                {:expression "one"
-                 :xray (one-spec [[:form 'data] [:find :xs] :right]
-                                 #(do (reset! seen %) (reduce + %)))})]
+                 source
+                 {:expression "one"
+                  :xray (one-spec [[:form 'data] [:find :xs] :right]
+                                  #(do (reset! seen %) (reduce + %)))})]
     (is (= [1 2] @seen))
     (is (= 3 (:value result)))
     (is (= :selected-value (get-in result [:xray :input-shape])))))
@@ -215,9 +215,9 @@
                         "(expect-count 1) (analyze identity))")
         program (dsl/compile-xray expression)
         result (dsl/evaluate-xray
-                source
-                {:expression expression
-                 :xray (assoc program :analyzer #(do (reset! seen %) %))})]
+                 source
+                 {:expression expression
+                  :xray (assoc program :analyzer #(do (reset! seen %) %))})]
     (is (= [[1 2]] @seen))
     (is (= [[1 2]] (:value result)))
     (is (= [:exactly 1] (get-in result [:xray :cardinality])))
@@ -281,14 +281,14 @@
 (deftest compact-evidence-preserves-provenance-without-repeating-source
   (let [query [[:form 'data] [:find :ys] :right]
         compact (dsl/evaluate-xray
-                 source
-                 {:expression "compact"
-                  :xray (one-spec query identity)})
+                  source
+                  {:expression "compact"
+                   :xray (one-spec query identity)})
         full (dsl/evaluate-xray
-              source
-              {:expression "full"
-               :evidence :full
-               :xray (one-spec query identity)})
+               source
+               {:expression "full"
+                :evidence :full
+                :xray (one-spec query identity)})
         compact-match (get-in compact [:matches 0])]
     (is (= [3 4] (:value compact) (:value full)))
     (is (= :compact (get-in compact [:xray :evidence])))
@@ -303,24 +303,24 @@
                           (pr-str (vec (range 1000))) ")\n")
         query [[:form 'data]]
         compact (dsl/evaluate-xray
-                 large-source
-                 {:expression "compact"
-                  :xray (one-spec query count)})
+                  large-source
+                  {:expression "compact"
+                   :xray (one-spec query count)})
         full (dsl/evaluate-xray
-              large-source
-              {:expression "full"
-               :evidence :full
-               :xray (one-spec query count)})]
+               large-source
+               {:expression "full"
+                :evidence :full
+                :xray (one-spec query count)})]
     (is (< (count (pr-str compact))
            (/ (count (pr-str full)) 2))))
   (let [first-result (dsl/evaluate-xray
-                      source
-                      {:expression "stable"
-                       :xray (one-spec [[:form 'data]] identity)})
+                       source
+                       {:expression "stable"
+                        :xray (one-spec [[:form 'data]] identity)})
         changed-result (dsl/evaluate-xray
-                        (str/replace source "[3 4]" "[3 5]")
-                        {:expression "stable"
-                         :xray (one-spec [[:form 'data]] identity)})]
+                         (str/replace source "[3 4]" "[3 5]")
+                         {:expression "stable"
+                          :xray (one-spec [[:form 'data]] identity)})]
     (is (not= (:selection-hash first-result)
               (:selection-hash changed-result)))
     (is (not= (get-in first-result [:matches 0 :source-hash])
@@ -329,20 +329,20 @@
 (deftest spans-and-partitions-arrive-as-vectors-of-clojure-values
   (let [span-result
         (dsl/evaluate-xray
-         source
-         {:file "bench/xray.clj"
-          :expression "span"
-          :evidence :full
-          :xray (spec [[:form 'choose] [:find :a] [:span 2]] first)})
+          source
+          {:file "bench/xray.clj"
+           :expression "span"
+           :evidence :full
+           :xray (spec [[:form 'choose] [:find :a] [:span 2]] first)})
         partition-result
         (dsl/evaluate-xray
-         source
-         {:file "bench/xray.clj"
-          :expression "partitions"
-          :evidence :full
-          :xray (spec [[:form 'choose] [:find 'case] :up :down :right :right
-                       [:partition-all 2]]
-                      #(mapv vec %))})]
+          source
+          {:file "bench/xray.clj"
+           :expression "partitions"
+           :evidence :full
+           :xray (spec [[:form 'choose] [:find 'case] :up :down :right :right
+                        [:partition-all 2]]
+                       #(mapv vec %))})]
     (is (= [:a 1] (:value span-result)))
     (is (= [[:a 1] [:b 2]] (:value partition-result)))
     (is (= [":a" "1"] (get-in span-result [:matches 0 :forms])))
@@ -352,11 +352,11 @@
   (let [query [[:form 'data] [:find :ys] :right]
         expected (lens/evaluate-query source query)
         actual (dsl/evaluate-xray
-                source
-                {:file "bench/xray.clj"
-                 :expression "evidence"
-                 :evidence :full
-                 :xray (spec query first)})]
+                 source
+                 {:file "bench/xray.clj"
+                  :expression "evidence"
+                  :evidence :full
+                  :xray (spec query first)})]
     (is (= (select-keys expected
                         [:query :trace :match-count :matches :source-hash])
            (select-keys actual
@@ -380,7 +380,7 @@
            ["set" #{1 2}]]]
     (testing label
       (let [result (dsl/evaluate-xray
-                    source
+                     source
                      {:file "bench/xray.clj"
                       :expression label
                       :xray (spec [[:form 'data] [:find :missing]]
@@ -397,7 +397,7 @@
             :xray-analysis-failed]]]
     (testing label
       (let [result (dsl/evaluate-xray
-                    source
+                     source
                      {:file "bench/xray.clj"
                       :expression label
                       :xray (spec [[:form 'data] [:find :missing]] analyzer)})]
@@ -412,10 +412,10 @@
                            "  (hash-map :read {:category :read}\n"
                            "            :write {:category :write}))\n")
         result (dsl/evaluate-xray
-                shaped-source
-                {:expression "shape repair"
-                 :xray (one-spec [[:form 'registry]]
-                                 #(throw (ex-info "not a map" {})))})
+                 shaped-source
+                 {:expression "shape repair"
+                  :xray (one-spec [[:form 'registry]]
+                                  #(throw (ex-info "not a map" {})))})
         serialized (pr-str result)]
     (is (= :xray-analysis-failed (:error-type result)))
     (is (str/includes? (:remedy result) "parsed syntax"))
@@ -430,14 +430,14 @@
         many-source (str "(ns bench.many)\n(def many [" forms "])\n")
         calls (atom 0)
         result (dsl/evaluate-xray
-                many-source
-                {:file "bench/many.clj"
-                 :expression "bounded"
-                 :xray (spec [[:form 'many] [:find '_]
-                              [:where {:tag :token :parent-tag :vector}]]
-                             (fn [values]
-                               (swap! calls inc)
-                               values))})]
+                 many-source
+                 {:file "bench/many.clj"
+                  :expression "bounded"
+                  :xray (spec [[:form 'many] [:find '_]
+                               [:where {:tag :token :parent-tag :vector}]]
+                              (fn [values]
+                                (swap! calls inc)
+                                values))})]
     (is (= :xray-input-truncated (:error-type result)))
     (is (= 101 (:match-count result)))
     (is (= 100 (count (:matches result))))
@@ -451,11 +451,11 @@
                         "(xray #(mapv first %)))")
         compiled (dsl/compile-xray expression)
         result (dsl/evaluate-xray
-                real-source
+                 real-source
                  {:file "bench/fixtures/bench/pair_view.clj"
-                 :expression expression
-                 :evidence :full
-                 :xray compiled})]
+                  :expression expression
+                  :evidence :full
+                  :xray compiled})]
     (is (= [[:form 'classify-request] [:find 'cond] :up :outermost
             :down :right [:partition-all 2]]
            (:query compiled)))
@@ -475,26 +475,26 @@
            (:error-type (dsl/prepare-xray-options base))))
     (is (= :unsupported-arguments
            (:error-type (dsl/prepare-xray-options
-                         (assoc base :expr valid :query [])))))
+                          (assoc base :expr valid :query [])))))
     (is (= :invalid-xray-expression
            (:error-type (dsl/prepare-xray-options
-                         (assoc base :expr "(slurp \"secret\")")))))
+                          (assoc base :expr "(slurp \"secret\")")))))
     (is (= :invalid-evidence-mode
            (:error-type (dsl/prepare-xray-options
-                         (assoc base :expr valid :evidence :brief)))))
+                          (assoc base :expr valid :evidence :brief)))))
     (is (= :compact
            (:evidence (dsl/prepare-xray-options (assoc base :expr valid)))))
     (is (= :full
            (:evidence (dsl/prepare-xray-options
-                       (assoc base :expr valid :evidence :full)))))))
+                        (assoc base :expr valid :evidence :full)))))))
 
 (def ^:private project-root
   (str (fs/normalize (fs/path (System/getProperty "user.dir")))))
 
 (defn- run-cli [& args]
   @(proc/process
-    (into ["bb" "-m" "clj-surgeon.core"] args)
-    {:dir project-root :err :string :out :string}))
+     (into ["bb" "-m" "clj-surgeon.core"] args)
+     {:dir project-root :err :string :out :string}))
 
 (deftest cli-xray-computes-one-read-only-edn-result
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon xray "})
@@ -570,9 +570,10 @@
           (is (str/includes? text "frequencies"))
           (is (str/includes? text "analyze") surface)
           (is (str/includes? text "expect-count") surface)
-          (is (str/includes? text "initializer") surface))))
+          (is (str/includes? text "initializer") surface)
+          (is (str/includes? text "tree-seq") surface))))
     (is (<= (count (str/split-lines
-                    (get surfaces "canonical skill")))
+                     (get surfaces "canonical skill")))
             240))))
 
 (deftest parse-args-preserves-xray-expression-verbatim
