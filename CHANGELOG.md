@@ -11,10 +11,12 @@ is cut.
 ### Added
 
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
-  `(xray-one path pure-function)` refuses zero or many matches and receives one
-  value directly; generic `(xray path pure-function)` aggregates a selection
-  vector. It returns `:value`; compact hash-backed evidence is the default and
-  full exact source is opt-in. Named selection now sees `#?`
+  A plain path such as `(form 'transition)` returns literal source;
+  `(compute path pure-function)` refuses zero or many and receives one value;
+  `(aggregate path pure-function)` receives a selection vector. Computation
+  returns `:value` with compact hash evidence.
+  Former read spellings remain compatibility inputs while this unified surface
+  is measured. Named selection now sees `#?`
   and `#?@` branch-local forms and accepts an optional platform. X-ray never
   writes source or a plan and refuses truncated evidence, analyzer failure,
   non-EDN results, and oversized output.

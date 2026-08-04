@@ -141,15 +141,14 @@ Planning then discards the function and saves only the concrete replacement,
 diff, and hashes. The durable artifact stays data, and the trusted executor
 does not gain an interpreter.
 
-The read-only counterpart is `:xray`. Its exact-one terminal
-`(xray-one path pure-function)` refuses zero or many matches and receives the
-selected Clojure value directly. Generic `(xray path pure-function)` receives
-the selected values as a vector for intentional aggregation. Both return a
-bounded EDN `:value`. Compact evidence retains addresses, ranges, trace,
-cardinality, per-selection hashes, and the complete-file hash without repeating
-large source bodies; full exact source is opt-in. Computation never replaces
-evidence. `:xray` never writes source or a plan. Literal inspection remains
-`:q`. `:xray` is justified only when computation removes a later shell step.
+The read-only surface is `:xray :expr`. A plain Clojure path such as
+`(-> (form 'transition) (match :finish) right)` returns exact literal source
+evidence. `(compute path pure-function)` refuses zero or many and receives one
+value; `(aggregate path pure-function)` receives a selection vector. Computed
+results return bounded EDN `:value` with compact addresses, ranges, trace,
+cardinality, and hashes. Computation never replaces evidence. X-ray never
+writes source or a plan. Former read spellings remain compatibility inputs
+while the unified surface is tested.
 
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and

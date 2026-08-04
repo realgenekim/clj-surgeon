@@ -33,6 +33,27 @@ These findings disprove any current claim of maximality.
 
 ## Product Changes Under Test
 
+### 0. One read surface
+
+Test whether `:xray :expr` can own both literal and computed structural reads:
+
+```clojure
+(form 'transition)                         ; literal full evidence
+(-> (form 'transition) (match :finish) right) ; literal relationship
+(-> (form 'retry-policy) (compute f))      ; exact-one compact result
+(-> (form 'events) (match :event) (aggregate f)) ; many compact result
+```
+
+This candidate removes `:q`, `xray-one`, and `:evidence :full` from the primary
+mental model. Literal X-ray is the full-evidence route; computed X-ray is the
+compact route. Keep the old operation, EDN query spelling, and terminal names
+as compatibility inputs during the experiment. Do not delete them until the
+unified surface wins clean-agent literal, relationship, exact-one, aggregate,
+and refusal tasks.
+
+If performance is comparable, prefer the smaller documented API. Runtime
+aliases are cheap; parallel concepts in the skill and help are not.
+
 ### 1. CLJC-aware named selection
 
 `[:form NAME]` must see branch-local definitions in `#?` and `#?@` forms.

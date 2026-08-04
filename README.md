@@ -257,53 +257,37 @@ that genuinely spans forms or files. Inside one Clojure file, use
 `:show-form :contains` instead of `rg -n` followed by `:show-form :line`; do not
 print a large outline merely to discover the line.
 
-#### `:lens` / `:q` — Query and update the concrete syntax tree
+#### `:xray` — Read and compute with one Clojure path
 
-`:q` is a jq-like structural lens expressed as EDN. It navigates parsed Clojure
-syntax without evaluating it. Read the value paired with `:finish` in one call:
+Use `:xray :expr` for literal structural reads and pure computation. A path
+without a terminal returns exact source evidence:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] :right]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right)"
 ```
 
-The same relationship works across the common peer shapes:
-
-- `case` key → clause value
-- `cond` guard → branch result
-- map key → map value
-- binding name → initializer
-
-Compose `[:form NAME]`, `[:find PATTERN]`,
-`[:where {:tag TAG}]`, `[:where {:parent-tag TAG}]`, and semantic
-`:right`/`:left`/`:up`/`:down` steps. `_` matches one subtree in a `:find`
-pattern. Navigation skips whitespace and comments while addresses still refer
-to the lossless rewrite-clj tree. Each read returns the exact source, semantic
-path, stable address, owner, source range, complete-file hash, and a per-step
-cardinality trace. Zero and many matches are useful read results; output is
-bounded.
-
-#### `:xray` — Compute over selected Clojure data
-
-Use `:xray` for counts, sums, frequencies, grouping, or other pure Clojure
-computation over selected source. Do not reconstruct those answers manually
-from `:q`. Keep `:q` as the shorter path for literal reads:
+End the same path with `compute` when exactly one selected value determines a
+derived answer:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))"
 ```
 
-Use `xray-one` when the path is intended to select exactly one node. It refuses
-zero or many matches before calling the analyzer and passes that node's Clojure
-value directly. Use generic `xray` to aggregate zero, one, or many selected
-values in query order; it receives a vector. A span or partition is one
-selected value represented as a vector.
+`compute` refuses zero or many matches before calling the function and passes
+the selected Clojure value directly. Use `aggregate` for a vector of zero, one,
+or many selected values in query order.
 
-Compact evidence is the default. The result keeps `:value`, addresses, source
-ranges, cardinality trace, per-match hashes, a selection hash, and the
-complete-file hash without repeating selected source. Add `:evidence :full`
-when the exact selected source must accompany the computation.
+The value is parsed source syntax, not evaluated program state. Selecting a
+`def` returns its complete defining list; selecting `(hash-map :a 1)` returns a
+list headed by the symbol `hash-map`, not a constructed map. Return concrete
+EDN from computation; realize lazy results with `vec` or another collection.
+
+Literal paths return full source evidence. Computed paths keep `:value`,
+addresses, ranges, trace, per-match hashes, a selection hash, and the
+complete-file hash without repeating selected source. The old `:q`, EDN paths,
+`xray`, and `xray-one` remain compatibility inputs during the experiment.
 
 Named paths are CLJC-aware. `(form 'load-starred-post :cljs)` and the EDN step
 `[:form load-starred-post :cljs]` select one reader-conditional branch. Without
@@ -315,10 +299,18 @@ input, analyzer failure, lazy or non-EDN output, and output over 65,536
 characters. SCI does not expose I/O, processes, namespaces, mutable references,
 classes, or host interop.
 
+The same `right` relationship moves from a `case` key, `cond` guard, map key,
+or binding name to its paired value. Navigation skips whitespace and comments
+while returned addresses still refer to the lossless concrete-syntax tree.
+
+Compatibility: `:lens` / `:q` accepts the former jq-like EDN query pipeline.
+Existing invocations remain supported, but new read workflows should use the
+single Clojure X-ray surface above.
+
 In the initial unprimed four-run checksum keep gate, `:xray` was exact in four of four
 runs versus three of four before the feature. Median wall time fell 21%, shell
-calls 33%, input tokens 45%, and output tokens 43%. Routine literal reads still
-belong to `:q`. This established a compelling feature, not a local maximum;
+calls 33%, input tokens 45%, and output tokens 43%. Routine literal reads remain
+cheaper than computation. This established a compelling feature, not a local maximum;
 the [maximality audit](docs/plans/xray-maximality-audit.md) now compares compact
 X-ray with `:q | bb` and direct execution. See the original
 [experiment record](docs/observations/2026-08-04-captains-log-source-became-data.md).

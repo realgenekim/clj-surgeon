@@ -638,18 +638,18 @@
     :xray             {:handler run-xray
                        :desc "Compute one read-only EDN value from structurally selected Clojure data"
                        :args {:file {:required true :desc "Clojure source file; never modified"}
-                              :expr {:required true :desc "One sandboxed pure Clojure expression ending in xray or xray-one"}
-                              :evidence {:desc ":compact (default) or :full exact selected source"}}
-                       :workflow ["Use :q for a literal structural read. Use :xray for counts, sums, frequencies, grouping, or another pure computation; do not reconstruct those answers manually from :q."
-                                  "End one thread-first structural path with (xray pure-function). The function receives a vector of selected values in match order; when one selected node is itself a collection, operate on (first values)."
-                                  "For an intended singular selection, end with (xray-one pure-function). It receives that value directly and refuses zero or many matches."
-                                  "Generic xray passes [] for zero matches, a one-element vector for one match, and stable query order for many."
-                                  "Compact evidence is the default: :value, addresses, ranges, trace, cardinality, and hashes without repeated source bodies. Add :evidence :full when exact selected source is needed."
+                              :expr {:required true :desc "One sandboxed pure Clojure path, optionally ending in compute or aggregate"}}
+                       :workflow ["Use one Clojure path for every structural read. A path without a terminal returns literal source evidence."
+                                  "End with (compute pure-function) for exactly one selected value. It refuses zero or many before calling the function."
+                                  "End with (aggregate pure-function) for a vector of zero, one, or many values in match order."
+                                  "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
+                                  "Selected values are parsed syntax, not evaluated program state. A selected def is its complete defining list. Return concrete EDN, not a lazy sequence."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]
-                       :examples ["clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))\""
-                                  "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (xray #(mapv first %)))\""]
+                       :examples ["clj-surgeon :op :xray :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right)\""
+                                  "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))\""
+                                  "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (aggregate #(mapv first %)))\""]
                        :category :read}
 
     :ls               {:handler   run-outline
@@ -841,8 +841,8 @@
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
-    (.append sb "    clj-surgeon :op :q :file src/my/ns.clj :query '[[:form transition] [:find :finish] :right]'\n")
-    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))\"\n")
+    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right)\"\n")
+    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))\"\n")
     (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right (replace 'NEW-FORM))\" :plan-out plan.edn\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")
@@ -909,7 +909,7 @@
                               :error-type :missing-arguments
                               :missing missing}
                        (= canonical :xray)
-                       (assoc :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\"")
+                       (assoc :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\"")
 
                        (= canonical :show-form)
                        (merge (show-form/refusal-context opts))

@@ -80,16 +80,13 @@ updates, and verification gates. It is not a chronological coding diary.
   `[:find cond] :up :outermost` before navigating to the children. Placement is
   significant: use `:up :outermost`, not `:outermost :up`. When the first outer
   guard is already known, anchor there directly because that route is shorter.
-- Use `:xray :expr` only when pure Clojure computation over selected values
-  removes a later shell command or manual reconstruction. Use
-  `(xray-one path pure-function)` for an intended singular selection; it
-  receives that value directly and refuses zero or many. Generic `xray`
-  receives a vector in match order. The returned `:value` has compact
-  hash-backed evidence by default; add `:evidence :full` only when exact
-  selected source is required.
-  It is read-only and never writes source or a plan. Use `:q` when no
-  computation is needed. For a CLJC named form, pass `:clj` or `:cljs` to
-  `form`; never treat an unqualified branch ambiguity as absence.
+- Use `:xray :expr` as the primary structural read surface. Write one pure Clojure
+  path, such as `(-> (form 'transition) (match :finish) right)`, to
+  return literal source evidence. End it with `compute` for exactly one
+  selected value or `aggregate` for a vector in match order. Computed `:value`
+  has compact hash evidence; literal paths retain full source. X-ray never
+  writes source or a plan. For CLJC, pass `:clj` or `:cljs` to `form`; never
+  treat an unqualified branch ambiguity as absence.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already

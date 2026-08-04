@@ -46,32 +46,31 @@ distinctive text into a line for `:show-form`.
 
 ## Read and edit syntax like data
 
-Use `:q` to read when one piece of syntax identifies a related node. The query
-is an EDN pipeline over the concrete syntax tree, not evaluated Clojure:
+Use `:xray :expr` when one piece of syntax identifies a related node:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] :right]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right)"
 ```
 
 This reads the value paired with `:finish`. The same `:right` step moves from a
 `cond` guard to its result, a map key to its value, or a binding name to its
 initializer. Semantic navigation skips whitespace and comments but the tool
-preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
-`[:where {:tag TAG}]`, `[:where {:parent-tag TAG}]`, and
-`:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
-pattern. A read reports zero, one, or many matches and a per-step count trace.
+preserves them in the file. Compose `form`, `match`, `where`, `right`, `left`,
+`up`, `down`, `outermost`, `span`, and `partition-all`. `_` matches one subtree.
+A plain path reports zero, one, or many matches and a count trace.
 
-Use `:xray` for counts, sums, frequencies, grouping, or other pure computation over selected source. Do not reconstruct those answers manually from `:q`:
+End the path with `compute` for one selected value or `aggregate` for many:
 
 ```bash
-clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))"
 ```
 
-`xray-one` receives one intended value and refuses zero or many; generic `xray`
-receives a vector. The `:value` has compact hash evidence; use `:evidence :full`
-for source. It never writes. Use `:q` without computation. In CLJC, select a
-branch with `(form 'name :clj)` or `[:form name :cljs]`.
+`compute` receives one value and refuses zero or many. `aggregate` receives a
+vector. Computed `:value` has compact hash evidence; a plain path returns full
+source. Values are parsed syntax, not evaluated code: a selected `def` is the
+whole list. Return concrete EDN, not a lazy sequence. X-ray never writes. In
+CLJC, select with `(form 'name :clj)`.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing
@@ -116,7 +115,7 @@ interop. Refusals include allowed symbols, signatures, and a remedy.
 
 `:edit` requires `:file`, `:plan-out`, and one authoring surface. It never
 changes source. Review its edit, trace, diff, and hashes before apply. Never
-chain plan generation and application. Use `:q` first only for judgment.
+chain plan generation and application. Use X-ray first only for judgment.
 
 Do not preflight whether the task-specific `:plan-out` path exists. Successful
 planning atomically replaces that artifact. Any refusal preserves it.
@@ -143,17 +142,17 @@ inspection. Use `:right` when only the peer value is the target.
 
 ## Enumerate sibling pairs in one read
 
-When the first sibling is known, enumerate every pair with `[:partition-all 2]`:
+When the first sibling is known, enumerate every pair with `partition-all`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/state.clj :expr "(-> (form 'transition) (match 'case) up down right right (partition-all 2))"
 ```
 
 When repeated nested heads make the first outer sibling unknown, promote heads
 to owners before retaining maximal owners:
 
 ```bash
-clj-surgeon :op :q :file src/policy.clj :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2))"
 ```
 
 Use `:up :outermost`, not `:outermost :up`. Head symbols do not contain one
@@ -183,7 +182,7 @@ clj-surgeon :op :grep-form :file src/views.clj :inside render \
 ```
 
 When a peer key, guard, or binding identifies the intended subtree, prefer one
-`:q` read or `:edit` plan. Do not read its owner and reconstruct a separate
+X-ray read or `:edit` plan. Do not read its owner and reconstruct a separate
 match. Do not grep a repeated expression and then cat its owner only to recover
 sibling context.
 

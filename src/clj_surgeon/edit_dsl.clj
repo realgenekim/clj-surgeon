@@ -46,7 +46,7 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down outermost span partition-all replace
-    replace-span transform xray xray-one])
+    replace-span transform xray xray-one compute aggregate])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -74,9 +74,13 @@
    "(xray-one path pure-function)"])
 
 (def ^:private xray-expression-reference
-  (vec (remove #(or (str/starts-with? % "(replace")
-                    (str/starts-with? % "(transform"))
-               expression-reference)))
+  (->> expression-reference
+       (remove #(or (str/starts-with? % "(replace")
+                    (str/starts-with? % "(transform")
+                    (str/starts-with? % "(xray")))
+       (into ["A path expression returns literal structural evidence."
+              "(compute path pure-function)"
+              "(aggregate path pure-function)"])))
 
 (def ^:private max-expression-characters 32768)
 (def ^:private max-xray-result-characters 65536)
@@ -208,6 +212,16 @@
          :cardinality :one
          :input-shape :selected-value))
 
+(defn compute
+  "Compute from exactly one selected value. Primary X-ray terminal."
+  [path analyzer]
+  (xray-one path analyzer))
+
+(defn aggregate
+  "Compute across zero, one, or many selected values."
+  [path analyzer]
+  (xray path analyzer))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -223,7 +237,9 @@
    'replace-span replace-span
    'transform transform
    'xray xray
-   'xray-one xray-one})
+   'xray-one xray-one
+   'compute compute
+   'aggregate aggregate})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -250,8 +266,8 @@
                     :allowed-symbol-count (count allowed-symbols)
                     :allowed-capabilities allowed-capabilities
                     :allowed-forms xray-expression-reference
-                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\""
-                    :remedy "Use one pure Clojure expression ending in (xray path pure-function) or (xray-one path pure-function)."}
+                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""
+                    :remedy "Return a structural path for literal evidence, or end it with compute or aggregate."}
                    cause))))
 
 (defn- evaluate-expression
@@ -300,15 +316,27 @@
     query))
 
 (defn compile-xray
-  "Compile one capability-limited Clojure expression into an xray program."
+  "Compile one pure path or terminal computation into an X-ray program."
   [expression]
   (let [program (evaluate-expression expression invalid-xray-expression!)]
-    (when-not (and (map? program)
-                   (= :xray (:kind program))
-                   (vector? (:query program))
-                   (fn? (:analyzer program)))
-      (invalid-xray-expression! expression :xray-terminal-required))
-    (assoc program :expression expression)))
+    (cond
+      (vector? program)
+      (do
+        (when (terminal-step? (peek program))
+          (invalid-xray-expression! expression :xray-terminal-required))
+        {:kind :literal
+         :query program
+         :expression expression})
+
+      (and (map? program)
+           (= :xray (:kind program))
+           (vector? (:query program))
+           (fn? (:analyzer program)))
+      (assoc program :expression expression)
+
+      :else
+      (invalid-xray-expression!
+       expression :xray-expression-must-return-path-or-computation))))
 
 (defn prepare-edit-options
   "Compile :expr into :query or return a structured one-of-input refusal."
@@ -365,7 +393,7 @@
        :error-type :unsupported-arguments
        :unsupported unsupported
        :allowed (vec (sort xray-allowed-arguments))
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\" [:evidence :full]"}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""}
 
       (not (contains? opts :expr))
       {:operation :xray
@@ -373,7 +401,7 @@
        :error "Supply :expr"
        :error-type :missing-xray-input
        :missing [:expr]
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (xray-one pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (compute pure-function))\""}
 
       (and (contains? opts :evidence)
            (not (#{:compact :full} evidence)))
@@ -453,7 +481,7 @@
         (assoc :selection-hash
                (structural-lens/source-hash (pr-str sources)))))))
 
-(defn evaluate-xray
+(defn- evaluate-computed-xray
   "Evaluate one read-only xray program against source. Pure: data in, EDN out."
   [source {:keys [expression xray evidence]}]
   (let [{:keys [query analyzer cardinality input-shape]} xray
@@ -516,6 +544,16 @@
 
               :else
               (assoc evidence :value value))))))))
+
+(defn evaluate-xray
+  "Evaluate a literal structural path or a terminal pure computation."
+  [source {:keys [expression xray] :as opts}]
+  (if (= :literal (:kind xray))
+    (-> (structural-lens/evaluate-query source (:query xray))
+        (assoc :operation :xray
+               :mode :literal
+               :expression expression))
+    (assoc (evaluate-computed-xray source opts) :mode :computed)))
 
 (defn evaluate-edit
   "Materialize a pure transform against one selected form, then build a concrete plan."

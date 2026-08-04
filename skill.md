@@ -50,45 +50,43 @@ distinctive text into a line for `:show-form`.
 
 ## Navigate and update syntax like data
 
-Use `:q` when one piece of syntax identifies a related node. The query is an
-EDN pipeline over the concrete syntax tree, not evaluated Clojure:
+Use `:xray :expr` when one piece of syntax identifies a related node:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] :right]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right)"
 ```
 
 This reads the value paired with `:finish`. The same `:right` step moves from a
 `cond` guard to its result, a map key to its value, or a binding name to its
 initializer. Semantic navigation skips whitespace and comments but the tool
-preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
-`[:where {:tag TAG}]`, `[:where {:parent-tag TAG}]`, and
-`:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
-pattern. A read reports zero, one, or many matches and a per-step count trace.
+preserves them in the file. Compose `form`, `match`, `where`, and navigation
+builders. `_` matches one subtree. A plain path reports zero, one, or many
+matches and a count trace.
 
-Use `:xray` for counts, sums, frequencies, grouping, or other pure computation
-over selected source. Do not reconstruct those answers manually from `:q`:
+End the path with `compute` for one value or `aggregate` for many:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (xray-one #(frequencies (map :category %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (compute #(frequencies (map :category %))))"
 ```
 
-`xray-one` receives one intended value and refuses zero or many. Generic `xray`
-receives a vector for aggregation. The result keeps `:value` with compact
-hash-backed evidence; add `:evidence :full` for exact source. It never writes.
-Use `:q` for literal reads. In CLJC, pass a platform to `form` for one branch.
+`compute` receives one value and refuses zero or many. `aggregate` receives a
+vector. Computed `:value` has compact hash evidence; a plain path returns full
+source. Values are parsed syntax, not evaluated code: a selected `def` is the
+whole list. Return concrete EDN, not a lazy sequence. It never writes. In CLJC,
+pass a platform to `form` for one branch.
 
-End that same path with `[:replace FORM]` to emit one guarded plan:
+End that same path with `replace` to emit one guarded plan:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
   :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-`:q` never writes source. A terminal replacement refuses unless the path
+`:edit` never writes source. A terminal replacement refuses unless the path
 selects exactly one node, then returns that node, the trace, one diff, and the
 source/result hashes. Review the plan before the separate apply command. Never
 chain plan generation and application. When the requested relationship and
@@ -130,7 +128,7 @@ planning atomically replaces that artifact. Any refusal preserves it.
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
   :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
@@ -144,11 +142,11 @@ inspection. Use `:right` when only the peer value is the target.
 
 ## Enumerate sibling pairs in one read
 
-When the first sibling is known, enumerate every pair with `[:partition-all 2]`:
+When the first sibling is known, enumerate every pair with `partition-all`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match 'case) up down right right (partition-all 2))"
 ```
 
 The step starts at the current node and partitions it with all following
@@ -163,8 +161,8 @@ When repeated nested heads make that first outer sibling unknown, promote each
 head to its owner before retaining maximal owners:
 
 ```bash
-clj-surgeon :op :q :file src/policy.clj \
-  :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/policy.clj \
+  :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2))"
 ```
 
 Use `:up :outermost`, not `:outermost :up`; head symbols do not contain one
@@ -190,7 +188,7 @@ a narrowed search or replacement. Add `:inside` only
 when already known or when choosing among multiple matches.
 
 When a peer key, guard, or binding identifies the intended subtree, prefer one
-`:q` pipeline over reading its owner and reconstructing a separate match. Do
+X-ray path over reading its owner and reconstructing a separate match. Do
 not grep a repeated expression and then cat its owner merely to recover sibling
 context.
 
@@ -231,7 +229,7 @@ worktree or explicitly requests that review. Never probe
 `.git` solely to decide whether to repeat the edit-level evidence.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
-syntax, not a synthetic wrapper list. Use `:q` peer navigation when the sibling
+syntax, not a synthetic wrapper list. Use X-ray peer navigation when the sibling
 relationship identifies the target. Use `:replace-subform` when one independent
 subtree pattern already identifies it exactly.
 
