@@ -67,12 +67,12 @@
   (is (= [[:form 'load-starred-post :cljs]]
          (dsl/form 'load-starred-post :cljs))))
 
-(deftest one-xray-algebra-covers-literal-inspect-one-and-inspect-all
+(deftest one-xray-algebra-covers-literal-one-and-all
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
         computed (dsl/compile-xray
-                  "(-> (form 'data) (match :xs) right (inspect :one count))")
+                  "(-> (form 'data) (match :xs) right (one count))")
         aggregated (dsl/compile-xray
-                    "(-> (form 'data) (match '_) (where {:tag :vector}) (inspect :all #(mapv count %)))")]
+                    "(-> (form 'data) (match '_) (where {:tag :vector}) (all #(mapv count %)))")]
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
     (is (= :one (:cardinality computed)))
@@ -116,7 +116,7 @@
         (is (= :invalid-xray-expression (:error-type error)))
         (is (= reason (:reason error)))
         (is (= expression (:expression error)))
-        (is (some #{"(inspect path :one pure-function)"} (:allowed-forms error)))
+        (is (some #{"(one path pure-function)"} (:allowed-forms error)))
         (is (str/includes? (:usage error) ":xray"))))))
 
 (deftest literal-xray-returns-full-structural-evidence
@@ -339,7 +339,7 @@
         serialized (pr-str result)]
     (is (= :xray-analysis-failed (:error-type result)))
     (is (str/includes? (:remedy result) "parsed syntax"))
-    (is (str/includes? (:remedy result) "without inspect"))
+    (is (str/includes? (:remedy result) "without its terminal"))
     (is (nil? (:input-summary result)))
     (is (not (str/includes? serialized "Operation registry.")))
     (is (not (str/includes? serialized "hash-map :read")))
@@ -488,9 +488,8 @@
       (testing (str surface " teaches computed aggregation and exact-one input")
         (let [text (get surfaces surface)]
           (is (str/includes? text "frequencies"))
-          (is (str/includes? text "inspect") surface)
-          (is (str/includes? text ":one") surface)
-          (is (str/includes? text ":all") surface))))
+          (is (str/includes? text "(one") surface)
+          (is (re-find #"(?:`all`|\(all )" text) surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

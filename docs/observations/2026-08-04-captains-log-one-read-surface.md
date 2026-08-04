@@ -245,6 +245,39 @@ This candidate is rejected as a combined change. It also confounded the new
 next bounded neighbor must remove the summary from the default path and test
 the naming change alone. Do not blame or promote the names from this result.
 
+## Candidate v4: `inspect` alone also lost wall time
+
+Candidate v4 removed automatic summaries and isolated only the naming change.
+The one-pair pilot had `inspect` 24% slower but one call shorter. Four
+counterbalanced replicates again kept correctness perfect and rejected the
+candidate on efficiency:
+
+```text
+                              compute / aggregate    inspect :one / :all
+correct                               4/4                    4/4
+median wall                          67.7 s                   78.4 s
+median shell calls                    8                       9
+median input tokens                 176,696                 189,374
+```
+
+Three of four paired `inspect` runs were slower. Agents accepted the syntax
+without naming errors; they still spent time navigating to and interpreting
+the definition initializer. Human comprehension favors `inspect`, but the
+measured wall result does not. Do not call aesthetic preference an efficiency
+win.
+
+The next neighbor removes the redundant verb. Inside an operation already
+named X-ray, database-style `one` / `all` states only the cardinality contract:
+
+```clojure
+(-> path (one f)) ; exact-one or refuse
+(-> path (all f)) ; vector in source order
+```
+
+This is smaller than both previous pairs and directly answers the human
+question that rejected `compute` / `aggregate`. Compatibility aliases remain
+available during the test.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

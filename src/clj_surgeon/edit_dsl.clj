@@ -46,7 +46,7 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down outermost span partition-all replace
-    replace-span transform xray xray-one compute aggregate inspect])
+    replace-span transform xray xray-one compute aggregate inspect one all])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -79,8 +79,8 @@
                     (str/starts-with? % "(transform")
                     (str/starts-with? % "(xray")))
        (into ["A path returns literal evidence."
-              "(inspect path :one pure-function)"
-              "(inspect path :all pure-function)"])))
+              "(one path pure-function)"
+              "(all path pure-function)"])))
 
 (def ^:private max-expression-characters 32768)
 (def ^:private max-xray-result-characters 65536)
@@ -233,6 +233,16 @@
                      :cardinality cardinality
                      :allowed [:one :all]}))))
 
+(defn one
+  "Analyze exactly one selected value; refuse zero or many."
+  [path analyzer]
+  (xray-one path analyzer))
+
+(defn all
+  "Analyze all selected values as a vector in source order."
+  [path analyzer]
+  (xray path analyzer))
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -251,7 +261,9 @@
    'xray-one xray-one
    'compute compute
    'aggregate aggregate
-   'inspect inspect})
+   'inspect inspect
+   'one one
+   'all all})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -278,8 +290,8 @@
                     :allowed-symbol-count (count allowed-symbols)
                     :allowed-capabilities allowed-capabilities
                     :allowed-forms xray-expression-reference
-                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""
-                    :remedy "Return a path, or end it with inspect :one or :all."}
+                    :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""
+                    :remedy "Return a path, or end it with one or all."}
                    cause))))
 
 (defn- evaluate-expression
@@ -405,7 +417,7 @@
        :error-type :unsupported-arguments
        :unsupported unsupported
        :allowed (vec (sort xray-allowed-arguments))
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""}
 
       (not (contains? opts :expr))
       {:operation :xray
@@ -413,7 +425,7 @@
        :error "Supply :expr"
        :error-type :missing-xray-input
        :missing [:expr]
-       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (inspect :one pure-function))\""}
+       :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (one pure-function))\""}
 
       (and (contains? opts :evidence)
            (not (#{:compact :full} evidence)))
@@ -545,8 +557,8 @@
                                 (str "Pure xray analysis failed: "
                                      (.getMessage ^Exception value)))
                   (assoc :remedy (str "Selected values are parsed syntax, not "
-                                      "evaluated program state. Run the same "
-                                      "path without inspect to read the source.")))
+                                      "evaluated program state. Run the path "
+                                      "without its terminal to read the source.")))
 
               (not (concrete-edn? value))
               (-> (xray-refusal evidence expression :invalid-xray-result

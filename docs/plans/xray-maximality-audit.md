@@ -40,8 +40,8 @@ Test whether `:xray :expr` can own both literal and computed structural reads:
 ```clojure
 (form 'transition)                         ; literal full evidence
 (-> (form 'transition) (match :finish) right) ; literal relationship
-(-> (form 'retry-policy) (inspect :one f)) ; exact-one compact result
-(-> (form 'events) (match :event) (inspect :all f)) ; many compact result
+(-> (form 'retry-policy) (one f))          ; exact-one compact result
+(-> (form 'events) (match :event) (all f)) ; many compact result
 ```
 
 This candidate removes `:q`, `xray-one`, and `:evidence :full` from the primary

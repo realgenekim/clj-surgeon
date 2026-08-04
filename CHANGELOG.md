@@ -12,9 +12,9 @@ is cut.
 
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
   A plain path such as `(form 'transition)` returns literal source;
-  `(inspect path :one pure-function)` refuses zero or many and receives one
-  value; `(inspect path :all pure-function)` receives a selection vector.
-  Computation returns `:value` with compact hash evidence.
+  `(one path pure-function)` refuses zero or many and receives one value;
+  `(all path pure-function)` receives a selection vector. Computation returns
+  `:value` with compact hash evidence.
   Former read spellings remain compatibility inputs while this unified surface
   is measured. Named selection now sees `#?`
   and `#?@` branch-local forms and accepts an optional platform. X-ray never

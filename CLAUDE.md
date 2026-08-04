@@ -82,11 +82,11 @@ updates, and verification gates. It is not a chronological coding diary.
   guard is already known, anchor there directly because that route is shorter.
 - Use `:xray :expr` as the primary structural read surface. Write one pure Clojure
   path, such as `(-> (form 'transition) (match :finish) right)`, to
-  return literal source evidence. End it with `inspect :one` for exactly one
-  selected value or `inspect :all` for a vector in match order. The computed
-  `:value` has compact hash evidence; literal paths retain full source. X-ray
-  never writes source or a plan. For CLJC, pass `:clj` or `:cljs` to `form`;
-  never treat an unqualified branch ambiguity as absence.
+  return literal source evidence. End it with `one` for exactly one selected
+  value or `all` for a vector in match order. The computed `:value` has compact
+  hash evidence; literal paths retain full source. X-ray never writes source or
+  a plan. For CLJC, pass `:clj` or `:cljs` to `form`; never treat an unqualified
+  branch ambiguity as absence.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already
