@@ -1,4 +1,0 @@
-{"name":"Skill","input":{"skill":"clj-surgeon"}}
-{"name":"Bash","input":{"command":"clj-surgeon :op :xray :file src/bench/pair_view.clj :expr \"(-> (form 'route-event) (match :finish) right)\"","description":"X-ray the :finish result in route-event"}}
-{"name":"Bash","input":{"command":"clj-surgeon :op :edit :file src/bench/pair_view.clj :expr \"(-> (form 'route-event) (match :finish) right (match :done) (replace :complete))\" :plan-out plan.edn","description":"Generate edit plan for :status value"}}
-{"name":"Bash","input":{"command":"clj-surgeon :op :replace-subform! :plan plan.edn","description":"Apply the edit plan"}}

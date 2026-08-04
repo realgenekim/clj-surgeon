@@ -1,6 +1,0 @@
-Both steps succeeded.
-
-- **Plan** (`plan.edn`): one edit, `match-count 1` — inside `route-event`'s `case`, the `:finish` result `(assoc state :status :done :audit (:audit payload))` at line 18. Diff was a single token: `-:done` / `+:complete`.
-- **Apply** (`:replace-subform!`): `:ok true`, `:whole-file-parsed true`, `:atomic-write true`, and the read-back hash matched the planned `result-hash` (`05012ad4…`) exactly.
-
-Only the `:status` keyword changed; the `:finish` clause's attached comment and every other byte are untouched, and planning and application ran as separate commands.
