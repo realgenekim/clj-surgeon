@@ -13,21 +13,27 @@
              dsl/right
              (dsl/replace '(assoc state :status :complete))))))
 
-(deftest every-navigation-builder-appends-one-existing-step
-  (let [start (dsl/form 'f)
-        cases [["match" #(dsl/match % '(call _)) [:find '(call _)]]
-               ["where" #(dsl/where % {:parent-tag :vector})
-                [:where {:parent-tag :vector}]]
-               ["right" dsl/right :right]
-               ["left" dsl/left :left]
-               ["up" dsl/up :up]
-               ["down" dsl/down :down]
-               ["span" #(dsl/span % 2) [:span 2]]
-               ["partition" #(dsl/partition-all % 2) [:partition-all 2]]]]
-    (doseq [[label build expected-step] cases]
-      (testing label
-        (is (= (conj start expected-step) (build start)))
-        (is (= [[:form 'f]] start))))))
+(def builder-cases
+  [["match" #(dsl/match % '(call _)) [:find '(call _)]]
+   ["where" #(dsl/where % {:parent-tag :vector})
+    [:where {:parent-tag :vector}]]
+   ["right" dsl/right :right]
+   ["left" dsl/left :left]
+   ["up" dsl/up :up]
+   ["down" dsl/down :down]
+   ["span" #(dsl/span % 2) [:span 2]]
+   ["partition" #(dsl/partition-all % 2) [:partition-all 2]]
+   ["replace" #(dsl/replace % '(inc x)) [:replace '(inc x)]]
+   ["replace span" #(dsl/replace-span % :a :b) [:replace-span :a :b]]])
+
+(deftest every-builder-appends-one-existing-step-to-every-valid-path-shape
+  (doseq [start [[]
+                 (dsl/form 'f)
+                 [[:form 'f] :down]]
+          [label build expected-step] builder-cases]
+    (testing (str label " after " (pr-str start))
+      (is (= (conj start expected-step) (build start)))
+      (is (= start (pop (build start)))))))
 
 (deftest replacement-builders-append-the-existing-terminal-steps
   (is (= [[:form 'f] [:replace '(inc x)]]
@@ -38,34 +44,50 @@
              (dsl/replace-span :finish '(inc x))))))
 
 (deftest builders-preserve-clojure-data-without-evaluation
-  (let [pattern (with-meta '(dangerous _ {:reader (reader-conditional :clj :jvm)})
-                  {:line 9})
-        replacement '(do (spit "/tmp/must-not-exist" "no") :value)
-        query (-> (dsl/form 'f)
-                  (dsl/match pattern)
-                  (dsl/replace replacement))]
-    (is (= pattern (-> query second second)))
-    (is (= {:line 9} (meta (-> query second second))))
-    (is (= replacement (-> query last second)))
-    (is (= 3 (count query)))))
+  (let [effect-count (atom 0)
+        values ['symbol
+                :keyword
+                '(list 1 2)
+                [1 :two]
+                {:one 1}
+                #{:one :two}
+                (with-meta '(metadata) {:line 9})
+                (reader-conditional '(:clj :jvm) false)
+                '(swap! effect-count inc)]]
+    (doseq [value values]
+      (testing (pr-str value)
+        (let [query (-> (dsl/form 'f)
+                        (dsl/match value)
+                        (dsl/replace value))]
+          (is (identical? value (-> query second second)))
+          (is (identical? value (-> query last second)))
+          (is (= (meta value) (meta (-> query second second)))))))
+    (is (zero? @effect-count))))
 
-(deftest builders-refuse-invalid-paths-and-post-terminal-composition
-  (doseq [path [nil '() {} :path]]
-    (testing (pr-str path)
+(deftest every-builder-refuses-invalid-paths
+  (doseq [path [nil '() {} :path]
+          [label build _] builder-cases]
+    (testing (str label " on " (pr-str path))
       (let [error (try
-                    (dsl/right path)
+                    (build path)
                     nil
                     (catch Exception e (ex-data e)))]
-        (is (= :invalid-edit-path (:error-type error)))
-        (is (= path (:path error))))))
+        (is (= {:error-type :invalid-edit-path
+                :path path}
+               error))))))
+
+(deftest every-builder-refuses-composition-after-a-terminal-step
   (doseq [terminal [[[:replace :done]]
-                    [[:replace-span :a :b]]]]
-    (let [error (try
-                  (dsl/right terminal)
-                  nil
-                  (catch Exception e (ex-data e)))]
-      (is (= :terminal-edit-step (:error-type error)))
-      (is (= (last terminal) (:terminal-step error))))))
+                    [[:replace-span :a :b]]]
+          [label build _] builder-cases]
+    (testing (str label " after " (pr-str terminal))
+      (let [error (try
+                    (build terminal)
+                    nil
+                    (catch Exception e (ex-data e)))]
+        (is (= {:error-type :terminal-edit-step
+                :terminal-step (last terminal)}
+               error))))))
 
 (deftest counted-builders-require-positive-integers
   (doseq [[builder step] [[dsl/span :span]

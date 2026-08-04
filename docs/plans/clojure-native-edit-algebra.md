@@ -1,6 +1,6 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Evidence earned; Stage A prototype next
+**Status:** Stage A pure builders implemented. Authoring benchmark next.
 
 ## Product hypothesis
 
@@ -62,8 +62,24 @@ Clojure combinators
   -> existing verified receipt
 ```
 
-No new selector, replacement, address, diff, hash, replay, or write semantics
-are permitted in Stage A.
+Stage A permits no new selector, replacement, address, diff, hash, replay, or
+write semantics.
+
+## Stage A result
+
+The first prototype implements only the pure builders below. Eight tests with
+192 assertions cover these cases:
+
+- Every public builder on empty, rooted, and previously navigated paths.
+- Every builder on invalid paths and after both terminal edit steps.
+- Literal Clojure data and metadata preservation.
+- Positive-integer boundaries.
+- Input persistence.
+- Exact `case`, `cond`, and binding queries.
+
+The implementation passes those tests and clj-kondo with no findings. This
+proves semantic equivalence to the existing query data. It does not yet prove
+that agents author the native form faster or that invoking it costs less.
 
 ## Stage A: pure query builders
 
@@ -178,7 +194,8 @@ or more syntax shapes:
 - removes a demonstrated quoting or query-grammar repair;
 - prevents the manual-diff replay failure by returning a clearer review/apply
   value;
-- is voluntarily chosen when both routes are documented neutrally.
+- prompts clean agents to choose it voluntarily when both routes have neutral
+  documentation.
 
 It must retain 100% exactness, zero/many refusal, one plan/one edit, separate
 consent, unchanged source during planning, atomic apply, complete-file parse,

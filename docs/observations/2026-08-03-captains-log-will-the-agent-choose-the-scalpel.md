@@ -225,3 +225,18 @@ syntax and exposes plan-file ceremony. The next hill is the Clojure-native
 expression in `docs/plans/clojure-native-edit-algebra.md`: ordinary pure
 Clojure combinators that compile to the same guarded planner. The kernel stays;
 the authoring surface competes against the measured 3/5-command baseline.
+
+## Native algebra: the photograph becomes executable
+
+The Stage A prototype makes the proposed expression ordinary Clojure. `form`,
+`match`, `where`, navigation functions, spans, and replacement functions build
+the byte-for-byte existing query vector. They do not parse, match, evaluate,
+read, write, plan, or apply anything.
+
+The pure contract passes 8 tests and 192 assertions, including exhaustive
+public-builder checks on valid, invalid, and terminal paths. This is an
+important but narrow win: the pleasant expression is real and inherits the
+existing planner, but a shell caller still needs classpath and namespace setup.
+The next probe must price that invocation ceremony honestly. The native syntax
+wins only if it reduces agent translation or an end-to-end action, not because
+the example looks beautiful in a document.
