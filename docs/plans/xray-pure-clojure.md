@@ -1,6 +1,6 @@
 # Pure Clojure X-Ray
 
-**Status:** Contract fixed; implementation and clean-context keep gate pending
+**Status:** Implemented and kept after clean-context aggregation and checksum gates
 
 ## Outcome
 
@@ -158,3 +158,24 @@ Keep `:xray` only if the normal installed skill produces correct voluntary use
 on at least three of four clean runs and removes one downstream shell command
 without increasing source reads. Otherwise retain the negative evidence and
 remove the operation. A pleasant name or symmetric API is not sufficient.
+
+## Results
+
+The routine aggregation replication produced correct voluntary `:xray` use in
+four of four treatment runs. Median wall time fell from 22.54 to 18.39 seconds
+and median output from 586 to 482 tokens. Both versions used one source call;
+the baseline model could still sum the visible values without another tool.
+
+The weighted-checksum stress replication exercised the intended keep boundary.
+Treatment was correct in four of four runs versus three of four baseline runs.
+Median wall time fell from 37.13 to 29.19 seconds, shell calls from three to two,
+input tokens from 92,001 to 50,666, and output tokens from 1,249 to 718. All
+four treatment agents chose `:xray` without the prompt naming it. Exact evidence
+increased source output by 288 bytes and no run added a source read.
+
+The first probes also found and repaired three experiment defects: a priming
+question that named `:xray`, an expected answer leaked in a prompt, and guidance
+that did not explain the outer selection vector around one selected collection.
+The permanent benchmark now runs isolated sessions in parallel and records
+`:xray` adoption explicitly. See the
+[Captain's Log](../observations/2026-08-04-captains-log-source-became-data.md).

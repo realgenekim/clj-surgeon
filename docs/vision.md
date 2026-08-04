@@ -152,8 +152,9 @@ computation removes a later shell step.
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a
-special operation for every kind of peer edit, and we do not evaluate arbitrary
-Clojure to obtain apparent generality.
+special operation for every kind of peer edit. Pure Clojure analysis runs only
+inside the bounded SCI capability sandbox; arbitrary host execution remains
+outside the kernel.
 
 ## The Structural X-Ray Loop
 
@@ -187,6 +188,12 @@ reads for context that genuinely spans forms.
 Perfection here means lossless perception, singular guarded action, and an
 executable recovery path after refusal. It does not mean autonomous design or
 an expanding catalog of inferred refactorings.
+
+The native patch tool remains the wall-clock bar for one exact, supplied, unique
+text edit. clj-surgeon should win when structure removes discovery, ambiguity,
+manual computation, or unsafe replay. It should not maximize its own adoption.
+When the structural route buys no measurable correctness, context, call, or
+safety advantage, use the faster native patch.
 
 ## Shipped Kernel
 

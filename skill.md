@@ -74,7 +74,7 @@ clj-surgeon :op :xray :file src/policy.clj \
   :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
 ```
 
-`xray` receives a vector of selected values; use `(first values)` when one
+`xray` receives a vector of selected values. Use `(first values)` when one
 selected node is itself a collection. The result keeps computed `:value`
 beside exact evidence. It never writes. Use `:q` for literal reads.
 

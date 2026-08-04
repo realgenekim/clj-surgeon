@@ -65,13 +65,13 @@ preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
 `:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
 pattern. A read reports zero, one, or many matches and a per-step count trace.
 
-Use `:xray` for counts, sums, frequencies, grouping, or other pure computation over selected source; do not reconstruct those answers manually from `:q`:
+Use `:xray` for counts, sums, frequencies, grouping, or other pure computation over selected source. Do not reconstruct those answers manually from `:q`:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
 ```
 
-`xray` receives a vector of selected values; use `(first values)` when one
+`xray` receives a vector of selected values. Use `(first values)` when one
 selected node is itself a collection. It keeps `:value` beside exact evidence
 and never writes. Use `:q` when no computation is needed.
 

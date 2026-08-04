@@ -287,7 +287,7 @@ bounded.
 
 Use `:xray` for counts, sums, frequencies, grouping, or other pure Clojure
 computation over selected source. Do not reconstruct those answers manually
-from `:q`; keep `:q` as the shorter path for literal reads:
+from `:q`. Keep `:q` as the shorter path for literal reads:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
@@ -307,6 +307,12 @@ as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
 input, analyzer failure, lazy or non-EDN output, and output over 65,536
 characters. SCI does not expose I/O, processes, namespaces, mutable references,
 classes, or host interop.
+
+In the unprimed four-run checksum benchmark, `:xray` was exact in four of four
+runs versus three of four before the feature. Median wall time fell 21%, shell
+calls 33%, input tokens 45%, and output tokens 43%. Routine literal reads still
+belong to `:q`. See the
+[experiment record](docs/observations/2026-08-04-captains-log-source-became-data.md).
 
 Make the same path an updater by ending it with `[:replace FORM]`:
 
