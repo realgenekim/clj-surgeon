@@ -22,36 +22,36 @@ Use `clj-surgeon` from `PATH`. Stop on nonzero exit or EDN `:error`; call
   derive a computed replacement with `transform` instead of retyping one.
 
 ```bash
-clj-surgeon :op :cat :file src/app.clj :form transition
 clj-surgeon :op :cat :file src/app.clj :contains :finish
-clj-surgeon :op :grep-form :file src/app.clj :match '(post! "/api/items" _)'
 ```
 
 `_` matches exactly one subtree; pattern arity is exact, so use `(loop _ _)`
 for a two-argument loop. There is no variadic wildcard. `:cat` strictly aliases
-`:show-form` and never dumps a file. Use it instead of reconstructing a `sed`
-range. Distinctive text refuses zero or multiple forms. Reserve `rg` for broad
-cross-file discovery, not manufacturing a line number.
+`:show-form`, never dumps a file: use it instead of reconstructing a `sed`
+range; a distinctive text selector refuses zero or multiple forms. Reserve
+`rg` for broad cross-file discovery, not manufacturing a line number.
 
 ## X-ray ordinary Clojure data
 
-Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data
-and returns compact `:value` plus hashes. `expect-count` refuses
-before analysis without changing that vector. `initializer` selects a `def`
-right-hand side without evaluating it.
+Plain paths return exact source; `analyze` receives
+one vector of ordinary Clojure data and returns compact `:value` plus hashes;
+`expect-count` refuses before analysis; `initializer` selects a `def`
+right-hand side unevaluated.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
   :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
-Write one total pure Clojure function instead of a shape-discovery query. Map
-literals and `hash-map` / `array-map` share a canonical map view. Identify
-shape-independent descendants with `(filter predicate (tree-seq coll? seq value))`.
-Return concrete EDN, not a lazy sequence. X-ray never writes source or a plan.
-Compose `form`, `match`, `where`, `right`, `left`, `up`, `down`, `outermost`,
-`initializer`, `span`, and `partition-all`. For CLJC use `(form 'name :clj)` or
-`:cljs`. Use `:up :outermost`, not `:outermost :up`.
+Write one total pure Clojure function instead of a shape-discovery query;
+when keys are uncertain, return a shape echo like `:ks (vec (keys m))` beside
+the aggregation in the same map. Map literals and `hash-map` / `array-map`
+share a canonical map view. Identify shape-independent descendants with
+`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a
+lazy sequence. X-ray never writes source or a plan. Compose `form`, `match`,
+`where`, `right`, `left`, `up`, `down`, `outermost`, `initializer`, `span`,
+and `partition-all`. For CLJC use `(form 'name :clj)` or `:cljs`; use
+`:up :outermost`, not `:outermost :up`.
 
 ## Plan and apply separately
 
@@ -62,26 +62,26 @@ Compose `form`, `match`, `where`, `right`, `left`, `up`, `down`, `outermost`,
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
   :plan-out plan.edn
-clj-surgeon :op :replace-subform! :plan plan.edn
-```
-
-The plan saves `transform`'s concrete replacement, never executable code:
-
-```bash
 clj-surgeon :op :edit :file src/policy.clj \
   :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
   :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
+The plan saves `transform`'s concrete replacement, never executable code.
+
+`transform` receives the selection as quoted syntax: a call is a list, not
+its runtime value, so never `assoc` into it. To change one element inside a
+call, navigate to it — `(match :done) (replace :complete)`.
 Do not preflight whether the plan path exists. Review diff and hashes after
-plan generation. Never chain plan generation and application. Do not edit the
-plan; when intent changes, generate a new plan. Apply returns `:verified`
-read-back hash and whole-file parse evidence. Trust it; never reproduce the
-plan with `apply_patch`.
+plan generation; never chain plan and application. Do not edit the plan; when
+intent changes, generate a new plan. Apply returns `:verified` read-back hash
+and whole-file parse evidence. Trust it; never reproduce the plan with
+`apply_patch`.
 
 A `case` clause, `cond` branch, map entry, or binding pair is sibling syntax,
-not a synthetic wrapper list. Use `right` for one peer, `span 2` for one pair,
-and `partition-all 2` for the run. Compatibility `:q` accepts
+not a synthetic wrapper list: `right` selects one peer, `span 2` one pair,
+`partition-all 2` the run. Compatibility `:q` accepts
 `[[:form transition] [:find :finish] :right]`, `[:span 2]`, and
 `[:partition-all 2]`; `[:replace FORM]` or `[:replace-span FORM FORM]` plans
 for later `:replace-subform!`. Prefer the Clojure `:xray` / `:edit` surface.
