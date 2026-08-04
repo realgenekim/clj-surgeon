@@ -431,6 +431,15 @@
       (is (str/includes? out "Usage:"))
       (is (str/includes? out "Read-only")))))
 
+(deftest cli-version-is-a-zero-exit-edn-orientation-call
+  (let [result (run-cli "--version")
+        version (edn/read-string (:out result))]
+    (is (= 0 (:exit result)) (:err result))
+    (is (= {:tool "clj-surgeon" :version "0.1.0"} version))
+    (is (str/blank? (:err result)))
+    (is (str/includes? (core/format-global-help core/ops-registry)
+                       "clj-surgeon --version"))))
+
 (deftest cli-dash-h-flag-shows-help
   (let [{:keys [exit out]} (run-cli "-h")]
     (testing "-h works like --help"

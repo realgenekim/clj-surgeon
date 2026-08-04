@@ -762,6 +762,7 @@
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon --help              show this message\n")
+    (.append sb "       clj-surgeon --version           show machine-readable version\n")
     (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n")
     (doseq [cat category-order
             :let [label (get category-labels cat)
@@ -895,6 +896,10 @@
           (cond
             (empty? args)
             (println (format-global-help ops-registry))
+
+            (= ["--version"] (vec args))
+            (pp/pprint {:tool "clj-surgeon"
+                        :version structural-lens/tool-version})
 
             :else
             (let [opts (parse-args args)]
