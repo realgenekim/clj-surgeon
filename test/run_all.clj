@@ -25,6 +25,7 @@
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
+   [clj-surgeon.xray-test]
    [clojure.test :refer [run-tests]]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
@@ -49,6 +50,7 @@
                    'clj-surgeon.ls-tree-test
                    'clj-surgeon.outermost-test
                    'clj-surgeon.partition-all-test
+                   'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test
                    'clj-surgeon.cli-dispatch-test)]

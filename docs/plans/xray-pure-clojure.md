@@ -9,7 +9,7 @@ with pure Clojure in the same source invocation:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max %)))"
+  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
 ```
 
 The command returns the computed `:value` together with the unchanged query,
