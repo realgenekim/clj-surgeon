@@ -114,6 +114,18 @@ Use native `:expr` plus `transform` when the replacement depends on the selected
 form. Do not promote native query construction as a replacement for shorter
 literal EDN.
 
+## Final one-read replication
+
+After reducing the installed skill from 241 to 240 lines and adding a permanent
+line-count test, four of four clean agents completed the computed edit in
+exactly three calls: one skill read, one transform plan, and one verified apply.
+Every run was byte-exact, chose `:expr`, made the plan its first source-bearing
+call, and avoided all text readers and read preflights.
+
+Final medians were three shell calls, 65,806 cumulative input tokens, 14,075
+uncached input tokens, 731 output tokens, 1,529 source-output bytes, and 28.22
+seconds. Stage C is complete and passes the one-shot keep gate.
+
 ## Product hypothesis
 
 The current structural kernel is safe and expressive, but agents must translate

@@ -317,7 +317,7 @@ derive a replacement from source without a preliminary read.
 
 The source-derived A/B passed. Eight clean Codex runs compared the query-only
 native checkpoint with `transform`, using four replicates of an edit whose new
-vector had to be calculated from unknown source values. Every run was
+vector the agent had to calculate from unknown source values. Every run was
 byte-exact.
 
 Post agents chose `transform` in four of four runs. Their first source-bearing
@@ -339,7 +339,39 @@ atomically replaces it, while any refusal preserves the existing artifact.
 
 The four-run guidance replication revealed a better explanation. Every agent
 used the correct first-source transform, but all four made two skill reads. The
-skill had grown to 241 lines; the standard first command read lines 1–240, then
+skill had grown to 241 lines. The standard first command read lines 1–240, then
 the agent fetched the final line. The product fix is not more edit guidance. It
 is a 240-line ceiling, now enforced by a permanent test so the complete skill
 fits in one standard read.
+
+## Best ever: four perfect three-call edits
+
+The final clean-context replication achieved the target in all four runs. Each
+agent used exactly this sequence:
+
+1. read the complete clj-surgeon skill once;
+2. plan the source-derived edit with `:edit :expr` and `transform`;
+3. apply the reviewed plan with `:replace-subform!`.
+
+All four results were byte-exact. All four agents chose `:expr` voluntarily.
+All four made the edit plan their first source-bearing call. All four used
+separate plan and apply commands with a verified receipt. None used `:q`,
+`:cat`, `rg`, `sed`, a help call, a text patch, or a post-apply reread.
+
+Median shell calls were 3, cumulative input was 65,806 tokens, uncached input
+was 14,075 tokens, output was 731 tokens, source output was 1,529 bytes, and
+wall time was 28.22 seconds. Against the query-only pre checkpoint, median calls
+fell from 5 to 3, cumulative input from 102,837 to 65,806, source output from
+2,150 to 1,529 bytes, and wall time from 42.36 to 28.22 seconds.
+
+These are the best measured clj-surgeon results for a source-derived structural
+edit. The qualification matters. Literal paths and replacements still favor
+shorter EDN. `transform` wins when the new form genuinely depends on the current
+form, because it removes the preliminary information-gathering command without
+weakening the review boundary.
+
+The final one-call improvement came from treating documentation size as runtime
+performance. At 241 lines, the skill required two standard reads. At 240 lines,
+it fit in one. The repository now tests that ceiling. The one-shot standard is
+therefore executable: the safe route, the skill that teaches it, and the token
+boundary that keeps it one-shot all fail together if they drift.
