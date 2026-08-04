@@ -18,6 +18,7 @@
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
    [clj-surgeon.outline-test]
+   [clj-surgeon.outermost-test]
    [clj-surgeon.partition-all-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
@@ -42,6 +43,7 @@
                    'clj-surgeon.edn-config-integration-test
                    'clj-surgeon.cljc-existing-ops-test
                    'clj-surgeon.ls-tree-test
+                   'clj-surgeon.outermost-test
                    'clj-surgeon.partition-all-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test

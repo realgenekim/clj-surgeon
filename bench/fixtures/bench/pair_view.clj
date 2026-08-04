@@ -83,3 +83,22 @@
 
 (def normalize-record
   #(select-keys % [:type :line :end-line]))
+
+(defn route-two-dimensions [mode event]
+  [(case mode
+     :online
+     (case event
+       :start :run
+       :stop :halt)
+
+     :offline
+     :queue)
+
+   (case event
+     :start
+     (case mode
+       :online :immediate
+       :offline :deferred)
+
+     :stop
+     :halt)])
