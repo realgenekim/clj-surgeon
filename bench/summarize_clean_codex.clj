@@ -12,7 +12,7 @@
 
 (def boolean-fields
   #{:correct :exact-correct :skill-read :show-form :grep-form :ls-used :help-used
-    :text-reader :q-used :partition-all-used :edit-used :first-source-edit
+    :text-reader :q-used :partition-all-used :edit-used :expr-used :first-source-edit
     :plan-generated :plan-applied :plan-apply-separate :verified})
 
 (defn parse-value [field value]
@@ -34,18 +34,21 @@
           rows)))
 
 (defn median [values]
-  (let [xs (vec (sort values))
+  (let [xs (vec (sort (keep identity values)))
         n (count xs)
         midpoint (quot n 2)]
-    (if (odd? n)
-      (nth xs midpoint)
-      (/ (+ (nth xs (dec midpoint)) (nth xs midpoint)) 2.0))))
+    (when (pos? n)
+      (if (odd? n)
+        (nth xs midpoint)
+        (/ (+ (nth xs (dec midpoint)) (nth xs midpoint)) 2.0)))))
 
 (defn percent [predicate rows]
   (* 100.0 (/ (count (filter predicate rows)) (count rows))))
 
 (defn fmt-int [number]
-  (format "%,.0f" (double number)))
+  (if (some? number)
+    (format "%,.0f" (double number))
+    "—"))
 
 (defn summarize-group [[[task context version] rows]]
   {:task task
@@ -65,6 +68,7 @@
    :q-used (percent :q-used rows)
    :partition-all (percent :partition-all-used rows)
    :edit-used (percent :edit-used rows)
+   :expr-used (percent :expr-used rows)
    :first-edit (percent :first-source-edit rows)
    :text-reader (percent :text-reader rows)
    :show-form (percent :show-form rows)
@@ -80,18 +84,18 @@
       "# Clean Codex benchmark summary\n\n"
       "Correctness is a gate. Token counts are the final cumulative usage "
       "reported by each Codex session.\n\n"
-      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | File changes | Source output | Skill read | q | partition-all | edit | First source edit | Text reader | show-form | Separate plan/apply |\n"
-      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | File changes | Source output | Skill read | q | partition-all | edit | expr | First source edit | Text reader | show-form | Separate plan/apply |\n"
+      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
       (str/join
         ""
         (for [{:keys [task context version runs correct exact wall input uncached output
-                      commands file-changes source-bytes skill-read q-used partition-all edit-used
+                      commands file-changes source-bytes skill-read q-used partition-all edit-used expr-used
                       first-edit text-reader show-form plan-separate]}
               summaries]
-          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
+          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
                   task context version runs correct exact (fmt-int wall) (fmt-int input)
                   (fmt-int uncached) (fmt-int output) (fmt-int commands) (fmt-int file-changes)
-                  (fmt-int source-bytes) skill-read q-used partition-all edit-used first-edit
+                  (fmt-int source-bytes) skill-read q-used partition-all edit-used expr-used first-edit
                   text-reader show-form
                   (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))
 
