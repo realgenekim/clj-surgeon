@@ -169,10 +169,13 @@
                       "(eval '(form 'f))"
                       "(resolve 'spit)"
                       "(future (form 'f))"
-                      "(do (form 'a) (form 'b))"
-                      "(if true (form 'a) (form 'b))"
-                      "(let [path (form 'f)] path)"
-                      "((fn [] (form 'f)))"
+                      "(def path (form 'f))"
+                      "(atom (form 'f))"
+                      "(transient (form 'f))"
+                      "(loop [] (recur))"
+                      "(trampoline identity (form 'f))"
+                      "(repeat :right)"
+                      "(iterate right (form 'f))"
                       "(java.io.File. \"secret\")"
                       "#=(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"]]
     (testing expression
@@ -183,8 +186,45 @@
         (is (= :invalid-edit-expression (:error-type error)))
         (is (= expression (:expression error)))
         (is (seq (:allowed-symbols error)))
+        (is (seq (:allowed-capabilities error)))
         (is (some #{"(match path pattern)"} (:allowed-forms error)))
         (is (re-find #"thread-first" (:remedy error)))))))
+
+(deftest sci-provides-pure-clojure-for-structural-computation
+  (is (= [[:form 'transition]
+          [:find :finish]
+          :right
+          [:replace {:status :complete :attempts 2}]]
+         (dsl/compile-query
+          "(let [[target initial] [:finish {:status :done :attempts 1}]
+                 candidates (->> [initial {:skip true}]
+                                 (filterv #(contains? % :status))
+                                 (mapv (comp #(update % :attempts inc)
+                                             #(assoc % :status :complete))))]
+             (-> (form 'transition)
+                 (match target)
+                 right
+                 (replace (first candidates))))")))
+  (is (= [[:form 'f] :right :left :right]
+         (dsl/compile-query
+          "(reduce (fn [path direction]
+                     (case direction
+                       :right (right path)
+                       :left (left path)))
+                   (form 'f)
+                   [:right :left :right])")))
+  (is (= [[:form 'f] [:replace [:done :done]]]
+         (dsl/compile-query
+          "(-> (form 'f)
+               (replace (first (mapv (juxt identity identity) [:done]))))")))
+  (is (= [[:form 'f] [:replace 5]]
+         (dsl/compile-query
+          "(-> (form 'f) (replace (count (range 5))))")))
+  (is (= [[:form 'f] [:replace :yes]]
+         (dsl/compile-query
+          "(do (form 'ignored)
+               (-> (form 'f)
+                   (replace (if (and true (not false)) :yes :no))))"))))
 
 (deftest sci-requires-exactly-one-expression-and-a-query-result
   (doseq [[expression reason] [["" :expected-one-form]
@@ -217,3 +257,45 @@
                (str "(-> (form 'f) (replace '(spit \"" path "\" \"bad\")))"))]
     (is (= [[:form 'f] [:replace (list 'spit path "bad")]] query))
     (is (not (.exists (java.io.File. path))))))
+
+(deftest edit-options-accept-exactly-one-authoring-surface
+  (let [base {:op :edit
+              :file "src/state.clj"
+              :plan-out "plan.edn"}
+        expression "(-> (form 'transition) (match :finish) right (replace :complete))"
+        query [[:form 'transition] [:find :finish] :right [:replace :complete]]]
+    (is (= (assoc base :query query)
+           (dsl/prepare-edit-options (assoc base :expr expression))))
+    (is (= (assoc base :query query)
+           (dsl/prepare-edit-options (assoc base :query query))))
+    (is (= {:operation :edit
+            :file "src/state.clj"
+            :error "Supply exactly one of :query and :expr"
+            :error-type :edit-input-conflict
+            :provided [:expr :query]
+            :required-one-of [:query :expr]}
+           (dsl/prepare-edit-options
+            (assoc base :query query :expr expression))))
+    (is (= {:operation :edit
+            :file "src/state.clj"
+            :error "Supply exactly one of :query and :expr"
+            :error-type :missing-edit-input
+            :provided []
+            :required-one-of [:query :expr]}
+           (dsl/prepare-edit-options base)))))
+
+(deftest edit-options-preserve-structured-sci-refusals
+  (let [expression "(spit \"/tmp/no\" \"bad\")"
+        result (dsl/prepare-edit-options
+                {:op :edit
+                 :file "/missing/source.clj"
+                 :expr expression
+                 :plan-out "plan.edn"})]
+    (is (= :edit (:operation result)))
+    (is (= "/missing/source.clj" (:file result)))
+    (is (= :invalid-edit-expression (:error-type result)))
+    (is (= :unsupported-form (:reason result)))
+    (is (= expression (:expression result)))
+    (is (some #{"(replace path form)"} (:allowed-forms result)))
+    (is (re-find #"thread-first" (:remedy result)))
+    (is (string? (:error result)))))

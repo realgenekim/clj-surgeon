@@ -3,6 +3,7 @@
    [babashka.fs :as fs]
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.structural-lens :as lens]
    [clojure.edn :as edn]
    [clojure.string :as str]
@@ -88,6 +89,7 @@
     (is (contains? core/ops-registry :edit))
     (is (str/includes? global "edit"))
     (is (str/includes? global "clj-surgeon :op :edit"))
+    (is (str/includes? global ":expr"))
     (is (str/includes? global ":plan-out plan.edn"))
     (is (str/includes? help "PLAN ONLY"))
     (is (str/includes? help "never changes source"))
@@ -96,11 +98,18 @@
     (is (str/includes? help "never reproduce it with apply_patch"))
     (is (str/includes? help "[:replace"))
     (is (str/includes? help "[:replace-span"))
+    (is (str/includes? help "SCI"))
+    (is (str/includes? help "exactly one of :query and :expr"))
+    (is (str/includes? help "(-> (form 'transition)"))
     (is (str/includes? help ":replace-subform!"))
-    (is (= #{:file :query :plan-out}
+    (is (= #{:file :query :expr :plan-out}
            (set (keys (get-in core/ops-registry [:edit :args])))))
     (is (every? :required
-                (vals (get-in core/ops-registry [:edit :args]))))))
+                (map #(get-in core/ops-registry [:edit :args %])
+                     [:file :plan-out])))
+    (is (not-any? :required
+                  (map #(get-in core/ops-registry [:edit :args %])
+                       [:query :expr])))))
 
 (def project-root
   (str (fs/normalize (fs/path (System/getProperty "user.dir")))))
@@ -137,6 +146,87 @@
           (is (= 1 (count (re-seq #"status :done" source))))))
       (finally
         (fs/delete-tree tmp-dir)))))
+
+(deftest cli-native-edit-plan-equals-the-legacy-query-plan-and-applies
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon native edit "})
+        source-file (fs/path tmp-dir "source.clj")
+        query-plan-file (fs/path tmp-dir "query-plan.edn")
+        expr-plan-file (fs/path tmp-dir "expr-plan.edn")
+        expression "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))"]
+    (try
+      (spit (str source-file) edit-source)
+      (let [query-result (run-cli ":op" ":edit"
+                                  ":file" (str source-file)
+                                  ":query" (pr-str node-query)
+                                  ":plan-out" (str query-plan-file))
+            expr-result (run-cli ":op" ":edit"
+                                 ":file" (str source-file)
+                                 ":expr" expression
+                                 ":plan-out" (str expr-plan-file))
+            query-plan (edn/read-string (:out query-result))
+            expr-plan (edn/read-string (:out expr-result))]
+        (is (zero? (:exit query-result)) (:err query-result))
+        (is (zero? (:exit expr-result)) (:err expr-result))
+        (is (= (dissoc query-plan :plan-out)
+               (dissoc expr-plan :plan-out)))
+        (is (= edit-source (slurp (str source-file))))
+        (is (= (dissoc expr-plan :plan-out)
+               (edn/read-string (slurp (str expr-plan-file)))))
+        (let [applied (run-cli ":op" ":replace-subform!"
+                               ":plan" (str expr-plan-file))
+              receipt (edn/read-string (:out applied))]
+          (is (zero? (:exit applied)) (:err applied))
+          (is (= (:result-hash expr-plan)
+                 (get-in receipt [:verified :read-back-hash])))
+          (is (true? (get-in receipt [:verified :whole-file-parsed]))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest cli-native-edit-refuses-before-source-or-plan-io
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon native refusal "})
+        missing-source (fs/path tmp-dir "missing.clj")
+        plan-file (fs/path tmp-dir "plan.edn")
+        side-effect-file (str (fs/path tmp-dir "must-not-exist"))
+        original-plan "{:existing :review}\n"
+        valid-expression "(-> (form 'transition) (match :finish) right (replace :complete))"]
+    (try
+      (spit (str plan-file) original-plan)
+      (doseq [[label args expected]
+              [["neither input"
+                []
+                :missing-edit-input]
+               ["both inputs"
+                [":query" (pr-str node-query)
+                 ":expr" valid-expression]
+                :edit-input-conflict]
+               ["unsafe expression"
+                [":expr" (str "(spit \"" side-effect-file "\" \"bad\")")]
+                :invalid-edit-expression]]]
+        (testing label
+          (let [result (apply run-cli
+                              ":op" ":edit"
+                              ":file" (str missing-source)
+                              ":plan-out" (str plan-file)
+                              args)
+                refusal (edn/read-string (:out result))]
+            (is (pos? (:exit result)) (:out result))
+            (is (= expected (:error-type refusal)))
+            (is (not (str/includes? (:err result) "Exception")))
+            (is (= original-plan (slurp (str plan-file)))))))
+      (is (not (fs/exists? side-effect-file)))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest parse-args-preserves-native-edit-expression-verbatim
+  (let [expression "(-> (form 'transition) (replace '(str \"done\")))"]
+    (is (= expression
+           (:expr (core/parse-args [":op" ":edit" ":expr" expression]))))
+    (is (= (edit-dsl/compile-query expression)
+           (:query (edit-dsl/prepare-edit-options
+                    (core/parse-args [":op" ":edit"
+                                      ":file" "src/state.clj"
+                                      ":expr" expression
+                                      ":plan-out" "plan.edn"]))))))
 
 (deftest cli-edit-refuses-unsafe-or-incomplete-requests-without-changing-bytes
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon edit refusal "})

@@ -2,6 +2,45 @@
 
 **Status:** Stage A builders and sandboxed SCI compiler pass. CLI probe next.
 
+## Stage B CLI probe contract
+
+Extend the existing plan-only `:edit` operation with `:expr`. Do not add a new
+operation or executor.
+
+```bash
+clj-surgeon :op :edit :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
+  :plan-out plan.edn
+```
+
+The caller must supply exactly one of `:query` and `:expr`. Existing `:query`
+behavior stays unchanged. `:expr` compiles through the sandboxed SCI boundary
+and then delegates to the same `structural-lens/edit-file` function. The caller
+must still supply `:file` and `:plan-out`.
+
+On success, the saved plan schema, diff, hashes, operation, and executor remain
+identical to the corresponding `:query` plan. The returned EDN adds no second
+plan format. Planning never changes source. Application remains a later
+`:replace-subform!` command.
+
+Refuse these inputs before reading or writing source:
+
+- neither `:query` nor `:expr`;
+- both `:query` and `:expr`;
+- an invalid or unsafe SCI expression;
+- an expression that returns non-vector data;
+- any existing unsupported consent-like argument.
+
+SCI failures must preserve the compiler's stable reason, allowed symbols,
+allowed signatures, and remedy in CLI EDN. The CLI must return a nonzero status
+without a stack trace. Existing plan files and source bytes must remain exact
+on every refusal.
+
+This probe intentionally keeps `:plan-out` explicit. A generated plan path is
+a separate experiment because it changes artifact ownership and cleanup. First
+measure whether native authoring improves clean-agent behavior while every
+other workflow variable remains fixed.
+
 ## Product hypothesis
 
 The current structural kernel is safe and expressive, but agents must translate
@@ -113,23 +152,32 @@ remains ordinary Clojure.
 
 Babashka already embeds the Small Clojure Interpreter (SCI). Use SCI to compile
 one native expression at the CLI boundary without requiring callers to set a
-classpath or load a namespace. Configure SCI with an explicit allowlist that
-contains only thread-first composition, quoting, and the Stage A builders.
+classpath or load a namespace. Configure SCI with an explicit capability
+allowlist.
 
 The compiler must accept exactly one expression and return query-vector data.
-It must refuse host I/O, namespace loading, evaluation, concurrency, class
-access, interop, multiple expressions, and non-vector results. Quoted patterns
-and replacements remain inert Clojure data. Do not use unrestricted SCI mode.
+Give the expression Clojure's pure collection algebra, control forms, and
+higher-order functions in addition to the Stage A builders. This includes
+`assoc`, `update`, `mapv`, `filter`, `reduce`, `comp`, `juxt`, destructuring,
+and bounded sequence operations.
+
+The compiler must refuse host I/O, namespace loading, evaluation, concurrency,
+class access, interop, mutable references, definitions, recursive control,
+multiple expressions, and non-vector results. Quoted patterns and replacements
+remain inert Clojure data. Do not use unrestricted SCI mode.
+
+The allowlist omits recursive control and unbounded sequence constructors. This
+is a practical editing DSL, not a termination proof. The clean-agent harness
+retains its normal process timeout.
 
 This bridge changes the earlier architectural boundary. clj-surgeon may
 interpret a tightly capability-limited edit expression, but it must never call
 Clojure `eval` or expose a general Babashka environment.
 
-The compiler now passes 13 tests and 271 assertions. It accepts exactly one
-expression of at most 32,768 characters. A syntax validator and SCI allowlist
-both restrict execution to thread-first composition, quoting, and the ten pure
-builders. Structured failures include the allowed symbols, function
-signatures, and a concise remedy.
+The first compiler checkpoint passed 13 tests and 271 assertions with only the
+ten builders. The next red contract expands it to pure structural Clojure while
+retaining both the syntax validator and SCI allowlist. Structured failures
+must include capability categories, function signatures, and a concise remedy.
 
 Two first-pass clean-agent probes produced mixed evidence. For the simple
 `case` query, both the EDN and native agents returned exact output. The native
