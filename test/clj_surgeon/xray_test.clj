@@ -586,10 +586,11 @@
           (is (str/includes? text "expect-count") surface)
           (is (str/includes? text "initializer") surface)
           (is (str/includes? text "tree-seq") surface)
-          (is (str/includes? text "(for") surface))))
+          (is (str/includes? text "one vector of ordinary Clojure data")
+              surface))))
     (is (<= (count (str/split-lines
                      (get surfaces "canonical skill")))
-            240))))
+            120))))
 
 (deftest parse-args-preserves-xray-expression-verbatim
   (let [expression "(-> (form 'data) (xray #(mapv count %)))"]

@@ -121,8 +121,8 @@
                        "vision" (slurp "docs/vision.md")
                        "changelog" (slurp "CHANGELOG.md"))]
     (is (<= (count (str/split-lines (get operational "installed skill")))
-            240)
-        "The installed skill must fit in one standard 1-240 line read")
+            120)
+        "The installed skill must fit in one compact 1-120 line read")
     (doseq [[surface text] durable]
       (testing surface
         (let [normalized (-> text
@@ -292,10 +292,10 @@
            (:expr (core/parse-args [":op" ":edit" ":expr" expression]))))
     (is (= (edit-dsl/compile-query expression)
            (:query (edit-dsl/prepare-edit-options
-                    (core/parse-args [":op" ":edit"
-                                      ":file" "src/state.clj"
-                                      ":expr" expression
-                                      ":plan-out" "plan.edn"])))))))
+                     (core/parse-args [":op" ":edit"
+                                       ":file" "src/state.clj"
+                                       ":expr" expression
+                                       ":plan-out" "plan.edn"])))))))
 
 (deftest cli-edit-refuses-unsafe-or-incomplete-requests-without-changing-bytes
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon edit refusal "})

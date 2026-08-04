@@ -296,9 +296,6 @@ collection.
 function over that contract instead of a separate shape-discovery query. When
 a predicate identifies the desired descendants, use
 `(filter predicate (tree-seq coll? seq value))` inside that function.
-When records live below known parents, scope and traverse in the same
-comprehension: `(for [parent parents node (tree-seq coll? seq (child parent))
-:when (predicate node)] node)`.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the

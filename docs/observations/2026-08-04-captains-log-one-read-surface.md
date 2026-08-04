@@ -643,6 +643,54 @@ keeps the domain boundary in the model. It survives only if it reduces the
 remaining source calls and clears the 2 KB median source-output gate without
 slowing the v10 leader.
 
+### Candidate v11 result: reject prescriptive comprehension guidance
+
+The scoped-comprehension treatment was exact in all four runs, and every agent
+used `for`. It nevertheless lost decisively:
+
+```text
+                              v10 leader       v11 scoped for      change
+correct                           4/4             4/4             tied
+median wall                      27.529 s          35.411 s        29% slower
+median shell calls                3                4              1 more
+median input tokens              56,458           75,547          34% more
+median output tokens                947            1,300          37% more
+median source output              2.1 KB           3.4 KB         60% more
+```
+
+The example activated syntax, not semantics. One agent wrote a nested `for`
+directly over `(:args spec)`. Because that value was a map, each iteration
+bound a map entry rather than an argument-spec map and produced the wrong
+intermediate count. The agent recovered, but only after help and more calls.
+
+Keep `for`, `key`, and `val` in the safe pure-Clojure substrate: they remove
+real dialect traps and have permanent tests. Remove the prescriptive `for`
+example from primary help and skills. v10 remains the leader. The lesson is
+the Bitter Lesson again: make general computation available, state the stable
+data contract, and avoid prompt-level recipes that merely move the guess.
+
+### Candidate v12: make the skill pay rent
+
+The canonical skill reached its tested 240-line ceiling. Every clean session
+reads it before touching source, including roughly 130 lines about operations
+irrelevant to the computed-read task. That context costs wall time and tokens
+even when cached, and it competes with the actual program for attention.
+
+Candidate v12 applies progressive disclosure. A 107-line primary skill keeps:
+
+- the smallest-read router (`:ls`, `:cat`, `:grep-form`, `:xray`);
+- the complete analyzer input, canonical-data, and `tree-seq` contract;
+- exact X-ray, edit, transform, partition, and compatibility examples;
+- plan/apply separation, refusal, read-back, and receipt safety;
+- the sibling and `outermost` placement rules agents repeatedly guessed.
+
+Dependency, extraction, declare, move, rename, and CLJC workflows remain in the
+existing advanced-operations reference and are loaded only for those tasks.
+All 1,219 assertions across the five agent-surface test namespaces pass, and
+the skill validator accepts the package. The permanent ceiling tightens from
+240 to 120 lines. The candidate survives only if clean agents remain exact and
+beat or match v10 on wall time; brevity cannot purchase forgotten safety.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

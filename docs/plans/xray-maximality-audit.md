@@ -125,12 +125,23 @@ Make the computed input contract complete before the first call: `analyze`
 always receives one ordered vector of ordinary Clojure data. Agents should
 write one total function over that value rather than issue a separate
 container-shape query. `tree-seq` provides shape-independent traversal; a
-nested `for` scopes that traversal below semantically known parents.
+nested `for` is available when it is the clearest ordinary Clojure expression,
+but is not primary guidance: the scoped-comprehension treatment increased
+latency and did not eliminate container-semantic mistakes.
 
 Do not turn SCI into a smaller surprise language. Admit demonstrated pure core
 idioms such as `key`, `val`, and `for`. Because `for` expands through loop and
 chunk internals, keep those symbols private to macro expansion and continue to
 refuse direct nonterminating `loop` / `recur` source before file I/O.
+
+### 7. Compact primary skill
+
+Replace the 240-line always-loaded skill with a compact task router under 120
+lines. Keep direct read, X-ray, guarded edit, sibling, refusal, and receipt
+contracts in the primary file. Route dependency, extraction, move, rename, and
+CLJC details to the existing advanced-operations reference. The compact skill
+must pass every agent-surface drift test and clean read benchmark; line count
+alone is not a product win.
 
 ## Permanent Test Matrix
 
@@ -155,6 +166,8 @@ All prior tests remain. Add tests for:
 10. shape-independent map/vector traversal, idiomatic `key` / `val` / `for`,
     direct loop refusal, macro-expansion isolation, help and skill propagation,
     and the exact clean-agent expressions that previously failed.
+11. canonical skill validation, every safety-critical surface assertion, a
+    hard 120-line budget, and clean-context comparison against the full skill.
 
 Use the existing real-program-derived CLJC fixture and `ops-registry` in
 `src/clj_surgeon/core.clj`; do not replace them with toy-only evidence.
