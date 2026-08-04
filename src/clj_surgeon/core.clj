@@ -579,16 +579,18 @@
                        :aliases  [:q]
                        :desc     "Query Clojure syntax with an EDN pipeline or emit one guarded replacement plan"
                        :args     {:file     {:required true :desc "Clojure source file"}
-                                  :query    {:required true :desc "EDN vector of structural navigation steps, optionally ending in [:replace FORM]"}
-                                  :plan-out {:desc "Write the replayable EDN plan when the query ends in [:replace FORM]"}}
+                                  :query    {:required true :desc "EDN structural pipeline, optionally ending in [:replace FORM] or [:replace-span FORM ...]"}
+                                  :plan-out {:desc "Write the replayable EDN plan for a terminal replacement"}}
                        :workflow ["Pipe located syntax through [:form NAME], [:find PATTERN], [:where {:tag TAG}] or [:where {:parent-tag TAG}], and :right/:left/:up/:down."
                                   "Navigation-only queries are read-only and report zero, one, or many matches plus a per-step count trace."
                                   "Use semantic sibling navigation for case clauses, cond branches, map entries, and bindings; do not reconstruct textual context."
+                                  "Use [:span 2] to select a node and its next semantic peer; [:replace-span FORM FORM] preserves comments and whitespace between peers and requires equal arity."
                                   "A final [:replace FORM] reuses the same structural path as an updater, emits a plan and never writes source."
                                   "Review the one edit, diff, selector, trace, and hashes. Apply the reviewed plan separately with :replace-subform!."
                                   "Writes refuse zero or multiple selected nodes. Arbitrary evaluation, fuzzy choice, and implicit bulk updates are unsupported."]
                        :examples ["clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] :right]'"
-                                  "clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"]
+                                  "clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"
+                                  "clj-surgeon :op :q :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"]
                        :category :read}
 
     :ls               {:handler   run-outline

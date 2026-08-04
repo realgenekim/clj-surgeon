@@ -21,7 +21,9 @@
    [:where {:tag :TAG}]
    [:where {:parent-tag :TAG}]
    :right :left :up :down
-   [:replace 'FORM]])
+   [:span 'POSITIVE-COUNT]
+   [:replace 'FORM]
+   [:replace-span 'FORM 'FORM]])
 
 (defn source-hash [source]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
@@ -147,25 +149,25 @@
       (invalid-query! (str "Query exceeds the " max-query-steps " step limit")
                       {:step-count (count parsed)
                        :max-query-steps max-query-steps}))
-    (let [replace-indexes (keep-indexed
-                            (fn [index step]
-                              (when (and (vector? step)
-                                         (= :replace (first step)))
-                                index))
-                            parsed)]
-      (when (and (seq replace-indexes) (not allow-transform?))
+    (let [transform-indexes (keep-indexed
+                              (fn [index step]
+                                (when (and (vector? step)
+                                           (#{:replace :replace-span} (first step)))
+                                  index))
+                              parsed)]
+      (when (and (seq transform-indexes) (not allow-transform?))
         (invalid-query! "Read queries cannot contain a transformation"
-                        {:step-index (first replace-indexes)
-                         :step (nth parsed (first replace-indexes))}))
-      (when (> (count replace-indexes) 1)
+                        {:step-index (first transform-indexes)
+                         :step (nth parsed (first transform-indexes))}))
+      (when (> (count transform-indexes) 1)
         (invalid-query! "A query may contain only one transformation"
-                        {:step-index (second replace-indexes)
-                         :step (nth parsed (second replace-indexes))}))
-      (when (and (seq replace-indexes)
-                 (not= (first replace-indexes) (dec (count parsed))))
+                        {:step-index (second transform-indexes)
+                         :step (nth parsed (second transform-indexes))}))
+      (when (and (seq transform-indexes)
+                 (not= (first transform-indexes) (dec (count parsed))))
         (invalid-query! "A transformation must be the final query step"
-                        {:step-index (first replace-indexes)
-                         :step (nth parsed (first replace-indexes))})))
+                        {:step-index (first transform-indexes)
+                         :step (nth parsed (first transform-indexes))})))
     (doseq [[index step] (map-indexed vector parsed)]
       (cond
         (navigation-steps step) nil
@@ -198,10 +200,44 @@
             (invalid-query! "[:where PREDICATES] supports nonempty :tag and :parent-tag keyword predicates"
                             {:step-index index :step step})))
 
+        (= :span (first step))
+        (let [terminal-index (if (and allow-transform?
+                                      (vector? (last parsed))
+                                      (= :replace-span (first (last parsed))))
+                               (- (count parsed) 2)
+                               (dec (count parsed)))]
+          (when-not (and (= 2 (count step))
+                         (integer? (second step))
+                         (pos? (second step))
+                         (= index terminal-index))
+            (invalid-query! "[:span N] requires a positive integer and must end a read or immediately precede [:replace-span ...]"
+                            {:step-index index :step step})))
+
         (= :replace (first step))
-        (when-not (= 2 (count step))
-          (invalid-query! "[:replace FORM] requires exactly one replacement form"
-                          {:step-index index :step step}))
+        (let [previous (when (pos? index) (nth parsed (dec index)))]
+          (when-not (and (= 2 (count step))
+                         (not (and (vector? previous)
+                                   (= :span (first previous)))))
+            (invalid-query! "[:replace FORM] requires exactly one node selection and one replacement form"
+                            {:step-index index :step step})))
+
+        (= :replace-span (first step))
+        (let [span-step (when (pos? index) (nth parsed (dec index)))
+              span-count (when (and (vector? span-step)
+                                    (= :span (first span-step)))
+                           (second span-step))
+              replacement-count (dec (count step))]
+          (when-not (and span-count (pos? replacement-count))
+            (invalid-query! "[:replace-span FORM ...] must immediately follow [:span N] and contain replacement forms"
+                            {:step-index index :step step}))
+          (when (not= span-count replacement-count)
+            (throw (ex-info (str "Span contains " span-count
+                                 " forms but replacement contains " replacement-count)
+                            {:error-type :span-arity-mismatch
+                             :span-count span-count
+                             :replacement-count replacement-count
+                             :step-index index
+                             :step step}))))
 
         :else
         (invalid-query! (str "Unsupported query step: " (pr-str step))
@@ -215,12 +251,47 @@
 (defn- unique-items [items]
   (second
     (reduce (fn [[seen result] item]
-              (let [address (:address item)]
+              (let [address (if (= :span (:kind item))
+                              [:span (:addresses item)]
+                              (:address item))]
                 (if (contains? seen address)
                   [seen result]
                   [(conj seen address) (conj result item)])))
             [#{} []]
             items)))
+
+(defn- semantic-span [{:keys [by-location]} {:keys [zloc]} span-count]
+  (let [zlocs (->> (iterate z/right zloc)
+                (take span-count)
+                (take-while some?)
+                vec)]
+    (when (= span-count (count zlocs))
+      (let [items (mapv #(get by-location (location-key %)) zlocs)]
+        (when (every? some? items)
+          {:kind :span
+           :zloc (first zlocs)
+           :zlocs zlocs
+           :address (:address (first items))
+           :addresses (mapv :address items)})))))
+
+(defn- raw-span-source [zlocs]
+  (let [end-key (location-key (last zlocs))]
+    (loop [current (first zlocs) result ""]
+      (let [result (str result (z/string current))]
+        (if (= end-key (location-key current))
+          result
+          (recur (z/right* current) result))))))
+
+(defn- raw-between [left right]
+  (let [end-key (location-key right)]
+    (loop [current (z/right* left) result ""]
+      (if (= end-key (location-key current))
+        result
+        (recur (z/right* current) (str result (z/string current)))))))
+
+(defn- span-gaps [zlocs]
+  (mapv (fn [[left right]] (raw-between left right))
+        (partition 2 1 zlocs)))
 
 (defn- source-index [root]
   (let [locations (vec (zipper-locations root))
@@ -282,17 +353,27 @@
       (mapcat #(matching-descendants entries % (second step)) items)
 
       (= :where (first step))
-      (filter #(where-match? (:zloc %) (second step)) items))))
+      (filter #(where-match? (:zloc %) (second step)) items)
 
-(defn- query-match [top-levels {:keys [address zloc]}]
-  (let [{:keys [row end-row]} (meta (z/node zloc))
+      (= :span (first step))
+      (keep #(semantic-span {:by-location by-location} % (second step)) items))))
+
+(defn- query-match [top-levels {:keys [address addresses kind zloc zlocs]}]
+  (let [{:keys [row]} (meta (z/node zloc))
+        {end-row :end-row} (meta (z/node (or (last zlocs) zloc)))
         owner (enclosing-form-name top-levels zloc)]
-    (cond-> {:path (semantic-path zloc owner)
-             :tag (z/tag zloc)
-             :address {:preorder address}
+    (cond-> {:path (cond-> (semantic-path zloc owner)
+                     (= :span kind) (conj {:span {:count (count zlocs)}}))
+             :tag (if (= :span kind) :span (z/tag zloc))
+             :address (if (= :span kind)
+                        {:preorders addresses}
+                        {:preorder address})
              :line row
              :end-line end-row
-             :source (z/string zloc)}
+             :source (if (= :span kind) (raw-span-source zlocs) (z/string zloc))}
+      (= :span kind) (assoc :count (count zlocs)
+                            :forms (mapv z/string zlocs)
+                            :gaps (span-gaps zlocs))
       owner (assoc :inside owner))))
 
 (defn- query-error-result [source query exception]
@@ -391,13 +472,37 @@
 (defn- replacement-node [source]
   (z/node (z/of-string source)))
 
-(defn apply-plan [source {:keys [source-hash edits result-hash] :as plan}]
+(defn- replace-at-address [source address before after]
+  (let [root (z/of-string source {:track-position? true})
+        target (nth (zipper-locations root) address nil)]
+    (when-not target
+      (throw (ex-info (str "Planned address no longer exists: " address)
+                      {:error-type :stale-path})))
+    (when-not (= before (z/string target))
+      (throw (ex-info "Source at planned address does not match edit"
+                      {:error-type :stale-subform})))
+    (let [{replacement-source :source}
+          (one-complete-form after :invalid-result-source "Replacement result")]
+      (-> target (z/replace (replacement-node replacement-source)) z/root-string))))
+
+(defn- apply-span-edit [source {:keys [addresses before-forms after-forms]}]
+  (when-not (and (= (count addresses) (count before-forms))
+                 (= (count addresses) (count after-forms))
+                 (pos? (count addresses)))
+    (throw (ex-info "Span edit addresses and forms must have equal positive counts"
+                    {:error-type :invalid-plan})))
+  (reduce (fn [current [address before after]]
+            (replace-at-address current address before after))
+          source
+          (sort-by first > (map vector addresses before-forms after-forms))))
+
+(defn apply-plan [source {:keys [source-hash edits result-hash operation] :as plan}]
   (cond
     (not= plan-version (:plan-version plan))
     {:error (str "Unsupported plan version: " (pr-str (:plan-version plan)))
      :error-type :unsupported-plan-version :supported-plan-version plan-version}
-    (not= :replace-subform (:operation plan))
-    {:error (str "Unsupported plan operation: " (pr-str (:operation plan)))
+    (not (#{:replace-subform :replace-span} operation))
+    {:error (str "Unsupported plan operation: " (pr-str operation))
      :error-type :unsupported-plan-operation}
     (not= source-hash (clj-surgeon.structural-lens/source-hash source))
     {:error "Source hash does not match plan" :error-type :source-hash-mismatch}
@@ -406,24 +511,16 @@
      :error-type :invalid-plan}
     :else
     (try
-      (let [{:keys [path address before after]} (first edits)
-            root (z/of-string source {:track-position? true})
-            target (nth (zipper-locations root) (:preorder address) nil)]
-        (cond
-          (nil? target) {:error (str "Planned path no longer exists: " path)
-                         :error-type :stale-path}
-          (not= before (z/string target))
-          {:error "Source at planned path does not match edit" :error-type :stale-subform}
-          :else
-          (let [{replacement-source :source}
-                (one-complete-form after :invalid-result-source "Replacement result")
-                updated (-> target (z/replace (replacement-node replacement-source)) z/root-string)
-                ;; Validate the whole future file, not only the replacement subtree.
-                _ (z/of-string updated {:track-position? true})
-                actual-result-hash (clj-surgeon.structural-lens/source-hash updated)]
-            (if (and result-hash (not= result-hash actual-result-hash))
-              {:error "Result hash does not match plan" :error-type :result-hash-mismatch}
-              {:ok true :source updated :result-hash actual-result-hash}))))
+      (let [{:keys [address before after] :as edit} (first edits)
+            updated (if (= :replace-span operation)
+                      (apply-span-edit source edit)
+                      (replace-at-address source (:preorder address) before after))
+            ;; Validate the whole future file, not only replacement nodes.
+            _ (z/of-string updated {:track-position? true})
+            actual-result-hash (clj-surgeon.structural-lens/source-hash updated)]
+        (if (and result-hash (not= result-hash actual-result-hash))
+          {:error "Result hash does not match plan" :error-type :result-hash-mismatch}
+          {:ok true :source updated :result-hash actual-result-hash}))
       (catch Exception e
         {:error (.getMessage e)
          :error-type (or (:error-type (ex-data e)) :invalid-result-source)}))))
@@ -456,6 +553,46 @@
                             :source-hash (:source-hash found)
                             :result-hash result-hash})))))
 
+(defn- span-source-from-parts [forms gaps]
+  (apply str
+         (mapcat (fn [index form]
+                   (cond-> [form]
+                     (< index (count gaps)) (conj (nth gaps index))))
+                 (range)
+                 forms)))
+
+(defn- build-span-plan [source found selector replacement-sources file]
+  (let [matched (first (:matches found))
+        edit {:path (:path matched)
+              :address (:address matched)
+              :addresses (get-in matched [:address :preorders])
+              :line (:line matched)
+              :before-forms (:forms matched)
+              :after-forms replacement-sources
+              :before (:source matched)
+              :after (span-source-from-parts replacement-sources (:gaps matched))}
+        provisional {:plan-version plan-version
+                     :operation :replace-span
+                     :file file
+                     :selector selector
+                     :source-hash (:source-hash found)
+                     :match-count 1
+                     :query-trace (:trace found)
+                     :edits [edit]
+                     :diff (edit-diff (or file "source.clj") edit)}
+        applied (apply-plan source provisional)]
+    (if (:error applied)
+      applied
+      (let [result-hash (:result-hash applied)]
+        (assoc provisional
+               :result-hash result-hash
+               :provenance {:tool "clj-surgeon"
+                            :tool-version tool-version
+                            :operation :replace-span
+                            :selector selector
+                            :source-hash (:source-hash found)
+                            :result-hash result-hash})))))
+
 (defn plan-replacement [source {:keys [inside match with file]}]
   (try
     (let [{replacement-source :source}
@@ -477,21 +614,24 @@
 
 (defn evaluate-lens
   "Evaluate a getter/updater lens expression. Navigation-only queries return
-   read evidence; a terminal [:replace FORM] returns a guarded plan. Pure."
+   read evidence; a terminal replacement returns a guarded plan. Pure."
   [source {:keys [query file]}]
   (try
     (let [query (parse-query query true)
           transform (when (and (vector? (last query))
-                               (= :replace (first (last query))))
+                               (#{:replace :replace-span}
+                                (first (last query))))
                       (last query))]
       (if-not transform
         (cond-> (evaluate-query source query)
           file (assoc :file file))
         (let [selection-query (pop query)
-              {replacement-source :source}
-              (one-complete-form (second transform)
-                                 :invalid-replacement
-                                 "Replacement")
+              replacement-sources
+              (mapv (fn [replacement]
+                      (:source (one-complete-form replacement
+                                                  :invalid-replacement
+                                                  "Replacement")))
+                    (rest transform))
               found (evaluate-query source selection-query)
               match-count (:match-count found)]
           (cond
@@ -506,8 +646,11 @@
             (let [selector {:query query
                             :selection-query selection-query
                             :expected-match-count 1}]
-              (build-replacement-plan source found selector replacement-source file
-                                      {:query-trace (:trace found)}))))))
+              (if (= :replace-span (first transform))
+                (build-span-plan source found selector replacement-sources file)
+                (build-replacement-plan source found selector
+                                        (first replacement-sources) file
+                                        {:query-trace (:trace found)})))))))
     (catch Exception e
       (query-error-result source query e))))
 
@@ -533,7 +676,7 @@
       (let [result (evaluate-lens (slurp file) opts)
             result (cond-> result
                      (= :lens (:operation result)) (assoc :file file))]
-        (if (and (= :replace-subform (:operation result))
+        (if (and (#{:replace-subform :replace-span} (:operation result))
                  (nil? (:error result))
                  plan-out)
           (write-plan-file result plan-out)

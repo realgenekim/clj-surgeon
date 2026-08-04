@@ -65,6 +65,11 @@ updates, and verification gates. It is not a chronological coding diary.
   it separately with `:replace-subform!`. The query never writes source. Do not
   grep a repeated expression and then read its owner merely to recover sibling
   context.
+- When the adjacent forms are themselves the intended object, use
+  `[[:form transition] [:find :finish] [:span 2]]`. A terminal
+  `[:replace-span :finish (assoc state :status :complete)]` requires equal
+  replacement arity and preserves every comment and whitespace byte between
+  the peers; apply its plan separately with `:replace-subform!`.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already

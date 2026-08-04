@@ -288,6 +288,29 @@ hash. Review it, then run the separate apply command. Never chain plan and
 apply. Invalid queries return the compact supported-step grammar in the error,
 so an agent does not need a second `--help` call or a wall of generic help.
 
+When adjacent forms are themselves the meaningful object, promote the current
+node and its next semantic peer into a lossless slice with `[:span 2]`:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] [:span 2]]'
+
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+`:span N` contains the current semantic node and its next `N-1` siblings and
+never crosses their parent. It counts through comments and whitespace without
+owning the trivia before or after the slice. `:replace-span` requires exactly
+`N` replacement forms and replaces corresponding nodes, preserving every
+intervening comment and whitespace byte. The same primitive makes a flattened
+anonymous-function body addressable—for example,
+`[[:find select-keys] [:where {:parent-tag :fn}] [:span 3]]`—without pretending
+that rewrite-clj contains a wrapper list that is not actually there.
+
 This algebra removes the `cat owner → reconstruct peer match → plan` bridge.
 The existing commands remain useful standard-library spellings: `:cat` is the
 fastest exact top-level read, and `:grep-form` / `:replace-subform` are concise

@@ -74,6 +74,21 @@ chain them. When the requested relationship and replacement are already exact,
 the updater can be the first non-mutating call. Run a read query first when the
 choice still requires judgment.
 
+Select a meaningful peer pair as one lossless slice with `[:span 2]`:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
+
+`[:span N]` includes the current node and its next `N-1` semantic siblings and
+never crosses their parent. `[:replace-span FORM ...]` requires the same number
+of forms, so comments and whitespace between peers remain byte-for-byte intact.
+Use a span when the pair or flattened `#(...)` body is itself the object under
+inspection; use `:right` when only the peer value is the target.
+
 ## Find nested syntax
 
 Use file-wide structural search when the enclosing form is unknown:

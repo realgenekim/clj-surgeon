@@ -214,6 +214,88 @@
     (is (= "#{:match :with :contains :query}" (-> result :matches first :source)))
     (is (= "parse-args" (-> result :matches first :inside)))))
 
+(deftest sibling-spans-address-peer-shaped-and-flattened-syntax
+  (let [cases [{:label "case pair with internal comment"
+                :source target-source
+                :query [[:form 'transition] [:find :finish] [:span 2]]
+                :forms [":finish" "(assoc state :status :done)"]
+                :source-fragment ":finish\n    ;; Preserve this comment between the pair.\n    (assoc state :status :done)"}
+               {:label "cond pair"
+                :source target-source
+                :query [[:form 'classify] [:find '(eligible? user)] [:span 2]]
+                :forms ["(eligible? user)" ":accepted"]}
+               {:label "map pair"
+                :source target-source
+                :query [[:form 'settings] [:find :timeout-ms] [:span 2]]
+                :forms [":timeout-ms" "1000"]}
+               {:label "binding pair"
+                :source target-source
+                :query [[:form 'fetch] [:find 'cache-key]
+                        [:where {:parent-tag :vector}] [:span 2]]
+                :forms ["cache-key" "(key-for source)"]}
+               {:label "anonymous function body siblings"
+                :source "(ns flat.fn)\n(def f #(select-keys % [:type :line :end-line]))\n"
+                :query [[:form 'f] [:find 'select-keys]
+                        [:where {:parent-tag :fn}] [:span 3]]
+                :forms ["select-keys" "%" "[:type :line :end-line]"]}]]
+    (doseq [{:keys [label source query forms source-fragment]} cases]
+      (testing label
+        (let [result (lens/evaluate-query source query)
+              match (first (:matches result))]
+          (is (= 1 (:match-count result)))
+          (is (= :span (:tag match)))
+          (is (= forms (:forms match)))
+          (is (= (count forms) (:count match)))
+          (is (= (count forms) (count (get-in match [:address :preorders]))))
+          (when source-fragment
+            (is (= source-fragment (:source match)))))))))
+
+(deftest span-updater-plans-one-slice-and-preserves-all-internal-trivia
+  (let [query [[:form 'transition] [:find :finish] [:span 2]
+               [:replace-span :finish (list 'assoc 'state :status :complete)]]
+        plan (lens/evaluate-lens target-source {:file "state.clj" :query query})
+        applied (lens/apply-plan target-source plan)]
+    (is (= :replace-span (:operation plan)))
+    (is (= 1 (:match-count plan)))
+    (is (= [":finish" "(assoc state :status :done)"]
+           (-> plan :edits first :before-forms)))
+    (is (= [":finish" "(assoc state :status :complete)"]
+           (-> plan :edits first :after-forms)))
+    (is (str/includes? (:diff plan) ";; Preserve this comment between the pair."))
+    (is (:ok applied))
+    (is (str/includes? (:source applied)
+                       ":finish\n    ;; Preserve this comment between the pair.\n    (assoc state :status :complete)"))
+    (is (str/includes? (:source applied) ":start (assoc state :status :running)"))))
+
+(deftest span-reads-report-overlap-and-boundaries-while-plans-refuse-ambiguity
+  (let [source "(ns spans)\n(defn f [] [:a :a :a])\n"
+        query [[:form 'f] [:find :a] [:span 2]]
+        read (lens/evaluate-query source query)
+        plan (lens/evaluate-lens source
+                                 {:file "spans.clj"
+                                  :query (conj query [:replace-span :a :b])})
+        boundary (lens/evaluate-query source
+                                      [[:form 'f] [:find :a] [:span 4]])]
+    (is (= 2 (:match-count read)) "two overlapping windows are evidence")
+    (is (= :ambiguous-match (:error-type plan)))
+    (is (= 0 (:match-count boundary)) "a span never crosses its parent")))
+
+(deftest invalid-span-grammar-and-replacement-arity-refuse-before-planning
+  (doseq [{:keys [query error-type]}
+          [{:query [[:span 0]] :error-type :invalid-query}
+           {:query [[:span -1]] :error-type :invalid-query}
+           {:query [[:span "2"]] :error-type :invalid-query}
+           {:query [[:form 'transition] [:span 2] :right]
+            :error-type :invalid-query}
+           {:query [[:form 'transition] [:replace-span :x]]
+            :error-type :invalid-query}
+           {:query [[:form 'transition] [:find :finish] [:span 2]
+                    [:replace-span :finish]]
+            :error-type :span-arity-mismatch}]]
+    (let [result (lens/evaluate-lens target-source
+                                     {:file "state.clj" :query query})]
+      (is (= error-type (:error-type result)) (pr-str query)))))
+
 (deftest agent-facing-surfaces-teach-one-jq-like-getter-updater-route
   (let [surfaces {"README" (slurp "README.md")
                   "repository instructions" (slurp "CLAUDE.md")
@@ -227,6 +309,8 @@
         (is (str/includes? body "[:form transition]"))
         (is (str/includes? body "[:find :finish]"))
         (is (str/includes? body ":right"))
+        (is (str/includes? body "[:span 2]"))
+        (is (str/includes? body "[:replace-span"))
         (is (str/includes? body "[:replace"))
         (is (str/includes? body ":replace-subform!"))))))
 
@@ -290,5 +374,29 @@
           (is (= :invalid-query (:error-type refusal)))
           (is (= 0 (:step-index refusal)))
           (is (str/blank? (:err result)))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest cli-q-span-plan-applies-through-the-existing-verified-executor
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon span "})
+        source-file (fs/path tmp-dir "span fixture.clj")
+        plan-file (fs/path tmp-dir "span plan.edn")
+        query (str "[[:form transition] [:find :finish] [:span 2] "
+                   "[:replace-span :finish (assoc state :status :complete)]]")]
+    (try
+      (spit (str source-file) target-source)
+      (let [planned (run-cli ":op" ":q" ":file" (str source-file)
+                             ":query" query ":plan-out" (str plan-file))
+            plan (edn/read-string (:out planned))
+            applied (run-cli ":op" ":replace-subform!"
+                             ":plan" (str plan-file))
+            receipt (edn/read-string (:out applied))]
+        (is (zero? (:exit planned)) (:err planned))
+        (is (= :replace-span (:operation plan)))
+        (is (= [18 19] (-> plan :edits first :addresses)))
+        (is (zero? (:exit applied)) (:err applied))
+        (is (= (:result-hash plan) (get-in receipt [:verified :read-back-hash])))
+        (is (str/includes? (slurp (str source-file))
+                           ";; Preserve this comment between the pair.")))
       (finally
         (fs/delete-tree tmp-dir)))))

@@ -105,6 +105,13 @@ name. Ending the path with `[:replace FORM]` changes its role from read evidence
 to a single hash-bound plan; it still never writes source. The reviewed plan is
 applied separately with `:replace-subform!`.
 
+The same path algebra includes structural slices. After selecting a node,
+`[:span 2]` addresses it and its next semantic peer as one located object. A
+terminal `[:replace-span FORM FORM]` replaces corresponding nodes with equal
+arity, so comments and whitespace between them remain exact. This covers peer
+pairs and flattened `#(...)` bodies without a macro-specific operation or a
+synthetic wrapper node.
+
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a
@@ -180,6 +187,16 @@ Navigation-only queries report zero, one, or many results and a per-step
 cardinality trace. A terminal replacement requires exactly one result. Both
 operate on syntax, preserve comments and whitespace outside the selected node,
 and never write source.
+
+Sibling slice planning uses the same boundary:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
+  :plan-out plan.edn
+
+clj-surgeon :op :replace-subform! :plan plan.edn
+```
 
 Planning:
 

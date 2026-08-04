@@ -17,6 +17,10 @@ is cut.
   address, ownership, source hash, and per-step cardinality. Ending the same
   path in `[:replace FORM]` emits one existing hash-bound replacement plan,
   never writes source, and applies later through `:replace-subform!`.
+- `[:span 2]` promotes a selected node and its semantic peer into one located
+  slice. A terminal `[:replace-span FORM FORM]` plans an equal-arity peer edit
+  while preserving all internal comments and whitespace, including flattened
+  sibling bodies inside `#(...)`; plans apply through `:replace-subform!`.
 - `:show-form`, a read-only one-shot that returns one complete top-level form
   by unqualified name, containing line, or case-sensitive literal `:contains`
   selector, with CLJC platform disambiguation,
