@@ -178,7 +178,7 @@ perl -0pi -e 's/\(or \(:timeout-ms request\) \(:timeout-ms defaults\)\)/\(or \(:
 
 if [ "${BENCH_RESUME:-false}" != true ] || [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -215,6 +215,9 @@ task_prompt() {
     binding-inventory)
       printf '%s' 'In src/bench/pair_view.clj, return every top-level binding name/initializer pair in the let binding vector inside prepare-request, in source order. Exclude later symbol uses and the returned map. Do not modify files or read the whole file. Your final answer must be exactly one EDN map with this shape and no prose or code fence: {:pairs [{:left-source "exact source" :right-source "exact source"} ...] :tail-source nil :commands ["command summaries"]}.'
       ;;
+    xray-summary)
+      printf '%s' 'In src/bench/pair_view.clj, inspect the outer cond in classify-request and return a frequency map of its result categories. Map results contribute their :decision value. A nested cond result contributes :conditional; do not count its internal branches. Do not modify files or read the whole file. Your final answer must be exactly this EDN map with no prose or code fence: {:deny 3 :allow 3 :conditional 1}'
+      ;;
     *)
       echo "Unknown task: $task" >&2
       exit 2
@@ -229,7 +232,7 @@ target_for_task() {
     case-edit) printf '%s' 'src/bench/state.clj' ;;
     computed-edit) printf '%s' 'src/bench/policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
-    case-inventory|cond-inventory|binding-inventory) printf '%s' 'src/bench/pair_view.clj' ;;
+    case-inventory|cond-inventory|binding-inventory|xray-summary) printf '%s' 'src/bench/pair_view.clj' ;;
   esac
 }
 
@@ -253,7 +256,7 @@ prepare_workspace() {
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
       ;;
-    case-inventory|cond-inventory|binding-inventory)
+    case-inventory|cond-inventory|binding-inventory|xray-summary)
       cp "$setup_root/templates/pair_view.clj" "$workspace/src/bench/pair_view.clj"
       ;;
   esac
@@ -401,7 +404,7 @@ run_one() {
   total_tool_output_bytes=$(jq '[.[] | (.aggregated_output // "" | utf8bytelength)] | add // 0' \
     "$run_dir/commands.json")
 
-  local skill_read show_form grep_form ls_used help_used text_reader q_used partition_all_used
+  local skill_read show_form grep_form ls_used help_used text_reader q_used xray_used partition_all_used
   local edit_used expr_used first_source_edit
   local plan_generated plan_applied chained_plan_apply plan_apply_separate verified
   skill_read=$(jq '[.[] | select(.command | contains("/skills/clj-surgeon/SKILL.md"))] | length > 0' "$run_dir/commands.json")
@@ -413,6 +416,7 @@ run_one() {
     '[.[] | select((.command | contains($target)) and (.command | test("(^|[ /])(rg|sed|awk|head|tail|cat)( |$)")))] | length > 0' \
     "$run_dir/commands.json")
   q_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?(q|lens)([^a-zA-Z-]|$)")))] | length > 0' "$run_dir/commands.json")
+  xray_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?xray([^a-zA-Z-]|$)")))] | length > 0' "$run_dir/commands.json")
   partition_all_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("partition-all")))] | length > 0' "$run_dir/commands.json")
   edit_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)")))] | length > 0' "$run_dir/commands.json")
   expr_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":expr([[:space:]]|$)")))] | length > 0' "$run_dir/commands.json")
@@ -485,6 +489,10 @@ run_one() {
       exact_correct=$(bb "$repo_root/bench/score_pair_inventory.clj" binding "$setup_root/expected/binding-inventory.edn" "$run_dir/final.txt" exact) || exact_correct=false
       correct=$(bb "$repo_root/bench/score_pair_inventory.clj" binding "$setup_root/expected/binding-inventory.edn" "$run_dir/final.txt" normalized) || correct=false
       ;;
+    xray-summary)
+      exact_correct=$(bb -e "(require '[clojure.edn :as edn]) (try (println (= {:deny 3 :allow 3 :conditional 1} (edn/read-string (slurp \"$run_dir/final.txt\")))) (catch Exception _ (println false)))") || exact_correct=false
+      correct=$exact_correct
+      ;;
     case-edit)
       if cmp -s "$target" "$setup_root/expected/state.clj"; then
         exact_correct=true
@@ -508,12 +516,12 @@ run_one() {
       ;;
   esac
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$file_changes" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
-    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
+    "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$xray_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
     "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
     >> "$result_dir/runs.tsv"
 

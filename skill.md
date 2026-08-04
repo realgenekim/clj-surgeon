@@ -70,12 +70,12 @@ Use `:xray` when pure Clojure computation removes a later shell command:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+  :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (xray #(mapv first %)))"
 ```
 
-`xray` receives a vector of selected values. The read-only result keeps the
-computed `:value` beside exact matches, addresses, trace, and source hash. It
-never writes source or a plan. Use `:q` for literal structural reads.
+Quote symbol patterns such as `(match 'cond)`. `xray` receives a vector of
+selected values. The read-only result keeps computed `:value` beside exact
+evidence. It never writes source or a plan. Use `:q` for literal reads.
 
 End that same path with `[:replace FORM]` to emit one guarded plan:
 

@@ -12,7 +12,7 @@
 
 (def boolean-fields
   #{:correct :exact-correct :skill-read :show-form :grep-form :ls-used :help-used
-    :text-reader :q-used :partition-all-used :edit-used :expr-used :first-source-edit
+    :text-reader :q-used :xray-used :partition-all-used :edit-used :expr-used :first-source-edit
     :plan-generated :plan-applied :plan-apply-separate :verified})
 
 (defn parse-value [field value]
@@ -66,6 +66,7 @@
    :source-bytes (median (map :source-output-bytes rows))
    :skill-read (percent :skill-read rows)
    :q-used (percent :q-used rows)
+   :xray-used (percent :xray-used rows)
    :partition-all (percent :partition-all-used rows)
    :edit-used (percent :edit-used rows)
    :expr-used (percent :expr-used rows)
@@ -84,18 +85,18 @@
       "# Clean Codex benchmark summary\n\n"
       "Correctness is a gate. Token counts are the final cumulative usage "
       "reported by each Codex session.\n\n"
-      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | File changes | Source output | Skill read | q | partition-all | edit | expr | First source edit | Text reader | show-form | Separate plan/apply |\n"
-      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+      "| Task | Context | Version | n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | File changes | Source output | Skill read | q | xray | partition-all | edit | expr | First source edit | Text reader | show-form | Separate plan/apply |\n"
+      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
       (str/join
         ""
         (for [{:keys [task context version runs correct exact wall input uncached output
-                      commands file-changes source-bytes skill-read q-used partition-all edit-used expr-used
+                      commands file-changes source-bytes skill-read q-used xray-used partition-all edit-used expr-used
                       first-edit text-reader show-form plan-separate]}
               summaries]
-          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
+          (format "| %s | %s | %s | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %sB | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
                   task context version runs correct exact (fmt-int wall) (fmt-int input)
                   (fmt-int uncached) (fmt-int output) (fmt-int commands) (fmt-int file-changes)
-                  (fmt-int source-bytes) skill-read q-used partition-all edit-used expr-used first-edit
+                  (fmt-int source-bytes) skill-read q-used xray-used partition-all edit-used expr-used first-edit
                   text-reader show-form
                   (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))
 

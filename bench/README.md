@@ -38,6 +38,20 @@ BENCH_REPLICATES=4 \
 make benchmark-clean-codex
 ```
 
+The `xray-summary` task tests whether a clean agent computes a bounded answer
+over selected source in one read call. It is the keep gate for the read-only
+`xray` builder:
+
+```bash
+BENCH_PRE_COMMIT=ad726c6 \
+BENCH_POST_COMMIT=HEAD \
+BENCH_TASKS=xray-summary \
+BENCH_CONTEXTS=matched-skill \
+BENCH_INCLUDE_COMPACT=false \
+BENCH_REPLICATES=4 \
+make benchmark-clean-codex
+```
+
 Resume a stopped result directory without rerunning completed rows:
 
 ```bash

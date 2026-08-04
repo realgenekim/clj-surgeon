@@ -68,12 +68,12 @@ pattern. A read reports zero, one, or many matches and a per-step count trace.
 Use `:xray` only when pure Clojure computation removes a later shell command:
 
 ```bash
-clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (xray #(mapv first %)))"
 ```
 
-`xray` receives a vector of selected values. The result keeps computed `:value`
-beside exact matches, addresses, trace, and source hash. It never writes. Use
-`:q` when no computation is needed.
+Quote symbol patterns such as `(match 'cond)`. `xray` receives a vector of
+selected values and keeps computed `:value` beside exact evidence. It never writes.
+Use `:q` when no computation is needed.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing
