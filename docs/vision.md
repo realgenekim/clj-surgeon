@@ -141,6 +141,14 @@ Planning then discards the function and saves only the concrete replacement,
 diff, and hashes. The durable artifact stays data, and the trusted executor
 does not gain an interpreter.
 
+The read-only counterpart is `:xray`. Its terminal
+`(xray path pure-function)` receives selected values as Clojure data and returns
+a bounded EDN `:value`. Exact
+matches, addresses, trace, cardinality, and source hash remain beside that
+value. Computation never replaces evidence. `:xray` never writes source or a
+plan. Literal inspection remains `:q`. `:xray` is justified only when
+computation removes a later shell step.
+
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a
@@ -191,6 +199,7 @@ an expanding catalog of inferred refactorings.
 | `:ls-extract` | Minimal mechanically extractable closure |
 | `:declares` | Forward-declare audit |
 | `:lens` / `:q` | Composable concrete-syntax getter and single-edit plan updater |
+| `:xray` | Pure Clojure computation over selected values with exact evidence retained |
 | `:grep-form` / `:find-subform` | File-wide or scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
 | `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |

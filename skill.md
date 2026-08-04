@@ -66,6 +66,17 @@ preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
 `:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
 pattern. A read reports zero, one, or many matches and a per-step count trace.
 
+Use `:xray` when pure Clojure computation removes a later shell command:
+
+```bash
+clj-surgeon :op :xray :file src/policy.clj \
+  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+```
+
+`xray` receives a vector of selected values. The read-only result keeps the
+computed `:value` beside exact matches, addresses, trace, and source hash. It
+never writes source or a plan. Use `:q` for literal structural reads.
+
 End that same path with `[:replace FORM]` to emit one guarded plan:
 
 ```bash

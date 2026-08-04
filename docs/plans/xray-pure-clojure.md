@@ -90,7 +90,7 @@ builder signatures, and a direct remedy when expression authoring failed.
 | multiple expressions | `:invalid-xray-expression` | no |
 | unsafe or unknown symbol | `:invalid-xray-expression` | no |
 | expression does not return `xray` | `:invalid-xray-expression` | no |
-| invalid/terminal path | `:invalid-xray-path` | no |
+| invalid/terminal path | `:invalid-xray-expression`, reason `:invalid-xray-path` | no |
 | lens parse or navigation failure | existing lens error | yes |
 | more than 100 selected matches | `:xray-input-truncated` | yes |
 | selected source cannot become data | `:xray-input-invalid` | yes |
@@ -103,7 +103,8 @@ builder signatures, and a direct remedy when expression authoring failed.
 
 - SCI uses the existing pure capability allowlist. It exposes no I/O,
   processes, namespaces, mutable references, classes, or host interop.
-- Expression validation occurs before file I/O.
+- Expression validation occurs before source I/O. Project-alias initialization
+  can inspect the nearest `.clj-surgeon.edn` first.
 - The returned EDN never contains the analyzer function.
 - Original match evidence remains available beside `:value`.
 - A function cannot change match source, addresses, trace, or source hash.

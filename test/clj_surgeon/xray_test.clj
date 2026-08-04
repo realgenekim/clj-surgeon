@@ -67,6 +67,10 @@
            ["(form 'data) (form 'choose)" :expected-one-form]
            ["(form 'data)" :xray-terminal-required]
            ["(-> (form 'data) (replace :changed))" :xray-terminal-required]
+           ["(-> (form 'data) (replace :changed) (xray identity))"
+            :invalid-xray-path]
+           ["(-> (form 'data) (xray :callable-keyword))"
+            :invalid-xray-analyzer]
            ["(spit \"/tmp/xray-must-not-write\" \"bad\")" :disallowed-symbol]]]
     (testing expression
       (let [error (try
@@ -95,7 +99,7 @@
             :query vectors-query
             :analyzer #(mapv (partial reduce +) %)
             :expected-input [[1 2] [3 4]]
-            :expected-value [3 7]}]}]
+            :expected-value [3 7]}]]
     (testing label
       (let [seen (atom nil)
             wrapped (fn [values]
@@ -167,9 +171,10 @@
     (testing label
       (let [result (dsl/evaluate-xray
                     source
-                    {:file "bench/xray.clj"
-                     :expression label
-                     :xray (spec [] (constantly value))})]
+                     {:file "bench/xray.clj"
+                      :expression label
+                      :xray (spec [[:form 'data] [:find :missing]]
+                                  (constantly value))})]
         (is (= value (:value result)))
         (is (nil? (:error result))))))
   (doseq [[label analyzer expected]
@@ -183,9 +188,9 @@
     (testing label
       (let [result (dsl/evaluate-xray
                     source
-                    {:file "bench/xray.clj"
-                     :expression label
-                     :xray (spec [] analyzer)})]
+                     {:file "bench/xray.clj"
+                      :expression label
+                      :xray (spec [[:form 'data] [:find :missing]] analyzer)})]
         (is (= expected (:error-type result)))
         (is (nil? (:value result)))
         (is (not (str/includes? (str result) "#object")))))))

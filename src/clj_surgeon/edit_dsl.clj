@@ -46,7 +46,7 @@
 
 (def ^:private builder-symbols
   '[form match where right left up down span partition-all replace replace-span
-    transform])
+    transform xray])
 
 (def ^:private allowed-symbols
   (vec (distinct (concat pure-core-symbols builder-symbols))))
@@ -69,9 +69,11 @@
    "(right path)" "(left path)" "(up path)" "(down path)"
    "(span path n)" "(partition-all path n)"
    "(replace path form)" "(replace-span path & forms)"
-   "(transform path pure-function)"])
+   "(transform path pure-function)"
+   "(xray path pure-function)"])
 
 (def ^:private max-expression-characters 32768)
+(def ^:private max-xray-result-characters 65536)
 
 (defn- terminal-step?
   [step]
@@ -168,6 +170,24 @@
                      :transform transformer})))
   (append-step path [:transform transformer]))
 
+(defn xray
+  "Compute a read-only EDN value from the selected Clojure values."
+  [path analyzer]
+  (try
+    (validate-path path)
+    (catch Exception exception
+      (throw (ex-info "X-ray path must be a read-only query vector"
+                      {:error-type :invalid-xray-path
+                       :path path}
+                      exception))))
+  (when-not (fn? analyzer)
+    (throw (ex-info "X-ray analyzer must be a function"
+                    {:error-type :invalid-xray-analyzer
+                     :analyzer analyzer})))
+  {:kind :xray
+   :query path
+   :analyzer analyzer})
+
 (def ^:private sci-bindings
   {'form form
    'match match
@@ -180,7 +200,8 @@
    'partition-all partition-all
    'replace replace
    'replace-span replace-span
-   'transform transform})
+   'transform transform
+   'xray xray})
 
 (defn- invalid-expression!
   ([expression reason]
@@ -196,13 +217,26 @@
                     :remedy "Use one pure Clojure expression. A thread-first form and the allowed builders must return one query vector."}
                    cause))))
 
-(defn compile-query
-  "Compile one capability-limited Clojure expression into query-vector data."
-  [expression]
+(defn- invalid-xray-expression!
+  ([expression reason]
+   (invalid-xray-expression! expression reason nil))
+  ([expression reason cause]
+   (throw (ex-info "Invalid Clojure xray expression"
+                   {:error-type :invalid-xray-expression
+                    :reason reason
+                    :expression expression
+                    :allowed-symbols allowed-symbols
+                    :allowed-capabilities allowed-capabilities
+                    :allowed-forms expression-reference
+                    :remedy "Use one pure Clojure expression ending in (xray path pure-function). Run clj-surgeon :op :xray --help for the complete workflow."}
+                   cause))))
+
+(defn- evaluate-expression
+  [expression invalid!]
   (when-not (string? expression)
-    (invalid-expression! expression :expression-must-be-string))
+    (invalid! expression :expression-must-be-string))
   (when (> (count expression) max-expression-characters)
-    (invalid-expression! expression :expression-too-large))
+    (invalid! expression :expression-too-large))
   (let [context (sci/init {:namespaces {'user sci-bindings}
                            :classes {}
                            :allow allowed-symbols})
@@ -213,23 +247,45 @@
             trailing (sci/parse-next context reader)]
         (when (or (= :sci.core/eof form)
                   (not= :sci.core/eof trailing))
-          (invalid-expression! expression :expected-one-form))
-        (let [query (:val (sci/eval-string+ context expression {:ns user-ns}))]
-          (when-not (vector? query)
-            (invalid-expression! expression :query-must-be-vector))
-          query))
+          (invalid! expression :expected-one-form))
+        (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception
-        (if (= :invalid-edit-expression
-               (:error-type (ex-data exception)))
+        (if (#{:invalid-edit-expression :invalid-xray-expression}
+             (:error-type (ex-data exception)))
           (throw exception)
-          (invalid-expression! expression
-                               (if (or (str/includes? (.getMessage exception)
-                                                      "is not allowed")
-                                       (str/includes? (.getMessage exception)
-                                                      "Unable to resolve symbol"))
-                                 :disallowed-symbol
-                                 :evaluation-failed)
-                               exception))))))
+          (invalid! expression
+                    (cond
+                      (#{:invalid-xray-path :invalid-xray-analyzer}
+                       (:error-type (ex-data exception)))
+                      (:error-type (ex-data exception))
+
+                      (or (str/includes? (.getMessage exception)
+                                         "is not allowed")
+                          (str/includes? (.getMessage exception)
+                                         "Unable to resolve symbol"))
+                      :disallowed-symbol
+
+                      :else :evaluation-failed)
+                    exception))))))
+
+(defn compile-query
+  "Compile one capability-limited Clojure expression into query-vector data."
+  [expression]
+  (let [query (evaluate-expression expression invalid-expression!)]
+    (when-not (vector? query)
+      (invalid-expression! expression :query-must-be-vector))
+    query))
+
+(defn compile-xray
+  "Compile one capability-limited Clojure expression into an xray program."
+  [expression]
+  (let [program (evaluate-expression expression invalid-xray-expression!)]
+    (when-not (and (map? program)
+                   (= :xray (:kind program))
+                   (vector? (:query program))
+                   (fn? (:analyzer program)))
+      (invalid-xray-expression! expression :xray-terminal-required))
+    (assoc program :expression expression)))
 
 (defn prepare-edit-options
   "Compile :expr into :query or return a structured one-of-input refusal."
@@ -266,6 +322,133 @@
                  :error (.getMessage exception))))
 
       :else opts)))
+
+(def ^:private xray-allowed-arguments
+  #{:op :file :expr :help})
+
+(defn prepare-xray-options
+  "Compile :expr before source I/O and reject unsupported arguments."
+  [{:keys [file expr] :as opts}]
+  (let [unsupported (->> (keys opts)
+                         (remove xray-allowed-arguments)
+                         sort
+                         vec)]
+    (cond
+      (seq unsupported)
+      {:operation :xray
+       :file file
+       :error (str "Unsupported arguments for :xray: "
+                   (str/join ", " (map #(str ":" (name %)) unsupported)))
+       :error-type :unsupported-arguments
+       :unsupported unsupported
+       :allowed (vec (sort xray-allowed-arguments))}
+
+      (not (contains? opts :expr))
+      {:operation :xray
+       :file file
+       :error "Supply :expr"
+       :error-type :missing-xray-input
+       :missing [:expr]}
+
+      :else
+      (try
+        (-> opts
+            (dissoc :expr)
+            (assoc :operation :xray
+                   :expression expr
+                   :xray (compile-xray expr)))
+        (catch Exception exception
+          (assoc (ex-data exception)
+                 :operation :xray
+                 :file file
+                 :error (.getMessage exception)))))))
+
+(defn- source-value
+  [source]
+  (z/sexpr (z/of-string source)))
+
+(defn- match-value
+  [{:keys [forms source]}]
+  (if forms
+    (mapv source-value forms)
+    (source-value source)))
+
+(defn- concrete-edn?
+  [value]
+  (cond
+    (or (nil? value)
+        (boolean? value)
+        (char? value)
+        (string? value)
+        (symbol? value)
+        (keyword? value)
+        (number? value)) true
+    (vector? value) (every? concrete-edn? value)
+    (list? value) (every? concrete-edn? value)
+    (set? value) (every? concrete-edn? value)
+    (map? value) (every? (fn [[key item]]
+                           (and (concrete-edn? key)
+                                (concrete-edn? item)))
+                         value)
+    :else false))
+
+(defn- xray-refusal
+  [found expression error-type error]
+  (-> found
+      (assoc :operation :xray
+             :expression expression
+             :error-type error-type
+             :error error)
+      (dissoc :value)))
+
+(defn evaluate-xray
+  "Evaluate one read-only xray program against source. Pure: data in, EDN out."
+  [source {:keys [expression xray]}]
+  (let [{:keys [query analyzer]} xray
+        found (structural-lens/evaluate-query source query)
+        evidence (-> found
+                     (assoc :operation :xray
+                            :expression expression
+                            :xray {:input-shape :selected-values
+                                   :input-count (:match-count found)}))]
+    (cond
+      (:error found)
+      (assoc evidence :operation :xray :expression expression)
+
+      (:matches-truncated? found)
+      (xray-refusal evidence expression :xray-input-truncated
+                    (str "X-ray selection has " (:match-count found)
+                         " matches; narrow it to at most "
+                         structural-lens/query-result-limit))
+
+      :else
+      (let [values (try
+                     (mapv match-value (:matches found))
+                     (catch Exception exception exception))]
+        (if (instance? Exception values)
+          (xray-refusal evidence expression :xray-input-invalid
+                        (str "Selected syntax cannot become Clojure data: "
+                             (.getMessage ^Exception values)))
+          (let [value (try
+                        (analyzer values)
+                        (catch Exception exception exception))]
+            (cond
+              (instance? Exception value)
+              (xray-refusal evidence expression :xray-analysis-failed
+                            (str "Pure xray analysis failed: "
+                                 (.getMessage ^Exception value)))
+
+              (not (concrete-edn? value))
+              (xray-refusal evidence expression :invalid-xray-result
+                            "Pure xray analysis must return concrete EDN data")
+
+              (> (count (pr-str value)) max-xray-result-characters)
+              (xray-refusal evidence expression :xray-result-too-large
+                            (str "Pure xray result exceeds "
+                                 max-xray-result-characters " characters"))
+
+              :else
+              (assoc evidence :value value))))))))
 
 (defn evaluate-edit
   "Materialize a pure transform against one selected form, then build a concrete plan."

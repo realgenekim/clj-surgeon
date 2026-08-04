@@ -283,6 +283,28 @@ path, stable address, owner, source range, complete-file hash, and a per-step
 cardinality trace. Zero and many matches are useful read results; output is
 bounded.
 
+#### `:xray` — Compute over selected Clojure data
+
+Use `:xray` when a pure Clojure computation can replace a later shell command
+or manual reconstruction. Keep `:q` as the shorter path for literal reads:
+
+```bash
+clj-surgeon :op :xray :file src/policy.clj \
+  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+```
+
+The terminal `xray` function receives a vector of selected values in query
+order. A node match becomes one Clojure value. A span or partition match
+becomes a vector. Zero matches pass `[]`. One match still passes a one-element
+vector. The result returns computed `:value` beside the unchanged exact
+`:matches`, addresses, cardinality trace, and complete-file source hash.
+
+`:xray` uses the same sandboxed pure Clojure functions and structural builders
+as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
+input, analyzer failure, lazy or non-EDN output, and output over 65,536
+characters. SCI does not expose I/O, processes, namespaces, mutable references,
+classes, or host interop.
+
 Make the same path an updater by ending it with `[:replace FORM]`:
 
 ```bash

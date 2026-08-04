@@ -11,9 +11,8 @@ description: >-
 
 # clj-surgeon
 
-Use `clj-surgeon` from `PATH`. Run `clj-surgeon --help` or
-`clj-surgeon :op OP --help` only when the exact routes below do not cover the
-task.
+Use `clj-surgeon` from `PATH`. Run help only when the exact routes below do not
+cover the task: `clj-surgeon --help` or `clj-surgeon :op OP --help`.
 
 ## Read the smallest structural object
 
@@ -66,6 +65,16 @@ preserves them in the file. Compose `[:form NAME]`, `[:find PATTERN]`,
 `:right`/`:left`/`:up`/`:down`. `_` matches one subtree inside a `:find`
 pattern. A read reports zero, one, or many matches and a per-step count trace.
 
+Use `:xray` only when pure Clojure computation removes a later shell command:
+
+```bash
+clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+```
+
+`xray` receives a vector of selected values. The result keeps computed `:value`
+beside exact matches, addresses, trace, and source hash. It never writes. Use
+`:q` when no computation is needed.
+
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing
 command. Do not pre-read only to reconstruct the supplied relationship.
@@ -98,27 +107,18 @@ clj-surgeon :op :edit :file src/policy.clj \
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-`transform` receives the exactly-one selected form as Clojure data. It does not
-run for zero or many matches. The plan stores only the concrete replacement,
-diff, and hashes. The plan never stores the function. Use `replace` when the
-replacement is already known. Use `transform` when the current form determines
-the replacement.
+`transform` receives the exactly-one selected form as Clojure data and does not
+run for zero or many matches. The plan stores only concrete replacement data,
+never the function. Use `transform` only when the current form determines it.
 
-Supply exactly one of `:query` and `:expr`. For a literal path, `:query` is
-often shorter. `:expr` provides pure `clojure.core` collection functions such as
-`let`, `assoc`, `update`, `mapv`, `filter`, `reduce`, `comp`, and `juxt`, plus
-`form`, `match`, `where`, navigation, span, partition, and replacement
-builders. SCI does not expose I/O, processes, namespaces, mutable references,
-or host interop. An invalid expression returns its allowed capabilities,
-symbols, builder signatures, and remedy in the refusal EDN. Do not call help
-only to recover that information.
+Supply exactly one of `:query` and `:expr`. Literal paths are often shorter as
+`:query`. `:expr` provides pure `clojure.core` collections and structural
+builders. SCI excludes I/O, processes, namespaces, mutable references, and host
+interop. Refusals include allowed symbols, signatures, and a remedy.
 
-`:edit` requires `:file`, `:plan-out`, and exactly one authoring surface. It
-writes only the atomic review artifact and never changes source. A terminal
-replacement refuses unless the path selects exactly one node, then returns that
-node, the trace, one diff, and the source/result hashes. Review the plan before
-the separate apply command. Never chain plan generation and application. Use
-`:q` first only when the choice still requires judgment.
+`:edit` requires `:file`, `:plan-out`, and one authoring surface. It never
+changes source. Review its edit, trace, diff, and hashes before apply. Never
+chain plan generation and application. Use `:q` first only for judgment.
 
 Do not preflight whether the task-specific `:plan-out` path exists. Successful
 planning atomically replaces that artifact. Any refusal preserves it.
@@ -158,7 +158,7 @@ to owners before retaining maximal owners:
 clj-surgeon :op :q :file src/policy.clj :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
 ```
 
-Use `:up :outermost`, not `:outermost :up`; head symbols do not contain one
+Use `:up :outermost`, not `:outermost :up`. Head symbols do not contain one
 another. When the first outer guard is known, anchor there because it is
 shorter. Results contain exact source, addresses, gaps, and partition evidence.
 Use `:right` for one known value. Use `[:span 2]` for one known pair. Use
