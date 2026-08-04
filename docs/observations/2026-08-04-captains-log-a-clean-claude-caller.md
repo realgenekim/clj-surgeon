@@ -159,6 +159,42 @@ that the working-tree skill supersedes installed snapshots. This laptop moved
 to `make install-dev` branch-live links so the skill under test is always the
 skill being edited; stable copies remain for benchmark pinning.
 
+## The perfection assessment (end of day)
+
+Eleven agent sessions ran today across two models and several skill
+versions; every one was correct, byte-scored, with zero repository damage.
+Graded against the perfect-tools standard — one command that works every
+time and handles its own gotchas:
+
+- **Read/compute surface: ~95% perfect.** Both models one-shot a blind
+  three-part aggregation over a 300-line map at zero source bytes.
+  Refusals carry their own remedy, and Opus was observed using that remedy
+  to self-repair in one step. The residual is not correctness but
+  determinism of elegance: Opus occasionally spends a call re-verifying a
+  count it already got right.
+- **Edit surface: perfect on the property that matters, one feature short
+  on ergonomics.** The audit-payload trap was caught twice at plan review
+  before any byte moved. Missing: `:expect`, the one-call guarded edit.
+- **Meta-layer: the quiet achievement.** The tool measures its own
+  perfection — make-driven benchmarks, machine-scored one-shot rates, a
+  regression time series in git, hash-receipted installs, five drift-test
+  suites on the skill. Today's transcript → diagnosis → patch → verified
+  one-shot loop ran twice in under an hour because that layer exists.
+
+Against the built-in `Edit` tool, within the Clojure domain: **better,
+not merely competitive** — on correctness (structural impossibility of
+unbalanced parens, demonstrated trap-catching), token economy (editing
+files never read, 0–1.5 KB exposure versus a full-file read per edit),
+and capability (`transform` computes replacements Edit must do in the
+model's head). Edit retains call count (until `:expect`), ergonomics
+(no shell quoting, no permission prompts, training prior), and
+universality. The bar for a domain tool is not beating the general tool
+at everything; it is making the general tool the wrong choice inside the
+domain. Today's benchmark shows skill-equipped agents already choosing
+the surgeon voluntarily in every session. Ship `:expect` and native
+invocation, and the sentence becomes: Edit is the fallback for files
+clj-surgeon doesn't speak.
+
 Same-day sequel: the make-driven benchmark scored Opus correct-but-not-one-shot
 (shape probes before aggregating; a transform that treated call syntax as its
 runtime value). Two skill iterations later — fused shape echoes with
