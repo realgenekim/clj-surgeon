@@ -145,3 +145,67 @@ inside `#(...)` was not: rewrite-clj represents that anonymous-function body as
 sibling nodes rather than a standalone list node. Issue #21 now includes this
 self-hosting acceptance case. The tool should expose the representation it
 actually has, then give the agent a general span lens over it.
+
+## Log entry: semantic text became an address, then the edit loop closed
+
+The next benchmark asked the sharper question: if an agent reaches for `rg`,
+what structural fact is still missing? A distinctive phrase inside one file was
+being used only to manufacture a line number for `:show-form`. Literal
+`:contains` selection removed that bridge. In a fresh matched-skill session,
+the old route was skill → `rg -n` → `:show-form :line`; the new route was skill
+→ `:cat :contains`. Both returned exact source. Calls fell from three to two,
+cumulative input from 62,032 to 43,554 tokens, and wall time from 28.1 to 24.1
+seconds.
+
+The first clean edit run was more useful because it was not impressive. The
+agent used `:grep-form` to find two identical expressions, then needed `:cat`
+to recover the `:finish` sibling context. After applying the plan, it attempted
+`git diff`, probed `.git`, and reread the unrelated form. The new receipt had
+removed one old verification call, but the complete route still took eight
+calls and more tokens than the adjacent old-tool run. Green unit tests had not
+made the workflow one-shot.
+
+That transcript produced three product changes:
+
+- CLI `:contains` values now remain literal text, so keyword-shaped clues such
+  as `:finish` work directly instead of being coerced to EDN keywords.
+- The skill and help route sibling labels, guards, keys, and binding names to
+  `:cat :contains`; this returns the owner and surrounding form in one read.
+- A reviewed one-edit plan plus the verified apply receipt is explicitly the
+  stopping condition for exact-edit verification. Agents do not reread source,
+  repeat hashes, or probe for a Git worktree merely to reproduce that evidence.
+
+The next blank session fell to five calls; the only remaining detour was a
+failed `git diff`. After the stopping condition was made explicit, two fresh
+post sessions independently chose the four-call ideal: read the installed
+skill, `:cat :contains :finish`, generate and review one scoped plan, then apply
+that unchanged plan. Neither used `rg`, `sed`, `:ls`, help, Git probing, or a
+post-apply reread.
+
+The final adjacent replication remained byte-exact and kept plan and apply in
+separate commands. Old versus new was 10 → 4 shell calls, 157,481 → 77,421
+cumulative input tokens, 24,617 → 14,189 uncached input tokens, 9,782 → 1,596
+source-output bytes, and 67.4 → 49.3 seconds. The apply emitted the complete
+586-byte receipt with matching result/read-back hashes, one applied edit,
+atomic-write evidence, and whole-file parse success.
+
+One prior four-call run made the exact edit but Codex's JSON event recorded an
+empty apply output. The strict benchmark scored `:verified false`; it did not
+infer a receipt from exit status, final bytes, or the agent's prose. A direct
+relative-plan reproduction emitted the full receipt, and the next clean run
+captured it normally. This appears to be a transient event-capture anomaly, but
+preserving the failed score matters more than polishing the result.
+
+The mental model survived contact with the evidence, with one qualification.
+clj-surgeon is becoming the `ed`/REPL structural microkernel for Clojure: a
+perfect lens for naming and returning parsed objects, plus deterministic,
+guarded transformations. “Every task in one command” would erase review and
+consent. “One command per honest judgment boundary” is the stronger ideal:
+one structural discovery, one inspectable plan, one verified apply. Clean-agent
+transcripts are now acceptance tests for whether those boundaries are obvious
+and minimal.
+
+Raw result directories remain on the benchmark host at
+`/tmp/clj-surgeon-one-shot-20260803-v1` through `v4`. The final replication's
+`runs.tsv` SHA-256 is
+`8e8ce927c057fd96065cc4c1f8135e052cb6916617e64af30c951b84b0b30159`.
