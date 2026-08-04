@@ -120,6 +120,9 @@ node, the trace, one diff, and the source/result hashes. Review the plan before
 the separate apply command. Never chain plan generation and application. Use
 `:q` first only when the choice still requires judgment.
 
+Do not preflight whether the task-specific `:plan-out` path exists. Successful
+planning atomically replaces that artifact. Any refusal preserves it.
+
 When the returned diff is exact, apply that saved plan next with
 `:replace-subform!`. Never reproduce the plan with `apply_patch`, a text edit,
 or a second equivalent plan. The verified executor is the source-changing

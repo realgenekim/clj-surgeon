@@ -134,6 +134,7 @@
           (is (str/includes? text ":replace-subform!")))))
     (doseq [[surface text] operational]
       (testing surface
+        (is (str/includes? (str/lower-case text) "do not preflight whether"))
         (is (str/includes? text "(-> (form 'transition)"))
         (is (str/includes? text "(match :finish)"))
         (is (str/includes? text "(replace '(assoc state"))

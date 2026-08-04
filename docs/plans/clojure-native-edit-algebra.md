@@ -1,7 +1,6 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Literal authoring failed the voluntary-use gate. Source-derived
-`transform` hill climb in progress.
+**Status:** Source-derived `transform` passed the clean-agent keep gate.
 
 ## Stage B CLI probe contract
 
@@ -50,8 +49,8 @@ apart from their requested plan paths. The same existing executor applies both
 plans.
 
 The pure and SCI tests pass 21 tests with 367 assertions. The CLI edit tests
-pass 11 tests with 149 assertions. The combined edit, help, and structural-lens
-suite passes 99 tests with 956 assertions. The tests cover these boundaries:
+pass 11 tests with 153 assertions. The combined edit, help, and structural-lens
+suite passes 99 tests with 960 assertions. The tests cover these boundaries:
 
 - broad pure Clojure collection and higher-order composition;
 - every structural builder;
@@ -96,6 +95,23 @@ The clean-agent task must require a replacement derived from an unknown current
 value. The post surface earns a keep only if agents can plan directly with
 `transform`, while the pre surface needs a read before it can author the
 replacement.
+
+## Stage C clean-agent result
+
+The eight-run A/B was byte-exact in every run. Post agents chose `transform` in
+four of four runs and made the edit plan their first source-bearing call in four
+of four runs. Pre agents did that in zero of four runs.
+
+Median shell calls fell from five to three. Median cumulative input fell from
+102,837 to 65,829 tokens, median output from 1,201 to 718 tokens, source output
+from 2,150 to 1,527 bytes, and wall time from 42.36 to 27.67 seconds. The
+source-derived surface passes the command, token, voluntary-use, and exactness
+gates.
+
+Keep both surfaces. Use EDN `:query` for literal selections and replacements.
+Use native `:expr` plus `transform` when the replacement depends on the selected
+form. Do not promote native query construction as a replacement for shorter
+literal EDN.
 
 ## Product hypothesis
 

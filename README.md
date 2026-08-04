@@ -334,6 +334,10 @@ existing EDN executor can therefore read and replay the plan without SCI. Use
 `replace` when the new form is already known. Use `transform` when the new form
 must be calculated from the selected code or data.
 
+Do not preflight whether the task-specific `:plan-out` path exists. A
+successful plan atomically replaces that artifact. A refusal leaves an existing
+plan unchanged.
+
 The SCI environment does not expose filesystem or process operations,
 namespace loading, mutable references, Java classes, or host interop. Supply
 exactly one of `:query` and `:expr`. Use the literal EDN query when it is

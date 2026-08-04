@@ -566,6 +566,7 @@
                                    "Use :q to read. Use :edit when the complete selection and either the replacement or its pure transformation rule are known."
                                    "When a named form plus an exact key, guard, map key, or binding identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
                                    "PLAN ONLY: this command saves a hash-fenced review artifact and never changes source."
+                                   "Do not preflight whether :plan-out exists. A successful plan atomically replaces that artifact; any refusal preserves it."
                                    "Review the returned selector, one edit, diff, source hash, and result hash."
                                    "When the diff is exact, apply that saved plan with :replace-subform!; never reproduce it with apply_patch, a text edit, or a second equivalent plan."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."

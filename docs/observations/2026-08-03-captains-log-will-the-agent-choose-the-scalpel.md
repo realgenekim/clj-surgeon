@@ -312,3 +312,27 @@ saves only the concrete replacement, diff, and hashes. Zero or many matches do
 not invoke the function. The durable plan remains inert EDN, and the existing
 executor remains the only write path. This creates a real one-shot hypothesis:
 derive a replacement from source without a preliminary read.
+
+## The algebra closes the loop
+
+The source-derived A/B passed. Eight clean Codex runs compared the query-only
+native checkpoint with `transform`, using four replicates of an edit whose new
+vector had to be calculated from unknown source values. Every run was
+byte-exact.
+
+Post agents chose `transform` in four of four runs. Their first source-bearing
+call was the edit plan in four of four runs, versus zero of four pre runs.
+Median shell calls fell from five to three. Median cumulative input fell from
+102,837 to 65,829 tokens, output from 1,201 to 718 tokens, source output from
+2,150 to 1,527 bytes, and wall time from 42.36 to 27.67 seconds.
+
+This is the distinction the literal benchmark exposed. Native query
+construction was aesthetic equivalence. Source-derived transformation removes
+an information-gathering command. The agent can state the rule directly in the
+language already active in context, while the kernel still owns selection,
+cardinality, planning, hashing, replay, and verification.
+
+Three of four post agents used the ideal three-command sequence: read skill,
+plan, apply. One added a plan-path existence probe. The next small hill-climb is
+to state that a task-specific plan path needs no preflight: successful planning
+atomically replaces it, while any refusal preserves the existing artifact.

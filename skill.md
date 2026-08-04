@@ -111,6 +111,9 @@ Supply exactly one of `:query` and `:expr`. `:expr` provides pure
 SCI. It does not expose I/O, processes, namespaces, mutable references, or host
 interop. Both authoring surfaces save the same plan and use the same executor.
 
+Do not preflight whether the task-specific `:plan-out` path exists. Successful
+planning atomically replaces that artifact. Any refusal preserves it.
+
 Select a meaningful peer pair as one lossless slice with `[:span 2]`:
 
 ```bash
