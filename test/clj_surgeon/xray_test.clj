@@ -69,12 +69,14 @@
 
 (deftest one-xray-algebra-covers-literal-stable-selection-and-count-refinement
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
+        initializer (dsl/compile-xray "(-> (form 'data) initializer)")
         computed (dsl/compile-xray
                   "(-> (form 'data) (match :xs) right (expect-count 1) (analyze (fn [[xs]] (count xs))))")
         aggregated (dsl/compile-xray
                     "(-> (form 'data) (match '_) (where {:tag :vector}) (analyze #(mapv count %)))")]
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
+    (is (= [[:form 'data] :initializer] (:query initializer)))
     (is (= 1 (:expected-count computed)))
     (is (= :selected-values (:input-shape computed)))
     (is (= 2 ((:analyzer computed) [[1 2]])))
@@ -167,6 +169,7 @@
         (is (= (count expected-input) (:match-count result)))
         (is (= {:input-shape :selected-values
                 :input-count (count expected-input)
+                :data-view :canonical-collections
                 :cardinality :any
                 :evidence :compact}
                (:xray result)))
@@ -228,6 +231,44 @@
                 nil
                 (catch Exception exception (ex-data exception)))]
     (is (= :invalid-xray-cardinality (:error-type error)))))
+
+(deftest computed-xray-canonicalizes-map-shaped-syntax-without-evaluation
+  (let [map-source (str "(ns bench.maps)\n"
+                        "(def literal {:a 1 :b 2})\n"
+                        "(def hashed (hash-map :a 1 :b 2))\n"
+                        "(def arrayed (array-map :a 1 :b 2))\n"
+                        "(def unsupported (merge {:a 1} {:b 2}))\n"
+                        "(def malformed (hash-map :a))\n")
+        evaluate (fn [name]
+                   (let [expression (str "(-> (form '" name ") initializer "
+                                         "(expect-count 1) (analyze identity))")
+                         program (dsl/compile-xray expression)]
+                     (dsl/evaluate-xray map-source
+                                        {:expression expression
+                                         :xray program})))]
+    (doseq [name ['literal 'hashed 'arrayed]]
+      (testing (str name)
+        (let [result (evaluate name)]
+          (is (= [{:a 1 :b 2}] (:value result)))
+          (is (= :canonical-collections
+                 (get-in result [:xray :data-view]))))))
+    (testing "unsupported calls remain syntax"
+      (is (= ['(merge {:a 1} {:b 2})]
+             (:value (evaluate 'unsupported)))))
+    (testing "literal read remains exact source"
+      (let [expression "(-> (form 'hashed) initializer)"
+            program (dsl/compile-xray expression)
+            result (dsl/evaluate-xray map-source
+                                      {:expression expression
+                                       :xray program})]
+        (is (= "(hash-map :a 1 :b 2)"
+               (get-in result [:matches 0 :source])))
+        (is (nil? (:value result)))))
+    (testing "odd constructor arguments refuse before analysis"
+      (let [result (evaluate 'malformed)]
+        (is (= :xray-input-invalid (:error-type result)))
+        (is (str/includes? (:error result) "key/value pairs"))
+        (is (nil? (:value result)))))))
 
 (deftest compact-evidence-preserves-provenance-without-repeating-source
   (let [query [[:form 'data] [:find :ys] :right]
@@ -520,7 +561,8 @@
         (let [text (get surfaces surface)]
           (is (str/includes? text "frequencies"))
           (is (str/includes? text "analyze") surface)
-          (is (str/includes? text "expect-count") surface))))
+          (is (str/includes? text "expect-count") surface)
+          (is (str/includes? text "initializer") surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

@@ -149,7 +149,11 @@ cardinality without changing that input representation and refuses before
 analysis. Computed results return bounded EDN `:value` with compact addresses,
 ranges, trace, cardinality, and hashes. Computation never replaces evidence.
 X-ray never writes source or a plan. Former spellings remain compatibility
-inputs while the unified surface is tested.
+inputs while the unified surface is tested. The general `initializer` path
+operator selects a `def` right-hand side without evaluating it; semantic
+interpretation remains with the model. Computed analysis canonicalizes map
+literals and `hash-map` / `array-map` syntax without executing source; evidence
+retains exact syntax.
 
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and

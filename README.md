@@ -272,7 +272,7 @@ vector. Add `expect-count` when cardinality must be exact:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'audit-report) (match :events) right (expect-count 1) (analyze (fn [[events]] (frequencies (map :category events)))))"
+  :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
 `analyze` always passes a vector of zero, one, or many selected values in query
@@ -280,10 +280,17 @@ order. `expect-count` refuses before calling the function and does not change
 that input type. Therefore one selected vector is `[[...]]`, which remains
 distinct from multiple selected scalar forms.
 
-The value is parsed source syntax, not evaluated program state. Selecting a
-`def` returns its complete defining list; selecting `(hash-map :a 1)` returns a
-list headed by the symbol `hash-map`, not a constructed map. Return concrete
-EDN from computation; realize lazy results with `vec` or another collection.
+Use `initializer` after a named `def` to select its right-hand side directly.
+It returns zero matches for an unbound `def` or a non-`def` form and never
+evaluates constructor syntax.
+
+The value is parsed source syntax, not evaluated program state. For computed
+X-ray, map literals and `hash-map` / `array-map` constructor syntax share one
+canonical map view. This pairs already-parsed key/value forms; it never invokes
+the constructor or its arguments. Unsupported calls remain lists, malformed
+map constructors refuse, and literal X-ray plus evidence retain exact source.
+Return concrete EDN from computation; realize lazy results with `vec` or another
+collection.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the

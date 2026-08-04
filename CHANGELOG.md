@@ -14,7 +14,10 @@ is cut.
   A plain path such as `(form 'transition)` returns literal source;
   `(analyze path pure-function)` receives a stable ordered selection vector;
   `(expect-count path n)` optionally refines cardinality without changing that
-  input type. Computation returns `:value` with compact hash evidence.
+  input type. `initializer` selects a `def` right-hand side without evaluating
+  it. Computed analysis gives map literals and `hash-map` / `array-map` syntax
+  one non-evaluating canonical view while exact evidence remains source-shaped.
+  Computation returns `:value` with compact hash evidence.
   Former read spellings remain compatibility inputs while this unified surface
   is measured. Named selection now sees `#?`
   and `#?@` branch-local forms and accepts an optional platform. X-ray never

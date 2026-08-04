@@ -642,13 +642,15 @@
                        :workflow ["Use one Clojure path for every structural read. A path without a terminal returns literal source evidence."
                                   "End with (analyze pure-function). The function always receives a vector of selected values in match order, including for zero or one match."
                                   "Add (expect-count n) before analyze when cardinality must be exact. It refuses before calling the function and never changes the vector input type."
+                                  "After selecting a def, use initializer to select its right-hand side without evaluating it. An unbound def or non-def produces zero matches."
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
-                                  "Selected values are parsed syntax, not evaluated program state. A selected def is its complete defining list. Return concrete EDN, not a lazy sequence."
+                                  "Selected values are never evaluated. Computed X-ray gives map literals and hash-map/array-map syntax one canonical map view while exact source remains in evidence."
+                                  "Return concrete EDN, not a lazy sequence. Malformed map constructor syntax refuses."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]
                        :examples ["clj-surgeon :op :xray :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right)\""
-                                  "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'audit-report) (match :events) right (expect-count 1) (analyze (fn [[events]] (frequencies (map :category events)))))\""
+                                  "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))\""
                                   "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (analyze #(mapv first %)))\""]
                        :category :read}
 
@@ -842,7 +844,7 @@
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
     (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right)\"\n")
-    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) (match :events) right (expect-count 1) (analyze (fn [[events]] (frequencies (map :category events)))))\"\n")
+    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))\"\n")
     (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right (replace 'NEW-FORM))\" :plan-out plan.edn\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")

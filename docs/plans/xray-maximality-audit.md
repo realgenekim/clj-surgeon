@@ -105,6 +105,20 @@ terminal signatures in the refusal itself. Do not print the complete symbol
 allowlist by default and then require a separate `--help` call. Target: under
 1 KB for common authoring failures without weakening safety detail.
 
+### 5. Stable selection and canonical initializer data
+
+Test one computed input type: `analyze` always receives an ordered vector.
+`expect-count` may refine cardinality before invocation but never unwraps the
+vector. Add `initializer` to select a `def` right-hand side without variable
+`down` / `right` guesses.
+
+For computed analysis only, canonicalize map literals and syntactic
+`hash-map` / `array-map` constructor calls to a map without executing source.
+Odd constructor arguments refuse; unsupported calls remain lists. Literal
+X-ray and evidence retain exact source, while computed results declare the
+data view. This candidate must beat the real `ops-registry` task on wall time;
+smaller output alone is insufficient.
+
 ## Permanent Test Matrix
 
 All prior tests remain. Add tests for:
@@ -120,7 +134,11 @@ All prior tests remain. Add tests for:
    command, unchanged source, and structured nonzero refusals;
 7. diagnostic byte bounds and executable local remedies;
 8. benchmark summarization that excludes incorrect runs from all efficiency
-   statistics, plus counterbalanced scheduling tests.
+   statistics, plus counterbalanced scheduling tests;
+9. stable vector input, count refinement without unwrapping, initializer
+   selection across every `def` arity, canonical map constructors, malformed
+   constructor refusal, unsupported-call preservation, and exact literal
+   evidence.
 
 Use the existing real-program-derived CLJC fixture and `ops-registry` in
 `src/clj_surgeon/core.clj`; do not replace them with toy-only evidence.

@@ -21,7 +21,7 @@
    [:find 'PATTERN]
    [:where {:tag :TAG}]
    [:where {:parent-tag :TAG}]
-   :right :left :up :down :outermost
+   :right :left :up :down :outermost :initializer
    [:span 'POSITIVE-COUNT]
    [:partition-all 'POSITIVE-COUNT]
    [:replace 'FORM]
@@ -174,7 +174,7 @@
       (cond
         (navigation-steps step) nil
 
-        (= :outermost step) nil
+        (#{:outermost :initializer} step) nil
 
         (not (vector? step))
         (invalid-query! (str "Unsupported query step: " (pr-str step))
@@ -348,9 +348,6 @@
                         {:address address :zloc zloc})
                       (range)
                       locations)
-        by-location (into {} (map (fn [item]
-                                    [(location-key (:zloc item)) item])
-                                  entries))
         walked (cwalk/top-level-forms-from-zloc root #{:clj :cljs})
         walked-by-location (into {}
                                  (map (fn [{:keys [zloc platforms]}]
@@ -403,6 +400,16 @@
     :up (z/up zloc)
     :down (z/down zloc)))
 
+(defn- def-initializer
+  [by-location {:keys [zloc]}]
+  (let [children (loop [child (z/down zloc) result []]
+                   (if child
+                     (recur (z/right child) (conj result child))
+                     result))
+        head (some-> children first z/sexpr)]
+    (when (and (= 'def head) (<= 3 (count children)))
+      (get by-location (location-key (peek children))))))
+
 (defn- apply-query-step [{:keys [entries by-location]} items step]
   (unique-items
     (cond
@@ -415,6 +422,9 @@
 
       (= :outermost step)
       (outermost-items items)
+
+      (= :initializer step)
+      (keep #(def-initializer by-location %) items)
 
       (= :form (first step))
       (let [[_ name platform] step]

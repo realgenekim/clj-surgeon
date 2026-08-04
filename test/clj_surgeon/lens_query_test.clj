@@ -78,6 +78,31 @@
       (is (= ["{:timeout-ms 1000\n   :mode :safe}"]
              (mapv :source (:matches result)))))))
 
+(deftest initializer-selects-def-right-hand-side-without-evaluating-it
+  (let [source (str "(ns field.initializer)\n"
+                    "(def unbound)\n"
+                    "(def scalar\n"
+                    "  ;; Preserve this comment.\n"
+                    "  42)\n"
+                    "(def text \"literal\")\n"
+                    "(def documented \"Registry docs.\"\n"
+                    "  (hash-map :read {:category :read}))\n"
+                    "(defn function-value [] 1)\n")]
+    (doseq [[name expected]
+            [['scalar "42"]
+             ['text "\"literal\""]
+             ['documented "(hash-map :read {:category :read})"]]]
+      (testing (str name)
+        (let [result (lens/evaluate-query source [[:form name] :initializer])]
+          (is (= 1 (:match-count result)))
+          (is (= expected (get-in result [:matches 0 :source])))
+          (is (= [1 1] (mapv :output-count (:trace result)))))))
+    (doseq [name ['unbound 'function-value]]
+      (testing (str name " has no def initializer")
+        (let [result (lens/evaluate-query source [[:form name] :initializer])]
+          (is (= 0 (:match-count result)))
+          (is (= [1 0] (mapv :output-count (:trace result)))))))))
+
 (deftest duplicate-same-line-values-keep-distinct-complete-file-addresses
   (let [source "(ns same.line)\n(defn f [x] (case x :a (inc 1) :b (inc 2)))\n"
         result (lens/evaluate-query source

@@ -355,6 +355,71 @@ two selected scalars 1, 2 -> analyzer input [1 2]
 This is the Bitter Lesson boundary: make the substrate uniform and let the
 model interpret it. Do not ask the runtime to guess a sum type from cardinality.
 
+## Candidate v6: the type was clean; the workload was slower
+
+The one-pair pilot favored stable selection: 53.7 seconds and four calls versus
+58.4 seconds and seven calls. Four parallel replicates rejected promotion on
+the primary metric:
+
+```text
+                              compute / aggregate    stable Selection
+correct                               4/4                  4/4
+median wall                          83.9 s                102.2 s
+median shell calls                   10                    11
+median input tokens                 212,366               230,472
+median source output                 30.6 KB                19.2 KB
+```
+
+As in the prior candidates, smaller output did not buy lower wall time. The
+transcripts nevertheless showed that agents understood the stable vector
+immediately. They wrote `(fn [[form]] ...)`; none confused one selected vector
+with multiple selected values. The extra work came from navigating and
+interpreting the selected definition, not from the input type.
+
+Every candidate independently guessed how many `down` / `right` steps reached
+the initializer of a `def`. Agents tried the docstring, the complete definition,
+and the `(hash-map ...)` child; several read the whole form to settle the
+question. That is repeated mechanical work and therefore belongs in the tool.
+
+The next neighbor keeps the type law and adds one general structural operator:
+
+```clojure
+(-> (form 'ops-registry) initializer (expect-count 1) (analyze f))
+```
+
+`initializer` should support `def`, select zero nodes when no initializer is
+present, preserve exact source, and never evaluate constructor syntax. It must
+not absorb semantic interpretation such as converting `(hash-map ...)` to a
+map. This is the Bitter Lesson boundary in miniature: the kernel locates the
+right-hand side; the model understands it.
+
+That last boundary was challenged immediately: why make every agent notice and
+repair the map-literal versus `hash-map` distinction? An explicit `as-map`
+helper would still require a choice. Every repeated choice costs wall time.
+
+Candidate v7 therefore adds a canonical computed-data view:
+
+```text
+exact source                     computed analyzer value
+{:a 1}                           {:a 1}
+(hash-map :a 1)                  {:a 1}
+(array-map :a 1)                 {:a 1}
+(merge a b)                      (merge a b)
+```
+
+This is syntactic normalization, not evaluation. The implementation pairs
+already-parsed key/value forms only for known map-shaped constructors. It never
+invokes the head or its arguments. Odd constructor arguments refuse.
+Unsupported calls remain lists. Literal X-ray and evidence retain exact source
+and hashes, while computed results declare
+`:data-view :canonical-collections`.
+
+This slightly moves the Bitter Lesson boundary, but in the correct direction:
+normalize a universal representation mismatch once in the substrate; leave
+schema meaning to the model. The tool answers “map or `hash-map`?” before an
+agent can ask. It still leaves “what does `:args` mean?” and “who owns `:pair`?”
+to general reasoning.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

@@ -45,7 +45,7 @@
     clojure.core/partition-all clojure.core/replace])
 
 (def ^:private builder-symbols
-  '[form match where right left up down outermost span partition-all replace
+  '[form match where right left up down outermost initializer span partition-all replace
     replace-span transform xray xray-one compute aggregate inspect one all
     expect-count analyze])
 
@@ -68,6 +68,7 @@
    "(match path pattern)"
    "(where path predicates)"
    "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)"
+   "(initializer path)"
    "(span path n)" "(partition-all path n)"
    "(replace path form)" "(replace-span path & forms)"
    "(transform path pure-function)"
@@ -158,6 +159,11 @@
   "Retain current nodes that have no current ancestor."
   [path]
   (append-step path :outermost))
+
+(defn initializer
+  "Select the initializer of each selected def without evaluating it."
+  [path]
+  (append-step path :initializer))
 
 (defn span
   "Select the current form and the next n-1 structural siblings."
@@ -285,6 +291,7 @@
    'up up
    'down down
    'outermost outermost
+   'initializer initializer
    'span span
    'partition-all partition-all
    'replace replace
@@ -326,7 +333,7 @@
                     :allowed-capabilities allowed-capabilities
                     :allowed-forms xray-expression-reference
                     :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""
-                    :remedy "Return a path, or end it with analyze; add expect-count when cardinality must be exact."}
+                    :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
                    cause))))
 
 (defn- evaluate-expression
@@ -496,6 +503,23 @@
     (mapv source-value forms)
     (source-value source)))
 
+(def ^:private canonical-map-constructors
+  '#{hash-map clojure.core/hash-map array-map clojure.core/array-map})
+
+(defn- canonical-analysis-value
+  "Normalize known map-shaped syntax without evaluating any source form."
+  [value]
+  (if (and (list? value)
+           (contains? canonical-map-constructors (first value)))
+    (let [arguments (rest value)]
+      (when (odd? (count arguments))
+        (throw (ex-info "Map constructor syntax requires key/value pairs"
+                        {:error-type :invalid-map-constructor-syntax
+                         :constructor (first value)
+                         :argument-count (count arguments)})))
+      (apply array-map arguments))
+    value))
+
 (defn- concrete-edn?
   [value]
   (cond
@@ -552,6 +576,7 @@
                             :xray {:input-shape (or input-shape
                                                     :selected-values)
                                    :input-count (:match-count found)
+                                   :data-view :canonical-collections
                                    :cardinality (cond
                                                   expected-count [:exactly expected-count]
                                                   cardinality cardinality
@@ -585,7 +610,8 @@
 
       :else
       (let [values (try
-                     (mapv match-value (:matches found))
+                     (mapv #(canonical-analysis-value (match-value %))
+                           (:matches found))
                      (catch Exception exception exception))]
         (if (instance? Exception values)
           (xray-refusal evidence expression :xray-input-invalid

@@ -87,7 +87,10 @@ updates, and verification gates. It is not a chronological coding diary.
   cardinality must be exact; refusal occurs before the function runs and does
   not change its input type. The computed `:value` has compact hash evidence;
   literal paths retain full source. X-ray never writes source or a plan. For
-  CLJC, pass `:clj` or `:cljs` to `form`.
+  a selected `def`, use `initializer` to select its right-hand side without
+  evaluating it. Computed X-ray canonicalizes map literals and
+  `hash-map`/`array-map` syntax to one map view while exact evidence remains
+  source-shaped. For CLJC, pass `:clj` or `:cljs` to `form`.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already
