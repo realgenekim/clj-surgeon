@@ -644,7 +644,6 @@
                                   "End with (inspect :all pure-function) for a vector of zero, one, or many values in match order."
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
                                   "Selected values are parsed syntax, not evaluated program state. A selected def is its complete defining list. Return concrete EDN, not a lazy sequence."
-                                  "If computation refuses, use its bounded :input-summary to repair the path or function without another source read."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]

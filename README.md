@@ -283,9 +283,6 @@ The value is parsed source syntax, not evaluated program state. Selecting a
 `def` returns its complete defining list; selecting `(hash-map :a 1)` returns a
 list headed by the symbol `hash-map`, not a constructed map. Return concrete
 EDN from computation; realize lazy results with `vec` or another collection.
-If computation refuses, its bounded `:input-summary` reports the collection
-kind, count, child kinds, and list heads needed to repair the expression without
-another source read.
 
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the

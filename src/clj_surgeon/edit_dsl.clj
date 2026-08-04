@@ -468,66 +468,6 @@
                          value)
     :else false))
 
-(def ^:private input-summary-child-limit 6)
-(def ^:private input-summary-depth 2)
-(def ^:private input-summary-preview-limit 80)
-
-(defn- bounded-preview
-  [value]
-  (let [text (str value)]
-    (if (<= (count text) input-summary-preview-limit)
-      text
-      (str (subs text 0 input-summary-preview-limit) "…"))))
-
-(defn- input-summary
-  "Describe selected syntax without evaluating it or repeating the source."
-  [value]
-  (letfn [(summarize [item depth]
-            (cond
-              (nil? item) {:kind :nil}
-              (boolean? item) {:kind :boolean :value item}
-              (char? item) {:kind :character :value item}
-              (string? item) {:kind :string
-                              :characters (count item)
-                              :preview (bounded-preview item)}
-              (symbol? item) {:kind :symbol :value item}
-              (keyword? item) {:kind :keyword :value item}
-              (number? item) {:kind :number :value item}
-
-              (map? item)
-              (cond-> {:kind :map :count (count item)}
-                (pos? depth)
-                (assoc :sample-keys
-                       (mapv #(summarize % (dec depth))
-                             (take input-summary-child-limit (keys item))))
-
-                (and (pos? depth)
-                     (> (count item) input-summary-child-limit))
-                (assoc :children-truncated? true))
-
-              (or (vector? item) (list? item) (set? item))
-              (let [kind (cond
-                           (vector? item) :vector
-                           (list? item) :list
-                           :else :set)
-                    item-count (count item)]
-                (cond-> {:kind kind :count item-count}
-                  (and (list? item) (symbol? (first item)))
-                  (assoc :head (first item))
-
-                  (pos? depth)
-                  (assoc :children
-                         (mapv #(summarize % (dec depth))
-                               (take input-summary-child-limit item)))
-
-                  (and (pos? depth)
-                       (> item-count input-summary-child-limit))
-                  (assoc :children-truncated? true)))
-
-              :else {:kind :unknown
-                     :preview (bounded-preview item)}))]
-    (summarize value input-summary-depth)))
-
 (defn- xray-refusal
   [found expression error-type error]
   (-> found
@@ -604,16 +544,14 @@
               (-> (xray-refusal evidence expression :xray-analysis-failed
                                 (str "Pure xray analysis failed: "
                                      (.getMessage ^Exception value)))
-                  (assoc :input-summary (input-summary analyzer-input)
-                         :remedy (str "Use :input-summary to correct the pure "
-                                      "function. Selected values are parsed "
-                                      "syntax, not evaluated program state.")))
+                  (assoc :remedy (str "Selected values are parsed syntax, not "
+                                      "evaluated program state. Run the same "
+                                      "path without inspect to read the source.")))
 
               (not (concrete-edn? value))
               (-> (xray-refusal evidence expression :invalid-xray-result
                                 "Pure xray analysis must return concrete EDN data")
-                  (assoc :input-summary (input-summary analyzer-input)
-                         :remedy (str "Return concrete EDN. Realize lazy results "
+                  (assoc :remedy (str "Return concrete EDN. Realize lazy results "
                                       "with vec or another collection constructor.")))
 
               (> (count (pr-str value)) max-xray-result-characters)

@@ -75,8 +75,7 @@ clj-surgeon :op :xray :file src/policy.clj \
 Computed `:value` has compact hash evidence; a plain path returns full
 source. Values are parsed syntax, not evaluated code: a selected `def` is the
 whole list. Return concrete EDN, not a lazy sequence. It never writes. In CLJC,
-pass a platform to `form` for one branch. On refusal, repair from
-`:input-summary` instead of reading the selected form separately.
+pass a platform to `form` for one branch.
 
 End that same path with `replace` to emit one guarded plan:
 

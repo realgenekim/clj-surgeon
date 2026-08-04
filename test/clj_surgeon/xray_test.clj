@@ -325,7 +325,7 @@
         (is (nil? (:value result)))
         (is (not (str/includes? (str result) "#object")))))))
 
-(deftest xray-analysis-refusal-summarizes-selected-syntax-for-local-repair
+(deftest xray-analysis-refusal-stays-compact-and-actionable
   (let [shaped-source (str "(ns bench.shape)\n"
                            "(def registry\n"
                            "  \"Operation registry.\"\n"
@@ -336,18 +336,14 @@
                 {:expression "shape repair"
                  :xray (one-spec [[:form 'registry]]
                                  #(throw (ex-info "not a map" {})))})
-        summary (:input-summary result)]
+        serialized (pr-str result)]
     (is (= :xray-analysis-failed (:error-type result)))
-    (is (= :list (:kind summary)))
-    (is (= 4 (:count summary)))
-    (is (= 'def (:head summary)))
-    (is (= [:symbol :symbol :string :list]
-           (mapv :kind (:children summary))))
-    (is (= 'hash-map (get-in summary [:children 3 :head])))
-    (is (= 5 (get-in summary [:children 3 :count])))
     (is (str/includes? (:remedy result) "parsed syntax"))
-    (is (not (str/includes? (str result) "hash-map :read")))
-    (is (< (count (pr-str result)) 2000))))
+    (is (str/includes? (:remedy result) "without inspect"))
+    (is (nil? (:input-summary result)))
+    (is (not (str/includes? serialized "Operation registry.")))
+    (is (not (str/includes? serialized "hash-map :read")))
+    (is (< (count serialized) 1500))))
 
 (deftest xray-refuses-to-compute-from-truncated-evidence
   (let [forms (str/join " " (map #(keyword (str "k" %)) (range 101)))

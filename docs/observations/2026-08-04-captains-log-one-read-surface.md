@@ -220,6 +220,31 @@ with database-flavored cardinality:
 two more magic terminal names. The old terminal spellings remain compatibility
 aliases until the candidate earns promotion.
 
+## Candidate v3: smaller refusals led to slower agents
+
+Candidate v3 combined the naming change with bounded `:input-summary` repair.
+The one-run pilot was neutral: both versions were exact in six calls, and the
+candidate finished 4% faster. The four-run parallel gate reversed that result:
+
+```text
+                              unified v2    inspect + summary    change
+correct                           4/4             4/4            tied
+median wall                      59.8 s            69.6 s         16% slower
+median shell calls                8                9             1 more
+median input tokens             143,579          183,126         28% more
+median source output             35.3 KB           16.2 KB       54% less
+```
+
+The summary did what it promised mechanically: agents stopped dumping the full
+form as often, and source output fell by more than half. That did not satisfy
+the product gate. Agents used the newly visible shape as an invitation to issue
+more semantic probes. Smaller output is not a win when wall time rises.
+
+This candidate is rejected as a combined change. It also confounded the new
+`inspect :one` / `inspect :all` spelling with automatic input summaries. The
+next bounded neighbor must remove the summary from the default path and test
+the naming change alone. Do not blame or promote the names from this result.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

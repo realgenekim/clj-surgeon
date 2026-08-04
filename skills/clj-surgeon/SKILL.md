@@ -71,8 +71,7 @@ clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) (matc
 Computed `:value` has compact hash evidence; a plain path returns full source.
 Values are parsed syntax, not evaluated code: a selected `def` is the whole
 list. Return concrete EDN, not a lazy sequence. X-ray never writes. In CLJC,
-select with `(form 'name :clj)`. On refusal, repair from `:input-summary`
-instead of reading the selected form separately.
+select with `(form 'name :clj)`.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing
