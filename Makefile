@@ -4,7 +4,7 @@ CODEX_HOME ?= $(HOME)/.codex
 CODEX_SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
 CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
 
-.PHONY: test outline help install install-cli install-codex-skill nrepl
+.PHONY: test outline help install install-cli install-codex-skill nrepl benchmark-clean-codex
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -14,6 +14,7 @@ help:
 	@echo "  make install-cli          Install only the CLI"
 	@echo "  make install-codex-skill  Install only the Codex skill"
 	@echo "  make nrepl                Start bb nREPL"
+	@echo "  make benchmark-clean-codex Run the 32-session clean Codex benchmark"
 	@echo ""
 	@echo "Installation overrides:"
 	@echo "  CLI_DEST=/path/to/clj-surgeon  CLI path (default: $(CLI_DEST))"
@@ -58,6 +59,9 @@ install-codex-skill:
 
 nrepl:
 	cd $(CLJ_SURGEON_HOME) && bb nrepl-server 0
+
+benchmark-clean-codex:
+	bash bench/run_clean_codex.sh
 
 test:
 	bb test/run_all.clj
