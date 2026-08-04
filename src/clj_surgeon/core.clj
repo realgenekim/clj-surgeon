@@ -639,14 +639,14 @@
                        :desc "Compute one read-only EDN value from structurally selected Clojure data"
                        :args {:file {:required true :desc "Clojure source file; never modified"}
                               :expr {:required true :desc "One sandboxed pure Clojure expression ending in (xray path pure-function)"}}
-                       :workflow ["Use :q for a literal structural read. Use :xray only when pure Clojure computation removes a later shell command or manual reconstruction."
-                                  "End one thread-first structural path with (xray pure-function). The function receives a vector of selected values in match order; node matches are values and span matches are vectors."
+                       :workflow ["Use :q for a literal structural read. Use :xray for counts, sums, frequencies, grouping, or another pure computation; do not reconstruct those answers manually from :q."
+                                  "End one thread-first structural path with (xray pure-function). The function receives a vector of selected values in match order; when one selected node is itself a collection, operate on (first values)."
                                   "Zero matches pass []; one match passes a one-element vector; many matches preserve query order."
                                   "The result keeps :value beside the exact :matches, addresses, trace, match count, and source hash. Computation never replaces structural evidence."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]
-                       :examples ["clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))\""
+                       :examples ["clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))\""
                                   "clj-surgeon :op :xray :file src/policy.clj :expr \"(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2) (xray #(mapv first %)))\""]
                        :category :read}
 
@@ -840,7 +840,7 @@
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
     (.append sb "    clj-surgeon :op :q :file src/my/ns.clj :query '[[:form transition] [:find :finish] :right]'\n")
-    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))\"\n")
+    (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))\"\n")
     (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right (replace 'NEW-FORM))\" :plan-out plan.edn\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")

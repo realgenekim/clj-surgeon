@@ -317,6 +317,11 @@
         (is (str/includes? (str/lower-case text) "pure clojure"))
         (is (str/includes? text ":value"))
         (is (str/includes? (str/lower-case text) "never write"))))
+    (doseq [surface ["README" "canonical skill" "legacy skill" "help"]]
+      (testing (str surface " teaches computed aggregation and singleton input")
+        (let [text (get surfaces surface)]
+          (is (str/includes? text "frequencies"))
+          (is (str/includes? text "(first %)") surface))))
     (is (<= (count (str/split-lines
                     (get surfaces "canonical skill")))
             240))))

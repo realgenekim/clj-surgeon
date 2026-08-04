@@ -285,12 +285,13 @@ bounded.
 
 #### `:xray` — Compute over selected Clojure data
 
-Use `:xray` when a pure Clojure computation can replace a later shell command
-or manual reconstruction. Keep `:q` as the shorter path for literal reads:
+Use `:xray` for counts, sums, frequencies, grouping, or other pure Clojure
+computation over selected source. Do not reconstruct those answers manually
+from `:q`; keep `:q` as the shorter path for literal reads:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
-  :expr "(-> (form 'retry-policy) (match :delays) right (xray #(apply max (first %))))"
+  :expr "(-> (form 'audit-report) (match :events) right (xray #(frequencies (map :category (first %)))))"
 ```
 
 The terminal `xray` function receives a vector of selected values in query
@@ -298,6 +299,8 @@ order. A node match becomes one Clojure value. A span or partition match
 becomes a vector. Zero matches pass `[]`. One match still passes a one-element
 vector. The result returns computed `:value` beside the unchanged exact
 `:matches`, addresses, cardinality trace, and complete-file source hash.
+When one selected node is itself a collection, operate on `(first values)`;
+the outer vector represents the selection, not the source collection.
 
 `:xray` uses the same sandboxed pure Clojure functions and structural builders
 as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
