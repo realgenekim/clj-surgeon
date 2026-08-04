@@ -81,6 +81,7 @@ Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
 one canonical map view while evidence stays exact. Identify descendants with
 `(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a lazy
 sequence. It never writes. In CLJC, pass a platform for one branch.
+Scope records below known parents in the same function: `(for [parent parents node (tree-seq coll? seq (child parent)) :when (predicate node)] node)`.
 
 End that same path with `replace` to emit one guarded plan:
 

@@ -119,6 +119,19 @@ X-ray and evidence retain exact source, while computed results declare the
 data view. This candidate must beat the real `ops-registry` task on wall time;
 smaller output alone is insufficient.
 
+### 6. A-priori analyzer contract and natural Clojure
+
+Make the computed input contract complete before the first call: `analyze`
+always receives one ordered vector of ordinary Clojure data. Agents should
+write one total function over that value rather than issue a separate
+container-shape query. `tree-seq` provides shape-independent traversal; a
+nested `for` scopes that traversal below semantically known parents.
+
+Do not turn SCI into a smaller surprise language. Admit demonstrated pure core
+idioms such as `key`, `val`, and `for`. Because `for` expands through loop and
+chunk internals, keep those symbols private to macro expansion and continue to
+refuse direct nonterminating `loop` / `recur` source before file I/O.
+
 ## Permanent Test Matrix
 
 All prior tests remain. Add tests for:
@@ -139,6 +152,9 @@ All prior tests remain. Add tests for:
    selection across every `def` arity, canonical map constructors, malformed
    constructor refusal, unsupported-call preservation, and exact literal
    evidence.
+10. shape-independent map/vector traversal, idiomatic `key` / `val` / `for`,
+    direct loop refusal, macro-expansion isolation, help and skill propagation,
+    and the exact clean-agent expressions that previously failed.
 
 Use the existing real-program-derived CLJC fixture and `ops-registry` in
 `src/clj_surgeon/core.clj`; do not replace them with toy-only evidence.

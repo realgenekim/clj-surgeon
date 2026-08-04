@@ -73,6 +73,7 @@ Computed `:value` has compact hash evidence; a plain path returns full source.
 Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
 one canonical map view while evidence stays exact. Identify descendants with `(filter predicate (tree-seq coll? seq value))`.
 Return concrete EDN, not a lazy sequence. X-ray never writes. In CLJC, select `(form 'name :clj)`.
+Scope records below known parents in the same function: `(for [parent parents node (tree-seq coll? seq (child parent)) :when (predicate node)] node)`.
 
 When the path and replacement are already exact, use `:edit` with that same
 path ending in `[:replace FORM]`. The plan can be the first source-bearing

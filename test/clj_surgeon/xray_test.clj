@@ -585,7 +585,8 @@
           (is (str/includes? text "analyze") surface)
           (is (str/includes? text "expect-count") surface)
           (is (str/includes? text "initializer") surface)
-          (is (str/includes? text "tree-seq") surface))))
+          (is (str/includes? text "tree-seq") surface)
+          (is (str/includes? text "(for") surface))))
     (is (<= (count (str/split-lines
                      (get surfaces "canonical skill")))
             240))))

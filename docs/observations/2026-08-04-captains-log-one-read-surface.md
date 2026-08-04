@@ -597,6 +597,52 @@ every application's field semantics a priori. It can make representation fully
 predictable, let one function branch or traverse over ordinary data, and stop
 rejecting the Clojure already nearest in the model's latent space.
 
+### Candidate v10 result: the Clojure substrate wins
+
+The four-run parallel comparison against v9 was exact and source-preserving on
+both sides:
+
+```text
+                              v9 leader       v10 pure Clojure     change
+correct                           4/4             4/4             tied
+median wall                      50.025 s          37.552 s        25% faster
+median shell calls                5                3              2 fewer
+median input tokens             104,470           65,982          37% fewer
+median uncached tokens           20,810           14,782          29% fewer
+median output tokens              1,488            1,188          20% fewer
+median source output              5.9 KB           2.7 KB         53% fewer
+```
+
+One v10 agent was exactly one-shot after reading the skill: one X-ray, 22.9
+seconds, and 1.4 KB of source output. None of the four happened to use `for`;
+one used the newly admitted `val`. All four used `tree-seq`. The performance
+gain therefore belongs mainly to the explicit analyzer-input contract and
+reliable shape-independent traversal. Safe `for` support remains justified by
+the earlier first-attempt field failure and its permanent regression, not by
+claiming credit for this timing result.
+
+Three agents still made semantic validation calls. Two first used a
+shape-dependent `mapcat :args`; another returned the correct whole-registry
+`tree-seq` answer and then verified that no unrelated `:required` map had been
+counted. That caution is rational. The caller knows the domain phrase
+“argument specs,” while clj-surgeon knows only data.
+
+Candidate v11 tests the general Clojure solution: scope traversal below known
+semantic parents and traverse their children in the same comprehension.
+
+```clojure
+(for [parent parents
+      node (tree-seq coll? seq (child parent))
+      :when (predicate node)]
+  node)
+```
+
+This is not an operation-registry helper. It works for any irregular nested
+data, uses ordinary Clojure, handles map or vector children uniformly, and
+keeps the domain boundary in the model. It survives only if it reduces the
+remaining source calls and clears the 2 KB median source-output gate without
+slowing the v10 leader.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

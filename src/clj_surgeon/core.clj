@@ -646,6 +646,7 @@
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
                                   "Selected values are never evaluated. Computed X-ray gives map literals and hash-map/array-map syntax one canonical map view while exact source remains in evidence."
                                   "Identify nested descendants inside that function with (filter predicate (tree-seq coll? seq value))."
+                                  "Scope records below known parents in the same expression with (for [parent parents node (tree-seq coll? seq (child parent)) :when (predicate node)] node)."
                                   "Return concrete EDN, not a lazy sequence. Malformed map constructor syntax refuses."
                                   "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
