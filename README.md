@@ -9,6 +9,8 @@ A babashka CLI and Claude Code skill for exploring Clojure codebases via the AST
 - Want one exact top-level form by name or containing line without reconstructing a `sed` range
 - Want a jq-like path that reads or safely edits the peer value after a `case`
   key, `cond` guard, map key, or binding name
+- Want one structural read that returns every `case`, `cond`, map, or binding
+  pair without manual counting
 
 **Origin story:** I watched Claude Code spend 45 minutes refactoring a 5,000-line `views.clj` file — painfully extracting functions, moving them, reading and re-reading to get the ordering right, burning through context window. It was doing the right things, just agonizingly slowly. So I asked it: *"What would the ideal tool be to help you manipulate beautiful Clojure homoiconic EDN files?"* clj-surgeon was born 45 minutes later.
 
@@ -320,6 +322,28 @@ intervening comment and whitespace byte. The same primitive makes a flattened
 anonymous-function body addressable—for example,
 `[[:find select-keys] [:where {:parent-tag :fn}] [:span 3]]`—without pretending
 that rewrite-clj contains a wrapper list that is not actually there.
+
+When the task asks for every pair, use `[:partition-all 2]` instead of reading
+the owner, counting children, or issuing one query per key:
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+```
+
+`[:partition-all N]` starts at the current node and partitions it with all
+following semantic siblings. Each result is an existing lossless span with
+`:forms`, exact `:source`, addresses, gaps, and
+`:partition {:size N :index I :complete? BOOLEAN}`. The operation never crosses
+the parent and never drops a remainder. For a `case`, a final one-form span can
+be the default expression. The tool reports only that the span is incomplete;
+the caller decides what it means. A nested branch result remains one subtree.
+
+Use `:right` for one known value, `[:span 2]` for one known pair, and
+`[:partition-all 2]` for all pairs in a sibling suffix. A terminal
+`[:replace-span FORM ...]` can update one unambiguous partition with equal
+arity. Multiple partitions refuse mutation, so enumeration never becomes a
+silent bulk edit.
 
 This algebra removes the `cat owner → reconstruct peer match → plan` bridge.
 The existing commands remain useful standard-library spellings: `:cat` is the

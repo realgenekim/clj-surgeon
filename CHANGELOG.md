@@ -21,6 +21,12 @@ is cut.
   slice. A terminal `[:replace-span FORM FORM]` plans an equal-arity peer edit
   while preserving all internal comments and whitespace, including flattened
   sibling bodies inside `#(...)`; plans apply through `:replace-subform!`.
+- `[:partition-all 2]` (general form: `[:partition-all N]`) partitions a
+  selected node and its following semantic
+  siblings into consecutive lossless spans. It makes full `case`, `cond`, map,
+  binding, and alternating-argument inventories one structural read, retains
+  a shorter final span without semantic inference, and reuses the guarded
+  equal-arity `:replace-span` updater when exactly one partition is selected.
 - Machine-readable `clj-surgeon --version`, plus `:planned-operation` in apply
   receipts so the generic executor identifies node versus span plans.
 - `:show-form`, a read-only one-shot that returns one complete top-level form

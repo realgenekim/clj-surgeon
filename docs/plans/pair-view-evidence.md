@@ -1,6 +1,6 @@
 # Pair-View Evidence Experiment
 
-**Status:** H1 accepted; `[:partition-all N]` contract fixed before implementation
+**Status:** Implemented and fully green; two of three clean inventories are one-shot
 
 ## Question
 
@@ -278,13 +278,17 @@ Tests must fix:
 
 - [x] Fix the observable contract before code.
 - [x] Record a real-program-derived fixture and clean-context baseline.
-- [ ] Add red pure tests for the full grammar, boundary, trivia, and updater
+- [x] Add red pure tests for the full grammar, boundary, trivia, and updater
   matrix.
-- [ ] Implement the smallest contract without weakening existing tests.
-- [ ] Integrate CLI help, README, skill, vision, and changelog with anti-drift
+- [x] Implement the smallest contract without weakening existing tests.
+- [x] Integrate CLI help, README, skill, vision, and changelog with anti-drift
   assertions.
-- [ ] Format, lint, run focused and full tests, and run `make install`.
-- [ ] Replicate all three inventories in fresh clean contexts.
-- [ ] Record call/token/source-output deltas and the Captain's Log.
+- [ ] Format, lint, run focused and full tests, and run `make install`. Formatter,
+  linter, focused tests, and 367-test full suite pass; install remains.
+- [ ] Replicate all three inventories in fresh clean contexts. `case` and
+  bindings are one-shot. Nested `cond` exposed a separate contained-match
+  selector gap and required two queries.
+- [x] Record call/source-output deltas and the Captain's Log. Do not claim a
+  token delta until a harness run measures it.
 - [ ] Tag every reversible hill-climb point, commit, push, merge to `main`, and
   remove the experiment branch after verification.

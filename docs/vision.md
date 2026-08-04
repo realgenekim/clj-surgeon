@@ -112,6 +112,14 @@ arity, so comments and whitespace between them remain exact. This covers peer
 pairs and flattened `#(...)` bodies without a macro-specific operation or a
 synthetic wrapper node.
 
+The enumeration counterpart is `[:partition-all 2]`. Starting at one located
+node, it groups the complete following sibling suffix into consecutive
+lossless spans. It retains a shorter final span instead of dropping or naming
+it. The same mechanical step inventories `case` tests/results, `cond`
+guards/results, map entries, bindings, and alternating function arguments. The
+model supplies the starting node and interprets the neutral `:forms`. The
+kernel supplies boundaries, source, cardinality, and addresses.
+
 This is the Bitter Lesson boundary in API form. The kernel supplies general
 navigation, exact addresses, concrete-syntax preservation, cardinality, and
 safe replay. The model supplies the path and replacement. We do not encode a

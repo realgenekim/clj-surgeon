@@ -254,6 +254,8 @@
     (is (str/includes? help "[:find :finish]"))
     (is (str/includes? help ":right"))
     (is (str/includes? help "[:span 2]"))
+    (is (str/includes? help "[:partition-all 2]"))
+    (is (str/includes? help "shorter final span is explicit"))
     (is (str/includes? help "[:replace-span :finish"))
     (is (str/includes? help "preserves comments and whitespace between peers"))
     (is (str/includes? help "[:replace (assoc state :status :complete)]"))

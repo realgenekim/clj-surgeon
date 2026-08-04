@@ -1,6 +1,12 @@
 ---
 name: clj-surgeon
-description: Inspect and modify Clojure, ClojureScript, and CLJC structurally with the clj-surgeon CLI. Use for outlining large namespaces, selecting a complete form, navigating from a case key, cond guard, map key, or binding to its peer value, finding or replacing nested forms, mapping dependencies, extracting forms, eliminating declares, moving forms, renaming namespaces, or deterministic CLJC operations. Prefer it when textual reads or patches would be ambiguous, formatting-sensitive, or context-expensive.
+description: >-
+  Inspect and modify Clojure, ClojureScript, and CLJC structurally with the
+  clj-surgeon CLI. Use for outlines, exact form reads, peer navigation,
+  sibling-run enumeration, nested-form edits, dependency maps, extraction,
+  declare removal, moves, namespace renames, and deterministic CLJC operations.
+  Prefer it when textual reads or patches are ambiguous, formatting-sensitive,
+  or context-expensive.
 ---
 
 # clj-surgeon
@@ -30,10 +36,12 @@ clj-surgeon :op :cat :file src/my/ns.clj :contains :finish
 Use `:show-form` instead of reconstructing a `sed` range. Do not run `:ls`
 solely as a preflight when any direct selector is known.
 
-`:cat` is a strict alias for canonical `:show-form`; it never dumps the file.
+`:cat` is a strict alias for canonical `:show-form`. It never dumps the file.
 Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
 case-sensitive literal, not a regex. It returns one containing top-level form
-or refuses on ambiguity. Add `:platform :clj` or `:platform :cljs` only to
+or refuses on ambiguity.
+
+Add `:platform :clj` or `:platform :cljs` only to
 disambiguate CLJC branches. The CLI preserves the `:contains` value as text, so
 keyword-shaped literals such as `:finish` need no EDN-string workaround.
 
@@ -69,7 +77,7 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 
 `:q` never writes source. A terminal replacement refuses unless the path
 selects exactly one node, then returns that node, the trace, one diff, and the
-source/result hashes. Review the plan before the separate apply command; never
+source/result hashes. Review the plan before the separate apply command. Never
 chain plan generation and application. When the requested relationship and
 replacement are already exact, the updater can be the first non-mutating call.
 Run a read query first when the choice still requires judgment.
@@ -87,7 +95,30 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 never crosses their parent. `[:replace-span FORM ...]` requires the same number
 of forms, so comments and whitespace between peers remain byte-for-byte intact.
 Use a span when the pair or flattened `#(...)` body is itself the object under
-inspection; use `:right` when only the peer value is the target.
+inspection. Use `:right` when only the peer value is the target.
+
+## Enumerate sibling pairs in one read
+
+When the task asks for every pair, use `[:partition-all 2]`. Do not read the
+owner and manually count children. Do not issue one `:q` call per key.
+
+```bash
+clj-surgeon :op :q :file src/state.clj \
+  :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+```
+
+The step starts at the current node and partitions it with all following
+semantic siblings. Each result contains neutral `:forms`, exact source,
+addresses, gaps, and `:partition` evidence. A shorter final span is explicit;
+the tool never drops it or guesses what it means. In a `case`, the caller can
+interpret a one-form remainder as the optional default. In a `cond`, a nested
+`cond` result remains one subtree when the query starts at the first outer
+guard.
+
+Use `:right` for one known value. Use `[:span 2]` for one known pair. Use
+`[:partition-all 2]` for all pairs in a sibling suffix. Multiple partitions are
+read evidence and refuse mutation. Use an exact anchor and `[:span 2]` for a
+singular pair edit.
 
 ## Find nested syntax
 
@@ -98,8 +129,8 @@ clj-surgeon :op :grep-form :file src/views.clj \
   :match '(post! "/api/items" _)'
 ```
 
-`_` matches one subtree. Each named match reports an `:inside` value that can
-be copied directly into a narrowed search or replacement. Add `:inside` only
+`_` matches one subtree. Copy each named match's `:inside` value directly into
+a narrowed search or replacement. Add `:inside` only
 when already known or when choosing among multiple matches.
 
 When a peer key, guard, or binding identifies the intended subtree, prefer one
@@ -126,21 +157,26 @@ Then apply the unchanged saved plan in a later command:
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Do not edit the plan; when intent changes, generate a new plan. Successful apply
-returns `:applied-edit` and a `:verified` read-back receipt. Trust that receipt
-for exact replay/hash/parse evidence; do not repeat it with `rg`, `show-form`,
-`git diff`, or `shasum`. The reviewed plan diff is the edit-level change review;
-the receipt proves that exact result was atomically written and reparsed. Do not
-reread related forms solely to verify byte preservation. When a task asks only
-to verify this exact edit, the reviewed plan plus successful receipt completes
-that request. Still run relevant repository formatters, linters, compilers, and
-tests. Review an aggregate Git diff only when the surrounding task already
-establishes a Git worktree or explicitly requests that review; never probe
+Do not edit the plan. When intent changes, generate a new plan. Successful apply
+returns `:applied-edit` and a `:verified` read-back receipt.
+
+Trust that receipt for exact replay/hash/parse evidence. Do not repeat it with
+`rg`, `show-form`, `git diff`, or `shasum`.
+
+The reviewed plan diff is the edit-level change review. The receipt proves that
+clj-surgeon atomically wrote and reparsed that exact result. Do not reread
+related forms solely to verify byte preservation. When a task asks only to
+verify this exact edit, the reviewed plan plus successful receipt completes that
+request.
+
+Still run relevant repository formatters, linters, compilers, and tests. Review
+an aggregate Git diff only when the surrounding task already establishes a Git
+worktree or explicitly requests that review. Never probe
 `.git` solely to decide whether to repeat the edit-level evidence.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
 syntax, not a synthetic wrapper list. Use `:q` peer navigation when the sibling
-relationship identifies the target; use `:replace-subform` when one independent
+relationship identifies the target. Use `:replace-subform` when one independent
 subtree pattern already identifies it exactly.
 
 ## Advanced operations

@@ -1,6 +1,9 @@
 (ns clj-surgeon.partition-all-test
   (:require
+   [babashka.process :as proc]
    [clj-surgeon.structural-lens :as lens]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
@@ -29,6 +32,14 @@
 
 (defn- partitions [source query]
   (:matches (lens/evaluate-query source query)))
+
+(def ^:private project-root
+  (.getCanonicalPath (io/file ".")))
+
+(defn- run-cli [& args]
+  @(proc/process
+     (into ["bb" "-m" "clj-surgeon.core"] args)
+     {:dir project-root :err :string :out :string}))
 
 (deftest partition-all-groups-a-semantic-sibling-suffix-with-an-explicit-tail
   (let [query [[:form 'route] [:find 'case] :up :down :right :right
@@ -130,6 +141,28 @@
               "cached-decision" "timeout-ms" "retry-limit"
               "audit-context"]
              (mapv (comp first :forms) (:matches binding-result)))))))
+
+(deftest cli-q-returns-the-complete-case-inventory-in-one-invocation
+  (let [source-file (java.io.File/createTempFile "partition-all-cli" ".clj")]
+    (try
+      (spit source-file shape-source)
+      (let [process (run-cli
+                      ":op" ":q"
+                      ":file" (.getPath source-file)
+                      ":query" (str "[[:form route] [:find case] :up :down "
+                                    ":right :right [:partition-all 2]]"))
+            result (edn/read-string (:out process))]
+        (is (zero? (:exit process)) (:err process))
+        (is (= 3 (:match-count result)))
+        (is (= [[":start" "(assoc state :status :running)"]
+                [":finish" "(assoc state :status :done)"]
+                ["state"]]
+               (mapv :forms (:matches result))))
+        (is (= [true true false]
+               (mapv #(get-in % [:partition :complete?])
+                     (:matches result)))))
+      (finally
+        (.delete source-file)))))
 
 (deftest empty-singleton-even-and-odd-streams-have-total-results
   (let [source "(ns partition.edges)\n(defn f [] [:a :b :c :d])\n"

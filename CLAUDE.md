@@ -70,6 +70,11 @@ updates, and verification gates. It is not a chronological coding diary.
   `[:replace-span :finish (assoc state :status :complete)]` requires equal
   replacement arity and preserves every comment and whitespace byte between
   the peers; apply its plan separately with `:replace-subform!`.
+- When a task asks for every pair in a `case`, `cond`, map, binding vector, or
+  other flat sibling run, start at the first member and use
+  `[:partition-all 2]`. Do not read the owner and manually count children or
+  issue one query per key. The final shorter span is explicit and must be
+  interpreted by the caller. clj-surgeon does not infer a default or error.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already

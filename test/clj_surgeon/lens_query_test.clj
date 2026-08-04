@@ -310,6 +310,7 @@
         (is (str/includes? body "[:find :finish]"))
         (is (str/includes? body ":right"))
         (is (str/includes? body "[:span 2]"))
+        (is (str/includes? body "[:partition-all 2]"))
         (is (str/includes? body "[:replace-span"))
         (is (str/includes? body "[:replace"))
         (is (str/includes? body ":replace-subform!"))))))
