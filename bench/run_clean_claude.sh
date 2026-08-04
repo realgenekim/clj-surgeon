@@ -148,8 +148,13 @@ rg -q ':artifact :claude-skill' "$installed_receipt"
 rg -q ':mode :stable-copy' "$installed_receipt"
 rg -q ":source-commit \"$source_commit\"" "$installed_receipt"
 test -f "$installed_skill/SKILL.md"
-cmp -s "$installed_skill/SKILL.md" "$canonical_skill"
-cmp -s "$installed_skill/SKILL.md" "$project_claude_skill"
+expected_skill=$(mktemp /tmp/clj-surgeon-expected-skill.XXXXXX)
+cat "$canonical_skill" > "$expected_skill"
+printf '\nStable copy installed from commit %s.\nWhen working inside the clj-surgeon repository, the working-tree skill.md\nsupersedes this copy.\n' \
+  "$source_commit" >> "$expected_skill"
+cmp -s "$installed_skill/SKILL.md" "$expected_skill"
+rm -f "$expected_skill"
+cmp -s "$canonical_skill" "$project_claude_skill"
 cmp -s "$installed_skill/references/advanced-operations.md" \
   "$repo_root/.claude/skills/clj-surgeon/references/advanced-operations.md"
 

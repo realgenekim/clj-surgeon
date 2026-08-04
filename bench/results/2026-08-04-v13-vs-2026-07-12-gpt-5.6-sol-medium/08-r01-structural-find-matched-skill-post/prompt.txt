@@ -1,1 +1,0 @@
-Find every real structural occurrence of (select-keys _ [:status :attempts]) in src/bench/structural.clj. String and comment lookalikes are not matches. Return the exact match count, source, and locations. Do not modify files and do not read the whole file. Briefly name the commands used.

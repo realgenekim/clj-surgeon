@@ -1,9 +1,0 @@
-Updated [src/bench/state.clj](/private/tmp/clj-surgeon-benchmark-setup.yEVk93/workspaces/31-r04-case-edit-no-skill-native/src/bench/state.clj:322).
-
-Verified:
-
-- Only `:finish` changed from `:done` to `:complete`.
-- `unrelated-finish` remains `:done`.
-- No whole-file read was performed.
-
-Commands used: `rg`, `apply_patch`, and a context-limited `diff` with `sed`. Git verification was unavailable because the workspace is not a Git repository.

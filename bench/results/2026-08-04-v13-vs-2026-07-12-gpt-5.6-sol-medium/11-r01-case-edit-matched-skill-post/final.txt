@@ -1,9 +1,0 @@
-Updated [`src/bench/state.clj`](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/11-r01-case-edit-matched-skill-post/src/bench/state.clj:322):
-
-```clojure
-(assoc state :status :complete)
-```
-
-Verified exactly one structural replacement, matching file hash, and `unrelated-finish` remains `(assoc state :status :done)`.
-
-Commands used: `clj-surgeon :edit`, `:replace-subform!`, `:cat`, `:xray`, and `sha256sum`. `git diff` was unavailable because the workspace is not a Git worktree.

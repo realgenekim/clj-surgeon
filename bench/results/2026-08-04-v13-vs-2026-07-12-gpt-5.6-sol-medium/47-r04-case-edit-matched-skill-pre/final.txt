@@ -1,9 +1,0 @@
-Updated [src/bench/state.clj:322](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/47-r04-case-edit-matched-skill-pre/src/bench/state.clj:322) to use `:complete`.
-
-Verified:
-
-- Exactly one planned byte-level change.
-- `unrelated-finish` still uses `:done`.
-- Applied result hash matches the plan.
-
-Commands used: `clj-surgeon :ls`, `:find-subform`, `:replace-subform`, and `:replace-subform!`. `git diff` was unavailable because the workspace is not exposed as a Git worktree.

@@ -1,9 +1,0 @@
-Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/10-r01-case-edit-matched-skill-pre/src/bench/state.clj:322):
-
-```clojure
-:finish (assoc state :status :complete)
-```
-
-Verified the plan/result hash, unique structural match, and that `unrelated-finish` remains `:done`.
-
-Commands used: `clj-surgeon :ls`, `:find-subform`, `:replace-subform`, `:replace-subform!`, `rg`, and `shasum`.

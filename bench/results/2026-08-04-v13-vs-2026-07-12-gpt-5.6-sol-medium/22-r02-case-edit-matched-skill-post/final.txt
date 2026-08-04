@@ -1,9 +1,0 @@
-Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/22-r02-case-edit-matched-skill-post/src/bench/state.clj:322):
-
-```clojure
-:finish (assoc state :status :complete)
-```
-
-`unrelated-finish` remains `(assoc state :status :done)`. The structural plan contained exactly one edit, and read-back parsing/hash verification passed.
-
-Commands used: `clj-surgeon :cat`, `:edit`, and `:replace-subform!`. Temporary plan: `/tmp/state-finish-plan.edn`.

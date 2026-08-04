@@ -1,6 +1,0 @@
-Plan and apply both succeeded.
-
-- [plan.edn](/tmp/clj-surgeon-benchmark-setup.1swjIU/workspaces/03-r01-pair-view-edit-matched-skill-post/plan.edn) contained one edit: `:done` → `:complete`.
-- Applied with `:replace-subform!`.
-- Whole-file parsing and read-back hash verification passed.
-- The attached comment and all unrelated bytes were preserved.

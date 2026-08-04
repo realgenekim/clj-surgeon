@@ -1,9 +1,0 @@
-Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.HYfSxs/workspaces/46-r04-case-edit-matched-skill-post/src/bench/state.clj:322):
-
-```clojure
-:finish (assoc state :status :complete)
-```
-
-`unrelated-finish` remains byte-preserved with `:done`. The applied plan’s verified hash matches `shasum`: `1a8735…c845`.
-
-Commands used: `clj-surgeon :cat`, `:edit`, `:replace-subform!`, and `shasum`. A `git diff` check was attempted, but this directory is not recognized as a Git worktree.

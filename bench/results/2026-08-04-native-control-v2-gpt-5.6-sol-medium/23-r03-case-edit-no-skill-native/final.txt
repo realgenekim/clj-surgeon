@@ -1,6 +1,0 @@
-Updated [src/bench/state.clj](/tmp/clj-surgeon-benchmark-setup.yEVk93/workspaces/23-r03-case-edit-no-skill-native/src/bench/state.clj:322):
-
-- `:finish` now sets `:status :complete`.
-- `unrelated-finish` remains unchanged.
-
-Commands used: `rg`, `test`; edit applied with `apply_patch`. Verification passed.
