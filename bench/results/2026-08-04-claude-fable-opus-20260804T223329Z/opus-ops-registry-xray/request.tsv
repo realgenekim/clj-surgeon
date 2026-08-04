@@ -1,0 +1,8 @@
+requested_model	opus
+task	ops-registry-xray
+deadline_seconds	90
+max_budget_usd	5.00
+skill_file_sha256	fe050346044c7793b78f8b83177206b3d7e898ef1a3d440cc898c22a35373d7b
+skill_source_sha256	0f959c5792b6c8b69acf4ac2c6fd55022174e7579d24593950a05c27df5484f6
+cli_source_sha256	c6830c782e1c09bfb41fcb2f9d8a27972d81233ed6fd72b47b0bc2e80af5da35
+workspace	/Users/genekim/src.local/clj-surgeon/bench/results/2026-08-04-claude-fable-opus-20260804T223329Z/opus-ops-registry-xray/workspace

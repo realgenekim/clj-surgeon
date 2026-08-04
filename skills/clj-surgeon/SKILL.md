@@ -45,10 +45,10 @@ clj-surgeon :op :xray :file src/policy.clj \
 
 Write one total pure Clojure function instead of a shape-discovery query;
 when keys are uncertain, return a shape echo like `:ks (vec (keys m))` beside
-the aggregation in the same map. Map literals and `hash-map` / `array-map`
-share a canonical map view. Identify shape-independent descendants with
-`(filter predicate (tree-seq coll? seq value))`. Return concrete EDN, not a
-lazy sequence. X-ray never writes source or a plan. Compose `form`, `match`,
+the aggregation in the same map, describing shape with predicates such as
+`map?`, never `type`. Scope counts to the keys the question names; reserve
+`(filter predicate (tree-seq coll? seq value))` for truly unknown shapes.
+Return concrete EDN, not a lazy sequence. X-ray never writes source or a plan. Compose `form`, `match`,
 `where`, `right`, `left`, `up`, `down`, `outermost`, `initializer`, `span`,
 and `partition-all`. For CLJC use `(form 'name :clj)` or `:cljs`; use
 `:up :outermost`, not `:outermost :up`.

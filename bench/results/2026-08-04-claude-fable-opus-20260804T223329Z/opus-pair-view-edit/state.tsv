@@ -1,0 +1,6 @@
+state	running
+pid	43453
+started_utc	2026-08-04T22:33:29Z
+started_ms	1785882809703
+deadline_seconds	90
+cleanup	gtimeout TERM, then KILL after 1s

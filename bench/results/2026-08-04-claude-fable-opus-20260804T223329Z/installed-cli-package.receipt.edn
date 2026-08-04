@@ -1,0 +1,4 @@
+{:artifact :cli-runtime
+ :mode :stable-copy
+ :source-commit "e531446bab25719bc8a4c3862e3223faee33e6d5"
+ :source-hash "c6830c782e1c09bfb41fcb2f9d8a27972d81233ed6fd72b47b0bc2e80af5da35"}
