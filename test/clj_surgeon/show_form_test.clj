@@ -117,13 +117,67 @@
       (is (str/includes? (:source result) "(def hidden :example)"))
       (is (not (contains? result :name))))))
 
+(deftest show-form-by-contains-selects-one-form-with-literal-evidence
+  (testing "attached comments and exact source are searchable"
+    (let [result (selector-result basic-source
+                                  {:contains "Preserve this context."})]
+      (is (= :show-form (:operation result)))
+      (is (= {:contains "Preserve this context."} (:selector result)))
+      (is (= 'alpha (:name result)))
+      (is (= 1 (:occurrence-count result)))
+      (is (= [{:line 4 :column 4}] (:occurrences result)))
+      (is (= "(defn ^:private alpha [x]\n  (+ x\n     1))"
+             (:source result)))))
+  (testing "multiple literal occurrences in one form still select one form"
+    (let [source "(ns repeated)\n\n(defn only []\n  [\"needle\" \"needle\"])\n"
+          result (selector-result source {:contains "needle"})]
+      (is (= 'only (:name result)))
+      (is (= 2 (:occurrence-count result)))
+      (is (= [{:line 4 :column 5}
+              {:line 4 :column 14}]
+             (:occurrences result)))))
+  (testing "literal matching is case-sensitive and does not interpret regex"
+    (let [source "(ns literal)\n(defn target [] \"a.*b\")\n"]
+      (is (= 'target (:name (selector-result source {:contains "a.*b"}))))
+      (is (= :contains-not-found
+             (:error-type (selector-result source {:contains "A.*B"})))))))
+
+(deftest show-form-by-contains-refuses-zero-or-many-containing-forms
+  (let [source "(ns ambiguous)\n(defn alpha [] \"needle\")\n(defn beta [] \"needle\")\n"]
+    (testing "no match is an exact refusal"
+      (let [result (selector-result source {:contains "absent"})]
+        (is (= :contains-not-found (:error-type result)))
+        (is (zero? (:match-count result)))
+        (is (= {:contains "absent"} (:selector result)))))
+    (testing "multiple containing forms are bounded evidence, never a choice"
+      (let [result (selector-result source {:contains "needle"})]
+        (is (= :ambiguous-form (:error-type result)))
+        (is (= 2 (:match-count result)))
+        (is (= ['alpha 'beta] (mapv :name (:matches result))))
+        (is (= [1 1] (mapv :occurrence-count (:matches result))))
+        (is (not (contains? result :source)))))
+    (testing "text outside every owned top-level form is not silently attached"
+      (let [trailing (str source "\n;; trailing orphan needle\n")
+            result (selector-result trailing {:contains "trailing orphan"})]
+        (is (= :contains-not-found (:error-type result)))
+        (is (zero? (:match-count result)))))))
+
 (deftest show-form-refuses-invalid-selector-contracts
   (let [cases [{:opts {}
                 :error-type :missing-selector
-                :field [:required-one-of [:form :line]]}
+                :field [:required-one-of [:form :line :contains]]}
                {:opts {:form "alpha" :line 5}
                 :error-type :conflicting-selectors
                 :field [:supplied-selectors [:form :line]]}
+               {:opts {:form "alpha" :contains "context"}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:form :contains]]}
+               {:opts {:line 5 :contains "context"}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:line :contains]]}
+               {:opts {:form "alpha" :line 5 :contains "context"}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:form :line :contains]]}
                {:opts {:form "sample/alpha"}
                 :error-type :invalid-form-selector
                 :field [:form "sample/alpha"]}
@@ -139,6 +193,15 @@
                {:opts {:line "five"}
                 :error-type :invalid-line
                 :field [:line "five"]}
+               {:opts {:contains ""}
+                :error-type :invalid-contains-selector
+                :field [:contains ""]}
+               {:opts {:contains "   "}
+                :error-type :invalid-contains-selector
+                :field [:contains "   "]}
+               {:opts {:contains :needle}
+                :error-type :invalid-contains-selector
+                :field [:contains :needle]}
                {:opts {:form "alpha" :platform "clj"}
                 :error-type :invalid-platform
                 :field [:platform "clj"]}]]
@@ -183,7 +246,20 @@
     (is (= 30 (:match-count result)))
     (is (= 10 (:candidate-limit result)))
     (is (true? (:matches-truncated? result)))
-    (is (= 10 (count (:matches result))))))
+    (is (= 10 (count (:matches result)))))
+  (testing "contains ambiguity uses the same bounded evidence contract"
+    (let [source (str "(ns many-text)\n"
+                      (str/join "\n"
+                                (map #(str "(defn f" % " [] \"needle\")")
+                                     (range 30)))
+                      "\n")
+          result (show-form/select-form "many-text.clj" source
+                                        {:contains "needle"})]
+      (is (= :ambiguous-form (:error-type result)))
+      (is (= 30 (:match-count result)))
+      (is (= 10 (:candidate-limit result)))
+      (is (true? (:matches-truncated? result)))
+      (is (= 10 (count (:matches result)))))))
 
 (deftest show-form-preserves-reader-conditional-platforms
   (testing "name is ambiguous across platforms until the caller selects one"
@@ -209,6 +285,16 @@
                                         {:form "common" :platform :clj})]
       (is (= [:clj :cljs] (:platforms result)))
       (is (= "(defn common [] :both)" (:source result)))))
+  (testing "contains preserves the same CLJC ambiguity and platform filter"
+    (let [ambiguous (show-form/select-form "sample.cljc" cljc-source
+                                           {:contains "defn shared"})
+          cljs-result (show-form/select-form "sample.cljc" cljc-source
+                                             {:contains "defn shared"
+                                              :platform :cljs})]
+      (is (= :ambiguous-form (:error-type ambiguous)))
+      (is (= 2 (:match-count ambiguous)))
+      (is (= [:cljs] (:platforms cljs-result)))
+      (is (= "(defn shared [] :cljs)" (:source cljs-result)))))
   (testing "a platform with no candidate is an exact not-found refusal"
     (let [result (show-form/select-form "sample.cljc" cljc-source
                                         {:form "shared" :platform :bb})]
@@ -294,6 +380,10 @@
   (is (nil? (show-form/invocation-remedy {:file "x.clj" :form "x" :line 2})))
   (testing "only remedies that can succeed are emitted"
     (is (some? (show-form/invocation-remedy {:file "x.clj" :line "12"})))
+    (is (= "clj-surgeon :op :show-form :file x.clj :contains 'distinctive text'"
+           (:command (show-form/invocation-remedy
+                       {:file "x.clj" :contains "distinctive text"}))))
+    (is (nil? (show-form/invocation-remedy {:file "x.clj" :contains "   "})))
     (is (nil? (show-form/invocation-remedy {:file "x.clj" :line "nope"})))
     (is (nil? (show-form/invocation-remedy
                 {:file "x.clj" :line "999999999999999999999999"})))
@@ -318,18 +408,21 @@
      (into ["bb" "-m" "clj-surgeon.core"] args)
      {:dir project-root :err :string :out :string}))
 
-(deftest cli-show-form-name-and-line-are-one-shot-edn-reads
+(deftest cli-show-form-selectors-and-cat-contains-are-one-shot-edn-reads
   (let [tmp-dir (fs/create-temp-dir {:prefix "show form cli "})
         file (fs/path tmp-dir "migration fixture.clj")
         source "(ns field.case)\n\n;; target\n(defn target [x]\n  (inc x))\n"]
     (try
       (spit (str file) source)
-      (doseq [selector [[":form" "target"]
-                        [":line" (str (line-containing source "(inc x)"))]]]
-        (let [{:keys [exit out err]} (apply run-cli ":op" ":show-form"
+      (doseq [[op selector] [[":show-form" [":form" "target"]]
+                             [":show-form" [":line" (str (line-containing source "(inc x)"))]]
+                             [":show-form" [":contains" "(inc x)"]]
+                             [":cat" [":contains" "(inc x)"]]]]
+        (let [{:keys [exit out err]} (apply run-cli ":op" op
                                        ":file" (str file) selector)
               result (edn/read-string out)]
           (is (zero? exit) err)
+          (is (= :show-form (:operation result)))
           (is (= 'target (:name result)))
           (is (= "(defn target [x]\n  (inc x))" (:source result)))
           (is (str/blank? err))))
@@ -429,12 +522,18 @@
               [{:label "conflicting selectors"
                 :args [":file" (str file) ":form" "same" ":line" "3"]
                 :error-type :conflicting-selectors}
+               {:label "contains conflict"
+                :args [":file" (str file) ":form" "same" ":contains" "same"]
+                :error-type :conflicting-selectors}
                {:label "qualified form"
                 :args [":file" (str file) ":form" "other/same"]
                 :error-type :invalid-form-selector}
                {:label "nonpositive line"
                 :args [":file" (str file) ":line" "0"]
                 :error-type :invalid-line}
+               {:label "blank contains"
+                :args [":file" (str file) ":contains" "   "]
+                :error-type :invalid-contains-selector}
                {:label "nonkeyword platform"
                 :args [":file" (str file) ":form" "same" ":platform" "clj"]
                 :error-type :invalid-platform}
@@ -446,6 +545,12 @@
                 :error-type :line-not-in-form}
                {:label "duplicate name"
                 :args [":file" (str file) ":form" "same"]
+                :error-type :ambiguous-form}
+               {:label "contains absent"
+                :args [":file" (str file) ":contains" "missing text"]
+                :error-type :contains-not-found}
+               {:label "contains ambiguous"
+                :args [":file" (str file) ":contains" "defn same"]
                 :error-type :ambiguous-form}
                {:label "invalid source"
                 :args [":file" (str invalid-file) ":form" "broken"]
@@ -472,6 +577,8 @@
     (is (zero? (:exit alias)) (:err alias))
     (is (= 1 (:match-count alias-result)))
     (is (nil? (:inside alias-result)))
+    (is (= "upsert-starred-post!"
+           (get-in alias-result [:matches 0 :inside])))
     (is (= (:matches canonical-result) (:matches alias-result)))
     (is (= (:source-hash canonical-result) (:source-hash alias-result)))))
 
@@ -480,12 +587,23 @@
         source (slurp file)
         target-line (line-containing source "on conflict")
         by-name (show-form/select-form file source {:form "upsert-starred-post!"})
-        by-line (show-form/select-form file source {:line target-line})]
+        by-line (show-form/select-form file source {:line target-line})
+        by-contains (show-form/select-form file source {:contains "on conflict"})]
     (is (= 'upsert-starred-post! (:name by-name)))
     (is (= (:source by-name) (:source by-line)))
+    (is (= (:source by-name) (:source by-contains)))
+    (is (= 1 (:occurrence-count by-contains)))
     (is (= [:clj :cljs] (:platforms by-name)))
     (is (str/includes? (:source by-name) "on conflict"))
     (is (str/includes? (:source by-name) "json/write-value-as-string"))))
+
+(deftest current-core-distinctive-help-phrase-is-a-one-shot-self-hosting-read
+  (let [file "src/clj_surgeon/core.clj"
+        result (show-form/select-form file (slurp file)
+                                      {:contains "Per-command help"})]
+    (is (= 'format-op-help (:name result)))
+    (is (= 1 (:occurrence-count result)))
+    (is (str/includes? (:source result) "Per-command help"))))
 
 (deftest agent-facing-surfaces-do-not-drift
   (let [readme (slurp "README.md")
@@ -513,6 +631,12 @@
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill
+                            "changelog" changelog
+                            "show-form help" help}]
+      (is (str/includes? text ":contains") surface))
+    (doseq [[surface text] {"README" readme
+                            "installed skill" skill
+                            "legacy skill" legacy-skill
                             "changelog" changelog}]
       (is (str/includes? text ":cat") surface))
     (is (str/includes? help "Aliases: cat") "show-form help")
@@ -528,7 +652,9 @@
                             "replace-subform! help" apply-help}]
       (let [normalized (str/replace text #"\s+" " ")]
         (is (str/includes? normalized "Do not edit the plan") surface)
-        (is (str/includes? normalized "generate a new plan") surface)))
+        (is (str/includes? normalized "generate a new plan") surface)
+        (is (str/includes? normalized "read-back") surface)
+        (is (str/includes? normalized ":verified") surface)))
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill
@@ -557,5 +683,7 @@
             surface)
         (is (str/includes? normalized "do not run :ls solely as a preflight")
             surface)
-        (is (str/includes? normalized "rg -n") surface)
-        (is (str/includes? normalized ":show-form :line") surface)))))
+        (is (str/includes? normalized ":contains") surface)
+        (is (str/includes? normalized "distinctive text") surface)))
+    (is (not (str/includes? help "rg -n"))
+        "show-form help must teach the one-call contains route")))

@@ -139,7 +139,9 @@
     (testing "contains usage line"
       (is (str/includes? help "Usage:")))
     (testing "contains quick start examples"
-      (is (str/includes? help "Quick start:")))
+      (is (str/includes? help "Quick start:"))
+      (is (str/includes? help
+                         ":op :cat :file src/my/ns.clj :contains 'distinctive text'")))
     (testing "does not make the false only-bang-ops-write claim"
       (is (not (str/includes? help "only ! variants write files")))
       (is (str/includes? help ":mv writes unless :dry-run true")))))
@@ -203,18 +205,21 @@
 (deftest show-form-help-documents-the-one-shot-read-contract
   (let [help (core/format-op-help :show-form
                                   (get core/ops-registry :show-form))]
-    (testing "both selectors and CLJC disambiguation are discoverable"
+    (testing "all selectors and CLJC disambiguation are discoverable"
       (is (str/includes? help ":form"))
       (is (str/includes? help ":line"))
+      (is (str/includes? help ":contains"))
       (is (str/includes? help ":platform"))
       (is (str/includes? help "exactly one selector"))
       (is (str/includes? help "instead of reconstructing a sed range"))
       (is (str/includes? help "do not run :ls solely as a preflight"))
       (is (str/includes? help "distinctive text"))
-      (is (str/includes? help "rg -n")))
+      (is (str/includes? help "literal"))
+      (is (not (str/includes? help "rg -n"))))
     (testing "the exact documented invocations are printed"
       (is (str/includes? help ":op :show-form :file src/my/ns.clj :form transition!"))
-      (is (str/includes? help ":op :show-form :file src/my/ns.clj :line 1134")))
+      (is (str/includes? help ":op :show-form :file src/my/ns.clj :line 1134"))
+      (is (str/includes? help ":op :cat :file src/my/ns.clj :contains 'transition complete'")))
     (testing "the structural-shell alias is discoverable"
       (is (str/includes? help "Aliases: cat")))
     (testing "ambiguity fails closed"

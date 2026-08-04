@@ -1,7 +1,9 @@
 (ns clj-surgeon.structural-lens-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
-            [clj-surgeon.structural-lens :as lens]))
+  (:require
+   [clj-surgeon.structural-lens :as lens]
+   [clojure.edn :as edn]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 (def sample-source
   "(ns demo.views)\n\n(defn other-pane []\n  (ds/post-action* \"/api/book/new-node\" :other))\n\n(defn book-workshop-pane [surface]\n  [:div.panel\n   [:button.secondary\n    {:data-star-on:click\n     (ds/post-action* \"/api/book/new-node\" surface)}\n    \"New\"]\n   ;; This sibling must survive a replacement byte-for-byte.\n   [:p.note \"Keep me\"]])\n")
@@ -25,7 +27,8 @@
     (testing "a symbol _ matches one arbitrary subtree"
       (is (= 1 (:match-count result))))
     (testing "the enclosing top-level form excludes an identical call elsewhere"
-      (is (= "book-workshop-pane" (:inside result))))
+      (is (= "book-workshop-pane" (:inside result)))
+      (is (= "book-workshop-pane" (:inside match))))
     (testing "the result is small but sufficient for review and later addressing"
       (is (= "(ds/post-action* \"/api/book/new-node\" surface)" (:source match)))
       (is (= 10 (:line match)))
@@ -42,7 +45,7 @@
 (deftest structural-matching-ignores-formatting
   (let [source "(ns x)\n(defn f []\n  (+\n    1\n    2))\n"]
     (is (= 1 (:match-count
-              (lens/find-subforms source {:inside 'f :match "(+ 1 2)"}))))))
+               (lens/find-subforms source {:inside 'f :match "(+ 1 2)"}))))))
 
 (deftest match-and-replacement-require-exactly-one-complete-form
   (testing "missing forms are not interpreted as the literal nil form"
@@ -74,6 +77,27 @@
     (is (= 2 (:match-count found)))
     (is (= "Expected exactly one match, found 2" (:error plan)))
     (is (= 2 (:match-count plan)))))
+
+(deftest file-wide-find-names-each-enclosing-form-for-direct-narrowing
+  ;; Clean Codex benchmark regression: two identical expressions previously
+  ;; forced find-subform -> show-form :line merely to recover their owners.
+  (let [source "(ns field.case)\n\n(defn transition [state event]\n  (case event\n    :finish (assoc state :status :done)\n    state))\n\n(defn unrelated-finish [state]\n  (assoc state :status :done))\n"
+        result (lens/find-subforms source
+                                   {:match "(assoc state :status :done)"})]
+    (is (= 2 (:match-count result)))
+    (is (= ["transition" "unrelated-finish"]
+           (mapv :inside (:matches result))))
+    (is (= [5 9] (mapv :line (:matches result))))
+    (is (every? #(integer? (get-in % [:address :preorder]))
+                (:matches result)))))
+
+(deftest file-wide-find-does-not-invent-an-owner-for-unnamed-top-level-forms
+  (let [result (lens/find-subforms "(ns loose)\n(comment (inc 1))\n"
+                                   {:match "(inc 1)"})
+        match (first (:matches result))]
+    (is (= 1 (:match-count result)))
+    (is (not (contains? match :inside)))
+    (is (= "(inc 1)" (:source match)))))
 
 (deftest replacement-plan-is-pure-reviewable-and-replayable
   (let [opts {:inside 'book-workshop-pane
@@ -144,18 +168,42 @@
         (is (= :invalid-result-source (:error-type result)))
         (is (nil? (:source result)))))))
 
+(deftest verified-apply-receipt-is-pure-and-refuses-read-back-mismatch
+  (let [plan (assoc (lens/plan-replacement
+                      sample-source
+                      {:inside 'book-workshop-pane
+                       :match target-pattern
+                       :with "(book-tree/creation-actions surface)"})
+                    :file "src/demo/views.clj")
+        applied (lens/apply-plan sample-source plan)
+        receipt (lens/verified-apply-receipt plan (:source applied))
+        mismatch (lens/verified-apply-receipt plan sample-source)]
+    (is (= {:ok true
+            :operation :replace-subform!
+            :file "src/demo/views.clj"
+            :source-hash (:source-hash plan)
+            :result-hash (:result-hash plan)
+            :applied-edit (first (:edits plan))
+            :verified {:whole-file-parsed true
+                       :atomic-write true
+                       :read-back-hash (:result-hash plan)}}
+           receipt))
+    (is (= :read-back-hash-mismatch (:error-type mismatch)))
+    (is (= (:result-hash plan) (:expected-result-hash mismatch)))
+    (is (= (lens/source-hash sample-source) (:read-back-hash mismatch)))))
+
 (deftest plan-out-writes-the-complete-versioned-plan
   (with-temp-file sample-source
     (fn [source-path]
       (let [plan-file (java.io.File/createTempFile "clj-surgeon-plan" ".edn")]
         (try
           (let [result (lens/plan-file-replacement
-                        {:file source-path
-                         :inside 'book-workshop-pane
-                         :match target-pattern
-                         :with "(book-tree/creation-actions surface)"
-                         :plan-out (.getAbsolutePath plan-file)})
-                saved (clojure.edn/read-string (slurp plan-file))]
+                         {:file source-path
+                          :inside 'book-workshop-pane
+                          :match target-pattern
+                          :with "(book-tree/creation-actions surface)"
+                          :plan-out (.getAbsolutePath plan-file)})
+                saved (edn/read-string (slurp plan-file))]
             (is (= (.getAbsolutePath plan-file) (:plan-out result)))
             (is (= 1 (:plan-version saved)))
             (is (= (:source-hash result) (:source-hash saved)))
@@ -174,6 +222,14 @@
                         :file source-path)
             result (lens/execute-plan! {:plan plan})]
         (is (:ok result))
+        (is (= :replace-subform! (:operation result)))
+        (is (= source-path (:file result)))
+        (is (= (:source-hash plan) (:source-hash result)))
         (is (= (:result-hash plan) (:result-hash result)))
+        (is (= (first (:edits plan)) (:applied-edit result)))
+        (is (= {:whole-file-parsed true
+                :atomic-write true
+                :read-back-hash (:result-hash plan)}
+               (:verified result)))
         (is (str/includes? (slurp source-path)
                            "(book-tree/creation-actions surface)"))))))

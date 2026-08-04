@@ -2,6 +2,7 @@
   "Exact, fail-closed structural search and replacement below a named form."
   (:require
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.forms :as forms]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
@@ -58,7 +59,10 @@
   (->> (iterate z/right zloc) (take-while some?)))
 
 (defn- defining-form-name [zloc]
-  (when (z/list? zloc) (some-> zloc z/down z/right z/sexpr str)))
+  (when (z/list? zloc)
+    (let [head (some-> zloc z/down z/sexpr str)]
+      (when (forms/defining-form? head)
+        (some-> zloc z/down z/right z/sexpr str)))))
 
 (defn- inside-range [zloc inside]
   (some (fn [candidate]
@@ -70,6 +74,13 @@
 (defn- within-range? [{:keys [row end-row]} zloc]
   (let [{node-row :row node-end-row :end-row} (meta (z/node zloc))]
     (and node-row node-end-row (<= row node-row) (<= node-end-row end-row))))
+
+(defn- enclosing-form-name [top-levels candidate]
+  (some (fn [top-level]
+          (let [{:keys [row end-row]} (meta (z/node top-level))]
+            (when (within-range? {:row row :end-row end-row} candidate)
+              (defining-form-name top-level))))
+        top-levels))
 
 (defn- node-head [zloc]
   (when-let [child (z/down zloc)]
@@ -104,6 +115,7 @@
     (let [{pattern :sexpr match-source :source}
           (one-complete-form match :invalid-match "Match")
           root (z/of-string source {:track-position? true})
+          top-levels (vec (top-level-locations root))
           range (when inside (inside-range root inside))]
       (if (and inside (nil? range))
         {:error (str "Enclosing form not found: " inside)
@@ -116,11 +128,13 @@
                                    (when (and (or (nil? range) (within-range? range candidate))
                                               (try (wildcard-match? pattern (z/sexpr candidate))
                                                    (catch Exception _ false)))
-                                     (let [{:keys [row end-row]} (meta (z/node candidate))]
-                                       {:path (semantic-path candidate inside)
-                                        :address {:preorder index}
-                                        :line row :end-line end-row
-                                        :source (z/string candidate)}))))
+                                     (let [{:keys [row end-row]} (meta (z/node candidate))
+                                           owner (enclosing-form-name top-levels candidate)]
+                                       (cond-> {:path (semantic-path candidate inside)
+                                                :address {:preorder index}
+                                                :line row :end-line end-row
+                                                :source (z/string candidate)}
+                                         owner (assoc :inside owner))))))
                            vec)]
           {:inside (when inside (str inside)) :match match-source
            :match-count (count matches) :matches matches
@@ -244,6 +258,35 @@
         (string? plan) (edn/read-string (slurp plan))
         :else nil))
 
+(defn verified-apply-receipt
+  "Build a machine-readable receipt from a plan and the exact bytes read back
+   after its atomic write. Pure: plan and source string in; data out."
+  [plan read-back-source]
+  (let [read-back-hash (source-hash read-back-source)
+        expected-result-hash (:result-hash plan)]
+    (if (not= expected-result-hash read-back-hash)
+      {:error "Read-back hash does not match the planned result"
+       :error-type :read-back-hash-mismatch
+       :file (:file plan)
+       :expected-result-hash expected-result-hash
+       :read-back-hash read-back-hash}
+      (try
+        (z/of-string read-back-source {:track-position? true})
+        {:ok true
+         :operation :replace-subform!
+         :file (:file plan)
+         :source-hash (:source-hash plan)
+         :result-hash expected-result-hash
+         :applied-edit (first (:edits plan))
+         :verified {:whole-file-parsed true
+                    :atomic-write true
+                    :read-back-hash read-back-hash}}
+        (catch Exception e
+          {:error (str "Written result could not be reparsed: " (.getMessage e))
+           :error-type :read-back-invalid-source
+           :file (:file plan)
+           :read-back-hash read-back-hash})))))
+
 (defn execute-plan! [{:keys [plan]}]
   (try
     (if-let [plan (read-plan plan)]
@@ -252,12 +295,21 @@
               result (apply-plan source plan)]
           (if (:error result)
             result
-            (try
-              (file-ops/atomic-write! file (:source result))
-              (dissoc result :source)
-              (catch Exception e
-                {:error (str "Atomic replacement failed; target was not replaced: " (.getMessage e))
-                 :error-type :atomic-write-failed :file file}))))
+            (if-let [write-error
+                     (try
+                       (file-ops/atomic-write! file (:source result))
+                       nil
+                       (catch Exception e
+                         {:error (str "Atomic replacement failed; target was not replaced: "
+                                      (.getMessage e))
+                          :error-type :atomic-write-failed :file file}))]
+              write-error
+              (try
+                (verified-apply-receipt plan (slurp file))
+                (catch Exception e
+                  {:error (str "Could not read back the replaced target: "
+                               (.getMessage e))
+                   :error-type :read-back-failed :file file})))))
         {:error "Plan does not contain :file" :error-type :invalid-plan})
       {:error ":plan must be an EDN plan map or file path" :error-type :invalid-plan})
     (catch Exception e

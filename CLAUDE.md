@@ -52,10 +52,12 @@ updates, and verification gates. It is not a chronological coding diary.
   When a top-level name or containing line is already known, use `:show-form`
   as the first source inspection; do not run `:ls` solely as a preflight or
   reconstruct a `sed` range.
-- When distinctive text is known but its containing form is not, use `rg -n`
-  to get a line and then `:show-form :line`; do not print a large outline merely
-  to discover that line. Use `:grep-form` for file-wide structural patterns;
-  add `:inside` only when the parent is known or ambiguity needs narrowing.
+- When distinctive text is known but its containing form is not, use
+  `:show-form :contains` to select that form in one command; do not manufacture
+  a line with `rg -n` or print a large outline. Use `rg` for broad cross-file
+  discovery. Use `:grep-form` for file-wide structural patterns; each named
+  match reports reusable `:inside` ownership. Add `:inside` only when the
+  parent is known or ambiguity needs narrowing.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application.

@@ -177,6 +177,38 @@
       (finally
         (.delete tmp)))))
 
+(deftest cli-replacement-apply-emits-a-read-back-verified-receipt
+  (let [source-file (java.io.File/createTempFile "clj-surgeon-cli-receipt" ".clj")
+        plan-file (java.io.File/createTempFile "clj-surgeon-cli-receipt" ".edn")]
+    (spit source-file "(ns receipt)\n(defn finish [state]\n  (assoc state :status :done))\n")
+    (try
+      (let [planned (run-cli ":op" "replace-subform"
+                             ":file" (.getAbsolutePath source-file)
+                             ":inside" "finish"
+                             ":match" "(assoc state :status :done)"
+                             ":with" "(assoc state :status :complete)"
+                             ":plan-out" (.getAbsolutePath plan-file))
+            plan (edn/read-string (:out planned))
+            applied (run-cli ":op" "replace-subform!"
+                             ":plan" (.getAbsolutePath plan-file))
+            receipt (edn/read-string (:out applied))]
+        (is (zero? (:exit planned)) (:err planned))
+        (is (zero? (:exit applied)) (:err applied))
+        (is (= :replace-subform! (:operation receipt)))
+        (is (= (.getAbsolutePath source-file) (:file receipt)))
+        (is (= (:source-hash plan) (:source-hash receipt)))
+        (is (= (:result-hash plan) (:result-hash receipt)))
+        (is (= (:result-hash receipt)
+               (get-in receipt [:verified :read-back-hash])))
+        (is (true? (get-in receipt [:verified :whole-file-parsed])))
+        (is (true? (get-in receipt [:verified :atomic-write])))
+        (is (= "(assoc state :status :complete)"
+               (get-in receipt [:applied-edit :after])))
+        (is (str/includes? (slurp source-file) ":status :complete")))
+      (finally
+        (.delete source-file)
+        (.delete plan-file)))))
+
 (deftest cli-bare-string-op-help-resolves
   (let [{:keys [exit out]} (run-cli ":op" "tree" "--help")]
     (testing "--help with a bare-string alias shows the canonical op's help"

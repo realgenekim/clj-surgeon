@@ -100,11 +100,14 @@ Add this line to your project's `CLAUDE.md`:
 Read <path-to-clj-surgeon>/skill.md — it teaches you when and how to use clj-surgeon for Clojure structural operations.
 ```
 
-`skill.md` contains every operation, when to use each one, workflows, and proactive usage rules. One line, and Claude reaches for clj-surgeon automatically.
+`skill.md` contains the exact one-shot read/edit routes and points uncommon
+move, extraction, dependency, and CLJC work to the repository-owned advanced
+reference. One line, and Claude reaches for clj-surgeon automatically without
+loading every operation into each simple task.
 
 I added it to my global `~/.claude/CLAUDE.md` because it's so freaking useful — Claude uses it in every Clojure project without being asked. You may eventually want to do the same. Here's what I put in mine:
 
-> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for an unknown file's form boundaries (~50 tokens per file). When a top-level name or containing line is already known, use `:show-form` as the first source inspection; do not run `:ls` solely as a preflight. When only distinctive text is known, use `rg -n` to find its line and then `:show-form :line`. Use `:grep-form` for file-wide structural search, and a bounded text read only when context genuinely spans forms. Only spawn Explore agents for targeted follow-up questions with specific file paths.
+> **For Clojure codebase exploration**: ALWAYS use `/clj-surgeon` before spawning Explore agents or reading .clj files. Measured: 150x more token-efficient than Explore agents (5 files, ~5000 lines mapped in ~1000 tokens vs ~150K tokens). Returns in milliseconds vs ~100 seconds. Use `:ls` for an unknown file's form boundaries (~50 tokens per file). When a top-level name, containing line, or distinctive literal text is known, use `:show-form` as the first source inspection; do not run `:ls` solely as a preflight. Use `:show-form :contains` instead of an `rg -n` line-number bridge inside one Clojure file. Use `:grep-form` for file-wide structural search, and a bounded text read only when context genuinely spans forms. Keep `rg` for broad cross-file discovery. Only spawn Explore agents for targeted follow-up questions with specific file paths.
 
 ## Operations
 
@@ -134,7 +137,17 @@ Or use a line contained by the form:
 clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
 ```
 
-Supply exactly one of `:form` or `:line`. For ambiguous reader-conditional
+Or select the one form containing distinctive literal text:
+
+```bash
+clj-surgeon :op :cat :file src/writer/state.clj :contains 'transition complete'
+```
+
+Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` is a
+case-sensitive literal substring, not a regular expression. It searches form
+source, strings, docstrings, and attached comments. Multiple occurrences in
+one form succeed; occurrences in multiple forms refuse with bounded candidate
+evidence. For ambiguous reader-conditional
 definitions, add `:platform :clj` or `:platform :cljs`. Success returns the
 exact parsed form source, type, name when present, platforms, line range,
 attached-comment start, and complete-file source hash. Missing or ambiguous
@@ -144,13 +157,14 @@ the first match.
 `:cat` is a strict alias. It never dumps the complete file, and its result
 retains the canonical machine identity `:operation :show-form`.
 
-When a top-level name or containing line is known, use `:show-form` as the first
+When a top-level name, containing line, or distinctive text is known, use
+`:show-form` as the first
 source inspection instead of reconstructing a `sed` range. Do not run `:ls`
 solely as a preflight. Continue to use `rg` for broad textual discovery,
 `:grep-form` for nested structural syntax, and bounded text reads for context
-that genuinely spans forms. When distinctive text is known but the form name
-is not, use `rg -n` to find one line and then `:show-form :line`; do not print a
-large outline merely to discover the line.
+that genuinely spans forms or files. Inside one Clojure file, use
+`:show-form :contains` instead of `rg -n` followed by `:show-form :line`; do not
+print a large outline merely to discover the line.
 
 #### `:ls-tree` / `:tree` / `:map` — Map an entire directory of repos
 
@@ -396,6 +410,9 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
 Search reports every match; replacement refuses zero or multiple matches.
+Each search match includes its enclosing top-level name in `:inside` when one
+is mechanically available. Reuse that value directly to narrow a replacement;
+do not run `:show-form :line` merely to recover the owner.
 `:match` and `:with` must each contain exactly one complete Clojure form—trailing
 syntax is an error. The plan is a versioned EDN artifact with stable
 `:operation`, `:selector`, hash, edit, diff, and provenance fields. Its `:diff`
@@ -403,7 +420,11 @@ is a standard unified diff, suitable for human or agent review.
 
 Application validates the plan version, unchanged source snapshot, recorded
 address, exact before text, complete rewritten-file parse, and result hash. It
-then atomically replaces the target file. If atomic replacement is unavailable,
+then atomically replaces the target file and reads it back. A successful EDN
+receipt includes `:applied-edit` plus `:verified` whole-file parse,
+`:read-back-hash`, and atomic-write evidence. Do not repeat those exact checks
+with `rg`, `:show-form`, or `shasum`; proceed to the formatter, linter, compiler,
+tests, and final repository change review. If atomic replacement is unavailable,
 the command fails and does not fall back to a weaker write. Every error is
 concise EDN and every error exits nonzero.
 

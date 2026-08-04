@@ -569,6 +569,7 @@
                                    :match  {:required true :desc "Clojure form pattern; _ matches one subtree"}}
                        :workflow  ["Omit :inside for file-wide structural search; add it only to narrow the search."
                                    "Use :grep-form as the structural-shell alias; patterns are Clojure forms, not regular expressions."
+                                   "Each match names its enclosing form in :inside when available; reuse that value to narrow a plan without a line-number lookup."
                                    "Zero and multiple matches are useful read evidence; mutation still requires exactly one match."]
                        :examples  ["clj-surgeon :op :grep-form :file src/views.clj :match '(post! \"/api/items\" _)'"
                                    "clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
@@ -582,21 +583,24 @@
                        :category  :read}
 
     :show-form        {:handler  show-form/show-file
-                       :desc     "Show one complete top-level form by name or containing line"
+                       :desc     "Show one complete top-level form by name, containing line, or literal text"
                        :aliases  [:cat]
                        :args     {:file     {:required true :desc "Clojure source file"}
-                                  :form     {:desc "Unqualified top-level name; supply exactly one of :form or :line"}
-                                  :line     {:desc "Positive one-based line; supply exactly one of :form or :line"}
+                                  :form     {:desc "Unqualified top-level name; supply exactly one selector"}
+                                  :line     {:desc "Positive one-based line; supply exactly one selector"}
+                                  :contains {:desc "Nonblank case-sensitive literal text; supply exactly one selector"}
                                   :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}}
-                       :workflow ["Supply exactly one selector: :form or :line."
+                       :workflow ["Supply exactly one selector: :form, :line, or :contains."
                                   "Use :show-form instead of reconstructing a sed range when a top-level name or containing line is known."
                                   "Make :show-form the first source inspection; do not run :ls solely as a preflight."
-                                  "With distinctive text but no form name, use rg -n to find one line, then :show-form :line instead of printing the full outline."
+                                  "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command."
+                                  "Literal search includes attached comments, strings, and docstrings; it never interprets a regular expression."
                                   "Use :platform only to select a reader-conditional branch."
                                   "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
                        :examples ["clj-surgeon :op :show-form :file src/my/ns.clj :form transition!"
                                   "clj-surgeon :op :show-form :file src/my/ns.clj :line 1134"
+                                  "clj-surgeon :op :cat :file src/my/ns.clj :contains 'transition complete'"
                                   "clj-surgeon :op :show-form :file src/my/ns.cljc :form transition! :platform :cljs"]
                        :category :read}
 
@@ -666,6 +670,7 @@
                        :workflow  ["Run plan generation as a separate command; never chain it with application."
                                    "Review the saved plan and its diff before application."
                                    "Apply the reviewed plan directly with :replace-subform!."
+                                   "A successful receipt includes :verified read-back hash and whole-file parse evidence; do not repeat those checks with rg, show-form, or shasum."
                                    "Do not edit the plan with apply_patch or another text tool."
                                    "If the intended edit changes, generate a new plan."
                                    "Stop on nonzero status, then run the repository formatter, linter, and tests after success."]
@@ -755,6 +760,7 @@
         (.append sb "\n")))
     (.append sb "  Quick start:\n")
     (.append sb "    clj-surgeon :op :ls :file src/my/ns.clj\n")
+    (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")
     (.append sb "  All ops return EDN. Read-only operations never write.\n  Write operations differ: :mv writes unless :dry-run true; paired operations use their documented ! executor.\n")

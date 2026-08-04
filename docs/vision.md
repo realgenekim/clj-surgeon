@@ -113,9 +113,11 @@ x-ray exact structure
 The ideal lens minimizes fallback to line-oriented reading when syntax already
 provides a better address. Use `:show-form` instead of reconstructing a `sed`
 range when a top-level name or containing line is known. When only distinctive
-text is known, use `rg -n` to locate one line, then `:show-form :line`. Use
-`:grep-form` for file-wide structural syntax and optional `:inside` narrowing.
-Keep bounded text reads for context that genuinely spans forms.
+text is known, use literal `:show-form :contains` to select its enclosing form
+without manufacturing a line number. Use `:grep-form` for file-wide structural
+syntax; each match exposes reusable enclosing-form ownership for optional
+`:inside` narrowing. Keep `rg` for broad cross-file discovery and bounded text
+reads for context that genuinely spans forms.
 
 Perfection here means lossless perception, singular guarded action, and an
 executable recovery path after refusal. It does not mean autonomous design or
@@ -126,7 +128,7 @@ an expanding catalog of inferred refactorings.
 | Operation | Role |
 |---|---|
 | `:ls` / `:outline` | Top-level form boundaries and signatures |
-| `:show-form` | Exact top-level source by name or containing line |
+| `:show-form` | Exact top-level source by name, containing line, or literal text |
 | `:ls-tree` | Cross-project structural map |
 | `:deps`, `:ls-deps`, `:topo` | Dependency visibility |
 | `:ls-extract` | Minimal mechanically extractable closure |
