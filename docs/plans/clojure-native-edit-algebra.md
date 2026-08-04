@@ -1,6 +1,6 @@
 # Clojure-Native Edit Algebra Experiment
 
-**Status:** Stage A pure builders pass. SCI compiler contract is red.
+**Status:** Stage A builders and sandboxed SCI compiler pass. CLI probe next.
 
 ## Product hypothesis
 
@@ -124,6 +124,21 @@ and replacements remain inert Clojure data. Do not use unrestricted SCI mode.
 This bridge changes the earlier architectural boundary. clj-surgeon may
 interpret a tightly capability-limited edit expression, but it must never call
 Clojure `eval` or expose a general Babashka environment.
+
+The compiler now passes 13 tests and 271 assertions. It accepts exactly one
+expression of at most 32,768 characters. A syntax validator and SCI allowlist
+both restrict execution to thread-first composition, quoting, and the ten pure
+builders. Structured failures include the allowed symbols, function
+signatures, and a concise remedy.
+
+Two first-pass clean-agent probes produced mixed evidence. For the simple
+`case` query, both the EDN and native agents returned exact output. The native
+expression was 88 characters and the EDN query was 86. For the outer `cond`
+query, the EDN agent returned an exact query, but the native agent invented
+named path arguments and two plausible predicates that the API did not expose.
+Ordinary Clojure syntax activates useful composition knowledge and plausible
+but nonexistent APIs. The SCI boundary makes those inventions safe, but the
+skill and error response must still make the correct grammar one-shot.
 
 Only after Stage A wins query-authoring probes, test:
 

@@ -240,3 +240,29 @@ existing planner, but a shell caller still needs classpath and namespace setup.
 The next probe must price that invocation ceremony honestly. The native syntax
 wins only if it reduces agent translation or an end-to-end action, not because
 the example looks beautiful in a document.
+
+## SCI: a bridge, and a useful hallucination
+
+Gene noticed that Babashka already runs on SCI. That changes the shell-side
+economics. clj-surgeon can interpret one Clojure-shaped query through an
+explicit capability allowlist, without asking the caller to set a classpath or
+load a namespace. The prototype permits only thread-first composition,
+quoting, and the ten pure builders. It has no access to host I/O, namespaces,
+evaluation, concurrency, Java classes, interop, or unrestricted SCI mode.
+
+The first blind authoring pair was exact for both surfaces. The native `case`
+expression was 88 characters. The equivalent EDN vector was 86. Native syntax
+did not earn a compactness win.
+
+The second pair was more revealing. The EDN agent authored the outer `cond`
+query exactly. The native agent invented named path arguments plus
+`parent-head?` and `outermost-parent?`. Those names are coherent Clojure, but
+they are not clj-surgeon. The same latent fluency that makes the syntax feel
+natural also creates a larger space of plausible programs.
+
+This is not a reason to abandon the path. It is a reason to make the path
+smaller. SCI provides two safety fences: a pre-evaluation syntax validator and
+an execution allowlist. Structured errors now return every valid signature and
+a one-sentence remedy. The next clean-session benchmark must test whether that
+compact contract produces first-pass use or merely makes second-pass repair
+pleasant.

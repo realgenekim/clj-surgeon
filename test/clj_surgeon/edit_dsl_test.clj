@@ -169,6 +169,10 @@
                       "(eval '(form 'f))"
                       "(resolve 'spit)"
                       "(future (form 'f))"
+                      "(do (form 'a) (form 'b))"
+                      "(if true (form 'a) (form 'b))"
+                      "(let [path (form 'f)] path)"
+                      "((fn [] (form 'f)))"
                       "(java.io.File. \"secret\")"
                       "#=(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"]]
     (testing expression
@@ -178,7 +182,9 @@
                     (catch Exception e (ex-data e)))]
         (is (= :invalid-edit-expression (:error-type error)))
         (is (= expression (:expression error)))
-        (is (seq (:allowed-symbols error)))))))
+        (is (seq (:allowed-symbols error)))
+        (is (some #{"(match path pattern)"} (:allowed-forms error)))
+        (is (re-find #"thread-first" (:remedy error)))))))
 
 (deftest sci-requires-exactly-one-expression-and-a-query-result
   (doseq [[expression reason] [["" :expected-one-form]
@@ -192,6 +198,18 @@
         (is (= :invalid-edit-expression (:error-type error)))
         (is (= reason (:reason error)))
         (is (= expression (:expression error)))))))
+
+(deftest sci-bounds-input-before-parsing
+  (doseq [[expression reason] [[nil :expression-must-be-string]
+                               [(apply str (repeat 32769 "x"))
+                                :expression-too-large]]]
+    (let [error (try
+                  (dsl/compile-query expression)
+                  nil
+                  (catch Exception e (ex-data e)))]
+      (is (= :invalid-edit-expression (:error-type error)))
+      (is (= reason (:reason error)))
+      (is (= expression (:expression error))))))
 
 (deftest sci-treats-replacement-code-as-inert-data
   (let [path (str "/tmp/clj-surgeon-must-not-write-" (random-uuid))
