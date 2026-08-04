@@ -292,6 +292,9 @@ map constructors refuse, and literal X-ray plus evidence retain exact source.
 Return concrete EDN from computation; realize lazy results with `vec` or another
 collection.
 
+When a nested container's exact map-versus-vector shape is irrelevant, use
+`tree-seq coll? seq` with a predicate instead of probing the schema first.
+
 Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the
 complete-file hash without repeating selected source. The old `:q`, EDN paths,

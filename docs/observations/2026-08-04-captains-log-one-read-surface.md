@@ -420,6 +420,87 @@ schema meaning to the model. The tool answers “map or `hash-map`?” before an
 agent can ask. It still leaves “what does `:args` mean?” and “who owns `:pair`?”
 to general reasoning.
 
+## Candidate v7: the first decisive audit win
+
+The one-pair pilot was exact on both sides and favored canonical initializer
+data by 40%: 70.5 seconds versus 117.1 seconds, six calls versus twelve, and
+roughly half the input tokens. The four-run parallel gate confirmed the result:
+
+```text
+                              best prior    canonical initializer    change
+correct                           4/4                 4/4             tied
+median wall                      75.5 s                51.5 s          32% faster
+median shell calls                8                    5              3 fewer
+median input tokens             157,515              104,269          34% fewer
+median output tokens              2,366                1,665          30% fewer
+median source output              8.5 KB                5.3 KB        38% fewer
+```
+
+Every run preserved the source hash and produced the independently scored exact
+answer. The post times were also comparatively tight: 46.8, 62.4, 51.9, and
+51.2 seconds. No post agent called `:cat`, `:show-form`, text readers, `:q`, or
+help. All used X-ray expressions exclusively.
+
+This is the strongest audit result because it removed questions rather than
+adding instructions. Agents used `initializer` immediately and received one
+canonical map whether the source used a map literal or `(hash-map ...)`. The
+remaining probes investigated the real registry schema: whether `:args` held a
+map and whether `:pair` lived on the operation specification. Those are
+semantic questions, not representation accidents.
+
+Candidate v7 clears the 10% neighboring-win threshold on the primary metric and
+improves every secondary metric without weakening correctness, source safety,
+or tests. Keep it as the new hill-climb leader. Do not yet claim one-shot or
+local maximality: the median still contains five shell calls.
+
+## Candidate v8: remove schema questions with ordinary Clojure
+
+The v7 transcripts exposed one remaining repeated detour. Agents first wrote
+an analysis that assumed `:args` was sequential:
+
+```clojure
+(mapcat :args (vals registry))
+```
+
+In this registry, `:args` is a map, so that expression returns map entries,
+not argument-spec maps. Agents then spent calls asking whether `:args` values
+were maps or vectors, inspecting key frequencies, and repairing the traversal
+to `(mapcat (comp vals :args) ...)`. The answer was correct, but the route was
+not one-shot.
+
+The wrong response would be another repository-specific operator such as
+`arg-specs`. That would move domain knowledge into clj-surgeon, enlarge the API,
+and teach the model less reusable machinery. The more general response is
+already in Clojure: when container shape is irrelevant, recursively traverse
+the data and select by meaning.
+
+```clojure
+(->> (tree-seq coll? seq registry)
+     (filter map?)
+     (filter #(= true (:required %)))
+     count)
+```
+
+Candidate v8 therefore exposes pure `clojure.core/tree-seq` inside the SCI
+analyzer and gives one short instruction: use `tree-seq coll? seq` with a
+predicate when nested map-versus-vector shape is irrelevant. This is not a new
+X-ray algebra term. It is ordinary Clojure operating on the stable selection
+vector and canonical collection view. The implementation remains ignorant of
+`:args`, `:required`, operation registries, and every future application schema.
+
+The hypothesis is deliberately narrow: a familiar, general traversal should
+prevent the model from asking a representation question it does not need to
+answer. The risk is equally clear. `tree-seq` can visit maps, map entries, and
+their contents, so a vague predicate may count unintended nested values. Exact
+cardinality and domain predicates remain the agent's responsibility. The tool
+must not silently guess what a record is.
+
+Candidate v8 is not yet the leader. It survives only if clean-context agents
+stay exact and beat or closely approximate v7 on wall time, with shell calls,
+source output, and tokens as secondary evidence. Until that parallel benchmark
+passes, v7 remains the proven maximum and this section records an experiment,
+not a product claim.
+
 The likely destination is one Clojure substrate with a tiny Unix façade:
 
 ```text

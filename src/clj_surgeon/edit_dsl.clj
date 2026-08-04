@@ -33,7 +33,7 @@
     map mapv mapcat filter filterv remove keep keep-indexed map-indexed
     reduce reduce-kv reductions transduce sequence eduction
     take take-last take-nth take-while drop drop-last drop-while split-at
-    split-with partition partition-by interleave interpose flatten distinct
+    split-with partition partition-by interleave interpose flatten tree-seq distinct
     dedupe sort sort-by group-by frequencies zipmap
     some every? not-every? not-any?
     range

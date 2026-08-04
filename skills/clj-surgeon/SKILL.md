@@ -68,11 +68,11 @@ Add `expect-count` when cardinality must be exact:
 clj-surgeon :op :xray :file src/policy.clj :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
-`analyze` receives a vector for zero, one, or many matches. `expect-count`
-refuses before analysis and never changes that vector type.
+`analyze` receives a vector for zero, one, or many matches; `expect-count` refuses before analysis without changing that type.
 Computed `:value` has compact hash evidence; a plain path returns full source.
 Values are never evaluated; map literals and `hash-map`/`array-map` syntax share
-one canonical map view while evidence stays exact. Return concrete EDN, not a
+one canonical map view while evidence stays exact. When nested container shape
+is irrelevant, traverse with `tree-seq coll? seq`. Return concrete EDN, not a
 lazy sequence. X-ray never writes. In CLJC, select `(form 'name :clj)`.
 
 When the path and replacement are already exact, use `:edit` with that same

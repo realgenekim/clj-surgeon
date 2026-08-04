@@ -70,6 +70,8 @@
 (deftest one-xray-algebra-covers-literal-stable-selection-and-count-refinement
   (let [literal (dsl/compile-xray "(-> (form 'data) (match :xs) right)")
         initializer (dsl/compile-xray "(-> (form 'data) initializer)")
+        traversal (dsl/compile-xray
+                   "(-> (form 'data) (analyze #(count (filter (fn [x] (and (map? x) (= true (:required x)))) (tree-seq coll? seq %)))))")
         computed (dsl/compile-xray
                   "(-> (form 'data) (match :xs) right (expect-count 1) (analyze (fn [[xs]] (count xs))))")
         aggregated (dsl/compile-xray
@@ -77,6 +79,12 @@
     (is (= :literal (:kind literal)))
     (is (= [[:form 'data] [:find :xs] :right] (:query literal)))
     (is (= [[:form 'data] :initializer] (:query initializer)))
+    (is (= [1 1]
+           (mapv #((:analyzer traversal) [%])
+                 [{:args {:file {:required true}
+                          :root {:required false}}}
+                  {:args [{:required true}
+                          {:required false}]}])))
     (is (= 1 (:expected-count computed)))
     (is (= :selected-values (:input-shape computed)))
     (is (= 2 ((:analyzer computed) [[1 2]])))
