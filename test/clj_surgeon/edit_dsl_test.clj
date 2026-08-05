@@ -361,6 +361,31 @@
     (is (= [[:form 'f] [:replace (list 'spit path "bad")]] query))
     (is (not (.exists (java.io.File. path))))))
 
+(deftest native-expressions-retain-exact-literal-replacement-source
+  (doseq [[label expression expected-sources]
+          [["threaded replacement with nested reader shorthand"
+            "(-> (form 'page) (match :config) right (replace '{:asset-url #(views/static %)}))"
+            ["{:asset-url #(views/static %)}"]]
+           ["direct replacement with explicit fn*"
+            "(replace (match (form 'page) :handler) '(fn* [value] (handle value)))"
+            ["(fn* [value] (handle value))"]]
+           ["span replacement with two anonymous functions"
+            "(-> (form 'page) (match 'marker) (span 2) (replace-span '#(left %) '#(right %)))"
+            ["#(left %)" "#(right %)"]]
+           ["a quoted replacement call is data, not the terminal builder"
+            "(-> (form 'page) (replace '{:example (replace :old :new) :handler #(handle %)}))"
+            ["{:example (replace :old :new) :handler #(handle %)}"]]
+           ["metadata remains attached to reader shorthand"
+            "(-> (form 'page) (replace '^:private #(handle %)))"
+            ["^:private #(handle %)"]]
+           ["a computed replacement has no literal source override"
+            "(let [after (list 'handle 'value)] (-> (form 'page) (replace after)))"
+            [nil]]]]
+    (testing label
+      (let [query (dsl/compile-query expression)]
+        (is (= expected-sources
+               (::lens/replacement-sources (meta query))))))))
+
 (deftest edit-options-accept-exactly-one-authoring-surface
   (let [base {:op :edit
               :file "src/state.clj"

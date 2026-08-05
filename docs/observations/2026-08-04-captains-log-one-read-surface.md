@@ -920,6 +920,96 @@ performed no source read, and used no text editor. The guarded receipt verified
 the write, and byte comparison showed equal file lengths with exactly three
 changed bytes: `old` became `new`. Every unrelated byte remained exact.
 
+### One-call guarded edits worked; source spelling did not
+
+A second anonymized production session used the installed `0461f72` release.
+The target forms had stable names, so `(form 'NAME)` was the correct root.
+Forcing the new `(line N)` root would have made the selectors less semantic.
+
+The session issued four guarded write calls. Every call used `:edit`, an exact
+literal `:expect`, and `:plan-out`. Each call planned, applied, parsed the whole
+result, wrote atomically, and returned a matching read-back hash. The agent made
+zero `:replace-subform!` calls and never replayed a saved plan. This is the
+intended replacement for the earlier two-action plan-and-apply ceremony.
+
+| Surface | Observed result | Assessment |
+|---|---|---|
+| Root selection | Named-form roots and exact nested matches each selected one subtree. | Correct |
+| Guarded write | `:edit` plus `:expect` completed planning and application in one call. | Correct |
+| Receipt use | The agent did not reopen or replay a plan, but it made one unnecessary 209-line form read after a verified receipt. | Better, not minimal |
+| Source spelling | Reader shorthand in the replacement became its expanded `fn*` representation. | Semantically valid, not source-faithful |
+| New-form layout | A compound replacement was initially emitted on one line. | Required formatting |
+| Final scope | The source diff was one five-line hunk, and the behavioral gate passed with no browser errors. | Correct |
+
+The source-spelling failure caused the main detour. The replacement expression
+contained an anonymous-function shorthand. The Clojure reader expanded that
+shorthand before clj-surgeon rendered the replacement, so the source received
+an equivalent `fn*` form. The agent used another guarded structural edit to
+replace that form with an existing named function value. The result was simpler,
+but the repair should not have been necessary.
+
+Formatting exposed a second boundary. The repository formatter changed a
+legacy 1,920-line source file and produced a 2,632-line diff for a four-line
+feature. The agent reversed the complete file diff, reapplied the guarded edit,
+and used a text patch only to arrange the four inserted lines. The final diff
+was exact, and a real browser verified the complete behavior. However, reversing
+a complete file diff is safe only when that file has no unrelated prior edits.
+It is not an acceptable general recovery procedure for a dirty worktree.
+
+The mutation assessment rises from 5/10 in the first production observation to
+8/10 here. Structural selection, expectation fencing, atomic application, and
+receipt verification now compose correctly. Source spelling and local layout
+still prevent clj-surgeon from being the exclusive editing surface.
+
+The next acceptance case should require all of the following results:
+
+1. A replacement that contains reader shorthand preserves that shorthand in
+   the emitted source.
+2. A caller can provide an exact multiline replacement layout without changing
+   unrelated bytes.
+3. Formatting remains local to the changed form or replacement region.
+4. A successful guarded receipt causes no verification-only source reread.
+5. Recovery reverses only the agent's own edit, even when the file was already
+   dirty.
+
+### Literal source retention closed the reader-expansion gap
+
+The repair keeps two representations during expression compilation. The
+evaluated query remains the semantic authority. The lossless rewrite-clj tree
+supplies the terminal replacement's raw source. SCI parses that raw source
+without evaluating it. clj-surgeon retains the source only when the parsed form
+equals the evaluated replacement value.
+
+This is preservation, not reverse inference. The implementation does not guess
+that an arbitrary `fn*` form came from anonymous-function shorthand. An
+explicit `fn*` stays explicit. A computed replacement and the `:query` data
+surface continue to use canonical printing because they have no caller-provided
+lexical source.
+
+The first regression run failed in the expected field shape. The file, diff,
+plan edit's `:after`, and receipt's `:applied-edit :after` all contained
+`(fn* [%1] (str %1))` instead of `#(str %)`. After the repair, the same guarded
+CLI call preserved `#(str %)` in each source-bearing field. The selector query
+remains semantic data and can display the equivalent `fn*` value. The receipt
+verified a whole-file parse, atomic write, and matching read-back hash. The Git
+diff changed one map and no unrelated byte.
+
+The adversarial matrix also covers shorthand inside a larger conditional, two
+shorthand functions in `replace-span`, direct and threaded builders, explicit
+`fn*`, a quoted fake `replace` call, computed fallback, and a multiline form
+with a comment and var quote. The multiline test proves that the mechanism
+preserves exact layout and reader syntax rather than special-casing `#()`.
+
+This closes the source-spelling and inserted-layout gaps inside clj-surgeon.
+Repository-wide formatter churn and recovery of an agent's changes in an
+already dirty file remain separate workflow problems.
+
+The complete gate passed 483 tests and 3,810 assertions: five tests and 54
+assertions more than the preceding release. The new tests failed before the
+implementation, and no existing expectation was weakened. Formatter,
+clj-kondo, benchmark harness, retention, evidence-manifest, skill-validation,
+and agent-text gates also passed.
+
 ## Audit checkpoint
 
 The earlier audit boundaries are now remediated:

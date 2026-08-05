@@ -809,21 +809,29 @@
    read evidence; a terminal replacement returns a guarded plan. Pure."
   [source {:keys [query file]}]
   (try
-    (let [query (parse-query query true)
+    (let [query-meta (meta query)
+          query (parse-query query true)
           transform (when (and (vector? (last query))
                                (#{:replace :replace-span}
                                 (first (last query))))
-                      (last query))]
+                      (last query))
+          replacements (when transform (vec (rest transform)))
+          source-overrides
+          (when (= replacements (::replacement-values query-meta))
+            (::replacement-sources query-meta))]
       (if-not transform
         (cond-> (evaluate-query source query {:file file})
           file (assoc :file file))
         (let [selection-query (pop query)
               replacement-sources
-              (mapv (fn [replacement]
-                      (:source (one-complete-form replacement
-                                                  :invalid-replacement
-                                                  "Replacement")))
-                    (rest transform))
+              (mapv (fn [index replacement]
+                      (:source
+                        (one-complete-form
+                          (or (get source-overrides index) replacement)
+                          :invalid-replacement
+                          "Replacement")))
+                    (range)
+                    replacements)
               found (evaluate-query source selection-query {:file file})
               match-count (:match-count found)]
           (cond

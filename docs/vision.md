@@ -141,6 +141,14 @@ Planning then discards the function and saves only the concrete replacement,
 diff, and hashes. The durable artifact stays data, and the trusted executor
 does not gain an interpreter.
 
+A literal terminal replacement has two compatible representations. Its
+evaluated Clojure value defines the semantic change. Its raw `:expr` source
+defines the spelling that the caller requested. The planner retains the raw
+source only when SCI parses it to the same value. This preserves `#()`,
+comments, metadata, commas, and layout without guessing how to rewrite an
+arbitrary `fn*` form. Computed replacements remain data and use canonical
+printing.
+
 The read-only surface is `:xray :expr`. A plain Clojure path such as
 `(-> (form 'transition) (match :finish) right)` returns exact literal source
 evidence. `(analyze path pure-function)` always passes an ordered selection

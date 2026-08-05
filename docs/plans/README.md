@@ -12,6 +12,9 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Literal replacement source fidelity](literal-replacement-source-fidelity.md)
+  — preserve reader shorthand, comments, commas, metadata, and layout for
+  literal replacements written inline in `:edit :expr`.
 - [Containing-line structural root](containing-line-edit-root.md) — select an
   unnamed top-level form by physical line, then perform one lossless nested
   read or guarded edit.

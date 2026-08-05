@@ -456,6 +456,27 @@ existing EDN executor can therefore read and replay the plan without SCI. Use
 `replace` when the new form is already known. Use `transform` when the new form
 depends on the selected code or data.
 
+A literal `replace` or `replace-span` written inline in `:expr` preserves the
+exact replacement source. This includes anonymous-function shorthand,
+comments, commas, metadata, reader syntax, and multiline layout:
+
+```bash
+clj-surgeon :op :edit :file src/page.clj \
+  :expr "(-> (form 'page) (match '{:dev-mode? dev-mode?}) (replace '{:dev-mode? dev-mode? :head {:asset-url #(views/static %)}}))" \
+  :expect '{:dev-mode? dev-mode?}' \
+  :plan-out plan.edn
+```
+
+The planner retains that literal source beside the evaluated query and verifies
+that both describe the same replacement. A replacement computed through a
+local binding or `transform` has no literal source to preserve. The `:query`
+surface also contains data rather than source spelling. Those routes use
+canonical printing and still require plan review.
+
+The returned `:selector :query` is semantic data, so it can display `#()` as an
+equivalent `fn*` form. This is not the planned source spelling. Read the edit's
+`:after` and `:diff` fields for the exact source that clj-surgeon will write.
+
 Use an `.edn` suffix for the task-specific `:plan-out` path. Do not preflight whether that
 path exists. A successful plan atomically replaces that artifact. A refusal
 leaves an existing plan unchanged.

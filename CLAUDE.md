@@ -110,6 +110,11 @@ updates, and verification gates. It is not a chronological coding diary.
   or neighboring forms solely to reproduce that evidence. Review an aggregate
   Git diff only when task context already establishes a worktree or explicitly
   requests it; do not probe `.git` merely to repeat edit-level evidence.
+- A literal `replace` or `replace-span` written inline in `:expr` preserves its
+  exact source spelling, including `#()`, comments, commas, metadata, and
+  multiline layout. Keep the literal at the terminal builder when spelling
+  matters. A computed replacement and the `:query` surface contain only data
+  and use canonical printing.
 - Format changed Clojure files before linting or testing. Use the repository's
   formatter when configured; otherwise run
   `npx @chrisoakman/standard-clojure-style fix <changed-files>`.

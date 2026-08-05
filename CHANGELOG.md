@@ -10,6 +10,13 @@ is cut.
 
 ### Added
 
+- Literal `replace` and `replace-span` forms written inline in `:edit :expr`
+  now preserve their exact replacement source. Anonymous-function shorthand,
+  comments, commas, metadata, reader syntax, and multiline layout survive the
+  plan and verified apply. The planner carries this syntax as query metadata,
+  verifies it against the evaluated replacement, and keeps saved EDN plans
+  concrete and replayable. Computed replacements and the `:query` data surface
+  retain canonical printing.
 - `(line N)` and `[:line N]` structural roots for `:xray` and `:edit`. They
   select the one top-level form whose physical range or attached comment
   contains N, including otherwise unnamed custom macro forms. Blank gaps

@@ -35,9 +35,8 @@ selector refuses zero or multiple forms. Reserve
 
 ## X-ray ordinary Clojure data
 
-Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data and returns compact
-`:value` plus hashes. `expect-count` refuses before analysis. `initializer`
-selects a `def` right-hand side unevaluated.
+Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data and returns compact `:value` plus hashes.
+`expect-count` refuses before analysis. `initializer` selects a `def` right-hand side unevaluated.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
@@ -48,9 +47,9 @@ clj-surgeon :op :xray :file src/policy.clj \
 form whose range or attached comment contains N. Gaps and overlapping owners
 refuse. It selects the owner, so follow it with `match` to select a nested leaf.
 
-Write one total pure Clojure function instead of a shape-discovery query. When keys are
-uncertain, return a shape echo beside the result. Scope counts to named keys;
-reserve `tree-seq` for unknown shapes. Return concrete EDN, not a lazy sequence.
+Write one total pure Clojure function instead of a shape-discovery query. When keys are uncertain,
+return a shape echo. Scope counts to named keys. Reserve `tree-seq` for unknown shapes.
+Return concrete EDN, not a lazy sequence.
 X-ray never writes. Compose `form`, `line`, `match`, `where`, navigation,
 `initializer`, `span`, and `partition-all`. For CLJC use `(form 'name :clj)`
 or `:cljs`. Use `:up :outermost`, not `:outermost :up`.
@@ -78,6 +77,7 @@ must match. On mismatch, narrow the selection—`(match :done) (replace
 :complete)` preserves its surroundings—or review a plan. Never use `:expect`
 with `transform`: its generated after-state requires review. Plans store concrete replacement data,
 never executable code.
+Literal replacements inline in `:expr` preserve `#()`, comments, commas, metadata, and layout. Computed replacements and `:query` use canonical printing. Read `:after` and `:diff` for exact source. Selector queries are semantic data.
 `transform` receives quoted syntax, not runtime values. Do not preflight whether
 plan paths exist. Review hashes and do not reopen the plan file. Do not edit the plan. Instead, generate a new plan.
 Never chain plan generation and application. Trust the apply receipt's `:verified` read-back

@@ -98,6 +98,12 @@
     (is (not (str/includes? help "Use :q to read")))
     (is (str/includes? help "first source-bearing call"))
     (is (str/includes? help "never reproduce it with apply_patch"))
+    (is (str/includes? help "preserves its exact replacement spelling"))
+    (is (str/includes? help "including #(), comments, commas, metadata, and multiline layout"))
+    (is (str/includes? help "computed replacement or :query"))
+    (is (str/includes? help ":selector :query is semantic data"))
+    (is (str/includes? help "may display #() as fn*"))
+    (is (str/includes? help "edit :after and :diff fields report the exact source"))
     (is (str/includes? help "[:replace"))
     (is (str/includes? help "[:replace-span"))
     (is (str/includes? help "SCI"))
@@ -117,6 +123,7 @@
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))
         operational {"README" (slurp "README.md")
                      "installed skill" (slurp "skills/clj-surgeon/SKILL.md")
+                     "Claude skill" (slurp ".claude/skills/clj-surgeon/SKILL.md")
                      "legacy skill" (slurp "skill.md")
                      "edit help" help}
         durable (assoc operational
@@ -144,6 +151,8 @@
         (is (str/includes? text "(match :finish)"))
         (is (str/includes? text "(replace '(assoc state"))
         (is (str/includes? text "(transform #(mapv"))
+        (is (str/includes? text "#()"))
+        (is (str/includes? (str/lower-case text) "canonical printing"))
         (is (str/includes? text ":plan-out plan.edn"))))))
 
 (def project-root
@@ -809,3 +818,117 @@
             (is (= (:result-hash receipt) (:result-hash saved))))))
       (finally
         (fs/delete-tree tmp-dir)))))
+
+(deftest cli-literal-replacement-preserves-anonymous-function-spelling
+  (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon reader shorthand "})
+        source-file (str (fs/path tmp-dir "source.clj"))
+        plan-file (str (fs/path tmp-dir "plan.edn"))
+        original (slurp "test/fixtures/literal_replacement_source.clj")
+        expression (str "(-> (form 'page) (match '{:dev-mode? dev-mode?}) "
+                        "(replace '{:dev-mode? dev-mode? "
+                        ":head {:asset-url #(str %)}}))")
+        expected (str/replace original
+                              "{:dev-mode? dev-mode?}"
+                              "{:dev-mode? dev-mode? :head {:asset-url #(str %)}}")]
+    (try
+      (spit source-file original)
+      (let [result (run-cli ":op" ":edit"
+                            ":file" source-file
+                            ":expr" expression
+                            ":expect" "{:dev-mode? dev-mode?}"
+                            ":plan-out" plan-file)
+            receipt (edn/read-string (:out result))
+            saved (edn/read-string (slurp plan-file))]
+        (is (zero? (:exit result)) (:err result))
+        (is (true? (:ok receipt)))
+        (is (= expected (slurp source-file)))
+        (is (= "{:dev-mode? dev-mode? :head {:asset-url #(str %)}}"
+               (get-in receipt [:applied-edit :after])))
+        (is (str/includes? (:diff receipt) "#(str %)"))
+        (is (not (str/includes? (:diff receipt) "fn*")))
+        (is (= "{:dev-mode? dev-mode? :head {:asset-url #(str %)}}"
+               (get-in saved [:edits 0 :after]))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest literal-replacement-preserves-multiline-layout-comments-and-reader-syntax
+  (let [source (str "(ns bench.literal-layout)\n\n"
+                    "(defn choose-handler []\n"
+                    "  identity)\n")
+        expression (str "(-> (form 'choose-handler) (match 'identity) "
+                        "(replace '(fn [request]\n"
+                        "            ;; Keep the fast path visible.\n"
+                        "            (#'dispatch #(handle request %) request))))")
+        query (:query (edit-dsl/prepare-edit-options {:op :edit
+                                                      :file "source.clj"
+                                                      :expr expression
+                                                      :plan-out "plan.edn"}))
+        plan (edit-dsl/evaluate-edit source {:op :edit
+                                             :file "source.clj"
+                                             :query query
+                                             :plan-out "plan.edn"})
+        after (get-in plan [:edits 0 :after])
+        applied (lens/apply-plan source plan)]
+    (is (= (str "(fn [request]\n"
+                "            ;; Keep the fast path visible.\n"
+                "            (#'dispatch #(handle request %) request))")
+           after))
+    (is (str/includes? (:diff plan) "#'dispatch #(handle request %)"))
+    (is (not (str/includes? (:diff plan) "fn*")))
+    (is (nil? (:error applied)))
+    (is (str/includes? (:source applied)
+                       ";; Keep the fast path visible."))))
+
+(deftest literal-replacement-preserves-shorthand-inside-a-large-conditional
+  (let [source (slurp "test/fixtures/literal_replacement_source.clj")
+        expression (str "(-> (form 'include-current) "
+                        "(match '(if (and current (not (some #{current} entries))) "
+                        "(cons current entries) entries)) "
+                        "(replace '(if (and current "
+                        "(not (some #(= (clojure.string/lower-case current) (clojure.string/lower-case %)) entries))) "
+                        "(cons current entries) entries)))")
+        opts (edit-dsl/prepare-edit-options {:op :edit
+                                             :file "source.clj"
+                                             :expr expression
+                                             :plan-out "plan.edn"})
+        plan (edit-dsl/evaluate-edit source opts)
+        after (get-in plan [:edits 0 :after])
+        applied (lens/apply-plan source plan)]
+    (is (str/includes? after
+                       "#(= (clojure.string/lower-case current) (clojure.string/lower-case %))"))
+    (is (not (str/includes? after "fn*")))
+    (is (str/includes? (:diff plan)
+                       "#(= (clojure.string/lower-case current) (clojure.string/lower-case %))"))
+    (is (nil? (:error applied)))
+    (is (str/includes? (:source applied)
+                       "#(= (clojure.string/lower-case current) (clojure.string/lower-case %))"))))
+
+(deftest source-overrides-never-invent-spelling-for-computed-replacements
+  (let [source "(ns bench.computed)\n\n(defn handler [] identity)\n"
+        plan-for (fn [expression]
+                   (->> {:op :edit
+                         :file "source.clj"
+                         :expr expression
+                         :plan-out "plan.edn"}
+                        edit-dsl/prepare-edit-options
+                        (edit-dsl/evaluate-edit source)))
+        explicit (plan-for
+                   "(-> (form 'handler) (match 'identity) (replace '(fn* [value] (handle value))))")
+        computed (plan-for
+                   "(let [after (list 'handle 'value)] (-> (form 'handler) (match 'identity) (replace after)))")
+        forged-query (with-meta [[:form 'handler]
+                                 [:find 'identity]
+                                 [:replace '(handle value)]]
+                       {::lens/replacement-sources ["(wrong value)"]
+                        ::lens/replacement-values ['(different value)]})
+        forged (lens/evaluate-edit source {:op :edit
+                                           :file "source.clj"
+                                           :query forged-query
+                                           :plan-out "plan.edn"})]
+    (is (= "(fn* [value] (handle value))"
+           (get-in explicit [:edits 0 :after])))
+    (is (= "(handle value)"
+           (get-in computed [:edits 0 :after])))
+    (is (= "(handle value)"
+           (get-in forged [:edits 0 :after]))
+        "metadata that does not describe the terminal query cannot override source")))

@@ -425,13 +425,102 @@
                       :else :evaluation-failed)
                     exception))))))
 
+(defn- zipper-children
+  [zloc]
+  (when-let [child (z/down zloc)]
+    (->> (iterate z/right child)
+         (take-while some?)
+         vec)))
+
+(defn- quote-list?
+  [zloc]
+  (and (z/list? zloc)
+       (#{'quote 'clojure.core/quote}
+        (some-> zloc z/down z/sexpr))))
+
+(defn- inside-quote?
+  [zloc]
+  (loop [ancestor (z/up zloc)]
+    (cond
+      (nil? ancestor) false
+      (or (#{:quote :syntax-quote} (z/tag ancestor))
+          (quote-list? ancestor)) true
+      :else (recur (z/up ancestor)))))
+
+(defn- replacement-call?
+  [zloc operation]
+  (let [head (when (z/list? zloc)
+               (some-> zloc z/down z/sexpr))]
+    (and (symbol? head)
+         (= (name operation) (name head))
+         (not (inside-quote? zloc)))))
+
+(defn- unquoted-source
+  [zloc]
+  (cond
+    (= :quote (z/tag zloc))
+    (some-> zloc z/down z/string)
+
+    (quote-list? zloc)
+    (let [children (zipper-children zloc)]
+      (when (= 2 (count children))
+        (z/string (second children))))
+
+    :else
+    (z/string zloc)))
+
+(defn- parse-one-sci-form
+  [source]
+  (try
+    (let [context (sci/init {:classes {}})
+          reader (sci/reader source)
+          form (sci/parse-next context reader)
+          trailing (sci/parse-next context reader)]
+      (when (and (not= :sci.core/eof form)
+                 (= :sci.core/eof trailing))
+        form))
+    (catch Exception _
+      nil)))
+
+(defn- literal-replacement-sources
+  [expression query]
+  (try
+    (let [terminal (when (vector? query) (peek query))
+          operation (when (and (vector? terminal)
+                               (#{:replace :replace-span} (first terminal)))
+                      (first terminal))
+          replacements (when operation (vec (rest terminal)))]
+      (when (seq replacements)
+        (let [root (z/of-string expression)
+              call (->> (iterate z/next root)
+                        (take-while (complement z/end?))
+                        (filter #(replacement-call? % operation))
+                        last)
+              arguments (some-> call zipper-children rest vec)
+              raw-sources (when (<= (count replacements) (count arguments))
+                            (->> arguments
+                                 (take-last (count replacements))
+                                 (mapv unquoted-source)))]
+          (when (= (count replacements) (count raw-sources))
+            (mapv (fn [replacement source]
+                    (when (= replacement (parse-one-sci-form source))
+                      source))
+                  replacements
+                  raw-sources)))))
+    (catch Exception _
+      nil)))
+
 (defn compile-query
   "Compile one capability-limited Clojure expression into query-vector data."
   [expression]
   (let [query (evaluate-expression expression invalid-expression!)]
     (when-not (vector? query)
       (invalid-expression! expression :query-must-be-vector))
-    query))
+    (if-let [sources (literal-replacement-sources expression query)]
+      (vary-meta query assoc
+                 ::structural-lens/replacement-sources sources
+                 ::structural-lens/replacement-values (vec (rest (peek query))))
+      query)))
 
 (defn compile-xray
   "Compile one pure path or terminal computation into an X-ray program."

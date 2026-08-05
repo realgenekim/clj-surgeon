@@ -580,6 +580,8 @@
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
                                    ":expect is optional; without it the default flow is unchanged: plan first, review, then apply separately."
                                    "With :expect FORM and a literal replacement, the command is one guarded call. It ignores whitespace, but comments, metadata, reader macros, and token spelling must match."
+                                   "A literal replace or replace-span written inline in :expr preserves its exact replacement spelling, including #(), comments, commas, metadata, and multiline layout. A computed replacement or :query has no lexical source and uses canonical printing."
+                                   ":selector :query is semantic data and may display #() as fn*. The edit :after and :diff fields report the exact source that the plan writes."
                                    "A difference refuses with :expect-mismatch, returns :expected, :actual, and :actual-source, and leaves the source bytes and any existing plan artifact unchanged. If undeclared comments or metadata caused the refusal, narrow the selector or declare the exact before-source."
                                    "Unknown flags, getter-only queries, computed transforms, ambiguous targets, non-.edn plan paths, and source/plan path aliasing refuse without changing source or an existing plan."]
                        :examples  ["clj-surgeon :op :edit :file src/policy.clj :expr \"(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))\" :plan-out plan.edn"
