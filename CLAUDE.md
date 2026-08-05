@@ -53,22 +53,25 @@ updates, and verification gates. It is not a chronological coding diary.
 - Errors use a human-readable `:error` string plus a stable keyword
   `:error-type` and structured diagnostic fields.
 - For a large Clojure file, use `:ls` first when the relevant form is unknown.
-  When a top-level name or containing line is already known, use `:show-form`
+  When a top-level name or containing line is already known, use `:cat`
   as the first source inspection; do not run `:ls` solely as a preflight or
   reconstruct a `sed` range.
 - When distinctive text is known but its containing form is not, use
-  `:show-form :contains` to select that form in one command; do not manufacture
+  `:cat :contains` to select that form in one command; do not manufacture
   a line with `rg -n` or print a large outline. Use `rg` for broad cross-file
   discovery. Use `:grep-form` for file-wide structural patterns; each named
   match reports reusable `:inside` ownership. Add `:inside` only when the
   parent is known or ambiguity needs narrowing.
-- When sibling text identifies an edit—a `case` key, `cond` guard, map key, or
-  binding name—use the structural lens getter
-  `:q :query '[[:form transition] [:find :finish] :right]'`. Add
-  `[:replace FORM]` to the same pipeline to emit one hash-bound plan, then apply
-  it separately with `:replace-subform!`. The query never writes source. Do not
-  grep a repeated expression and then read its owner merely to recover sibling
-  context.
+- When sibling syntax identifies a target—a `case` key, `cond` guard, map key,
+  or binding name—read it with `:xray :expr "(-> (form 'transition) (match
+  :finish) right)"`. Plan the same path with `:edit` and terminal `replace`,
+  then apply it separately with `:replace-subform!`. Do not grep a repeated
+  expression and then read its owner merely to recover sibling context.
+- When a physical line identifies one otherwise unnamed top-level owner, start
+  an X-ray or edit path with `(line N)`, then use `match` or navigation to
+  select the exact nested syntax. The line can be inside the form or in its
+  attached comment. Blank gaps and overlapping owners must refuse. Prefer
+  `(form 'NAME)` when semantic identity is known.
 - When the adjacent forms are themselves the intended object, use
   `[[:form transition] [:find :finish] [:span 2]]`. A terminal
   `[:replace-span :finish (assoc state :status :complete)]` requires equal
@@ -100,7 +103,7 @@ updates, and verification gates. It is not a chronological coding diary.
 - Generate a replacement plan in a standalone shell command. Observe and
   review it before running a separate apply command; never chain planning and
   application. When the intended relationship and replacement are already
-  exact, a `:q` query ending in `[:replace ...]` may be the first non-mutating
+  exact, an `:edit` expression ending in `replace` may be the first non-mutating
   call; read first only when the choice requires a separate judgment. A
   successful verified apply receipt proves exact replay,
   read-back hash, atomic write, and whole-file parse; do not reread the edited

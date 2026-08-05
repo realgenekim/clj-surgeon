@@ -4,6 +4,7 @@
    [clj-surgeon.cljc.walk :as cwalk]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.outline :as outline]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.pprint :as pprint]
@@ -22,6 +23,7 @@
 (def supported-platform-file-extensions [".clj" ".cljs" ".cljc"])
 (def supported-query-steps
   [[:form 'NAME]
+   [:line 'POSITIVE-LINE]
    [:find 'PATTERN]
    [:where {:tag :TAG}]
    [:where {:parent-tag :TAG}]
@@ -195,6 +197,13 @@
           (invalid-query! "[:form NAME] or [:form NAME PLATFORM] must be first; NAME is a symbol or nonblank string and PLATFORM is a keyword"
                           {:step-index index :step step}))
 
+        (= :line (first step))
+        (when-not (and (zero? index)
+                       (= 2 (count step))
+                       (pos-int? (second step)))
+          (invalid-query! "[:line N] must be first and N must be a positive integer"
+                          {:step-index index :step step}))
+
         (= :find (first step))
         (when-not (= 2 (count step))
           (invalid-query! "[:find PATTERN] requires exactly one pattern"
@@ -359,8 +368,9 @@
       "cljc" #{:clj :cljs}
       nil)))
 
-(defn- source-index [root default-platforms]
+(defn- source-index [root default-platforms source]
   (let [locations (vec (zipper-locations root))
+        lines (str/split-lines source)
         entries (mapv (fn [address zloc]
                         {:address address :zloc zloc})
                       (range)
@@ -370,22 +380,35 @@
                                    default-platforms)))
         walked-by-location (into {}
                                  (map (fn [{:keys [zloc platforms]}]
-                                        [(location-key zloc) platforms]))
-                                 walked)
+                                        (let [{:keys [row end-row]}
+                                              (meta (z/node zloc))]
+                                          [(location-key zloc)
+                                           {:platforms platforms
+                                            :owner-line row
+                                            :owner-end-line end-row
+                                            :comment-start
+                                            (when row
+                                              (outline/attached-comment-start
+                                                lines row))}]))
+                                   walked))
         entries (mapv (fn [item]
-                        (if-let [platforms (get walked-by-location
-                                                (location-key (:zloc item)))]
-                          (assoc item :platforms platforms)
+                        (if-let [owner (get walked-by-location
+                                            (location-key (:zloc item)))]
+                          (merge item owner)
                           item))
                       entries)
         by-location (into {} (map (fn [item]
                                     [(location-key (:zloc item)) item])
                                   entries))
         ordinary-top-levels (top-level-locations root)
-        walked-top-levels (map :zloc walked)]
+        walked-top-levels (map :zloc walked)
+        line-roots (into []
+                         (keep #(get by-location (location-key %)))
+                         walked-top-levels)]
     {:entries entries
      :by-location by-location
      :top-levels (vec walked-top-levels)
+     :line-roots (unique-items line-roots)
      :initial (unique-items
                 (into []
                       (keep #(get by-location (location-key %)))
@@ -429,7 +452,7 @@
     (when (and (= 'def head) (<= 3 (count children)))
       (get by-location (location-key (peek children))))))
 
-(defn- apply-query-step [{:keys [entries by-location]} items step]
+(defn- apply-query-step [{:keys [entries by-location line-roots]} items step]
   (unique-items
     (cond
       (navigation-steps step)
@@ -451,6 +474,37 @@
                       (or (nil? platform)
                           (contains? (:platforms %) platform)))
                 items))
+
+      (= :line (first step))
+      (let [line (second step)
+            matches (->> line-roots
+                         (filter (fn [item]
+                                   (let [start (or (:comment-start item)
+                                                   (:owner-line item))
+                                         end (:owner-end-line item)]
+                                     (and start end (<= start line end)))))
+                         vec)]
+        (cond
+          (= 1 (count matches)) matches
+          (empty? matches)
+          (throw (ex-info (str "Line " line
+                               " is not contained by a top-level form")
+                          {:error-type :line-not-in-form
+                           :line line
+                           :match-count 0}))
+          :else
+          (throw (ex-info (str "Line " line " is contained by "
+                               (count matches) " top-level forms")
+                          {:error-type :ambiguous-form
+                           :line line
+                           :match-count (count matches)
+                           :matches-truncated? (> (count matches)
+                                                  query-result-limit)
+                           :matches (mapv (fn [item]
+                                            {:line (:owner-line item)
+                                             :end-line (:owner-end-line item)
+                                             :platforms (vec (sort (:platforms item)))})
+                                          (take query-result-limit matches))}))))
 
       (= :find (first step))
       (mapcat #(matching-descendants entries % (second step)) items)
@@ -504,6 +558,7 @@
                       [:step-index :step :step-count :max-query-steps
                        :supported-query-steps :span-count
                        :replacement-count :file :platform
+                       :line :match-count :matches :matches-truncated?
                        :supported-file-extensions])))
 
 (defn evaluate-query
@@ -531,7 +586,7 @@
        (let [default-platforms (or file-platforms #{:clj :cljs})
              root (z/of-string source {:track-position? true})
              {:keys [initial top-levels] :as index}
-             (source-index root default-platforms)
+             (source-index root default-platforms source)
              {:keys [items trace]}
              (reduce (fn [{:keys [items trace]} step]
                        (let [next-items (apply-query-step index items step)]

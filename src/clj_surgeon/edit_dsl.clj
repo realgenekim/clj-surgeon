@@ -49,7 +49,7 @@
     chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
 
 (def ^:private builder-symbols
-  '[form match where right left up down outermost initializer span partition-all replace
+  '[form line match where right left up down outermost initializer span partition-all replace
     replace-span transform xray xray-one compute aggregate inspect one all
     expect-count analyze])
 
@@ -92,7 +92,7 @@
    :structural-builders])
 
 (def ^:private expression-reference
-  ["(form name)" "(form name platform)"
+  ["(form name)" "(form name platform)" "(line positive-line)"
    "(match path pattern)"
    "(where path predicates)"
    "(right path)" "(left path)" "(up path)" "(down path)" "(outermost path)"
@@ -152,6 +152,15 @@
    [[:form name]])
   ([name platform]
    [[:form name platform]]))
+
+(defn line
+  "Start a query at the one top-level form containing a physical source line."
+  [value]
+  (when-not (pos-int? value)
+    (throw (ex-info "Line root requires a positive integer"
+                    {:error-type :invalid-line-root
+                     :line value})))
+  [[:line value]])
 
 (defn match
   "Append an exact structural find step."
@@ -312,6 +321,7 @@
 
 (def ^:private sci-bindings
   {'form form
+   'line line
    'match match
    'where where
    'right right
@@ -366,7 +376,7 @@
                               :allowed-symbol-count (count allowed-symbols)
                               :allowed-capabilities allowed-capabilities
                               :allowed-forms xray-expression-reference
-                              :usage "clj-surgeon :op :xray :file FILE :expr \"(-> (form 'NAME) (expect-count 1) (analyze pure-function))\""
+                              :usage "clj-surgeon :op :xray :file FILE :expr EXPR"
                               :remedy "Return a path, or end with analyze; add expect-count for exact cardinality."}
                        symbol (assoc :symbol symbol
                                      :remedy (str "Return a path, or end with analyze; add expect-count for exact cardinality. "

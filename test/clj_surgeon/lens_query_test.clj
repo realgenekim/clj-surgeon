@@ -65,8 +65,8 @@
     (let [case-query [[:form 'transition] [:find :finish] :up]
           parent (first (:matches (lens/evaluate-query target-source case-query)))
           head (first (:matches
-                       (lens/evaluate-query target-source
-                                            (conj case-query :down))))]
+                        (lens/evaluate-query target-source
+                                             (conj case-query :down))))]
       (is (= :list (:tag parent)))
       (is (str/starts-with? (:source parent) "(case event"))
       (is (= "case" (:source head)))))
@@ -165,6 +165,113 @@
     (is (= ["(def branch-value :clj)"]
            (mapv :source (:matches clj))))))
 
+(def containing-line-fixture
+  "test/fixtures/containing_line_owner.clj")
+
+(deftest containing-line-root-selects-one-unnamed-top-level-owner
+  (let [source (slurp containing-line-fixture)]
+    (doseq [[label line] [["attached comment" 12]
+                          ["opening line" 13]
+                          ["interior line" 14]
+                          ["closing line" 16]]]
+      (testing label
+        (let [owner (lens/evaluate-query source [[:line line]]
+                                         {:file containing-line-fixture})
+              leaf (lens/evaluate-query
+                     source
+                     [[:line line] [:find '(old-reader account-id)]]
+                     {:file containing-line-fixture})]
+          (is (= 1 (:match-count owner)))
+          (is (str/starts-with? (get-in owner [:matches 0 :source])
+                                "(defcache 'selected-cache"))
+          (is (= ["(old-reader account-id)"]
+                 (mapv :source (:matches leaf)))))))))
+
+(deftest containing-line-root-refuses-gaps-invalid-roots-and-overlapping-owners
+  (let [source (slurp containing-line-fixture)]
+    (doseq [[label query error-type]
+            [["blank gap" [[:line 5]] :line-not-in-form]
+             ["line must be first" [[:find 'reader] [:line 14]] :invalid-query]
+             ["line needs an argument" [[:line]] :invalid-query]
+             ["line needs a positive integer" [[:line 0]] :invalid-query]
+             ["line rejects strings" [[:line "12"]] :invalid-query]
+             ["two roots refuse" [[:line 14] [:form 'first-cache]] :invalid-query]]]
+      (testing label
+        (let [result (lens/evaluate-query source query
+                                          {:file containing-line-fixture})]
+          (is (= error-type (:error-type result)))
+          (is (zero? (:match-count result)))
+          (is (= [] (:matches result)))))))
+  (testing "two reader-conditional owners on one physical line refuse ambiguity"
+    (let [source (str "(ns overlap)\n"
+                      "#?(:clj (defn platform-value [] :clj) :cljs (defn platform-value [] :cljs))\n")
+          result (lens/evaluate-query source [[:line 2]]
+                                      {:file "overlap.cljc"})]
+      (is (= :ambiguous-form (:error-type result)))
+      (is (= 2 (:match-count result)))))
+  (testing "large same-line ambiguity reports total cardinality and bounded evidence"
+    (let [source (str (str/join " " (for [i (range 105)]
+                                      (str "(def value-" i " " i ")")))
+                      "\n")
+          result (lens/evaluate-query source [[:line 1]]
+                                      {:file "many.clj"})]
+      (is (= :ambiguous-form (:error-type result)))
+      (is (= 105 (:match-count result)))
+      (is (= 100 (count (:matches result))))
+      (is (true? (:matches-truncated? result))))))
+
+(deftest containing-line-plan-changes-only-the-exact-leaf-and-preserves-bytes
+  (let [source (slurp containing-line-fixture)
+        query [[:line 14]
+               [:find '(old-reader account-id)]
+               [:replace '(new-reader account-id)]]
+        plan (lens/evaluate-lens source
+                                 {:file containing-line-fixture
+                                  :query query})
+        applied (lens/apply-plan source plan)
+        expected (str/replace-first
+                   source
+                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (old-reader account-id)]"
+                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (new-reader account-id)]")]
+    (is (nil? (:error plan)))
+    (is (= 1 (:match-count plan)))
+    (is (= "(old-reader account-id)" (-> plan :edits first :before)))
+    (is (= "(new-reader account-id)" (-> plan :edits first :after)))
+    (is (:ok applied))
+    (is (= expected (:source applied)))
+    (is (= 2 (count (re-seq #"\(old-reader account-id\)"
+                      (:source applied)))))
+    (is (= 1 (count (re-seq #"\(new-reader account-id\)"
+                      (:source applied)))))
+    (is (str/includes? (:source applied)
+                       ";; Preserve this comment and the multiline let layout."))))
+
+(deftest containing-line-root-does-not-hide-ambiguity-inside-the-owner
+  (let [source (str "(ns local.ambiguity)\n\n"
+                    "(defcache selected [account-id]\n"
+                    "  [(old-reader account-id)\n"
+                    "   (old-reader account-id)])\n")
+        plan (lens/evaluate-lens
+               source
+               {:file "local_ambiguity.clj"
+                :query [[:line 4]
+                        [:find '(old-reader account-id)]
+                        [:replace '(new-reader account-id)]]})]
+    (is (= :ambiguous-match (:error-type plan)))
+    (is (= 2 (:match-count plan)))
+    (is (nil? (:result-hash plan))))
+  (testing "an absent leaf inside the selected owner keeps the normal refusal"
+    (let [source (slurp containing-line-fixture)
+          plan (lens/evaluate-lens
+                 source
+                 {:file containing-line-fixture
+                  :query [[:line 14]
+                          [:find '(missing-reader account-id)]
+                          [:replace '(new-reader account-id)]]})]
+      (is (= :no-match (:error-type plan)))
+      (is (zero? (:match-count plan)))
+      (is (nil? (:result-hash plan))))))
+
 (deftest invalid-query-matrix-refuses-with-stable-local-evidence
   (let [too-long (vec (repeat 33 :down))
         cases [{:label "nil" :query nil}
@@ -180,6 +287,10 @@
                {:label "malformed form" :query [[:form]] :step-index 0}
                {:label "form platform must be a keyword"
                 :query [[:form 'transition "cljs"]] :step-index 0}
+               {:label "line is not first"
+                :query [[:find :finish] [:line 5]] :step-index 1}
+               {:label "malformed line"
+                :query [[:line -1]] :step-index 0}
                {:label "malformed find" :query [[:find]] :step-index 0}
                {:label "where needs one map"
                 :query [[:where :vector]] :step-index 0}
@@ -356,7 +467,7 @@
                                      {:file "state.clj" :query query})]
       (is (= error-type (:error-type result)) (pr-str query)))))
 
-(deftest agent-facing-surfaces-teach-one-jq-like-getter-updater-route
+(deftest agent-facing-surfaces-teach-the-canonical-clojure-roots
   (let [surfaces {"README" (slurp "README.md")
                   "repository instructions" (slurp "CLAUDE.md")
                   "vision" (slurp "docs/vision.md")
@@ -365,23 +476,24 @@
                   "changelog" (slurp "CHANGELOG.md")}]
     (doseq [[surface body] surfaces]
       (testing surface
-        (is (str/includes? body ":q"))
-        (is (str/includes? body "[:form transition]"))
-        (is (str/includes? body "[:find :finish]"))
-        (is (str/includes? body ":right"))
-        (is (str/includes? body "[:span 2]"))
-        (is (str/includes? body "[:partition-all 2]"))
-        (is (str/includes? body "[:replace-span"))
-        (is (str/includes? body "[:replace"))
-        (is (str/includes? body ":replace-subform!"))))))
+        (is (str/includes? body ":xray"))
+        (is (str/includes? body ":edit"))
+        (is (str/includes? body "(line N)"))
+        (is (str/includes? body "(form '"))))
+    (let [[primary aliases] (str/split (get surfaces "README")
+                                       #"## Compatibility aliases"
+                                       2)]
+      (is (not (str/includes? primary "`:q`")))
+      (is (str/includes? aliases "`:q`"))
+      (is (str/includes? aliases "`:lens`")))))
 
 (def ^:private project-root
   (.getCanonicalPath (io/file ".")))
 
 (defn- run-cli [& args]
   @(proc/process
-    (into ["bb" "-m" "clj-surgeon.core"] args)
-    {:dir project-root :err :string :out :string}))
+     (into ["bb" "-m" "clj-surgeon.core"] args)
+     {:dir project-root :err :string :out :string}))
 
 (deftest cli-lens-and-q-read-plan-and-apply-the-documented-expression
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon q "})

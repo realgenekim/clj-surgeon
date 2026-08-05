@@ -37,7 +37,7 @@ computes over a Clojure path.
 expose the graph. Write operations separate planning from application.
 
 ```text
-ls / cat / q / grep / deps  →  plan  →  apply  →  receipt
+ls / cat / xray / grep-form / deps  →  plan  →  apply  →  receipt
 ```
 
 A write first produces a hash-bound plan and exact diff. A later command applies
@@ -57,10 +57,10 @@ select safely, it refuses with bounded evidence and executable remedies. It
 does not silently widen scope, choose an ambiguous match, or move additional
 code without consent.
 
-When the target relationship and replacement are already explicit, a `q`
-updater may be the first non-mutating call: its plan contains the selected
+When the target relationship and replacement are already explicit, an `:edit`
+operation may be the first non-mutating call: its plan contains the selected
 source, trace, exact diff, and hashes. When intent depends on what the source
-contains, run a read query first. The safety boundary is always plan versus
+contains, run `:xray` first. The safety boundary is always plan versus
 apply, never an artificial requirement to spend an extra shell call.
 
 This is the project's Bitter Lesson boundary. clj-surgeon adds general
@@ -84,11 +84,11 @@ read the skill, selected with `:cat :contains`, planned, and applied. The edit
 was exact, and the apply returned a verified receipt.
 
 An adjacent single-pair replication compared the previous paved road with the
-jq-like lens. Both routes made the exact edit, planned and applied separately,
-and avoided textual fallback.
+structural query pipeline. Both routes made the exact edit. Both planned and
+applied separately, and both avoided textual fallback.
 
 The previous route used four shell calls,
-77,320 cumulative input tokens, and 1,602 source-output bytes. The lens used
+77,320 cumulative input tokens, and 1,602 source-output bytes. The structural query used
 three calls, 63,514 input tokens, and 1,380 source-output bytes. Uncached input
 fell from 17,160 to 15,386. Wall time increased from 33.3 to 42.3 seconds, so
 this result supports fewer calls and less context, not a speed claim.
@@ -214,7 +214,7 @@ Its output and receipts use `:mode :development-link`. Run stable
 Two binaries must be on `PATH`:
 
 - **[babashka](https://babashka.org/)** (`bb`) — the runtime. rewrite-clj and cheshire are built in.
-- **[clj-kondo](https://github.com/clj-kondo/clj-kondo)** — used by `:ls`, `:outline`, `:fix-declares!`, and any op that needs forward-reference detection. Without it those ops fail.
+- **[clj-kondo](https://github.com/clj-kondo/clj-kondo)** — used by `:ls`, `:fix-declares!`, and any op that needs forward-reference detection. Without it those ops fail.
 
 No-sudo install (e.g. inside the Claude Code sandbox, where `sudo` is blocked):
 
@@ -250,7 +250,7 @@ match the canonical package.
 
 ### Read-only operations
 
-#### `:ls` / `:outline` — See the skeleton of a namespace
+#### `:ls` — See the skeleton of a namespace
 
 ```bash
 clj-surgeon :op :ls :file src/writer/state.clj
@@ -258,21 +258,30 @@ clj-surgeon :op :ls :file src/writer/state.clj
 
 Every top-level form with exact line boundaries, types, names, arglists, and forward reference detection. 236 forms in a 2768-line file, returned in ~200ms.
 
-#### `:show-form` / `:cat` — Read one complete top-level form
+#### `:cat` — Read one complete top-level form
 
 Use a name:
 
 ```bash
-clj-surgeon :op :show-form :file src/writer/state.clj :form transition!
-# Equivalent structural-shell spelling:
 clj-surgeon :op :cat :file src/writer/state.clj :form transition!
 ```
 
 Or use a line contained by the form:
 
 ```bash
-clj-surgeon :op :show-form :file src/writer/state.clj :line 1134
+clj-surgeon :op :cat :file src/writer/state.clj :line 1134
 ```
+
+Quote form names that contain shell metacharacters. The quotes belong to the
+shell command, not to the Clojure name:
+
+```bash
+clj-surgeon :op :cat :file src/convert.clj :form 'source->target'
+clj-surgeon :op :cat :file src/convert.clj :form 'ready?'
+```
+
+Without the quotes, a shell can interpret `>` as redirection or `?` as a glob
+before clj-surgeon receives the argument.
 
 Or select the one form containing distinctive literal text:
 
@@ -294,16 +303,15 @@ line range, attached-comment start, and complete-file source hash. A missing or
 ambiguous selector returns structured EDN and exits nonzero. The command never
 chooses the first match.
 
-`:cat` is a strict alias. It never dumps the complete file, and its result
-retains the canonical machine identity `:operation :show-form`.
+`:cat` never dumps the complete file.
 
 When a top-level name, containing line, or distinctive text is known, use
-`:show-form` as the first
-source inspection instead of reconstructing a `sed` range. Do not run `:ls`
+`:cat` as the first source inspection instead of reconstructing a `sed` range.
+Do not run `:ls`
 solely as a preflight. Continue to use `rg` for broad textual discovery,
 `:grep-form` for nested structural syntax, and bounded text reads for context
 that genuinely spans forms or files. Inside one Clojure file, use
-`:show-form :contains` instead of `rg -n` followed by `:show-form :line`. Do not
+`:cat :contains` instead of `rg -n` followed by `:cat :line`. Do not
 print a large outline merely to discover the line.
 
 #### `:xray` — Read and compute with one Clojure path
@@ -315,6 +323,22 @@ without a terminal returns exact source evidence:
 clj-surgeon :op :xray :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right)"
 ```
+
+Use `(line N)` when the enclosing top-level form has no configured name, but a
+physical source line identifies it. The line can be the form's opening line,
+an interior line, its closing line, or a contiguous comment immediately above
+it. Then select the exact nested syntax normally:
+
+```bash
+clj-surgeon :op :xray :file src/cache.clj \
+  :expr "(-> (line 412) (match '(old-reader account-id)))"
+```
+
+`(line N)` selects the owner, not the nested leaf. A blank gap refuses with
+`:line-not-in-form`. A physical line shared by reader-conditional owners
+refuses with `:ambiguous-form`. Prefer `(form 'NAME)` when the semantic name is
+known. Use `(line N)` as a precise physical locator for otherwise unnamed
+top-level syntax.
 
 End the same path with `analyze` to derive an answer from the ordered selection
 vector. Add `expect-count` when cardinality must be exact:
@@ -353,8 +377,7 @@ Literal paths return full source evidence. Computed paths keep `:value`,
 addresses, ranges, trace, per-match hashes, a selection hash, and the
 complete-file hash without repeating selected source. Add `:evidence :full`
 when a computed read must also return exact selected source. Compact evidence
-is the default. The old `:q`, EDN paths, `xray`, and `xray-one` remain supported
-compatibility inputs but are not the primary agent surface.
+is the default. New read workflows should use the Clojure X-ray surface above.
 
 Named paths are file-aware. `(form 'load-starred-post :cljs)` and the EDN step
 `[:form load-starred-post :cljs]` select one reader-conditional branch in a
@@ -374,23 +397,18 @@ The same `right` relationship moves from a `case` key, `cond` guard, map key,
 or binding name to its paired value. Navigation skips whitespace and comments
 while returned addresses still refer to the lossless concrete-syntax tree.
 
-Compatibility: the `:lens` and `:q` operations accept the legacy jq-like EDN
-query pipeline.
-Existing invocations remain supported, but new read workflows should use the
-single Clojure X-ray surface above.
-
 In the initial unprimed four-run checksum experiment, `:xray` was exact in four
 of four runs. The preceding workflow was exact in three of four. Median wall
 time fell 21%, shell calls 33%, input tokens 45%, and output tokens 43%.
 Routine literal reads remain cheaper than computation. The
 [maximality audit](docs/plans/xray-maximality-audit.md) then compared compact
-X-ray with `:q | bb` and direct execution. See the
+X-ray with an external Babashka pipeline and direct execution. See the
 [experiment record](docs/observations/2026-08-04-captains-log-source-became-data.md).
 
 Make the same path an updater by ending it with `[:replace FORM]`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
   :plan-out plan.edn
 
@@ -460,6 +478,21 @@ clj-surgeon :op :edit :file src/state.clj \
   :plan-out plan.edn
 ```
 
+The same guarded route works inside an unnamed top-level owner. This is one
+CLI call because the caller declares the exact old leaf:
+
+```bash
+clj-surgeon :op :edit :file src/cache.clj \
+  :expr "(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))" \
+  :expect '(old-reader account-id)' \
+  :plan-out plan.edn
+```
+
+The line narrows ownership. `match` selects the leaf. `:expect` verifies the
+old leaf before the tool saves the audit plan, writes atomically, reparses the
+complete file, and returns the read-back hash. Repeated copies in other
+top-level forms remain outside the selection.
+
 Use shell single quotes around `:expect` source when possible. They prevent the
 shell from expanding `$`, backticks, and other source characters.
 
@@ -505,10 +538,10 @@ When adjacent forms are themselves the meaningful object, promote the current
 node and its next semantic peer into a lossless slice with `[:span 2]`:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] [:span 2]]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) (span 2))"
 
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
   :plan-out plan.edn
 
@@ -528,8 +561,8 @@ When the task asks for every pair, use `[:partition-all 2]` instead of reading
 the owner, counting children, or issuing one query per key:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find case] :up :down :right :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match 'case) up down right right (partition-all 2))"
 ```
 
 `[:partition-all N]` starts at the current node and partitions it with all
@@ -544,8 +577,8 @@ If repeated nested heads make the first outer sibling unknown, promote every
 head to its owner and retain the maximal owners before partitioning:
 
 ```bash
-clj-surgeon :op :q :file src/policy.clj \
-  :query '[[:form classify-request] [:find cond] :up :outermost :down :right [:partition-all 2]]'
+clj-surgeon :op :xray :file src/policy.clj \
+  :expr "(-> (form 'classify-request) (match 'cond) up outermost down right (partition-all 2))"
 ```
 
 Placement matters. The symbol nodes selected by `[:find cond]` do not contain
@@ -794,11 +827,10 @@ The compound extraction operation:
 Planning is pure. Only `:extract!` writes files. After extraction, use the
 compiler to find unresolved bare references and correct them.
 
-#### `:grep-form` / `:find-subform` / `:replace-subform` — Nested structural edits
+#### `:grep-form` / `:replace-subform` — Nested structural edits
 
-Use `:grep-form` for file-wide structural search. It is a strict alias for
-`:find-subform`, not a text regular expression. Matching ignores formatting,
-and `_` matches exactly one subtree:
+Use `:grep-form` for file-wide structural search. It is not a text regular
+expression. Matching ignores formatting, and `_` matches exactly one subtree:
 
 ```bash
 clj-surgeon :op :grep-form :file src/views.clj \
@@ -809,7 +841,7 @@ Add `:inside` only when the containing top-level form is already known or when
 you need to narrow multiple matches:
 
 ```bash
-clj-surgeon :op :find-subform :file src/views.clj :inside render \
+clj-surgeon :op :grep-form :file src/views.clj :inside render \
   :match '(post! "/api/items" _)'
 ```
 
@@ -828,7 +860,7 @@ clj-surgeon :op :replace-subform! :plan plan.edn
 Search reports every match. Replacement refuses zero or multiple matches.
 Each search match includes its enclosing top-level name in `:inside` when one
 is mechanically available. Reuse that value directly to narrow a replacement.
-Do not run `:show-form :line` merely to recover the owner.
+Do not run `:cat :line` merely to recover the owner.
 
 `:match` and `:with` must each contain exactly one complete Clojure form—trailing
 syntax is an error. The plan is a versioned EDN artifact with stable
@@ -841,7 +873,7 @@ atomically replaces the target file and reads it back.
 
 A successful EDN receipt includes `:applied-edit`, `:verified` whole-file parse,
 `:read-back-hash`, and atomic-write evidence. Do not repeat those checks with
-`rg`, `:show-form`, `git diff`, or `shasum`. The reviewed plan is the edit-level
+`rg`, `:cat`, `git diff`, or `shasum`. The reviewed plan is the edit-level
 diff. Continue with the relevant formatter, linter, compiler, and tests.
 
 Review an aggregate Git diff only if the task already establishes a worktree or
@@ -855,7 +887,7 @@ a new plan.
 
 A `case` clause, `cond` branch, map entry, or binding pair is adjacent sibling
 syntax, not a synthetic wrapper list. When one peer identifies another, use
-`:q` navigation rather than reconstructing a match from the whole owner. Use
+`:xray` navigation rather than reconstructing a match from the whole owner. Use
 `:replace-subform` when an independently readable value or expression already
 identifies the target exactly. See
 [issue #21](https://github.com/realgenekim/clj-surgeon/issues/21).
@@ -894,7 +926,7 @@ JavaScript `\xNN` escapes are not valid EDN/Clojure string escapes. Prefer
 `pr-str`, or valid Clojure escapes such as `\"`, `\\`, and `\u0027`.
 
 A broader [session-history ethnography](docs/observations/2026-07-12-lenses-in-the-wild.md)
-found 38 direct production lens invocations across UI, state, storage, and route
+found 38 direct production structural-query invocations across UI, state, storage, and route
 work. Beyond replacement, agents used zero/one match results as executable
 hypotheses about code shape and used sequential hash-bound plans to refactor a
 fast-moving dirty worktree safely.
@@ -945,11 +977,12 @@ in `src/clj_surgeon/forms.clj`:
 ## Agent workflow
 
 The Claude Code and Codex entrances load one canonical skill package. That
-skill teaches five common routes:
+skill teaches these common routes:
 
 - For an unknown large file, use `:ls`, then read only the required forms.
-- For a known form, line, or distinctive text, start with `:show-form` or
-  `:cat`.
+- For a known form, line, or distinctive text, start with `:cat`.
+- For nested syntax in an unnamed top-level form, start an `:xray` or `:edit`
+  expression with `(line N)`, then narrow to the exact subtree.
 - For a declaration, run `:fix-declares` before deciding whether to apply
   `:fix-declares!`.
 - For an extraction, inspect `:ls-deps` and `:ls-extract` before planning the
@@ -1079,3 +1112,9 @@ then provide external feedback.
 
 This boundary keeps the tool general. It also prevents the tool from silently
 guessing intent or expanding the requested scope.
+
+## Compatibility aliases
+
+Existing callers can continue to use `:outline`, `:show-form`, `:find-subform`,
+`:lens`, and `:q`. New callers should use `:ls`, `:cat`, `:grep-form`, `:xray`,
+and `:edit`.

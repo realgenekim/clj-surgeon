@@ -10,6 +10,15 @@ is cut.
 
 ### Added
 
+- `(line N)` and `[:line N]` structural roots for `:xray` and `:edit`. They
+  select the one top-level form whose physical range or attached comment
+  contains N, including otherwise unnamed custom macro forms. Blank gaps
+  refuse with `:line-not-in-form`; overlapping reader-conditional owners
+  refuse with `:ambiguous-form`. A following `match` can select one exact leaf,
+  and literal replacement plus `:expect` remains a verified one-call edit.
+  The same line contract now backs `:cat`, X-ray, planning, help, and both agent
+  skill entrances. Shell-generated form commands quote names containing `>`,
+  `?`, and other metacharacters.
 - `:edit :expect FORM`, the optional one-call guarded edit. `:expect` is the
   caller's declared before-state: exactly one Clojure form, compared with the
   selected form losslessly. Whitespace does not change the verdict. Comments,
@@ -42,7 +51,7 @@ is cut.
   macro-expansion internals remain refused. The sandbox is capability-limited,
   not termination-proof; callers remain responsible for bounded work.
   Computation returns `:value` with
-  compact hash evidence. The canonical agent skill is a validated 89-line task
+  compact hash evidence. The canonical agent skill is a validated 90-line task
   router with advanced workflows loaded on demand.
   Former read spellings remain compatibility inputs but are not the primary
   surface. Named selection now sees `#?`

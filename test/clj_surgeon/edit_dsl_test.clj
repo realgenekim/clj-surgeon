@@ -15,6 +15,28 @@
              dsl/right
              (dsl/replace '(assoc state :status :complete))))))
 
+(deftest line-starts-a-query-at-the-top-level-form-containing-a-physical-line
+  (is (= [[:line 42]] (dsl/line 42)))
+  (is (= [[:line 42]
+          [:find '(old-reader account-id)]
+          [:replace '(new-reader account-id)]]
+         (-> (dsl/line 42)
+             (dsl/match '(old-reader account-id))
+             (dsl/replace '(new-reader account-id)))))
+  (is (= [[:line 42] [:find :finish]]
+         (dsl/compile-query "(-> (line 42) (match :finish))"))))
+
+(deftest line-refuses-values-that-cannot-identify-a-physical-source-line
+  (doseq [value [nil 0 -1 1.5 "2" :two]]
+    (testing (pr-str value)
+      (let [error (try
+                    (dsl/line value)
+                    nil
+                    (catch Exception exception
+                      (ex-data exception)))]
+        (is (= :invalid-line-root (:error-type error)))
+        (is (= value (:line error)))))))
+
 (def builder-cases
   (let [transformer identity]
     [["match" #(dsl/match % '(call _)) [:find '(call _)]]
@@ -166,7 +188,7 @@
           :right
           [:replace '(assoc state :status :complete)]]
          (dsl/compile-query
-          "(-> (form 'transition)\n     (match :finish)\n     right\n     (replace '(assoc state :status :complete)))"))))
+           "(-> (form 'transition)\n     (match :finish)\n     right\n     (replace '(assoc state :status :complete)))"))))
 
 (deftest sci-compilation-does-not-depend-on-the-callers-current-namespace
   (binding [*ns* (the-ns 'clj-surgeon.edit-dsl-test)]
@@ -175,10 +197,10 @@
             :right
             [:replace :complete]]
            (dsl/compile-query
-            "(-> (form 'transition) (match :finish) right (replace :complete))")))))
+             "(-> (form 'transition) (match :finish) right (replace :complete))")))))
 
 (deftest sci-exposes-every-builder-and-no-unrelated-function
-  (is (= [[:form 'f]
+  (is (= [[:line 42]
           [:find :anchor]
           [:where {:parent-tag :vector}]
           :right
@@ -189,7 +211,7 @@
           [:partition-all 2]
           [:replace-span :a :b]]
          (dsl/compile-query
-          "(-> (form 'f) (match :anchor) (where {:parent-tag :vector}) right left up down (span 2) (partition-all 2) (replace-span :a :b))")))
+           "(-> (line 42) (match :anchor) (where {:parent-tag :vector}) right left up down (span 2) (partition-all 2) (replace-span :a :b))")))
   (doseq [expression ["(spit \"/tmp/clj-surgeon-must-not-write\" \"bad\")"
                       "(slurp \"secret\")"
                       "(require '[clojure.java.shell :as shell])"
@@ -223,7 +245,7 @@
           :right
           [:replace {:status :complete :attempts 2}]]
          (dsl/compile-query
-          "(let [[target initial] [:finish {:status :done :attempts 1}]
+           "(let [[target initial] [:finish {:status :done :attempts 1}]
                  candidates (->> [initial {:skip true}]
                                  (filterv #(contains? % :status))
                                  (mapv (comp #(update % :attempts inc)
@@ -234,7 +256,7 @@
                  (replace (first candidates))))")))
   (is (= [[:form 'f] :right :left :right]
          (dsl/compile-query
-          "(reduce (fn [path direction]
+           "(reduce (fn [path direction]
                      (case direction
                        :right (right path)
                        :left (left path)))
@@ -242,14 +264,14 @@
                    [:right :left :right])")))
   (is (= [[:form 'f] [:replace [:done :done]]]
          (dsl/compile-query
-          "(-> (form 'f)
+           "(-> (form 'f)
                (replace (first (mapv (juxt identity identity) [:done]))))")))
   (is (= [[:form 'f] [:replace 5]]
          (dsl/compile-query
-          "(-> (form 'f) (replace (count (range 5))))")))
+           "(-> (form 'f) (replace (count (range 5))))")))
   (is (= [[:form 'f] [:replace :yes]]
          (dsl/compile-query
-          "(do (form 'ignored)
+           "(do (form 'ignored)
                (-> (form 'f)
                    (replace (if (and true (not false)) :yes :no))))"))))
 
@@ -335,7 +357,7 @@
 (deftest sci-treats-replacement-code-as-inert-data
   (let [path (str "/tmp/clj-surgeon-must-not-write-" (random-uuid))
         query (dsl/compile-query
-               (str "(-> (form 'f) (replace '(spit \"" path "\" \"bad\")))"))]
+                (str "(-> (form 'f) (replace '(spit \"" path "\" \"bad\")))"))]
     (is (= [[:form 'f] [:replace (list 'spit path "bad")]] query))
     (is (not (.exists (java.io.File. path))))))
 
@@ -356,7 +378,7 @@
             :provided [:expr :query]
             :required-one-of [:query :expr]}
            (dsl/prepare-edit-options
-            (assoc base :query query :expr expression))))
+             (assoc base :query query :expr expression))))
     (is (= {:operation :edit
             :file "src/state.clj"
             :error "Supply exactly one of :query and :expr"
@@ -368,10 +390,10 @@
 (deftest edit-options-preserve-structured-sci-refusals
   (let [expression "(spit \"/tmp/no\" \"bad\")"
         result (dsl/prepare-edit-options
-                {:op :edit
-                 :file "/missing/source.clj"
-                 :expr expression
-                 :plan-out "plan.edn"})]
+                 {:op :edit
+                  :file "/missing/source.clj"
+                  :expr expression
+                  :plan-out "plan.edn"})]
     (is (= :edit (:operation result)))
     (is (= "/missing/source.clj" (:file result)))
     (is (= :invalid-edit-expression (:error-type result)))

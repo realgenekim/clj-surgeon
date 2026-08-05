@@ -8,16 +8,17 @@ description: >-
 
 # clj-surgeon
 
-Use `clj-surgeon` from `PATH`. Stop on nonzero exit or EDN `:error`; call
+Use `clj-surgeon` from `PATH`. Stop on nonzero exit or EDN `:error`. Call
 `clj-surgeon :op OP --help` only when these routes do not cover the task.
 
 ## Smallest structural route
 
 - Unknown top-level form: `clj-surgeon :op :ls :file FILE`.
-- Known name, line, or distinctive text: call `:cat` with exactly one of
-  `:form`, `:line`, or `:contains`; do not run `:ls` solely as a preflight.
-- Unknown owner, known pattern: call `:grep-form`; add `:inside` only to narrow.
-- Related nested syntax or computed facts: call `:xray`.
+- Known owner name, containing line, or distinctive text: call `:cat` with
+  exactly one selector. Do not run `:ls` solely as a preflight.
+- Unknown owner, known pattern: call `:grep-form`. Add `:inside` only to narrow.
+- Related syntax or computed facts: call `:xray`. Start with `(line N)` when a
+  physical line identifies one otherwise unnamed top-level owner.
 - Exact nested edit: call `:edit`, review its plan, then apply separately;
   derive a computed replacement with `transform` instead of retyping one.
 
@@ -25,66 +26,65 @@ Use `clj-surgeon` from `PATH`. Stop on nonzero exit or EDN `:error`; call
 clj-surgeon :op :cat :file src/app.clj :contains :finish
 ```
 
-`_` matches exactly one subtree; pattern arity is exact, so use `(loop _ _)`
-for a two-argument loop. There is no variadic wildcard. `:cat` strictly aliases
-`:show-form`, never dumps a file: use it instead of reconstructing a `sed`
-range; a distinctive text selector refuses zero or multiple forms. Reserve
+Quote names containing shell syntax: `:form 'source->target'` or `:form 'ready?'`.
+`_` matches exactly one subtree. Pattern arity is exact, so use `(loop _ _)`
+for a two-argument loop. There is no variadic wildcard. `:cat` never dumps a
+file: use it instead of reconstructing a `sed` range. A distinctive text
+selector refuses zero or multiple forms. Reserve
 `rg` for broad cross-file discovery, not manufacturing a line number.
 
 ## X-ray ordinary Clojure data
 
-Plain paths return exact source; `analyze` receives one vector of ordinary Clojure data
-and returns compact `:value` plus hashes; `expect-count` refuses before
-analysis; `initializer` selects a `def` right-hand side unevaluated.
+Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data and returns compact
+`:value` plus hashes. `expect-count` refuses before analysis. `initializer`
+selects a `def` right-hand side unevaluated.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \
   :expr "(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))"
 ```
 
-Write one total pure Clojure function instead of a shape-discovery query;
-when keys are uncertain, return a shape echo like `:ks (vec (keys m))` beside
-the aggregation in the same map, describing shape with predicates such as
-`map?`, never `type`. Scope counts to the keys the question names; reserve
-`(filter predicate (tree-seq coll? seq value))` for truly unknown shapes.
-Return concrete EDN, not a lazy sequence. X-ray never writes source or a plan. Compose `form`, `match`,
-`where`, `right`, `left`, `up`, `down`, `outermost`, `initializer`, `span`,
-and `partition-all`. For CLJC use `(form 'name :clj)` or `:cljs`; use
-`:up :outermost`, not `:outermost :up`.
+`(form 'NAME)` selects semantic identity. `(line N)` selects the one top-level
+form whose range or attached comment contains N. Gaps and overlapping owners
+refuse. It selects the owner, so follow it with `match` to select a nested leaf.
+
+Write one total pure Clojure function instead of a shape-discovery query. When keys are
+uncertain, return a shape echo beside the result. Scope counts to named keys;
+reserve `tree-seq` for unknown shapes. Return concrete EDN, not a lazy sequence.
+X-ray never writes. Compose `form`, `line`, `match`, `where`, navigation,
+`initializer`, `span`, and `partition-all`. For CLJC use `(form 'name :clj)`
+or `:cljs`. Use `:up :outermost`, not `:outermost :up`.
 
 ## Guarded edit or plan and apply
 
-Supply `:plan-out` and one of `:query` or `:expr`; `:edit` may be the first source-bearing command and never changes source without `:expect`.
-Use optional `:expect BEFORE-FORM` only with a literal replacement. It makes one guarded
-call that saves and applies only when the selection equals the declared source.
+Supply `:plan-out` and one of `:query` or `:expr`. `:edit` may be the first
+source-bearing command and never changes source without `:expect`. Use
+`:expect BEFORE-FORM` only with a literal replacement. It saves and applies
+only when the selection equals the declared source.
 
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
   :expect '(assoc state :status :done)' :plan-out plan.edn
-clj-surgeon :op :edit :file src/policy.clj \
-  :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" \
-  :plan-out plan.edn
+clj-surgeon :op :edit :file src/cache.clj \
+  :expr "(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))" \
+  :expect '(old-reader account-id)' :plan-out plan.edn
+clj-surgeon :op :edit :file src/policy.clj :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Whitespace does not affect `:expect`; comments, metadata, and reader syntax must match.
-On mismatch, narrow the selection—`(match :done) (replace :complete)` preserves its
-surroundings—or use plan and review. Never use `:expect` with `transform`: its generated
-after-state requires review. The plan stores concrete replacement data, never executable code.
-`transform` receives quoted syntax: a call is a list, not its runtime value.
-Do not preflight whether the plan path exists. Review the returned diff and
-hashes; do not reopen the plan file. Do not edit the plan; generate a new plan
-when intent changes. Never chain plan generation and application. Apply returns
-`:verified` read-back hash and whole-file parse evidence. Trust it; never
-reproduce the plan with `apply_patch`.
+Whitespace does not affect `:expect`. Comments, metadata, and reader syntax
+must match. On mismatch, narrow the selection—`(match :done) (replace
+:complete)` preserves its surroundings—or review a plan. Never use `:expect`
+with `transform`: its generated after-state requires review. Plans store concrete replacement data,
+never executable code.
+`transform` receives quoted syntax, not runtime values. Do not preflight whether
+plan paths exist. Review hashes and do not reopen the plan file. Do not edit the plan. Instead, generate a new plan.
+Never chain plan generation and application. Trust the apply receipt's `:verified` read-back
+hash and whole-file parse. Never reproduce a plan with `apply_patch`.
 
-A `case` clause, `cond` branch, map entry, or binding pair is sibling syntax,
-not a synthetic wrapper list: `right` selects one peer, `span 2` one pair,
-`partition-all 2` the run. Compatibility `:q` accepts
-`[[:form transition] [:find :finish] :right]`, `[:span 2]`, and
-`[:partition-all 2]`; `[:replace FORM]` or `[:replace-span FORM FORM]` plans
-for later `:replace-subform!`. Prefer the Clojure `:xray` / `:edit` surface.
+A `case` clause, `cond` branch, map entry, or binding pair is sibling syntax, not a
+synthetic wrapper list: `right` selects one peer, `span 2` one pair, and
+`partition-all 2` the run. Prefer the Clojure `:xray` / `:edit` surface.
 
-For dependencies, extraction, declares, moves, renames, or CLJC operations,
-read [references/advanced-operations.md](references/advanced-operations.md).
+For dependencies, extraction, declares, moves, renames, or CLJC operations, read [references/advanced-operations.md](references/advanced-operations.md).

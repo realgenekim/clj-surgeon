@@ -10,6 +10,12 @@ Plans complement, and must conform to:
 - [the testing guidelines](../testing-guidelines.md);
 - [the repository instructions](../../CLAUDE.md).
 
+Active plans:
+
+- [Containing-line structural root](containing-line-edit-root.md) — select an
+  unnamed top-level form by physical line, then perform one lossless nested
+  read or guarded edit.
+
 ## Required plan sections
 
 Copy this structure and remove sections only when they genuinely do not apply:

@@ -154,7 +154,7 @@
         (is (str/includes? (:remedy error) (str symbol))))))
   (testing "a quoted form remains inert data at every nested depth"
     (let [compiled (dsl/compile-xray
-                    "(-> (form 'data) (analyze (fn [_] '(loop [] (recur)))))")]
+                     "(-> (form 'data) (analyze (fn [_] '(loop [] (recur)))))")]
       (is (= '(loop [] (recur)) ((:analyzer compiled) [])))))
   (testing "syntax quote remains inert and preserves its qualified symbol"
     (let [compiled (dsl/compile-xray "(-> (form 'data) (match `loop))")]
@@ -196,6 +196,42 @@
                         [:query :trace :match-count :matches :source-hash])))
     (is (= "[3 4]" (get-in result [:matches 0 :source])))
     (is (nil? (:value result)))))
+
+(deftest literal-xray-can-start-at-an-unnamed-owner-containing-a-line
+  (let [file "test/fixtures/containing_line_owner.clj"
+        source (slurp file)
+        expression "(-> (line 14) (match '(old-reader account-id)))"
+        program (dsl/compile-xray expression)
+        result (dsl/evaluate-xray source
+                                  {:file file
+                                   :expression expression
+                                   :xray program})]
+    (is (= :xray (:operation result)))
+    (is (= :literal (:mode result)))
+    (is (= [[:line 14] [:find '(old-reader account-id)]]
+           (:query result)))
+    (is (= 1 (:match-count result)))
+    (is (= "(old-reader account-id)"
+           (get-in result [:matches 0 :source])))))
+
+(deftest computed-xray-can-start-at-an-unnamed-owner-containing-a-line
+  (let [file "test/fixtures/containing_line_owner.clj"
+        source (slurp file)
+        expression (str "(-> (line 14)"
+                        " (match '(old-reader account-id))"
+                        " (expect-count 1)"
+                        " (analyze (fn [[call]] {:head (first call)"
+                        " :argument (second call)})))")
+        program (dsl/compile-xray expression)
+        result (dsl/evaluate-xray source
+                                  {:file file
+                                   :expression expression
+                                   :xray program})]
+    (is (= :computed (:mode result)))
+    (is (= {:head 'old-reader :argument 'account-id} (:value result)))
+    (is (= 1 (:match-count result)))
+    (is (nil? (get-in result [:matches 0 :source])))
+    (is (re-matches #"[0-9a-f]{64}" (:selection-hash result)))))
 
 (deftest xray-evaluates-zero-one-and-many-selected-values
   (doseq [{:keys [label query analyzer expected-input expected-value]}
@@ -633,6 +669,7 @@
       (testing surface
         (is (str/includes? text ":xray"))
         (is (str/includes? text "(form"))
+        (is (str/includes? text "(line N)"))
         (is (str/includes? (str/lower-case text) "pure clojure"))
         (is (str/includes? text ":value"))
         (is (str/includes? (str/lower-case text) "never write"))))

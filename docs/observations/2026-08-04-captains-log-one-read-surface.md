@@ -841,6 +841,85 @@ are not yet a Claude-versus-Codex comparison because the existing Codex runs
 used different fixtures. The repository-owned matched-agent Make targets close
 that measurement gap.
 
+## A live production session split the read and edit verdicts
+
+An anonymized production session supplied a different kind of evidence. The
+agent diagnosed and repaired a real data-display failure across several large
+Clojure namespaces. This section omits the source repository, domain, user
+data, paths, storage systems, and source-specific identifiers.
+
+The relevant source set contained 7,014 lines and 318,455 bytes. The session
+used clj-surgeon in 29 shell actions. Those command texts contained 42
+clj-surgeon occurrences, including parallel calls and help calls. Associated
+process receipts accounted for approximately 8.8 seconds of execution and
+25,815 output tokens.
+
+| Surface | Observed result | Assessment |
+|---|---|---|
+| Structural reading | The agent read exact forms from several large namespaces instead of dumping complete files. | High value |
+| Runtime diagnosis | Persistent evaluation and browser checks found the missing behavioral contract. | Complementary; source structure was not runtime truth |
+| Exact existing-form edit | One small vector change used a hash-fenced plan and verified apply. | Safe, but two calls |
+| Custom-macro edit | The caller tried several selectors, requested help, broadened the replacement, and later repaired formatting. | Too costly |
+| Source preservation | A seven-line form became one dense line before final diff review caught it. | Failed the one-shot quality goal |
+| Shell safety | An unquoted `>` in a form name redirected an error receipt into an unintended file. | Guidance gap |
+
+The reading lens earned a 9/10 assessment. It bounded source exposure and made
+structural ownership visible. The mutation surface earned 5/10. It remained
+safe, but it stopped composing at a custom defining macro and forced a broad
+replacement. Overall utility was 8/10 because runtime diagnosis dominated the
+session and the final change was correct.
+
+There was no paired native-control run, so token savings are estimates rather
+than benchmark results. Reading all relevant files would have exposed roughly
+75,000 to 85,000 tokens. A competent `rg` and narrow-range workflow would
+probably have exposed 35,000 to 50,000. The observed tool-bearing receipts
+contained about 25,800 output tokens. The likely saving is therefore 10,000 to
+25,000 tokens against a competent caller and more against a full-file reader.
+
+Wall-clock benefit was smaller. The complete session took approximately 13.5
+minutes, while tool-bearing process execution took less than nine seconds.
+Runtime and browser verification consumed most of the elapsed time. The custom-
+macro editing detour consumed roughly 70 seconds and erased much of the source-
+navigation gain. Without clj-surgeon, a direct patch could have been faster but
+would not have supplied structural ambiguity checks, immutable plans, or read-
+back hashes.
+
+At observation time, the session established a sharper product boundary:
+clj-surgeon was an excellent source lens, but it was not the default mutation
+surface for every Clojure form. The next acceptance case had to select a leaf
+inside an unnamed custom top-level macro, apply one `:expect`-guarded edit,
+preserve surrounding layout and comments, and create no unintended files when
+a form name contained shell metacharacters.
+
+### The containing-line root closed the observed edit gap
+
+The remediation adds `(line N)` and `[:line N]` as top-level roots for X-ray
+and edit paths. A line can identify the opening line, an interior line, the
+closing line, or a contiguous comment attached above one top-level form. The
+root does not infer a custom macro name and does not select the nested leaf. A
+following `match` or navigation step performs that selection.
+
+The faithful fixture contains three unconfigured custom macro forms with the
+same nested call. The accepted one-call command selects the middle owner by an
+interior line, matches its call, declares the exact old call with `:expect`,
+and replaces only that call. The test asserts the complete expected file bytes:
+the other two calls, attached top-level comment, nested comment, and multiline
+layout remain unchanged.
+
+The refusal matrix covers invalid and misplaced roots, blank gaps, ambiguity
+inside one owner, two reader-conditional owners on one line, and more than 100
+same-line owners with bounded candidate evidence. A separate Zsh regression
+runs a generated command for a form name containing `>` and proves that the
+shell creates no redirected file. This closes both failures without teaching
+the tool source-specific macro semantics.
+
+A fresh-context agent then read only the repo-local skill and received the
+fixture path, target line, and requested leaf change. Its first and only edit
+call used `(line 14)` with the exact old leaf in `:expect`. It called no help,
+performed no source read, and used no text editor. The guarded receipt verified
+the write, and byte comparison showed equal file lengths with exactly three
+changed bytes: `old` became `new`. Every unrelated byte remained exact.
+
 ## Audit checkpoint
 
 The earlier audit boundaries are now remediated:

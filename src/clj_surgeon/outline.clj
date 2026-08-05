@@ -69,7 +69,7 @@
                                   (recur (z/right child))))
               :else           (recur (z/right child)))))))))
 
-(defn- preceding-comments
+(defn attached-comment-start
   "Look backwards from a form's start line to find attached comment lines.
    Comments must be contiguous (no blank lines between them and the form)."
   [lines form-line]
@@ -179,7 +179,7 @@
                              name-val (extract-arglist zloc))
                    form-line (:row m)
                    comment-start (when form-line
-                                   (preceding-comments lines form-line))
+                                   (attached-comment-start lines form-line))
                    extras (when extracted
                             (dissoc extracted :name :arglist))]
                (cond-> {:type (symbol (or type-str "?"))

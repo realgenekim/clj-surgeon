@@ -159,6 +159,15 @@ value when that value itself is a map literal or `hash-map` / `array-map`
 syntax. It does not recursively normalize nested constructor syntax or execute
 source; evidence retains exact syntax.
 
+Paths have two explicit top-level roots. `(form 'NAME)` identifies semantic
+ownership. `(line N)` identifies the one physical top-level owner whose source
+range or contiguous attached comment contains N. The line root exists for
+otherwise unnamed custom macro forms; it does not infer their names or select a
+nested leaf. A following `match` or navigation step selects that leaf. Blank
+gaps refuse with `:line-not-in-form`, and overlapping reader-conditional owners
+refuse with `:ambiguous-form`. This keeps line numbers as bounded physical
+locators, not guessed semantic identities.
+
 The sandbox should feel like Clojure, not an accidental smaller dialect. Pure
 `key`, `val`, and `for` are available. Macro expansion may use private loop and
 chunk machinery, while direct `loop`, `recur`, I/O, mutation, classes,
@@ -191,9 +200,9 @@ x-ray exact structure
 ```
 
 The ideal lens minimizes fallback to line-oriented reading when syntax already
-provides a better address. Use `:show-form` instead of reconstructing a `sed`
+provides a better address. Use `:cat` instead of reconstructing a `sed`
 range when a top-level name or containing line is known. When only distinctive
-text is known, use literal `:show-form :contains` to select its enclosing form
+text is known, use literal `:cat :contains` to select its enclosing form
 without manufacturing a line number. Use `:grep-form` for file-wide structural
 syntax; each match exposes reusable enclosing-form ownership for optional
 `:inside` narrowing. Use

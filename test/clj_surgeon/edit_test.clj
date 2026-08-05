@@ -94,7 +94,8 @@
     (is (str/includes? help "Without :expect"))
     (is (str/includes? help "PLAN ONLY"))
     (is (str/includes? help "modified only by a successful :expect-guarded edit"))
-    (is (str/includes? help "Use :q to read"))
+    (is (str/includes? help "Use :xray to read"))
+    (is (not (str/includes? help "Use :q to read")))
     (is (str/includes? help "first source-bearing call"))
     (is (str/includes? help "never reproduce it with apply_patch"))
     (is (str/includes? help "[:replace"))
@@ -434,6 +435,79 @@
               (is (= (:result-hash saved)
                      (lens/source-hash source))))))))))
 
+(deftest expect-with-line-root-is-a-one-call-exact-edit-in-an-unnamed-owner
+  (let [source (slurp "test/fixtures/containing_line_owner.clj")
+        expected (str/replace-first
+                   source
+                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (old-reader account-id)]"
+                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (new-reader account-id)]")
+        tmp-dir (fs/create-temp-dir {:prefix "clj surgeon line expect "})
+        source-file (str (fs/path tmp-dir "containing_line_owner.clj"))
+        plan-file (str (fs/path tmp-dir "line-plan.edn"))]
+    (try
+      (spit source-file source)
+      (let [result (run-cli
+                     ":op" ":edit"
+                     ":file" source-file
+                     ":expr" (str "(-> (line 14)"
+                                  " (match '(old-reader account-id))"
+                                  " (replace '(new-reader account-id)))")
+                     ":expect" "(old-reader account-id)"
+                     ":plan-out" plan-file)
+            receipt (edn/read-string (:out result))]
+        (is (zero? (:exit result)) (:err result))
+        (is (true? (:ok receipt)))
+        (is (= :expect-guarded (:mode receipt)))
+        (is (= [[:line 14]
+                [:find '(old-reader account-id)]
+                [:replace '(new-reader account-id)]]
+               (get-in receipt [:selector :query])))
+        (is (= expected (slurp source-file)))
+        (is (= (:result-hash receipt)
+               (get-in receipt [:verified :read-back-hash])))
+        (is (= (:result-hash receipt)
+               (:result-hash (edn/read-string (slurp plan-file))))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest line-root-plan-only-and-expect-mismatch-never-change-source
+  (let [source (slurp "test/fixtures/containing_line_owner.clj")
+        expression (str "(-> (line 14)"
+                        " (match '(old-reader account-id))"
+                        " (replace '(new-reader account-id)))")
+        tmp-dir (fs/create-temp-dir {:prefix "clj surgeon line refusal "})
+        source-file (str (fs/path tmp-dir "containing_line_owner.clj"))
+        plan-file (str (fs/path tmp-dir "line-plan.edn"))]
+    (try
+      (spit source-file source)
+      (spit plan-file pre-existing-plan)
+      (testing "without expect, the line-root edit only replaces the plan artifact"
+        (let [plan (core/run-edit {:file source-file
+                                   :expr expression
+                                   :plan-out plan-file})]
+          (is (= :replace-subform (:operation plan)))
+          (is (= [[:line 14]
+                  [:find '(old-reader account-id)]
+                  [:replace '(new-reader account-id)]]
+                 (get-in plan [:selector :query])))
+          (is (= source (slurp source-file)))
+          (is (= (dissoc plan :plan-out)
+                 (edn/read-string (slurp plan-file))))))
+      (testing "a wrong leaf declaration preserves source and the existing plan"
+        (spit plan-file pre-existing-plan)
+        (let [refusal (core/run-edit
+                        {:file source-file
+                         :expr expression
+                         :expect "(old-reader different-account)"
+                         :plan-out plan-file})]
+          (is (= :expect-mismatch (:error-type refusal)))
+          (is (= '(old-reader account-id) (:actual refusal)))
+          (is (= '(old-reader different-account) (:expected refusal)))
+          (is (= source (slurp source-file)))
+          (is (= pre-existing-plan (slurp plan-file)))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
 (deftest expect-row-4-mismatch-refuses-and-changes-nothing
   (with-expect-workspace
     (fn [{:keys [source-file plan-file]}]
@@ -652,6 +726,7 @@
           help
           ":expect is optional; without it the default flow is unchanged"))
     (is (str/includes? help ":expect-mismatch"))
+    (is (str/includes? help "(line N)"))
     (is (str/includes? help ":actual-source"))
     (is (str/includes? help "comments, metadata, reader macros"))
     (is (str/includes? help "computed transforms"))

@@ -397,7 +397,30 @@
                        {:file "state.clj" :form "*state*"}))))
     (is (= "clj-surgeon :op :show-form :file state.clj :form 'ready?'"
            (:command (show-form/invocation-remedy
-                       {:file "state.clj" :form "ready?"}))))))
+                       {:file "state.clj" :form "ready?"}))))
+    (is (= "clj-surgeon :op :show-form :file state.clj :form 'source->target'"
+           (:command (show-form/invocation-remedy
+                       {:file "state.clj" :form "source->target"}))))))
+
+(deftest rendered-form-remedy-survives-zsh-metacharacter-parsing
+  (let [tmp-dir (fs/create-temp-dir {:prefix "show form shell quote "})
+        file (fs/path tmp-dir "names.clj")
+        redirected-file (fs/path tmp-dir "target")]
+    (try
+      (spit (str file) "(ns shell.names)\n(defn source->target [] :ok)\n")
+      (let [command (:command
+                      (show-form/invocation-remedy
+                        {:file (str file) :form "source->target"}))
+            result @(proc/process ["zsh" "-c" command]
+                                  {:dir (str tmp-dir)
+                                   :err :string
+                                   :out :string})
+            receipt (edn/read-string (:out result))]
+        (is (zero? (:exit result)) (:err result))
+        (is (= 'source->target (:name receipt)))
+        (is (not (fs/exists? redirected-file))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
 
 (def ^:private project-root
   (.getCanonicalPath (io/file ".")))
@@ -624,11 +647,13 @@
                     :find-subform
                     (get core/ops-registry :find-subform))]
     (doseq [[surface text] {"README" readme
-                            "installed skill" skill
-                            "legacy skill" legacy-skill
                             "changelog" changelog
                             "show-form help" help}]
       (is (str/includes? text ":show-form") surface))
+    (doseq [[surface text] {"installed skill" skill
+                            "legacy skill" legacy-skill}]
+      (is (str/includes? text ":cat") surface)
+      (is (not (str/includes? text ":show-form")) surface))
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill
