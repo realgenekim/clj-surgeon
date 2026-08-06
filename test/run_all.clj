@@ -16,6 +16,7 @@
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
    [clj-surgeon.install-test]
+   [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
@@ -57,5 +58,6 @@
                    'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test
+                   'clj-surgeon.intent-transaction-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))
