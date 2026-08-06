@@ -210,6 +210,17 @@
           (is (fs/executable? cli-path))
           (is (fs/sym-link? codex-skill))
           (is (fs/sym-link? claude-skill)))
+        (testing "the stable aggregate install is idempotent"
+          (let [{:keys [exit out err]}
+                (run-make "--silent" "install"
+                          (str "CLI_DEST=" cli-path)
+                          (str "CODEX_HOME=" codex-home)
+                          (str "CLAUDE_HOME=" claude-home)
+                          (str "INSTALL_ROOT=" install-root))]
+            (is (zero? exit) (str out err))
+            (is (fs/executable? cli-path))
+            (is (fs/sym-link? codex-skill))
+            (is (fs/sym-link? claude-skill))))
         (testing "Codex and Claude resolve the same copied package"
           (is (= (fs/real-path codex-skill) (fs/real-path claude-skill)))
           (is (str/starts-with? (str (fs/real-path codex-skill))

@@ -82,7 +82,8 @@ install-cli: prepare-cli-package
 	  dest="$(CLI_DEST)"; \
 	  receipt="$(CLI_DEST).receipt.edn"; \
 	  if [ -e "$$dest" ] && \
-	     ! grep -q '^;; clj-surgeon \(stable\|development\) launcher' "$$dest" && \
+	     ! grep -q '^## clj-surgeon stable launcher' "$$dest" && \
+	     ! grep -q '^;; clj-surgeon development launcher' "$$dest" && \
 	     ! grep -qF '(require (quote [clj-surgeon.core :as core]))' "$$dest"; then \
 	    echo "Refusing to replace unrelated file $$dest"; \
 	    exit 1; \
@@ -167,7 +168,8 @@ install-dev-cli:
 	  dest="$(CLI_DEST)"; \
 	  receipt="$(CLI_DEST).receipt.edn"; \
 	  if [ -e "$$dest" ] && \
-	     ! grep -q '^;; clj-surgeon \(stable\|development\) launcher' "$$dest" && \
+	     ! grep -q '^## clj-surgeon stable launcher' "$$dest" && \
+	     ! grep -q '^;; clj-surgeon development launcher' "$$dest" && \
 	     ! grep -qF '(require (quote [clj-surgeon.core :as core]))' "$$dest"; then \
 	    echo "Refusing to replace unrelated file $$dest"; \
 	    exit 1; \

@@ -289,6 +289,25 @@ ordered read results out, no new selector language. If it cannot beat these
 gates, do not add another public command. Improve startup, result compaction,
 or the skill instead.
 
+Start with the smallest same-file batch because it matches an observed caller
+thought directly:
+
+```bash
+clj-surgeon :op :cat :file src/writer/routes.clj \
+  :forms '[handle-sync-draft draft-conflict-response]'
+```
+
+`:form` and `:forms` must be mutually exclusive. `:forms` preserves requested
+order, parses the file once, and returns an ordered vector of the existing
+exact-source records under one file hash. If any requested name is missing or
+ambiguous, the complete read refuses with compact per-name evidence and no
+partial source. Reject duplicate requested names. This gives callers an
+immediate one-call route for the common “read these neighboring owners” task.
+
+The general stdin manifest is the second layer for cross-file or mixed
+operations. It should accept `:cat :forms` as one member rather than inventing
+another selector model.
+
 The proposed caller shape deliberately reuses the write-transaction model:
 
 ```clojure
