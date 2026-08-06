@@ -76,6 +76,13 @@ with stable fields:
 Provenance records the tool/version, operation, selector, and both snapshot
 hashes. Application uses the recorded address; it does not rerun the selector.
 
+One-edit plans remain the smallest review artifact. Intent transactions add a
+higher compilation layer for work that is already one coherent model decision.
+The model supplies explicit scope, declared mechanical intents, and cardinality
+assertions. clj-surgeon compiles them into concrete per-file edits, validates
+their combined future state, and emits one reversible transaction receipt.
+This removes repeated bookkeeping without asking the kernel to infer intent.
+
 ### Fail closed
 
 Errors are concise EDN and always produce a nonzero process exit status. A plan
@@ -320,7 +327,32 @@ compound operation.
 | `:refactor` / split-by-cluster | **DO NOT BUILD** | It compounds several judgment calls and makes the failure surface larger than the kernel. Compose primitives under model supervision. |
 | macro expansion / semantic inference in lenses | **DO NOT BUILD** | Lenses promise syntax identity. Pretending to know expansion, scope, or intent would weaken that understandable contract. |
 | fuzzy or best-match replacement | **DO NOT BUILD** | Ambiguity must be evidence, never an implicit mutation choice. Refine the selector instead. |
-| multi-edit lens plans | **DO NOT BUILD** | One plan, one edit keeps review, provenance, replay, and failure atomic. Sequence plans when several edits are needed. |
+## Intent transactions: the boundary beyond the microscope
+
+Field use found a local optimum in the one-edit lens: it was precise and safe,
+but a coherent change could require 23 plan/apply calls. That ceremony did not
+add 23 independent design decisions. It repeatedly translated one model plan
+into isolated mechanical edits and made native patching attractive again.
+
+The durable answer is an intent compiler, not an autonomous refactoring oracle:
+
+```text
+model plan expressed as explicit EDN
+  -> checked structural intents
+  -> concrete hash-bound file edits
+  -> combined future-state proof
+  -> failure-atomic commit
+  -> hash-fenced inverse receipt
+```
+
+The first compiler accepts heterogeneous losslessly exact `:from` / `:to`
+intents over explicit file sets. One intent covers a structural global
+replacement; one transaction can also materialize many different edits from a
+single model plan. Later transforms may add captures, insertion, deletion,
+movement, and graph-aware caller mechanics. All must preserve the same
+boundary: the model chooses meaning and scope; the kernel compiles and executes
+only declared mechanics. See `docs/plans/intent-transactions.md` for the
+contract, atomicity limits, and dogfood batches.
 
 The boundary is simple: improve the kernel when real use exposes a general
 mechanical weakness. Do not grow it merely because an AST makes a clever
