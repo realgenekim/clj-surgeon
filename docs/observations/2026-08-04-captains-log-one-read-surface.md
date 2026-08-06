@@ -1010,6 +1010,181 @@ implementation, and no existing expectation was weakened. Formatter,
 clj-kondo, benchmark harness, retention, evidence-manifest, skill-validation,
 and agent-text gates also passed.
 
+## Eighteen hours in the wild: guarded edits became normal
+
+We next examined every local Codex session that mentioned clj-surgeon between
+August 4 at 3:01 PM and August 5 at 9:01 AM Pacific time. Four sessions matched
+the search. Three contained actual tool use; the fourth contained only prior
+context. We copied no raw session logs into the repository. This account omits
+repository names, domains, paths, people, user data, and source-specific
+identifiers.
+
+The window captured a transition rather than one uniform population. Before
+9:33 PM, operational callers still used the old plan-and-apply habit. After
+9:33 PM, every observed structural edit used the one-call `:expect` contract.
+
+| Observed behavior | Earlier segment | Later segment |
+|---|---:|---:|
+| Structural edit invocations | 14 | 21 |
+| Edits guarded with `:expect` | 1 / 14 | 21 / 21 |
+| Separate `:replace-subform!` calls | 11 | 0 |
+| Verified guarded writes | 1 | 18 |
+| Safe refusal events | 0 | 3 |
+
+The later segment is the strongest adoption result in this log. Eighteen edits
+planned, applied, parsed the complete result, wrote atomically, and returned a
+matching read-back hash in one command. The three other edits refused without
+writing. The caller did not regress to a separate apply command after any
+successful guarded edit.
+
+The final application result was behaviorally correct. Repository tests,
+linting, focused runtime probes, and live rendered-output checks passed. The
+guarded receipts establish write integrity; those semantic checks establish
+that the selected edits solved the application problem. Neither kind of
+evidence substitutes for the other.
+
+### The refusals exposed one success and two remaining edges
+
+One `:expect` selected a map that contained an inline comment omitted from the
+declared source. clj-surgeon returned `:expect-mismatch` and changed no bytes.
+That refusal is correct. The map's semantic value matched, but applying the
+replacement would have discarded authored source. The caller narrowed the
+eventual change and preserved the comment.
+
+The same recovery exposed shell-quoting friction for a scalar string
+replacement. The caller authored an invalid replacement expression, received
+`:invalid-replacement`, and used a native patch for the leaf. A direct probe
+against the subsequent `13d3848` release confirmed that scalar string
+replacement works when expressed correctly. The product gap is therefore
+caller guidance and quoting ergonomics, not the replacement algebra itself.
+
+The third refusal was a real structural-reader gap. A query containing an
+auto-resolved keyword such as `::name` was read in the CLI's `user` namespace
+instead of the source file's namespace. The resulting qualified keyword could
+not match the source form. The caller used a native patch. The durable repair
+is file-aware keyword resolution derived from the source `ns` form, without
+loading or executing the namespace.
+
+### One-call writes were safe; a multi-command shell action was not atomic
+
+Several shell actions contained two or three independent guarded edits
+separated by newlines. In one action, the first edit refused and a later edit
+still applied because the shell continued after the nonzero command. Each
+clj-surgeon invocation honored its own safety contract, but the shell action
+did not provide an all-or-nothing transaction.
+
+The guidance must therefore say more than "stop on nonzero exit." An agent
+should run exactly one mutating clj-surgeon operation per shell action. If a
+caller deliberately groups commands, it must explicitly short-circuit them.
+We should test this behavior with clean callers because a prose assertion alone
+does not prove adoption.
+
+### X-ray was chosen voluntarily, but map-value navigation cost a retry
+
+The later session used X-ray four times for two compact inspections. Both
+first attempts matched a map key and analyzed the key itself. Both second
+attempts appended `right` and obtained the value. The caller chose X-ray
+without being told to do so, which is positive adoption evidence. The repeated
+repair shows a teaching boundary: examples and successful key-only results
+should make `(match :key) right` discoverable.
+
+This does not justify another navigation primitive. `right` already expresses
+the structural relationship. A small result hint when every final selection
+is a map key, plus a canonical help example, preserves the smaller algebra.
+
+### Reading was bounded, though not yet minimal
+
+The long application session issued 52 `:ls` calls and 124 `:cat` calls across
+the complete observation window. Large namespaces were generally outlined
+before narrow form or line reads, and the caller did not dump those namespaces.
+That is materially better than broad text reading. Some calls remained pure
+ceremony: `:ls` redirected to `/dev/null` as a parse check and a source form
+reopened after a verified edit receipt.
+
+The receipt already reports whole-file parsing, atomic write, exact diff, and
+read-back identity. Guidance should route the caller from a verified receipt to
+semantic validation, linting, or tests, not another verification-only source
+read.
+
+### The current source-fidelity release still needs field evidence
+
+Every external session in this window finished before commit `13d3848`, which
+preserves literal replacement spelling and layout. The last application
+session ended three minutes before that commit. Its anonymous-function
+expansion and local formatting repairs therefore remain valid evidence about
+the preceding release, not evidence that the current repair failed.
+
+The next clean-context battery must use the installed content-addressed
+artifact and cover anonymous-function shorthand, comments, commas, metadata,
+multiline layout, scalar strings, auto-resolved keywords, map-value X-rays,
+and a stale guarded edit followed by another requested mutation. It must retain
+aggregate results and failure examples without retaining raw agent logs.
+
+### The help guess belongs in the API
+
+One caller independently tried `clj-surgeon :op :help`. That spelling is an
+obvious extension of `clj-surgeon :op :edit --help`, but the current CLI treats
+`:help` as an unknown operation. `:op :help` should return the same complete
+global usage as `--help` and exit successfully. Invalid real operations should
+remain structured errors with targeted remedies; they should not print an
+unrequested wall of text.
+
+The ethnographic verdict is positive and bounded. Guarded one-call editing went
+from exceptional to universal in the later segment, successful writes were
+verified, and incorrect assumptions refused without corrupting source. The
+remaining problems are specific: shell-action batching, file-aware `::keyword`
+resolution, map-value navigation teaching, redundant verification reads, and
+an intuitive global-help route. They are product and guidance defects to test
+and repair, not evidence against the structural editing model.
+
+## A 90-minute application session exposed a split vocabulary
+
+One later application session issued 51 clj-surgeon operations. This count is
+the complete observed window, excluding the observing session. The source
+project and domain terms are intentionally omitted.
+
+| Operation spelling | Issued calls |
+|---|---:|
+| `:cat` | 19 |
+| `:show-form` | 20 |
+| `:ls` | 8 |
+| `:get` | 2 |
+| `:grep-form` | 1 |
+| `:edit` | 1 |
+
+Before the caller read the installed skill, it issued 11 operations: nine
+`:show-form`, one `:get`, and one `:ls`. After the skill read, it issued 40:
+19 `:cat`, 11 `:show-form`, seven `:ls`, one `:get`, one `:grep-form`, and one
+`:edit`. The skill changed behavior, but did not establish one vocabulary.
+
+The binary was part of the problem. An unknown `:get` response listed
+`:show-form` but omitted `:cat`, and its executable remedy also used
+`:show-form`. A later `:get :name` had no remedy. A `:grep-form :pattern` call
+reported the missing `:match` argument but did not return an executable repair.
+The session produced nine structured refusals or errors plus one shell-glob
+failure. Several were legitimate absent- or ambiguous-form evidence, but four
+caller mistakes were direct vocabulary or argument mismatches.
+
+The write result was stronger. The caller used one `:edit` call with `:expect`.
+The command verified the declared before-state, applied the literal
+replacement, and returned a read-back receipt. There was no separate apply
+call. Native patches handled new tests, comments, namespace edits, and file
+deletion. Those operations were outside the smallest structural-edit path, so
+native patch use was an appropriate boundary rather than failed adoption.
+
+The session did not use X-ray or `right`. Its work required form reads,
+cross-file tracing, one exact replacement, and broad multi-form changes. This
+window therefore tests canonical read names and guarded editing, not the X-ray
+navigation primer.
+
+The resulting correction makes the binary and skill agree. Global help and
+unknown-operation messages now advertise `:cat` and `:grep-form`.
+`clj-surgeon :op :help` returns global help. `:get :name` and legacy
+`:show-form :name` return executable `:cat :form` remedies.
+`:grep-form :pattern` returns an executable `:grep-form :match` remedy. Tests
+execute every remedy and verify the recovered command, so the contract covers
+behavior rather than message text alone.
+
 ## Audit checkpoint
 
 The earlier audit boundaries are now remediated:

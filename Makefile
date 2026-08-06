@@ -13,7 +13,7 @@ VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
 CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
 SKILL_PACKAGE := $(VERSION_ROOT)/skill-$(SKILL_SOURCE_HASH)
 
-.PHONY: test outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl benchmark-clean-codex benchmark-harness-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -25,6 +25,8 @@ help:
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
+	@echo "  make study-agent-usage         Compare Codex and Claude since the latest study marker"
+	@echo "  make study-agent-usage-self-test Test the bounded cross-agent history collector"
 	@echo "  make benchmark-clean-codex     Run the 32-session clean Codex benchmark"
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
 	@echo "  make benchmark-codex-skill     Run the bounded 2-session Codex skill battery"
@@ -272,6 +274,7 @@ verify-benchmark-evidence:
 
 test:
 	bb test/run_all.clj
+	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
 	bb bench/summarize_clean_codex.clj --self-test
 	bb bench/score_ops_registry.clj --self-test
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
@@ -284,3 +287,9 @@ test:
 
 outline:
 	bb -m clj-surgeon.core :op :outline :file $(FILE)
+
+study-agent-usage:
+	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --pretty $(AGENT_USAGE_ARGS)
+
+study-agent-usage-self-test:
+	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test

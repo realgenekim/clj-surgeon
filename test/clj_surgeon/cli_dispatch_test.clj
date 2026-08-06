@@ -42,9 +42,12 @@
 (deftest help-text-ops-all-resolve-anti-drift
   (let [help (core/format-global-help core/ops-registry)
         ops  (ops-mentioned-in-help help)]
-    (testing "help text yields a sane number of op names"
-      (is (>= (count ops) (count core/ops-registry))
-          (str "extracted only " (count ops) " names — extraction regex drifted?")))
+    (testing "help text exposes exactly the preferred caller operations"
+      (is (= (->> (keys core/ops-registry)
+                  (remove core/hidden-from-primary-help)
+                  (map (comp name core/public-op-name))
+                  set)
+             ops)))
     (testing "every op shown in help resolves as a bare STRING (CLI shape)"
       (doseq [op ops]
         (is (some? (core/resolve-op op))
@@ -99,7 +102,9 @@
   (testing "the error names valid ops so the caller can self-correct"
     (let [out (run->output {:op "bogus"})]
       (is (str/includes? out ":ls"))
-      (is (str/includes? out ":extract")))))
+      (is (str/includes? out ":extract"))
+      (is (str/includes? out ":cat"))
+      (is (not (str/includes? out ":show-form"))))))
 
 ;; ============================================================
 ;; Subprocess CLI — bare-string ops end to end

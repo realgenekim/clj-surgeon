@@ -896,9 +896,10 @@
            :file file
            :query query
            :source-hash (:source-hash result)
-           :error ":edit requires a terminal [:replace FORM] or [:replace-span FORM ...] step; use :q for read-only queries"
+           :error ":edit requires a terminal [:replace FORM] or [:replace-span FORM ...] step. Use :xray :expr for a read-only structural path."
            :error-type :edit-requires-transform
-           :remedy {:read-operation :q
+           :remedy {:read-operation :xray
+                    :read-argument :expr
                     :terminal-steps [[:replace 'form]
                                      [:replace-span 'form '...]]}}
           result)))))
@@ -1089,19 +1090,27 @@
                      :error-type :plan-artifact-repair-failed))))))))
 
 (defn- guarded-edit
-  "Save and apply one plan whose selection equals the declared :expect form.
-   A mismatch refuses before the plan artifact is written."
+  "Apply one plan whose selection equals the declared :expect form.
+   Retain and verify a plan artifact only when the caller supplies :plan-out.
+   A mismatch refuses before any plan artifact or source bytes are written."
   [plan parsed-expect plan-out]
   (let [comparison (expect-comparison parsed-expect
                                       (:before (first (:edits plan))))]
     (if-not (:match? comparison)
-      (assoc (expect-mismatch-result plan comparison)
-             :plan-out plan-out
-             :expect-source (:expect-source parsed-expect))
-      (let [saved (write-plan-file plan plan-out)]
-        (if (:error saved)
-          saved
-          (apply-guarded-plan saved))))))
+      (cond-> (assoc (expect-mismatch-result plan comparison)
+                     :expect-source (:expect-source parsed-expect))
+        plan-out (assoc :plan-out plan-out))
+      (if plan-out
+        (let [saved (write-plan-file plan plan-out)]
+          (if (:error saved)
+            saved
+            (apply-guarded-plan saved)))
+        (let [receipt (execute-plan! {:plan plan})]
+          (if (:error receipt)
+            (assoc receipt :mode :expect-guarded)
+            (assoc (merge plan receipt)
+                   :mode :expect-guarded
+                   :plan-artifact-retained false)))))))
 
 (defn- transform-query? [query]
   (let [terminal (when (vector? query) (peek query))]
@@ -1113,19 +1122,21 @@
    selection structurally equals the declared form."
   [{:keys [file plan-out expect] :as opts} evaluator]
   (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))
-        parsed-expect (when (contains? opts :expect) (parse-expect expect))]
+        expect-supplied? (contains? opts :expect)
+        parsed-expect (when expect-supplied? (parse-expect expect))]
     (cond
       unsupported
       (evaluate-edit "" opts)
 
-      (= (canonical-path file) (canonical-path plan-out))
+      (and plan-out
+           (= (canonical-path file) (canonical-path plan-out)))
       {:operation :edit
        :file file
        :plan-out plan-out
        :error ":plan-out must not resolve to the source file"
        :error-type :plan-overwrites-source}
 
-      (not (edn-plan-path? plan-out))
+      (and plan-out (not (edn-plan-path? plan-out)))
       {:operation :edit
        :file file
        :plan-out plan-out
@@ -1138,6 +1149,18 @@
              :file file
              :plan-out plan-out
              :expect expect)
+
+      (and (not expect-supplied?) (nil? plan-out))
+      {:operation :edit
+       :file file
+       :error "Plan-only :edit requires :plan-out; supply :expect for a guarded one-call write"
+       :error-type :missing-plan-out
+       :remedies {:guarded-edit
+                  {:operation :edit
+                   :reason "Declare the exact selected before-state with :expect to apply and verify in one call"}
+                  :plan-only
+                  {:operation :edit
+                   :reason "Supply :plan-out PLAN.edn to retain a review artifact without changing source"}}}
 
       (and parsed-expect (transform-query? (:query opts)))
       {:operation :edit

@@ -10,6 +10,16 @@ is cut.
 
 ### Added
 
+- `:match-form`, the preferred name for structural pattern search. The existing
+  `:find-subform` and `:grep-form` spellings remain compatibility aliases.
+  Supplying the historically guessed `:pattern` argument now recommends
+  `:match-form :match` for an EDN form and a bounded text-search command for a
+  value that contains regular-expression alternation.
+- Guarded literal `:edit :expect` no longer requires `:plan-out`. It applies
+  the in-memory hash-fenced plan through the same atomic executor and returns
+  the same whole-file parse and read-back-hash receipt. Supply `:plan-out` only
+  to retain an audit artifact. Plan-only and computed edits still require the
+  artifact and the separate review/apply boundary.
 - Literal `replace` and `replace-span` forms written inline in `:edit :expr`
   now preserve their exact replacement source. Anonymous-function shorthand,
   comments, commas, metadata, reader syntax, and multiline layout survive the
@@ -30,20 +40,20 @@ is cut.
   caller's declared before-state: exactly one Clojure form, compared with the
   selected form losslessly. Whitespace does not change the verdict. Comments,
   metadata, reader macros, and token spelling must match. On equality `:edit`
-  saves the plan artifact and applies it in the
-  same invocation through the existing `:replace-subform!` executor, returning
-  the plan evidence merged with the verified apply receipt and
-  `:mode :expect-guarded`. Any difference refuses with
+  applies the in-memory plan through the existing `:replace-subform!` executor,
+  returning its evidence merged with the verified apply receipt and `:mode
+  :expect-guarded`. An optional `:plan-out` retains and verifies an audit
+  artifact. Any difference refuses with
   `:error-type :expect-mismatch` and reports `:expected`, `:actual`, and
   `:actual-source` while source bytes and an existing plan artifact stay
   unchanged; a `:expect` that is not exactly one readable form refuses with
   `:error-type :invalid-expect` before the source read. Selection refusals keep
   their existing error types. `:expect` is optional and the default flow is
   unchanged: without it `:edit` remains plan-only, reviewed, then applied
-  separately. `:expect` refuses computed `transform` replacements because their
-  generated after-state still requires review. Plan paths must use an `.edn`
-  suffix. Guarded receipts verify the plan artifact, and atomic writes preserve
-  the source file's existing permissions.
+  separately and requires `:plan-out`. `:expect` refuses computed `transform`
+  replacements because their generated after-state still requires review.
+  Retained plan paths must use an `.edn` suffix. Atomic writes preserve the
+  source file's existing permissions.
 - `:xray`, a read-only pure Clojure analysis over structurally selected values.
   A plain path such as `(form 'transition)` returns literal source;
   `(analyze path pure-function)` receives one stable ordered vector of ordinary

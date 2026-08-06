@@ -33,21 +33,30 @@ clj-surgeon gives coding agents a composable structural interface. `:ls`
 inventories a namespace. `:cat` returns one selected form. `:xray` reads or
 computes over a Clojure path.
 
-`:grep-form` finds syntax instead of textual lookalikes. Dependency operations
+`:match-form` finds syntax instead of textual lookalikes. Dependency operations
 expose the graph. Write operations separate planning from application.
 
 ```text
-ls / cat / xray / grep-form / deps  →  plan  →  apply  →  receipt
+ls / cat / xray / match-form / deps  →  plan  →  apply  →  receipt
 ```
 
-A write first produces a hash-bound plan and exact diff. A later command applies
-only that reviewed artifact. The apply receipt records the write, read-back
-hash, and whole-file parse.
+Run `clj-surgeon :op :help` for the complete caller surface. Unknown operations
+list the preferred names, not compatibility spellings. When an invalid call
+still identifies one safe intent, its EDN includes executable `:command-args`.
+For example, `:get :name NAME` points to `:cat :form NAME`, and
+`:match-form :pattern FORM` points to `:match-form :match FORM`. A value that
+looks like a text regular expression instead points to an `rg` command bounded
+to 20 matching lines.
+
+A computed write first produces a hash-bound plan and exact diff. A later
+command applies only that reviewed artifact. A literal write with `:expect`
+applies in one call because the caller declared the exact before-state. Both
+routes return write, read-back-hash, and whole-file-parse evidence.
 
 The design target is one command for each judgment boundary:
 
 ```text
-one structural read or plan  →  one verified apply
+one structural read or declared before-state  →  one verified apply
 ```
 
 Each command owns its mechanical work: parsing, selection, ordering, ambiguity
@@ -241,6 +250,13 @@ The canonical package keeps uncommon move, extraction, dependency, and CLJC
 guidance in `references/advanced-operations.md`. Simple tasks load only the
 one-shot read and edit routes.
 
+The skill activates before an agent uses native Read, Edit, grep, sed, or cat
+on an existing Clojure file. It routes compact reads and structural changes to
+clj-surgeon while retaining native Write for new files and native editing for
+unsupported prose- or comment-heavy changes. For an existing file over 500
+lines, the first unknown-form inspection is `:ls`; when the owner is known,
+start with `:cat`.
+
 `make install` also installs the same canonical package for Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/clj-surgeon`. Do not maintain separate
 vendor copies. Tests require the installed Claude and Codex skill content to
@@ -309,7 +325,7 @@ When a top-level name, containing line, or distinctive text is known, use
 `:cat` as the first source inspection instead of reconstructing a `sed` range.
 Do not run `:ls`
 solely as a preflight. Continue to use `rg` for broad textual discovery,
-`:grep-form` for nested structural syntax, and bounded text reads for context
+`:match-form` for nested structural syntax, and bounded text reads for context
 that genuinely spans forms or files. Inside one Clojure file, use
 `:cat :contains` instead of `rg -n` followed by `:cat :line`. Do not
 print a large outline merely to discover the line.
@@ -463,8 +479,7 @@ comments, commas, metadata, reader syntax, and multiline layout:
 ```bash
 clj-surgeon :op :edit :file src/page.clj \
   :expr "(-> (form 'page) (match '{:dev-mode? dev-mode?}) (replace '{:dev-mode? dev-mode? :head {:asset-url #(views/static %)}}))" \
-  :expect '{:dev-mode? dev-mode?}' \
-  :plan-out plan.edn
+  :expect '{:dev-mode? dev-mode?}'
 ```
 
 The planner retains that literal source beside the evaluated query and verifies
@@ -477,26 +492,27 @@ The returned `:selector :query` is semantic data, so it can display `#()` as an
 equivalent `fn*` form. This is not the planned source spelling. Read the edit's
 `:after` and `:diff` fields for the exact source that clj-surgeon will write.
 
-Use an `.edn` suffix for the task-specific `:plan-out` path. Do not preflight whether that
-path exists. A successful plan atomically replaces that artifact. A refusal
-leaves an existing plan unchanged.
+Without `:expect`, `:plan-out` is required because the command is plan-only.
+Use an `.edn` suffix. Do not preflight whether that path exists. A successful
+plan atomically replaces that artifact. A refusal leaves an existing plan
+unchanged.
 
 `:expect` is the optional one-call guarded form. It is the caller's declared
 before-state for a literal replacement. The comparison ignores whitespace.
 It does not ignore comments, metadata, reader macros, or token spelling. Those
 elements can affect behavior or preserve design intent.
 
-On equality, `:edit` saves the plan and applies it in the same invocation. It returns the plan
-evidence merged with the verified apply receipt and `:mode :expect-guarded`. On
-any difference it exits nonzero with `:error-type :expect-mismatch`, reports
-`:expected`, `:actual`, and `:actual-source`, and leaves both the source bytes
-and an existing plan artifact untouched:
+On equality, `:edit` applies the plan in memory and returns its evidence merged
+with the verified apply receipt and `:mode :expect-guarded`. No plan filename is
+needed. Add `:plan-out plan.edn` only when an audit artifact must be retained.
+On any difference the command exits nonzero with `:error-type
+:expect-mismatch`, reports `:expected`, `:actual`, and `:actual-source`, and
+leaves both the source bytes and an existing plan artifact untouched:
 
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
-  :expect '(assoc state :status :done)' \
-  :plan-out plan.edn
+  :expect '(assoc state :status :done)'
 ```
 
 The same guarded route works inside an unnamed top-level owner. This is one
@@ -505,14 +521,13 @@ CLI call because the caller declares the exact old leaf:
 ```bash
 clj-surgeon :op :edit :file src/cache.clj \
   :expr "(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))" \
-  :expect '(old-reader account-id)' \
-  :plan-out plan.edn
+  :expect '(old-reader account-id)'
 ```
 
 The line narrows ownership. `match` selects the leaf. `:expect` verifies the
-old leaf before the tool saves the audit plan, writes atomically, reparses the
-complete file, and returns the read-back hash. Repeated copies in other
-top-level forms remain outside the selection.
+old leaf before the tool writes atomically, reparses the complete file, and
+returns the read-back hash. Repeated copies in other top-level forms remain
+outside the selection.
 
 Use shell single quotes around `:expect` source when possible. They prevent the
 shell from expanding `$`, backticks, and other source characters.
@@ -525,8 +540,7 @@ syntax in place:
 ```bash
 clj-surgeon :op :edit :file src/state.clj \
   :expr "(-> (form 'transition) (match :done) (replace :complete))" \
-  :expect :done \
-  :plan-out plan.edn
+  :expect :done
 ```
 
 This command replaces only `:done`. A comment elsewhere in the enclosing form
@@ -615,7 +629,7 @@ silent bulk edit.
 
 This algebra removes the `cat owner → reconstruct peer match → plan` bridge.
 The existing commands remain useful standard-library spellings: `:cat` is the
-fastest exact top-level read, and `:grep-form` / `:replace-subform` are concise
+fastest exact top-level read, and `:match-form` / `:replace-subform` are concise
 when an independent subtree pattern already identifies the target.
 
 #### `:ls-tree` / `:tree` / `:map` — Map an entire directory of repos
@@ -848,13 +862,13 @@ The compound extraction operation:
 Planning is pure. Only `:extract!` writes files. After extraction, use the
 compiler to find unresolved bare references and correct them.
 
-#### `:grep-form` / `:replace-subform` — Nested structural edits
+#### `:match-form` / `:replace-subform` — Nested structural edits
 
-Use `:grep-form` for file-wide structural search. It is not a text regular
+Use `:match-form` for file-wide structural search. It is not a text regular
 expression. Matching ignores formatting, and `_` matches exactly one subtree:
 
 ```bash
-clj-surgeon :op :grep-form :file src/views.clj \
+clj-surgeon :op :match-form :file src/views.clj \
   :match '(post! "/api/items" _)'
 ```
 
@@ -862,7 +876,7 @@ Add `:inside` only when the containing top-level form is already known or when
 you need to narrow multiple matches:
 
 ```bash
-clj-surgeon :op :grep-form :file src/views.clj :inside render \
+clj-surgeon :op :match-form :file src/views.clj :inside render \
   :match '(post! "/api/items" _)'
 ```
 
@@ -1000,6 +1014,9 @@ in `src/clj_surgeon/forms.clj`:
 The Claude Code and Codex entrances load one canonical skill package. That
 skill teaches these common routes:
 
+- Before native source tools touch an existing Clojure file, load the skill;
+  retain native Write for new files and unsupported prose- or comment-heavy
+  changes.
 - For an unknown large file, use `:ls`, then read only the required forms.
 - For a known form, line, or distinctive text, start with `:cat`.
 - For nested syntax in an unnamed top-level form, start an `:xray` or `:edit`
@@ -1012,6 +1029,28 @@ skill teaches these common routes:
 
 The tool performs parsing, selection, movement, and require rewriting. The
 agent decides scope and intent.
+
+### Repeated agent-usage studies
+
+The repo-local `study-agent-usage` skill turns the recurring Codex-versus-Claude
+ethnography into one bounded command:
+
+```bash
+make study-agent-usage
+```
+
+The canonical package lives under `skills/study-agent-usage`; the repository
+exposes it to Codex through `.agents/skills/` and to Claude Code through
+`.claude/skills/`, both as links to that one package.
+
+It scans both providers from the newest completed study marker and emits a
+versioned JSON receipt without transcript prose or workspace paths. The
+receipt distinguishes skill visibility, skill loading, real clj-surgeon
+invocations, native Clojure actions, direct tool wall, and complete Codex turn
+wall. A completed study records the emitted `next_marker`, which becomes the
+next automatic "since last time" boundary.
+Run `make study-agent-usage-self-test` to verify both history parsers and the
+privacy contract.
 
 ## Development method
 
@@ -1137,5 +1176,5 @@ guessing intent or expanding the requested scope.
 ## Compatibility aliases
 
 Existing callers can continue to use `:outline`, `:show-form`, `:find-subform`,
-`:lens`, and `:q`. New callers should use `:ls`, `:cat`, `:grep-form`, `:xray`,
-and `:edit`.
+`:grep-form`, `:lens`, and `:q`. New callers should use `:ls`, `:cat`,
+`:match-form`, `:xray`, and `:edit`.

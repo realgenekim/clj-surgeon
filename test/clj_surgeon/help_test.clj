@@ -26,6 +26,8 @@
     (is (= :ls-tree (core/resolve-op :outline-tree)))
     (is (= :show-form (core/resolve-op :cat)))
     (is (= :show-form (core/resolve-op "cat")))
+    (is (= :find-subform (core/resolve-op :match-form)))
+    (is (= :find-subform (core/resolve-op "match-form")))
     (is (= :find-subform (core/resolve-op :grep-form)))
     (is (= :find-subform (core/resolve-op "grep-form")))
     (is (= :lens (core/resolve-op :q)))
@@ -79,17 +81,21 @@
 
 (deftest dispatch-unknown-ops-return-error-maps-not-exceptions
   (testing "unknown bare string op returns a clean EDN error"
-    (let [out (with-out-str (core/run (core/parse-args [":op" "bogus"])))]
-      (is (= {:error (str "Unknown op: bogus. Valid ops: "
-                          (str/join ", " (sort (keys core/ops-registry))))
-              :error-type :unknown-operation}
-             (edn/read-string out)))))
+    (let [result (-> (with-out-str (core/run (core/parse-args [":op" "bogus"])))
+                     edn/read-string)]
+      (is (= :unknown-operation (:error-type result)))
+      (is (str/includes? (:error result) "Unknown op: bogus"))
+      (is (str/includes? (:error result) ":cat"))
+      (is (str/includes? (:error result) ":match-form"))
+      (is (not (str/includes? (:error result) ":show-form")))
+      (is (not (str/includes? (:error result) ":find-subform")))
+      (is (= "clj-surgeon :op :help" (:usage result)))))
   (testing "unknown keyword op returns a clean EDN error"
-    (let [out (with-out-str (core/run (core/parse-args [":op" ":bogus"])))]
-      (is (= {:error (str "Unknown op: :bogus. Valid ops: "
-                          (str/join ", " (sort (keys core/ops-registry))))
-              :error-type :unknown-operation}
-             (edn/read-string out))))))
+    (let [result (-> (with-out-str (core/run (core/parse-args [":op" ":bogus"])))
+                     edn/read-string)]
+      (is (= :unknown-operation (:error-type result)))
+      (is (str/includes? (:error result) "Unknown op: :bogus"))
+      (is (= "clj-surgeon :op :help" (:usage result))))))
 
 ;; ============================================================
 ;; ops-registry completeness
@@ -128,18 +134,21 @@
 ;; format-global-help
 ;; ============================================================
 
-(deftest global-help-contains-all-canonical-ops
+(deftest global-help-contains-the-preferred-caller-surface
   (let [help (core/format-global-help core/ops-registry)]
-    (testing "contains every canonical op name"
-      (doseq [op-key (keys core/ops-registry)]
-        (is (str/includes? help (name op-key))
-            (str "missing " op-key " in global help"))))
+    (testing "uses the preferred structural read names"
+      (is (re-find #"(?m)^    cat\s" help))
+      (is (re-find #"(?m)^    match-form\s" help))
+      (is (not (re-find #"(?m)^    show-form\s" help)))
+      (is (not (re-find #"(?m)^    find-subform\s" help)))
+      (is (not (re-find #"(?m)^    lens\s" help))))
     (testing "contains category headers"
       (is (str/includes? help "Read-only"))
       (is (str/includes? help "Write"))
       (is (str/includes? help "CLJC")))
     (testing "contains usage line"
-      (is (str/includes? help "Usage:")))
+      (is (str/includes? help "Usage:"))
+      (is (str/includes? help "clj-surgeon :op :help")))
     (testing "contains quick start examples"
       (is (str/includes? help "Quick start:"))
       (is (str/includes? help
@@ -165,7 +174,6 @@
                            (remove #{"clj-surgeon"})
                            set)]
     (testing "every op name printed in global help resolves from the parser's string form"
-      (is (= (set (map name (keys core/ops-registry))) help-op-names))
       (doseq [op-name help-op-names]
         (is (some? (core/resolve-op op-name))
             (str "global help prints unresolved op " op-name))))))
@@ -199,14 +207,15 @@
         (is (not (str/includes? form-line "(required)"))
             ":form should be optional")))))
 
-(deftest op-help-shows-aliases
+(deftest op-help-keeps-compatibility-aliases-secondary
   (let [help (core/format-op-help :ls (get core/ops-registry :ls))]
-    (testing "shows aliases"
-      (is (str/includes? help "Aliases: outline")))))
+    (testing "labels old spellings as compatibility inputs"
+      (is (str/includes? help "Compatibility aliases: outline")))))
 
-(deftest show-form-help-documents-the-one-shot-read-contract
+(deftest cat-help-documents-the-one-shot-read-contract
   (let [help (core/format-op-help :show-form
                                   (get core/ops-registry :show-form))]
+    (is (str/starts-with? help "clj-surgeon :op cat"))
     (testing "all selectors and CLJC disambiguation are discoverable"
       (is (str/includes? help ":form"))
       (is (str/includes? help ":line"))
@@ -219,12 +228,12 @@
       (is (str/includes? help "literal"))
       (is (not (str/includes? help "rg -n"))))
     (testing "the exact documented invocations are printed"
-      (is (str/includes? help ":op :show-form :file src/my/ns.clj :form transition!"))
-      (is (str/includes? help ":op :show-form :file src/my/ns.clj :line 1134"))
+      (is (str/includes? help ":op :cat :file src/my/ns.clj :form transition!"))
+      (is (str/includes? help ":op :cat :file src/my/ns.clj :line 1134"))
       (is (str/includes? help ":op :cat :file src/my/ns.clj :contains :finish"))
       (is (str/includes? help "keyword-shaped values such as :finish remain literal text")))
-    (testing "the structural-shell alias is discoverable"
-      (is (str/includes? help "Aliases: cat")))
+    (testing "the old spelling is secondary"
+      (is (str/includes? help "Compatibility aliases: show-form")))
     (testing "ambiguity fails closed"
       (is (str/includes? help "never chooses the first match")))))
 
@@ -248,7 +257,7 @@
 
 (deftest lens-help-teaches-the-getter-updater-algebra-and-review-boundary
   (let [help (core/format-op-help :lens (get core/ops-registry :lens))]
-    (is (str/includes? help "Aliases: q"))
+    (is (str/includes? help "Compatibility aliases: q"))
     (is (str/includes? help "EDN pipeline"))
     (is (str/includes? help "[:form transition]"))
     (is (str/includes? help "[:find :finish]"))
@@ -271,13 +280,14 @@
     (is (str/includes? edit-help "do not reread the saved plan file"))
     (is (str/includes? apply-help "do not reopen the saved plan"))))
 
-(deftest find-subform-help-teaches-one-shot-file-wide-structural-grep
+(deftest find-subform-help-teaches-one-shot-file-wide-structural-match
   (let [help (core/format-op-help :find-subform
                                   (get core/ops-registry :find-subform))]
-    (is (str/includes? help "Aliases: grep-form"))
+    (is (str/starts-with? help "clj-surgeon :op match-form"))
+    (is (str/includes? help "Compatibility aliases: find-subform, grep-form"))
     (is (str/includes? help "Omit :inside for file-wide structural search"))
-    (is (str/includes? help ":op :grep-form"))
-    (is (str/includes? help "not regular expressions"))
+    (is (str/includes? help ":op :match-form"))
+    (is (str/includes? help "not a regular expression"))
     (is (str/includes? help "matches exactly one subtree"))
     (is (str/includes? help "There is no variadic wildcard"))
     (is (str/includes? help ":match '(loop _ _)'"))))
@@ -447,6 +457,13 @@
     (testing "shows same global help as no-args"
       (is (str/includes? out "Usage:"))
       (is (str/includes? out "Read-only")))))
+
+(deftest cli-op-help-name-shows-global-help
+  (doseq [op [":help" "help"]]
+    (let [{:keys [exit out err]} (run-cli ":op" op)]
+      (is (zero? exit) (str op " stderr: " err))
+      (is (str/includes? out "Usage:") op)
+      (is (str/includes? out "Quick start:") op))))
 
 (deftest cli-version-is-a-zero-exit-edn-orientation-call
   (let [result (run-cli "--version")

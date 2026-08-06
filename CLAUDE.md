@@ -52,21 +52,27 @@ updates, and verification gates. It is not a chronological coding diary.
 - All ops return EDN data, not side effects (except `!`-suffixed ops which write files)
 - Errors use a human-readable `:error` string plus a stable keyword
   `:error-type` and structured diagnostic fields.
-- For a large Clojure file, use `:ls` first when the relevant form is unknown.
-  When a top-level name or containing line is already known, use `:cat`
-  as the first source inspection; do not run `:ls` solely as a preflight or
-  reconstruct a `sed` range.
+- Before native Read, Edit, grep, sed, or cat touches an existing Clojure,
+  ClojureScript, or CLJC file, load the working-tree skill and use
+  clj-surgeon. Native Write remains appropriate for new files; use native
+  editing for unsupported prose- or comment-heavy changes. For a file over
+  500 lines, use `:ls` first when the relevant form is unknown. When a
+  top-level name or containing line is already known, use `:cat` as the first
+  source inspection; do not run `:ls` solely as a preflight or reconstruct a
+  `sed` range.
 - When distinctive text is known but its containing form is not, use
   `:cat :contains` to select that form in one command; do not manufacture
   a line with `rg -n` or print a large outline. Use `rg` for broad cross-file
-  discovery. Use `:grep-form` for file-wide structural patterns; each named
+  discovery. Use `:match-form` for file-wide structural patterns; each named
   match reports reusable `:inside` ownership. Add `:inside` only when the
-  parent is known or ambiguity needs narrowing.
+  parent is known or ambiguity needs narrowing. `:match` accepts one EDN form
+  pattern, not a regular expression.
 - When sibling syntax identifies a target—a `case` key, `cond` guard, map key,
   or binding name—read it with `:xray :expr "(-> (form 'transition) (match
-  :finish) right)"`. Plan the same path with `:edit` and terminal `replace`,
-  then apply it separately with `:replace-subform!`. Do not grep a repeated
-  expression and then read its owner merely to recover sibling context.
+  :finish) right)"`. For a known literal replacement, use the same path with
+  `:edit`, terminal `replace`, and `:expect` to apply and verify in one call.
+  Do not grep a repeated expression and then read its owner merely to recover
+  sibling context.
 - When a physical line identifies one otherwise unnamed top-level owner, start
   an X-ray or edit path with `(line N)`, then use `match` or navigation to
   select the exact nested syntax. The line can be inside the form or in its
@@ -100,11 +106,13 @@ updates, and verification gates. It is not a chronological coding diary.
   syntax and exact evidence remain source-shaped. The SCI sandbox limits
   capabilities but does not prove termination, so analyzers must perform
   bounded work. For CLJC, pass `:clj` or `:cljs` to `form`.
-- Generate a replacement plan in a standalone shell command. Observe and
-  review it before running a separate apply command; never chain planning and
-  application. When the intended relationship and replacement are already
-  exact, an `:edit` expression ending in `replace` may be the first non-mutating
-  call; read first only when the choice requires a separate judgment. A
+- When a replacement is computed or its before-state is not declared, generate
+  a replacement plan in a standalone shell command. Observe and review it
+  before running a separate apply command; never chain planning and
+  application. When the intended relationship, literal replacement, and exact
+  before-state are known, one `:edit` call with `:expect` may be the first
+  source-bearing action. Omit `:plan-out` unless an audit artifact must be
+  retained. Read first only when the choice requires a separate judgment. A
   successful verified apply receipt proves exact replay,
   read-back hash, atomic write, and whole-file parse; do not reread the edited
   or neighboring forms solely to reproduce that evidence. Review an aggregate

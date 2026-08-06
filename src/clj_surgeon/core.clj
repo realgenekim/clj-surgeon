@@ -565,31 +565,31 @@
                        :args      {:file     {:required true :desc "Clojure source file; modified only by a successful :expect-guarded edit"}
                                    :query    {:desc "EDN lens pipeline ending in [:replace FORM] or [:replace-span FORM ...]; supply exactly one of :query and :expr"}
                                    :expr     {:desc "Sandboxed pure Clojure edit program; supply exactly one of :query and :expr"}
-                                   :expect   {:desc "Optional declared before-state for a literal replacement. Whitespace is ignored; comments, metadata, and reader syntax must match. Equality saves and applies the plan; any difference refuses"}
-                                   :plan-out {:required true :desc "New or replaceable .edn review artifact; must not alias :file"}}
+                                   :expect   {:desc "Optional declared before-state for a literal replacement. Whitespace is ignored; comments, metadata, and reader syntax must match. Equality applies and verifies the edit; any difference refuses"}
+                                   :plan-out {:desc "Optional .edn audit artifact with :expect; required for a plan-only edit; must not alias :file"}}
                        :workflow  ["Supply exactly one of :query and :expr. Use :expr for pure Clojure collection composition through sandboxed SCI."
                                    "Use (transform path pure-function) when the replacement must be derived from the selected form. The plan stores its concrete replacement. Transform remains plan-only because its generated after-state requires review; :expect refuses it."
                                    "SCI exposes pure clojure.core collection functions and clj-surgeon builders. It does not expose I/O, processes, namespaces, mutable references, or host interop."
                                    "Use :xray to read or compute from a structural path. Use :edit when the complete selection and either the replacement or its pure transformation rule are known."
                                    "Start with (form 'NAME) for a known named form. Start with (line N) when a physical line identifies one otherwise unnamed top-level owner; blank gaps and overlapping owners refuse."
                                    "When an owner plus an exact key, guard, map key, binding, or subtree identifies the target, the :edit plan can be the first source-bearing call; do not pre-read merely to reconstruct that relationship."
-                                   "Without :expect, this command is PLAN ONLY: it saves a hash-fenced review artifact and never changes source."
+                                   "Without :expect, this command is PLAN ONLY: :plan-out is required, the command saves a hash-fenced review artifact, and source never changes."
                                    "Do not preflight whether :plan-out exists. A successful plan atomically replaces that artifact; any refusal preserves it."
                                    "Review the returned selector, one edit, diff, source hash, and result hash. The command already returns the review evidence; do not reread the saved plan file."
                                    "When the diff is exact, apply that saved plan with :replace-subform!; never reproduce it with apply_patch, a text edit, or a second equivalent plan."
                                    "Apply only after review, as a separate command: clj-surgeon :op :replace-subform! :plan PLAN.edn."
                                    ":expect is optional; without it the default flow is unchanged: plan first, review, then apply separately."
-                                   "With :expect FORM and a literal replacement, the command is one guarded call. It ignores whitespace, but comments, metadata, reader macros, and token spelling must match."
+                                   "With :expect FORM and a literal replacement, the command applies and verifies in one guarded call. It ignores whitespace, but comments, metadata, reader macros, and token spelling must match. Omit :plan-out unless the audit artifact must be retained."
                                    "A literal replace or replace-span written inline in :expr preserves its exact replacement spelling, including #(), comments, commas, metadata, and multiline layout. A computed replacement or :query has no lexical source and uses canonical printing."
                                    ":selector :query is semantic data and may display #() as fn*. The edit :after and :diff fields report the exact source that the plan writes."
                                    "A difference refuses with :expect-mismatch, returns :expected, :actual, and :actual-source, and leaves the source bytes and any existing plan artifact unchanged. If undeclared comments or metadata caused the refusal, narrow the selector or declare the exact before-source."
                                    "Unknown flags, getter-only queries, computed transforms, ambiguous targets, non-.edn plan paths, and source/plan path aliasing refuse without changing source or an existing plan."]
                        :examples  ["clj-surgeon :op :edit :file src/policy.clj :expr \"(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))\" :plan-out plan.edn"
-                                   "clj-surgeon :op :edit :file src/cache.clj :expr \"(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))\" :expect '(old-reader account-id)' :plan-out plan.edn"
+                                   "clj-surgeon :op :edit :file src/cache.clj :expr \"(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))\" :expect '(old-reader account-id)'"
                                    "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"
-                                   "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :expect '(assoc state :status :done)' :plan-out plan.edn"
+                                   "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :expect '(assoc state :status :done)'"
                                    "clj-surgeon :op :replace-subform! :plan plan.edn"]
                        :category  :write}
 
@@ -608,19 +608,19 @@
                        :pair      :fix-declares}
 
     :find-subform     {:handler   structural-lens/find-file
-                       :aliases   [:grep-form]
+                       :aliases   [:match-form :grep-form]
                        :desc      "Find nested syntax structurally across a file or within a named form"
                        :args      {:file   {:required true :desc "Clojure source file"}
                                    :inside {:desc "Restrict search to this top-level form"}
                                    :match  {:required true :desc "Clojure form pattern; _ matches exactly one subtree and pattern arity is exact"}}
                        :workflow  ["Omit :inside for file-wide structural search; add it only to narrow the search."
-                                   "Use :grep-form as the structural-shell alias; patterns are Clojure forms, not regular expressions."
+                                   "Use :match-form for structural search; :match accepts one Clojure form pattern, not a regular expression."
                                    "The _ wildcard matches exactly one subtree. There is no variadic wildcard; use (loop _ _) for a two-argument loop form."
                                    "Each match names its enclosing form in :inside when available; reuse that value to narrow a plan without a line-number lookup."
                                    "Zero and multiple matches are useful read evidence; mutation still requires exactly one match."]
-                       :examples  ["clj-surgeon :op :grep-form :file src/views.clj :match '(post! \"/api/items\" _)'"
-                                   "clj-surgeon :op :grep-form :file src/runtime.clj :match '(loop _ _)'"
-                                   "clj-surgeon :op :find-subform :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
+                       :examples  ["clj-surgeon :op :match-form :file src/views.clj :match '(post! \"/api/items\" _)'"
+                                   "clj-surgeon :op :match-form :file src/runtime.clj :match '(loop _ _)'"
+                                   "clj-surgeon :op :match-form :file src/views.clj :inside render :match '(post! \"/api/items\" _)'"]
                        :category  :read}
 
     :lens             {:handler  structural-lens/lens-file
@@ -686,17 +686,17 @@
                                   :contains {:desc "Nonblank case-sensitive literal text; supply exactly one selector"}
                                   :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}}
                        :workflow ["Supply exactly one selector: :form, :line, or :contains."
-                                  "Use :show-form instead of reconstructing a sed range when a top-level name or containing line is known."
-                                  "Make :show-form the first source inspection; do not run :ls solely as a preflight."
+                                  "Use :cat instead of reconstructing a sed range when a top-level name or containing line is known."
+                                  "Make :cat the first source inspection; do not run :ls solely as a preflight."
                                   "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command; keyword-shaped values such as :finish remain literal text."
                                   "Literal search includes attached comments, strings, and docstrings; it never interprets a regular expression."
                                   "Platform-qualified form selection follows the .clj, .cljs, or .cljc file extension; unknown extensions refuse."
                                   "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
-                       :examples ["clj-surgeon :op :show-form :file src/my/ns.clj :form transition!"
-                                  "clj-surgeon :op :show-form :file src/my/ns.clj :line 1134"
+                       :examples ["clj-surgeon :op :cat :file src/my/ns.clj :form transition!"
+                                  "clj-surgeon :op :cat :file src/my/ns.clj :line 1134"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :contains :finish"
-                                  "clj-surgeon :op :show-form :file src/my/ns.cljc :form transition! :platform :cljs"]
+                                  "clj-surgeon :op :cat :file src/my/ns.cljc :form transition! :platform :cljs"]
                        :category :read}
 
     :ls-deps          {:handler   run-ls-deps
@@ -766,7 +766,7 @@
                        :workflow  ["Run plan generation as a separate command; never chain it with application."
                                    "Before this command, review the evidence returned by plan generation; do not reopen the saved plan only to repeat that review."
                                    "Apply the reviewed plan directly with :replace-subform!."
-                                   "A successful receipt includes :verified read-back hash and whole-file parse evidence; the reviewed plan is the edit-level diff, so do not repeat those checks with rg, show-form, git diff, or shasum."
+                                   "A successful receipt includes :verified read-back hash and whole-file parse evidence; the reviewed plan is the edit-level diff, so do not repeat those checks with rg, cat, git diff, or shasum."
                                    "When the task asks only to verify this exact edit, the reviewed plan plus successful receipt completes that request; do not probe for a Git worktree merely to repeat it."
                                    "Do not edit the plan with apply_patch or another text tool."
                                    "If the intended edit changes, generate a new plan."
@@ -808,6 +808,33 @@
              {}
              ops-registry))
 
+(def preferred-op-names
+  "Public caller spellings for operations whose implementation keys remain
+   stable for compatibility."
+  {:find-subform :match-form
+   :show-form :cat})
+
+(def hidden-from-primary-help
+  "Compatibility-only operations superseded by the Clojure-native read and
+   edit surfaces. They remain dispatchable."
+  #{:lens})
+
+(defn public-op-name
+  "Return the preferred caller spelling for one registry operation."
+  [op-key]
+  (get preferred-op-names op-key op-key))
+
+(defn public-op-keys
+  "Return the exact operations advertised to new callers."
+  [registry]
+  (->> (keys registry)
+       (remove hidden-from-primary-help)
+       (map public-op-name)
+       (concat [:help :mv-with-deps])
+       set
+       sort
+       vec))
+
 (defn resolve-op
   "Resolve an op (keyword or bare string, e.g. `:op ls-tree`) to its
    canonical name, following aliases. Returns nil for unknown ops.
@@ -837,10 +864,14 @@
    Pure: registry in, string out."
   [registry]
   (let [sb (StringBuilder.)
-        by-cat (group-by (fn [[_ v]] (:category v)) registry)]
+        by-cat (->> registry
+                    (remove (fn [[op-key]]
+                              (contains? hidden-from-primary-help op-key)))
+                    (group-by (fn [[_ v]] (:category v))))]
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon --help              show this message\n")
+    (.append sb "       clj-surgeon :op :help           show this message\n")
     (.append sb "       clj-surgeon --version           show machine-readable version\n")
     (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n")
     (doseq [cat category-order
@@ -848,10 +879,9 @@
                   ops   (get by-cat cat)]]
       (when (seq ops)
         (.append sb (str "  " label ":\n"))
-        (doseq [[op-key {:keys [desc aliases pair]}] (sort-by first ops)]
-          (.append sb (format "    %-20s %s" (name op-key) desc))
-          (when (seq aliases)
-            (.append sb (format "  (aliases: %s)" (str/join ", " (map name aliases)))))
+        (doseq [[op-key {:keys [desc pair]}]
+                (sort-by (comp public-op-name first) ops)]
+          (.append sb (format "    %-20s %s" (name (public-op-name op-key)) desc))
           (when pair
             (.append sb (format "  -> %s" (name pair))))
           (.append sb "\n"))
@@ -861,9 +891,12 @@
     (.append sb "    clj-surgeon :op :cat :file src/my/ns.clj :contains 'distinctive text'\n")
     (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right)\"\n")
     (.append sb "    clj-surgeon :op :xray :file src/my/ns.clj :expr \"(-> (form 'audit-report) initializer (expect-count 1) (analyze (fn [[report]] (frequencies (map :category (:events report))))))\"\n")
-    (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'transition) (match :finish) right (replace 'NEW-FORM))\" :plan-out plan.edn\n")
+    (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'transition) (match :done) (replace :complete))\" :expect :done\n")
+    (.append sb "    clj-surgeon :op :edit :file src/my/ns.clj :expr \"(-> (form 'retry-policy) (match :delays) right (transform #(mapv inc %)))\" :plan-out plan.edn\n")
     (.append sb "    clj-surgeon :op :ls-tree :dir . :grep \"postgres\"\n")
     (.append sb "    clj-surgeon :op :deps :file src/my/ns.clj :form my-fn\n    clj-surgeon :op :mv :file src/my/ns.clj :form foo :before bar :dry-run true\n\n")
+    (.append sb "  Compatibility aliases: :outline, :show-form, :find-subform, :grep-form, :lens, :q, :tree, :map, :outline-tree.\n")
+    (.append sb "  Convenience alias: :mv-with-deps presets :with-deps true.\n\n")
     (.append sb "  All ops return EDN. Read-only operations never write.\n  Write operations differ: :mv writes unless :dry-run true; paired operations use their documented ! executor.\n")
     (str sb)))
 
@@ -871,11 +904,16 @@
   "Per-command help: description, args, examples.
    Pure: op-key + op-def in, string out."
   [op-key {:keys [desc args examples pair aliases workflow]}]
-  (let [sb (StringBuilder.)]
-    (.append sb (format "clj-surgeon :op %s\n\n" (name op-key)))
+  (let [sb (StringBuilder.)
+        public-name (public-op-name op-key)
+        compatibility-aliases (->> (cons op-key aliases)
+                                   (remove #{public-name})
+                                   distinct)]
+    (.append sb (format "clj-surgeon :op %s\n\n" (name public-name)))
     (.append sb (format "  %s\n" desc))
-    (when (seq aliases)
-      (.append sb (format "  Aliases: %s\n" (str/join ", " (map name aliases)))))
+    (when (seq compatibility-aliases)
+      (.append sb (format "  Compatibility aliases: %s\n"
+                          (str/join ", " (map name compatibility-aliases)))))
     (.append sb "\n")
     (when (seq args)
       (.append sb "  Arguments:\n")
@@ -904,10 +942,36 @@
 ;; Dispatch + CLI
 ;; ============================================================
 
-(defn- with-show-form-remedy
+(defn- with-cat-remedy
   [result opts]
   (if-let [remedy (show-form/invocation-remedy opts)]
-    (assoc-in result [:remedies :show-form] remedy)
+    (assoc-in result [:remedies :cat] remedy)
+    result))
+
+(defn- with-match-form-pattern-remedy
+  [result {:keys [file inside pattern] :as opts}]
+  (if (and file
+           (contains? opts :pattern)
+           (string? pattern)
+           (not (str/blank? pattern))
+           (not (contains? opts :match)))
+    (if (str/includes? pattern "|")
+      (let [args ["rg" "-n" "--max-count" "20" pattern (str file)]]
+        (assoc-in result [:remedies :text-search]
+                  {:operation :text-search
+                   :reason (str ":match-form :match accepts one EDN form pattern, not a regular expression. "
+                                "Inspect at most 20 matching lines, then :cat the containing form or refine the pattern")
+                   :command (show-form/render-command args)
+                   :command-args args}))
+      (let [args (cond-> ["clj-surgeon" ":op" ":match-form"
+                          ":file" (str file)]
+                   (contains? opts :inside) (into [":inside" (str inside)])
+                   true (into [":match" pattern]))]
+        (assoc-in result [:remedies :match-form]
+                  {:operation :match-form
+                   :reason "Use :match for one structural EDN pattern, not a regular expression"
+                   :command (show-form/render-command args)
+                   :command-args args})))
     result))
 
 (defn run [{:keys [op] :as opts}]
@@ -933,13 +997,20 @@
                        (merge (show-form/refusal-context opts))
 
                        (and (= canonical :find-subform) (contains? opts :line))
-                       (with-show-form-remedy opts))
-                     ((:handler op-def) opts)))
-                 (with-show-form-remedy
+                       (with-cat-remedy opts)
+
+                       (and (= canonical :find-subform) (contains? opts :pattern))
+                       (with-match-form-pattern-remedy opts))
+                     (let [handler-result ((:handler op-def) opts)]
+                       (if (and (= canonical :show-form) (:error handler-result))
+                         (with-cat-remedy handler-result opts)
+                         handler-result))))
+                 (with-cat-remedy
                    {:error (str "Unknown op: " op
                                 ". Valid ops: "
-                                (str/join ", " (sort (keys ops-registry))))
-                    :error-type :unknown-operation}
+                                (str/join ", " (public-op-keys ops-registry)))
+                    :error-type :unknown-operation
+                    :usage "clj-surgeon :op :help"}
                    opts))]
     (if (string? result) (println result) (pp/pprint result))
     result))
@@ -988,6 +1059,9 @@
             :else
             (let [opts (parse-args args)]
               (cond
+                (contains? #{:help "help"} (:op opts))
+                (println (format-global-help ops-registry))
+
                 (and (:help opts) (nil? (:op opts)))
                 (println (format-global-help ops-registry))
 

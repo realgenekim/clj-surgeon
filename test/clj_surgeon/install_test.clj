@@ -54,9 +54,18 @@
 
 (defn- assert-skill-contracts
   [label skill]
-  (doseq [contract [":op :xray"
+  (doseq [contract ["Invoke before using Read, Edit, grep, sed, or cat"
+                    "Native Write is right for new files"
+                    ":op :xray"
                     ":op :edit"
                     ":op :replace-subform!"
+                    "(match :href) right"
+                    "`right`: next structural sibling"
+                    "`left`: previous structural sibling"
+                    "`up`: structural parent"
+                    "`down`: first structural child"
+                    "Navigation skips whitespace and comments"
+                    "no selected ancestor"
                     "There is no variadic wildcard"
                     "(loop _ _)"
                     "do not reopen the plan file"
@@ -102,12 +111,7 @@
       (is (str/includes? out "make install-dev"))
       (is (str/includes? out "Branch-live")))
     (testing "bounded clean-context acceptance batteries are discoverable"
-      (doseq [target ["benchmark-codex-skill"
-                      "benchmark-claude-skill"
-                      "benchmark-agent-skills"
-                      "benchmark-agent-skills-self-test"
-                      "retain-benchmark-result"
-                      "verify-benchmark-retention"]]
+      (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-usage-self-test" "retain-benchmark-result" "verify-benchmark-retention"]]
         (is (str/includes? out target))))))
 
 (deftest benchmark-agent-skill-targets-are-bounded-and-composable

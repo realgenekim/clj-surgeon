@@ -369,18 +369,18 @@
 (deftest invocation-remedy-is-narrow-executable-and-space-safe
   (let [opts {:file "dir with space/state.clj" :form "alpha"}
         remedy (show-form/invocation-remedy opts)]
-    (is (= :show-form (:operation remedy)))
+    (is (= :cat (:operation remedy)))
     (is (= "Read one named top-level form" (:reason remedy)))
-    (is (= ["clj-surgeon" ":op" ":show-form"
+    (is (= ["clj-surgeon" ":op" ":cat"
             ":file" "dir with space/state.clj" ":form" "alpha"]
            (:command-args remedy)))
-    (is (= "clj-surgeon :op :show-form :file 'dir with space/state.clj' :form alpha"
+    (is (= "clj-surgeon :op :cat :file 'dir with space/state.clj' :form alpha"
            (:command remedy))))
   (is (nil? (show-form/invocation-remedy {:file "x.clj"})))
   (is (nil? (show-form/invocation-remedy {:file "x.clj" :form "x" :line 2})))
   (testing "only remedies that can succeed are emitted"
     (is (some? (show-form/invocation-remedy {:file "x.clj" :line "12"})))
-    (is (= "clj-surgeon :op :show-form :file x.clj :contains 'distinctive text'"
+    (is (= "clj-surgeon :op :cat :file x.clj :contains 'distinctive text'"
            (:command (show-form/invocation-remedy
                        {:file "x.clj" :contains "distinctive text"}))))
     (is (nil? (show-form/invocation-remedy {:file "x.clj" :contains "   "})))
@@ -392,13 +392,13 @@
     (is (nil? (show-form/invocation-remedy
                 {:file "x.clj" :form "name" :platform "clj"}))))
   (testing "shell metacharacters in Clojure names are always quoted"
-    (is (= "clj-surgeon :op :show-form :file state.clj :form '*state*'"
+    (is (= "clj-surgeon :op :cat :file state.clj :form '*state*'"
            (:command (show-form/invocation-remedy
                        {:file "state.clj" :form "*state*"}))))
-    (is (= "clj-surgeon :op :show-form :file state.clj :form 'ready?'"
+    (is (= "clj-surgeon :op :cat :file state.clj :form 'ready?'"
            (:command (show-form/invocation-remedy
                        {:file "state.clj" :form "ready?"}))))
-    (is (= "clj-surgeon :op :show-form :file state.clj :form 'source->target'"
+    (is (= "clj-surgeon :op :cat :file state.clj :form 'source->target'"
            (:command (show-form/invocation-remedy
                        {:file "state.clj" :form "source->target"}))))))
 
@@ -511,17 +511,42 @@
         (let [{:keys [exit out err]}
               (run-cli ":op" ":get" ":file" (str file) ":form" "target")
               result (edn/read-string out)
-              remedy (get-in result [:remedies :show-form])
+              remedy (get-in result [:remedies :cat])
               recovered (apply run-cli (rest (:command-args remedy)))
               recovered-result (edn/read-string (:out recovered))]
           (is (pos? exit))
           (is (= :unknown-operation (:error-type result)))
-          (is (= :show-form (:operation remedy)))
-          (is (str/includes? (:command remedy) ":op :show-form"))
+          (is (= :cat (:operation remedy)))
+          (is (str/includes? (:command remedy) ":op :cat"))
           (is (zero? (:exit recovered)) (:err recovered))
           (is (= 'target (:name recovered-result)))
           (is (str/blank? err))))
-      (testing "line-only find-subform preserves its error and recommends show-form"
+      (testing "unknown :get repairs the observed :name spelling"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":get" ":file" (str file) ":name" "target")
+              result (edn/read-string out)
+              remedy (get-in result [:remedies :cat])
+              recovered (apply run-cli (rest (:command-args remedy)))]
+          (is (pos? exit))
+          (is (= :unknown-operation (:error-type result)))
+          (is (= ["clj-surgeon" ":op" ":cat" ":file" (str file)
+                  ":form" "target"]
+                 (:command-args remedy)))
+          (is (zero? (:exit recovered)) (:err recovered))
+          (is (str/blank? err))))
+      (testing "legacy show-form repairs the observed :name selector"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":show-form" ":file" (str file) ":name" "target")
+              result (edn/read-string out)
+              remedy (get-in result [:remedies :cat])
+              recovered (apply run-cli (rest (:command-args remedy)))]
+          (is (pos? exit))
+          (is (= :missing-selector (:error-type result)))
+          (is (= :cat (:operation remedy)))
+          (is (= ":form" (nth (:command-args remedy) 5)))
+          (is (zero? (:exit recovered)) (:err recovered))
+          (is (str/blank? err))))
+      (testing "line-only find-subform preserves its error and recommends cat"
         (let [{:keys [exit out err]}
               (run-cli ":op" ":find-subform" ":file" (str file)
                        ":line" "2")
@@ -529,7 +554,37 @@
           (is (pos? exit))
           (is (= :missing-arguments (:error-type result)))
           (is (= [:match] (:missing result)))
-          (is (= :show-form (get-in result [:remedies :show-form :operation])))
+          (is (= :cat (get-in result [:remedies :cat :operation])))
+          (is (str/blank? err))))
+      (testing "structural pattern spelling repairs to match-form"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":grep-form" ":file" (str file)
+                       ":pattern" "(defn _ [] :ok)")
+              result (edn/read-string out)
+              remedy (get-in result [:remedies :match-form])
+              recovered (apply run-cli (rest (:command-args remedy)))
+              recovered-result (edn/read-string (:out recovered))]
+          (is (pos? exit))
+          (is (= :missing-arguments (:error-type result)))
+          (is (= :match-form (:operation remedy)))
+          (is (str/includes? (:command remedy) ":op :match-form"))
+          (is (str/includes? (:command remedy) ":match '(defn _ [] :ok)'"))
+          (is (zero? (:exit recovered)) (:err recovered))
+          (is (= 1 (:match-count recovered-result)))
+          (is (str/blank? err))))
+      (testing "grep-form does not mislabel regex alternation as a structural pattern"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":grep-form" ":file" (str file)
+                       ":pattern" "target|missing")
+              result (edn/read-string out)
+              remedy (get-in result [:remedies :text-search])]
+          (is (pos? exit))
+          (is (= :missing-arguments (:error-type result)))
+          (is (nil? (get-in result [:remedies :grep-form])))
+          (is (= :text-search (:operation remedy)))
+          (is (str/includes? (:reason remedy) "not a regular expression"))
+          (is (= ["rg" "-n" "--max-count" "20" "target|missing" (str file)]
+                 (:command-args remedy)))
           (is (str/blank? err))))
       (finally
         (fs/delete-tree tmp-dir)))))
@@ -591,20 +646,24 @@
       (finally
         (fs/delete-tree tmp-dir)))))
 
-(deftest cli-grep-form-alias-is-one-shot-file-wide-structural-search
+(deftest cli-match-form-and-grep-form-aliases-are-one-shot-structural-search
   (let [file "test/fixtures/show_form_migration.cljc"
         match "(json/write-value-as-string _)"
         canonical (run-cli ":op" ":find-subform" ":file" file ":match" match)
-        alias (run-cli ":op" ":grep-form" ":file" file ":match" match)
+        alias (run-cli ":op" ":match-form" ":file" file ":match" match)
+        grep-alias (run-cli ":op" ":grep-form" ":file" file ":match" match)
         canonical-result (edn/read-string (:out canonical))
-        alias-result (edn/read-string (:out alias))]
+        alias-result (edn/read-string (:out alias))
+        grep-result (edn/read-string (:out grep-alias))]
     (is (zero? (:exit alias)) (:err alias))
     (is (= 1 (:match-count alias-result)))
     (is (nil? (:inside alias-result)))
     (is (= "upsert-starred-post!"
            (get-in alias-result [:matches 0 :inside])))
     (is (= (:matches canonical-result) (:matches alias-result)))
-    (is (= (:source-hash canonical-result) (:source-hash alias-result)))))
+    (is (= (:source-hash canonical-result) (:source-hash alias-result)))
+    (is (= (:matches canonical-result) (:matches grep-result)))
+    (is (= (:source-hash canonical-result) (:source-hash grep-result)))))
 
 (deftest real-program-derived-fixture-supports-both-motivating-reads
   (let [file "test/fixtures/show_form_migration.cljc"
@@ -647,9 +706,10 @@
                     :find-subform
                     (get core/ops-registry :find-subform))]
     (doseq [[surface text] {"README" readme
-                            "changelog" changelog
-                            "show-form help" help}]
+                            "changelog" changelog}]
       (is (str/includes? text ":show-form") surface))
+    (is (str/includes? help "Compatibility aliases: show-form")
+        "cat help")
     (doseq [[surface text] {"installed skill" skill
                             "legacy skill" legacy-skill}]
       (is (str/includes? text ":cat") surface)
@@ -665,13 +725,13 @@
                             "legacy skill" legacy-skill
                             "changelog" changelog}]
       (is (str/includes? text ":cat") surface))
-    (is (str/includes? help "Aliases: cat") "show-form help")
+    (is (str/includes? help "clj-surgeon :op cat") "cat help")
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill
                             "changelog" changelog
                             "find-subform help" find-help}]
-      (is (str/includes? text ":grep-form") surface))
+      (is (str/includes? text ":match-form") surface))
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill

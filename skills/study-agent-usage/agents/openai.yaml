@@ -1,0 +1,4 @@
+interface:
+  display_name: "Study Agent Usage"
+  short_description: "Compare recent Codex and Claude tool behavior"
+  default_prompt: "Review Codex and Claude usage since the last study and write an anonymized ethnographic analysis."

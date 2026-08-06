@@ -50,7 +50,8 @@
                   :plan-out "review.edn"})]
     (is (= :edit (:operation result)))
     (is (= :edit-requires-transform (:error-type result)))
-    (is (= :q (get-in result [:remedy :read-operation])))
+    (is (= :xray (get-in result [:remedy :read-operation])))
+    (is (= :expr (get-in result [:remedy :read-argument])))
     (is (= [[:replace 'form] [:replace-span 'form '...]]
            (get-in result [:remedy :terminal-steps])))
     (is (nil? (:result-hash result)))))
@@ -90,6 +91,7 @@
     (is (str/includes? global "edit"))
     (is (str/includes? global "clj-surgeon :op :edit"))
     (is (str/includes? global ":expr"))
+    (is (str/includes? global ":expect :done"))
     (is (str/includes? global ":plan-out plan.edn"))
     (is (str/includes? help "Without :expect"))
     (is (str/includes? help "PLAN ONLY"))
@@ -112,12 +114,11 @@
     (is (str/includes? help ":replace-subform!"))
     (is (= #{:file :query :expr :expect :plan-out}
            (set (keys (get-in core/ops-registry [:edit :args])))))
-    (is (every? :required
-                (map #(get-in core/ops-registry [:edit :args %])
-                     [:file :plan-out])))
+    (is (true? (get-in core/ops-registry [:edit :args :file :required])))
     (is (not-any? :required
                   (map #(get-in core/ops-registry [:edit :args %])
-                       [:query :expr :expect])))))
+                       [:query :expr :expect :plan-out])))
+    (is (str/includes? help "Omit :plan-out unless"))))
 
 (deftest agent-facing-surfaces-teach-the-native-edit-boundary
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))
@@ -341,14 +342,19 @@
             (is (= edit-source (slurp (str source-file))))
             (when-not (= label "source aliases plan")
               (is (= original-plan (slurp (str plan-file))))))))
-      (testing "plan-out is mandatory"
+      (testing "plan-only edit explains both safe routes when plan-out is absent"
         (let [result (run-cli ":op" ":edit"
                               ":file" (str source-file)
                               ":query" (pr-str node-query))
               refusal (edn/read-string (:out result))]
           (is (pos? (:exit result)))
-          (is (= :missing-arguments (:error-type refusal)))
-          (is (= [:plan-out] (:missing refusal)))
+          (is (= :missing-plan-out (:error-type refusal)))
+          (is (= #{:guarded-edit :plan-only}
+                 (set (keys (:remedies refusal)))))
+          (is (str/includes? (get-in refusal [:remedies :guarded-edit :reason])
+                             ":expect"))
+          (is (str/includes? (get-in refusal [:remedies :plan-only :reason])
+                             ":plan-out"))
           (is (= edit-source (slurp (str source-file))))))
       (finally
         (fs/delete-tree tmp-dir)))))
@@ -443,6 +449,39 @@
               (is (= (:source-hash result) (:source-hash saved)))
               (is (= (:result-hash saved)
                      (lens/source-hash source))))))))))
+
+(deftest matching-expect-applies-without-plan-artifact-bookkeeping
+  (doseq [[label route] [["expr" {:expr expect-replacement-expr}]
+                         ["query" {:query node-query}]]]
+    (testing label
+      (with-expect-workspace
+        (fn [{:keys [source-file plan-file]}]
+          (let [result (core/run-edit (merge {:file source-file
+                                              :expect true-expect}
+                                             route))
+                source (slurp source-file)]
+            (is (nil? (:error result)))
+            (is (true? (:ok result)))
+            (is (= :expect-guarded (:mode result)))
+            (is (= :replace-subform! (:operation result)))
+            (is (false? (:plan-artifact-retained result)))
+            (is (nil? (:plan-out result)))
+            (is (= (:result-hash result)
+                   (get-in result [:verified :read-back-hash])))
+            (is (= 1 (count (re-seq #"status :complete" source))))
+            (is (= pre-existing-plan (slurp plan-file))
+                "an unrelated plan artifact remains untouched")))))))
+
+(deftest plan-only-edit-still-requires-a-plan-artifact
+  (with-expect-workspace
+    (fn [{:keys [source-file plan-file]}]
+      (let [result (core/run-edit {:file source-file
+                                   :expr expect-replacement-expr})]
+        (is (= :missing-plan-out (:error-type result)))
+        (is (= edit-source (slurp source-file)))
+        (is (= pre-existing-plan (slurp plan-file)))
+        (is (= #{:guarded-edit :plan-only}
+               (set (keys (:remedies result)))))))))
 
 (deftest expect-with-line-root-is-a-one-call-exact-edit-in-an-unnamed-owner
   (let [source (slurp "test/fixtures/containing_line_owner.clj")
@@ -586,7 +625,8 @@
                                    :plan-out plan-file
                                    :expect true-expect})]
         (is (= :edit-requires-transform (:error-type result)))
-        (is (= :q (get-in result [:remedy :read-operation])))
+        (is (= :xray (get-in result [:remedy :read-operation])))
+        (is (= :expr (get-in result [:remedy :read-argument])))
         (is (= edit-source (slurp source-file)))
         (is (= pre-existing-plan (slurp plan-file)))))))
 
@@ -742,9 +782,9 @@
     (is (str/includes? help "non-.edn plan paths"))
     (is (some #(and (str/includes? % ":expect")
                     (str/includes? % ":expect '")
-                    (str/includes? % ":plan-out plan.edn"))
+                    (not (str/includes? % ":plan-out")))
               (get-in core/ops-registry [:edit :examples]))
-        "one documented example shows the guarded invocation")))
+        "one documented example shows the artifact-free guarded invocation")))
 
 (deftest parse-args-preserves-the-expect-form-verbatim
   (let [expect "(assoc state :status :done)"]
@@ -801,11 +841,9 @@
           (let [result (run-cli ":op" ":edit"
                                 ":file" source-file
                                 ":expr" expect-replacement-expr
-                                ":expect" true-expect
-                                ":plan-out" plan-file)
+                                ":expect" true-expect)
                 receipt (edn/read-string (:out result))
-                source (slurp source-file)
-                saved (edn/read-string (slurp plan-file))]
+                source (slurp source-file)]
             (is (zero? (:exit result)) (:err result))
             (is (true? (:ok receipt)))
             (is (= :expect-guarded (:mode receipt)))
@@ -815,7 +853,8 @@
             (is (true? (get-in receipt [:verified :whole-file-parsed])))
             (is (= 1 (count (re-seq #"status :complete" source))))
             (is (= 1 (count (re-seq #"status :done" source))))
-            (is (= (:result-hash receipt) (:result-hash saved))))))
+            (is (false? (:plan-artifact-retained receipt)))
+            (is (= pre-existing-plan (slurp plan-file))))))
       (finally
         (fs/delete-tree tmp-dir)))))
 

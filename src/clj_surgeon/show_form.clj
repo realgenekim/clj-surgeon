@@ -15,7 +15,8 @@
       s
       (str "'" (str/replace s "'" "'\"'\"'") "'"))))
 
-(defn- render-command
+(defn render-command
+  "Render command argument data as one shell-safe command string."
   [args]
   (str/join " " (map shell-quote args)))
 
@@ -55,17 +56,25 @@
 
 (defn- command-args
   [{:keys [file form line contains platform] :as opts}]
-  (cond-> ["clj-surgeon" ":op" ":show-form" ":file" (str file)]
+  (cond-> ["clj-surgeon" ":op" ":cat" ":file" (str file)]
     (contains? opts :form) (into [":form" (str form)])
     (contains? opts :line) (into [":line" (str line)])
     (contains? opts :contains) (into [":contains" (str contains)])
     (contains? opts :platform) (into [":platform" (str platform)])))
 
 (defn invocation-remedy
-  "Return an executable show-form remedy when explicit arguments identify
-   exactly one supported read selector. Pure; nil when intent is not exact."
-  [{:keys [file] :as opts}]
-  (let [form? (contains? opts :form)
+  "Return an executable cat remedy when explicit arguments identify exactly
+   one supported read selector. Treat :name as a recoverable :form spelling.
+   This pure function returns nil when intent is not exact."
+  [{:keys [file] :as supplied-opts}]
+  (let [opts (if (and (contains? supplied-opts :name)
+                      (not-any? #(contains? supplied-opts %)
+                                [:form :line :contains]))
+               (-> supplied-opts
+                   (assoc :form (:name supplied-opts))
+                   (dissoc :name))
+               supplied-opts)
+        form? (contains? opts :form)
         line? (contains? opts :line)
         contains-selector? (contains? opts :contains)
         normalized-line (normalize-cli-line (:line opts))]
@@ -83,7 +92,7 @@
                      form? "Read one named top-level form"
                      line? "Read the top-level form containing one line"
                      :else "Read the one top-level form containing literal text")]
-        {:operation :show-form
+        {:operation :cat
          :reason reason
          :command (render-command args)
          :command-args args}))))

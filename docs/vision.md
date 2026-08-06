@@ -90,20 +90,20 @@ write.
 ### Small composable primitives age well
 
 `rg` remains the right tool for broad textual discovery. `:ls` is better when a
-model needs a namespace's shape. `:find-subform` is better for repeated nested
+model needs a namespace's shape. `:match-form` is better for repeated nested
 Hiccup, handlers, rules, routes, and state transitions. The goal is not to
 replace every tool; it is to make structural facts and exact actions cheap.
 
 ### One path should read and update
 
 The most durable interface is jq-like: a composable path is both a getter and
-an updater. In clj-surgeon, `:q` runs an EDN pipeline over rewrite-clj's concrete
-syntax tree. For example,
-`[[:form transition] [:find :finish] :right]` selects the value paired with a
-`case` key. The same relationship works for a `cond` guard, map key, or binding
-name. Ending the path with `[:replace FORM]` changes its role from read evidence
-to a single hash-bound plan; it still never writes source. The reviewed plan is
-applied separately with `:replace-subform!`.
+an updater. In clj-surgeon, `:xray` reads a Clojure path and `:edit` uses the
+same path with a terminal replacement. For example, `(-> (form 'transition)
+(match :finish) right)` selects the value paired with a `case` key. The same
+relationship works for a `cond` guard, map key, or binding name. A literal
+terminal `replace` with `:expect` applies one declared edit and returns a
+verified receipt. A computed replacement emits a hash-bound plan for separate
+review and `:replace-subform!` application.
 
 The same path algebra includes structural slices. After selecting a node,
 `[:span 2]` addresses it and its next semantic peer as one located object. A
@@ -211,14 +211,15 @@ The ideal lens minimizes fallback to line-oriented reading when syntax already
 provides a better address. Use `:cat` instead of reconstructing a `sed`
 range when a top-level name or containing line is known. When only distinctive
 text is known, use literal `:cat :contains` to select its enclosing form
-without manufacturing a line number. Use `:grep-form` for file-wide structural
+without manufacturing a line number. Use `:match-form` for file-wide structural
 syntax; each match exposes reusable enclosing-form ownership for optional
 `:inside` narrowing. Use
-`:q :query '[[:form transition] [:find :finish] :right]' when structural
+`:xray :expr "(-> (form 'transition) (match :finish) right)"` when structural
 relationship—not textual containment—identifies the desired node. Add a
-terminal `[:replace FORM]` to emit a plan and apply it later with
-`:replace-subform!`. Keep `rg` for broad cross-file discovery and bounded text
-reads for context that genuinely spans forms.
+terminal literal `replace` plus `:expect` to apply and verify a declared edit
+in one call. Keep computed replacements behind a saved plan and separate
+`:replace-subform!` apply. Keep `rg` for broad cross-file discovery and bounded
+text reads for context that genuinely spans forms.
 
 Perfection here means lossless perception, singular guarded action, and an
 executable recovery path after refusal. It does not mean autonomous design or
@@ -234,15 +235,15 @@ safety advantage, use the faster native patch.
 
 | Operation | Role |
 |---|---|
-| `:ls` / `:outline` | Top-level form boundaries and signatures |
-| `:show-form` | Exact top-level source by name, containing line, or literal text |
+| `:ls` | Top-level form boundaries and signatures |
+| `:cat` | Exact top-level source by name, containing line, or literal text |
 | `:ls-tree` | Cross-project structural map |
 | `:deps`, `:ls-deps`, `:topo` | Dependency visibility |
 | `:ls-extract` | Minimal mechanically extractable closure |
 | `:declares` | Forward-declare audit |
-| `:lens` / `:q` | Composable concrete-syntax getter and single-edit plan updater |
+| `:edit` | Composable concrete-syntax single-edit updater |
 | `:xray` | Pure Clojure computation over selected values with compact hash-backed or full evidence |
-| `:grep-form` / `:find-subform` | File-wide or scoped nested structural search |
+| `:match-form` | File-wide or scoped nested structural search |
 | `:replace-subform` / `!` | Versioned, hash-bound single-subtree edit |
 | `:mv` / `:mv-with-deps` | Guarded exact movement / explicit minimum dependency-expanded movement |
 | `:fix-declares` / `!` | Mechanical declare cleanup |
@@ -255,10 +256,10 @@ safety advantage, use the faster native patch.
 The composable form uses one path for reading and planning:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
-  :query '[[:form transition] [:find :finish] :right]'
+clj-surgeon :op :xray :file src/state.clj \
+  :expr "(-> (form 'transition) (match :finish) right)"
 
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] :right [:replace (assoc state :status :complete)]]' \
   :plan-out plan.edn
 ```
@@ -271,7 +272,7 @@ and never write source.
 Sibling slice planning uses the same boundary:
 
 ```bash
-clj-surgeon :op :q :file src/state.clj \
+clj-surgeon :op :edit :file src/state.clj \
   :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' \
   :plan-out plan.edn
 
@@ -312,7 +313,7 @@ compound operation.
 | Idea | Decision | Why |
 |---|---|---|
 | `:dead-code` | **DO NOT BUILD** | clj-kondo supplies evidence; a model can inspect reachability and runtime registration context. |
-| unstructured cross-project `:find` replacement | **DO NOT BUILD** | `rg` is superior for broad discovery; `:q` and `:find-subform` should remain narrow lenses where syntax identity matters. |
+| unstructured cross-project `:find` replacement | **DO NOT BUILD** | `rg` is superior for broad discovery; `:xray`, `:edit`, and `:match-form` should remain narrow lenses where syntax identity matters. |
 | `:suggest-split` | **DO NOT BUILD** | Cluster boundaries, ownership, naming, and API design are architectural judgment. Give the model `:ls` and `:deps`. |
 | semantic `:diff` | **DO NOT BUILD** | Git already produces the durable change artifact; a model can interpret it with surrounding context. Lens plans need only a real unified diff. |
 | `:find-extractable-pure` auto-extraction | **DO NOT BUILD** | Recognizing `swap!` is easy; deciding parameters, nil semantics, invariants, names, and tests is the actual work. |

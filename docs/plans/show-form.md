@@ -19,10 +19,16 @@ classification, platforms, selector, and file snapshot hash. It never writes.
 It refuses missing, conflicting, invalid, absent, or ambiguous selectors with a
 stable nonzero error.
 
-`:cat` is a strict alias for `:show-form`. It accepts the identical argument
-contract, never dumps the whole file, and preserves `:operation :show-form` in
-success and refusal data. Help exposes the alias; executable remedies use the
-explicit canonical name.
+`:cat` is the preferred caller spelling. `:show-form` remains a compatibility
+input. Both spellings accept the identical argument contract, never dump the
+whole file, and preserve `:operation :show-form` in success and refusal data.
+Help and executable remedies use `:cat` so that the binary and agent skill teach
+one vocabulary.
+
+An unknown `:get` call with `:form` or `:name` receives an executable `:cat
+:form` remedy. A `:grep-form` call that supplies `:pattern` instead of `:match`
+receives an executable `:grep-form :match` remedy. `:op :help` prints the same
+global usage text as `--help` and exits successfully.
 
 ## Bitter-Lesson Boundary
 
@@ -246,13 +252,14 @@ not brittle absolute line numbers in permanent tests.
 
 - Exact documented name and line commands return EDN and exit zero.
 - All refusal types return EDN and exit nonzero without stack traces.
-- Global help lists `show-form` as read-only.
-- Global and per-operation help expose `cat` only as an alias.
+- Global help lists `cat` as read-only and keeps compatibility spellings in one
+  footer.
+- Per-operation help uses `cat` as the command name.
 - `:cat` returns the same canonical operation, selector, source, and hash as
   `:show-form`; bare `:cat :file ...` refuses instead of dumping the file.
 - Per-operation help documents exactly-one selector and `:platform`.
-- Unknown `:get` with a form returns an executable `:show-form` remedy.
-- Line-only `:find-subform` returns an executable `:show-form` remedy.
+- Unknown `:get` with `:form` or `:name` returns an executable `:cat` remedy.
+- Line-only `:find-subform` returns an executable `:cat` remedy.
 - Remedy `:command-args` reproduce the successful invocation, including a file
   path containing spaces.
 - Help, README, changelog, and both skill files agree on the operation and plan
