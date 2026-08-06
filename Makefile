@@ -90,7 +90,7 @@ install-cli: prepare-cli-package
 	  if [ -e "$$receipt" ] && { [ ! -f "$$receipt" ] || ! grep -q ':artifact :cli' "$$receipt"; }; then echo "Refusing to replace unrelated receipt $$receipt"; exit 1; fi; \
 	  stage="$$dest.tmp.$$$$"; \
 	  trap 'rm -f "$$stage"' EXIT HUP INT TERM; \
-	  printf '%s\n' '#!/usr/bin/env bb' ';; clj-surgeon stable launcher' '(require (quote [babashka.classpath :as cp]))' '(cp/add-classpath "$(CLI_PACKAGE)/src")' '(require (quote [clj-surgeon.core :as core]))' '(apply core/-main *command-line-args*)' > "$$stage"; \
+	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'exec bb --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
 	  chmod +x "$$stage"; \
 	  mv "$$stage" "$$dest"; \
 	  trap - EXIT HUP INT TERM; \

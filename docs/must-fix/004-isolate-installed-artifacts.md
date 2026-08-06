@@ -1,6 +1,6 @@
 # Isolate Installed Artifacts from the Active Checkout
 
-**Status:** Open
+**Status:** Resolved 2026-08-06
 **Severity:** P0 release blocker
 
 ## Evidence
@@ -37,3 +37,13 @@ claims must distinguish those from the developer's live-linked entrance.
 
 “Installed version” has one unambiguous, testable meaning and a branch switch
 cannot silently invalidate benchmark or release isolation.
+
+## Resolution
+
+Stable installs use immutable, content-addressed runtime and skill packages.
+The CLI launcher now invokes Babashka with `--classpath PACKAGE/src`; this
+overrides a caller checkout's `bb.edn` classpath without changing the caller's
+working directory. A permanent adversarial test installs the CLI, creates a
+hostile checkout containing a fake `clj-surgeon.core`, runs the installed
+command from that checkout, and proves the copied runtime wins. Development
+install targets remain explicitly branch-coupled.

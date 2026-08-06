@@ -24,7 +24,7 @@
 (defn- run-installed-cli
   [path & args]
   @(proc/process
-     (into ["bb" (str path)] args)
+     (into [(str path)] args)
      {:err :string :out :string}))
 
 (defn- slurp-path
@@ -223,6 +223,20 @@
             (is (str/includes? launcher "clj-surgeon stable launcher"))
             (is (str/includes? launcher (str install-root)))
             (is (not (str/includes? launcher project-root)))))
+        (testing "a hostile caller bb.edn cannot shadow the copied runtime"
+          (let [hostile-root (fs/path tmp-dir "hostile-checkout")
+                hostile-src (fs/path hostile-root "src" "clj_surgeon")]
+            (fs/create-dirs hostile-src)
+            (spit (str (fs/path hostile-root "bb.edn")) "{:paths [\"src\"]}\n")
+            (spit (str (fs/path hostile-src "core.clj"))
+                  "(ns clj-surgeon.core)\n(defn -main [& _] (println \"HOSTILE-WORKTREE\"))\n")
+            (let [{:keys [exit out err]}
+                  @(proc/process [(str cli-path) "--version"]
+                                 {:dir (str hostile-root)
+                                  :out :string :err :string})]
+              (is (zero? exit) (str out err))
+              (is (str/includes? out ":tool \"clj-surgeon\""))
+              (is (not (str/includes? out "HOSTILE-WORKTREE"))))))
         (testing "receipts identify source bytes, mode, package, and destination"
           (doseq [receipt [(str cli-path ".receipt.edn")
                            (str codex-skill ".receipt.edn")
