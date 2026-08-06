@@ -670,3 +670,22 @@ The clean report exposed one remaining documentation guess. The skill said to
 pass the receipt path directly to `:undo-change!`, but did not spell out the
 `:receipt` argument. The caller guessed correctly. The skill now gives the
 complete command so a later caller need not guess at all.
+
+### Stdin removed the shell-escaping tax
+
+The first real follow-on dogfood attempted to add an exact test intent through
+inline `:spec`. The engine refused safely before source I/O because the caller
+over-escaped quotes inside the EDN string. The corrected command succeeded, but
+the failure belonged to the transport rather than the transaction model.
+
+The CLI now follows the `kubectl apply -f -` convention. `:spec-file -` reads
+exactly one EDN document from stdin; `:spec-file PATH` reads a saved document.
+Empty input, a trailing second form, conflicting `:spec` and `:spec-file`, and
+missing input all refuse with stable errors. Inline `:spec` remains compatible
+for small plans.
+
+The first heredoc dogfood applied two intents and three edits across two copied
+real fixtures, emitted one compact receipt, and restored both exact starting
+hashes through the unopened 2,262-byte inverse receipt. It required no repair.
+The only remaining escape, such as `\"/app.css\"`, is intrinsic EDN string
+syntax; the additional shell-argument escape layer is gone.

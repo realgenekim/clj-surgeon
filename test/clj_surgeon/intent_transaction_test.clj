@@ -706,6 +706,8 @@
     (is (str/includes? global-help "    change!"))
     (is (str/includes? global-help "    undo-change!"))
     (is (str/includes? apply-help "complete mechanical model plan once"))
+    (is (str/includes? apply-help ":spec-file -"))
+    (is (str/includes? apply-help "kubectl apply -f -"))
     (is (str/includes? apply-help "without probing source"))
     (is (str/includes? apply-help "publishes the receipt last"))
     (is (str/includes? apply-help ":receipt-out"))
@@ -776,6 +778,53 @@
       (finally
         (fs/delete-tree temp-dir)))))
 
+(deftest change-cli-loads-one-spec-document-from-file-or-stdin
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-spec-input-"})
+        file (str (fs/path temp-dir "sample.clj"))
+        spec-file (str (fs/path temp-dir "change.edn"))
+        source "(ns sample)\n(defn page [x] [(old x)])\n"
+        change-spec
+        (spec [(intent [file] "(old x)" "(new x)" 1)]
+              {:intent-count 1 :edit-count 1 :changed-file-count 1})
+        run-cli (fn [args input]
+                  @(proc/process (into ["bb" "-m" "clj-surgeon.core"] args)
+                                 (cond-> {:out :string :err :string}
+                                   input (assoc :in input))))]
+    (try
+      (spit file source)
+      (spit spec-file (pr-str change-spec))
+      (doseq [[label args input]
+              [["file" [":op" ":change" ":spec-file" spec-file] nil]
+               ["stdin" [":op" ":change" ":spec-file" "-"]
+                (pr-str change-spec)]]]
+        (testing label
+          (let [{:keys [exit out err]} (run-cli args input)
+                result (edn/read-string out)]
+            (is (= 0 exit))
+            (is (= "" err))
+            (is (:ok result))
+            (is (= source (slurp file))))))
+      (doseq [[label args input error-type]
+              [["conflicting inputs"
+                [":op" ":change" ":spec" (pr-str change-spec)
+                 ":spec-file" spec-file]
+                nil :conflicting-spec-inputs]
+               ["missing input" [":op" ":change"] nil :missing-spec-input]
+               ["empty stdin" [":op" ":change" ":spec-file" "-"] ""
+                :invalid-spec-document]
+               ["trailing form" [":op" ":change" ":spec-file" "-"]
+                (str (pr-str change-spec) "\n:extra")
+                :invalid-spec-document]]]
+        (testing label
+          (let [{:keys [exit out err]} (run-cli args input)
+                result (edn/read-string out)]
+            (is (= 1 exit))
+            (is (= "" err))
+            (is (= error-type (:error-type result)))
+            (is (= source (slurp file))))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
 (deftest change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-dogfood-"})
         app-file (str (fs/path temp-dir "app_shell.clj"))
@@ -799,9 +848,10 @@
       (let [{:keys [exit out err]}
             @(proc/process ["bb" "-m" "clj-surgeon.core"
                             ":op" ":change!"
-                            ":spec" (pr-str change-spec)
+                            ":spec-file" "-"
                             ":receipt-out" receipt-file]
-                           {:out :string :err :string})
+                           {:in (pr-str change-spec)
+                            :out :string :err :string})
             result (edn/read-string out)
             changed-app (slurp app-file)
             changed-reader (slurp reader-file)

@@ -26,6 +26,7 @@
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clojure.edn :as edn]
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
@@ -596,8 +597,10 @@
 
     :change           {:handler   intent-transaction/plan-change
                        :desc      "Compile one heterogeneous structural intent transaction without writing source"
-                       :args      {:spec {:required true :desc "EDN map with exact :intents and aggregate :expect guards"}}
-                       :workflow  ["Express the complete mechanical model plan as one :spec with an :intents vector."
+                       :args      {:spec      {:desc "Inline EDN map; compatibility entrance for small specs"}
+                                   :spec-file {:desc "EDN spec path, or - to read one document from stdin (preferred)"}}
+                       :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - for a nontrivial plan, like kubectl apply -f -."
+                                   "Express the complete mechanical model plan as one document with an :intents vector."
                                    "Every intent declares explicit :files, exact source strings :from and :to, and a positive :expect-count."
                                    "Declare aggregate :expect values for :intent-count, :edit-count, and :changed-file-count."
                                    "This command reads each scoped file once, compiles every intent against the original snapshots, and writes nothing."
@@ -605,21 +608,23 @@
                                    "Different intents may touch disjoint syntax in the same file. Any identical, ancestor/descendant, or otherwise overlapping targets refuse the whole plan."
                                    "Review the per-intent and per-file counts, hashes, concrete edits, combined diff, and whole-file parse proof."
                                    "Use one intent for a structural global replacement; use several intents to materialize one heterogeneous model plan without repeated edit turns."]
-                       :examples  ["clj-surgeon :op :change :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}'"]
+                       :examples  ["clj-surgeon :op :change :spec-file - <<'EDN'\n{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}\nEDN"]
                        :category  :write
                        :pair      :change!}
 
     :change!          {:handler   intent-transaction/execute-change!
                        :desc      "Apply one guarded structural intent transaction and save its inverse receipt"
-                       :args      {:spec        {:required true :desc "EDN map with exact :intents and aggregate :expect guards"}
+                       :args      {:spec        {:desc "Inline EDN map; compatibility entrance for small specs"}
+                                   :spec-file   {:desc "EDN spec path, or - to read one document from stdin (preferred)"}
                                    :receipt-out {:required true :desc "Durable .edn inverse receipt; must not alias a source file"}}
-                       :workflow  ["Express the complete mechanical model plan once as the same guarded :spec accepted by :change."
+                       :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - so a large plan travels as data instead of shell-escaped text, like kubectl apply -f -."
+                                   "Express the complete mechanical model plan once as the same guarded document accepted by :change."
                                    "Every :from, :to, per-intent :expect-count, and aggregate :expect value is consent to the exact materialized transaction. If the task already determines those counts, declare them without probing source only to confirm them."
                                    "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
                                    "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
                                    "The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!."
                                    "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
-                       :examples  ["clj-surgeon :op :change! :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}' :receipt-out /tmp/api-change.edn"]
+                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/api-change.edn <<'EDN'\n{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}\nEDN"]
                        :category  :write
                        :pair      :change}
 
@@ -1014,11 +1019,64 @@
                    :command-args args})))
     result))
 
+(defn parse-spec-document
+  "Parse exactly one EDN document from a transaction spec source."
+  [source source-label]
+  (try
+    (let [reader (java.io.PushbackReader. (java.io.StringReader. source))
+          eof (Object.)
+          value (edn/read {:eof eof} reader)
+          trailing (edn/read {:eof eof} reader)]
+      (when (identical? eof value)
+        (throw (ex-info "Transaction spec is empty" {})))
+      (when-not (identical? eof trailing)
+        (throw (ex-info "Transaction spec must contain exactly one EDN form" {})))
+      value)
+    (catch Exception exception
+      (throw (ex-info (str "Invalid transaction spec from " source-label
+                           ": " (.getMessage exception))
+                      {:error-type :invalid-spec-document
+                       :spec-source source-label}
+                      exception)))))
+
+(defn- load-change-spec
+  [{:keys [spec spec-file] :as opts}]
+  (let [inline? (contains? opts :spec)
+        file? (contains? opts :spec-file)]
+    (cond
+      (and inline? file?)
+      (throw (ex-info "Provide exactly one of :spec or :spec-file"
+                      {:error-type :conflicting-spec-inputs}))
+
+      inline?
+      opts
+
+      file?
+      (let [source-label (if (= "-" spec-file) "stdin" spec-file)
+            source (try
+                     (if (= "-" spec-file) (slurp *in*) (slurp spec-file))
+                     (catch Exception exception
+                       (throw (ex-info (str "Cannot read transaction spec from " source-label
+                                            ": " (.getMessage exception))
+                                       {:error-type :invalid-spec-source
+                                        :spec-source source-label}
+                                       exception))))]
+        (-> opts
+            (dissoc :spec-file)
+            (assoc :spec (parse-spec-document source source-label))))
+
+      :else
+      (throw (ex-info "Provide exactly one of :spec or :spec-file"
+                      {:error-type :missing-spec-input})))))
+
 (defn run [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
   (let [canonical (resolve-op op)
+        opts (if (#{:change :change!} canonical)
+               (load-change-spec opts)
+               opts)
         op-def (get ops-registry canonical)
         result (if op-def
                  (let [missing (->> (:args op-def)

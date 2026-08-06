@@ -782,10 +782,21 @@ declares explicit files, one exact before-form, one exact after-form, and an
 expected match count. The aggregate expectation guards the complete plan.
 
 ```bash
-clj-surgeon :op :change! \
-  :spec '{:intents [{:files ["src/app/a.clj" "src/app/b.clj"] :from "(old-api account)" :to "(new-api account)" :expect-count 3} {:files ["src/app/b.clj"] :from ":body" :to ":body.page" :expect-count 1}] :expect {:intent-count 2 :edit-count 4 :changed-file-count 2}}' \
-  :receipt-out /tmp/api-change.edn
+clj-surgeon :op :change! :spec-file - \
+  :receipt-out /tmp/api-change.edn <<'EDN'
+{:intents
+ [{:files ["src/app/a.clj" "src/app/b.clj"]
+   :from "(old-api account)" :to "(new-api account)" :expect-count 3}
+  {:files ["src/app/b.clj"]
+   :from ":body" :to ":body.page" :expect-count 1}]
+ :expect {:intent-count 2 :edit-count 4 :changed-file-count 2}}
+EDN
 ```
+
+This follows the `kubectl apply -f -` convention: command-line arguments select
+the operation, stdin carries the large structured document, and stdout returns
+the compact receipt. Use `:spec-file PATH` for a saved document. Inline `:spec`
+remains compatible for small plans, but it is not the primary agent route.
 
 All intents compile against the same original snapshots. Matching ignores
 whitespace. Comments, metadata, reader macros, token spelling, and collection
@@ -799,7 +810,7 @@ transaction-owned bytes. Recovery never overwrites unknown concurrent bytes.
 Use the non-mutating command when the combined diff needs review:
 
 ```bash
-clj-surgeon :op :change :spec '{:intents [...] :expect {...}}'
+clj-surgeon :op :change :spec-file plan.edn
 ```
 
 Successful `:change!` output is compact. The durable receipt contains concrete

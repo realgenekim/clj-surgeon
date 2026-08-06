@@ -2,9 +2,10 @@
 
 ## Status
 
-Active implementation plan for the first `:change` / `:change!` transaction on
-the `intent-transactions` branch. Batches 0 through 4 are implemented and
-dogfooded. Batch 5, the clean-context and native-control comparison, is next.
+Implemented plan for the first `:change` / `:change!` transaction. Batches 0
+through 5 passed. The first post-implementation dogfood added a kubectl-style
+`:spec-file -` stdin entrance after inline shell escaping caused a safe refusal.
+Batch 6, the optional EDNL stack, remains evidence-gated.
 
 The first transform is deliberately narrow: replace every losslessly exact
 `:from` form with one exact `:to` form across an explicit set of files. A
@@ -171,7 +172,7 @@ evidence, not noise to defer until the API is complete.
 | 2 | Guard and diagnostic refinement from early dogfood | Does refusal teach the model to repair the whole intent once? | passed |
 | 3 | Guarded `:change!` with staged writes and rollback | Can known-safe work beat repeated plan/apply without weakening refusal behavior? | passed |
 | 4 | Durable hash-fenced receipt and `:undo-change!` | Is recovery obvious, compact, and independently verifiable? | passed |
-| 5 | Clean-context replay and tagged/native controls | Does the whole route reduce turns and wall time on realistic work? | next |
+| 5 | Clean-context replay and tagged/native controls | Does the whole route reduce turns and wall time on realistic work? | passed |
 | 6 | Optional hash-chained EDNL intent stack | Does externalizing decisions during planning beat one large spec without weakening consent? | queued |
 
 For every batch:

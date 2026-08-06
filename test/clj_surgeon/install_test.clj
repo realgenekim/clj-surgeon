@@ -59,6 +59,8 @@
                     ":op :xray"
                     ":op :edit"
                     ":op :change!"
+                    ":spec-file -"
+                    "kubectl apply -f -"
                     ":op :undo-change! :receipt /tmp/api-change.edn"
                     ":receipt-out"
                     "Every intent requires positive `:expect-count`"
