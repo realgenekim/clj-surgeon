@@ -565,3 +565,45 @@ spec and did not become repeated plan/apply turns. Incremental pushes remain
 unproven. They should be added only if long-plan trials show that tiny,
 source-free appends reduce reconstruction cost enough to repay extra process
 startups.
+
+## Clean callers kept the plan whole
+
+Two clean Codex lanes and one clean Claude Fable lane received the same task:
+three exact intents, four edits, two copied files, a durable inverse, and exact
+restoration. The prompts did not name a clj-surgeon operation. The native lane
+forbade clj-surgeon. The skill lanes could read only the installed 90-line
+skill and the named fixtures.
+
+| Lane | Edit route | Correct | Edit one-shot | Calls reported | Durable inverse |
+|---|---|---:|---:|---:|---:|
+| Installed-skill Codex | one `:change!`, one `:undo-change!` | yes | yes | 9 shell calls, including rejected cleanup | 2,864 B receipt |
+| Installed-skill Claude Fable, first guidance | refused `:change!`, corrected `:change!`, `:undo-change!` | yes | no | 4 shell calls, 3 Surgeon invocations | 2,612 B receipt |
+| Native control | one `apply_patch`, archive restore | yes | yes | 5 tool actions, including rejected cleanup | 7,168 B tar archive |
+
+Codex read no fixture source before mutation. It expressed the complete plan as
+one spec, committed it once, and restored both exact starting hashes. Its
+reported direct tool wall was approximately 3.9 seconds. The native control
+used one targeted `rg`, one multi-file patch, and a tar archive; it reported 25
+seconds from temporary setup through verified restoration.
+
+Those wall values are not a controlled speed comparison. The Codex lane
+reported summed tool wall, while the native lane reported elapsed workflow time.
+Claude's external process reported 98.9 seconds, seven turns, and 6,759 output
+tokens, but it used a different model and execution surface. Preserve the route
+evidence and do not aggregate these values into a speed claim.
+
+The clean Claude run found one actionable skill defect. It saw
+`:expect-count` in the example but did not understand that every intent
+requires it. The first call refused with `:invalid-expect-count` and changed no
+bytes. The second call inferred all counts and committed the complete plan.
+The 90-line skill now states both requirements explicitly: every intent needs a
+positive `:expect-count`, and aggregate `:expect` needs exact intent, edit, and
+changed-file counts. This sentence is a permanent cross-agent contract test.
+
+The result narrows the performance hypothesis. For a short task, native
+`apply_patch` remains a fearsome one-action competitor. `:change!` does not win
+merely by reducing the mutation action from one to one. It earns its place by
+letting the caller skip source reconstruction, structurally excluding textual
+lookalikes, compiling all exact intents against one snapshot, and producing a
+smaller machine-verifiable inverse. A replicated harness must measure complete
+turn wall and tokens before claiming a speed win.
