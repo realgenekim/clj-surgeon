@@ -480,3 +480,29 @@ spec because Babashka process startup is not free. Benchmark rather than assume:
 The compiler must normalize both the in-memory spec and EDNL records into the
 same intent representation. Mutation stays out of scope until the direct spec
 transaction, rollback, and inverse are proven.
+
+## Frontier update: the failure-atomic commit substrate
+
+The first mutation batch remains internal; `:change!` is not public until a
+durable inverse receipt exists. The commit protocol now proves these cases with
+injected source I/O:
+
+| Failure point | Required outcome | Result |
+|---|---|---|
+| Stale file during all-file preflight | Zero writes | passed |
+| Second write throws after changing bytes | Restore both exact originals | passed |
+| Read-back verification lies once | Detect, restore, verify originals | passed |
+| Later file changes concurrently | Restore owned result; preserve unknown bytes | recovery required, passed |
+| Rollback write itself fails | Report exact partial state | recovery required, passed |
+
+Rollback classifies current bytes by hash. Original bytes need no action;
+transaction-result bytes are safe to restore; any third state is never
+overwritten. This prevents an “atomic” recovery claim from clobbering a user's
+concurrent edit.
+
+Filesystem dogfood copied the two realistic UI fixtures, compiled two intents
+into three edits across both files, committed them with real atomic per-file
+renames, and verified both read-back hashes. Complete planning plus commit took
+0.42 seconds in the Babashka process. This is substrate evidence, not the final
+agent benchmark: the public CLI, receipt publication, inverse, and native
+control are still absent.

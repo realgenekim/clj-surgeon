@@ -372,6 +372,169 @@
     (is (= original-shell (slurp shell-file)))
     (is (= original-reader (slurp reader-file)))))
 
+(defn- compiled-two-file-change
+  []
+  (transaction/compile-transaction
+    {"src/a.clj" "(ns app.a)\n(def value (old x))\n"
+     "src/b.clj" "(ns app.b)\n(def value :body)\n"}
+    (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+           (intent ["src/b.clj"] ":body" ":body.page" 1)]
+          {:intent-count 2 :edit-count 2 :changed-file-count 2})))
+
+(defn- memory-io
+  [state write-fn]
+  {:read-source (fn [file] (get @state file))
+   :write-source! (fn [file source]
+                    (write-fn state file source))})
+
+(deftest commit-protocol-updates-and-verifies-every-file
+  (let [compiled (compiled-two-file-change)
+        originals (:original-sources compiled)
+        futures (:future-sources compiled)
+        state (atom originals)
+        writes (atom [])
+        result
+        (transaction/commit-compiled!
+          compiled
+          (memory-io state
+                     (fn [state file source]
+                       (swap! writes conj file)
+                       (swap! state assoc file source))))]
+    (is (:ok result))
+    (is (= :change! (:operation result)))
+    (is (:committed result))
+    (is (= ["src/a.clj" "src/b.clj"] @writes))
+    (is (= futures @state))
+    (is (= (into {} (map (juxt :file :result-hash) (:files compiled)))
+           (get-in result [:verified :read-back-hashes])))
+    (is (= {:whole-files true :file-count 2}
+           (select-keys (:verified result) [:whole-files :file-count])))))
+
+(deftest commit-protocol-refuses-stale-source-before-any-write
+  (let [compiled (compiled-two-file-change)
+        state (atom (assoc (:original-sources compiled)
+                           "src/b.clj" "(ns app.b)\n(def value :changed-elsewhere)\n"))
+        writes (atom 0)
+        result
+        (transaction/commit-compiled!
+          compiled
+          (memory-io state
+                     (fn [state file source]
+                       (swap! writes inc)
+                       (swap! state assoc file source))))]
+    (is (= :source-hash-mismatch (:error-type result)))
+    (is (= "src/b.clj" (:file result)))
+    (is (zero? @writes))
+    (is (= "(ns app.a)\n(def value (old x))\n"
+           (get @state "src/a.clj")))
+    (is (= "(ns app.b)\n(def value :changed-elsewhere)\n"
+           (get @state "src/b.clj")))))
+
+(deftest commit-protocol-rolls-back-a-partial-write
+  (let [compiled (compiled-two-file-change)
+        originals (:original-sources compiled)
+        state (atom originals)
+        write-count (atom 0)
+        result
+        (transaction/commit-compiled!
+          compiled
+          (memory-io state
+                     (fn [state file source]
+                       (swap! state assoc file source)
+                       (when (= 2 (swap! write-count inc))
+                         (throw (ex-info "injected second-write failure"
+                                         {:error-type :injected-write-failure}))))))]
+    (is (= :transaction-write-failed (:error-type result)))
+    (is (= :injected-write-failure (:cause-error-type result)))
+    (is (true? (:rolled-back result)))
+    (is (= originals @state))
+    (is (= {"src/a.clj" :restored "src/b.clj" :restored}
+           (into {} (map (juxt :file :status) (:recovery result)))))))
+
+(deftest commit-protocol-reports-recovery-required-without-clobbering-concurrent-source
+  (let [compiled (compiled-two-file-change)
+        originals (:original-sources compiled)
+        concurrent "(ns app.b)\n(def value :concurrent-user-change)\n"
+        state (atom originals)
+        write-count (atom 0)
+        result
+        (transaction/commit-compiled!
+          compiled
+          (memory-io state
+                     (fn [state file source]
+                       (swap! state assoc file source)
+                       (when (= 1 (swap! write-count inc))
+                         (swap! state assoc "src/b.clj" concurrent)))))]
+    (is (= :transaction-recovery-required (:error-type result)))
+    (is (false? (:rolled-back result)))
+    (is (= "src/b.clj" (:file result)))
+    (is (= originals
+           (assoc @state "src/b.clj" (get originals "src/b.clj"))))
+    (is (= concurrent (get @state "src/b.clj")))
+    (is (= :unexpected-source
+           (:status (first (filter #(= "src/b.clj" (:file %))
+                                   (:recovery result))))))))
+
+(deftest commit-protocol-rolls-back-after-read-back-corruption
+  (let [compiled (compiled-two-file-change)
+        originals (:original-sources compiled)
+        state (atom originals)
+        corrupt-read-once? (atom true)
+        b-result (get (:future-sources compiled) "src/b.clj")
+        result
+        (transaction/commit-compiled!
+          compiled
+          {:read-source
+           (fn [file]
+             (let [source (get @state file)]
+               (if (and (= "src/b.clj" file)
+                        (= b-result source)
+                        (compare-and-set! corrupt-read-once? true false))
+                 (str source "\n; corrupted read")
+                 source)))
+           :write-source! (fn [file source]
+                            (swap! state assoc file source))})]
+    (is (= :transaction-write-failed (:error-type result)))
+    (is (= :read-back-hash-mismatch (:cause-error-type result)))
+    (is (true? (:rolled-back result)))
+    (is (= originals @state))))
+
+(deftest commit-protocol-makes-rollback-failure-explicit
+  (let [compiled (compiled-two-file-change)
+        originals (:original-sources compiled)
+        futures (:future-sources compiled)
+        state (atom originals)
+        forward-failed? (atom false)
+        result
+        (transaction/commit-compiled!
+          compiled
+          (memory-io
+            state
+            (fn [state file source]
+              (cond
+                (and (= "src/b.clj" file)
+                     (= source (get futures file))
+                     (compare-and-set! forward-failed? false true))
+                (do
+                  (swap! state assoc file source)
+                  (throw (ex-info "injected forward failure"
+                                  {:error-type :injected-write-failure})))
+
+                (and (= "src/b.clj" file)
+                     (= source (get originals file)))
+                (throw (ex-info "injected rollback failure"
+                                {:error-type :injected-rollback-failure}))
+
+                :else
+                (swap! state assoc file source)))))]
+    (is (= :transaction-recovery-required (:error-type result)))
+    (is (false? (:rolled-back result)))
+    (is (= (get originals "src/a.clj") (get @state "src/a.clj")))
+    (is (= (get futures "src/b.clj") (get @state "src/b.clj")))
+    (is (= :restore-failed
+           (:status (first (filter #(= "src/b.clj" (:file %))
+                                   (:recovery result))))))))
+
 (deftest change-help-teaches-one-plan-materialization
   (let [op-def (get core/ops-registry :change)
         help (core/format-op-help :change op-def)

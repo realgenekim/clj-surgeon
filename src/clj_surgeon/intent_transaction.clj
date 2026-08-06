@@ -1,5 +1,6 @@
 (ns clj-surgeon.intent-transaction
   (:require
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]
    [rewrite-clj.node :as node]
@@ -349,6 +350,7 @@
      :intents (mapv #(dissoc % :edits) compiled-intents)
      :files (mapv #(dissoc % :result-source :diff) compiled-files)
      :diff (apply str (keep :diff compiled-files))
+     :original-sources (select-keys sources files)
      :future-sources (into {} (map (juxt :file :result-source) compiled-files))
      :validated {:whole-files-parsed true
                  :file-count (count compiled-files)}}))
@@ -409,7 +411,7 @@
 (defn- public-plan
   [compiled]
   (-> compiled
-      (dissoc :future-sources)
+      (dissoc :original-sources :future-sources)
       (update :files
               (fn [files]
                 (mapv #(update % :edits
@@ -446,3 +448,151 @@
     (catch Exception e
       {:error (.getMessage e)
        :error-type :intent-compiler-failure})))
+
+(defn- changed-file-plans
+  [compiled]
+  (filterv (comp pos? :match-count) (:files compiled)))
+
+(defn- read-source!
+  [read-source file]
+  (try
+    (let [source (read-source file)]
+      (when-not (string? source)
+        (refuse! :source-read-failed
+                 (str "Source reader did not return text for " file)
+                 {:file file}))
+      source)
+    (catch clojure.lang.ExceptionInfo e
+      (throw e))
+    (catch Exception e
+      (refuse! :source-read-failed
+               (str "Cannot read source " file ": " (.getMessage e))
+               {:file file}))))
+
+(defn- assert-file-hash!
+  [read-source file expected error-type]
+  (let [source (read-source! read-source file)
+        actual (structural-lens/source-hash source)]
+    (when-not (= expected actual)
+      (refuse! error-type
+               (str "Source hash mismatch for " file)
+               {:file file :expected-hash expected :actual-hash actual}))
+    source))
+
+(defn- recovery-result
+  [read-source write-source! originals
+   {:keys [file source-hash result-hash]}]
+  (try
+    (let [current (read-source! read-source file)
+          current-hash (structural-lens/source-hash current)]
+      (cond
+        (= source-hash current-hash)
+        {:file file :status :original :source-hash current-hash}
+
+        (= result-hash current-hash)
+        (try
+          (write-source! file (get originals file))
+          (let [restored (read-source! read-source file)
+                restored-hash (structural-lens/source-hash restored)]
+            (if (= source-hash restored-hash)
+              {:file file :status :restored :source-hash restored-hash}
+              {:file file :status :restore-hash-mismatch
+               :expected-hash source-hash :actual-hash restored-hash}))
+          (catch Exception e
+            {:file file :status :restore-failed :error (.getMessage e)}))
+
+        :else
+        {:file file :status :unexpected-source
+         :original-hash source-hash
+         :result-hash result-hash
+         :actual-hash current-hash}))
+    (catch Exception e
+      {:file file :status :recovery-read-failed :error (.getMessage e)})))
+
+(defn- recover-transaction!
+  [read-source write-source! originals file-plans]
+  (mapv #(recovery-result read-source write-source! originals %)
+        (reverse file-plans)))
+
+(defn- recovered?
+  [recovery]
+  (every? #(#{:original :restored} (:status %)) recovery))
+
+(defn- execute-writes!
+  [read-source write-source! futures file-plans]
+  (doseq [{:keys [file source-hash result-hash]} file-plans]
+    ;; Recheck immediately before each replacement. If a later file goes stale
+    ;; after an earlier write, the caller enters the same recovery protocol.
+    (assert-file-hash! read-source file source-hash :source-hash-mismatch)
+    (write-source! file (get futures file))
+    (assert-file-hash! read-source file result-hash :read-back-hash-mismatch)))
+
+(defn- verified-hashes
+  [read-source file-plans]
+  (into {}
+        (map (fn [{:keys [file result-hash]}]
+               (assert-file-hash! read-source file result-hash
+                                  :read-back-hash-mismatch)
+               [file result-hash]))
+        file-plans))
+
+(defn commit-compiled!
+  "Commit a successfully compiled transaction through injected source I/O.
+   Ordinary handled failures restore files that still equal either the original
+   or transaction result. Unexpected bytes are never overwritten."
+  ([compiled]
+   (commit-compiled! compiled
+                     {:read-source slurp
+                      :write-source! file-ops/atomic-write!}))
+  ([compiled {:keys [read-source write-source!]}]
+   (try
+     (when-not (and (:ok compiled)
+                    (map? (:original-sources compiled))
+                    (map? (:future-sources compiled))
+                    (ifn? read-source)
+                    (ifn? write-source!))
+       (refuse! :invalid-compiled-transaction
+                "Commit requires one complete compiled transaction and source I/O"))
+     (let [file-plans (changed-file-plans compiled)
+           originals (:original-sources compiled)
+           futures (:future-sources compiled)]
+       ;; The all-file preflight is outside the recovery block because it has
+       ;; not written anything.
+       (doseq [{:keys [file source-hash]} file-plans]
+         (assert-file-hash! read-source file source-hash
+                            :source-hash-mismatch))
+       (try
+         (execute-writes! read-source write-source! futures file-plans)
+         (let [hashes (verified-hashes read-source file-plans)]
+           {:ok true
+            :operation :change!
+            :transaction-version transaction-version
+            :committed true
+            :changed-file-count (count file-plans)
+            :verified {:whole-files true
+                       :file-count (count file-plans)
+                       :read-back-hashes hashes}})
+         (catch Exception cause
+           (let [recovery (recover-transaction!
+                            read-source write-source! originals file-plans)
+                 rolled-back? (recovered? recovery)
+                 cause-data (ex-data cause)]
+             (merge
+               {:error (if rolled-back?
+                         "Transaction write failed; all files restored"
+                         "Transaction write failed; manual recovery required")
+                :error-type (if rolled-back?
+                              :transaction-write-failed
+                              :transaction-recovery-required)
+                :cause-error (.getMessage cause)
+                :cause-error-type (or (:error-type cause-data)
+                                      :transaction-write-exception)
+                :rolled-back rolled-back?
+                :recovery recovery}
+               (select-keys cause-data
+                            [:file :expected-hash :actual-hash]))))))
+     (catch clojure.lang.ExceptionInfo e
+       (merge {:error (.getMessage e)} (ex-data e)))
+     (catch Exception e
+       {:error (.getMessage e)
+        :error-type :transaction-write-exception}))))
