@@ -689,3 +689,13 @@ real fixtures, emitted one compact receipt, and restored both exact starting
 hashes through the unopened 2,262-byte inverse receipt. It required no repair.
 The only remaining escape, such as `\"/app.css\"`, is intrinsic EDN string
 syntax; the additional shell-argument escape layer is gone.
+
+### First live dogfood: the stdin route stayed one-shot
+
+The next real task closed the X-ray sandbox-termination contract. A red test
+intent and the exact help-string implementation intent each traveled through
+`:spec-file -` and succeeded on their first call. The red test failed for the
+intended missing phrase, then passed after the implementation transaction.
+There were no quoting refusals, source preflights, plan-file reads, or repair
+edits. Prose and skill changes correctly remained native patches because the
+transaction compiler only accepts Clojure source.

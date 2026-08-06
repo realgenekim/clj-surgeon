@@ -55,7 +55,7 @@ clj-surgeon :op :xray :file src/policy.clj \
 ```
 
 Write one total pure Clojure function instead of a shape-discovery query. When keys are uncertain, return a shape echo; scope counts to named keys and reserve `tree-seq` for unknown shapes.
-Return concrete EDN, not a lazy sequence. X-ray never writes. For CLJC use `(form 'name :clj)` or `:cljs`.
+Return concrete EDN, not a lazy sequence. X-ray is capability-limited, not termination-proof; analyzers must perform bounded work. X-ray never writes. For CLJC use `(form 'name :clj)` or `:cljs`.
 
 ## Materialize one complete edit plan
 

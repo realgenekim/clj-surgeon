@@ -1,6 +1,6 @@
 # State and Test the Sandbox Termination Boundary
 
-**Status:** Open claim gap
+**Status:** Resolved 2026-08-06
 **Severity:** P1 safety and availability
 
 ## Evidence
@@ -34,3 +34,13 @@ general nontermination guard from a symbol denylist.
 
 The public safety claim exactly matches the mechanism, and any promised
 resource bound has a deterministic boundary test.
+
+## Resolution
+
+Help, README, changelog, vision, and both installed agent skills now state that
+X-ray is capability-limited, not termination-proof, and that analyzers must
+perform bounded work. Permanent tests retain direct `loop`/`recur` refusal,
+bounded `for` success, quoted structural-symbol search, no-source-I/O refusal,
+and the exact help/skill contract. No process-level runtime budget was added:
+field evidence supports the capability boundary, but does not yet justify a
+new evaluator mechanism.

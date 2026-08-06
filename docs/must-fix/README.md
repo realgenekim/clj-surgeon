@@ -21,7 +21,7 @@ efficiency metric. Existing tests may not be weakened or removed.
 5. [Decide the `:evidence` contract](005-xray-evidence-contract.md)
 6. [Make benchmark result directories single-writer](006-benchmark-single-writer-isolation.md)
 7. [Make platform selection file-aware or CLJC-only](007-platform-selector-file-awareness.md)
-8. [State and test the sandbox termination boundary](008-sandbox-termination-contract.md)
+8. [State and test the sandbox termination boundary](008-sandbox-termination-contract.md) — closed 2026-08-06
 9. [State canonicalization depth](009-canonicalization-depth-contract.md)
 10. [Keep quoted structural symbols searchable](010-quote-aware-source-guard.md)
 

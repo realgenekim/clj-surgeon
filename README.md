@@ -428,8 +428,8 @@ platform, duplicate branch-local definitions remain honest multiple matches.
 as `:edit :expr`. It never writes source or creates a plan. It refuses truncated
 input, analyzer failure, lazy or non-EDN output, and output over 65,536
 characters. SCI does not expose I/O, processes, namespaces, mutable references,
-classes, or host interop. This is a capability boundary, not a termination
-proof: analyzers remain responsible for bounded work.
+classes, or host interop. X-ray is capability-limited, not termination-proof:
+analyzers remain responsible for bounded work.
 
 The same `right` relationship moves from a `case` key, `cond` guard, map key,
 or binding name to its paired value. Navigation skips whitespace and comments

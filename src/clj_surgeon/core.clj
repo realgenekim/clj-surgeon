@@ -706,7 +706,7 @@
                                   "Selected values are never evaluated. Computed X-ray shallowly normalizes a selected map literal or top-level hash-map/array-map syntax; nested constructor syntax and exact evidence remain source-shaped."
                                   "Identify nested descendants inside that function with (filter predicate (tree-seq coll? seq value))."
                                   "Return concrete EDN, not a lazy sequence. Malformed map constructor syntax refuses."
-                                  "SCI exposes pure clojure.core collection functions and structural builders. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop. This limits capabilities, not execution time; analyzers must perform bounded work."
+                                  "SCI is capability-limited, not termination-proof. It does not expose I/O, processes, namespaces, mutable references, classes, or host interop. Analyzers must perform bounded work."
                                   "The command is READ ONLY. It never writes source or creates an edit plan."
                                   "Truncated selection, analyzer failure, lazy or non-EDN output, and output over 65,536 characters refuse with structured EDN."]
                        :examples ["clj-surgeon :op :xray :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right)\""

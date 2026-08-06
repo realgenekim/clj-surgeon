@@ -664,7 +664,7 @@
                      [:file :expr])))
     (is (not (get-in core/ops-registry [:xray :args :evidence :required])))
     (is (str/includes? help ":evidence"))
-    (is (str/includes? help ":full"))
+    (testing "help states the capability and termination boundary" (is (str/includes? help "capability-limited, not termination-proof")) (is (str/includes? help "bounded work")))
     (doseq [[surface text] surfaces]
       (testing surface
         (is (str/includes? text ":xray"))
