@@ -85,6 +85,105 @@
       (is (= "(defn ^:private alpha [x]\n  (+ x\n     1))" (:source result)))
       (is (= (structural-lens/source-hash basic-source) (:source-hash result))))))
 
+(deftest show-forms-returns-requested-order-from-one-snapshot
+  (let [result (selector-result basic-source {:forms ['omega "alpha"]})]
+    (is (= :show-form (:operation result)))
+    (is (= "sample.clj" (:file result)))
+    (is (= {:forms ['omega 'alpha]} (:selector result)))
+    (is (= 2 (:form-count result)))
+    (is (= (reduce + (map count ["(defn omega []\n  :done)"
+                                 "(defn ^:private alpha [x]\n  (+ x\n     1))"]))
+           (:source-char-count result)))
+    (is (= ['omega 'alpha] (mapv :name (:forms result))))
+    (is (= ["(defn omega []\n  :done)"
+            "(defn ^:private alpha [x]\n  (+ x\n     1))"]
+           (mapv :source (:forms result))))
+    (is (= (structural-lens/source-hash basic-source) (:source-hash result)))
+    (is (not (contains? result :source)))))
+
+(deftest show-forms-builds-top-level-records-once
+  (let [calls (atom 0)
+        original outline/top-level-form-records]
+    (with-redefs [outline/top-level-form-records
+                  (fn [& args]
+                    (swap! calls inc)
+                    (apply original args))]
+      (let [result (selector-result basic-source {:forms ['alpha 'omega]})]
+        (is (= ['alpha 'omega] (mapv :name (:forms result))))
+        (is (= 1 @calls))))))
+
+(deftest show-forms-refuses-invalid-and-duplicate-selector-vectors
+  (let [too-many (vec (map #(symbol (str "form-" %)) (range 51)))
+        cases [{:forms nil
+                :error-type :invalid-forms-selector}
+               {:forms 'alpha
+                :error-type :invalid-forms-selector}
+               {:forms []
+                :error-type :invalid-forms-selector}
+               {:forms ['alpha 'sample/omega]
+                :error-type :invalid-forms-selector}
+               {:forms ['alpha :omega]
+                :error-type :invalid-forms-selector}
+               {:forms too-many
+                :error-type :invalid-forms-selector}
+               {:forms ['alpha "alpha"]
+                :error-type :duplicate-form-selectors}]]
+    (doseq [{:keys [forms error-type]} cases]
+      (let [result (selector-result basic-source {:forms forms})]
+        (is (= error-type (:error-type result)) (pr-str forms))
+        (is (not (contains? result :source)) (pr-str forms))))
+    (is (= ['alpha]
+           (:duplicate-forms
+             (selector-result basic-source {:forms ['alpha "alpha"]}))))))
+
+(deftest show-forms-refuses-the-complete-read-on-any-missing-or-ambiguous-name
+  (testing "one missing owner suppresses every successful owner's source"
+    (let [result (selector-result basic-source {:forms ['alpha 'missing]})]
+      (is (= :batch-form-selection-failed (:error-type result)))
+      (is (= 2 (:requested-form-count result)))
+      (is (= 1 (:resolved-form-count result)))
+      (is (= [{:form 'missing
+               :error-type :form-not-found
+               :match-count 0}]
+             (:failures result)))
+      (is (not (contains? result :forms)))
+      (is (not-any? #(and (map? %) (contains? % :source))
+                    (tree-seq coll? seq result)))))
+  (testing "a reader-conditional ambiguity names its platform remedy"
+    (let [result (show-form/select-form "sample.cljc" cljc-source
+                                        {:forms ['shared 'common]})
+          failure (first (:failures result))]
+      (is (= :batch-form-selection-failed (:error-type result)))
+      (is (= 'shared (:form failure)))
+      (is (= :ambiguous-form (:error-type failure)))
+      (is (= [:clj :cljs]
+             (get-in failure [:remedies :select-platform :platforms])))
+      (is (not (contains? result :forms))))))
+
+(deftest show-forms-applies-one-platform-to-the-complete-batch
+  (let [result (show-form/select-form "sample.cljc" cljc-source
+                                      {:forms ['common 'shared]
+                                       :platform :cljs})]
+    (is (= {:forms ['common 'shared] :platform :cljs} (:selector result)))
+    (is (= ['common 'shared] (mapv :name (:forms result))))
+    (is (= ["(defn common [] :both)" "(defn shared [] :cljs)"]
+           (mapv :source (:forms result))))))
+
+(deftest show-forms-refuses-before-returning-an-oversized-source-batch
+  (let [payload (apply str (repeat 33000 "x"))
+        source (str "(ns large)\n"
+                    "(def first-large " (pr-str payload) ")\n"
+                    "(def second-large " (pr-str payload) ")\n")
+        result (show-form/select-form "large.clj" source
+                                      {:forms ['first-large 'second-large]})]
+    (is (= :batch-source-limit-exceeded (:error-type result)))
+    (is (= 65536 (:source-char-limit result)))
+    (is (< (:source-char-limit result) (:source-char-count result)))
+    (is (= "Request fewer forms in each batch" (:remedy result)))
+    (is (not (contains? result :forms)))
+    (is (not-any? #(and (map? %) (contains? % :source))
+                  (tree-seq coll? seq result)))))
+
 (deftest show-form-accepts-the-standalone-slash-as-an-unqualified-name
   (let [result (show-form/select-form "operators.clj"
                                       "(ns operators)\n(def / 1)\n"
@@ -165,10 +264,19 @@
 (deftest show-form-refuses-invalid-selector-contracts
   (let [cases [{:opts {}
                 :error-type :missing-selector
-                :field [:required-one-of [:form :line :contains]]}
+                :field [:required-one-of [:form :forms :line :contains]]}
                {:opts {:form "alpha" :line 5}
                 :error-type :conflicting-selectors
                 :field [:supplied-selectors [:form :line]]}
+               {:opts {:form "alpha" :forms ['omega]}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:form :forms]]}
+               {:opts {:forms ['alpha] :line 5}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:forms :line]]}
+               {:opts {:forms ['alpha] :contains "context"}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:forms :contains]]}
                {:opts {:form "alpha" :contains "context"}
                 :error-type :conflicting-selectors
                 :field [:supplied-selectors [:form :contains]]}
@@ -178,6 +286,10 @@
                {:opts {:form "alpha" :line 5 :contains "context"}
                 :error-type :conflicting-selectors
                 :field [:supplied-selectors [:form :line :contains]]}
+               {:opts {:form "alpha" :forms ['omega]
+                       :line 5 :contains "context"}
+                :error-type :conflicting-selectors
+                :field [:supplied-selectors [:form :forms :line :contains]]}
                {:opts {:form "sample/alpha"}
                 :error-type :invalid-form-selector
                 :field [:form "sample/alpha"]}
@@ -376,6 +488,16 @@
            (:command-args remedy)))
     (is (= "clj-surgeon :op :cat :file 'dir with space/state.clj' :form alpha"
            (:command remedy))))
+  (testing "a valid named batch remains one executable argument"
+    (let [remedy (show-form/invocation-remedy
+                   {:file "state.clj" :forms ['alpha 'omega]})]
+      (is (= "Read several named top-level forms from one snapshot"
+             (:reason remedy)))
+      (is (= ["clj-surgeon" ":op" ":cat" ":file" "state.clj"
+              ":forms" "[alpha omega]"]
+             (:command-args remedy)))
+      (is (= "clj-surgeon :op :cat :file state.clj :forms '[alpha omega]'"
+             (:command remedy)))))
   (is (nil? (show-form/invocation-remedy {:file "x.clj"})))
   (is (nil? (show-form/invocation-remedy {:file "x.clj" :form "x" :line 2})))
   (testing "only remedies that can succeed are emitted"
@@ -389,6 +511,8 @@
                 {:file "x.clj" :line "999999999999999999999999"})))
     (is (nil? (show-form/invocation-remedy
                 {:file "x.clj" :form "qualified/name"})))
+    (is (nil? (show-form/invocation-remedy
+                {:file "x.clj" :forms ['alpha 'alpha]})))
     (is (nil? (show-form/invocation-remedy
                 {:file "x.clj" :form "name" :platform "clj"}))))
   (testing "shell metacharacters in Clojure names are always quoted"
@@ -434,7 +558,7 @@
 (deftest cli-show-form-selectors-and-cat-contains-are-one-shot-edn-reads
   (let [tmp-dir (fs/create-temp-dir {:prefix "show form cli "})
         file (fs/path tmp-dir "migration fixture.clj")
-        source "(ns field.case)\n\n;; :target\n(defn target [x]\n  (inc x))\n"]
+        source "(ns field.case)\n\n;; :target\n(defn target [x]\n  (inc x))\n\n(defn other [] :other)\n"]
     (try
       (spit (str file) source)
       (doseq [[op selector] [[":show-form" [":form" "target"]]
@@ -449,6 +573,30 @@
           (is (= :show-form (:operation result)))
           (is (= 'target (:name result)))
           (is (= "(defn target [x]\n  (inc x))" (:source result)))
+          (is (str/blank? err))))
+      (testing "cat reads several named forms in one CLI call"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":cat" ":file" (str file)
+                       ":forms" "[target other]")
+              result (edn/read-string out)]
+          (is (zero? exit) err)
+          (is (= {:forms ['target 'other]} (:selector result)))
+          (is (= ['target 'other] (mapv :name (:forms result))))
+          (is (= ["(defn target [x]\n  (inc x))" "(defn other [] :other)"]
+                 (mapv :source (:forms result))))
+          (is (str/blank? err))))
+      (testing "cat returns no partial source when one batch name is absent"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":cat" ":file" (str file)
+                       ":forms" "[target missing]")
+              result (edn/read-string out)]
+          (is (pos? exit))
+          (is (= :batch-form-selection-failed (:error-type result)))
+          (is (= ['missing] (mapv :form (:failures result))))
+          (is (not (contains? result :forms)))
+          (is (nil? (get-in result [:remedies :cat])))
+          (is (not-any? #(and (map? %) (contains? % :source))
+                        (tree-seq coll? seq result)))
           (is (str/blank? err))))
       (finally
         (fs/delete-tree tmp-dir)))))
@@ -688,6 +836,15 @@
     (is (= 1 (:occurrence-count result)))
     (is (str/includes? (:source result) "Per-command help"))))
 
+(deftest current-show-form-implementation-is-a-one-shot-batch-read
+  (let [result (show-form/show-file
+                 {:file "src/clj_surgeon/show_form.clj"
+                  :forms ['select-form 'show-file]})]
+    (is (= 2 (:form-count result)))
+    (is (= ['select-form 'show-file] (mapv :name (:forms result))))
+    (is (every? #(str/starts-with? (:source %) "(defn") (:forms result)))
+    (is (not (contains? result :source)))))
+
 (deftest agent-facing-surfaces-do-not-drift
   (let [readme (slurp "README.md")
         skill (slurp "skills/clj-surgeon/SKILL.md")
@@ -720,6 +877,12 @@
                             "changelog" changelog
                             "show-form help" help}]
       (is (str/includes? text ":contains") surface))
+    (doseq [[surface text] {"README" readme
+                            "installed skill" skill
+                            "legacy skill" legacy-skill
+                            "changelog" changelog
+                            "show-form help" help}]
+      (is (str/includes? text ":forms") surface))
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill

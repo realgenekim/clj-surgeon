@@ -219,6 +219,7 @@
     (is (str/starts-with? help "clj-surgeon :op cat"))
     (testing "all selectors and CLJC disambiguation are discoverable"
       (is (str/includes? help ":form"))
+      (is (str/includes? help ":forms"))
       (is (str/includes? help ":line"))
       (is (str/includes? help ":contains"))
       (is (str/includes? help ":platform"))
@@ -230,13 +231,17 @@
       (is (not (str/includes? help "rg -n"))))
     (testing "the exact documented invocations are printed"
       (is (str/includes? help ":op :cat :file src/my/ns.clj :form transition!"))
+      (is (str/includes? help ":forms '[transition! validate-state]'"))
       (is (str/includes? help ":op :cat :file src/my/ns.clj :line 1134"))
       (is (str/includes? help ":op :cat :file src/my/ns.clj :contains :finish"))
       (is (str/includes? help "keyword-shaped values such as :finish remain literal text")))
     (testing "the old spelling is secondary"
       (is (str/includes? help "Compatibility aliases: show-form")))
     (testing "ambiguity fails closed"
-      (is (str/includes? help "never chooses the first match")))))
+      (is (str/includes? help "never chooses the first match"))
+      (is (str/includes? help "all-or-nothing"))
+      (is (str/includes? help "duplicate"))
+      (is (str/includes? help "65,536")))))
 
 (deftest replace-subform-apply-help-forbids-plan-editing
   (let [help (core/format-op-help :replace-subform!

@@ -19,8 +19,8 @@ Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-
 ## Smallest structural route
 
 - Unknown top-level form: `clj-surgeon :op :ls :file FILE`.
-- Known owner name, containing line, or distinctive text: call `:cat` with
-  exactly one of `:form`, `:line`, or `:contains`. Do not run `:ls` solely as a preflight.
+- Known owner name(s), containing line, or distinctive text: call `:cat` with exactly one of `:form`, `:forms`, `:line`, or `:contains`.
+  Use `:forms '[a b c]'` for one ordered, all-or-nothing snapshot capped at 65,536 source characters; do not run `:ls` solely as a preflight.
 - Unknown owner, known EDN form pattern: call `:match-form`. `:match` is not regex; use bounded `rg -l` for textual discovery, then one `:cat :contains` or `:cat :line`.
 - Related syntax or computed facts: call `:xray`. Use `(line N)` for an unnamed top-level owner.
 - Exact nested edit: call `:edit`. Use `transform` when the replacement depends on selected source.

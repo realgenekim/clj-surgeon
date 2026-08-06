@@ -295,13 +295,27 @@ clj-surgeon :op :ls :file src/writer/state.clj
 
 Every top-level form with exact line boundaries, types, names, arglists, and forward reference detection. 236 forms in a 2768-line file, returned in ~200ms.
 
-#### `:cat` — Read one complete top-level form
+#### `:cat` — Read one or several complete top-level forms
 
 Use a name:
 
 ```bash
 clj-surgeon :op :cat :file src/writer/state.clj :form transition!
 ```
+
+When several owner names in one file are known, read them from one parsed
+snapshot and preserve the requested order:
+
+```bash
+clj-surgeon :op :cat :file src/writer/routes.clj \
+  :forms '[handle-sync-draft draft-conflict-response]'
+```
+
+`:forms` accepts a nonempty EDN vector of up to 50 unique unqualified names.
+The batch is all-or-nothing. If any name is invalid, missing, duplicated, or
+ambiguous, the command returns compact per-name evidence and no partial source.
+Combined source over 65,536 characters also refuses without partial source. Add
+one `:platform` to disambiguate the complete CLJC batch.
 
 Or use a line contained by the form:
 
@@ -326,19 +340,20 @@ Or select the one form containing distinctive literal text:
 clj-surgeon :op :cat :file src/writer/state.clj :contains :finish
 ```
 
-Supply exactly one of `:form`, `:line`, or `:contains`. `:contains` searches for
-a case-sensitive literal substring, not a regular expression. It searches form
-source, strings, docstrings, and attached comments.
+Supply exactly one of `:form`, `:forms`, `:line`, or `:contains`. `:contains`
+searches for a case-sensitive literal substring, not a regular expression. It
+searches form source, strings, docstrings, and attached comments.
 
 Multiple occurrences in one form succeed. Occurrences in multiple forms refuse
 with bounded candidate evidence. CLI values remain literal text, so a search
 such as `:finish` does not need an EDN-string workaround. For ambiguous
 reader-conditional definitions, add `:platform :clj` or `:platform :cljs`.
 
-Success returns the exact parsed form source, type, optional name, platforms,
-line range, attached-comment start, and complete-file source hash. A missing or
-ambiguous selector returns structured EDN and exits nonzero. The command never
-chooses the first match.
+Single-form success returns the exact parsed form source, type, optional name,
+platforms, line range, attached-comment start, and complete-file source hash.
+Batch success returns the same records in an ordered `:forms` vector under one
+complete-file source hash. A missing or ambiguous selector returns structured
+EDN and exits nonzero. The command never chooses the first match.
 
 `:cat` never dumps the complete file.
 

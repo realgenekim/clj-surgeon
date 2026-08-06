@@ -10,6 +10,12 @@ is cut.
 
 ### Added
 
+- `:cat :forms '[a b c]'` reads several known top-level owners from one parsed
+  file snapshot and returns their exact sources in requested order. The batch
+  rejects invalid or duplicate names and returns no partial source when any
+  owner is missing or ambiguous. Combined source over 65,536 characters also
+  refuses without partial source. One optional `:platform` disambiguates the
+  complete CLJC batch.
 - `:change`, `:change!`, and `:undo-change!` for one heterogeneous exact intent
   transaction. A spec declares explicit file scopes, losslessly exact
   `:from` / `:to` forms, per-intent match counts, and aggregate intent, edit,

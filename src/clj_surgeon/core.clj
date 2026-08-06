@@ -723,14 +723,18 @@
                        :category  :read}
 
     :show-form        {:handler  show-form/show-file
-                       :desc     "Show one complete top-level form by name, containing line, or literal text"
+                       :desc     "Show one top-level form, or several named forms from one snapshot"
                        :aliases  [:cat]
                        :args     {:file     {:required true :desc "Clojure source file"}
                                   :form     {:desc "Unqualified top-level name; supply exactly one selector"}
+                                  :forms    {:desc "Nonempty EDN vector of up to 50 unique top-level names; supply exactly one selector"}
                                   :line     {:desc "Positive one-based line; supply exactly one selector"}
                                   :contains {:desc "Nonblank case-sensitive literal text; supply exactly one selector"}
                                   :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}}
-                       :workflow ["Supply exactly one selector: :form, :line, or :contains."
+                       :workflow ["Supply exactly one selector: :form, :forms, :line, or :contains."
+                                  "When several owner names in one file are known, use :forms once; it preserves requested order and reads one source snapshot."
+                                  "Batch reads are all-or-nothing: a missing, ambiguous, invalid, or duplicate name returns no partial source."
+                                  "Combined batch source over 65,536 characters refuses without returning partial source."
                                   "Use :cat instead of reconstructing a sed range when a top-level name or containing line is known."
                                   "Make :cat the first source inspection; do not run :ls solely as a preflight."
                                   "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command; keyword-shaped values such as :finish remain literal text."
@@ -739,6 +743,7 @@
                                   "Read :source as the exact parsed form and :source-hash as the complete file snapshot."
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
                        :examples ["clj-surgeon :op :cat :file src/my/ns.clj :form transition!"
+                                  "clj-surgeon :op :cat :file src/my/ns.clj :forms '[transition! validate-state]'"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :line 1134"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :contains :finish"
                                   "clj-surgeon :op :cat :file src/my/ns.cljc :form transition! :platform :cljs"]
@@ -989,8 +994,11 @@
 
 (defn- with-cat-remedy
   [result opts]
-  (if-let [remedy (show-form/invocation-remedy opts)]
-    (assoc-in result [:remedies :cat] remedy)
+  (if (or (not= :show-form (resolve-op (:op opts)))
+          (contains? opts :name))
+    (if-let [remedy (show-form/invocation-remedy opts)]
+      (assoc-in result [:remedies :cat] remedy)
+      result)
     result))
 
 (defn- with-match-form-pattern-remedy

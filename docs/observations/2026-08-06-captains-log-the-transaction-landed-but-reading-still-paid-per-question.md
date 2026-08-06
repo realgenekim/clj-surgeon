@@ -308,6 +308,57 @@ The general stdin manifest is the second layer for cross-file or mixed
 operations. It should accept `:cat :forms` as one member rather than inventing
 another selector model.
 
+### Same-file batch dogfood crossed its first speed gate
+
+The first implementation added `:cat :forms '[a b c]'` directly to the
+existing read operation. It does not loop over `show-file`. The file is read
+once, the top-level record index is built once, and every requested name is
+resolved against that snapshot. Pure tests instrument the index builder and
+require exactly one call.
+
+The first real call asked the working-tree binary to read `select-form`,
+`select-named-forms`, and `show-file` from its own implementation. One result
+returned all three exact sources in requested order under one file hash. A
+second call inserted one absent name between two valid names; it refused the
+complete batch and returned no source-bearing record.
+
+Five local timing runs compared those same three owners:
+
+| Route | Median wall | Output |
+|---|---:|---:|
+| Three separate CLI reads | 0.54 s | 8,884 bytes |
+| One `:cat :forms` read | 0.20 s | 8,621 bytes |
+
+The implemented batch was 2.7× faster, removed 63% of direct wall, and emitted
+slightly fewer bytes. The source payload itself was unchanged; savings came
+from one process, one file read, one parse, and one result envelope.
+
+This microbenchmark is mechanism evidence, not the product keep gate. The clean
+Mothership replay must save at least 10 seconds of direct tool wall and 10
+seconds of complete task wall, preserve diagnostic correctness, reduce
+source-bearing actions, and avoid increasing source output. A subsecond local
+gain does not count as beating built-in tools.
+
+Early dogfood found two defects before installation:
+
+1. A new helper initially appeared before an existing dependency and failed at
+   namespace analysis. Moving it behind the dependency restored the compile
+   gate.
+2. A failed canonical batch received a generic `:cat` remedy that repeated the
+   same failed command. Recovery now recommends `:cat` only for an invented
+   operation or historical selector spelling. A valid canonical `:cat`
+   refusal never recommends itself.
+
+Both failures now have permanent tests. This is the desired frontier loop:
+
+```text
+small batch -> use it on itself -> capture the surprise -> harden the contract
+```
+
+An adversarial output test added one more boundary: combined batch source over
+65,536 characters refuses before returning any form record. Faster must not
+mean faster context-window exhaustion.
+
 The proposed caller shape deliberately reuses the write-transaction model:
 
 ```clojure
