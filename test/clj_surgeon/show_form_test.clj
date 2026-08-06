@@ -443,7 +443,7 @@
                              [":cat" [":contains" "(inc x)"]]
                              [":cat" [":contains" ":target"]]]]
         (let [{:keys [exit out err]} (apply run-cli ":op" op
-                                       ":file" (str file) selector)
+                                            ":file" (str file) selector)
               result (edn/read-string out)]
           (is (zero? exit) err)
           (is (= :show-form (:operation result)))
@@ -480,7 +480,7 @@
               (run-cli ":op" ":cat" ":file" (str file) ":form" "target")
               result (edn/read-string out)
               canonical-result (-> (run-cli ":op" ":show-form" ":file"
-                                             (str file) ":form" "target")
+                                            (str file) ":form" "target")
                                    :out
                                    edn/read-string)]
           (is (zero? exit))
@@ -724,7 +724,10 @@
                             "installed skill" skill
                             "legacy skill" legacy-skill
                             "changelog" changelog}]
-      (is (str/includes? text ":cat") surface))
+      (is (str/includes? text ":cat") surface)
+      (when-not (= "changelog" surface)
+        (is (not (str/includes? text ":get"))
+            (str surface " must not teach unsupported :get"))))
     (is (str/includes? help "clj-surgeon :op cat") "cat help")
     (doseq [[surface text] {"README" readme
                             "installed skill" skill

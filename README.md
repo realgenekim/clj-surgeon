@@ -46,11 +46,10 @@ ls / cat / xray / match-form / deps  →  intent  →  change!  →  receipt
 
 Run `clj-surgeon :op :help` for the complete caller surface. Unknown operations
 list the preferred names, not compatibility spellings. When an invalid call
-still identifies one safe intent, its EDN includes executable `:command-args`.
-For example, `:get :name NAME` points to `:cat :form NAME`, and
-`:match-form :pattern FORM` points to `:match-form :match FORM`. A value that
-looks like a text regular expression instead points to an `rg` command bounded
-to 20 matching lines.
+still identifies one safe intent, its EDN includes executable `:command-args`
+with the preferred operation and canonical argument names. A value that looks
+like a text regular expression instead returns a bounded text-search remedy.
+Execute the returned remedy instead of guessing another spelling.
 
 When all exact before-forms, after-forms, scopes, and counts are known,
 `:change!` applies the complete plan in one call. It commits all files as one
