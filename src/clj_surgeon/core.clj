@@ -606,6 +606,31 @@
                                    "Review the per-intent and per-file counts, hashes, concrete edits, combined diff, and whole-file parse proof."
                                    "Use one intent for a structural global replacement; use several intents to materialize one heterogeneous model plan without repeated edit turns."]
                        :examples  ["clj-surgeon :op :change :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}'"]
+                       :category  :write
+                       :pair      :change!}
+
+    :change!          {:handler   intent-transaction/execute-change!
+                       :desc      "Apply one guarded structural intent transaction and save its inverse receipt"
+                       :args      {:spec        {:required true :desc "EDN map with exact :intents and aggregate :expect guards"}
+                                   :receipt-out {:required true :desc "Durable .edn inverse receipt; must not alias a source file"}}
+                       :workflow  ["Express the complete mechanical model plan once as the same guarded :spec accepted by :change."
+                                   "Every :from, :to, per-intent :expect-count, and aggregate :expect value is consent to the exact materialized transaction."
+                                   "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
+                                   "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
+                                   "The console result is compact. Keep :receipt-out for hash-fenced undo with :undo-change!."
+                                   "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
+                       :examples  ["clj-surgeon :op :change! :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}' :receipt-out /tmp/api-change.edn"]
+                       :category  :write
+                       :pair      :change}
+
+    :undo-change!     {:handler   intent-transaction/execute-undo!
+                       :desc      "Undo a completed structural intent transaction when every result hash still matches"
+                       :args      {:receipt {:required true :desc "Durable .edn receipt emitted by :change!"}}
+                       :workflow  ["Supply the unchanged receipt emitted by :change!."
+                                   "The command refuses the entire inverse before writing when any current file differs from the recorded forward result hash."
+                                   "Every reconstructed original file must parse and match its recorded original hash before commit."
+                                   "A successful receipt verifies every restored file's read-back hash. A second undo refuses because the forward result hashes no longer match."]
+                       :examples  ["clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn"]
                        :category  :write}
 
     :fix-declares     {:handler   (fn [opts] (fix-declares/plan (:file opts)))

@@ -2,8 +2,9 @@
 
 ## Status
 
-Implementation plan for the first `:change` / `:change!` transaction on the
-`intent-transactions` branch.
+Active implementation plan for the first `:change` / `:change!` transaction on
+the `intent-transactions` branch. Batches 0 through 4 are implemented and
+dogfooded. Batch 5, the clean-context and native-control comparison, is next.
 
 The first transform is deliberately narrow: replace every losslessly exact
 `:from` form with one exact `:to` form across an explicit set of files. A
@@ -163,15 +164,15 @@ Build the feature in small, vertically useful batches. Dogfood each batch on
 real source before adding the next guarantee. Early friction is product
 evidence, not noise to defer until the API is complete.
 
-| Batch | First usable capability | Immediate dogfood question |
-|---|---|---|
-| 0 | Pure compiler for heterogeneous exact intents over in-memory files | Can one model plan become one artifact without overlap or ordering surprises? |
-| 1 | Read-only `:change` over explicit real files | Are scope, matching, comments, diffs, and result size right in one call? |
-| 2 | Guard and diagnostic refinement from early dogfood | Does refusal teach the model to repair the whole intent once? |
-| 3 | Guarded `:change!` with staged writes and rollback | Can known-safe work beat repeated plan/apply without weakening refusal behavior? |
-| 4 | Durable hash-fenced receipt and `:undo-change!` | Is recovery obvious, compact, and independently verifiable? |
-| 5 | Clean-context replay and tagged/native controls | Does the whole route reduce turns and wall time on realistic work? |
-| 6 | Optional hash-chained EDNL intent stack | Does externalizing decisions during planning beat one large spec without weakening consent? |
+| Batch | First usable capability | Immediate dogfood question | State |
+|---|---|---|---|
+| 0 | Pure compiler for heterogeneous exact intents over in-memory files | Can one model plan become one artifact without overlap or ordering surprises? | passed |
+| 1 | Read-only `:change` over explicit real files | Are scope, matching, comments, diffs, and result size right in one call? | passed |
+| 2 | Guard and diagnostic refinement from early dogfood | Does refusal teach the model to repair the whole intent once? | passed |
+| 3 | Guarded `:change!` with staged writes and rollback | Can known-safe work beat repeated plan/apply without weakening refusal behavior? | passed |
+| 4 | Durable hash-fenced receipt and `:undo-change!` | Is recovery obvious, compact, and independently verifiable? | passed |
+| 5 | Clean-context replay and tagged/native controls | Does the whole route reduce turns and wall time on realistic work? | next |
+| 6 | Optional hash-chained EDNL intent stack | Does externalizing decisions during planning beat one large spec without weakening consent? | queued |
 
 For every batch:
 

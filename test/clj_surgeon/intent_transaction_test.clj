@@ -535,6 +535,154 @@
            (:status (first (filter #(= "src/b.clj" (:file %))
                                    (:recovery result))))))))
 
+(deftest durable-receipt-round-trips-and-restores-shape-changing-edits
+  (let [original "(ns app.a)\n(def views [#(old %) (old account) (old account)])\n"
+        compiled
+        (transaction/compile-transaction
+          {"src/a.clj" original}
+          (spec [(intent ["src/a.clj"]
+                         "(old account)"
+                         "(wrapper (new value) {:deep true})"
+                         2)]
+                {:intent-count 1 :edit-count 2 :changed-file-count 1}))
+        receipt (transaction/build-receipt compiled)
+        round-tripped (edn/read-string (pr-str receipt))
+        inverse (transaction/compile-inverse
+                  round-tripped (:future-sources compiled))]
+    (is (:ok compiled))
+    (is (string? (:receipt-hash receipt)))
+    (is (= 1 (:receipt-version receipt)))
+    (is (nil? (:original-sources receipt)))
+    (is (nil? (:future-sources receipt)))
+    (is (every? (fn [edit]
+                  (and (vector? (:path edit))
+                       (seq (:path edit))))
+                (mapcat :inverse-edits (:files receipt))))
+    (is (= receipt round-tripped))
+    (is (:ok inverse))
+    (is (= {"src/a.clj" original} (:future-sources inverse)))
+    (is (= (get-in compiled [:files 0 :source-hash])
+           (get-in inverse [:files 0 :result-hash])))
+    (is (valid-source? (get (:future-sources inverse) "src/a.clj")))))
+
+(deftest inverse-refuses-stale-corrupt-and-unsupported-receipts
+  (let [compiled (compiled-two-file-change)
+        receipt (transaction/build-receipt compiled)
+        receipt-hash-fn
+        (ns-resolve 'clj-surgeon.intent-transaction 'receipt-hash)
+        stale-sources (assoc (:future-sources compiled)
+                             "src/b.clj"
+                             "(ns app.b)\n(def value :changed-after-transaction)\n")]
+    (testing "one stale result hash refuses the complete inverse"
+      (let [result (transaction/compile-inverse receipt stale-sources)]
+        (is (= :result-hash-mismatch (:error-type result)))
+        (is (= "src/b.clj" (:file result)))
+        (is (nil? (:future-sources result)))))
+    (testing "receipt contents are hash fenced"
+      (let [result (transaction/compile-inverse
+                     (assoc receipt :diff "tampered")
+                     (:future-sources compiled))]
+        (is (= :invalid-transaction-receipt (:error-type result)))
+        (is (str/includes? (:error result) "hash"))))
+    (testing "unknown versions refuse before inverse compilation"
+      (let [result (transaction/compile-inverse
+                     (assoc receipt :receipt-version 999)
+                     (:future-sources compiled))]
+        (is (= :invalid-transaction-receipt (:error-type result)))
+        (is (= 1 (:supported-receipt-version result)))))
+    (testing "a corrupt path refuses even when its receipt hash is recomputed"
+      (let [tampered (assoc-in receipt [:files 0 :inverse-edits 0 :path]
+                               [0 999])
+            rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
+            result (transaction/compile-inverse
+                     rehashed (:future-sources compiled))]
+        (is (= :invalid-transaction-receipt (:error-type result)))
+        (is (= :stale-path (:cause-error-type result)))))
+    (testing "aggregate evidence must agree with concrete inverse edits"
+      (let [tampered (update receipt :match-count inc)
+            rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
+            result (transaction/compile-inverse
+                     rehashed (:future-sources compiled))]
+        (is (= :invalid-transaction-receipt (:error-type result)))
+        (is (str/includes? (:error result) "match count"))))))
+
+(deftest receipt-publication-failure-restores-source-and-preserves-old-receipt
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-receipt-failure-"})
+        file (str (fs/path temp-dir "sample.clj"))
+        receipt-file (str (fs/path temp-dir "receipt.edn"))
+        source "(ns sample)\n(def value (old x))\n"
+        change-spec
+        (spec [(intent [file] "(old x)" "(new x)" 1)]
+              {:intent-count 1 :edit-count 1 :changed-file-count 1})
+        publish-var (ns-resolve 'clj-surgeon.intent-transaction
+                                'publish-staged-receipt!)]
+    (try
+      (spit file source)
+      (spit receipt-file "{:old-receipt true}\n")
+      (let [result
+            (with-redefs-fn
+              {publish-var
+               (fn [& _]
+                 (throw (ex-info "injected publication failure"
+                                 {:error-type :injected-publish-failure})))}
+              #(transaction/execute-change!
+                 {:spec change-spec :receipt-out receipt-file}))]
+        (is (= :receipt-write-failed (:error-type result)))
+        (is (true? (:rolled-back result)))
+        (is (= source (slurp file)))
+        (is (= "{:old-receipt true}\n" (slurp receipt-file)))
+        (is (:ok (:recovery result))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest public-mutation-boundary-refuses-before-changing-source-or-receipt
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-boundary-refusal-"})
+        file (str (fs/path temp-dir "sample.clj"))
+        receipt-file (str (fs/path temp-dir "receipt.edn"))
+        malformed-receipt (str (fs/path temp-dir "malformed.edn"))
+        missing-parent-receipt
+        (str (fs/path temp-dir "missing" "receipt.edn"))
+        source "(ns sample)\n(def value (old x))\n"
+        change-spec
+        (spec [(intent [file] "(old x)" "(new x)" 1)]
+              {:intent-count 1 :edit-count 1 :changed-file-count 1})]
+    (try
+      (spit file source)
+      (spit receipt-file "{:old-receipt true}\n")
+      (spit malformed-receipt "{:not valid")
+      (testing "a receipt may not alias source"
+        (let [result (transaction/execute-change!
+                       {:spec change-spec :receipt-out file})]
+          (is (= :invalid-receipt-path (:error-type result)))
+          (is (= source (slurp file)))))
+      (testing "a missing receipt parent refuses before commit"
+        (let [result (transaction/execute-change!
+                       {:spec change-spec
+                        :receipt-out missing-parent-receipt})]
+          (is (= :invalid-receipt-path (:error-type result)))
+          (is (= source (slurp file)))))
+      (testing "a plan refusal preserves a pre-existing receipt"
+        (let [bad-spec (assoc-in change-spec [:intents 0 :expect-count] 2)
+              result (transaction/execute-change!
+                       {:spec bad-spec :receipt-out receipt-file})]
+          (is (= :expect-count-mismatch (:error-type result)))
+          (is (= source (slurp file)))
+          (is (= "{:old-receipt true}\n" (slurp receipt-file)))))
+      (testing "malformed undo receipt cannot reach source mutation"
+        (let [result (transaction/execute-undo!
+                       {:receipt malformed-receipt})]
+          (is (= :invalid-transaction-receipt (:error-type result)))
+          (is (= source (slurp file)))))
+      (testing "unknown mutation flags refuse"
+        (let [result (transaction/execute-change!
+                       {:spec change-spec :receipt-out receipt-file
+                        :surprise true})]
+          (is (= :unknown-arguments (:error-type result)))
+          (is (= source (slurp file)))
+          (is (= "{:old-receipt true}\n" (slurp receipt-file)))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
 (deftest change-help-teaches-one-plan-materialization
   (let [op-def (get core/ops-registry :change)
         help (core/format-op-help :change op-def)
@@ -546,6 +694,22 @@
     (is (str/includes? help "heterogeneous model plan"))
     (is (str/includes? help ":intent-count"))
     (is (str/includes? help ":changed-file-count"))))
+
+(deftest change-and-undo-help-teach-one-shot-guarded-materialization
+  (let [apply-help (core/format-op-help :change!
+                                        (get core/ops-registry :change!))
+        undo-help (core/format-op-help :undo-change!
+                                       (get core/ops-registry :undo-change!))
+        global-help (core/format-global-help core/ops-registry)]
+    (is (= :change! (core/resolve-op :change!)))
+    (is (= :undo-change! (core/resolve-op :undo-change!)))
+    (is (str/includes? global-help "    change!"))
+    (is (str/includes? global-help "    undo-change!"))
+    (is (str/includes? apply-help "complete mechanical model plan once"))
+    (is (str/includes? apply-help "publishes the receipt last"))
+    (is (str/includes? apply-help ":receipt-out"))
+    (is (str/includes? undo-help "entire inverse before writing"))
+    (is (str/includes? undo-help "second undo refuses"))))
 
 (deftest change-cli-previews-real-files-and-refuses-with-nonzero-exit
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-cli-"})
@@ -586,5 +750,81 @@
         (is (= 0 (:intent-index result)))
         (is (= 1 (:actual-count result)))
         (is (= source (slurp file))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest change-cli-dogfoods-one-shot-multi-file-apply-and-exact-undo
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-dogfood-"})
+        app-file (str (fs/path temp-dir "app_shell.clj"))
+        reader-file (str (fs/path temp-dir "source_reader.clj"))
+        receipt-file (str (fs/path temp-dir "receipt.edn"))
+        original-app (slurp "test/fixtures/intent_transaction/app_shell.clj")
+        original-reader
+        (slurp "test/fixtures/intent_transaction/source_reader.clj")
+        change-spec
+        (spec [(intent [app-file reader-file]
+                       ":body" ":body.intent-page" 2)
+               (intent [app-file]
+                       "\"/app.css\"" "\"/intent.css\"" 1)
+               (intent [reader-file]
+                       "[:title \"Workbench\"]"
+                       "[:title \"Intent Workbench\"]" 1)]
+              {:intent-count 3 :edit-count 4 :changed-file-count 2})]
+    (try
+      (spit app-file original-app)
+      (spit reader-file original-reader)
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":change!"
+                            ":spec" (pr-str change-spec)
+                            ":receipt-out" receipt-file]
+                           {:out :string :err :string})
+            result (edn/read-string out)
+            changed-app (slurp app-file)
+            changed-reader (slurp reader-file)
+            saved (edn/read-string (slurp receipt-file))]
+        (is (= 0 exit))
+        (is (= "" err))
+        (is (:ok result))
+        (is (= :change! (:operation result)))
+        (is (= 4 (:match-count result)))
+        (is (= 2 (:changed-file-count result)))
+        (is (= (str (fs/canonicalize receipt-file))
+               (:receipt-file result)))
+        (is (= (:receipt-hash result) (:receipt-hash saved)))
+        (is (< (count out) (count (slurp receipt-file))))
+        (is (str/includes? changed-app "#(str"))
+        (is (not (str/includes? changed-app "fn*")))
+        (is (str/includes? changed-app ":body.intent-page"))
+        (is (str/includes? changed-reader
+                           ";; Keep this explanation attached to the page body."))
+        (is (str/includes? changed-reader "[:title \"Intent Workbench\"]"))
+        (is (valid-source? changed-app))
+        (is (valid-source? changed-reader)))
+
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":undo-change!"
+                            ":receipt" receipt-file]
+                           {:out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 0 exit))
+        (is (= "" err))
+        (is (:ok result))
+        (is (= :undo-change! (:operation result)))
+        (is (= original-app (slurp app-file)))
+        (is (= original-reader (slurp reader-file))))
+
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":undo-change!"
+                            ":receipt" receipt-file]
+                           {:out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 1 exit))
+        (is (= "" err))
+        (is (= :result-hash-mismatch (:error-type result)))
+        (is (= original-app (slurp app-file)))
+        (is (= original-reader (slurp reader-file))))
       (finally
         (fs/delete-tree temp-dir)))))

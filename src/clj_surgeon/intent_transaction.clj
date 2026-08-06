@@ -2,12 +2,17 @@
   (:require
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [rewrite-clj.node :as node]
    [rewrite-clj.parser :as parser]
-   [rewrite-clj.zip :as z]))
+   [rewrite-clj.zip :as z])
+  (:import
+   (java.nio.file CopyOption Files StandardCopyOption)))
 
 (def transaction-version 1)
+(def receipt-version 1)
 
 (def ^:private supported-extensions [".clj" ".cljs" ".cljc"])
 (def ^:private spec-keys #{:intents :expect})
@@ -86,6 +91,23 @@
     (inc (if (node/inner? form-node)
            (reduce + 0 (map node-size (node/children form-node)))
            0))))
+
+(defn- sibling-index
+  [zloc]
+  (loop [current zloc
+         index 0]
+    (if-let [left (z/left current)]
+      (recur left (inc index))
+      index)))
+
+(defn- location-path
+  [zloc]
+  (loop [current zloc
+         path ()]
+    (let [path (conj path (sibling-index current))]
+      (if-let [parent (z/up current)]
+        (recur parent path)
+        (vec path)))))
 
 (defn- supported-file?
   [file]
@@ -209,6 +231,7 @@
                        {:intent-index intent-index
                         :file file
                         :address {:preorder preorder}
+                        :path (location-path candidate)
                         :end-preorder (+ preorder size -1)
                         :line row
                         :end-line end-row
@@ -270,10 +293,28 @@
   [source]
   (:node (parse-one-form source ":to")))
 
+(defn- move-right
+  [zloc n]
+  (nth (iterate z/right zloc) n nil))
+
+(defn- location-at-path
+  [source path]
+  (when (and (vector? path) (seq path) (every? nat-int? path))
+    (let [first-form (z/of-string source {:track-position? true})
+          forms-root (z/up first-form)
+          [root-index & child-indexes] path]
+      (when (and forms-root (zero? root-index))
+        (reduce (fn [parent index]
+                  (some-> parent z/down (move-right index)))
+                forms-root
+                child-indexes)))))
+
 (defn- replace-at-address
-  [source {:keys [address before after]}]
+  [source {:keys [address path before after]}]
   (let [root (z/of-string source {:track-position? true})
-        target (nth (zipper-locations root) (:preorder address) nil)]
+        target (if (some? path)
+                 (location-at-path source path)
+                 (nth (zipper-locations root) (:preorder address) nil))]
     (when-not target
       (refuse! :stale-path
                (str "Planned address no longer exists: " (:preorder address))))
@@ -288,7 +329,7 @@
   [source edits]
   (reduce replace-at-address
           source
-          (sort-by #(get-in % [:address :preorder]) > edits)))
+          (sort-by #(or (get-in % [:address :preorder]) 0) > edits)))
 
 (defn- prefixed-lines
   [prefix source]
@@ -596,3 +637,304 @@
      (catch Exception e
        {:error (.getMessage e)
         :error-type :transaction-write-exception}))))
+
+(defn- reverse-edit
+  [{:keys [intent-index address path line end-line before after]}]
+  {:intent-index intent-index
+   :address address
+   :path path
+   :line line
+   :end-line end-line
+   :before after
+   :after before})
+
+(defn- receipt-hash
+  [receipt]
+  (structural-lens/source-hash (pr-str (dissoc receipt :receipt-hash))))
+
+(defn build-receipt
+  "Build the durable forward evidence and concrete inverse edits for one
+   compiled transaction. Full original and future files are intentionally not
+   embedded."
+  [compiled]
+  (let [files (->> (changed-file-plans compiled)
+                   (mapv (fn [{:keys [file source-hash result-hash edits]}]
+                           {:file file
+                            :source-hash source-hash
+                            :result-hash result-hash
+                            :inverse-edits (mapv reverse-edit edits)})))
+        receipt {:receipt-version receipt-version
+                 :transaction-version transaction-version
+                 :operation :change!
+                 :intent-count (:intent-count compiled)
+                 :match-count (:match-count compiled)
+                 :changed-file-count (:changed-file-count compiled)
+                 :files files
+                 :intents (:intents compiled)
+                 :diff (:diff compiled)
+                 :inverse {:operation :undo-change!
+                           :guarded-file-count (count files)}}]
+    (assoc receipt :receipt-hash (receipt-hash receipt))))
+
+(defn- invalid-receipt!
+  [message & [data]]
+  (refuse! :invalid-transaction-receipt message data))
+
+(defn- validate-receipt!
+  [receipt]
+  (when-not (map? receipt)
+    (invalid-receipt! "Transaction receipt must be an EDN map"))
+  (when-not (= receipt-version (:receipt-version receipt))
+    (invalid-receipt!
+      (str "Unsupported receipt version: " (pr-str (:receipt-version receipt)))
+      {:supported-receipt-version receipt-version}))
+  (when-not (= transaction-version (:transaction-version receipt))
+    (invalid-receipt!
+      (str "Unsupported transaction version: "
+           (pr-str (:transaction-version receipt)))
+      {:supported-transaction-version transaction-version}))
+  (when-not (= :change! (:operation receipt))
+    (invalid-receipt! "Receipt operation must be :change!"))
+  (when-not (and (vector? (:files receipt)) (seq (:files receipt)))
+    (invalid-receipt! "Receipt :files must be a non-empty vector"))
+  (when-not (= (:receipt-hash receipt) (receipt-hash receipt))
+    (invalid-receipt! "Receipt hash does not match its contents"
+                      {:expected-hash (:receipt-hash receipt)
+                       :actual-hash (receipt-hash receipt)}))
+  (let [files (mapv :file (:files receipt))]
+    (when-not (and (every? string? files)
+                   (= (count files) (count (distinct files))))
+      (invalid-receipt! "Receipt file paths must be distinct strings")))
+  (when-not (= (:changed-file-count receipt) (count (:files receipt)))
+    (invalid-receipt! "Receipt changed-file count does not match its files"))
+  (when-not (= (:intent-count receipt) (count (:intents receipt)))
+    (invalid-receipt! "Receipt intent count does not match its intents"))
+  (when-not (= (:match-count receipt)
+               (reduce + 0 (map #(count (:inverse-edits %))
+                                (:files receipt))))
+    (invalid-receipt! "Receipt match count does not match its inverse edits"))
+  (when-not (= {:operation :undo-change!
+                :guarded-file-count (count (:files receipt))}
+               (:inverse receipt))
+    (invalid-receipt! "Receipt inverse summary does not match its files"))
+  (doseq [{:keys [file source-hash result-hash inverse-edits]} (:files receipt)]
+    (when-not (and (string? source-hash)
+                   (string? result-hash)
+                   (vector? inverse-edits)
+                   (seq inverse-edits))
+      (invalid-receipt! "Receipt file entry is incomplete" {:file file}))
+    (doseq [{:keys [path before after]} inverse-edits]
+      (when-not (and (vector? path) (seq path) (every? nat-int? path)
+                     (string? before) (string? after))
+        (invalid-receipt! "Receipt inverse edit is incomplete" {:file file}))))
+  receipt)
+
+(defn compile-inverse
+  "Compile a receipt's concrete reverse edits against current in-memory source.
+   Every current file must match its forward result hash, and every reconstructed
+   file must match its original hash."
+  [receipt sources]
+  (try
+    (validate-receipt! receipt)
+    (when-not (map? sources)
+      (invalid-receipt! "Inverse sources must be a file-to-source map"))
+    (let [compiled-files
+          (mapv
+            (fn [{:keys [file source-hash result-hash inverse-edits]}]
+              (let [current (get sources file)]
+                (validate-complete-source! file current :invalid-source)
+                (let [actual-hash (structural-lens/source-hash current)]
+                  (when-not (= result-hash actual-hash)
+                    (refuse! :result-hash-mismatch
+                             (str "Current source does not match transaction result: "
+                                  file)
+                             {:file file :expected-hash result-hash
+                              :actual-hash actual-hash})))
+                (let [restored
+                      (try
+                        (apply-edits current inverse-edits)
+                        (catch clojure.lang.ExceptionInfo e
+                          (invalid-receipt!
+                            (str "Inverse edit does not match its recorded path: "
+                                 file)
+                            {:file file
+                             :cause-error-type (:error-type (ex-data e))})))
+                      _ (validate-complete-source!
+                          file restored :invalid-result-source)
+                      restored-hash (structural-lens/source-hash restored)]
+                  (when-not (= source-hash restored-hash)
+                    (invalid-receipt!
+                      (str "Inverse result hash does not match original: " file)
+                      {:file file :expected-hash source-hash
+                       :actual-hash restored-hash}))
+                  {:file file
+                   :match-count (count inverse-edits)
+                   :source-hash result-hash
+                   :result-hash source-hash
+                   :edits inverse-edits
+                   :result-source restored})))
+            (:files receipt))
+          files (mapv :file compiled-files)]
+      {:ok true
+       :operation :undo-change!
+       :transaction-version transaction-version
+       :intent-count (:intent-count receipt)
+       :match-count (:match-count receipt)
+       :changed-file-count (count files)
+       :files (mapv #(dissoc % :result-source) compiled-files)
+       :original-sources (select-keys sources files)
+       :future-sources (into {} (map (juxt :file :result-source) compiled-files))
+       :validated {:whole-files-parsed true :file-count (count files)}})
+    (catch clojure.lang.ExceptionInfo e
+      (merge {:error (.getMessage e)} (ex-data e)))
+    (catch Exception e
+      {:error (.getMessage e) :error-type :invalid-transaction-receipt})))
+
+(defn- valid-edn-path?
+  [path]
+  (and (string? path) (str/ends-with? path ".edn")))
+
+(defn- canonical-receipt-path
+  [path]
+  (when-not (valid-edn-path? path)
+    (refuse! :invalid-receipt-path
+             ":receipt-out and :receipt must name an .edn file"
+             {:path path}))
+  (canonical-file path))
+
+(defn- assert-receipt-does-not-alias-source!
+  [receipt-path spec]
+  (when (some #{receipt-path} (spec-files spec))
+    (refuse! :invalid-receipt-path
+             "Receipt path must not alias a source file"
+             {:path receipt-path})))
+
+(defn- receipt-source
+  [receipt]
+  (str (pr-str receipt) "\n"))
+
+(defn- stage-receipt!
+  [receipt-path receipt]
+  (let [target (io/file receipt-path)
+        parent (.getParentFile (.getAbsoluteFile target))]
+    (when-not (and parent (.exists parent) (.isDirectory parent))
+      (refuse! :invalid-receipt-path
+               "Receipt parent directory does not exist"
+               {:path receipt-path}))
+    (let [staged (java.io.File/createTempFile
+                   ".clj-surgeon-receipt-" ".edn" parent)]
+      (try
+        (spit staged (receipt-source receipt))
+        (validate-receipt! (edn/read-string (slurp staged)))
+        staged
+        (catch Exception e
+          (.delete staged)
+          (throw e))))))
+
+(defn- publish-staged-receipt!
+  [staged receipt-path]
+  (Files/move (.toPath staged)
+              (.toPath (io/file receipt-path))
+              (into-array CopyOption
+                          [StandardCopyOption/ATOMIC_MOVE
+                           StandardCopyOption/REPLACE_EXISTING])))
+
+(defn- compile-change-spec
+  [spec]
+  (validate-spec! spec)
+  (let [canonical-spec (canonicalize-spec spec)
+        sources (read-sources (spec-files canonical-spec))]
+    {:spec canonical-spec
+     :compiled (compile-transaction sources canonical-spec)}))
+
+(defn execute-change!
+  "Compile, commit, verify, and publish one durable inverse receipt."
+  [{:keys [spec receipt-out] :as opts}]
+  (try
+    (let [unknown (vec (sort (remove #{:op :spec :receipt-out} (keys opts))))]
+      (when (seq unknown)
+        (refuse! :unknown-arguments
+                 (str "Unknown :change! arguments: " (str/join ", " unknown))
+                 {:unknown unknown})))
+    (when-not (map? spec)
+      (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
+    (let [receipt-path (canonical-receipt-path receipt-out)
+          {:keys [spec compiled]} (compile-change-spec spec)]
+      (assert-receipt-does-not-alias-source! receipt-path spec)
+      (if (:error compiled)
+        compiled
+        (let [receipt (build-receipt compiled)
+              staged (stage-receipt! receipt-path receipt)]
+          (try
+            (let [commit (commit-compiled! compiled)]
+              (if (:error commit)
+                commit
+                (try
+                  (publish-staged-receipt! staged receipt-path)
+                  (let [published (edn/read-string (slurp receipt-path))]
+                    (validate-receipt! published)
+                    (merge commit
+                           {:receipt-file receipt-path
+                            :receipt-hash (:receipt-hash receipt)
+                            :intent-count (:intent-count compiled)
+                            :match-count (:match-count compiled)
+                            :inverse (:inverse receipt)}))
+                  (catch Exception publish-error
+                    (let [inverse (compile-inverse
+                                    receipt (:future-sources compiled))
+                          rollback (if (:ok inverse)
+                                     (commit-compiled! inverse)
+                                     inverse)]
+                      {:error (if (:ok rollback)
+                                "Receipt publication failed; all files restored"
+                                "Receipt publication failed; manual recovery required")
+                       :error-type (if (:ok rollback)
+                                     :receipt-write-failed
+                                     :transaction-recovery-required)
+                       :cause-error (.getMessage publish-error)
+                       :rolled-back (boolean (:ok rollback))
+                       :recovery rollback})))))
+            (finally
+              (when (.exists staged) (.delete staged)))))))
+    (catch clojure.lang.ExceptionInfo e
+      (merge {:error (.getMessage e)} (ex-data e)))
+    (catch Exception e
+      {:error (.getMessage e) :error-type :transaction-write-exception})))
+
+(defn execute-undo!
+  "Apply the hash-fenced inverse from a durable :change! receipt."
+  [{:keys [receipt] :as opts}]
+  (try
+    (let [unknown (vec (sort (remove #{:op :receipt} (keys opts))))]
+      (when (seq unknown)
+        (refuse! :unknown-arguments
+                 (str "Unknown :undo-change! arguments: "
+                      (str/join ", " unknown))
+                 {:unknown unknown})))
+    (let [receipt-path (canonical-receipt-path receipt)
+          saved (try
+                  (edn/read-string (slurp receipt-path))
+                  (catch Exception e
+                    (invalid-receipt!
+                      (str "Cannot read transaction receipt: " (.getMessage e))
+                      {:receipt receipt-path})))
+          _ (validate-receipt! saved)
+          files (mapv :file (:files saved))
+          sources (read-sources files)
+          inverse (compile-inverse saved sources)]
+      (if (:error inverse)
+        inverse
+        (let [commit (commit-compiled! inverse)]
+          (if (:error commit)
+            commit
+            (-> commit
+                (assoc :operation :undo-change!
+                       :receipt-file receipt-path
+                       :receipt-hash (:receipt-hash saved)
+                       :restored-original-hashes
+                       (into {} (map (juxt :file :result-hash)
+                                     (:files inverse)))))))))
+    (catch clojure.lang.ExceptionInfo e
+      (merge {:error (.getMessage e)} (ex-data e)))
+    (catch Exception e
+      {:error (.getMessage e) :error-type :invalid-transaction-receipt})))

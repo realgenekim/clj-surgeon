@@ -503,6 +503,65 @@ concurrent edit.
 Filesystem dogfood copied the two realistic UI fixtures, compiled two intents
 into three edits across both files, committed them with real atomic per-file
 renames, and verified both read-back hashes. Complete planning plus commit took
-0.42 seconds in the Babashka process. This is substrate evidence, not the final
-agent benchmark: the public CLI, receipt publication, inverse, and native
-control are still absent.
+0.42 seconds in the Babashka process. This was substrate evidence; the next
+dogfood exercised the public boundary.
+
+## Frontier update: the durable transaction and inverse work end to end
+
+The first public mutation dogfood supplied one EDN spec containing three
+heterogeneous intents. It changed four exact forms across two copied Clojure
+files, published one inverse receipt, and then restored both original files:
+
+| Measure | Result |
+|---|---:|
+| Intent count | 3 |
+| Concrete edit count | 4 |
+| Changed files | 2 |
+| Forward plus undo wall | approximately 0.5 s in one Babashka process |
+| Console result | compact counts, hashes, verification, and receipt path |
+| Durable receipt | 3,466 bytes |
+| Final file hashes | exactly equal to both starting hashes |
+
+The fixtures contained a preserved anonymous function, a nearby textual
+lookalike, a body-attached comment, Hiccup, and unrelated source. The exact
+`:from` forms changed. `#()` did not become `fn*`, the textual lookalike did not
+match, and the comment remained byte-for-byte intact.
+
+The first easy inverse passed, but a stronger permanent test immediately found
+a real positional bug. Two sibling forms were each replaced by a larger tree.
+The forward transaction succeeded, but inverse replay interpreted a stored
+root coordinate relative to the first top-level form instead of the synthetic
+whole-file forms node. Preorder fallback could not safely compensate because
+the first replacement had changed later preorder positions.
+
+The fix made semantic child-index paths authoritative whenever they are
+present and replayed them from the whole-file forms root. A corrupt semantic
+path now refuses as an invalid receipt; it never falls back to a coincidentally
+matching preorder address. The original failing shape-changing case remains a
+permanent test.
+
+Public-boundary tests now prove:
+
+- exact forward apply and byte-exact inverse across two files;
+- a second undo refuses before writing;
+- one stale file refuses the complete inverse;
+- corrupt paths, counts, hashes, and versions refuse;
+- source/receipt aliasing and missing receipt parents refuse before mutation;
+- a plan refusal preserves an existing receipt;
+- receipt publication failure restores all source and preserves the prior
+  receipt;
+- handled write, read-back, and rollback failures retain their earlier atomic
+  guarantees.
+
+The complete repository gate passed 510 tests and 4,131 assertions with zero
+failures. This is still not the comparative speed result. It proves that one
+externalized model plan can safely become one transaction and one reversible
+artifact. Batch 5 must now compare clean callers against the tagged microscope
+and native patching.
+
+The EDNL queue hypothesis is narrower after this run. Externalization itself
+clearly helped: three decisions left model working memory as one executable
+spec and did not become repeated plan/apply turns. Incremental pushes remain
+unproven. They should be added only if long-plan trials show that tiny,
+source-free appends reduce reconstruction cost enough to repay extra process
+startups.
