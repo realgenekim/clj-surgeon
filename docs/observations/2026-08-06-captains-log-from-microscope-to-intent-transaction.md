@@ -699,3 +699,18 @@ intended missing phrase, then passed after the implementation transaction.
 There were no quoting refusals, source preflights, plan-file reads, or repair
 edits. Prose and skill changes correctly remained native patches because the
 transaction compiler only accepts Clojure source.
+
+### Dogfood exposed classpath leakage, then improved the lens
+
+The next dogfood implemented the literal X-ray expression that had failed
+during exploration: a path ending in `(expect-count 1)`. Before installation,
+the supposedly stable CLI unexpectedly accepted the working-tree-only feature.
+The cause was classpath order: Babashka loaded the caller checkout's `bb.edn`
+before the launcher appended its immutable package.
+
+The stable launcher now invokes Babashka with `--classpath PACKAGE/src`, which
+overrides caller classpaths while preserving the caller's working directory.
+An adversarial install test creates a hostile checkout with a fake
+`clj-surgeon.core` and proves the immutable runtime wins. Literal X-ray paths
+now enforce zero, exact, and many cardinalities without returning source on a
+mismatch. The original `ops-registry` read succeeds with exact source evidence.

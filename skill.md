@@ -47,7 +47,7 @@ For all `cond` pairs, use `(match 'cond) up outermost down right (partition-all 
 ## X-ray ordinary Clojure data
 
 Plain paths return exact source. `analyze` receives one vector of ordinary Clojure data and returns compact `:value` plus hashes.
-`expect-count` refuses before analysis. `initializer` selects a `def` right-hand side unevaluated.
+End a literal path with `expect-count` to return exact source only at that cardinality; before `analyze`, it refuses before analysis. `initializer` selects a `def` right-hand side unevaluated.
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \

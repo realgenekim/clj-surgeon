@@ -541,6 +541,15 @@
            (fn? (:analyzer program)))
       (assoc program :expression expression)
 
+      (and (map? program)
+           (= :selection (:kind program))
+           (vector? (:query program))
+           (integer? (:expected-count program)))
+      {:kind :literal
+       :query (:query program)
+       :expected-count (:expected-count program)
+       :expression expression}
+
       :else
       (invalid-xray-expression!
         expression :xray-expression-must-return-path-or-computation))))
@@ -791,10 +800,21 @@
   "Evaluate a literal structural path or a terminal pure computation."
   [source {:keys [expression file xray] :as opts}]
   (if (= :literal (:kind xray))
-    (-> (structural-lens/evaluate-query source (:query xray) {:file file})
-        (assoc :operation :xray
+    (let [found (structural-lens/evaluate-query source (:query xray) {:file file})
+          expected-count (:expected-count xray)]
+      (if (and (some? expected-count)
+               (not= expected-count (:match-count found)))
+        {:error (str "X-ray expected exactly " expected-count
+                     " matches, found " (:match-count found))
+         :error-type :xray-cardinality-mismatch
+         :operation :xray
+         :expression expression
+         :expected-match-count expected-count
+         :actual-match-count (:match-count found)}
+        (assoc found
+               :operation :xray
                :mode :literal
-               :expression expression))
+               :expression expression)))
     (assoc (evaluate-computed-xray source opts) :mode :computed)))
 
 (defn evaluate-edit

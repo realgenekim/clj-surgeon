@@ -699,7 +699,7 @@
                        :workflow ["Use one Clojure path for every structural read. A path without a terminal returns literal source evidence."
                                   "Start with (form 'NAME) for a known named form. Start with (line N) when a physical line identifies one otherwise unnamed top-level owner; blank gaps and overlapping owners refuse."
                                   "End with (analyze pure-function). The function always receives one vector of ordinary Clojure data in match order, including for zero or one match. Write one terminating pure function over this contract instead of a separate shape-discovery query."
-                                  "Add (expect-count n) before analyze when cardinality must be exact. It refuses before calling the function and never changes the vector input type."
+                                  "End a literal path with (expect-count n) to return exact source only at that cardinality. Put the same guard before analyze to refuse before calling the function without changing its vector input type."
                                   "After selecting a def, use initializer to select its right-hand side without evaluating it. An unbound def or non-def produces zero matches."
                                   "Literal reads return exact selected source. Computed reads return compact :value, addresses, ranges, trace, cardinality, and hashes without repeating source bodies."
                                   "Use :evidence :full when a computed read also needs exact selected source; :compact remains the default."

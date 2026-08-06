@@ -378,8 +378,16 @@ refuses with `:ambiguous-form`. Prefer `(form 'NAME)` when the semantic name is
 known. Use `(line N)` as a precise physical locator for otherwise unnamed
 top-level syntax.
 
+End a literal path with `expect-count` to return exact source only when the
+cardinality matches:
+
+```bash
+clj-surgeon :op :xray :file src/policy.clj \
+  :expr "(-> (form 'audit-report) initializer (expect-count 1))"
+```
+
 End the same path with `analyze` to derive an answer from the ordered selection
-vector. Add `expect-count` when cardinality must be exact:
+vector. Put `expect-count` before it when cardinality must be exact:
 
 ```bash
 clj-surgeon :op :xray :file src/policy.clj \

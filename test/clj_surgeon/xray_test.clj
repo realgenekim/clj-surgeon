@@ -197,6 +197,27 @@
     (is (= "[3 4]" (get-in result [:matches 0 :source])))
     (is (nil? (:value result)))))
 
+(deftest literal-xray-can-refuse-on-an-exact-match-count
+  (let [expression "(-> (form 'data) (match '[1 2]) (expect-count 1))"
+        compiled (dsl/compile-xray expression)
+        result (dsl/evaluate-xray source {:file "sample.clj"
+                                          :expression expression
+                                          :xray compiled})]
+    (is (= :literal (:kind compiled)))
+    (is (= 1 (:expected-count compiled)))
+    (is (= 1 (:match-count result)))
+    (is (= :literal (:mode result))))
+  (doseq [[expected actual] [[0 1] [2 1]]]
+    (let [expression (str "(-> (form 'data) (match '[1 2]) (expect-count "
+                          expected "))")
+          result (dsl/evaluate-xray source {:file "sample.clj"
+                                            :expression expression
+                                            :xray (dsl/compile-xray expression)})]
+      (is (= :xray-cardinality-mismatch (:error-type result)))
+      (is (= expected (:expected-match-count result)))
+      (is (= actual (:actual-match-count result)))
+      (is (not (contains? result :source))))))
+
 (deftest literal-xray-can-start-at-an-unnamed-owner-containing-a-line
   (let [file "test/fixtures/containing_line_owner.clj"
         source (slurp file)
@@ -683,6 +704,7 @@
           (is (str/includes? text "tree-seq") surface)
           (is (str/includes? text "one vector of ordinary Clojure data")
               surface))))
+    (is (str/includes? help "End a literal path with (expect-count n)"))
     (is (<= (count (str/split-lines
                      (get surfaces "canonical skill")))
             90))))

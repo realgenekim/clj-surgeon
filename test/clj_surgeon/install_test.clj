@@ -57,6 +57,7 @@
   (doseq [contract ["Invoke before using Read, Edit, grep, sed, or cat"
                     "Native Write is right for new files"
                     ":op :xray"
+                    "End a literal path with `expect-count`"
                     "capability-limited, not termination-proof"
                     ":op :edit"
                     ":op :change!"
