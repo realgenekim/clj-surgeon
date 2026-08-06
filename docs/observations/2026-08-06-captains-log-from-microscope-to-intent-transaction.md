@@ -456,3 +456,27 @@ impact -> change! -> receipt
 
 `change!` materializes the model's write plan once. `impact` should eventually
 materialize its exploration question once.
+
+## Queued experiment: discharge decisions into an EDNL intent stack
+
+One large `:spec` still asks the model to retain every decided edit until the
+end of planning. An optional append-only EDNL stack could externalize each
+operation as soon as the model decides it. Pushes would validate proposal data
+only and return a tiny count plus chain hash; they would never read or write
+source. One later `:change` or `:change!` would compile the hash-fenced stack
+against a single set of source snapshots.
+
+This may beat 23 plan/apply cycles even if it uses several shell calls: pushes
+carry no source, require no review diff, and avoid reacquiring earlier plan
+state after compaction or a long investigation. It may still lose to one large
+spec because Babashka process startup is not free. Benchmark rather than assume:
+
+| Lane | Hypothesized advantage |
+|---|---|
+| One large `:spec` | Fewest process calls |
+| EDNL pushes plus one commit | Lowest model working-memory and reconstruction cost |
+| Independent plans/applies | Existing safety baseline, highest ceremony |
+
+The compiler must normalize both the in-memory spec and EDNL records into the
+same intent representation. Mutation stays out of scope until the direct spec
+transaction, rollback, and inverse are proven.

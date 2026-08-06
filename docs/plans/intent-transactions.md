@@ -74,6 +74,52 @@ The compiler should eventually accept the same composable intent data from the
 CLI, an agent tool call, or a saved artifact. No caller should need to manually
 translate one coherent plan into 23 unrelated edit commands.
 
+### Externalize the plan while planning
+
+A second frontier hypothesis is that getting decided operations out of model
+working context has value even before execution. Support an optional append-only
+EDNL intent stack after the transaction substrate is proven:
+
+```clojure
+{:type :intent
+ :id :body-class
+ :files ["src/a.clj" "src/b.clj"]
+ :from ":body"
+ :to ":body.page"
+ :expect-count 2}
+{:type :intent
+ :id :browser-title
+ :files ["src/b.clj"]
+ :from "[:title \"Mothership\"]"
+ :to "[:title (str document-title \" — Mothership\")]"
+ :expect-count 1}
+{:type :expect
+ :intent-count 2
+ :edit-count 3
+ :changed-file-count 2}
+```
+
+The proposed flow is:
+
+```text
+push-intent -> tiny count/hash receipt
+push-intent -> tiny count/hash receipt
+change      -> compile and review the whole immutable stack
+change!     -> execute only with the declared stack hash
+```
+
+Pushing an intent never reads or writes source. It only validates and appends
+proposal data. Compilation still reads every source snapshot once, refuses
+overlap or count drift, and produces the same internal transaction plan as an
+in-memory `:spec`. Execution must bind the exact stack hash so an intervening
+append cannot widen consent.
+
+Do not assume that more calls are slower. Compare total wall, input/output
+tokens, source-bearing actions, correction turns, and context reconstruction
+for three lanes: one large `:spec`, incremental EDNL pushes plus one commit, and
+independent plan/apply cycles. A push command is valuable only if tiny
+source-free calls reduce total cognitive and runtime cost.
+
 ## Primary hypothesis
 
 The dominant cost is not rewriting syntax. It is repeatedly externalizing and
@@ -125,6 +171,7 @@ evidence, not noise to defer until the API is complete.
 | 3 | Guarded `:change!` with staged writes and rollback | Can known-safe work beat repeated plan/apply without weakening refusal behavior? |
 | 4 | Durable hash-fenced receipt and `:undo-change!` | Is recovery obvious, compact, and independently verifiable? |
 | 5 | Clean-context replay and tagged/native controls | Does the whole route reduce turns and wall time on realistic work? |
+| 6 | Optional hash-chained EDNL intent stack | Does externalizing decisions during planning beat one large spec without weakening consent? |
 
 For every batch:
 

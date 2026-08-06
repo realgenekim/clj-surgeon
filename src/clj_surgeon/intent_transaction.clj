@@ -37,11 +37,13 @@
   (try
     (let [root (parser/parse-string-all source)
           forms (->> (node/children root)
-                     (remove node/whitespace-or-comment?)
+                     (remove node/whitespace?)
                      vec)]
-      (when-not (= 1 (count forms))
+      (when-not (and (= 1 (count forms))
+                     (not (node/comment? (first forms))))
         (refuse! :invalid-intent-form
-                 (str label " must contain exactly one complete form")
+                 (str label
+                      " must contain exactly one complete form with no detached comments")
                  {:field label :form-count (count forms)}))
       (let [form-node (first forms)]
         {:node form-node
@@ -372,6 +374,26 @@
        distinct
        vec))
 
+(defn- canonical-file
+  [file]
+  (try
+    (.getCanonicalPath (java.io.File. file))
+    (catch Exception e
+      (refuse! :invalid-files
+               (str "Cannot canonicalize source path " (pr-str file)
+                    ": " (.getMessage e))
+               {:file file}))))
+
+(defn- canonicalize-spec
+  [spec]
+  (update spec :intents
+          (fn [intents]
+            (when intents
+              (mapv #(update % :files
+                             (fn [files]
+                               (when files (mapv canonical-file files))))
+                    intents)))))
+
 (defn- read-sources
   [files]
   (reduce (fn [sources file]
@@ -386,7 +408,18 @@
 
 (defn- public-plan
   [compiled]
-  (dissoc compiled :future-sources))
+  (-> compiled
+      (dissoc :future-sources)
+      (update :files
+              (fn [files]
+                (mapv #(update % :edits
+                               (fn [edits]
+                                 (mapv (fn [edit]
+                                         (select-keys edit
+                                                      [:intent-index :address
+                                                       :line :end-line]))
+                                       edits)))
+                      files)))))
 
 (defn plan-change
   "Read the explicit files in :spec and compile one non-mutating transaction
@@ -401,8 +434,13 @@
                  {:unknown unknown})))
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
-    (let [sources (read-sources (spec-files spec))]
-      (public-plan (compile-transaction sources spec)))
+    ;; Reject malformed proposal data before touching the filesystem. Compile
+    ;; validates again after canonicalization so aliased paths cannot evade the
+    ;; exact same contract.
+    (validate-spec! spec)
+    (let [canonical-spec (canonicalize-spec spec)
+          sources (read-sources (spec-files canonical-spec))]
+      (public-plan (compile-transaction sources canonical-spec)))
     (catch clojure.lang.ExceptionInfo e
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e

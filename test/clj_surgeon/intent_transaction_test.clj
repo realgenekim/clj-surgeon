@@ -144,6 +144,20 @@
           :spec (spec [(intent ["src/a.clj"] "(old-call x) extra" "(new-call x)" 1)]
                       valid-expect)
           :error :invalid-intent-form}
+         {:label "detached comment before before-form"
+          :spec (spec [(intent ["src/a.clj"]
+                               "; explain\n(old-call x)"
+                               "(new-call x)"
+                               1)]
+                      valid-expect)
+          :error :invalid-intent-form}
+         {:label "detached comment before replacement"
+          :spec (spec [(intent ["src/a.clj"]
+                               "(old-call x)"
+                               "; explain\n(new-call x)"
+                               1)]
+                      valid-expect)
+          :error :invalid-intent-form}
          {:label "lossless no-op"
           :spec (spec [(intent ["src/a.clj"] "(old-call x)" "(old-call   x)" 1)]
                       valid-expect)
@@ -202,7 +216,8 @@
 
 (deftest change-preview-reads-each-file-once-and-omits-full-future-source
   (let [reads (atom [])
-        sources {"src/a.clj" "(ns app.a)\n(def value [(old x) :body])\n"}
+        canonical-file (.getCanonicalPath (java.io.File. "src/a.clj"))
+        sources {canonical-file "(ns app.a)\n(def value [(old x) :body])\n"}
         change-spec
         (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
                (intent ["src/a.clj"] ":body" ":body.page" 1)]
@@ -213,10 +228,12 @@
                     (get sources file))]
       (let [result (transaction/plan-change {:op :change :spec change-spec})]
         (is (:ok result))
-        (is (= ["src/a.clj"] @reads))
+        (is (= [canonical-file] @reads))
         (is (nil? (:future-sources result)))
         (is (= 2 (:match-count result)))
-        (is (= 2 (count (get-in result [:files 0 :edits])))))))
+        (is (= 2 (count (get-in result [:files 0 :edits]))))
+        (is (every? #(not-any? (set (keys %)) [:before :after])
+                    (get-in result [:files 0 :edits]))))))
 
   (testing "unknown CLI arguments refuse before source reads"
     (let [read? (atom false)
@@ -229,7 +246,131 @@
                       :spec {:intents [] :expect {}}
                       :surprise true}))]
       (is (= :unknown-arguments (:error-type result)))
+      (is (false? @read?))))
+
+  (testing "malformed specs refuse before source reads"
+    (let [read? (atom false)
+          malformed
+          [{:spec {:intents {} :expect {}}
+            :error :invalid-intents}
+           {:spec {:intents [(assoc (intent ["src/a.clj"]
+                                            "(old x)" "(new x)" 1)
+                                    :surprise true)]
+                   :expect {:intent-count 1 :edit-count 1
+                            :changed-file-count 1}}
+            :error :unknown-intent-arguments}
+           {:spec {:intents [(intent "src/a.clj"
+                                     "(old x)" "(new x)" 1)]
+                   :expect {:intent-count 1 :edit-count 1
+                            :changed-file-count 1}}
+            :error :invalid-files}
+           {:spec {:intents [(intent ["src/a.clj"]
+                                     "(old x)" "(new x)" 1)]
+                   :expect {:intent-count 1 :edit-count 1
+                            :changed-file-count 1}
+                   :surprise true}
+            :error :unknown-transaction-arguments}]]
+      (with-redefs [clojure.core/slurp
+                    (fn [_]
+                      (reset! read? true)
+                      "")]
+        (doseq [{:keys [spec error]} malformed]
+          (is (= error
+                 (:error-type
+                   (transaction/plan-change {:op :change :spec spec}))))))
       (is (false? @read?)))))
+
+(deftest change-preview-canonicalizes-one-physical-file-across-intents
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-path-alias-"})
+        canonical-file (str (fs/path temp-dir "sample.clj"))
+        aliased-file (str (fs/path temp-dir "." "sample.clj"))
+        source "(ns sample)\n(def value [(old x) :body])\n"
+        change-spec
+        (spec [(intent [canonical-file] "(old x)" "(new x)" 1)
+               (intent [aliased-file] ":body" ":body.page" 1)]
+              {:intent-count 2 :edit-count 2 :changed-file-count 1})]
+    (try
+      (spit canonical-file source)
+      (let [result (transaction/plan-change {:op :change :spec change-spec})]
+        (is (:ok result))
+        (is (= 1 (count (:files result))))
+        (is (= (.getCanonicalPath (java.io.File. canonical-file))
+               (get-in result [:files 0 :file])))
+        (is (= 2 (get-in result [:files 0 :match-count])))
+        (is (= source (slurp canonical-file))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest intent-order-does-not-change-compiled-future-files
+  (let [sources {"src/a.clj" "(ns app.a)\n(def value [(old x) :body])\n"}
+        first-intent (intent ["src/a.clj"] "(old x)" "(new x)" 1)
+        second-intent (intent ["src/a.clj"] ":body" ":body.page" 1)
+        expected {:intent-count 2 :edit-count 2 :changed-file-count 1}
+        forward (transaction/compile-transaction
+                  sources (spec [first-intent second-intent] expected))
+        reverse (transaction/compile-transaction
+                  sources (spec [second-intent first-intent] expected))]
+    (is (:ok forward))
+    (is (:ok reverse))
+    (is (= (:future-sources forward) (:future-sources reverse)))
+    (is (= (mapv :result-hash (:files forward))
+           (mapv :result-hash (:files reverse))))))
+
+(deftest intents-match-only-original-snapshots-and-never-cascade
+  (let [source "(ns app.a)\n(def values [(old x) (new y)])\n"
+        result
+        (transaction/compile-transaction
+          {"src/a.clj" source}
+          (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+                 (intent ["src/a.clj"] "(new y)" "(final y)" 1)]
+                {:intent-count 2 :edit-count 2 :changed-file-count 1}))
+        future (get-in result [:future-sources "src/a.clj"])]
+    (is (:ok result))
+    (is (= "(ns app.a)\n(def values [(new x) (final y)])\n" future))
+    (is (str/includes? future "(new x)"))
+    (is (not (str/includes? future "(final x)")))))
+
+(deftest real-program-ui-plan-compiles-six-coordinated-edits-once
+  (let [shell-file "test/fixtures/intent_transaction/app_shell.clj"
+        reader-file "test/fixtures/intent_transaction/source_reader.clj"
+        original-shell (slurp shell-file)
+        original-reader (slurp reader-file)
+        change-spec
+        (spec
+          [(intent [shell-file reader-file]
+                   ":body" ":body.ide-shell-page" 2)
+           (intent [reader-file]
+                   "[project-id projects artifact current-location reader-region show-all?]"
+                   "[project-id projects artifact document-title current-location reader-region show-all?]"
+                   1)
+           (intent [reader-file]
+                   "[:title \"Workbench\"]"
+                   "[:title (str document-title \" — Workbench\")]"
+                   1)
+           (intent [reader-file]
+                   "[:span.tab-label artifact]"
+                   "[:span.tab-label {:title artifact} document-title]"
+                   1)
+           (intent [shell-file]
+                   "#(str \"/assets\" %)"
+                   "(partial str \"/assets\")"
+                   1)]
+          {:intent-count 5 :edit-count 6 :changed-file-count 2})
+        result (transaction/plan-change {:op :change :spec change-spec})]
+    (is (:ok result))
+    (is (= 5 (:intent-count result)))
+    (is (= 6 (:match-count result)))
+    (is (= 2 (:changed-file-count result)))
+    (is (= [2 4] (mapv :match-count (:files result))))
+    (is (= {:whole-files-parsed true :file-count 2}
+           (:validated result)))
+    (is (str/includes? (:diff result) "(partial str \"/assets\")"))
+    (is (str/includes? (:diff result)
+                       "[:title (str document-title \" — Workbench\")]"))
+    (is (not (str/includes? (:diff result)
+                            "The text :body is not a structural tag.")))
+    (is (= original-shell (slurp shell-file)))
+    (is (= original-reader (slurp reader-file)))))
 
 (deftest change-help-teaches-one-plan-materialization
   (let [op-def (get core/ops-registry :change)
