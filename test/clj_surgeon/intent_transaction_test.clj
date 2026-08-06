@@ -710,6 +710,7 @@
     (is (str/includes? apply-help "publishes the receipt last"))
     (is (str/includes? apply-help ":receipt-out"))
     (is (str/includes? apply-help "Do not open :receipt-out"))
+    (is (str/includes? apply-help ":receipt PATH"))
     (is (str/includes? undo-help "entire inverse before writing"))
     (is (str/includes? undo-help "second undo refuses"))))
 

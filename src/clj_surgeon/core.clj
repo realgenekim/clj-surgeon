@@ -617,7 +617,7 @@
                                    "Every :from, :to, per-intent :expect-count, and aggregate :expect value is consent to the exact materialized transaction. If the task already determines those counts, declare them without probing source only to confirm them."
                                    "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
                                    "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
-                                   "The console result is compact. Do not open :receipt-out; pass its path directly to :undo-change!."
+                                   "The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!."
                                    "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
                        :examples  ["clj-surgeon :op :change! :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}' :receipt-out /tmp/api-change.edn"]
                        :category  :write

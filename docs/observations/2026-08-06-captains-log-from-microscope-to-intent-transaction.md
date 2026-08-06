@@ -641,3 +641,32 @@ hashes, verification, receipt path, and inverse summary. The saved receipt holds
 the concrete reverse edits. The caller must pass that path directly to
 `:undo-change!`; it must not reopen the file and spend tokens rereading
 mechanical recovery data.
+
+### The second guidance repair eliminated count preflight
+
+The third clean Fable run used the same prompt after the skill said to declare
+task-determined counts without probing source. The caller went directly from
+setup to one `:change!`, then passed the unopened receipt to one
+`:undo-change!`. It made no source reads, count probes, help calls, refusals, or
+repair attempts.
+
+| Measure | Third Fable run |
+|---|---:|
+| Correct | yes |
+| `:change!` one-shot | yes |
+| Complete workflow one-shot | yes |
+| Surgeon invocations | 2 |
+| Complete process wall | 126.6 s |
+| Claude turns | 7 |
+| Output tokens | 8,111 |
+| Receipt | 2,598 B |
+
+The behavioral improvement is conclusive: Surgeon calls fell from six to two,
+and preflight reads fell from four to zero. The small wall-time change from
+132.3 to 126.6 seconds is not enough to claim a speedup from one replication;
+model deliberation still dominates the complete process time.
+
+The clean report exposed one remaining documentation guess. The skill said to
+pass the receipt path directly to `:undo-change!`, but did not spell out the
+`:receipt` argument. The caller guessed correctly. The skill now gives the
+complete command so a later caller need not guess at all.

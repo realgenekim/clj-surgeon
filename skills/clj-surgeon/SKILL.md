@@ -67,7 +67,7 @@ clj-surgeon :op :change! :spec '{:intents [{:files ["src/a.clj" "src/b.clj"] :fr
 ```
 
 A count mismatch, overlap, parse error, or stale hash refuses the complete transaction. Success returns compact read-back evidence and saves a hash-fenced inverse.
-Use `:change` with the same spec for review. Do not open the saved receipt; pass its path directly to `clj-surgeon :op :undo-change!` while every result hash matches. Use the single-edit route below for computed replacements.
+Use `:change` with the same spec for review. Do not open the saved receipt; run `clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn` while every result hash matches. Use the single-edit route below for computed replacements.
 
 ## Guarded edit or plan and apply
 

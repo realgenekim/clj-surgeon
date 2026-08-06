@@ -59,7 +59,7 @@
                     ":op :xray"
                     ":op :edit"
                     ":op :change!"
-                    ":op :undo-change!"
+                    ":op :undo-change! :receipt /tmp/api-change.edn"
                     ":receipt-out"
                     "Every intent requires positive `:expect-count`"
                     "declare them without probing source"
