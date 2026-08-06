@@ -1,6 +1,6 @@
 # Unify Claude and Codex Skill Packaging
 
-**Status:** Open
+**Status:** Closed on 2026-08-06
 **Severity:** P0 release blocker
 
 ## Evidence
@@ -34,3 +34,19 @@ exact artifact each agent receives.
 
 A user can install once, identify exactly what Claude and Codex loaded, and
 both clean-agent suites pass against those installed bytes.
+
+## Resolution
+
+`skills/clj-surgeon` is the authoritative package. The repository-native
+Claude entrance and root compatibility entrance have drift tests against that
+package. `make install` creates one content-addressed, read-only package and
+points both the Codex and Claude destinations to it. Each destination has an
+owned installation receipt. The installers refuse unrelated files, links, and
+receipts.
+
+Installation tests cover stable copies, development links, custom homes,
+unrelated destination refusal, shared contract text, progressive references,
+and byte-identical installed Claude and Codex surfaces. The Codex and Claude
+benchmark targets use the installed package and record its hash. The original
+line and word counts in the evidence section describe the pre-fix state; they
+are retained as the failure evidence.

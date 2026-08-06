@@ -13,7 +13,7 @@ efficiency metric. Existing tests may not be weakened or removed.
 
 1. [Archive benchmark evidence](001-archive-benchmark-evidence.md)
 2. [Confirm bounded Claude Fable and Opus use](002-bounded-claude-fable-opus.md)
-3. [Unify Claude and Codex skill packaging](003-unify-agent-skill-packaging.md)
+3. [Unify Claude and Codex skill packaging](003-unify-agent-skill-packaging.md) — closed 2026-08-06
 4. [Isolate installed artifacts from the active checkout](004-isolate-installed-artifacts.md)
 
 ## P1 — Public contract and safety

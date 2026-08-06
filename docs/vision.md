@@ -348,11 +348,15 @@ model plan expressed as explicit EDN
 The first compiler accepts heterogeneous losslessly exact `:from` / `:to`
 intents over explicit file sets. One intent covers a structural global
 replacement; one transaction can also materialize many different edits from a
-single model plan. Later transforms may add captures, insertion, deletion,
-movement, and graph-aware caller mechanics. All must preserve the same
-boundary: the model chooses meaning and scope; the kernel compiles and executes
-only declared mechanics. See `docs/plans/intent-transactions.md` for the
-contract, atomicity limits, and dogfood batches.
+single model plan. `:change` previews that compiled transaction. `:change!`
+commits it with handled-failure rollback and publishes a durable inverse
+receipt. `:undo-change!` requires every forward result hash to remain exact.
+
+Later transforms may add captures, insertion, deletion, movement, and
+graph-aware caller mechanics. All must preserve the same boundary: the model
+chooses meaning and scope; the kernel compiles and executes only declared
+mechanics. See `docs/plans/intent-transactions.md` for the contract, atomicity
+limits, and dogfood batches.
 
 The boundary is simple: improve the kernel when real use exposes a general
 mechanical weakness. Do not grow it merely because an AST makes a clever

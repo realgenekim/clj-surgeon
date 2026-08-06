@@ -10,6 +10,16 @@ is cut.
 
 ### Added
 
+- `:change`, `:change!`, and `:undo-change!` for one heterogeneous exact intent
+  transaction. A spec declares explicit file scopes, losslessly exact
+  `:from` / `:to` forms, per-intent match counts, and aggregate intent, edit,
+  and changed-file counts. `:change` compiles and previews the combined future
+  state without writing. `:change!` rechecks snapshot hashes, commits all files
+  with handled-failure rollback, verifies read-back hashes, and publishes one
+  durable inverse receipt. `:undo-change!` refuses the complete inverse if any
+  forward result hash is stale. Receipts use semantic child paths, preserve
+  literal `#()` and comments, and refuse corrupt paths instead of falling back
+  to unstable preorder coordinates.
 - `:match-form`, the preferred name for structural pattern search. The existing
   `:find-subform` and `:grep-form` spellings remain compatibility aliases.
   Supplying the historically guessed `:pattern` argument now recommends
@@ -68,7 +78,7 @@ is cut.
   macro-expansion internals remain refused. The sandbox is capability-limited,
   not termination-proof; callers remain responsible for bounded work.
   Computation returns `:value` with
-  compact hash evidence. The canonical agent skill is a validated 90-line task
+  compact hash evidence. The canonical agent skill is a validated compact task
   router with advanced workflows loaded on demand.
   Former read spellings remain compatibility inputs but are not the primary
   surface. Named selection now sees `#?`

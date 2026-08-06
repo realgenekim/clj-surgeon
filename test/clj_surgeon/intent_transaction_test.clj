@@ -711,6 +711,26 @@
     (is (str/includes? undo-help "entire inverse before writing"))
     (is (str/includes? undo-help "second undo refuses"))))
 
+(deftest public-docs-preserve-the-one-shot-transaction-contract
+  (let [readme (slurp "README.md")
+        skill (slurp "skills/clj-surgeon/SKILL.md")
+        changelog (slurp "CHANGELOG.md")
+        vision (slurp "docs/vision.md")]
+    (doseq [[label text] [["README" readme]
+                          ["skill" skill]
+                          ["changelog" changelog]
+                          ["vision" vision]]]
+      (is (str/includes? text ":change!")
+          (str label " must document guarded intent application"))
+      (is (str/includes? text ":undo-change!")
+          (str label " must document the hash-fenced inverse")))
+    (is (str/includes? readme
+                       "Do not split one known multi-edit plan into repeated"))
+    (is (str/includes? skill
+                       "Do not split one known plan into repeated edit calls"))
+    (is (str/includes? readme
+                       "It does not yet prove an agent speedup over native patching"))))
+
 (deftest change-cli-previews-real-files-and-refuses-with-nonzero-exit
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-cli-"})
         file (str (fs/path temp-dir "sample.clj"))

@@ -12,7 +12,7 @@ Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-
 ## Minimize total turns
 
 - Treat Surgeon as a lens, not a quota. On a bounded feature, stop after three Surgeon source reads; choose one X-ray or a native route instead of reconstructing a namespace form by form.
-- Native Write is right for new files. Use native tools for JavaScript, tests, prose/comments, and broad multi-form changes; use a normal patch when computed plan/apply is more ceremony than safety.
+- Native Write is right for new files. Use native tools for JavaScript, tests, and prose/comments. Use a normal patch when the requested Clojure change cannot be stated as exact structural substitutions.
 - A known literal edit may be the first source-bearing call: one `:edit` with `:expect` applies and verifies it. Do not pre-read known relationships or use Surgeon after tests merely to prove parsing.
 - Stop on nonzero exit or EDN `:error`. Call `clj-surgeon :op OP --help` only when the routes below do not cover the task.
 
@@ -57,6 +57,18 @@ clj-surgeon :op :xray :file src/policy.clj \
 Write one total pure Clojure function instead of a shape-discovery query. When keys are uncertain, return a shape echo; scope counts to named keys and reserve `tree-seq` for unknown shapes.
 Return concrete EDN, not a lazy sequence. X-ray never writes. For CLJC use `(form 'name :clj)` or `:cljs`.
 
+## Materialize one complete edit plan
+
+When exact before-forms, after-forms, scopes, and counts are known, use one guarded transaction. Do not split one known plan into repeated edit calls.
+One `:spec` can contain heterogeneous intents. Exact intents do not support `_`, regex, or fuzzy matching.
+
+```bash
+clj-surgeon :op :change! :spec '{:intents [{:files ["src/a.clj" "src/b.clj"] :from "(old-api account)" :to "(new-api account)" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}' :receipt-out /tmp/api-change.edn
+```
+
+A count mismatch, overlap, parse error, or stale hash refuses the complete transaction. Success returns compact read-back evidence and saves a hash-fenced inverse.
+Use `:change` with the same spec for review. Undo with `clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn` only while every result hash matches. Use the single-edit route below for computed replacements.
+
 ## Guarded edit or plan and apply
 
 Supply one of `:query` or `:expr`. `:edit` may be the first source-bearing command and never changes source without `:expect`.
@@ -64,26 +76,15 @@ Use `:expect BEFORE-FORM` only with a literal replacement. It applies and verifi
 Omit `:plan-out` unless an audit artifact must be retained. Without `:expect`, `:plan-out` is required and the command is plan-only.
 
 ```bash
-clj-surgeon :op :edit :file src/state.clj \
-  :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" \
-  :expect '(assoc state :status :done)'
-clj-surgeon :op :edit :file src/cache.clj \
-  :expr "(-> (line 412) (match '(old-reader account-id)) (replace '(new-reader account-id)))" \
-  :expect '(old-reader account-id)'
+clj-surgeon :op :edit :file src/state.clj :expr "(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))" :expect '(assoc state :status :done)'
 clj-surgeon :op :edit :file src/policy.clj :expr "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))" :plan-out plan.edn
 clj-surgeon :op :replace-subform! :plan plan.edn
 ```
 
-Whitespace does not affect `:expect`. Comments, metadata, and reader syntax
-must match. On mismatch, narrow the selection—`(match :done) (replace
-:complete)` preserves its surroundings—or review a plan. Never use `:expect`
-with `transform`: its generated after-state requires review. Plans store concrete replacement data,
-never executable code.
+Whitespace does not affect `:expect`; comments, metadata, and reader syntax must match. On mismatch, narrow the selection—`(match :done) (replace :complete)`—or review a plan. Never use `:expect` with `transform`; generated after-state requires review. Plans store concrete replacement data, never executable code.
 Literal replacements inline in `:expr` preserve `#()`, comments, commas, metadata, and layout. Computed replacements and `:query` use canonical printing. Read `:after` and `:diff` for exact source. Selector queries are semantic data.
-`transform` receives quoted syntax, not runtime values. Do not preflight whether
-plan paths exist. Review hashes and do not reopen the plan file. Do not edit the plan. Instead, generate a new plan.
-Never chain plan generation and application. Trust the apply receipt's `:verified` read-back
-hash and whole-file parse. Never reproduce a plan with `apply_patch`.
+`transform` receives quoted syntax, not runtime values. Do not preflight whether plan paths exist. Review hashes and do not reopen the plan file. Do not edit the plan; generate a new plan.
+Never chain plan generation and application. Trust the apply receipt's `:verified` read-back hash and whole-file parse. Never reproduce a plan with `apply_patch`.
 
 For dependencies, extraction, declares, moves, renames, or CLJC operations, read [references/advanced-operations.md](references/advanced-operations.md).
 Compatibility aliases include `:find-subform` and `:grep-form`.

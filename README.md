@@ -10,6 +10,7 @@ Use clj-surgeon to:
 - inspect a namespace without reading the complete file
 - select one top-level form by name, line, or distinctive text
 - search and compute over nested Clojure forms
+- materialize one guarded multi-file edit plan as one reversible transaction
 - create a reviewed, hash-bound replacement plan and apply it separately
 - move forms with explicit dependency handling
 - reorder definitions to remove unnecessary `(declare ...)` forms
@@ -34,10 +35,13 @@ inventories a namespace. `:cat` returns one selected form. `:xray` reads or
 computes over a Clojure path.
 
 `:match-form` finds syntax instead of textual lookalikes. Dependency operations
-expose the graph. Write operations separate planning from application.
+expose the graph. `:change!` compiles a complete exact edit plan into one
+verified transaction. Computed single edits retain separate planning and
+application.
 
 ```text
-ls / cat / xray / match-form / deps  →  plan  →  apply  →  receipt
+ls / cat / xray / match-form / deps  →  intent  →  change!  →  receipt
+                                      computed edit  →  plan  →  apply
 ```
 
 Run `clj-surgeon :op :help` for the complete caller surface. Unknown operations
@@ -48,15 +52,22 @@ For example, `:get :name NAME` points to `:cat :form NAME`, and
 looks like a text regular expression instead points to an `rg` command bounded
 to 20 matching lines.
 
-A computed write first produces a hash-bound plan and exact diff. A later
-command applies only that reviewed artifact. A literal write with `:expect`
-applies in one call because the caller declared the exact before-state. Both
-routes return write, read-back-hash, and whole-file-parse evidence.
+When all exact before-forms, after-forms, scopes, and counts are known,
+`:change!` applies the complete plan in one call. It commits all files as one
+failure-atomic unit and saves a hash-fenced inverse receipt. Use `:change` to
+review the combined plan without writing. Use `:undo-change!` only while every
+forward result hash still matches.
+
+A computed single write first produces a hash-bound plan and exact diff. A
+later command applies only that reviewed artifact. A literal single write with
+`:expect` applies in one call because the caller declared the exact
+before-state. All write routes return read-back-hash and whole-file-parse
+evidence.
 
 The design target is one command for each judgment boundary:
 
 ```text
-one structural read or declared before-state  →  one verified apply
+one complete declared intent  →  one verified transaction
 ```
 
 Each command owns its mechanical work: parsing, selection, ordering, ambiguity
@@ -66,11 +77,11 @@ select safely, it refuses with bounded evidence and executable remedies. It
 does not silently widen scope, choose an ambiguous match, or move additional
 code without consent.
 
-When the target relationship and replacement are already explicit, an `:edit`
-operation may be the first non-mutating call: its plan contains the selected
-source, trace, exact diff, and hashes. When intent depends on what the source
-contains, run `:xray` first. The safety boundary is always plan versus
-apply, never an artificial requirement to spend an extra shell call.
+When one target relationship and replacement are explicit, an `:edit`
+operation may be the first source-bearing call. Use `:expect` to apply a known
+literal replacement, or emit a plan for review. When several exact edits are
+already known, put them in one `:change!` spec. When intent depends on source
+discovery, run `:xray` first.
 
 This is the project's Bitter Lesson boundary. clj-surgeon adds general
 structural primitives and trustworthy feedback. It does not add special cases
@@ -147,6 +158,16 @@ passed the task's correctness gate.
 All native case-edit runs changed the requested token but deleted an unrelated
 trailing blank byte. Because no native run passed the exact-byte correctness
 gate, the table does not report native efficiency medians for that task.
+
+The first public transaction dogfood was not a controlled agent benchmark. It
+measured the mechanism before the clean-context comparison. One EDN spec
+contained three heterogeneous intents and produced four exact edits across two
+copied Clojure files.
+
+Forward apply, durable receipt publication, and exact undo completed in
+approximately 0.5 seconds in one Babashka process. The receipt was 3,466 bytes,
+and both final file hashes equaled their starting hashes. This proves bounded
+mechanism cost and reversibility. It does not yet prove an agent speedup over native patching.
 
 ## Production examples
 
@@ -253,9 +274,10 @@ one-shot read and edit routes.
 The skill activates before an agent uses native Read, Edit, grep, sed, or cat
 on an existing Clojure file. It routes compact reads and structural changes to
 clj-surgeon while retaining native Write for new files and native editing for
-unsupported prose- or comment-heavy changes. For an existing file over 500
-lines, the first unknown-form inspection is `:ls`; when the owner is known,
-start with `:cat`.
+unsupported transformations. A known exact multi-edit plan uses one
+`:change!`. A plan that needs combined review uses `:change`. A computed single
+edit uses the plan/apply route. For an existing file over 500 lines, the first
+unknown-form inspection is `:ls`. When the owner is known, start with `:cat`.
 
 `make install` also installs the same canonical package for Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/clj-surgeon`. Do not maintain separate
@@ -753,6 +775,46 @@ It also contains per-platform top-level form summaries.
 
 ### Write operations
 
+#### `:change` / `:change!` / `:undo-change!` — Materialize one exact plan
+
+Use one transaction when the complete plan is already known. Each intent
+declares explicit files, one exact before-form, one exact after-form, and an
+expected match count. The aggregate expectation guards the complete plan.
+
+```bash
+clj-surgeon :op :change! \
+  :spec '{:intents [{:files ["src/app/a.clj" "src/app/b.clj"] :from "(old-api account)" :to "(new-api account)" :expect-count 3} {:files ["src/app/b.clj"] :from ":body" :to ":body.page" :expect-count 1}] :expect {:intent-count 2 :edit-count 4 :changed-file-count 2}}' \
+  :receipt-out /tmp/api-change.edn
+```
+
+All intents compile against the same original snapshots. Matching ignores
+whitespace. Comments, metadata, reader macros, token spelling, and collection
+type must match. Exact transaction intents do not support `_`, regular
+expressions, or fuzzy matching.
+
+Any count mismatch, overlap, invalid future file, or stale hash refuses the
+complete transaction. A handled write or receipt-publication failure restores
+transaction-owned bytes. Recovery never overwrites unknown concurrent bytes.
+
+Use the non-mutating command when the combined diff needs review:
+
+```bash
+clj-surgeon :op :change :spec '{:intents [...] :expect {...}}'
+```
+
+Successful `:change!` output is compact. The durable receipt contains concrete
+inverse edits and original/result hashes. Undo refuses before writing when any
+current file differs from its recorded forward result:
+
+```bash
+clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn
+```
+
+Do not split one known multi-edit plan into repeated `:edit` or
+`:replace-subform!` calls. Use those operations when the replacement must be
+computed from selected source or reviewed as one independently meaningful
+edit.
+
 #### `:fix-declares` / `:fix-declares!` — Eliminate unnecessary declares
 
 ```bash
@@ -1021,6 +1083,9 @@ skill teaches these common routes:
 - For a known form, line, or distinctive text, start with `:cat`.
 - For nested syntax in an unnamed top-level form, start an `:xray` or `:edit`
   expression with `(line N)`, then narrow to the exact subtree.
+- For a known exact multi-edit plan, use one `:change!` transaction. Use
+  `:change` when the combined diff needs review first.
+- For a computed single edit, generate and review one plan before applying it.
 - For a declaration, run `:fix-declares` before deciding whether to apply
   `:fix-declares!`.
 - For an extraction, inspect `:ls-deps` and `:ls-extract` before planning the
@@ -1039,7 +1104,7 @@ ethnography into one bounded command:
 make study-agent-usage
 ```
 
-The canonical package lives under `skills/study-agent-usage`; the repository
+The canonical package lives under `skills/study-agent-usage`. The repository
 exposes it to Codex through `.agents/skills/` and to Claude Code through
 `.claude/skills/`, both as links to that one package.
 
