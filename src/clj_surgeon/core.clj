@@ -20,6 +20,7 @@
    [clj-surgeon.fix-declares :as fix-declares]
    [clj-surgeon.forms :as forms]
    [clj-surgeon.forward-refs :as fwd]
+   [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.rename :as rename]
@@ -591,6 +592,20 @@
                                    "clj-surgeon :op :edit :file src/state.clj :query '[[:form transition] [:find :finish] [:span 2] [:replace-span :finish (assoc state :status :complete)]]' :plan-out plan.edn"
                                    "clj-surgeon :op :edit :file src/state.clj :expr \"(-> (form 'transition) (match :finish) right (replace '(assoc state :status :complete)))\" :expect '(assoc state :status :done)'"
                                    "clj-surgeon :op :replace-subform! :plan plan.edn"]
+                       :category  :write}
+
+    :change           {:handler   intent-transaction/plan-change
+                       :desc      "Compile one heterogeneous structural intent transaction without writing source"
+                       :args      {:spec {:required true :desc "EDN map with exact :intents and aggregate :expect guards"}}
+                       :workflow  ["Express the complete mechanical model plan as one :spec with an :intents vector."
+                                   "Every intent declares explicit :files, exact source strings :from and :to, and a positive :expect-count."
+                                   "Declare aggregate :expect values for :intent-count, :edit-count, and :changed-file-count."
+                                   "This command reads each scoped file once, compiles every intent against the original snapshots, and writes nothing."
+                                   "Whitespace may differ. Comments, metadata, reader syntax, token spelling, and collection type must match exactly."
+                                   "Different intents may touch disjoint syntax in the same file. Any identical, ancestor/descendant, or otherwise overlapping targets refuse the whole plan."
+                                   "Review the per-intent and per-file counts, hashes, concrete edits, combined diff, and whole-file parse proof."
+                                   "Use one intent for a structural global replacement; use several intents to materialize one heterogeneous model plan without repeated edit turns."]
+                       :examples  ["clj-surgeon :op :change :spec '{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}'"]
                        :category  :write}
 
     :fix-declares     {:handler   (fn [opts] (fix-declares/plan (:file opts)))

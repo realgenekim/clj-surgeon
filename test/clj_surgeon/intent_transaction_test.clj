@@ -1,6 +1,10 @@
 (ns clj-surgeon.intent-transaction-test
   (:require
+   [babashka.fs :as fs]
+   [babashka.process :as proc]
+   [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
+   [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [rewrite-clj.zip :as z]))
@@ -195,3 +199,88 @@
     (is (str/includes? future "^String renamed"))
     (is (str/includes? future "^{:tag String} x"))
     (is (str/includes? future "#_ignored 1 2N"))))
+
+(deftest change-preview-reads-each-file-once-and-omits-full-future-source
+  (let [reads (atom [])
+        sources {"src/a.clj" "(ns app.a)\n(def value [(old x) :body])\n"}
+        change-spec
+        (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+               (intent ["src/a.clj"] ":body" ":body.page" 1)]
+              {:intent-count 2 :edit-count 2 :changed-file-count 1})]
+    (with-redefs [clojure.core/slurp
+                  (fn [file]
+                    (swap! reads conj file)
+                    (get sources file))]
+      (let [result (transaction/plan-change {:op :change :spec change-spec})]
+        (is (:ok result))
+        (is (= ["src/a.clj"] @reads))
+        (is (nil? (:future-sources result)))
+        (is (= 2 (:match-count result)))
+        (is (= 2 (count (get-in result [:files 0 :edits])))))))
+
+  (testing "unknown CLI arguments refuse before source reads"
+    (let [read? (atom false)
+          result (with-redefs [clojure.core/slurp
+                               (fn [_]
+                                 (reset! read? true)
+                                 "")]
+                   (transaction/plan-change
+                     {:op :change
+                      :spec {:intents [] :expect {}}
+                      :surprise true}))]
+      (is (= :unknown-arguments (:error-type result)))
+      (is (false? @read?)))))
+
+(deftest change-help-teaches-one-plan-materialization
+  (let [op-def (get core/ops-registry :change)
+        help (core/format-op-help :change op-def)
+        global-help (core/format-global-help core/ops-registry)]
+    (is (= :change (core/resolve-op :change)))
+    (is (str/includes? global-help "    change"))
+    (is (str/includes? help "complete mechanical model plan"))
+    (is (str/includes? help "writes nothing"))
+    (is (str/includes? help "heterogeneous model plan"))
+    (is (str/includes? help ":intent-count"))
+    (is (str/includes? help ":changed-file-count"))))
+
+(deftest change-cli-previews-real-files-and-refuses-with-nonzero-exit
+  (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-cli-"})
+        file (str (fs/path temp-dir "sample.clj"))
+        source "(ns sample)\n(defn page [x] [(old x) :body])\n"
+        change-spec
+        (spec [(intent [file] "(old x)" "#(new %)" 1)
+               (intent [file] ":body" ":body.page" 1)]
+              {:intent-count 2 :edit-count 2 :changed-file-count 1})]
+    (try
+      (spit file source)
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":change"
+                            ":spec" (pr-str change-spec)]
+                           {:out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 0 exit))
+        (is (= "" err))
+        (is (:ok result))
+        (is (= 2 (:match-count result)))
+        (is (= 1 (:changed-file-count result)))
+        (is (str/includes? (:diff result) "#(new %)"))
+        (is (nil? (:future-sources result)))
+        (is (= source (slurp file))))
+
+      (let [wrong-spec
+            (assoc-in change-spec [:intents 0 :expect-count] 2)
+            {:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":change"
+                            ":spec" (pr-str wrong-spec)]
+                           {:out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 1 exit))
+        (is (= "" err))
+        (is (= :expect-count-mismatch (:error-type result)))
+        (is (= 0 (:intent-index result)))
+        (is (= 1 (:actual-count result)))
+        (is (= source (slurp file))))
+      (finally
+        (fs/delete-tree temp-dir)))))

@@ -134,7 +134,7 @@
         from (parse-one-form (:from intent) ":from")
         to (parse-one-form (:to intent) ":to")
         expected-count (validate-expect-count! (:expect-count intent)
-                         intent-index)]
+                                               intent-index)]
     (when (= (:fingerprint from) (:fingerprint to))
       (refuse! :no-op-intent
                "Intent :from and :to are losslessly equal"
@@ -238,7 +238,7 @@
      :match-count actual-count
      :per-file-counts (into {} (map (fn [[file matches]]
                                       [file (count matches)]))
-                        by-file)
+                            by-file)
      :edits edits}))
 
 (defn- overlap?
@@ -359,6 +359,50 @@
     (when-not (map? sources)
       (refuse! :invalid-sources "Sources must be a map of file path to source"))
     (compile-transaction* sources spec)
+    (catch clojure.lang.ExceptionInfo e
+      (merge {:error (.getMessage e)} (ex-data e)))
+    (catch Exception e
+      {:error (.getMessage e)
+       :error-type :intent-compiler-failure})))
+
+(defn- spec-files
+  [spec]
+  (->> (:intents spec)
+       (mapcat :files)
+       distinct
+       vec))
+
+(defn- read-sources
+  [files]
+  (reduce (fn [sources file]
+            (try
+              (assoc sources file (slurp file))
+              (catch Exception e
+                (refuse! :invalid-source
+                         (str "Cannot read source " file ": " (.getMessage e))
+                         {:file file}))))
+          {}
+          files))
+
+(defn- public-plan
+  [compiled]
+  (dissoc compiled :future-sources))
+
+(defn plan-change
+  "Read the explicit files in :spec and compile one non-mutating transaction
+   plan. The public result retains concrete edits and hashes but omits complete
+   future-file source."
+  [{:keys [spec] :as opts}]
+  (try
+    (let [unknown (vec (sort (remove #{:op :spec} (keys opts))))]
+      (when (seq unknown)
+        (refuse! :unknown-arguments
+                 (str "Unknown :change arguments: " (str/join ", " unknown))
+                 {:unknown unknown})))
+    (when-not (map? spec)
+      (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
+    (let [sources (read-sources (spec-files spec))]
+      (public-plan (compile-transaction sources spec)))
     (catch clojure.lang.ExceptionInfo e
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e

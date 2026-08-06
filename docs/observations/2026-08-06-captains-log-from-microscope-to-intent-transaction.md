@@ -299,11 +299,28 @@ the shortest safe specification.
 
 ## Smallest falsifiable product experiment
 
-Build one vertical slice of the transaction model:
+Build one vertical slice of the transaction model. The first draft assumed one
+flat list of changes:
 
 ```clojure
 {:changes [{:file FILE :inside FORM :from OLD :to NEW} ...]
  :expect-counts [1 ...]}
+```
+
+Early design review sharpened the hypothesis. The expensive boundary is not
+one global replacement. It is repeatedly externalizing and reacquiring a
+heterogeneous plan that the model already formed. The first compiler therefore
+accepts exact per-intent scopes and aggregate transaction guards:
+
+```clojure
+{:intents [{:files [FILE ...]
+            :from "EXACT SOURCE FORM"
+            :to "EXACT SOURCE FORM"
+            :expect-count N}
+           ...]
+ :expect {:intent-count I
+          :edit-count E
+          :changed-file-count F}}
 ```
 
 It must support one or many files, apply atomically, preserve unrelated bytes,
@@ -350,3 +367,92 @@ edit! -> receipt
 
 That is the plausible route to a 2–4x win: not faster parsing alone, but turning
 dozens of navigation and replay decisions into one guarded statement of intent.
+
+## Frontier update: the first intent compiler dogfood
+
+**Time:** 2026-08-06 13:13 PDT
+
+The microscope baseline is preserved at commit `5d3e262` and annotated tag
+`local-microscope-optimum`. The `intent-transactions` branch contains the
+contract and first pure compiler.
+
+The red tests found an immediate structural bug: the overlap detector counted
+whitespace nodes, but rewrite-clj's semantic zipper addresses skip them. Two
+adjacent edits therefore appeared to overlap. Fixing node intervals to use the
+same semantic node model produced a permanent regression test before any write
+path existed.
+
+The pure compiler then materialized three different hypothetical edits in the
+same real namespace:
+
+| Measure | Result |
+|---|---:|
+| Intent count | 3 |
+| Concrete edit count | 3 |
+| Changed files | 1 |
+| Review diff | 383 bytes |
+| Source writes | 0 |
+
+The first CLI dogfood used two different intents in two real repository files:
+
+| Measure | Result |
+|---|---:|
+| Intent count | 2 |
+| Concrete edit count | 2 |
+| Changed files | 2 |
+| CLI wall | 0.55 s including process startup and pretty printing |
+| Source writes | 0 |
+
+The command read each file once, compiled both intents against the original
+snapshots, returned per-intent and per-file counts, concrete addresses, source
+and result hashes, one combined diff, and whole-file parse proof. A deliberately
+wrong per-intent count exited 1 with `:expect-count-mismatch` and the actual
+per-file count.
+
+This is not the speed result yet: no guarded commit, rollback, inverse, or
+native control exists. It is the first evidence for the interface hypothesis.
+One model plan can already become one bounded review artifact without plan/file
+writes or repeated edit turns.
+
+## Queued read-side field failure: three guesses, then surrender
+
+A separate clean caller reported this exploration route on large Clojure
+namespaces:
+
+```text
+:cat by distinctive text -> zero
+:cat by different distinctive text -> zero
+:cat by distinctive text -> ambiguous
+skill's three-read ceiling -> rg + bounded line reads
+```
+
+The reads were bounded, not whole-file dumps. That limits damage but does not
+meet the product standard. The caller also skipped the repository's stricter
+first-inspection `:ls` rule for files over 500 lines. The skill and project
+instructions therefore disagreed about the recovery route, and neither made
+the successful structural path obvious.
+
+This is the read-side analogue of repeated edit materialization. The model had
+one exploration goal, but the interface required independent selector guesses.
+Each failure should have compiled into evidence for the next move.
+
+Queue a faithful, anonymized regression study after the transaction slice:
+
+- replay the exact zero/zero/ambiguous selector sequence;
+- inspect the actual candidate and remedy EDN, not only the caller's summary;
+- require zero-match output to offer a directly runnable nearest-owner route;
+- require ambiguity output to return a compact reusable candidate table;
+- test one bounded resolver that accepts the accumulated clues instead of
+  forcing a fallback to line reads;
+- reconcile the three-source-read ceiling with the mandatory first `:ls` rule;
+- measure whether the repaired route beats `rg` plus bounded source reads in
+  calls, wall time, and source bytes.
+
+The long-term surface remains symmetric:
+
+```text
+impact -> change! -> receipt
+```
+
+`change!` materializes the model's write plan once. `impact` should eventually
+materialize its exploration question once.
