@@ -60,14 +60,14 @@ Return concrete EDN, not a lazy sequence. X-ray never writes. For CLJC use `(for
 ## Materialize one complete edit plan
 
 When exact before-forms, after-forms, scopes, and counts are known, use one guarded transaction. Do not split one known plan into repeated edit calls.
-One `:spec` can contain heterogeneous intents. Every intent requires positive `:expect-count`; aggregate `:expect` requires exact intent, edit, and changed-file counts. Exact intents do not support `_`, regex, or fuzzy matching.
+One `:spec` can contain heterogeneous intents. Every intent requires positive `:expect-count`; aggregate `:expect` requires exact intent, edit, and changed-file counts. If the task already determines those counts, declare them without probing source. Exact intents do not support `_`, regex, or fuzzy matching.
 
 ```bash
 clj-surgeon :op :change! :spec '{:intents [{:files ["src/a.clj" "src/b.clj"] :from "(old-api account)" :to "(new-api account)" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}' :receipt-out /tmp/api-change.edn
 ```
 
 A count mismatch, overlap, parse error, or stale hash refuses the complete transaction. Success returns compact read-back evidence and saves a hash-fenced inverse.
-Use `:change` with the same spec for review. Undo with `clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn` only while every result hash matches. Use the single-edit route below for computed replacements.
+Use `:change` with the same spec for review. Do not open the saved receipt; pass its path directly to `clj-surgeon :op :undo-change!` while every result hash matches. Use the single-edit route below for computed replacements.
 
 ## Guarded edit or plan and apply
 

@@ -607,3 +607,37 @@ letting the caller skip source reconstruction, structurally excluding textual
 lookalikes, compiling all exact intents against one snapshot, and producing a
 smaller machine-verifiable inverse. A replicated harness must measure complete
 turn wall and tokens before claiming a speed win.
+
+### The first guidance repair removed the refusal but exposed count preflight
+
+The same clean Fable prompt ran again after the skill made both count layers
+mandatory. `:change!` succeeded on the first attempt and the complete round
+trip was exact. There were no help calls, refusals, or corrections.
+
+The caller still made four `:match-form` calls before the transaction: one for
+each expected occurrence. It interpreted “counts are mandatory” as “always
+measure counts,” even though the task already determined two `:body` matches
+and one match for each other intent. The safe refusal contract had become
+unnecessary preflight ceremony.
+
+| Measure | Second Fable run |
+|---|---:|
+| Correct | yes |
+| `:change!` one-shot | yes |
+| Complete workflow one-shot | no; four count probes |
+| Surgeon invocations | 6 |
+| Complete process wall | 132.3 s |
+| Claude turns | 7 |
+| Output tokens | 8,180 |
+| Receipt | 2,668 B |
+
+The next skill sentence states the actual boundary: if the task already
+determines the counts, declare them without probing source. If the counts are
+not known, source inspection is part of forming the plan. This does not weaken
+the guard. It prevents the guard from becoming a mandatory duplicate read.
+
+The same update clarifies receipt use. `:change!` stdout carries compact counts,
+hashes, verification, receipt path, and inverse summary. The saved receipt holds
+the concrete reverse edits. The caller must pass that path directly to
+`:undo-change!`; it must not reopen the file and spend tokens rereading
+mechanical recovery data.

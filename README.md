@@ -810,6 +810,10 @@ current file differs from its recorded forward result:
 clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn
 ```
 
+Do not open the receipt file. The `:change!` stdout contains the counts, hashes,
+verification, receipt path, and inverse summary needed for the decision. Pass
+the saved path directly to `:undo-change!`.
+
 Do not split one known multi-edit plan into repeated `:edit` or
 `:replace-subform!` calls. Use those operations when the replacement must be
 computed from selected source or reviewed as one independently meaningful

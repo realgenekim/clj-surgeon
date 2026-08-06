@@ -62,6 +62,8 @@
                     ":op :undo-change!"
                     ":receipt-out"
                     "Every intent requires positive `:expect-count`"
+                    "declare them without probing source"
+                    "Do not open the saved receipt"
                     "Do not split one known plan into repeated edit calls"
                     ":op :replace-subform!"
                     "(match :href) right"
