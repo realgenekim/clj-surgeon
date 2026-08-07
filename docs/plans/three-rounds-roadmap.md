@@ -1,6 +1,14 @@
 # Three Rounds: the road from a fast transaction to a 3x task
 
 **Status:** Proposed design direction
+
+**2026-08-07 update:** The integrated inspect surface passed correctness but
+missed its keep gate. The
+[3x assessment](../observations/2026-08-07-captains-log-the-3x-mechanism-exists-but-the-product-is-not-there.md)
+revises the next sequence to workspace-scoped inspection, a hash-bound
+decision register, and closed verification profiles. Result-register
+drill-down now waits for measured output truncation.
+
 **Motivating evidence:**
 
 - [One call crossed the double-digit gate](../observations/2026-08-07-captains-log-one-call-crossed-the-double-digit-gate.md)
