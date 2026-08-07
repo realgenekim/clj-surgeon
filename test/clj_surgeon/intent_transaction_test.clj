@@ -930,8 +930,7 @@
                        "Do not split one known multi-edit plan into repeated"))
     (is (str/includes? skill
                        "Do not split one known plan into repeated edit calls"))
-    (is (str/includes? readme
-                       "It does not yet prove an agent speedup over native patching"))))
+    (testing "controlled benchmark evidence stays explicit" (is (str/includes? readme "Assisted `apply_clojure_changes`")) (is (str/includes? readme "4 / 4")) (is (str/includes? readme "43.2%")) (is (str/includes? readme "Tool metadata alone did not cause adoption")))))
 
 (deftest change-cli-previews-real-files-and-refuses-with-nonzero-exit
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-change-cli-"})

@@ -397,3 +397,11 @@ Batching is the intended source of a large read-side gain. A hot process alone
 is not sufficient evidence. The representative read portfolio compares
 complete task wall, calls, tokens, evidence bytes, and correctness against both
 CLI and native controls.
+
+The broader reader/explorer frontier—including snapshot-bound selection
+handles, semantic zoom, structural history, future-state X-ray, impact
+corridors, structural censuses, runtime/source joins, executable question
+graphs, and durable watchpoints—is collected in
+[The Code Reader/Explorer Frontier](code-reader-explorer-frontier.md). These
+are experiment candidates, not accepted features; each must earn its
+complexity against a strongest credible control.

@@ -19,3 +19,8 @@ bench/results/**/tool-calls.jsonl
 bench/results/**/mcp-telemetry/
 bench/results/**/SKILL.md
 .nrepl-port
+
+# Machine-local semantic index and MCP client configuration.
+.lsp/
+cclsp.json
+.codex/config.toml

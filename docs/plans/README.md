@@ -12,6 +12,13 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Three Rounds roadmap](three-rounds-roadmap.md) — design direction ranking
+  six levers by deleted model deliberation rounds, plus the internal-substrate
+  doctrine (atlas inside, algebra outside); the 3x target is the whole loop
+  compiled to `inspect -> decide -> change and verify`.
+- [Atlas paper exercises](atlas-paper-exercises.md) — seven real goals on
+  this codebase run through the atlas design on paper; produced five design
+  changes including workspace-scoped match and exploration-mode budgets.
 - [Typed MCP change entrance](typed-mcp-change-entrance.md) — expose the
   shipped guarded transaction compiler as one typed stdio tool and test whether
   removing CLI ceremony beats native patching by a material margin.
