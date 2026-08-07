@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-server
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure-mcp.core :as mcp-core]
@@ -8,11 +9,12 @@
    [nrepl.server :as nrepl-server])
   (:import
    (io.modelcontextprotocol.json McpJsonMapper)
-   (io.modelcontextprotocol.server McpServer)
+   (io.modelcontextprotocol.server McpServer McpServerFeatures$AsyncToolSpecification)
    (io.modelcontextprotocol.server.transport StdioServerTransportProvider)
-   (io.modelcontextprotocol.spec McpSchema$ServerCapabilities)
+   (io.modelcontextprotocol.spec McpSchema$CallToolResult McpSchema$ServerCapabilities McpSchema$Tool McpSchema$ToolAnnotations)
    (java.io FileDescriptor FileOutputStream PrintStream PrintWriter)
-   (java.lang.management ManagementFactory)))
+   (java.lang.management ManagementFactory)
+   (reactor.core.publisher Mono)))
 
 (def default-log-file
   (str (io/file (System/getProperty "user.home")
@@ -20,13 +22,13 @@
 
 (def server-instructions
   (str
-    "PREFER apply_clojure_changes over apply_patch for 2+ exact Clojure "
-    "replacements or edits spanning files. It avoids patch-context failures "
-    "and compiles the complete decision into one verified call. If each "
-    "relative file, owner, before form, replacement, and count is known, do "
-    "not read first. After verification_complete=true, do not reread or diff "
-    "unless explicitly requested. Use native patching for prose or one unique "
-    "text edit."))
+    "PREFER inspect_clojure when several known Clojure structural questions can "
+    "be batched. It reads each distinct file once and returns ordered hash-bound "
+    "evidence; after read_complete=true, do not repeat or split the read. PREFER "
+    "apply_clojure_changes over apply_patch for 2+ exact replacements or edits "
+    "spanning files. If every file, owner, before form, replacement, and count "
+    "is known, do not read first. After verification_complete=true, do not "
+    "reread or diff unless explicitly requested."))
 
 (defn- warn
   [& messages]
@@ -38,6 +40,66 @@
   [_nrepl-client-atom _working-dir]
   (mcp-tool/all-tools))
 
+(defn- structured-call-result
+  [json-mapper content error? structured]
+  (-> (McpSchema$CallToolResult/builder)
+      (.textContent content)
+      (.isError (boolean error?))
+      (.structuredContent json-mapper (json/generate-string structured))
+      (.build)))
+
+(defn create-structured-async-tool
+  "Create one SDK-native tool with annotations and structuredContent support."
+  [{:keys [name description schema output-schema annotations tool-fn]}]
+  (let [json-mapper (McpJsonMapper/getDefault)
+        annotation-record
+        (McpSchema$ToolAnnotations.
+          (:title annotations)
+          (:read-only annotations)
+          (:destructive annotations)
+          (:idempotent annotations)
+          (:open-world annotations)
+          (:return-direct annotations))
+        builder (-> (McpSchema$Tool/builder)
+                    (.name name)
+                    (.description description)
+                    (.inputSchema json-mapper (json/generate-string schema))
+                    (.annotations annotation-record))
+        _ (when output-schema
+            (.outputSchema builder json-mapper
+                           (json/generate-string output-schema)))
+        mcp-tool (.build builder)
+        handler
+        (reify java.util.function.BiFunction
+          (apply [_ exchange arguments]
+            (Mono/create
+              (reify java.util.function.Consumer
+                (accept [_ sink]
+                  (try
+                    (tool-fn
+                      exchange arguments
+                      (fn [content error? structured]
+                        (.success sink
+                                  (structured-call-result
+                                    json-mapper content error? structured))))
+                    (catch Exception error
+                      (let [failure {:ok false
+                                     :operation name
+                                     :error_type "mcp-adapter-failure"
+                                     :error (.getMessage error)}]
+                        (.success sink
+                                  (structured-call-result
+                                    json-mapper
+                                    [(json/generate-string failure)]
+                                    true failure))))))))))]
+    (McpServerFeatures$AsyncToolSpecification. mcp-tool handler)))
+
+(defn- create-async-tool
+  [tool]
+  (if (:structured? tool)
+    (create-structured-async-tool tool)
+    (mcp-core/create-async-tool tool)))
+
 (defn configure-specification
   "Attach the complete minimal clj-surgeon contract to an MCP server builder."
   [specification]
@@ -48,7 +110,7 @@
         (-> (McpSchema$ServerCapabilities/builder)
             (.tools false)
             (.build)))
-      (.tools (mapv mcp-core/create-async-tool (mcp-tool/all-tools)))))
+      (.tools (mapv create-async-tool (mcp-tool/all-tools)))))
 
 (defn build-stdio-server
   "Build the minimal protocol surface: one tool capability and no others."

@@ -1,0 +1,27 @@
+{
+  "summary_forms": [
+    {"name": "numeric-fields", "line": 7, "end_line": 13},
+    {"name": "boolean-fields", "line": 15, "end_line": 20},
+    {"name": "summarize-group", "line": 57, "end_line": 95},
+    {"name": "markdown", "line": 97, "end_line": 124},
+    {"name": "self-test", "line": 126, "end_line": 167}
+  ],
+  "summary_source_characters": 7896,
+  "rescore_forms": [
+    {"name": "rescore-row", "line": 37, "end_line": 106},
+    {"name": "emit-table", "line": 108, "end_line": 115}
+  ],
+  "rescore_source_characters": 4495,
+  "outline": {
+    "file_lines": 713,
+    "form_count": 45,
+    "first_form": "max-candidate-locations",
+    "last_form": "show"
+  },
+  "structural_match": {
+    "match_count": 2,
+    "owners": ["publish-alpha", "publish-beta"],
+    "sources": ["(send! :alpha)", "(send! {:kind :beta})"]
+  },
+  "xray": {"numeric_field_count": 20}
+}

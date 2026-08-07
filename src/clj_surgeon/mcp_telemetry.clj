@@ -158,3 +158,53 @@
   [state request response timings]
   (emit! state :tool.call
          (call-event (:mode state) request response timings)))
+
+(defn inspect-request-shape
+  "Return source-free shape and payload-size evidence for inspect_clojure."
+  [request]
+  (let [requests (vec (or (value request :requests) []))
+        operations (map #(value % :operation) requests)
+        files (map #(value % :file) requests)]
+    {:requests (count requests)
+     :files (count (distinct files))
+     :operations (frequencies operations)
+     :form_references
+     (reduce + 0 (map #(count (or (value % :forms) [])) requests))
+     :match_characters
+     (reduce + 0 (map #(count (str (or (value % :match) ""))) requests))
+     :expression_characters
+     (reduce + 0
+             (map #(count (str (or (value % :expression) ""))) requests))}))
+
+(defn inspect-outcome-shape
+  "Return inspect result metrics without paths, hashes, source, or values."
+  [response]
+  (cond->
+    {:ok (boolean (:ok response))}
+    (contains? response :read_complete)
+    (assoc :read_complete (:read_complete response))
+    (contains? response :request_count)
+    (assoc :requests (:request_count response))
+    (contains? response :file_count)
+    (assoc :files (:file_count response))
+    (contains? response :file_read_count)
+    (assoc :file_reads (:file_read_count response))
+    (contains? response :source_character_count)
+    (assoc :source_characters (:source_character_count response))
+    (:error_type response) (assoc :error_type (:error_type response))))
+
+(defn inspect-call-event
+  "Build mode-dependent inspect telemetry; metrics mode never includes source."
+  [mode request response timings]
+  (cond->
+    {:tool "inspect_clojure"
+     :request_shape (inspect-request-shape request)
+     :outcome (inspect-outcome-shape response)
+     :timings_ms timings}
+    (= :full (normalize-mode mode))
+    (assoc :request request :response response)))
+
+(defn record-inspect-call!
+  [state request response timings]
+  (emit! state :tool.call
+         (inspect-call-event (:mode state) request response timings)))

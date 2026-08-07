@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-server-test
   (:require
+   [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clojure.java.io :as io]
@@ -24,15 +25,23 @@
     (doseq [child (reverse (file-seq (io/file file)))]
       (Files/deleteIfExists (.toPath child)))))
 
-(deftest exposes-exactly-one-typed-tool
+(deftest exposes-exactly-two-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 1 (count tools)))
-    (is (= "apply_clojure_changes" (:name (first tools))))
-    (is (= #'tool/handle-clj-change (:tool-fn (first tools))))
+    (is (= 2 (count tools)))
+    (is (= ["inspect_clojure" "apply_clojure_changes"]
+           (mapv :name tools)))
+    (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
+    (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
+    (is (= inspect-tool/inspect-annotations
+           (:annotations (first tools))))
+    (is (str/includes? inspect-tool/tool-description
+                       "(-> (form 'numeric-fields) initializer"))
+    (is (str/includes? inspect-tool/tool-description
+                       "read_complete=true is terminal"))
     (is (< (count server/server-instructions) 512))
     (is (str/includes? server/server-instructions
-                       "PREFER apply_clojure_changes over apply_patch"))
+                       "PREFER inspect_clojure"))
     (is (str/includes? tool/tool-description
                        "avoids fragile patch-context mismatches"))
     (is (str/includes? server/server-instructions

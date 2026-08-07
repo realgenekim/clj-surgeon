@@ -21,14 +21,14 @@ MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
 MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
 CLOJURE_BIN ?= $(shell command -v clojure)
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test                      Run all tests"
 	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
-	@echo "  make mcp-smoke                 Verify initialize, one-tool discovery, and refusal over stdio"
+	@echo "  make mcp-smoke                 Verify initialize, two-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
@@ -46,6 +46,8 @@ help:
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
 	@echo "  make benchmark-edit-portfolio  Compare representative edits across microscope/current/native"
 	@echo "  make benchmark-edit-portfolio-self-test Verify edit capsules and harness without model calls"
+	@echo "  make benchmark-inspect-mcp     Compare persistent inspect, CLI, and native reads"
+	@echo "  make benchmark-inspect-mcp-self-test Verify the inspect harness without model calls"
 	@echo "  make benchmark-codex-skill     Run the bounded 2-session Codex skill battery"
 	@echo "  make benchmark-claude-skill    Run the bounded 4-session Fable/Opus skill battery"
 	@echo "  make benchmark-agent-skills    Run both bounded clean-agent skill batteries"
@@ -340,6 +342,13 @@ benchmark-edit-portfolio-self-test:
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
 
+benchmark-inspect-mcp:
+	bash bench/run_inspect_mcp_benchmark.sh
+
+benchmark-inspect-mcp-self-test:
+	BENCH_RESULT_DIR="$$(mktemp -d "$${TMPDIR:-/tmp}/clj-surgeon-inspect-self-test.XXXXXX")" \
+	bash bench/run_inspect_mcp_benchmark.sh --self-test
+
 benchmark-codex-skill:
 	BENCH_POST_COMMIT="$${BENCH_POST_COMMIT:-HEAD}" \
 	BENCH_VERSIONS="$${BENCH_VERSIONS:-post}" \
@@ -381,6 +390,8 @@ verify-benchmark-evidence:
 
 test:
 	bb test/run_all.clj
+	$(MAKE) --no-print-directory mcp-test
+	$(MAKE) --no-print-directory mcp-smoke
 	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
 	bb bench/initialize_benchmark_workspace.clj --self-test
 	bb bench/verify_edit_portfolio.clj --self-test
@@ -389,6 +400,7 @@ test:
 	bb bench/score_ops_registry.clj --self-test
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
+	$(MAKE) --no-print-directory benchmark-inspect-mcp-self-test
 	CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh
 	bash bench/retain_benchmark_result.sh --self-test
 	bash bench/retain_benchmark_result.sh --verify-tracked

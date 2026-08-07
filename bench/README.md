@@ -1,5 +1,37 @@
 # Clean Codex benchmark
 
+## Experimental typed MCP read portfolio
+
+Compare one persistent `inspect_clojure` batch with the current structural CLI
+route and a native read/grep control:
+
+```bash
+BENCH_RESULT_DIR=/tmp/clj-surgeon-inspect-benchmark \
+make benchmark-inspect-mcp
+```
+
+The frozen portfolio retrieves seven known forms across two files, outlines one
+large file, structurally matches a fixture containing textual decoys, and
+computes an X-ray aggregation. Four replicates use a counterbalanced route
+order. Exact answer validation is a gate, and the runner records complete wall
+time, tool and shell calls, source-bearing actions, process startups, tokens,
+request/result bytes, failures, and direct server telemetry. It starts the
+isolated server on port 7889 by default and creates a temporary Codex home; it
+does not touch the live port-7888 service or global Codex configuration.
+
+Run the fixture, schedule, scorer, and fake-command path without model calls:
+
+```bash
+make benchmark-inspect-mcp-self-test
+```
+
+Raw prompts, transcripts, events, and telemetry belong in the external result
+directory and must not be committed. The first experiment's structured summary
+is recorded in the typed-inspect plan and Captain's Log: the MCP route was 4/4
+correct with one MCP call and no shell or failed calls, but its 27.97-second
+median was only 13.8% below CLI. That misses the 2× hypothesis and 30% keep
+threshold.
+
 ## Representative edit portfolio
 
 Run the repo-owned editing hill-climb:

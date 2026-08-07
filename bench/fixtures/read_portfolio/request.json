@@ -1,0 +1,43 @@
+{
+  "requests": [
+    {
+      "id": "summary-fields",
+      "operation": "forms",
+      "file": "bench/summarize_clean_codex.clj",
+      "forms": [
+        "numeric-fields",
+        "boolean-fields",
+        "summarize-group",
+        "markdown",
+        "self-test"
+      ],
+      "expect": {"forms": 5}
+    },
+    {
+      "id": "rescore-fields",
+      "operation": "forms",
+      "file": "bench/rescore_clean_codex.clj",
+      "forms": ["rescore-row", "emit-table"],
+      "expect": {"forms": 2}
+    },
+    {
+      "id": "large-outline",
+      "operation": "outline",
+      "file": "src/clj_surgeon/show_form.clj"
+    },
+    {
+      "id": "structural-match",
+      "operation": "match",
+      "file": "bench/fixtures/read_portfolio/match_decoys.clj",
+      "match": "(send! _)",
+      "expect": {"matches": 2}
+    },
+    {
+      "id": "computed-xray",
+      "operation": "xray",
+      "file": "bench/summarize_clean_codex.clj",
+      "expression": "(-> (form 'numeric-fields) initializer (expect-count 1) (analyze (fn [[fields]] {:count (count fields) :frequencies (frequencies (map namespace fields))})))"
+    }
+  ],
+  "expect": {"requests": 5, "files": 4}
+}

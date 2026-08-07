@@ -10,6 +10,20 @@ is cut.
 
 ### Added
 
+- Experimental `inspect_clojure` MCP read batches. One typed call can retrieve
+  ordered named forms, a compact outline, exact structural matches, and
+  capability-limited X-ray results from immutable once-read file snapshots.
+  The failure-atomic contract rejects unknown fields, duplicate IDs, unsafe
+  paths, cardinality mismatches, and bounded-output violations without partial
+  evidence. The HTTP server now exposes exactly this read-only tool and the
+  existing guarded `apply_clojure_changes` write tool, with standard read-only
+  annotations and full `structuredContent` results. Path confinement is shared
+  by both tools.
+- A frozen four-task inspect portfolio and counterbalanced three-lane harness.
+  The first four-run experiment kept 4/4 correctness, one MCP call, no shell
+  calls, and no failed calls, but its 27.97-second median was only 13.8% below
+  the CLI route's 32.44 seconds. The 2× hypothesis and 30% keep threshold were
+  not met; the negative result is retained in the Captain's Log.
 - Experimental persistent MCP entrance `apply_clojure_changes`. One typed call
   compiles exact owner-scoped replacements into the existing failure-atomic
   transaction kernel, rejects paths outside the configured project root,

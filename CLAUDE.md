@@ -71,6 +71,9 @@ updates, and verification gates. It is not a chronological coding diary.
   falling back to source. Use the published tool schema; do not guess
   arguments. Do not reopen source only to recover an enclosing form that the
   semantic result already names.
+- For several known structural questions, prefer the read-only
+  `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
+  evidence; do not split or repeat the batch.
 - cclsp does not have write authority in this repository. Use clj-surgeon for
   structural writes, guarded transactions, and receipts.
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`

@@ -313,7 +313,10 @@ What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 Keep this branch-local while the MCP contract is under evaluation. The
 development installer points the CLI and both skills at the current checkout,
 starts one repository-scoped Streamable HTTP server on loopback, and registers
-its single `apply_clojure_changes` tool with Codex:
+exactly two tools with Codex:
+
+- `inspect_clojure` for failure-atomic, read-only structural batches;
+- `apply_clojure_changes` for guarded structural mutation.
 
 ```bash
 make install-mcp-codex-dev
@@ -329,6 +332,54 @@ terminal and Codex restarts. It listens only on `127.0.0.1:7888` and records
 full local telemetry under `~/.local/state/clj-surgeon/mcp`. The experimental
 job is session-persistent, not a permanent login item; rerun the installer
 after logging out or rebooting.
+
+An inspect call declares all knowable reads in one `requests` vector. The four
+operation variants are `forms`, `outline`, `match`, and `xray`; every variant
+has a closed JSON schema and paths are confined to project-relative `.clj`,
+`.cljs`, and `.cljc` files. Distinct canonical files are read once, results
+retain request order and SHA-256 snapshot hashes, and any validation, parse,
+cardinality, or output-limit failure refuses the complete batch. Full evidence
+is in `structuredContent`; the bounded text result is an ordinary transcript
+summary. The read tool is annotated read-only, non-destructive, idempotent, and
+closed-world. This experiment adds no resources, prompts, shell access,
+unrestricted evaluation, or custom MCP UI.
+
+```json
+{
+  "requests": [
+    {
+      "id": "summary-fields",
+      "operation": "forms",
+      "file": "bench/summarize_clean_codex.clj",
+      "forms": ["numeric-fields", "boolean-fields"],
+      "expect": {"forms": 2}
+    }
+  ],
+  "expect": {"requests": 1, "files": 1}
+}
+```
+
+The first counterbalanced read portfolio produced 4/4 correct one-call MCP
+runs with zero shell and failed calls. Its 27.97-second median was 13.8% lower
+than the CLI structural route's 32.44 seconds, not the hypothesized 2× and not
+the 30% keep threshold. Treat the tool as experimental and preserve that
+negative result when evaluating the next iteration.
+
+For an isolated evaluation, start the server with
+`BENCH_MCP_PORT=7889 make benchmark-inspect-mcp`; the harness creates a fresh
+temporary Codex home per run and writes only this registration there:
+
+```toml
+[mcp_servers.clj-surgeon]
+url = "http://127.0.0.1:7889/mcp"
+required = true
+enabled_tools = ["inspect_clojure"]
+default_tools_approval_mode = "writes"
+```
+
+The harness stops its own server on exit. Removing its external result
+directory removes the temporary Codex homes; it never replaces the user's
+global registration.
 
 Check or remove the experimental entrance with:
 

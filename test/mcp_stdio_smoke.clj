@@ -86,9 +86,14 @@
                    "MCP must not advertise prompts" {:capabilities capabilities})
           (assert! (not (contains? capabilities :resources))
                    "MCP must not advertise resources" {:capabilities capabilities})
-          (assert! (= ["apply_clojure_changes"] (mapv :name tools))
-                   "MCP must expose exactly apply_clojure_changes" {:tools tools})
+          (assert! (= ["inspect_clojure" "apply_clojure_changes"]
+                      (mapv :name tools))
+                   "MCP must expose exactly two structural tools" {:tools tools})
           (assert! (= false (get-in tools [0 :inputSchema :additionalProperties]))
+                   "inspect_clojure schema must refuse unknown fields" {:tools tools})
+          (assert! (= true (get-in tools [0 :annotations :readOnlyHint]))
+                   "inspect_clojure must be annotated read-only" {:tools tools})
+          (assert! (= false (get-in tools [1 :inputSchema :additionalProperties]))
                    "apply_clojure_changes schema must refuse unknown fields" {:tools tools})
           (assert! (= true (get-in invalid-call [:result :isError]))
                    "Invalid call must use the MCP error channel"
@@ -101,7 +106,7 @@
               {:ok true
                :operation :mcp-stdio-smoke
                :server "clj-surgeon"
-               :tools ["apply_clojure_changes"]
+               :tools ["inspect_clojure" "apply_clojure_changes"]
                :response-count 3
                :wall-ms (/ (double (- (System/nanoTime) started)) 1000000.0)}))))
       (finally

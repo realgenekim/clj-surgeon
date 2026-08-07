@@ -12,6 +12,10 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Typed MCP inspect entrance](typed-mcp-inspect-entrance.md) — batch ordered
+  forms, outlines, structural matches, and capability-limited X-ray against
+  once-read snapshots; its first experiment passed correctness but missed the
+  2× hypothesis and 30% keep threshold.
 - [Three Rounds roadmap](three-rounds-roadmap.md) — design direction ranking
   six levers by deleted model deliberation rounds, plus the internal-substrate
   doctrine (atlas inside, algebra outside); the 3x target is the whole loop

@@ -3,10 +3,12 @@
    [cheshire.core :as json]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clojure.java.io :as io])
   (:import
-   (java.nio.file Files LinkOption Path Paths)
+   (java.nio.file Files Path)
    (java.util UUID)))
 
 (def tool-description
@@ -82,41 +84,16 @@
 (defn init!
   "Set the live tool configuration. Passing nil disarms the handler."
   [config]
-  (reset! runtime-config config))
+  (reset! runtime-config config)
+  (inspect-tool/init! config))
 
 (defn- real-root
   ^Path [root]
-  (.toRealPath
-    (Paths/get (str root) (make-array String 0))
-    (make-array LinkOption 0)))
-
-(defn- path-refusal
-  [error-type message path]
-  {:ok false
-   :error_type (name error-type)
-   :error message
-   :path path
-   :source_unchanged true
-   :remedy "Use an existing project-relative source path inside the configured project root."})
+  (mcp-paths/real-root root))
 
 (defn- resolve-source-path
   [^Path root relative]
-  (try
-    (let [lexical (.normalize (.resolve root relative))]
-      (if-not (.startsWith lexical root)
-        (path-refusal :path-outside-project
-                      "Source path escapes the configured project root"
-                      relative)
-        (let [real (.toRealPath lexical (make-array LinkOption 0))]
-          (if (.startsWith real root)
-            {:ok true :path (.toString real)}
-            (path-refusal :path-outside-project
-                          "Source symlink resolves outside the configured project root"
-                          relative)))))
-    (catch java.nio.file.NoSuchFileException _
-      (path-refusal :source-file-not-found "Source file does not exist" relative))
-    (catch Exception error
-      (path-refusal :invalid-source-path (.getMessage error) relative))))
+  (mcp-paths/resolve-source-path root relative))
 
 (defn- resolve-transaction-paths
   [project-root spec]
@@ -234,4 +211,4 @@
 
 (defn all-tools
   []
-  [clj-change-tool])
+  [inspect-tool/inspect-tool clj-change-tool])
