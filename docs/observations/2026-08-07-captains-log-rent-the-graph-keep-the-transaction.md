@@ -127,6 +127,47 @@ field-gated:       importing LSP-generated edits as candidate input
 
 Less to build, more to prove, same three rounds.
 
+## The first rental improved the sensor, not the compiler
+
+The frozen E1 and E2 probes exposed two cclsp return-contract defects before
+we wrote a bridge:
+
+| Probe | Stock cclsp | Local fork |
+|---|---|---|
+| References to `normalize-success-receipt` | Three file/line/column positions | The same three positions plus enclosing forms: `normalizes-complete-success-to-terminal-evidence`, `normalize-success-receipt`, and `classify-kernel-result` |
+| Outgoing calls from `handle-clj-change` | Whole query failed on a non-`file:` URI | Six calls, including four `zipfile:` dependency targets |
+
+The stock failure was not a missing graph. cclsp called `fileURLToPath` on
+every call target; clojure-lsp correctly returned dependency symbols as
+`zipfile:` URIs, and one external target aborted the complete answer. The
+reference result had the opposite failure: it was correct but cursor-shaped.
+The caller still had to open three files or reconstruct the enclosing forms.
+
+The isolated cclsp branch `local/structural-reference-results` fixes both at
+commit `e0741a2`:
+
+- non-file URIs remain typed semantic locations instead of becoming fatal
+  conversion errors;
+- `find_references` asks the existing language server for each distinct
+  file's document symbols once and attaches the smallest enclosing owner;
+- text remains compact for a person, while MCP `structuredContent` gives an
+  agent stable fields, counts, schemes, owners, and authority;
+- owner enrichment is optional evidence: if document symbols fail, the
+  reference remains in the answer with `owner_status: unavailable`;
+- incoming and outgoing call tools are explicitly one-shot. Their stale
+  instruction to call `prepare_call_hierarchy` first is gone.
+
+The live end-to-end probe against this repository took 3.029 seconds for the
+first reference query while the new MCP process started clojure-lsp. The same
+enriched reference query then took 6 milliseconds hot. A hot outgoing-call
+query took 33 milliseconds. This is the rental economics we wanted: startup
+is amortized, and richer evidence does not add a caller round.
+
+The result also narrows the next build decision. Do not add an LSP bridge to
+clj-surgeon merely to repaint cclsp output. First use the enriched sensor in
+real sessions. Add a bridge only when hash re-anchoring, drift refusal, or
+composition with a candidate transaction removes another measured round.
+
 ## Bitter-Lesson boundary
 
 cclsp is a semantic sensor. clj-surgeon is a structural intent compiler.
