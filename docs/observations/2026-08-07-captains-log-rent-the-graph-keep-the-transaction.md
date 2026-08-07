@@ -168,6 +168,54 @@ clj-surgeon merely to repaint cclsp output. First use the enriched sensor in
 real sessions. Add a bridge only when hash re-anchoring, drift refusal, or
 composition with a candidate transaction removes another measured round.
 
+## Clean callers found the entrance before they judged the answer
+
+Direct MCP smoke tests were insufficient. A fresh Codex caller exposed two
+entrance defects before it could benefit from the richer result:
+
+1. cclsp published no MCP read-only annotations. Non-interactive Codex
+   cancelled navigation calls at the approval boundary and fell back to shell
+   exploration.
+2. Clean callers repeatedly supplied the compact, common arguments `file` and
+   `symbol`. cclsp accepted only `file_path` and `symbol_name`, leaking a
+   low-level Node path error when they were absent. Position-based call tools
+   had the same `file` versus `file_path` trap.
+
+The local cclsp branch now marks navigation and inspection tools read-only,
+idempotent, non-destructive, and closed-world. Write-capable tools receive no
+such annotation. `file` and `symbol` are accepted as agent-native names;
+existing names remain compatibility aliases. Missing inputs return a stable
+tool diagnostic rather than a host-language exception. These changes are in
+commits `f4a7e02` and `46866e7`.
+
+Three clean-caller pilots measured complete task wall time with
+`gpt-5.6-sol`, medium reasoning. They are single replications, not stable
+medians, but each freezes one causal mechanism:
+
+| Probe | Before | After | Result |
+|---|---:|---:|---|
+| Exact reference task, before and after callable argument contract | 60.762 s, failed MCP plus fallback | 24.252 s, one MCP call | 36.510 s saved; 2.5× faster |
+| Same reference evidence, bare positions versus positions with owners | 46.708 s, four source attempts | 12.908 s, zero tools | 33.800 s saved; 3.6× faster |
+| Exact outgoing-call task, before and after `file` alias | 84.799 s, failed MCP plus fallback | 20.049 s, one MCP call | 64.750 s saved; 4.2× faster |
+
+The outgoing-call replay also crossed the correctness gate. Fallback source
+inspection omitted `runtime-config` and guessed `deref`; the successful
+semantic call returned the complete local pair (`runtime-config`,
+`execute-request!`) and four dependency targets, with no source reads.
+
+The payload-only comparison isolates the return-value thesis from transport:
+bare file/line/column evidence forced the caller to resolve ownership through
+one failed X-ray and three form reads. Adding owner names and boundaries made
+the same correct decision with no tool call. This is the desired cognitive
+compression: the sensor performs location-to-owner bookkeeping so the model
+can spend its decision once.
+
+The product lesson is broader than cclsp. MCP annotations, argument names,
+diagnostics, and result shape are one entrance contract. A millisecond kernel
+behind an approval pause or one guessed field is not a fast tool. Conversely,
+the largest measured gains here came from deleting recovery rounds, not from
+optimizing the language server.
+
 ## Bitter-Lesson boundary
 
 cclsp is a semantic sensor. clj-surgeon is a structural intent compiler.
