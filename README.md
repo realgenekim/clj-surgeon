@@ -44,6 +44,12 @@ ls / cat / xray / match-form / deps  →  intent  →  change!  →  receipt
                                       computed edit  →  plan  →  apply
 ```
 
+For resolved definitions, references, implementations, and call hierarchy,
+search the deferred MCP catalog for `mcp__cclsp__*` before falling back to source. Use
+clj-surgeon for concrete syntax, structural computation, guarded writes, and
+receipts. cclsp supplies semantic evidence. It does not have write authority
+in this workflow.
+
 Run `clj-surgeon :op :help` for the complete caller surface. Unknown operations
 list the preferred names, not compatibility spellings. When an invalid call
 still identifies one safe intent, its EDN includes executable `:command-args`
@@ -197,6 +203,21 @@ versus 108.39 seconds for native generated extractors: **5.91 seconds (5.5%)
 faster**, with 27.8% less command output. This is one paired roll, not a stable
 median. The complete negative and positive stages are preserved in the
 [transaction/read Captain's Log](docs/observations/2026-08-06-captains-log-the-transaction-landed-but-reading-still-paid-per-question.md).
+
+A later single-replication experiment tested a local cclsp fork as the
+cross-file semantic sensor. These are causal pilot results, not stable
+medians:
+
+| Relationship task | Before usable contract | Enriched cclsp | Native | Outcome |
+|---|---:|---:|---:|---|
+| Resolve three reference owners | 60.762 s | 24.252 s | 46.686 s | Enriched cclsp was correct and 48% faster than the correct native control |
+| List direct outgoing calls | 84.799 s, incorrect | 20.049 s, correct | 60.777 s, incorrect | Enriched cclsp was the only correct route and saved at least 40.728 s |
+
+The gains came from removing recovery rounds. Read-only MCP annotations made
+the calls usable without approval pauses. Agent-native argument aliases
+removed guessed-field failures. Owner-enriched references removed
+line-to-form lookup. Each result is one replication, not a stable median. See the
+[semantic-sensor Captain's Log](docs/observations/2026-08-07-captains-log-rent-the-graph-keep-the-transaction.md).
 
 ## Production examples
 

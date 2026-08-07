@@ -66,6 +66,13 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Key conventions
 
+- For cross-file definitions, references, implementations, incoming calls,
+  and outgoing calls, search the deferred MCP catalog for `mcp__cclsp__*` before
+  falling back to source. Use the published tool schema; do not guess
+  arguments. Do not reopen source only to recover an enclosing form that the
+  semantic result already names.
+- cclsp does not have write authority in this repository. Use clj-surgeon for
+  structural writes, guarded transactions, and receipts.
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`
 - Private I/O wrappers delegate immediately to pure functions; for example,
   `extract-source-paths` delegates to `source-paths-from-config`.

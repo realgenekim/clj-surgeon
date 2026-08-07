@@ -11,9 +11,9 @@ Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-
 
 ## Minimize total turns
 
-- Treat Surgeon as a lens, not a quota. On a bounded feature, stop after three Surgeon source reads; choose one X-ray or a native route instead of reconstructing a namespace form by form.
+- For cross-file definitions, references, implementations, and call hierarchy, search the deferred MCP catalog for `mcp__cclsp__*` before falling back to source. Use the published tool schema; do not guess arguments. Do not read source only to recover an enclosing form that the result already names. Treat Surgeon as a lens, not a quota. On a bounded feature, stop after three Surgeon source reads; choose one X-ray or a native route instead of reconstructing a namespace form by form.
 - Native Write is right for new files. Use native tools for JavaScript, tests, and prose/comments. Use a normal patch when the requested Clojure change cannot be stated as exact structural substitutions.
-- A known literal edit may be the first source-bearing call: one `:edit` with `:expect` applies and verifies it. Do not pre-read known relationships or use Surgeon after tests merely to prove parsing.
+- Do not use cclsp rename or edit tools. Use clj-surgeon for structural writes, guarded transactions, and receipts. A known literal edit may be the first source-bearing call: one `:edit` with `:expect` applies and verifies it. Do not pre-read known relationships or use Surgeon after tests merely to prove parsing.
 - Stop on nonzero exit or EDN `:error`. Call `clj-surgeon :op OP --help` only when the routes below do not cover the task.
 
 ## Smallest structural route

@@ -216,6 +216,29 @@ behind an approval pause or one guessed field is not a fast tool. Conversely,
 the largest measured gains here came from deleting recovery rounds, not from
 optimizing the language server.
 
+## Native controls established the real baseline
+
+The exact reference and outgoing-call goals were repeated in an isolated
+Codex home with no skills, no MCP configuration, and no `clj-surgeon` on
+`PATH`. The control used ordinary shell search and bounded source reads. Raw
+events remain in `/tmp`, outside the repository retention surface.
+
+| Task | Before usable cclsp contract | Enriched cclsp | Native source tools |
+|---|---:|---:|---:|
+| Identify all owners of `normalize-success-receipt` | 60.762 s; MCP failed, then fallback | 24.252 s; correct, one MCP call | 46.686 s; correct, four shell calls |
+| Identify all outgoing targets from `handle-clj-change` | 84.799 s; incorrect fallback | 20.049 s; correct, one MCP call | 60.777 s; incorrect, three shell calls |
+
+The native reference route found the declaration, production caller, and
+test. It paid for repository search and two bounded source reads. The native
+outgoing-call route omitted `runtime-config`, `if-let`, and `let`, then
+reported `deref` and a callback parameter as call targets. Correctness is a
+gate: the 60.777-second native result is not a valid efficiency competitor.
+
+On the one task where both routes were correct, enriched cclsp saved 22.434
+seconds, or 48%, against native source inspection. On the semantic call-graph
+task, it was both 40.728 seconds faster and correct. These remain single
+replications. They establish a promising route, not a stable median.
+
 ## Bitter-Lesson boundary
 
 cclsp is a semantic sensor. clj-surgeon is a structural intent compiler.
