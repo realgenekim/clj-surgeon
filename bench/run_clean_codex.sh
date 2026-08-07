@@ -2,6 +2,7 @@
 set -euo pipefail
 
 script_path=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir=${BENCH_RESULT_DIR:-/tmp/clj-surgeon-clean-codex-$timestamp}
 owner_dir="$result_dir/.benchmark-owner"
@@ -166,6 +167,37 @@ counterbalanced_versions() {
   fi
 }
 
+validate_run_matrix() {
+  local matrix=$1 cell version context
+  [ -n "$matrix" ] || return 0
+  for cell in $matrix; do
+    version=${cell%%:*}
+    context=${cell#*:}
+    if [ "$version" = "$cell" ] || [ -z "$version" ] || [ -z "$context" ]; then
+      echo "Invalid BENCH_RUN_MATRIX cell; expected VERSION:CONTEXT: $cell" >&2
+      return 2
+    fi
+    case "$version" in pre|post|native|mcp) ;;
+      *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
+    esac
+    case "$context" in
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill) ;;
+      *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
+    esac
+    if [ "$version" = native ] && [ "$context" != no-skill ]; then
+      echo "Native matrix cells require no-skill context: $cell" >&2
+      return 2
+    fi
+    if [ "$version" = mcp ] \
+      && [ "$context" != no-skill ] \
+      && [ "$context" != mcp-hint-no-skill ] \
+      && [ "$context" != mcp-rule-no-skill ]; then
+      echo "MCP matrix cells require no-skill, mcp-hint-no-skill, or mcp-rule-no-skill context: $cell" >&2
+      return 2
+    fi
+  done
+}
+
 if [ "${BENCH_OWNER_PROBE_SELF_TEST:-false}" = true ]; then
   acquire_result_owner
   release_result_owner
@@ -178,6 +210,17 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   test "$(counterbalanced_versions 2 'pre post')" = "post pre"
   test "$(counterbalanced_versions 2 'pre post native')" = "post pre native"
   test "$(counterbalanced_versions 3 'post')" = "post"
+  validate_run_matrix 'pre:matched-skill post:matched-skill native:no-skill'
+  validate_run_matrix 'mcp:no-skill'
+  validate_run_matrix 'mcp:mcp-rule-no-skill'
+  if validate_run_matrix 'native:matched-skill' 2>/dev/null; then
+    echo "benchmark matrix self-test accepted an invalid native context" >&2
+    exit 1
+  fi
+  if validate_run_matrix 'post' 2>/dev/null; then
+    echo "benchmark matrix self-test accepted a malformed cell" >&2
+    exit 1
+  fi
   printf '%s\n' "benchmark schedule self-test passed"
   exit 0
 fi
@@ -236,13 +279,20 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   fi
   PATH="$self_test_root/native-bin" command -v sh >/dev/null
 
+  self_test_workspace="$self_test_root/workspace"
+  mkdir -p "$self_test_workspace"
+  printf '%s\n' 'starting bytes' > "$self_test_workspace/fixture.txt"
+  bb "$repo_root/bench/initialize_benchmark_workspace.clj" \
+    "$self_test_workspace" >/dev/null
+  test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
+  test -z "$(git -C "$self_test_workspace" status --short)"
+
   result_dir=$original_result_dir
   rm -rf "$self_test_root"
   printf '%s\n' "benchmark harness self-test passed"
   exit 0
 fi
 
-repo_root=$(cd "$(dirname "$0")/.." && pwd)
 pre_commit=${BENCH_PRE_COMMIT:-19a20b0}
 post_commit=${BENCH_POST_COMMIT:-80154bc}
 model=${BENCH_MODEL:-gpt-5.6-sol}
@@ -268,8 +318,11 @@ test -f "$auth_file" || {
   exit 2
 }
 
-git -C "$repo_root" cat-file -e "$pre_commit^{commit}"
-git -C "$repo_root" cat-file -e "$post_commit^{commit}"
+for source_ref in "$pre_commit" "$post_commit"; do
+  if [ "$source_ref" != WORKTREE ]; then
+    git -C "$repo_root" cat-file -e "$source_ref^{commit}"
+  fi
+done
 
 acquire_result_owner
 setup_root=$(mktemp -d /tmp/clj-surgeon-benchmark-setup.XXXXXX)
@@ -277,8 +330,21 @@ setup_root=$(mktemp -d /tmp/clj-surgeon-benchmark-setup.XXXXXX)
 mkdir -p "$result_dir" "$setup_root/tools/pre" "$setup_root/tools/post" \
   "$setup_root/bin/pre" "$setup_root/bin/post" "$setup_root/templates"
 
-git -C "$repo_root" archive "$pre_commit" | tar -x -C "$setup_root/tools/pre"
-git -C "$repo_root" archive "$post_commit" | tar -x -C "$setup_root/tools/post"
+materialize_tool_source() {
+  local source_ref=$1 destination=$2
+  if [ "$source_ref" = WORKTREE ]; then
+    mkdir -p "$destination/src" "$destination/skills" "$destination/bench"
+    cp -R "$repo_root/src/." "$destination/src/"
+    cp -R "$repo_root/skills/." "$destination/skills/"
+    cp -R "$repo_root/bench/fixtures" "$destination/bench/fixtures"
+    cp "$repo_root/deps.edn" "$destination/deps.edn"
+  else
+    git -C "$repo_root" archive "$source_ref" | tar -x -C "$destination"
+  fi
+}
+
+materialize_tool_source "$pre_commit" "$setup_root/tools/pre"
+materialize_tool_source "$post_commit" "$setup_root/tools/post"
 
 make_wrapper() {
   local source_root=$1
@@ -296,17 +362,18 @@ make_wrapper() {
 make_wrapper "$setup_root/tools/pre" "$setup_root/bin/pre/clj-surgeon"
 make_wrapper "$setup_root/tools/post" "$setup_root/bin/post/clj-surgeon"
 make_native_bin "$setup_root/bin/native" "$PATH"
+make_native_bin "$setup_root/bin/mcp" "$PATH"
 
 # Prewarm both versions outside the measured runs.
 PATH="$setup_root/bin/pre:$PATH" clj-surgeon --help >/dev/null
 PATH="$setup_root/bin/post:$PATH" clj-surgeon --help >/dev/null
 
-git -C "$repo_root" show "$pre_commit:src/clj_surgeon/core.clj" \
-  > "$setup_root/templates/core.clj"
-git -C "$repo_root" show "$post_commit:src/clj_surgeon/core.clj" \
-  > "$setup_root/templates/ops_registry.clj"
-git -C "$repo_root" show "$post_commit:bench/fixtures/bench/pair_view.clj" \
-  > "$setup_root/templates/pair_view.clj"
+cp "$setup_root/tools/pre/src/clj_surgeon/core.clj" \
+  "$setup_root/templates/core.clj"
+cp "$setup_root/tools/post/src/clj_surgeon/core.clj" \
+  "$setup_root/templates/ops_registry.clj"
+cp "$repo_root/bench/fixtures/bench/pair_view.clj" \
+  "$setup_root/templates/pair_view.clj"
 
 mkdir -p "$setup_root/expected"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :show-form \
@@ -473,12 +540,33 @@ if [ "${BENCH_RESUME:-false}" != true ] && [ -f "$result_dir/runs.tsv" ]; then
 fi
 if [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route\tdecision_supplied\tpost_decision_source_commands\tchange_used\tchange_apply_used\tchange_apply_successes\tfailed_mutation_actions\ttemp_manifest_patch\tsingle_change_transaction\tmcp_calls\tmcp_successes\tmcp_failures\tmcp_tool_output_bytes\tmcp_first_mutation' \
     > "$result_dir/runs.tsv"
 fi
 
+# The portfolio is the frozen task authority, independent of the historical
+# tool snapshots under comparison. Older tool commits may predate the fixtures.
+portfolio_fixture_root="$repo_root/bench/fixtures/edit_portfolio"
+
+portfolio_dir_for_task() {
+  case "$1" in
+    decision-batch-edit|pair-view-expect-edit|dependency-move-edit|literal-source-edit|native-text-edit)
+      printf '%s' "$1"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+is_portfolio_task() {
+  portfolio_dir_for_task "$1" >/dev/null 2>&1
+}
+
 task_prompt() {
   local task=$1
+  if is_portfolio_task "$task"; then
+    command cat "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/task.txt"
+    return
+  fi
   case "$task" in
     named-form)
       printf '%s' 'Return the exact complete source of the top-level form named format-op-help in src/clj_surgeon/core.clj. Do not modify files and do not read the whole file. In the final answer, include the exact source and briefly name the commands used.'
@@ -534,6 +622,10 @@ task_prompt() {
 
 target_for_task() {
   case "$1" in
+    decision-batch-edit) printf '%s' 'src/bench/app_shell.clj' ;;
+    dependency-move-edit) printf '%s' 'src/bench/move_order.clj' ;;
+    literal-source-edit) printf '%s' 'src/bench/assets.clj' ;;
+    native-text-edit) printf '%s' 'src/bench/descriptions.clj' ;;
     named-form|semantic-form) printf '%s' 'src/clj_surgeon/core.clj' ;;
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
@@ -545,10 +637,47 @@ target_for_task() {
   esac
 }
 
+target_scope_for_task() {
+  case "$1" in
+    decision-batch-edit) printf '%s' 'src/bench/' ;;
+    *) target_for_task "$1" ;;
+  esac
+}
+
+targets_for_task() {
+  case "$1" in
+    decision-batch-edit)
+      printf '%s\n' 'src/bench/app_shell.clj' 'src/bench/source_reader.clj'
+      ;;
+    *)
+      target_for_task "$1"
+      printf '\n'
+      ;;
+  esac
+}
+
+hash_task_targets() {
+  local task=$1 workspace=$2 target count
+  count=$(targets_for_task "$task" | awk 'NF {n++} END {print n+0}')
+  if [ "$count" -gt 1 ]; then
+    # Hash the ordered per-file manifest so a partial multi-file result cannot
+    # share a task hash with any complete result.
+    while IFS= read -r target; do
+      [ -n "$target" ] && shasum -a 256 "$workspace/$target"
+    done < <(targets_for_task "$task") | shasum -a 256 | awk '{print $1}'
+  else
+    shasum -a 256 "$workspace/$(target_for_task "$task")" | awk '{print $1}'
+  fi
+}
+
 prepare_workspace() {
   local task=$1
   local workspace=$2
   mkdir -p "$workspace/src/clj_surgeon" "$workspace/src/bench"
+  if is_portfolio_task "$task"; then
+    cp -R "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/before/." "$workspace/"
+    return
+  fi
   case "$task" in
     named-form|semantic-form)
       cp "$setup_root/templates/core.clj" "$workspace/src/clj_surgeon/core.clj"
@@ -602,7 +731,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -628,6 +757,13 @@ run_one() {
     echo "The native version is valid only with BENCH_CONTEXTS=no-skill: $run_id" >&2
     exit 2
   fi
+  if [ "$version" = mcp ] \
+    && [ "$context" != no-skill ] \
+    && [ "$context" != mcp-hint-no-skill ] \
+    && [ "$context" != mcp-rule-no-skill ]; then
+    echo "The MCP version requires no-skill, mcp-hint-no-skill, or mcp-rule-no-skill context: $run_id" >&2
+    exit 2
+  fi
   if [ "${BENCH_RESUME:-false}" = true ] \
     && row_exists "$result_dir/runs.tsv" "$run_id"; then
     terminal_state=skipped
@@ -639,6 +775,8 @@ run_one() {
   local codex_home="$setup_root/homes/$run_id"
   local target_rel
   target_rel=$(target_for_task "$task")
+  local target_scope
+  target_scope=$(target_scope_for_task "$task")
   local target="$workspace/$target_rel"
   local bin_dir="$setup_root/bin/$version"
   local zsh_dir="$codex_home/zsh"
@@ -647,9 +785,55 @@ run_one() {
   ln -s "$auth_file" "$codex_home/auth.json"
   install_treatment_skill "$version" "$context" "$codex_home"
   prepare_workspace "$task" "$workspace"
+  if [ "$context" = mcp-rule-no-skill ]; then
+    printf '%s\n' \
+      '# MCP routing experiment' \
+      '' \
+      'For two or more exact Clojure replacements or edits spanning files, call `apply_clojure_changes` once before reading source or using `apply_patch`. Treat `verification_complete=true` as terminal mutation proof.' \
+      > "$workspace/AGENTS.md"
+  fi
+  bb "$repo_root/bench/initialize_benchmark_workspace.clj" "$workspace" >/dev/null
+  if [ "$version" = mcp ]; then
+    local ready_file="$run_dir/mcp-ready.edn"
+    local server_started_ms server_ready_ms
+    server_started_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    (
+      cd "$repo_root"
+      exec clojure -X:clj-surgeon/mcp \
+        :project-dir "$(bb -e '(prn (first *command-line-args*))' "$workspace")" \
+        :telemetry :full \
+        :telemetry-dir "$(bb -e '(prn (first *command-line-args*))' "$run_dir/mcp-telemetry")" \
+        :run-id "$(bb -e '(prn (first *command-line-args*))' "$run_id")" \
+        :nrepl-port :none \
+        :port 0 \
+        :ready-file "$(bb -e '(prn (first *command-line-args*))' "$ready_file")"
+    ) >"$run_dir/mcp-server.stdout" 2>"$run_dir/mcp-server.stderr" &
+    mcp_pid=$!
+    local attempt
+    for attempt in $(seq 1 240); do
+      [ -s "$ready_file" ] && break
+      if ! kill -0 "$mcp_pid" 2>/dev/null; then
+        echo "Persistent MCP exited before readiness for $run_id" >&2
+        cat "$run_dir/mcp-server.stderr" >&2
+        exit 2
+      fi
+      sleep 0.25
+    done
+    if [ ! -s "$ready_file" ]; then
+      echo "Persistent MCP did not become ready for $run_id" >&2
+      exit 2
+    fi
+    local mcp_url
+    mcp_url=$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :url println)' "$ready_file")
+    curl --fail --silent --show-error "${mcp_url%/mcp}/healthz" >/dev/null
+    server_ready_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    printf '%s\n' "$((server_ready_ms - server_started_ms))" > "$run_dir/mcp-bootstrap-ms.txt"
+    bb "$repo_root/bench/write_mcp_config.clj" \
+      "$codex_home/config.toml" --url "$mcp_url" >/dev/null
+  fi
   local run_path
   run_path="$bin_dir:$PATH"
-  if [ "$version" = native ]; then
+  if [ "$version" = native ] || [ "$version" = mcp ]; then
     run_path=$bin_dir
     printf 'export PATH="%s"\n' "$bin_dir" > "$zsh_dir/.zprofile"
   else
@@ -657,16 +841,17 @@ run_one() {
   fi
   local resolved_cli
   resolved_cli=$(ZDOTDIR="$zsh_dir" /bin/zsh -lc 'command -v clj-surgeon' 2>/dev/null || true)
-  if [ "$version" = native ] && [ -n "$resolved_cli" ]; then
-    echo "Native-tools isolation exposed clj-surgeon for $run_id: $resolved_cli" >&2
+  if { [ "$version" = native ] || [ "$version" = mcp ]; } && [ -n "$resolved_cli" ]; then
+    echo "$version isolation exposed clj-surgeon for $run_id: $resolved_cli" >&2
     exit 2
-  elif [ "$version" != native ] && [ "$resolved_cli" != "$bin_dir/clj-surgeon" ]; then
+  elif [ "$version" != native ] && [ "$version" != mcp ] \
+    && [ "$resolved_cli" != "$bin_dir/clj-surgeon" ]; then
     echo "Version isolation failed for $run_id: $resolved_cli" >&2
     exit 2
   fi
-  if [ "$version" = native ] && [ -d "$codex_home/skills" ] \
+  if { [ "$version" = native ] || [ "$version" = mcp ]; } && [ -d "$codex_home/skills" ] \
     && [ -n "$(find "$codex_home/skills" -iname '*clj-surgeon*' -print -quit)" ]; then
-    echo "Native-tools isolation exposed a clj-surgeon skill for $run_id" >&2
+    echo "$version isolation exposed a clj-surgeon skill for $run_id" >&2
     exit 2
   fi
 
@@ -687,9 +872,13 @@ run_one() {
     printf '%s\n' '' 'You may use ordinary shell readers and patch editing, or the installed clj-surgeon CLI. For sibling inventories, clj-surgeon has a [:partition-all 2] query step. Choose whichever route you expect to be fastest, safest, and least wasteful; briefly explain the choice after completing the task.' \
       >> "$run_dir/prompt.txt"
   fi
+  if [ "$context" = 'mcp-hint-no-skill' ]; then
+    printf '%s\n' '' 'Use the available apply_clojure_changes tool for this complete supplied structural decision. Do not read source or use apply_patch before it. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+      >> "$run_dir/prompt.txt"
+  fi
 
   local start_sha
-  start_sha=$(shasum -a 256 "$target" | awk '{print $1}')
+  start_sha=$(hash_task_targets "$task" "$workspace")
   printf '%s\n' "$start_sha" > "$run_dir/start.sha256"
 
   local start_ms end_ms wall_ms exit_code sandbox
@@ -698,8 +887,16 @@ run_one() {
   [[ "$task" == *-edit ]] && sandbox='workspace-write'
 
   set +e
+  local codex_config_flags=(--ignore-user-config)
+  local codex_rule_flags=(--ignore-rules)
+  if [ "$version" = mcp ]; then
+    codex_config_flags=()
+  fi
+  if [ "$context" = mcp-rule-no-skill ]; then
+    codex_rule_flags=()
+  fi
   PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
-    codex exec --json --ephemeral --ignore-user-config --ignore-rules \
+    codex exec --json --ephemeral "${codex_config_flags[@]}" "${codex_rule_flags[@]}" \
     --skip-git-repo-check --sandbox "$sandbox" --color never \
     -m "$model" -c "model_reasoning_effort=\"$reasoning\"" \
     -C "$workspace" "$(cat "$run_dir/prompt.txt")" \
@@ -709,6 +906,11 @@ run_one() {
 
   end_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
   wall_ms=$((end_ms - start_ms))
+  if [ -n "${mcp_pid:-}" ]; then
+    kill "$mcp_pid" 2>/dev/null || true
+    wait "$mcp_pid" 2>/dev/null || true
+    mcp_pid=""
+  fi
 
   jq -s -r '[.[] | select(.type == "item.completed" and .item.type == "agent_message")][-1].item.text // ""' \
     "$run_dir/events.jsonl" > "$run_dir/final.txt"
@@ -728,7 +930,8 @@ run_one() {
   reasoning_tokens=$(jq -r '.reasoning_output_tokens // 0' <<< "$usage")
 
   local shell_calls file_changes atomic_commands clj_invocations source_commands
-  local source_output_bytes total_tool_output_bytes
+  local source_output_bytes total_tool_output_bytes mcp_tool_output_bytes
+  local mcp_calls mcp_successes mcp_failures mcp_first_mutation
   shell_calls=$(jq 'length' "$run_dir/commands.json")
   file_changes=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "file_change")] | length' \
     "$run_dir/events.jsonl")
@@ -736,16 +939,43 @@ run_one() {
     | awk 'BEGIN {n=0} {n++; while (sub(/&&/, "")) n++} END {print n+0}')
   clj_invocations=$(jq '[.[] | select(.command | contains("clj-surgeon "))] | length' \
     "$run_dir/commands.json")
-  source_commands=$(jq --arg target "$target_rel" \
+  source_commands=$(jq --arg target "$target_scope" \
     '[.[] | select(.command | contains($target))] | length' "$run_dir/commands.json")
-  source_output_bytes=$(jq --arg target "$target_rel" \
+  source_output_bytes=$(jq --arg target "$target_scope" \
     '[.[] | select(.command | contains($target)) | (.aggregated_output // "" | utf8bytelength)] | add // 0' \
     "$run_dir/commands.json")
+  mcp_calls=$(jq -s '[.[] | select(.type == "item.started"
+    and .item.type == "mcp_tool_call"
+    and .item.server == "clj-surgeon"
+    and .item.tool == "apply_clojure_changes")] | length' "$run_dir/events.jsonl")
+  mcp_successes=$(jq -s '[.[] | select(.type == "item.completed"
+    and .item.type == "mcp_tool_call"
+    and .item.server == "clj-surgeon"
+    and .item.tool == "apply_clojure_changes"
+    and .item.status == "completed"
+    and any(.item.result.content[]?; .type == "text"
+      and (.text | contains("\"verification_complete\":true"))
+      and (.text | contains("\"committed\":true"))))] | length' "$run_dir/events.jsonl")
+  mcp_failures=$(jq -s '[.[] | select(.type == "item.completed"
+    and .item.type == "mcp_tool_call"
+    and .item.server == "clj-surgeon"
+    and .item.tool == "apply_clojure_changes")] | length' "$run_dir/events.jsonl")
+  mcp_failures=$((mcp_failures - mcp_successes))
+  mcp_tool_output_bytes=$(jq -s '[.[] | select(.type == "item.completed"
+    and .item.type == "mcp_tool_call"
+    and .item.server == "clj-surgeon"
+    and .item.tool == "apply_clojure_changes")
+    | .item.result.content[]? | select(.type == "text")
+    | (.text // "" | utf8bytelength)] | add // 0' "$run_dir/events.jsonl")
   total_tool_output_bytes=$(jq '[.[] | (.aggregated_output // "" | utf8bytelength)] | add // 0' \
     "$run_dir/commands.json")
+  total_tool_output_bytes=$((total_tool_output_bytes + mcp_tool_output_bytes))
 
   local skill_read show_form grep_form ls_used help_used text_reader q_used xray_used partition_all_used
   local edit_used expr_used first_source_edit
+  local decision_supplied post_decision_source_commands
+  local change_used change_apply_used change_apply_successes failed_mutation_actions
+  local temp_manifest_patch single_change_transaction failed_clj_mutations failed_native_mutations
   local plan_generated plan_applied chained_plan_apply plan_apply_separate verified
   local expect_used expect_route separate_apply_seen
   skill_read=$(jq '[.[] | select(.command | contains("/skills/clj-surgeon/SKILL.md"))] | length > 0' "$run_dir/commands.json")
@@ -753,7 +983,7 @@ run_one() {
   grep_form=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("grep-form")))] | length > 0' "$run_dir/commands.json")
   ls_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":ls([^a-zA-Z]|$)")))] | length > 0' "$run_dir/commands.json")
   help_used=$(jq '[.[] | select(.command | contains("--help"))] | length > 0' "$run_dir/commands.json")
-  text_reader=$(jq --arg target "$target_rel" \
+  text_reader=$(jq --arg target "$target_scope" \
     '[.[] | select((.command | contains($target)) and (.command | test("(^|[ /])(rg|sed|awk|head|tail|cat)( |$)")))] | length > 0' \
     "$run_dir/commands.json")
   q_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?(q|lens)([^a-zA-Z-]|$)")))] | length > 0' "$run_dir/commands.json")
@@ -761,7 +991,46 @@ run_one() {
   partition_all_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | contains("partition-all")))] | length > 0' "$run_dir/commands.json")
   edit_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)")))] | length > 0' "$run_dir/commands.json")
   expr_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":expr([[:space:]]|$)")))] | length > 0' "$run_dir/commands.json")
-  first_source_edit=$(jq --arg target "$target_rel" '
+  change_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?change!?([^a-zA-Z!-]|$)")))] | length > 0' "$run_dir/commands.json")
+  change_apply_successes=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+    and (.command | test(":op[[:space:]]+(:)?change!([^a-zA-Z!-]|$)"))
+    and ((.exit_code // 1) == 0))] | length' "$run_dir/commands.json")
+  change_apply_successes=$((change_apply_successes + mcp_successes))
+  if [ "$mcp_calls" -gt 0 ]; then
+    change_used=true
+  fi
+  if [ "$change_apply_successes" -gt 0 ]; then
+    change_apply_used=true
+  else
+    change_apply_used=false
+  fi
+  failed_clj_mutations=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+    and (.command | test(":op[[:space:]]+(:)?(change!|edit|replace-subform!|mv|mv-with-deps|extract!|rename-ns!|fix-declares!)([^a-zA-Z!-]|$)"))
+    and ((.exit_code // 0) != 0))] | length' "$run_dir/commands.json")
+  failed_native_mutations=$(jq -s '[.[] | select(.type == "item.completed"
+    and .item.type == "file_change"
+    and ((.item.status // "completed") != "completed"))] | length' "$run_dir/events.jsonl")
+  failed_mutation_actions=$((failed_clj_mutations + failed_native_mutations + mcp_failures))
+  temp_manifest_patch=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "file_change")
+    | .item.changes[]? | (.path // "") | select(endswith(".edn"))] | length > 0' "$run_dir/events.jsonl")
+  case "$task" in
+    decision-batch-edit|literal-source-edit|native-text-edit)
+      decision_supplied=true
+      post_decision_source_commands=$source_commands
+      ;;
+    *)
+      decision_supplied=false
+      post_decision_source_commands=0
+      ;;
+  esac
+  if [ "$change_apply_successes" -eq 1 ] \
+    && [ "$failed_mutation_actions" -eq 0 ] \
+    && [ "$file_changes" -eq 0 ]; then
+    single_change_transaction=true
+  else
+    single_change_transaction=false
+  fi
+  first_source_edit=$(jq --arg target "$target_scope" '
     ([.[]
       | select((.type == "command_execution" and (.command | contains($target)))
                or (.type == "file_change"
@@ -771,6 +1040,17 @@ run_one() {
        and ($first.command | contains("clj-surgeon"))
        and ($first.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)")))' \
     "$run_dir/started-items.json")
+  mcp_first_mutation=$(jq '
+    ([.[]
+      | select(.type == "mcp_tool_call"
+               or .type == "file_change"
+               or (.type == "command_execution"
+                   and ((.command | contains("clj-surgeon"))
+                        or (.command | test("(^|[ /])apply_patch( |$)")))))]
+     | first // {}) as $first
+    | ($first.type == "mcp_tool_call"
+       and $first.server == "clj-surgeon"
+       and $first.tool == "apply_clojure_changes")' "$run_dir/started-items.json")
   plan_generated=$(jq '[.[] | select((.exit_code == 0)
     and (.command | contains("clj-surgeon"))
     and (((.command | contains("replace-subform")) and ((.command | contains("replace-subform!")) | not))
@@ -806,7 +1086,26 @@ run_one() {
   fi
 
   verified=false
-  if [ "$task" = pair-view-expect-edit ]; then
+  if [ "$mcp_successes" -gt 0 ]; then
+    verified=$(jq -s '[.[] | select(.type == "item.completed"
+      and .item.type == "mcp_tool_call"
+      and .item.server == "clj-surgeon"
+      and .item.tool == "apply_clojure_changes"
+      and .item.status == "completed"
+      and any(.item.result.content[]?; .type == "text"
+        and (.text | contains("\"verification_complete\":true"))
+        and (.text | contains("\"committed\":true"))
+        and (.text | contains("\"next_action\":\"none\""))))] | length > 0' \
+      "$run_dir/events.jsonl")
+  elif [ "$change_apply_successes" -gt 0 ]; then
+    verified=$(jq '[.[] | select((.command | contains("clj-surgeon"))
+      and (.command | test(":op[[:space:]]+(:)?change!([^a-zA-Z!-]|$)"))
+      and ((.exit_code // 1) == 0)
+      and ((.aggregated_output // "") | contains(":committed true"))
+      and ((.aggregated_output // "") | contains(":whole-files true"))
+      and ((.aggregated_output // "") | contains(":read-back-hashes")))] | length > 0' \
+      "$run_dir/commands.json")
+  elif [ "$task" = pair-view-expect-edit ]; then
     # The guarded call is its own apply receipt: plan evidence and the
     # :replace-subform! verification arrive in one command output.
     verified=$(jq '[.[] | select((.command | contains("clj-surgeon"))
@@ -832,11 +1131,35 @@ run_one() {
   fi
 
   local final_sha exact_correct correct
-  final_sha=$(shasum -a 256 "$target" | awk '{print $1}')
+  final_sha=$(hash_task_targets "$task" "$workspace")
   printf '%s\n' "$final_sha" > "$run_dir/final.sha256"
   exact_correct=false
   correct=false
   case "$task" in
+    decision-batch-edit|pair-view-expect-edit|dependency-move-edit|literal-source-edit|native-text-edit)
+      portfolio_task_dir=$(portfolio_dir_for_task "$task")
+      portfolio_correct=true
+      : > "$run_dir/target.diff"
+      while IFS= read -r portfolio_target; do
+        [ -n "$portfolio_target" ] || continue
+        if ! cmp -s "$workspace/$portfolio_target" \
+          "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target"; then
+          portfolio_correct=false
+        fi
+        diff -u \
+          "$portfolio_fixture_root/$portfolio_task_dir/before/$portfolio_target" \
+          "$workspace/$portfolio_target" >> "$run_dir/target.diff" || true
+      done < <(targets_for_task "$task")
+      if [ "$task" = dependency-move-edit ] \
+        && ! clj-kondo --lint "$workspace/src/bench/move_order.clj" \
+          --fail-level error >/dev/null 2>&1; then
+        portfolio_correct=false
+      fi
+      if [ "$portfolio_correct" = true ]; then
+        exact_correct=true
+        correct=true
+      fi
+      ;;
     named-form|semantic-form)
       correct=$(bb -e "(require '[clojure.string :as str]) (println (str/includes? (slurp \"$run_dir/final.txt\") (slurp \"$setup_root/expected/format-op-help.clj\")))") || correct=false
       exact_correct=$correct
@@ -876,7 +1199,7 @@ run_one() {
       fi
       diff -u "$setup_root/templates/state.clj" "$target" > "$run_dir/target.diff" || true
       ;;
-    pair-view-edit|pair-view-expect-edit)
+    pair-view-edit)
       if cmp -s "$target" "$setup_root/expected/pair-view-edit.clj"; then
         exact_correct=true
         correct=true
@@ -911,14 +1234,17 @@ run_one() {
   fi
 
   local row
-  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
+  printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$run_id" "$version" "$context" "$task" "$order" "$start_sha" "$final_sha" \
     "$wall_ms" "$exit_code" "$input_tokens" "$cached_tokens" "$uncached_tokens" \
     "$output_tokens" "$reasoning_tokens" "$shell_calls" "$file_changes" "$atomic_commands" \
     "$clj_invocations" "$source_commands" "$source_output_bytes" "$total_tool_output_bytes" \
     "$skill_read" "$show_form" "$grep_form" "$ls_used" "$help_used" "$text_reader" "$q_used" "$xray_used" "$partition_all_used" "$edit_used" "$expr_used" "$first_source_edit" \
     "$plan_generated" "$plan_applied" "$plan_apply_separate" "$verified" "$exact_correct" "$correct" \
-    "$expect_used" "$expect_route"
+    "$expect_used" "$expect_route" "$decision_supplied" "$post_decision_source_commands" \
+    "$change_used" "$change_apply_used" "$change_apply_successes" "$failed_mutation_actions" \
+    "$temp_manifest_patch" "$single_change_transaction" "$mcp_calls" "$mcp_successes" \
+    "$mcp_failures" "$mcp_tool_output_bytes" "$mcp_first_mutation"
   append_result_row "$run_id" "$row"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
@@ -951,9 +1277,9 @@ run_one_with_receipt() (
   local task=$3
   local order=$4
   local replicate=${5:-1}
-  local run_id terminal_state=completed
+  local run_id terminal_state=completed mcp_pid=""
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
-  trap 'status=$?; [ "$status" -eq 0 ] || terminal_state=failed; write_terminal_receipt "$run_id" "$terminal_state" "$status"; trap - EXIT; exit "$status"' EXIT
+  trap 'status=$?; if [ -n "${mcp_pid:-}" ]; then kill "$mcp_pid" 2>/dev/null || true; wait "$mcp_pid" 2>/dev/null || true; fi; [ "$status" -eq 0 ] || terminal_state=failed; write_terminal_receipt "$run_id" "$terminal_state" "$status"; trap - EXIT; exit "$status"' EXIT
   run_one "$version" "$context" "$task" "$order" "$replicate"
 )
 
@@ -964,6 +1290,7 @@ include_compact=${BENCH_INCLUDE_COMPACT:-true}
 replicates=${BENCH_REPLICATES:-1}
 versions=${BENCH_VERSIONS:-'pre post'}
 parallelism=${BENCH_PARALLELISM:-4}
+run_matrix=${BENCH_RUN_MATRIX:-}
 active_pids=()
 active_run_ids=()
 all_run_ids=()
@@ -973,6 +1300,7 @@ if ! [[ "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
   echo "BENCH_PARALLELISM must be a positive integer: $parallelism" >&2
   exit 2
 fi
+validate_run_matrix "$run_matrix"
 
 schedule_run() {
   local version=$1
@@ -1020,17 +1348,30 @@ wait_for_runs() {
   done
 }
 
-for replicate in $(seq 1 "$replicates"); do
-  for context in $contexts; do
+if [ -n "$run_matrix" ]; then
+  for replicate in $(seq 1 "$replicates"); do
     for task in $tasks; do
-      order=$((order + 1))
-      for version in $(counterbalanced_versions "$replicate" "$versions"); do
-        schedule_run "$version" "$context" "$task" "$order" "$replicate"
+      for matrix_cell in $run_matrix; do
+        version=${matrix_cell%%:*}
+        context=${matrix_cell#*:}
         order=$((order + 1))
+        schedule_run "$version" "$context" "$task" "$order" "$replicate"
       done
     done
   done
-done
+else
+  for replicate in $(seq 1 "$replicates"); do
+    for context in $contexts; do
+      for task in $tasks; do
+        order=$((order + 1))
+        for version in $(counterbalanced_versions "$replicate" "$versions"); do
+          schedule_run "$version" "$context" "$task" "$order" "$replicate"
+          order=$((order + 1))
+        done
+      done
+    done
+  done
+fi
 
 if [ "$include_compact" = true ]; then
   for compact_context in compact-skill compact-v2-skill; do

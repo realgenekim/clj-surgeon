@@ -719,3 +719,336 @@ The next frontier is now narrower:
 The lesson is not that generic text defeated structural editing. The general
 caller generated a formidable temporary extractor. The structural product won
 only after its input and presentation layers stopped sabotaging the engine.
+
+## Stop before coding: write the transaction the model wants
+
+The first implementation impulse was to add capture variables to structural
+replacement. We stopped before changing code. The better design question was:
+
+> After the model has decided the complete change, what single artifact would
+> it naturally give clj-surgeon?
+
+The answer is not a list of shell commands and not only a structural
+`s///g`. A vi or Emacs expert combines an address, a motion, an operator, and a
+repeat scope. The corresponding clj-surgeon artifact should preserve those
+parts of the model's plan.
+
+The example must teach the algebra by inspection. If it needs a paragraph of
+instructions before the first use, it has failed the clean-context test.
+
+The following EDN is the proposed golden example. It is not a supported
+interface:
+
+```clojure
+clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'
+{:changes
+ [{:in ["src/app/views/ide_layout.clj"]
+   :forms [ide-shell source-reader-shell]
+   :find ":body"
+   :do [:replace ":body.ide-shell-page"]
+   :expect 2}
+
+  {:in ["src/app/views/ide_layout.clj"]
+   :form source-reader-shell
+   :find "current-location"
+   :do [:insert-left "document-title"]
+   :expect 1}
+
+  {:in ["src/app/views/ide_layout.clj"]
+   :form source-reader-shell
+   :find "[:title \"Mothership\"]"
+   :do [:replace "[:title (str document-title \" — Mothership\")]"]
+   :expect 1}
+
+  {:in ["src/app/views/ide_layout.clj"]
+   :form source-reader-shell
+   :find "[:span.tab-label artifact]"
+   :do [:replace "[:span.tab-label {:title artifact} document-title]"]
+   :expect 1}
+
+  {:in ["src/app/views/common.clj"]
+   :form stylesheets
+   :find "(views/static ?asset)"
+   :do [:replace "(assets/static ?asset)"]
+   :expect 3}]
+
+ :expect {:changes 5 :edits 8 :files 2}}
+EDN
+```
+
+One repeated shape teaches the complete language:
+
+```text
+:in + :form(s)  -> address the scope
+:find           -> select the smallest structural object
+:do             -> apply one operator
+:expect         -> state consent as exact cardinality
+```
+
+`?asset` is learned from the example, not from a separate tutorial: bind one
+subtree in `:find`, then splice the exact captured source into `:replace`.
+
+`:change!` supplies the non-negotiable defaults. It reads each file once,
+matches only the original snapshots, refuses count drift and overlap, parses
+all future files, commits as one failure-atomic unit, verifies read-back
+hashes, and writes the inverse receipt. The caller must not restate those
+guarantees in each manifest.
+
+### What the model supplied
+
+The model supplied the parts that require judgment:
+
+- the explicit files and owning forms;
+- the structural relationship that identifies each target;
+- the smallest source change for each target;
+- the exact number of intended matches;
+- the total number of edits and changed files.
+
+The model did not supply line numbers, preorder addresses, source hashes,
+temporary plan paths, write ordering, rollback commands, or receipt plumbing.
+Those values are bookkeeping. The compiler must derive them from one source
+snapshot.
+
+### Why this is more general than structural search and replace
+
+The first and second intents are operator-and-motion edits. They replace or
+insert one sibling without reconstructing the enclosing form. This is the
+structural equivalent of a precise vi change command.
+
+The third and fourth intents are exact subtree replacements. They state the
+complete new syntax because the replacement itself carries meaning.
+
+The fifth intent is a capture-based broadcast. It is useful when many sites
+share one shape but contain different subtrees. `?asset` binds one exact
+concrete-syntax subtree, and the template must splice its original bytes back
+into the result.
+
+These are different edit shapes, but they share one transaction protocol. The
+compiler resolves all selectors against the original snapshots, proves all
+counts and non-overlap, validates every complete future file, and commits once.
+
+### The vi and Emacs comparison
+
+```text
+vi             address -> operator -> motion -> repeat
+Emacs          scope   -> command  -> macro  -> execute
+clj-surgeon    at      -> do       -> intents -> verified transaction
+```
+
+An expert editor user does not replace a paragraph when one symbol must
+change. The user selects the smallest stable object and repeats the operation
+over a deliberate scope. clj-surgeon should give the model the same leverage
+without making the model maintain cursor state.
+
+### What the artifact deliberately omits
+
+The artifact does not ask clj-surgeon to choose architecture, infer scope,
+guess a replacement, or decide whether tests prove the behavior. It also does
+not include arbitrary verification commands. Parsers, formatters, linters,
+tests, and live systems remain separate semantic authorities.
+
+The artifact can request only the mechanical proofs owned by the transaction
+engine. A later orchestration layer can run repository verification after the
+receipt exists.
+
+### Questions to answer before implementation
+
+1. Can the existing lens path compile to the same concrete edit record used by
+   exact intents?
+2. Can insertion preserve every surrounding comment and whitespace byte?
+3. Should `:forms` apply one path independently to each owner, or to one union
+   of all selected nodes?
+4. Must a capture bind one subtree only? If sibling spans are allowed, how are
+   comments and gaps represented without loss?
+5. Can a transaction mix path, exact, and capture intents without intent order
+   changing the result?
+6. Does the complete artifact reduce model rounds and wall time against native
+   patching on the same field-derived task?
+
+The next experiment should implement the smallest common substrate, not all
+of this syntax. First prove that two existing lens updates can compile into one
+transaction and one aggregate receipt. Then dogfood that slice before adding
+captures or insertion. This sequence tests the central hypothesis earlier:
+the gain comes from materializing one model plan, not from accumulating more
+commands.
+
+### Fifteen paper edits changed the proposed language
+
+The complete paper design is in
+[Structural Change Language](../plans/structural-change-language.md). It runs
+the proposal through 15 edits before implementation: leaf replacement, map
+value navigation, argument insertion, call-head replacement, anonymous
+functions, wrappers, deletion, `case` branches, top-level insertion, local
+symbols, CLJC ownership, comment-bearing gaps, computed transforms, moves, and
+namespace requires.
+
+The exercises changed the design in four material ways:
+
+1. `:expect {:matches 2}` did not prove one match in each of two intended
+   owners. The language now needs a distribution guard such as `:each-form 1`.
+2. Exact `:find` could not express “the value to the right of this map key.”
+   Relational selection must reuse the existing lens `:path` vocabulary.
+3. A variadic capture was unnecessary for most call-site renames. Selecting
+   and replacing the smallest head symbol preserves arbitrary arguments and
+   comments with less machinery.
+4. Insertion beside a comment is not mechanically obvious. Preserving comment
+   bytes does not prove that the comment still describes the intended form.
+   The compact operator must refuse and recommend a larger exact replacement.
+
+The resulting first slice is smaller than the initial capture proposal. It
+compiles explicit file and owner scopes, exact `:find`, literal `:replace`,
+total and per-owner guards, and mixed legacy exact intents into the shipped
+transaction protocol. Captures and insertion wait for separate dogfood gates.
+
+### The experience must feel like compiling a decision
+
+The design is successful only if the caller stops carrying mechanical edit
+state in working context.
+
+The old route feels like this:
+
+```text
+understand the change
+  -> remember several targets
+  -> issue one edit
+  -> inspect one result
+  -> repeat
+  -> reconstruct what remains
+  -> inspect the aggregate diff
+  -> test
+```
+
+The intended route is shorter:
+
+```text
+understand the change
+  -> state the complete plan once
+  -> receive one verified transaction
+  -> test
+```
+
+The editor analogy is exact enough to guide the API:
+
+```text
+vi             address -> operator -> motion -> repeat
+Emacs          scope   -> command  -> macro  -> execute
+clj-surgeon    in/forms -> find/path -> do -> guarded transaction
+```
+
+The model supplies judgment once. The compiler owns addresses, hashes, write
+ordering, rollback, and receipts. A successful call should be compact and
+uneventful. A failed call should resemble a compiler diagnostic: one stable
+error, the violated scope or count, and one executable remedy. Neither branch
+should require recovery archaeology.
+
+This does not make clj-surgeon mandatory for every edit. Native patching
+remains the control for one small arbitrary text change. The structural
+transaction should become the preferred route when the plan has repetition,
+relationships, several files, or safety constraints.
+
+The product-level acceptance criterion is therefore cognitive, not only
+syntactic: one coherent model decision must remain one edit transaction. The
+implementation fails even if every individual edit is correct when the caller
+must split the plan, remember partial progress, or reread source to assemble
+the final state.
+
+## The first slice felt like a compiler
+
+The first implementation changed the feeling of the work. I stopped performing
+one mutation at a time and instead finished describing the decision before I
+touched the repository:
+
+```edn
+{:changes
+ [{:id :body-class
+   :in ["src/ui.clj"]
+   :forms [shell reader]
+   :find ":body"
+   :do [:replace ":body.page"]
+   :expect {:matches 2 :each-form 1}}]
+ :expect {:changes 1 :edits 2 :files 1}}
+```
+
+That felt less like driving an editor and more like compiling a small program.
+The manifest held the mechanical state outside the model. The named owners
+made the scope visible. The total and distribution guards made completion
+objective. The transaction engine then supplied the tedious and fragile parts
+of a sequence of hand edits: original snapshots, non-overlap checks,
+future-file parsing, atomic writes, hashes, one receipt, and one undo boundary.
+
+There was a Sudoku-like moment when the counts closed. `:matches`,
+`:each-form`, `:edits`, and `:files` were not ceremony; together they proved
+that the intended cells of the plan had all been filled exactly once. After
+that, applying the transaction was deliberately boring.
+
+### It bootstrapped itself early
+
+The slice became useful before its surrounding documentation was finished. I
+used the working-tree CLI to update its own command help in one guarded
+transaction, then used the newly changed output contract in later
+transactions. The self-hosting sequence made real edits across `core.clj` and
+`intent_transaction.clj`. Each call returned planned and read-back hashes and
+left one reversible transaction boundary.
+
+This was the earliest useful dogfood signal: the feature did not need captures,
+insertions, or a general query language before it could replace repeated
+plan/apply turns. Explicit owner scope plus exact replacement was already a
+meaningful macro operation.
+
+The implementation reused nearly all of the difficult machinery already in
+the product:
+
+| Concern | Reused capability |
+|---|---|
+| Named owner discovery | top-level outline records |
+| Concrete syntax and byte preservation | rewrite-clj nodes |
+| File safety | source hashes and original snapshots |
+| Multi-edit safety | overlap detection and future-file parse checks |
+| Commit safety | atomic transaction write and rollback |
+| Evidence | receipts and transaction undo |
+
+The new code is primarily a compiler from scoped `:changes` into the existing
+concrete edit representation. It is not a second mutation engine.
+
+### SCI is not on this execution path
+
+SCI remains important for `:xray` and computed structural analysis. It is not
+used by this first change-language slice. The manifest is declarative EDN; the
+compiler resolves named forms with the outline model and exact concrete syntax
+with rewrite-clj, then hands edits to the existing transaction engine.
+
+That separation is desirable for literal replacements. The transaction has no
+arbitrary executable expression to sandbox, and the same manifest has the same
+meaning every time. A future computed transform may justify SCI, but it should
+cross a separate evidence gate instead of making the literal path more
+powerful by default.
+
+### The remaining friction is transport syntax
+
+The largest papercut was not structural editing. It was quoting Clojure source
+inside an EDN string inside a shell heredoc. Standard input removed shell
+argument escaping, but embedded string literals still require EDN escaping.
+That friction did not compromise correctness, yet it made the otherwise clean
+call feel noisier than the change itself.
+
+This suggests a precise next experiment: keep the declarative transaction
+contract, but test a source-block or file-backed representation that removes
+nested string escaping without hiding exact bytes. The remedy must preserve
+the property that made this slice feel good: the complete decision remains one
+inspectable artifact and one guarded transaction.
+
+### Papercuts are product evidence
+
+The next iteration should treat every repeated hesitation as a product gap.
+The current queue is:
+
+1. Remove or contain nested source-string escaping.
+2. Add relational `:path` only where exact `:find` forces a larger replacement.
+3. Keep success output compact while preserving a complete receipt on demand.
+4. Refuse comment-sensitive insertion until the tool can preserve both bytes
+   and evident ownership.
+5. Measure whether one compiled plan removes enough agent turns to beat native
+   patching by seconds, not fractions of a second.
+
+The standard is not that the feature works. The standard is that the fastest,
+clearest route for the model is also the safest route for the repository.

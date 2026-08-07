@@ -1,0 +1,12 @@
+The design decision is complete. Make exactly these six edits and preserve every unrelated byte.
+
+1. In src/bench/app_shell.clj, only inside ide-shell:
+   - replace :body with :body.ide-shell-page once;
+   - replace "/app.css" with "/command-center.css" once.
+2. In src/bench/source_reader.clj, only inside source-reader-shell:
+   - replace [project-id projects artifact current-location reader-region show-all?] with [project-id projects artifact document-title current-location reader-region show-all?] once;
+   - replace [:title "Workbench"] with [:title (str document-title " — Workbench")] once;
+   - replace :body with :body.ide-shell-page once;
+   - replace [:span.tab-label artifact] with [:span.tab-label {:title artifact} document-title] once.
+
+Do not inspect source before editing: the files, owners, exact before forms, exact replacements, and counts are supplied. Apply the complete decision as one coherent mutation action if your available editor supports it. Verify all changed files and report the mutation route and whether it succeeded on the first attempt.

@@ -596,35 +596,35 @@
                        :category  :write}
 
     :change           {:handler   intent-transaction/plan-change
-                       :desc      "Compile one heterogeneous structural intent transaction without writing source"
+                       :desc      "Compile one scoped structural change transaction without writing source"
                        :args      {:spec      {:desc "Inline EDN map; compatibility entrance for small specs"}
                                    :spec-file {:desc "EDN spec path, or - to read one document from stdin (preferred)"}}
                        :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - for a nontrivial plan, like kubectl apply -f -."
-                                   "Express the complete mechanical model plan as one document with an :intents vector."
-                                   "Every intent declares explicit :files, exact source strings :from and :to, and a positive :expect-count."
-                                   "Declare aggregate :expect values for :intent-count, :edit-count, and :changed-file-count."
-                                   "This command reads each scoped file once, compiles every intent against the original snapshots, and writes nothing."
-                                   "Whitespace may differ. Comments, metadata, reader syntax, token spelling, and collection type must match exactly."
-                                   "Different intents may touch disjoint syntax in the same file. Any identical, ancestor/descendant, or otherwise overlapping targets refuse the whole plan."
-                                   "Review the per-intent and per-file counts, hashes, concrete edits, combined diff, and whole-file parse proof."
-                                   "Use one intent for a structural global replacement; use several intents to materialize one heterogeneous model plan without repeated edit turns."]
-                       :examples  ["clj-surgeon :op :change :spec-file - <<'EDN'\n{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}\nEDN"]
+                                   "Express the complete mechanical model plan as one :changes document: :in, optional :forms, :find, :do, and :expect."
+                                   "Each change declares explicit :in, optional unique :forms, exact source :find, one [:replace SOURCE] :do, and positive :expect {:matches N}."
+                                   "Declare aggregate :expect values for :changes, :edits, and :files. Use :each-form or :each-file when distribution matters."
+                                   "This command reads each scoped file once, compiles every change against the original snapshots, and writes nothing."
+                                   "Whitespace may differ. Comments, metadata, reader syntax, token spelling, and collection type must match exactly. Legacy exact :intents with :intent-count and :changed-file-count remain accepted."
+                                   "Different changes may touch disjoint syntax in the same file. Any identical, ancestor/descendant, or otherwise overlapping targets refuse the whole plan."
+                                   "Review the per-change, per-form, and per-file counts, hashes, concrete edits, combined diff, and whole-file parse proof."
+                                   "Use one change for one repeated structural rule; use several changes to materialize one heterogeneous model plan without repeated edit turns."]
+                       :examples  ["clj-surgeon :op :change :spec-file - <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
                        :category  :write
                        :pair      :change!}
 
     :change!          {:handler   intent-transaction/execute-change!
-                       :desc      "Apply one guarded structural intent transaction and save its inverse receipt"
+                       :desc      "Apply one guarded structural change transaction and save its inverse receipt"
                        :args      {:spec        {:desc "Inline EDN map; compatibility entrance for small specs"}
                                    :spec-file   {:desc "EDN spec path, or - to read one document from stdin (preferred)"}
                                    :receipt-out {:required true :desc "Durable .edn inverse receipt; must not alias a source file"}}
                        :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - so a large plan travels as data instead of shell-escaped text, like kubectl apply -f -."
-                                   "Express the complete mechanical model plan once as the same guarded document accepted by :change."
-                                   "Every :from, :to, per-intent :expect-count, and aggregate :expect value is consent to the exact materialized transaction. If the task already determines those counts, declare them without probing source only to confirm them."
+                                   "Express the complete mechanical model plan once as the same guarded :changes document accepted by :change."
+                                   "Every :find, literal replacement, per-change count or distribution guard, and aggregate :expect value is consent to the exact materialized transaction. If the task already determines those counts, declare them without probing source only to confirm them."
                                    "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
                                    "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
                                    "The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!."
                                    "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
-                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/api-change.edn <<'EDN'\n{:intents [{:files [\"src/a.clj\" \"src/b.clj\"] :from \"(old-api account)\" :to \"(new-api account)\" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}\nEDN"]
+                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
                        :category  :write
                        :pair      :change}
 
@@ -1067,7 +1067,7 @@
          :remedy "Pipe the manifest in the same shell action: printf '%s\\n' 'MANIFEST' | clj-surgeon :op OP :spec-file -"}))))
 
 (defn- load-spec-input
-  [{:keys [spec spec-file] :as opts}]
+  [{:keys [spec-file] :as opts}]
   (let [inline? (contains? opts :spec)
         file? (contains? opts :spec-file)]
     (cond

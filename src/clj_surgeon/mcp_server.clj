@@ -1,0 +1,131 @@
+(ns clj-surgeon.mcp-server
+  (:require
+   [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure-mcp.core :as mcp-core]
+   [clojure-mcp.logging :as mcp-logging]
+   [clojure.java.io :as io]
+   [nrepl.server :as nrepl-server])
+  (:import
+   (io.modelcontextprotocol.json McpJsonMapper)
+   (io.modelcontextprotocol.server McpServer)
+   (io.modelcontextprotocol.server.transport StdioServerTransportProvider)
+   (io.modelcontextprotocol.spec McpSchema$ServerCapabilities)
+   (java.io FileDescriptor FileOutputStream PrintStream PrintWriter)
+   (java.lang.management ManagementFactory)))
+
+(def default-log-file
+  (str (io/file (System/getProperty "user.home")
+                ".local" "state" "clj-surgeon" "mcp-server.log")))
+
+(def server-instructions
+  (str
+    "PREFER apply_clojure_changes over apply_patch for 2+ exact Clojure "
+    "replacements or edits spanning files. It avoids patch-context failures "
+    "and compiles the complete decision into one verified call. If each "
+    "relative file, owner, before form, replacement, and count is known, do "
+    "not read first. After verification_complete=true, do not reread or diff "
+    "unless explicitly requested. Use native patching for prose or one unique "
+    "text edit."))
+
+(defn- warn
+  [& messages]
+  (binding [*out* *err*]
+    (apply println messages)))
+
+(defn make-tools
+  "clojure-mcp factory. Tool handlers are Vars so nREPL redefinition is live."
+  [_nrepl-client-atom _working-dir]
+  (mcp-tool/all-tools))
+
+(defn configure-specification
+  "Attach the complete minimal clj-surgeon contract to an MCP server builder."
+  [specification]
+  (-> specification
+      (.serverInfo "clj-surgeon" "experimental")
+      (.instructions server-instructions)
+      (.capabilities
+        (-> (McpSchema$ServerCapabilities/builder)
+            (.tools false)
+            (.build)))
+      (.tools (mapv mcp-core/create-async-tool (mcp-tool/all-tools)))))
+
+(defn build-stdio-server
+  "Build the minimal protocol surface: one tool capability and no others."
+  []
+  (let [transport (StdioServerTransportProvider. (McpJsonMapper/getDefault))
+        specification (configure-specification (McpServer/async transport))]
+    (.build specification)))
+
+(defn start-embedded-nrepl!
+  "Start an nREPL inside the live MCP JVM. Failure never blocks the MCP server."
+  [port port-file]
+  (try
+    (let [handler @(requiring-resolve 'cider.nrepl/cider-nrepl-handler)
+          server (nrepl-server/start-server :port (or port 0)
+                                            :handler handler)]
+      (spit port-file (:port server))
+      (warn "clj-surgeon MCP: embedded nREPL on" (:port server)
+            "(" port-file ")")
+      server)
+    (catch Exception error
+      (warn "clj-surgeon MCP: embedded nREPL failed —" (.getMessage error))
+      nil)))
+
+(defn armor-stdout!
+  "Redirect later JVM and Clojure stdout to stderr after stdio transport capture."
+  []
+  (let [err (PrintStream. (FileOutputStream. FileDescriptor/err) true)]
+    (System/setOut err)
+    (alter-var-root #'*out* (constantly (PrintWriter. err true)))
+    err))
+
+(defn- normalize-option
+  [value default]
+  (if (nil? value) default value))
+
+(defn start
+  "Start the persistent apply_clojure_changes stdio MCP server and block.
+
+  :project-dir    source project root (default user.dir)
+  :receipt-dir    durable inverse-receipt directory
+  :telemetry      off, metrics, or full (default metrics)
+  :telemetry-dir  local JSONL directory outside repositories
+  :run-id         optional benchmark correlation ID
+  :nrepl-port     0 for ephemeral development nREPL; :none disables it
+  :port-file      embedded nREPL discovery file (default .nrepl-port)
+  :log-file       clojure-mcp diagnostic log"
+  [{:keys [project-dir receipt-dir telemetry-dir run-id nrepl-port port-file
+           log-file]
+    telemetry-mode :telemetry}]
+  (let [project-dir (str (normalize-option project-dir
+                                           (System/getProperty "user.dir")))
+        telemetry-state
+        (telemetry/start! {:mode (normalize-option telemetry-mode :metrics)
+                           :directory telemetry-dir
+                           :run-id run-id})
+        started-ms (.getUptime (ManagementFactory/getRuntimeMXBean))
+        port-file (str (normalize-option port-file
+                                         (io/file project-dir ".nrepl-port")))
+        nrepl (when-not (= nrepl-port :none)
+                (start-embedded-nrepl! nrepl-port port-file))]
+    (mcp-logging/configure-logging!
+      {:log-file (str (normalize-option log-file default-log-file))
+       :enable-logging? true
+       :log-level :info})
+    (mcp-tool/init! {:project-root project-dir
+                     :receipt-dir receipt-dir
+                     :telemetry telemetry-state})
+    (build-stdio-server)
+    (armor-stdout!)
+    (telemetry/emit!
+      telemetry-state :server.start
+      (cond->
+        {:version "experimental"
+         :jvm_uptime_ms started-ms
+         :mcp_ready_ms (.getUptime (ManagementFactory/getRuntimeMXBean))
+         :nrepl_port (:port nrepl)}
+        (= :full (:mode telemetry-state))
+        (assoc :project_root project-dir)))
+    (warn "clj-surgeon MCP: ready — telemetry" (name (:mode telemetry-state)))
+    @(promise)))

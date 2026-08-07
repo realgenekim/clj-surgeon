@@ -58,17 +58,17 @@ clj-surgeon :op :xray :file src/policy.clj \
 Write one total pure Clojure function instead of a shape-discovery query. When keys are uncertain, return a shape echo; scope counts to named keys and reserve `tree-seq` for unknown shapes.
 Return concrete EDN, not a lazy sequence. X-ray is capability-limited, not termination-proof; analyzers must perform bounded work. X-ray never writes. For CLJC use `(form 'name :clj)` or `:cljs`.
 
-## Materialize one complete edit plan
+## Compile one complete edit plan
 
-When exact before-forms, after-forms, scopes, and counts are known, use one guarded transaction. Do not split one known plan into repeated edit calls.
-Send a nontrivial spec on stdin with `:spec-file -`, like `kubectl apply -f -`; do not embed it in a shell argument. Every intent requires positive `:expect-count`; aggregate `:expect` requires exact intent, edit, and changed-file counts. If the task determines counts, declare them without probing source. Exact intents do not support `_`, regex, or fuzzy matching.
+When files, named owners, exact targets, replacements, and counts are known, use one guarded transaction. Do not split one known plan into repeated edit calls.
+Send a nontrivial spec on stdin with `:spec-file -`, like `kubectl apply -f -`; do not embed it in a shell argument. Each named owner must resolve exactly once. Use `:each-form` or `:each-file` when a total match count alone would allow the wrong distribution. Exact `:find` does not support `_`, regex, or fuzzy matching.
 ```bash
 clj-surgeon :op :change! :spec-file - :receipt-out /tmp/api-change.edn <<'EDN'
-{:intents [{:files ["src/a.clj" "src/b.clj"] :from "(old-api account)" :to "(new-api account)" :expect-count 3}] :expect {:intent-count 1 :edit-count 3 :changed-file-count 2}}
+{:changes [{:id :body-class :in ["src/ui.clj"] :forms [shell reader] :find ":body" :do [:replace ":body.page"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}
 EDN
 ```
 A count mismatch, overlap, parse error, or stale hash refuses the complete transaction. Success returns compact read-back evidence and saves a hash-fenced inverse.
-Use `:change` with the same spec for review. Do not open the saved receipt; run `clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn` while every result hash matches. Use the single-edit route below for computed replacements.
+Use `:change` with the same spec for review. Do not open the saved receipt; run `clj-surgeon :op :undo-change! :receipt /tmp/api-change.edn` while every result hash matches. Scoped changes currently support literal `[:replace SOURCE]` only. Use the single-edit route below for relational or computed replacements. Legacy exact `:intents` remain accepted; never mix the two schemas.
 
 ## Guarded edit or plan and apply
 

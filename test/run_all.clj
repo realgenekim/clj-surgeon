@@ -19,6 +19,9 @@
    [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
    [clj-surgeon.ls-tree-test]
+   [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-telemetry-test]
+   [clj-surgeon.mcp-tool-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
    [clj-surgeon.outermost-test]
@@ -59,5 +62,8 @@
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test
                    'clj-surgeon.intent-transaction-test
+                   'clj-surgeon.mcp-contract-test
+                   'clj-surgeon.mcp-telemetry-test
+                   'clj-surgeon.mcp-tool-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))

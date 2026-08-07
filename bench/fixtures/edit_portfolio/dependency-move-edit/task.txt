@@ -1,0 +1,1 @@
+In src/bench/move_order.clj, move walk-files before run-kondo together with the minimum dependency closure required to keep the namespace valid. Do not add a new declaration or move unrelated forms. Preserve comments, metadata, and formatting. Verify the complete result and briefly report whether your first mutation attempt was safe.

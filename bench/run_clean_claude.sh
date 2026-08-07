@@ -113,6 +113,14 @@ self_test() {
   test -f "$result_dir/fast/terminal.tsv"
   test -f "$result_dir/failed/terminal.tsv"
 
+  local self_test_workspace="$self_test_root/workspace"
+  mkdir -p "$self_test_workspace"
+  printf '%s\n' 'starting bytes' > "$self_test_workspace/fixture.txt"
+  bb "$repo_root/bench/initialize_benchmark_workspace.clj" \
+    "$self_test_workspace" >/dev/null
+  test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
+  test -z "$(git -C "$self_test_workspace" status --short)"
+
   rm -rf "$self_test_root"
   printf '%s\n' "Claude benchmark harness self-test passed: fast and failed receipts survived an independently timed-out child"
 }
@@ -380,6 +388,7 @@ run_actual_child() {
       "$source_file" > "$run_dir/expected.clj"
     shasum -a 256 "$run_dir/expected.clj" > "$run_dir/expected.sha256"
   fi
+  bb "$repo_root/bench/initialize_benchmark_workspace.clj" "$workspace" >/dev/null
   cp "$source_file" "$run_dir/source.start.clj"
   shasum -a 256 "$source_file" > "$run_dir/start.sha256"
   cp "$installed_skill/SKILL.md" "$run_dir/SKILL.md"

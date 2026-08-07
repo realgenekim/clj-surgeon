@@ -44,6 +44,26 @@ updates, and verification gates. It is not a chronological coding diary.
 - `analyze.clj` — dependency analysis, topo sort, extraction closures (all pure, takes zippers)
 - `core.clj` — CLI dispatch, ls-tree pipeline, formatting
 
+## Benchmark harness architecture
+
+- Treat `bench/run_clean_codex.sh` and `bench/run_clean_claude.sh` as thin
+  caller adapters, not independent applications. Before adding logic to either
+  script, ask whether a pure data transformation or shared policy can move to
+  a tested Babashka namespace and be called by both harnesses.
+- Use the strangler pattern. Characterize current behavior, extract one seam,
+  route both harnesses through it, and keep the old shell path until parity is
+  proved. Do not rewrite a working harness wholesale.
+- Keep shell for irreducible process wiring such as environment isolation,
+  redirection, signals, and launching the caller. Put task catalogs, fixture
+  validation, schedules, scoring, retention policy, summaries, and receipt
+  construction in shared Babashka components whenever practical.
+- Do not copy a Codex harness feature into the Claude harness or vice versa.
+  Extract the common contract first; keep only caller-specific invocation and
+  telemetry parsing in the adapters.
+- Every extracted seam needs pure self-tests plus the existing boundary
+  self-tests on both harnesses. Extraction must preserve or strengthen the
+  evidence and retention contracts.
+
 ## Key conventions
 
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`

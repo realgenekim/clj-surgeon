@@ -1,0 +1,11 @@
+{:id :dependency-move-edit
+ :decision-boundary :relationship-determines-safe-change
+ :provenance {:kind :issue-derived
+              :source "clj-surgeon issue 20"
+              :minimized "retained the valid declaration and dependency that a plain move would strand"}
+ :targets ["src/bench/move_order.clj"]
+ :hashes {"src/bench/move_order.clj"
+          {:before "028f50889a07e33c81a4daed4e305ccae0b6b0bb5e44794caff65e290b2afaa7"
+           :after "b7210980f210c614fe5d8dc7f98f5f0b48f642aabc146ff08a8f059cd08630a6"}}
+ :verification {:exact-bytes true :parse-clojure true :lint true}
+ :expected {:changed-files 1 :moved-forms 2}}

@@ -19,7 +19,8 @@ SCHEMA = "clj-surgeon.agent-usage-ethnography.v2"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
-    r"(?:(?:~/bin/|[\w./-]*/)?clj-surgeon|bb\s+-m\s+clj-surgeon\.core)"
+    r"(?:(?:~/bin/|[\w./-]*/)?clj-surgeon|"
+    r"bb(?:\s+(?!-m(?:\s|$))\S+)*\s+-m\s+clj-surgeon\.core)"
     r"\s+(?:(?:--help)|:op\s+(:[\w!?-]+))"
 )
 SKILL_LOAD_RE = re.compile(
@@ -43,12 +44,12 @@ SURGEON_READ_OPS = {
     ":q", ":read", ":topo", ":xray",
 }
 SURGEON_PLAN_OPS = {
-    ":edit", ":extract", ":fix-declares", ":mv", ":rename-ns",
+    ":change", ":edit", ":extract", ":fix-declares", ":mv", ":rename-ns",
     ":replace-subform",
 }
 SURGEON_APPLY_OPS = {
-    ":extract!", ":fix-declares!", ":mv-with-deps", ":rename-ns!",
-    ":replace-subform!",
+    ":change!", ":extract!", ":fix-declares!", ":mv-with-deps",
+    ":rename-ns!", ":replace-subform!", ":undo-change!",
 }
 
 
@@ -708,6 +709,21 @@ def write_fixture(path: Path, events: list[dict]) -> None:
 
 
 def self_test() -> int:
+    assert [
+        match.group(1)
+        for match in SURGEON_RE.finditer(
+            "bb -cp src -m clj-surgeon.core :op :change! :spec-file -"
+        )
+    ] == [":change!"]
+    assert route_kinds(
+        "bb -cp src -m clj-surgeon.core :op :change :spec-file -", "shell"
+    ) == ["surgeon-plan"]
+    assert route_kinds(
+        "bb -cp src -m clj-surgeon.core :op :change! :spec-file -", "shell"
+    ) == ["surgeon-apply"]
+    assert route_kinds(
+        "bb -cp src -m clj-surgeon.core :op :undo-change! :receipt r.edn", "shell"
+    ) == ["surgeon-apply"]
     assert js_tool_methods(
         'await tools.apply_patch("docs mention tools.exec_command and clj-surgeon :op :cat")'
     ) == {"apply_patch"}
@@ -734,6 +750,8 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T01:01:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c1", "name": "exec", "input": "await tools.exec_command({cmd:\"cat /x/clj-surgeon/SKILL.md\"})"}},
                 {"timestamp": "2026-08-05T01:02:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c2", "name": "exec", "input": "await tools.exec_command({cmd:\"clj-surgeon :op :cat :file src/app.clj :form f\"})"}},
                 {"timestamp": "2026-08-05T01:03:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c3", "name": "exec", "input": "await tools.apply_patch(\"*** src/other.clj\\n+ docs say clj-surgeon :op :xray\")"}},
+                {"timestamp": "2026-08-05T01:03:15Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c4", "name": "exec", "input": "await tools.exec_command({cmd:\"bb -cp src -m clj-surgeon.core :op :change! :spec-file - :receipt-out receipt.edn\"})"}},
+                {"timestamp": "2026-08-05T01:03:16Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c4", "output": "{:ok true :operation :change!}"}},
                 {"timestamp": "2026-08-05T01:04:00Z", "type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 300000, "last_agent_message": "complete"}},
             ],
         )
@@ -758,19 +776,21 @@ def self_test() -> int:
         claude = receipt["providers"]["claude"]
         assert receipt["status"] == "ok"
         assert receipt["window"]["since"] == "2026-08-05T00:00:00Z"
-        assert codex["clj_surgeon_ops"] == {":cat": 1}
-        assert codex["clj_surgeon_tool_actions"] == 1
-        assert codex["clj_surgeon_result_actions"] == 0
+        assert codex["clj_surgeon_ops"] == {":cat": 1, ":change!": 1}
+        assert codex["clj_surgeon_tool_actions"] == 2
+        assert codex["clj_surgeon_result_actions"] == 1
         assert codex["skill_loads"] == 1
         assert codex["native_clojure_actions"] == {"apply_patch": 1}
         assert codex["route_action_kinds"] == {
             "native-patch": 1,
             "skill-load": 1,
+            "surgeon-apply": 1,
             "surgeon-read": 1,
         }
         codex_phases = codex["sessions"][0]["route_phases"]
         assert [phase["kinds"] for phase in codex_phases] == [
-            ["skill-load"], ["surgeon-read"], ["native-patch"]
+            ["skill-load"], ["surgeon-read"], ["native-patch"],
+            ["surgeon-apply"]
         ]
         assert all(phase["actions"] == 1 for phase in codex_phases)
         assert codex["sessions"][0]["task_turns"][0]["route_phases"] == codex_phases

@@ -16,4 +16,6 @@ bench/results/**/source.diff
 bench/results/**/expected.clj
 bench/results/**/jq-errors.txt
 bench/results/**/tool-calls.jsonl
+bench/results/**/mcp-telemetry/
 bench/results/**/SKILL.md
+.nrepl-port

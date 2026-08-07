@@ -1,0 +1,1 @@
+In src/bench/pair_view.clj, change only the :finish result inside route-event so its :status value is :complete instead of :done. Preserve its attached comment, the audit payload, and every unrelated byte. Do not read the whole file. Verify the exact result and report whether the first mutation declaration matched.

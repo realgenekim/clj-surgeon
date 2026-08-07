@@ -76,12 +76,13 @@ with stable fields:
 Provenance records the tool/version, operation, selector, and both snapshot
 hashes. Application uses the recorded address; it does not rerun the selector.
 
-One-edit plans remain the smallest review artifact. Intent transactions add a
+One-edit plans remain the smallest review artifact. Change transactions add a
 higher compilation layer for work that is already one coherent model decision.
-The model supplies explicit scope, declared mechanical intents, and cardinality
-assertions. clj-surgeon compiles them into concrete per-file edits, validates
-their combined future state, and emits one reversible transaction receipt.
-This removes repeated bookkeeping without asking the kernel to infer intent.
+The model supplies explicit files, optional named owner forms, exact structural
+targets, literal replacements, and total or distribution assertions.
+clj-surgeon compiles them into concrete per-file edits, validates their combined
+future state, and emits one reversible transaction receipt. This removes
+repeated bookkeeping without asking the kernel to infer intent.
 
 ### Fail closed
 
@@ -345,9 +346,10 @@ model plan expressed as explicit EDN
   -> hash-fenced inverse receipt
 ```
 
-The first compiler accepts heterogeneous losslessly exact `:from` / `:to`
-intents over explicit file sets. One intent covers a structural global
-replacement; one transaction can also materialize many different edits from a
+The first compiler accepts both heterogeneous losslessly exact `:from` / `:to`
+intents and scoped `:changes` over explicit file sets. A scoped change can name
+top-level owner forms, match an exact subtree, and prove one match per owner or
+file. One transaction can materialize many different edits from a
 single model plan. `:change` previews that compiled transaction. `:change!`
 commits it with handled-failure rollback and publishes a durable inverse
 receipt. `:undo-change!` requires every forward result hash to remain exact.
@@ -361,3 +363,37 @@ limits, and dogfood batches.
 The boundary is simple: improve the kernel when real use exposes a general
 mechanical weakness. Do not grow it merely because an AST makes a clever
 feature possible.
+
+## Typed native entrances
+
+The CLI proved the kernel, but shell ceremony remained material. A model with
+one complete six-edit decision still had to load guidance, encode EDN, cross a
+process boundary, and interpret a CLI receipt. A typed persistent MCP entrance
+removed that translation without changing the judgment boundary.
+
+Four counterbalanced correct `apply_clojure_changes` runs completed at a
+24.530-second median. The matched native median was 43.190 seconds, and the
+current CLI-and-skill median was 36.396 seconds. Every MCP run used one call,
+zero shell commands, zero source reads, and one terminal verified receipt.
+
+Transport did not make tool choice automatic. When MCP was available but no
+routing rule named it, Codex ignored it in four of four runs. One short project
+`AGENTS.md` rule changed adoption to four of four while retaining a
+27.432-second median. Capability metadata describes the tool. Repository
+instructions state when that capability is preferred.
+
+The same result suggests a read-side entrance. Repeated CLI reads pay one
+process and agent boundary per question even when all questions are already
+known. A separate `inspect_clojure` tool can batch ordered structural reads
+against one in-memory snapshot. It must remain read-only and bounded. It must
+not infer which question to ask next. The two-tool target is therefore:
+
+```text
+inspect_clojure          perception, read-only, batched
+apply_clojure_changes    action, guarded transaction
+```
+
+Batching is the intended source of a large read-side gain. A hot process alone
+is not sufficient evidence. The representative read portfolio compares
+complete task wall, calls, tokens, evidence bytes, and correctness against both
+CLI and native controls.

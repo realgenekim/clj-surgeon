@@ -13,12 +13,27 @@ VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
 CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
 SKILL_PACKAGE := $(VERSION_ROOT)/skill-$(SKILL_SOURCE_HASH)
 
-.PHONY: test outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+MCP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/mcp
+MCP_URL ?= http://127.0.0.1:7888/mcp
+MCP_PID_FILE := $(MCP_STATE_DIR)/server.pid
+MCP_READY_FILE := $(MCP_STATE_DIR)/ready.edn
+MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
+MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
+CLOJURE_BIN ?= $(shell command -v clojure)
+
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
 	@echo ""
 	@echo "  make test                      Run all tests"
+	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
+	@echo "  make mcp-smoke                 Verify initialize, one-tool discovery, and refusal over stdio"
+	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
+	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
+	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
+	@echo "  make mcp-status                Check the local MCP process, endpoint, and Codex registration"
+	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
 	@echo "  make install                   Stable copied CLI, Codex skill, and Claude skill"
 	@echo "  make install-cli               Install only the stable copied CLI"
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
@@ -29,6 +44,8 @@ help:
 	@echo "  make study-agent-usage-self-test Test the bounded cross-agent history collector"
 	@echo "  make benchmark-clean-codex     Run the 32-session clean Codex benchmark"
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
+	@echo "  make benchmark-edit-portfolio  Compare representative edits across microscope/current/native"
+	@echo "  make benchmark-edit-portfolio-self-test Verify edit capsules and harness without model calls"
 	@echo "  make benchmark-codex-skill     Run the bounded 2-session Codex skill battery"
 	@echo "  make benchmark-claude-skill    Run the bounded 4-session Fable/Opus skill battery"
 	@echo "  make benchmark-agent-skills    Run both bounded clean-agent skill batteries"
@@ -51,6 +68,78 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
 install: install-cli install-codex-skill install-claude-skill
+
+mcp-test:
+	clojure -M:clj-surgeon/mcp-test
+
+mcp-smoke:
+	bb test/mcp_stdio_smoke.clj
+
+mcp-serve:
+	clojure -X:clj-surgeon/mcp :telemetry :full
+
+mcp-serve-benchmark:
+	clojure -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
+
+mcp-start:
+	@set -eu; \
+	  mkdir -p "$(MCP_STATE_DIR)"; \
+	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then \
+	    echo "clj-surgeon MCP already ready at $(MCP_URL)"; \
+	    exit 0; \
+	  fi; \
+	  test -n "$(CLOJURE_BIN)" || { echo "clojure is required" >&2; exit 1; }; \
+	  launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	  rm -f "$(MCP_READY_FILE)" "$(MCP_PID_FILE)"; \
+	  launchctl submit -l "$(MCP_LAUNCH_LABEL)" \
+	    -o "$(MCP_LOG_FILE)" -e "$(MCP_LOG_FILE)" -- \
+	    /bin/sh -c 'cd "$$1"; shift; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
+	    "$(CLOJURE_BIN)" -X:clj-surgeon/mcp \
+	    :project-dir '"$(CLJ_SURGEON_HOME)"' \
+	    :telemetry :full \
+	    :telemetry-dir '"$(MCP_STATE_DIR)/telemetry"' \
+	    :run-id '"dogfood"' \
+	    :ready-file '"$(MCP_READY_FILE)"' \
+	    :port-file '"$(MCP_STATE_DIR)/nrepl-port"'; \
+	  ready=false; \
+	  for attempt in $$(seq 1 60); do \
+	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \
+	    if ! launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then break; fi; \
+	    sleep 0.5; \
+	  done; \
+	  if [ "$$ready" != true ]; then \
+	    echo "clj-surgeon MCP did not become ready; recent log:" >&2; \
+	    tail -40 "$(MCP_LOG_FILE)" >&2 || true; \
+	    launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	    exit 1; \
+	  fi; \
+	  mcp_pid=$$(sed -n 's/.*:pid \([0-9][0-9]*\).*/\1/p' "$(MCP_READY_FILE)"); \
+	  printf '%s\n' "$$mcp_pid" > "$(MCP_PID_FILE)"; \
+	  echo "clj-surgeon MCP ready at $(MCP_URL) (launchd PID $$mcp_pid)"
+
+mcp-stop:
+	@set -eu; \
+	  launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	  rm -f "$(MCP_PID_FILE)" "$(MCP_READY_FILE)" "$(MCP_STATE_DIR)/nrepl-port"; \
+	  echo "clj-surgeon MCP stopped"
+
+mcp-status:
+	@set -eu; \
+	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))"; then echo; else echo "MCP endpoint unavailable: $(MCP_URL)"; fi; \
+	  if [ -f "$(MCP_READY_FILE)" ]; then echo "Readiness: $$(cat "$(MCP_READY_FILE)")"; fi; \
+	  if launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then echo "Service: launchd job $(MCP_LAUNCH_LABEL) is loaded"; else echo "Service: not loaded"; fi; \
+	  codex mcp get clj-surgeon 2>/dev/null || echo "Codex registration: absent"
+
+install-mcp-codex-dev: install-dev mcp-start
+	@set -eu; \
+	  codex mcp remove clj-surgeon >/dev/null 2>&1 || true; \
+	  codex mcp add clj-surgeon --url "$(MCP_URL)"; \
+	  echo "Restart Codex, then confirm that apply_clojure_changes is available."
+
+uninstall-mcp-codex-dev:
+	@codex mcp remove clj-surgeon >/dev/null 2>&1 || true
+	@$(MAKE) --no-print-directory mcp-stop
+	@echo "Removed the local clj-surgeon MCP registration from Codex."
 
 prepare-cli-package:
 	@set -eu; \
@@ -235,6 +324,22 @@ benchmark-clean-codex:
 benchmark-harness-self-test:
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
 
+benchmark-edit-portfolio:
+	BENCH_PRE_COMMIT="$${BENCH_PRE_COMMIT:-5d3e262}" \
+	BENCH_POST_COMMIT="$${BENCH_POST_COMMIT:-WORKTREE}" \
+	BENCH_RUN_MATRIX="$${BENCH_RUN_MATRIX:-pre:matched-skill post:matched-skill native:no-skill}" \
+	BENCH_TASKS="$${BENCH_TASKS:-decision-batch-edit pair-view-expect-edit dependency-move-edit literal-source-edit native-text-edit}" \
+	BENCH_INCLUDE_COMPACT=false \
+	BENCH_REPLICATES="$${BENCH_REPLICATES:-1}" \
+	bash bench/run_clean_codex.sh
+
+benchmark-edit-portfolio-self-test:
+	bb bench/write_mcp_config.clj --self-test
+	bb bench/verify_edit_portfolio.clj --self-test
+	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
+	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
+	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
+
 benchmark-codex-skill:
 	BENCH_POST_COMMIT="$${BENCH_POST_COMMIT:-HEAD}" \
 	BENCH_VERSIONS="$${BENCH_VERSIONS:-post}" \
@@ -277,6 +382,9 @@ verify-benchmark-evidence:
 test:
 	bb test/run_all.clj
 	python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test
+	bb bench/initialize_benchmark_workspace.clj --self-test
+	bb bench/verify_edit_portfolio.clj --self-test
+	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
 	bb bench/summarize_clean_codex.clj --self-test
 	bb bench/score_ops_registry.clj --self-test
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh

@@ -7,6 +7,10 @@ through 5 passed. The first post-implementation dogfood added a kubectl-style
 `:spec-file -` stdin entrance after inline shell escaping caused a safe refusal.
 Batch 6, the optional EDNL stack, remains evidence-gated.
 
+The paper design for scoped selections and edit operators continues in
+[Structural Change Language](structural-change-language.md). It is not yet an
+implemented contract.
+
 The first transform is deliberately narrow: replace every losslessly exact
 `:from` form with one exact `:to` form across an explicit set of files. A
 transaction may contain many heterogeneous exact intents so one already-formed

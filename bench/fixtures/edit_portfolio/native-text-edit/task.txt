@@ -1,0 +1,1 @@
+In src/bench/descriptions.clj, change the unique docstring text "Return the active workspace title." to "Return the current workspace title." Preserve every other byte. Use the fastest safe editor for this prose-only change, verify the exact result, and briefly report the mutation route.

@@ -165,8 +165,27 @@ copied Clojure files.
 
 Forward apply, durable receipt publication, and exact undo completed in
 approximately 0.5 seconds in one Babashka process. The receipt was 3,466 bytes,
-and both final file hashes equaled their starting hashes. This proves bounded
-mechanism cost and reversibility. It does not yet prove an agent speedup over native patching.
+and both final file hashes equaled their starting hashes. This proved bounded
+mechanism cost and reversibility.
+
+A later controlled benchmark measured the complete agent task on the frozen
+six-edit, two-file decision. Each lane ran four correct replicates. Efficiency
+medians include only runs whose final bytes matched the accepted files.
+
+| Route | Correct | MCP adopted | Median wall | Median input | Shell calls |
+|---|---:|---:|---:|---:|---:|
+| Assisted `apply_clojure_changes` | 4 / 4 | 4 / 4 | **24.530 s** | **44,020** | **0** |
+| MCP + one project rule | 4 / 4 | 4 / 4 | **27.432 s** | 44,215 | **0** |
+| Current CLI + skill | 4 / 4 | — | 36.396 s | 64,842 | 3 |
+| MCP available, no routing rule | 4 / 4 | 0 / 4 | 40.618 s | 74,865 | 2 |
+| Native control | 4 / 4 | — | 43.190 s | 74,872 | 4 |
+
+The assisted MCP route was 18.660 seconds faster than native, a 43.2%
+reduction. It used one verified mutation call, zero source reads, and zero
+failed mutations in every run. Tool metadata alone did not cause adoption. A
+one-sentence project `AGENTS.md` rule changed adoption from 0 / 4 to 4 / 4
+without loading the skill. See the
+[complete Captain's Log](docs/observations/2026-08-07-captains-log-one-call-crossed-the-double-digit-gate.md).
 
 A later paired read benchmark asked fresh Codex callers 45 exact behavior
 questions about 45 named forms in three frozen files. Both answers passed all
@@ -267,6 +286,38 @@ bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/scri
 `make install` will warn (but not fail) if either binary is missing.
 
 What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
+
+### Experimental Codex MCP entrance
+
+Keep this branch-local while the MCP contract is under evaluation. The
+development installer points the CLI and both skills at the current checkout,
+starts one repository-scoped Streamable HTTP server on loopback, and registers
+its single `apply_clojure_changes` tool with Codex:
+
+```bash
+make install-mcp-codex-dev
+```
+
+Restart Codex after the command completes. A qualifying edit can then be one
+native tool call: send all known Clojure replacements, scopes, and cardinality
+guards to `apply_clojure_changes`; a successful
+`verification_complete=true` receipt is terminal evidence, so do not reread or
+diff the files afterward. The server remains hot across Codex sessions and is
+confined to this checkout. On macOS, a local `launchd` job keeps it alive across
+terminal and Codex restarts. It listens only on `127.0.0.1:7888` and records
+full local telemetry under `~/.local/state/clj-surgeon/mcp`. The experimental
+job is session-persistent, not a permanent login item; rerun the installer
+after logging out or rebooting.
+
+Check or remove the experimental entrance with:
+
+```bash
+make mcp-status
+make uninstall-mcp-codex-dev
+```
+
+`make install` remains the stable copied CLI-and-skills installation. It does
+not enable the experimental MCP server.
 
 ## Teach coding agents
 
@@ -833,21 +884,24 @@ It also contains per-platform top-level form summaries.
 
 ### Write operations
 
-#### `:change` / `:change!` / `:undo-change!` — Materialize one exact plan
+#### `:change` / `:change!` / `:undo-change!` — Compile one complete plan
 
-Use one transaction when the complete plan is already known. Each intent
-declares explicit files, one exact before-form, one exact after-form, and an
-expected match count. The aggregate expectation guards the complete plan.
+Use one transaction when the complete plan is already known. A scoped change
+states the files, optional unique owner forms, exact structural target, literal
+replacement, and exact consent counts. The aggregate expectation guards the
+complete plan.
 
 ```bash
 clj-surgeon :op :change! :spec-file - \
-  :receipt-out /tmp/api-change.edn <<'EDN'
-{:intents
- [{:files ["src/app/a.clj" "src/app/b.clj"]
-   :from "(old-api account)" :to "(new-api account)" :expect-count 3}
-  {:files ["src/app/b.clj"]
-   :from ":body" :to ":body.page" :expect-count 1}]
- :expect {:intent-count 2 :edit-count 4 :changed-file-count 2}}
+  :receipt-out /tmp/ui-change.edn <<'EDN'
+{:changes
+ [{:id :body-class
+   :in ["src/ui.clj"]
+   :forms [shell reader]
+   :find ":body"
+   :do [:replace ":body.page"]
+   :expect {:matches 2 :each-form 1}}]
+ :expect {:changes 1 :edits 2 :files 1}}
 EDN
 ```
 
@@ -856,10 +910,18 @@ the operation, stdin carries the large structured document, and stdout returns
 the compact receipt. Use `:spec-file PATH` for a saved document. Inline `:spec`
 remains compatible for small plans, but it is not the primary agent route.
 
-All intents compile against the same original snapshots. Matching ignores
-whitespace. Comments, metadata, reader macros, token spelling, and collection
-type must match. Exact transaction intents do not support `_`, regular
-expressions, or fuzzy matching.
+All changes compile against the same original snapshots. `:find` matches exact
+structural source inside the explicit files and optional owner forms.
+Whitespace can differ. Comments, metadata, reader macros, token spelling, and
+collection type must match. `:each-form` proves the match distribution across
+owners. `:each-file` proves it across files. A named owner must resolve exactly
+once in each scoped file.
+
+The first scoped-change slice supports `[:replace SOURCE]`. It does not yet
+support relational `:path`, captures, insertion, deletion, computed
+transformations, regular expressions, or fuzzy matching. Use `:edit` for one
+relational or computed change. Use the specialized move, dependency, require,
+rename, and CLJC operations for their stronger contracts.
 
 Any count mismatch, overlap, invalid future file, or stale hash refuses the
 complete transaction. A handled write or receipt-publication failure restores
@@ -887,6 +949,10 @@ Do not split one known multi-edit plan into repeated `:edit` or
 `:replace-subform!` calls. Use those operations when the replacement must be
 computed from selected source or reviewed as one independently meaningful
 edit.
+
+Legacy exact `:intents` with `:files`, `:from`, `:to`, `:expect-count`, and the
+original aggregate expectation keys remain accepted. Do not mix `:intents`
+and `:changes` in one transaction.
 
 #### `:fix-declares` / `:fix-declares!` — Eliminate unnecessary declares
 

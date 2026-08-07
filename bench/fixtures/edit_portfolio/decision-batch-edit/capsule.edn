@@ -1,0 +1,14 @@
+{:id :decision-batch-edit
+ :decision-boundary :complete-decision-supplied
+ :provenance {:kind :real-task-derived
+              :source "anonymized multi-surface viewer edit"
+              :minimized "retained duplicate syntax, owner scope, comment attachment, reader shorthand, and six accepted edits"}
+ :targets ["src/bench/app_shell.clj" "src/bench/source_reader.clj"]
+ :hashes {"src/bench/app_shell.clj"
+          {:before "7dedda6220bd580150c21142abbc5637e79a6747225cb90b9b8716bd8f846045"
+           :after "03fc2c425a56294695811366e3da00793054aa3038802215e12cbf58e16b5aad"}
+          "src/bench/source_reader.clj"
+          {:before "b0fe88bf6e8a519362350e5d56a0d586cc76f77b7f6d356b19b50ee9ba6db644"
+           :after "f2e9c6efc4c3885debe12f46a18fc47ef276c03e8ff8b38943329e4a2828f061"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 2 :edits 6}}

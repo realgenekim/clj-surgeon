@@ -21,6 +21,20 @@
    :to to
    :expect-count expected-count})
 
+(defn- change-spec
+  [changes expected]
+  {:changes changes
+   :expect expected})
+
+(defn- change
+  [id files forms find replacement expected]
+  (cond-> {:id id
+           :in files
+           :find find
+           :do [:replace replacement]
+           :expect expected}
+    forms (assoc :forms forms)))
+
 (defn- valid-source?
   [source]
   (try
@@ -177,6 +191,173 @@
           :error :transaction-expectation-mismatch}
          {:label "aggregate file mismatch"
           :spec (spec [valid-intent] (assoc valid-expect :changed-file-count 2))
+          :error :transaction-expectation-mismatch}]]
+    (doseq [{:keys [label spec error]} cases]
+      (testing label
+        (let [result (transaction/compile-transaction sources spec)]
+          (is (= error (:error-type result)))
+          (is (nil? (:future-sources result))))))))
+
+(deftest compiles-scoped-find-replace-changes-as-one-transaction
+  (let [sources
+        {"src/layout.clj"
+         (str "(ns app.layout)\n\n"
+              "(defn ide-shell []\n  [:main :body])\n\n"
+              "(defn source-reader-shell [current-location]\n"
+              "  [:main :body])\n")
+         "src/common.clj"
+         (str "(ns app.common)\n\n"
+              "(defn stylesheets []\n"
+              "  [(views/static \"/a.css\")])\n")}
+        result
+        (transaction/compile-transaction
+          sources
+          (change-spec
+            [(change :shell-body
+                     ["src/layout.clj"]
+                     ['ide-shell 'source-reader-shell]
+                     ":body"
+                     ":body.ide-shell-page"
+                     {:matches 2 :each-form 1})
+             (change :static-head
+                     ["src/common.clj"]
+                     ['stylesheets]
+                     "views/static"
+                     "assets/static"
+                     {:matches 1 :each-file 1})]
+            {:changes 2 :edits 3 :files 2}))]
+    (is (:ok result))
+    (is (= 2 (:change-count result)))
+    (is (= 3 (:match-count result)))
+    (is (= 2 (:changed-file-count result)))
+    (is (= [:shell-body :static-head]
+           (mapv :id (:changes result))))
+    (is (= "(ns app.layout)\n\n(defn ide-shell []\n  [:main :body.ide-shell-page])\n\n(defn source-reader-shell [current-location]\n  [:main :body.ide-shell-page])\n"
+           (get-in result [:future-sources "src/layout.clj"])))
+    (is (= "(ns app.common)\n\n(defn stylesheets []\n  [(assets/static \"/a.css\")])\n"
+           (get-in result [:future-sources "src/common.clj"])))
+    (is (every? valid-source? (vals (:future-sources result))))))
+
+(deftest scoped-change-guards-prove-owner-and-file-distribution
+  (let [sources
+        {"src/a.clj"
+         (str "(ns app.a)\n"
+              "(defn first-owner [] [:body :body])\n"
+              "(defn second-owner [] [:other])\n")
+         "src/b.clj"
+         "(ns app.b)\n(defn first-owner [] [:other])\n"}
+        aggregate
+        (change :body
+                ["src/a.clj"]
+                ['first-owner 'second-owner]
+                ":body"
+                ":body.page"
+                {:matches 2})
+        each-form (assoc aggregate :expect {:matches 2 :each-form 1})
+        across-files
+        (change :body
+                ["src/a.clj" "src/b.clj"]
+                nil
+                ":body"
+                ":body.page"
+                {:matches 2 :each-file 1})]
+    (is (:ok (transaction/compile-transaction
+               sources
+               (change-spec [aggregate]
+                            {:changes 1 :edits 2 :files 1}))))
+    (let [result (transaction/compile-transaction
+                   sources
+                   (change-spec [each-form]
+                                {:changes 1 :edits 2 :files 1}))]
+      (is (= :change-distribution-mismatch (:error-type result)))
+      (is (= :each-form (:distribution result)))
+      (is (= {"src/a.clj"
+              {'first-owner 2 'second-owner 0}}
+             (:actual result)))
+      (is (nil? (:future-sources result))))
+    (let [result (transaction/compile-transaction
+                   sources
+                   (change-spec [across-files]
+                                {:changes 1 :edits 2 :files 1}))]
+      (is (= :change-distribution-mismatch (:error-type result)))
+      (is (= :each-file (:distribution result)))
+      (is (= {"src/a.clj" 2 "src/b.clj" 0}
+             (:actual result)))
+      (is (nil? (:future-sources result))))))
+
+(deftest scoped-changes-refuse-every-field-and-owner-error-as-data
+  (let [sources
+        {"src/a.clj"
+         (str "(ns app.a)\n"
+              "(defn one [] [:body])\n"
+              "(defn two [] [:body])\n")
+         "src/duplicate.clj"
+         (str "(ns app.duplicate)\n"
+              "(defn repeated [] :first)\n"
+              "(defn repeated [] :second)\n")}
+        valid (change :body ["src/a.clj"] ['one]
+                      ":body" ":body.page" {:matches 1})
+        valid-expect {:changes 1 :edits 1 :files 1}
+        cases
+        [{:label "empty changes"
+          :spec (change-spec [] {:changes 0 :edits 0 :files 0})
+          :error :invalid-changes}
+         {:label "legacy and scoped modes cannot mix"
+          :spec {:intents [(intent ["src/a.clj"] ":body" ":body.page" 2)]
+                 :changes [valid]
+                 :expect valid-expect}
+          :error :mixed-transaction-modes}
+         {:label "unknown change key"
+          :spec (change-spec [(assoc valid :where :anywhere)] valid-expect)
+          :error :unknown-change-arguments}
+         {:label "duplicate change id"
+          :spec (change-spec [valid valid]
+                             {:changes 2 :edits 2 :files 1})
+          :error :duplicate-change-id}
+         {:label "invalid owner list"
+          :spec (change-spec [(assoc valid :forms [])] valid-expect)
+          :error :invalid-change-forms}
+         {:label "unknown owner"
+          :spec (change-spec [(assoc valid :forms ['missing])] valid-expect)
+          :error :change-owner-mismatch}
+         {:label "duplicate owner definition"
+          :spec (change-spec [(change :duplicate
+                                      ["src/duplicate.clj"]
+                                      ['repeated]
+                                      ":first" ":only"
+                                      {:matches 1})]
+                             valid-expect)
+          :error :change-owner-mismatch}
+         {:label "find must be one source form"
+          :spec (change-spec [(assoc valid :find ":body :other")]
+                             valid-expect)
+          :error :invalid-intent-form}
+         {:label "unsupported operator"
+          :spec (change-spec [(assoc valid :do [:delete])] valid-expect)
+          :error :unsupported-change-operator}
+         {:label "replacement must be one source form"
+          :spec (change-spec [(assoc valid :do [:replace ":a :b"])]
+                             valid-expect)
+          :error :invalid-intent-form}
+         {:label "missing positive match expectation"
+          :spec (change-spec [(assoc valid :expect {})] valid-expect)
+          :error :invalid-change-expectation}
+         {:label "each-form requires owners"
+          :spec (change-spec [(-> valid
+                                  (dissoc :forms)
+                                  (assoc :expect {:matches 1 :each-form 1}))]
+                             valid-expect)
+          :error :invalid-change-expectation}
+         {:label "unknown expectation key"
+          :spec (change-spec [(assoc valid :expect {:matches 1 :each 1})]
+                             valid-expect)
+          :error :unknown-change-expectation-arguments}
+         {:label "lossless no-op"
+          :spec (change-spec [(assoc valid :do [:replace ":body"])]
+                             valid-expect)
+          :error :no-op-intent}
+         {:label "aggregate change mismatch"
+          :spec (change-spec [valid] (assoc valid-expect :changes 2))
           :error :transaction-expectation-mismatch}]]
     (doseq [{:keys [label spec error]} cases]
       (testing label
@@ -692,6 +873,12 @@
     (is (str/includes? help "complete mechanical model plan"))
     (is (str/includes? help "writes nothing"))
     (is (str/includes? help "heterogeneous model plan"))
+    (is (str/includes? help ":changes"))
+    (is (str/includes? help ":in"))
+    (is (str/includes? help ":forms"))
+    (is (str/includes? help ":find"))
+    (is (str/includes? help "[:replace SOURCE]"))
+    (is (str/includes? help ":each-form"))
     (is (str/includes? help ":intent-count"))
     (is (str/includes? help ":changed-file-count"))))
 
@@ -706,6 +893,8 @@
     (is (str/includes? global-help "    change!"))
     (is (str/includes? global-help "    undo-change!"))
     (is (str/includes? apply-help "complete mechanical model plan once"))
+    (is (str/includes? apply-help ":changes"))
+    (is (str/includes? apply-help "per-change count or distribution guard"))
     (is (str/includes? apply-help ":spec-file -"))
     (is (str/includes? apply-help "kubectl apply -f -"))
     (is (str/includes? apply-help "without probing source"))
@@ -728,7 +917,15 @@
       (is (str/includes? text ":change!")
           (str label " must document guarded intent application"))
       (is (str/includes? text ":undo-change!")
-          (str label " must document the hash-fenced inverse")))
+          (str label " must document the hash-fenced inverse"))
+      (is (str/includes? text ":changes")
+          (str label " must document scoped change compilation")))
+    (doseq [[label text] [["README" readme]
+                          ["skill" skill]]]
+      (is (str/includes? text ":each-form")
+          (str label " must teach owner distribution guards"))
+      (is (str/includes? text "[:replace")
+          (str label " must show the supported scoped operator")))
     (is (str/includes? readme
                        "Do not split one known multi-edit plan into repeated"))
     (is (str/includes? skill
@@ -901,5 +1098,101 @@
         (is (= :result-hash-mismatch (:error-type result)))
         (is (= original-app (slurp app-file)))
         (is (= original-reader (slurp reader-file))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest scoped-change-cli-applies-owner-guarded-edits-and-undoes-once
+  (let [temp-dir (fs/create-temp-dir {:prefix "scoped-change-dogfood-"})
+        app-file (str (fs/path temp-dir "app_shell.clj"))
+        reader-file (str (fs/path temp-dir "source_reader.clj"))
+        receipt-file (str (fs/path temp-dir "receipt.edn"))
+        original-app (slurp "test/fixtures/intent_transaction/app_shell.clj")
+        original-reader
+        (slurp "test/fixtures/intent_transaction/source_reader.clj")
+        scoped-spec
+        (change-spec
+          [(change :app-body [app-file] ['ide-shell]
+                   ":body" ":body.scoped-page"
+                   {:matches 1 :each-form 1 :each-file 1})
+           (change :reader-body [reader-file] ['source-reader-shell]
+                   ":body" ":body.scoped-page"
+                   {:matches 1 :each-form 1 :each-file 1})
+           (change :app-css [app-file] ['ide-shell]
+                   "\"/app.css\"" "\"/scoped.css\""
+                   {:matches 1 :each-form 1 :each-file 1})
+           (change :reader-title [reader-file] ['source-reader-shell]
+                   "[:title \"Workbench\"]"
+                   "[:title \"Scoped Workbench\"]"
+                   {:matches 1 :each-form 1 :each-file 1})]
+          {:changes 4 :edits 4 :files 2})]
+    (try
+      (spit app-file original-app)
+      (spit reader-file original-reader)
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":change!"
+                            ":spec-file" "-"
+                            ":receipt-out" receipt-file]
+                           {:in (pr-str scoped-spec)
+                            :out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 0 exit))
+        (is (= "" err))
+        (is (:ok result))
+        (is (= 4 (:change-count result)))
+        (is (= 4 (:match-count result)))
+        (is (= 2 (:changed-file-count result)))
+        (is (str/includes? (slurp app-file) ":body.scoped-page"))
+        (is (str/includes? (slurp app-file) "\"/scoped.css\""))
+        (is (str/includes? (slurp reader-file) ":body.scoped-page"))
+        (is (str/includes? (slurp reader-file)
+                           "[:title \"Scoped Workbench\"]"))
+        (is (valid-source? (slurp app-file)))
+        (is (valid-source? (slurp reader-file))))
+
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":undo-change!"
+                            ":receipt" receipt-file]
+                           {:out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 0 exit))
+        (is (= "" err))
+        (is (:ok result))
+        (is (= original-app (slurp app-file)))
+        (is (= original-reader (slurp reader-file))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest scoped-change-cli-refuses-wrong-owner-distribution-without-writing
+  (let [temp-dir (fs/create-temp-dir {:prefix "scoped-change-refusal-"})
+        source-file (str (fs/path temp-dir "owners.clj"))
+        receipt-file (str (fs/path temp-dir "receipt.edn"))
+        original-source
+        (str "(ns fixture.owners)\n\n"
+             "(defn first-owner [] [:body :body])\n\n"
+             "(defn second-owner [] [:other])\n")
+        scoped-spec
+        (change-spec
+          [(change :body-class [source-file] ['first-owner 'second-owner]
+                   ":body" ":body.scoped-page"
+                   {:matches 2 :each-form 1})]
+          {:changes 1 :edits 2 :files 1})]
+    (try
+      (spit source-file original-source)
+      (let [{:keys [exit out err]}
+            @(proc/process ["bb" "-m" "clj-surgeon.core"
+                            ":op" ":change!"
+                            ":spec-file" "-"
+                            ":receipt-out" receipt-file]
+                           {:in (pr-str scoped-spec)
+                            :out :string :err :string})
+            result (edn/read-string out)]
+        (is (= 1 exit))
+        (is (= "" err))
+        (is (= :change-distribution-mismatch (:error-type result)))
+        (is (= :each-form (:distribution result)))
+        (is (= original-source (slurp source-file)))
+        (is (not (fs/exists? receipt-file))))
       (finally
         (fs/delete-tree temp-dir)))))

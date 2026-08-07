@@ -1,0 +1,11 @@
+{:id :native-text-edit
+ :decision-boundary :unique-prose-change-supplied
+ :provenance {:kind :control
+              :source "common docstring maintenance"
+              :minimized "unique one-line prose edit with no structural ambiguity"}
+ :targets ["src/bench/descriptions.clj"]
+ :hashes {"src/bench/descriptions.clj"
+          {:before "e0cdfc95c1bd81b65fdee810c2da913e3839c60fb384f7385cfac46e64349fa9"
+           :after "249ba203da6818467e1fbb67a3e85d558a41381ffa3c0cd9bf3c65111738d2b8"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 1 :edits 1}}

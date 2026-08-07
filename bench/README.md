@@ -1,5 +1,56 @@
 # Clean Codex benchmark
 
+## Representative edit portfolio
+
+Run the repo-owned editing hill-climb:
+
+```bash
+make benchmark-edit-portfolio
+```
+
+The default pilot starts 15 paid Codex sessions: five frozen tasks across the
+tagged local-microscope skill, the current working tree, and a native-tools
+control. The tasks cover a complete multi-file decision, a bounded owner edit,
+a dependency-aware move, literal `#()` source fidelity, and a prose-only edit
+that native patching should win. Every task contains its prompt, before files,
+accepted after files, hashes, and verification policy under
+`bench/fixtures/edit_portfolio/`. No live application or external source
+repository is required.
+
+Verify the complete fixture and harness contract without a model call:
+
+```bash
+make benchmark-edit-portfolio-self-test
+```
+
+For the smallest paid pilot, compare only the current treatment and native
+control on the supplied-decision task:
+
+```bash
+BENCH_TASKS=decision-batch-edit \
+BENCH_RUN_MATRIX='post:matched-skill native:no-skill' \
+BENCH_REPLICATES=1 \
+make benchmark-edit-portfolio
+```
+
+`BENCH_RUN_MATRIX` is an ordered list of `VERSION:CONTEXT` cells. It avoids an
+invalid Cartesian product such as `native:matched-skill`. The portfolio accepts
+`BENCH_POST_COMMIT=WORKTREE` so an uncommitted candidate can be measured in an
+isolated copy. Every task copy is its own clean Git repository, so normal diff
+and status verification remains available without exposing the source repo.
+Both Codex and Claude harnesses use the shared Babashka workspace initializer
+for this contract. Use a commit ID or `HEAD` for durable release evidence.
+
+Correctness is a gate. Inspect each task as well as the portfolio median. The
+runner records exact multi-file results, source-bearing calls, failed mutation
+attempts, use of `:change!`, post-decision reads, temporary EDN manifest patches,
+and whether one successful transaction kept a complete decision in one action.
+The prose control is successful when the agent chooses the native patch; more
+clj-surgeon use is not inherently better.
+
+The selection contract and keep gates are in
+[the representative edit portfolio plan](../docs/plans/representative-edit-portfolio.md).
+
 ## Bounded clean-agent skill acceptance
 
 Use the six-session acceptance battery to exercise the installed Claude and

@@ -12,6 +12,18 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Typed MCP change entrance](typed-mcp-change-entrance.md) — expose the
+  shipped guarded transaction compiler as one typed stdio tool and test whether
+  removing CLI ceremony beats native patching by a material margin.
+- [Representative edit portfolio](representative-edit-portfolio.md) — frozen
+  prompt/snapshot/diff capsules for hill-climbing complete agent editing
+  workflows against native and local-microscope controls.
+- [Representative MCP read portfolio](representative-read-portfolio.md) —
+  frozen structural questions and semantic answers for measuring whether one
+  hot batched read call beats current CLI and native controls.
+- [Structural change language](structural-change-language.md) — paper design
+  for compiling scoped selections and edit operators into one guarded
+  transaction; includes 15 edit exercises and fail-closed boundaries.
 - [Literal replacement source fidelity](literal-replacement-source-fidelity.md)
   — preserve reader shorthand, comments, commas, metadata, and layout for
   literal replacements written inline in `:edit :expr`.

@@ -1,6 +1,7 @@
 (ns clj-surgeon.intent-transaction
   (:require
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -15,10 +16,13 @@
 (def receipt-version 1)
 
 (def ^:private supported-extensions [".clj" ".cljs" ".cljc"])
-(def ^:private spec-keys #{:intents :expect})
+(def ^:private spec-keys #{:intents :changes :expect})
 (def ^:private intent-keys #{:files :from :to :expect-count})
 (def ^:private expectation-keys
   #{:intent-count :edit-count :changed-file-count})
+(def ^:private change-keys #{:id :in :forms :find :do :expect})
+(def ^:private change-expectation-keys #{:matches :each-form :each-file})
+(def ^:private change-aggregate-expectation-keys #{:changes :edits :files})
 
 (defn- refuse!
   [error-type message & [data]]
@@ -170,6 +174,124 @@
      :to to
      :expect-count expected-count}))
 
+(defn- positive-integer?
+  [value]
+  (and (integer? value) (pos? value)))
+
+(defn- validate-change-forms!
+  [forms change-index]
+  (when (some? forms)
+    (when-not (and (vector? forms)
+                   (seq forms)
+                   (every? symbol? forms)
+                   (= (count forms) (count (distinct forms))))
+      (refuse! :invalid-change-forms
+               "Change :forms must be a non-empty vector of distinct symbols"
+               {:change-index change-index :forms forms})))
+  forms)
+
+(defn- validate-change-expectation!
+  [expectation forms change-index change-id]
+  (when-not (map? expectation)
+    (refuse! :invalid-change-expectation
+             "Change :expect must be a map"
+             {:change-index change-index :change-id change-id}))
+  (let [unknown (vec (sort (remove change-expectation-keys
+                                   (keys expectation))))]
+    (when (seq unknown)
+      (refuse! :unknown-change-expectation-arguments
+               (str "Unknown change expectation fields: "
+                    (str/join ", " unknown))
+               {:change-index change-index
+                :change-id change-id
+                :unknown unknown})))
+  (when-not (positive-integer? (:matches expectation))
+    (refuse! :invalid-change-expectation
+             "Change :expect :matches must be a positive integer"
+             {:change-index change-index
+              :change-id change-id
+              :actual (:matches expectation)}))
+  (doseq [field [:each-form :each-file]
+          :let [value (get expectation field)]
+          :when (some? value)]
+    (when-not (positive-integer? value)
+      (refuse! :invalid-change-expectation
+               (str "Change :expect " field " must be a positive integer")
+               {:change-index change-index
+                :change-id change-id
+                :field field
+                :actual value})))
+  (when (and (contains? expectation :each-form) (nil? forms))
+    (refuse! :invalid-change-expectation
+             "Change :expect :each-form requires explicit :forms"
+             {:change-index change-index :change-id change-id}))
+  expectation)
+
+(defn- validate-change-operator!
+  [operator change-index change-id]
+  (when-not (and (vector? operator)
+                 (= 2 (count operator))
+                 (= :replace (first operator)))
+    (refuse! :unsupported-change-operator
+             "First structural change slice supports only [:replace SOURCE]"
+             {:change-index change-index
+              :change-id change-id
+              :operator operator
+              :supported [[:replace "SOURCE"]]}))
+  (parse-one-form (second operator) ":do replacement"))
+
+(defn- validate-change!
+  [change change-index]
+  (when-not (map? change)
+    (refuse! :invalid-changes
+             "Every change must be a map"
+             {:change-index change-index :actual change}))
+  (let [unknown (vec (sort (remove change-keys (keys change))))]
+    (when (seq unknown)
+      (refuse! :unknown-change-arguments
+               (str "Unknown change arguments: " (str/join ", " unknown))
+               {:change-index change-index :unknown unknown})))
+  (let [change-id (:id change)]
+    (when (and (some? change-id) (not (keyword? change-id)))
+      (refuse! :invalid-change-id
+               "Change :id must be a keyword"
+               {:change-index change-index :actual change-id}))
+    (let [files (validate-files! (:in change) change-index)
+          forms (validate-change-forms! (:forms change) change-index)
+          from (parse-one-form (:find change) ":find")
+          to (validate-change-operator! (:do change) change-index change-id)
+          expectation (validate-change-expectation!
+                        (:expect change) forms change-index change-id)]
+      (when (= (:fingerprint from) (:fingerprint to))
+        (refuse! :no-op-intent
+                 "Change :find and replacement are losslessly equal"
+                 {:change-index change-index :change-id change-id}))
+      {:kind :scoped-change
+       :id change-id
+       :intent-index change-index
+       :files files
+       :forms forms
+       :from from
+       :to to
+       :expect-count (:matches expectation)
+       :each-form (:each-form expectation)
+       :each-file (:each-file expectation)})))
+
+(defn- validate-changes!
+  [changes]
+  (when-not (and (vector? changes) (seq changes))
+    (refuse! :invalid-changes "Spec :changes must be a non-empty vector"))
+  (let [validated (mapv validate-change! changes (range))
+        ids (keep :id validated)
+        duplicate-id (first (for [[id occurrences] (frequencies ids)
+                                  :when (> occurrences 1)]
+                              id))]
+    (when duplicate-id
+      (refuse! :duplicate-change-id
+               (str "Duplicate change id: " duplicate-id)
+               {:change-id duplicate-id}))
+    validated))
+
 (defn- validate-aggregate-expectation!
   [expectation]
   (when-not (map? expectation)
@@ -195,6 +317,35 @@
                {:field field :actual value})))
   expectation)
 
+(defn- validate-change-aggregate-expectation!
+  [expectation]
+  (when-not (map? expectation)
+    (refuse! :invalid-transaction-expectation
+             "Spec :expect must be a map"
+             {:expected-fields change-aggregate-expectation-keys}))
+  (let [unknown (vec (sort (remove change-aggregate-expectation-keys
+                                   (keys expectation))))
+        missing (vec (sort (remove #(contains? expectation %)
+                                   change-aggregate-expectation-keys)))]
+    (when (seq unknown)
+      (refuse! :invalid-transaction-expectation
+               (str "Unknown transaction expectation fields: "
+                    (str/join ", " unknown))
+               {:unknown unknown}))
+    (when (seq missing)
+      (refuse! :invalid-transaction-expectation
+               (str "Missing transaction expectation fields: "
+                    (str/join ", " missing))
+               {:missing missing})))
+  (doseq [[field value] expectation]
+    (when-not (positive-integer? value)
+      (refuse! :invalid-transaction-expectation
+               (str field " must be a positive integer")
+               {:field field :actual value})))
+  {:intent-count (:changes expectation)
+   :edit-count (:edits expectation)
+   :changed-file-count (:files expectation)})
+
 (defn- validate-spec!
   [spec]
   (when-not (map? spec)
@@ -205,10 +356,22 @@
                (str "Unknown transaction arguments: "
                     (str/join ", " unknown))
                {:unknown unknown})))
-  (when-not (and (vector? (:intents spec)) (seq (:intents spec)))
-    (refuse! :invalid-intents "Spec :intents must be a non-empty vector"))
-  {:intents (mapv validate-intent! (:intents spec) (range))
-   :expect (validate-aggregate-expectation! (:expect spec))})
+  (let [has-intents? (contains? spec :intents)
+        has-changes? (contains? spec :changes)]
+    (when (and has-intents? has-changes?)
+      (refuse! :mixed-transaction-modes
+               "Use either :intents or :changes, not both"))
+    (if has-changes?
+      {:mode :changes
+       :intents (validate-changes! (:changes spec))
+       :expect (validate-change-aggregate-expectation! (:expect spec))}
+      (do
+        (when-not (and (vector? (:intents spec)) (seq (:intents spec)))
+          (refuse! :invalid-intents
+                   "Spec :intents must be a non-empty vector"))
+        {:mode :intents
+         :intents (mapv validate-intent! (:intents spec) (range))
+         :expect (validate-aggregate-expectation! (:expect spec))}))))
 
 (defn- ordered-scoped-files
   [intents]
@@ -217,18 +380,58 @@
           []
           (mapcat :files intents)))
 
+(defn- scoped-owner-records!
+  [source file {:keys [forms intent-index id]}]
+  (when forms
+    (let [records (outline/top-level-form-records file source)
+          by-name (group-by :name records)]
+      (mapv
+        (fn [form-name]
+          (let [matches (get by-name form-name [])]
+            (when-not (= 1 (count matches))
+              (refuse! :change-owner-mismatch
+                       (str "Change owner " form-name " in " file
+                            " must resolve exactly once, found "
+                            (count matches))
+                       {:change-index intent-index
+                        :change-id id
+                        :file file
+                        :owner form-name
+                        :actual-count (count matches)
+                        :candidates (mapv #(select-keys %
+                                                        [:type :name :platforms
+                                                         :line :end-line])
+                                          matches)}))
+            (first matches)))
+        forms))))
+
+(defn- containing-owner
+  [owner-records candidate-node]
+  (when owner-records
+    (let [{:keys [row end-row]} (meta candidate-node)]
+      (some (fn [{:keys [line end-line] :as owner}]
+              (when (and row end-row line end-line
+                         (<= line row)
+                         (<= end-row end-line))
+                owner))
+            owner-records))))
+
 (defn- matching-edits
-  [source file {:keys [intent-index from to]}]
-  (let [root (z/of-string source {:track-position? true})]
+  [source file {:keys [intent-index from to forms] :as intent}]
+  (let [root (z/of-string source {:track-position? true})
+        owner-records (scoped-owner-records! source file intent)]
     (->> (zipper-locations root)
          (map-indexed vector)
          (keep (fn [[preorder candidate]]
-                 (let [candidate-node (z/node candidate)]
-                   (when (= (:fingerprint from)
-                            (lossless-node-fingerprint candidate-node))
+                 (let [candidate-node (z/node candidate)
+                       owner (containing-owner owner-records candidate-node)]
+                   (when (and (= (:fingerprint from)
+                                 (lossless-node-fingerprint candidate-node))
+                              (or (nil? forms) owner))
                      (let [{:keys [row end-row]} (meta candidate-node)
                            size (node-size candidate-node)]
                        {:intent-index intent-index
+                        :owner (:name owner)
                         :file file
                         :address {:preorder preorder}
                         :path (location-path candidate)
@@ -245,27 +448,65 @@
                         [file (matching-edits (get sources file) file intent)])
                       (:files intent))
         edits (vec (mapcat second by-file))
-        actual-count (count edits)]
+        actual-count (count edits)
+        per-file-counts (into {} (map (fn [[file matches]]
+                                        [file (count matches)]))
+                              by-file)
+        per-form-counts
+        (when (:forms intent)
+          (into {}
+                (map (fn [[file matches]]
+                       [file
+                        (into {}
+                              (map (fn [form-name]
+                                     [form-name
+                                      (count (filter #(= form-name (:owner %))
+                                                     matches))])
+                                   (:forms intent)))])
+                     by-file)))]
     (when-not (= (:expect-count intent) actual-count)
       (refuse! :expect-count-mismatch
                (str "Intent " (:intent-index intent) " expected "
                     (:expect-count intent) " matches, found " actual-count)
                {:intent-index (:intent-index intent)
+                :change-id (:id intent)
                 :expected-count (:expect-count intent)
                 :actual-count actual-count
-                :per-file-counts (into {} (map (fn [[file matches]]
-                                                 [file (count matches)]))
-                                       by-file)}))
-    {:intent-index (:intent-index intent)
-     :files (:files intent)
-     :from (get-in intent [:from :source])
-     :to (get-in intent [:to :source])
-     :expected-count (:expect-count intent)
-     :match-count actual-count
-     :per-file-counts (into {} (map (fn [[file matches]]
-                                      [file (count matches)]))
-                            by-file)
-     :edits edits}))
+                :per-file-counts per-file-counts}))
+    (when (and (:each-file intent)
+               (some #(not= (:each-file intent) %)
+                     (vals per-file-counts)))
+      (refuse! :change-distribution-mismatch
+               "Change matches do not satisfy :each-file"
+               {:change-index (:intent-index intent)
+                :change-id (:id intent)
+                :distribution :each-file
+                :expected (:each-file intent)
+                :actual per-file-counts}))
+    (when (and (:each-form intent)
+               (some #(not= (:each-form intent) %)
+                     (mapcat vals (vals per-form-counts))))
+      (refuse! :change-distribution-mismatch
+               "Change matches do not satisfy :each-form"
+               {:change-index (:intent-index intent)
+                :change-id (:id intent)
+                :distribution :each-form
+                :expected (:each-form intent)
+                :actual per-form-counts}))
+    (cond->
+      {:intent-index (:intent-index intent)
+       :files (:files intent)
+       :from (get-in intent [:from :source])
+       :to (get-in intent [:to :source])
+       :expected-count (:expect-count intent)
+       :match-count actual-count
+       :per-file-counts per-file-counts
+       :edits edits}
+      (= :scoped-change (:kind intent))
+      (assoc :kind :scoped-change
+             :id (:id intent)
+             :forms (:forms intent)
+             :per-form-counts per-form-counts))))
 
 (defn- overlap?
   [left right]
@@ -366,7 +607,7 @@
 
 (defn- compile-transaction*
   [sources spec]
-  (let [{:keys [intents expect]} (validate-spec! spec)
+  (let [{:keys [mode intents expect]} (validate-spec! spec)
         files (ordered-scoped-files intents)
         _ (doseq [file files]
             (validate-complete-source! file (get sources file) :invalid-source))
@@ -382,19 +623,23 @@
       (refuse! :transaction-expectation-mismatch
                "Compiled transaction does not match aggregate expectations"
                {:expected expect :actual actual}))
-    {:ok true
-     :operation :change
-     :transaction-version transaction-version
-     :intent-count (:intent-count actual)
-     :match-count (:edit-count actual)
-     :changed-file-count (:changed-file-count actual)
-     :intents (mapv #(dissoc % :edits) compiled-intents)
-     :files (mapv #(dissoc % :result-source :diff) compiled-files)
-     :diff (apply str (keep :diff compiled-files))
-     :original-sources (select-keys sources files)
-     :future-sources (into {} (map (juxt :file :result-source) compiled-files))
-     :validated {:whole-files-parsed true
-                 :file-count (count compiled-files)}}))
+    (cond->
+      {:ok true
+       :operation :change
+       :transaction-version transaction-version
+       :intent-count (:intent-count actual)
+       :match-count (:edit-count actual)
+       :changed-file-count (:changed-file-count actual)
+       :intents (mapv #(dissoc % :edits) compiled-intents)
+       :files (mapv #(dissoc % :result-source :diff) compiled-files)
+       :diff (apply str (keep :diff compiled-files))
+       :original-sources (select-keys sources files)
+       :future-sources (into {} (map (juxt :file :result-source) compiled-files))
+       :validated {:whole-files-parsed true
+                   :file-count (count compiled-files)}}
+      (= :changes mode)
+      (assoc :change-count (:intent-count actual)
+             :changes (mapv #(dissoc % :edits) compiled-intents)))))
 
 (defn compile-transaction
   "Compile explicit exact structural intents against an in-memory file map.
@@ -412,8 +657,8 @@
 
 (defn- spec-files
   [spec]
-  (->> (:intents spec)
-       (mapcat :files)
+  (->> (or (:intents spec) (:changes spec))
+       (mapcat (if (:changes spec) :in :files))
        distinct
        vec))
 
@@ -429,13 +674,18 @@
 
 (defn- canonicalize-spec
   [spec]
-  (update spec :intents
-          (fn [intents]
-            (when intents
-              (mapv #(update % :files
-                             (fn [files]
-                               (when files (mapv canonical-file files))))
-                    intents)))))
+  (cond-> spec
+    (:intents spec)
+    (update :intents
+            (fn [intents]
+              (mapv #(update % :files (partial mapv canonical-file))
+                    intents)))
+
+    (:changes spec)
+    (update :changes
+            (fn [changes]
+              (mapv #(update % :in (partial mapv canonical-file))
+                    changes)))))
 
 (defn- read-sources
   [files]
@@ -874,11 +1124,13 @@
                   (let [published (edn/read-string (slurp receipt-path))]
                     (validate-receipt! published)
                     (merge commit
-                           {:receipt-file receipt-path
-                            :receipt-hash (:receipt-hash receipt)
-                            :intent-count (:intent-count compiled)
-                            :match-count (:match-count compiled)
-                            :inverse (:inverse receipt)}))
+                           (cond-> {:receipt-file receipt-path
+                                    :receipt-hash (:receipt-hash receipt)
+                                    :intent-count (:intent-count compiled)
+                                    :match-count (:match-count compiled)
+                                    :inverse (:inverse receipt)}
+                             (:change-count compiled)
+                             (assoc :change-count (:change-count compiled)))))
                   (catch Exception publish-error
                     (let [inverse (compile-inverse
                                     receipt (:future-sources compiled))

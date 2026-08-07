@@ -10,6 +10,20 @@ is cut.
 
 ### Added
 
+- Experimental persistent MCP entrance `apply_clojure_changes`. One typed call
+  compiles exact owner-scoped replacements into the existing failure-atomic
+  transaction kernel, rejects paths outside the configured project root,
+  returns terminal read-back hashes, and publishes an inverse receipt. The
+  loopback Streamable HTTP server includes health, readiness, full local
+  telemetry, and an embedded development nREPL. Stdio remains a protocol smoke
+  entrance. `make install-mcp-codex-dev` enables the branch-local experiment;
+  stable `make install` does not.
+- MCP-aware benchmark evidence for the frozen six-edit, two-file decision.
+  Four assisted runs were exact at a 24.530-second median versus 43.190 seconds
+  for native and 36.396 seconds for the current CLI-and-skill route. Four
+  metadata-only runs produced zero MCP calls. A one-sentence project rule
+  produced 4 / 4 adoption at a 27.432-second median.
+
 - `:cat :forms '[a b c]'` reads several known top-level owners from one parsed
   file snapshot and returns their exact sources in requested order. The batch
   rejects invalid or duplicate names and returns no partial source when any
@@ -39,6 +53,13 @@ is cut.
   forward result hash is stale. Receipts use semantic child paths, preserve
   literal `#()` and comments, and refuse corrupt paths instead of falling back
   to unstable preorder coordinates.
+- Scoped `:changes` compile explicit `:in` files, optional named `:forms`, exact
+  structural `:find`, and `:do [:replace SOURCE]` into the same atomic
+  transaction engine. Per-change `:matches`, `:each-form`, and `:each-file`
+  guards prove both total cardinality and distribution. Aggregate `:changes`,
+  `:edits`, and `:files` guards close the complete manifest. Named owners must
+  resolve exactly once, and any mismatch refuses before writing. Legacy exact
+  `:intents` remain accepted but cannot be mixed with scoped `:changes`.
 - `:match-form`, the preferred name for structural pattern search. The existing
   `:find-subform` and `:grep-form` spellings remain compatibility aliases.
   Supplying the historically guessed `:pattern` argument now recommends

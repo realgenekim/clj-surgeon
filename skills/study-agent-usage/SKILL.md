@@ -6,7 +6,9 @@ description: Analyze recent Codex and Claude Code history when Gene asks to revi
 # Study Agent Usage
 
 Produce an anonymized, evidence-backed comparison from one bounded receipt.
-Do not rediscover either provider's history format by hand.
+Do not rediscover either provider's history format by hand. The collector
+classifies `:change` as planning and `:change!` / `:undo-change!` as structural
+application, including Babashka launchers with options before `-m`.
 
 ## Collect once
 
@@ -43,6 +45,12 @@ fallbacks, and duplicated discovery without reading raw commands.
 Stop on nonzero exit or a receipt status other than `ok`. Do not replace a
 missing cutoff with a guessed date; supply `--since` from the prior study.
 
+If one receipt-named transcript region proves that a real operation is absent
+from the receipt, treat that as an analysis-tool field failure. Add a self-test,
+repair the collector, and rerun the identical bounds once. Discard the
+superseded receipt; never combine its counts with the corrected receipt. State
+the instrumentation repair in the study.
+
 ## Interpret adversarially
 
 Separate these stages:
@@ -55,6 +63,17 @@ Do not treat a mention, commentary promise, skill-list entry, or SKILL.md read
 as a binary call. Do not treat mechanical tool success as semantic
 correctness. Keep native Write as the expected control for new files and
 prose-heavy work.
+
+Assess breakthroughs as a ladder:
+
+```text
+capability implemented -> mechanism verified -> self-hosted ->
+fresh caller succeeds -> controlled efficiency gate passes
+```
+
+Do not promote a self-hosting demonstration into an efficiency claim. Compare
+complete task-turn wall, action count, context/output, correctness, and recovery
+against the repository's explicit acceptance gate and a credible counterfactual.
 
 Read narrow transcript regions only when the aggregate receipt cannot explain
 a route, recovery, or failure. Never quote private project context. Replace
@@ -79,6 +98,7 @@ baseline. Include:
 - dominant route-phase sequences and the task boundary they served;
 - direct tool wall versus complete task-turn wall;
 - successful behavior, failures, and counterfactual limits;
+- progress against the repository's explicit product goals and acceptance gate;
 - the smallest falsifiable improvement;
 - the receipt's exact `next_marker` HTML comment.
 
