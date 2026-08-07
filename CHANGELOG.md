@@ -16,6 +16,19 @@ is cut.
   owner is missing or ambiguous. Combined source over 65,536 characters also
   refuses without partial source. One optional `:platform` disambiguates the
   complete CLJC batch.
+- `:cat :spec-file -` reads known owners across files as one guarded manifest.
+  It preserves requested file and form order, reads each physical file once,
+  and requires exact `:file-count` and `:form-count` values. Unknown keys,
+  duplicate physical paths,
+  count mismatches, selection failures, and excessive combined output refuse
+  the complete transaction without partial source. Each successful file result
+  includes its complete-snapshot hash.
+- `:cat :spec-file - :format :semantic` emits a transcript-bounded canonical
+  behavior view with one file hash and short header per form. It removes
+  comments and layout and may expand reader shorthand; the default EDN format
+  remains the exact lexical-source contract. Help and both agent skills now
+  teach a noninteractive `printf | clj-surgeon` stdin route so callers do not
+  invoke `:spec-file -` and wait for later input.
 - `:change`, `:change!`, and `:undo-change!` for one heterogeneous exact intent
   transaction. A spec declares explicit file scopes, losslessly exact
   `:from` / `:to` forms, per-intent match counts, and aggregate intent, edit,

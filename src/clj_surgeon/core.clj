@@ -722,19 +722,27 @@
                        :examples  ["clj-surgeon :op :ls :file src/my/ns.clj"]
                        :category  :read}
 
-    :show-form        {:handler  show-form/show-file
-                       :desc     "Show one top-level form, or several named forms from one snapshot"
+    :show-form        {:handler  show-form/show
+                       :desc     "Show exact top-level forms from one file snapshot or one guarded cross-file manifest"
                        :aliases  [:cat]
                        :args     {:file     {:required true :desc "Clojure source file"}
                                   :form     {:desc "Unqualified top-level name; supply exactly one selector"}
                                   :forms    {:desc "Nonempty EDN vector of up to 50 unique top-level names; supply exactly one selector"}
                                   :line     {:desc "Positive one-based line; supply exactly one selector"}
                                   :contains {:desc "Nonblank case-sensitive literal text; supply exactly one selector"}
-                                  :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}}
+                                  :platform {:desc "Keyword platform to disambiguate CLJC forms, such as :clj or :cljs"}
+                                  :spec     {:desc "Inline cross-file EDN read manifest; compatibility entrance for small specs"}
+                                  :spec-file {:desc "Cross-file EDN read manifest path, or - for stdin (preferred)"}
+                                  :format   {:desc "Cross-file output: :edn (default exact source) or :semantic (canonical compact data without comments/layout)"}}
                        :workflow ["Supply exactly one selector: :form, :forms, :line, or :contains."
                                   "When several owner names in one file are known, use :forms once; it preserves requested order and reads one source snapshot."
+                                  "When owners span files, use :spec-file - with :reads plus exact :expect file/form counts. Each physical file is read once."
+                                  "Attach stdin in the same shell action: printf '%s\n' 'MANIFEST' | clj-surgeon :op :cat :spec-file -. Never invoke :spec-file - and wait to type the document later."
+                                  "For a large behavior or architecture read, add :format :semantic. It prints compact canonical Clojure data with file hashes; comments and layout are omitted and reader shorthand may expand."
+                                  "Keep the default :edn format when exact lexical source, comments, layout, or reader spelling matters."
+                                  "Do not combine :spec or :spec-file with direct read arguments."
                                   "Batch reads are all-or-nothing: a missing, ambiguous, invalid, or duplicate name returns no partial source."
-                                  "Combined batch source over 65,536 characters refuses without returning partial source."
+                                  "Cross-file manifests reject duplicate physical paths and unknown keys. Combined source over the declared limit, or the hard 65,536-character cap, refuses without partial source."
                                   "Use :cat instead of reconstructing a sed range when a top-level name or containing line is known."
                                   "Make :cat the first source inspection; do not run :ls solely as a preflight."
                                   "With distinctive text but no form name, use literal :contains to return its one enclosing form in the same command; keyword-shaped values such as :finish remain literal text."
@@ -744,6 +752,7 @@
                                   "On ambiguity, stop and refine the selector; the command never chooses the first match."]
                        :examples ["clj-surgeon :op :cat :file src/my/ns.clj :form transition!"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :forms '[transition! validate-state]'"
+                                  "printf '%s\n' '{:reads [{:file \"src/a.clj\" :forms [start stop]} {:file \"src/b.clj\" :forms [route]}] :expect {:file-count 2 :form-count 3}}' | clj-surgeon :op :cat :spec-file - :format :semantic"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :line 1134"
                                   "clj-surgeon :op :cat :file src/my/ns.clj :contains :finish"
                                   "clj-surgeon :op :cat :file src/my/ns.cljc :form transition! :platform :cljs"]
@@ -1028,7 +1037,7 @@
     result))
 
 (defn parse-spec-document
-  "Parse exactly one EDN document from a transaction spec source."
+  "Parse exactly one EDN document from a spec source."
   [source source-label]
   (try
     (let [reader (java.io.PushbackReader. (java.io.StringReader. source))
@@ -1036,18 +1045,28 @@
           value (edn/read {:eof eof} reader)
           trailing (edn/read {:eof eof} reader)]
       (when (identical? eof value)
-        (throw (ex-info "Transaction spec is empty" {})))
+        (throw (ex-info "Spec is empty" {})))
       (when-not (identical? eof trailing)
-        (throw (ex-info "Transaction spec must contain exactly one EDN form" {})))
+        (throw (ex-info "Spec must contain exactly one EDN form" {})))
       value)
     (catch Exception exception
-      (throw (ex-info (str "Invalid transaction spec from " source-label
+      (throw (ex-info (str "Invalid spec from " source-label
                            ": " (.getMessage exception))
                       {:error-type :invalid-spec-document
                        :spec-source source-label}
                       exception)))))
 
-(defn- load-change-spec
+(defn- read-stdin-spec
+  []
+  (if (.ready ^java.io.Reader *in*)
+    (slurp *in*)
+    (throw
+      (ex-info
+        "No spec document is attached to stdin"
+        {:error-type :missing-spec-stdin
+         :remedy "Pipe the manifest in the same shell action: printf '%s\\n' 'MANIFEST' | clj-surgeon :op OP :spec-file -"}))))
+
+(defn- load-spec-input
   [{:keys [spec spec-file] :as opts}]
   (let [inline? (contains? opts :spec)
         file? (contains? opts :spec-file)]
@@ -1062,13 +1081,15 @@
       file?
       (let [source-label (if (= "-" spec-file) "stdin" spec-file)
             source (try
-                     (if (= "-" spec-file) (slurp *in*) (slurp spec-file))
+                     (if (= "-" spec-file) (read-stdin-spec) (slurp spec-file))
                      (catch Exception exception
-                       (throw (ex-info (str "Cannot read transaction spec from " source-label
-                                            ": " (.getMessage exception))
-                                       {:error-type :invalid-spec-source
-                                        :spec-source source-label}
-                                       exception))))]
+                       (if (:error-type (ex-data exception))
+                         (throw exception)
+                         (throw (ex-info (str "Cannot read spec from " source-label
+                                              ": " (.getMessage exception))
+                                         {:error-type :invalid-spec-source
+                                          :spec-source source-label}
+                                         exception)))))]
         (-> opts
             (dissoc :spec-file)
             (assoc :spec (parse-spec-document source source-label))))
@@ -1082,14 +1103,22 @@
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
     (forms/init-from-file! anchor))
   (let [canonical (resolve-op op)
-        opts (if (#{:change :change!} canonical)
-               (load-change-spec opts)
+        opts (if (or (#{:change :change!} canonical)
+                     (and (= :show-form canonical)
+                          (or (contains? opts :spec)
+                              (contains? opts :spec-file))))
+               (load-spec-input opts)
                opts)
         op-def (get ops-registry canonical)
         result (if op-def
                  (let [missing (->> (:args op-def)
                                     (keep (fn [[arg {:keys [required]}]]
-                                            (when (and required (not (contains? opts arg))) arg)))
+                                            (when (and required
+                                                       (not (contains? opts arg))
+                                                       (not (and (= canonical :show-form)
+                                                                 (= arg :file)
+                                                                 (contains? opts :spec))))
+                                              arg)))
                                     vec)]
                    (if (seq missing)
                      (cond-> {:error (str "Missing required arguments: "
@@ -1185,6 +1214,8 @@
       (when (and (map? result) (:error result))
         (System/exit 1)))
     (catch Exception e
-      (pp/pprint {:error (.getMessage e)
-                  :error-type (or (:error-type (ex-data e)) :invalid-arguments)})
+      (pp/pprint (merge (or (ex-data e) {})
+                        {:error (.getMessage e)
+                         :error-type (or (:error-type (ex-data e))
+                                         :invalid-arguments)}))
       (System/exit 1))))

@@ -4,11 +4,19 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
-   [clojure.string :as str]))
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [rewrite-clj.zip :as z]))
 
 (def ^:private max-candidate-locations 10)
 (def ^:private max-batch-forms 50)
+(def ^:private max-batch-files 20)
 (def ^:private max-batch-source-chars 65536)
+
+(defn read-source
+  "Read one source snapshot. Public so the I/O contract can be instrumented."
+  [file]
+  (slurp file))
 
 (defn- shell-quote
   [value]
@@ -414,10 +422,292 @@
                (contains? opts :line) (update :line normalize-cli-line)
                true (assoc :project-aliases @forms/project-aliases))]
     (try
-      (select-form file (slurp file) opts)
+      (select-form file (read-source file) opts)
       (catch Exception e
         {:operation :show-form
          :file file
          :selector (normalized-selector opts)
          :error (str "Cannot read source file: " (.getMessage e))
          :error-type :file-read-failed}))))
+
+(def ^:private read-spec-keys #{:reads :expect :limits})
+(def ^:private read-entry-keys #{:file :forms :platform})
+(def ^:private read-expect-keys #{:file-count :form-count})
+(def ^:private read-limit-keys #{:source-chars})
+(def ^:private direct-read-keys #{:file :form :forms :line :contains :platform})
+(def ^:private supported-output-formats #{:edn :semantic})
+
+(defn- unknown-keys [value allowed]
+  (when (map? value)
+    (->> (keys value) (remove allowed) (sort-by pr-str) vec)))
+
+(defn- spec-error [error-type message fields]
+  (error-result {:operation :show-form
+                 :selector {:spec :cross-file}}
+                error-type message fields))
+
+(defn- validate-read-spec
+  [spec]
+  (let [reads (:reads spec)
+        expect (:expect spec)
+        limits (:limits spec)
+        root-unknown (unknown-keys spec read-spec-keys)
+        expect-unknown (unknown-keys expect read-expect-keys)
+        limit-unknown (unknown-keys limits read-limit-keys)
+        entry-failures
+        (when (vector? reads)
+          (->> reads
+               (map-indexed
+                 (fn [index read]
+                   (let [unknown (unknown-keys read read-entry-keys)]
+                     (cond
+                       (not (map? read))
+                       {:index index :error-type :invalid-read-entry}
+
+                       (seq unknown)
+                       {:index index :error-type :unknown-read-entry-keys
+                        :unknown-keys unknown}
+
+                       (not (and (string? (:file read))
+                                 (not (str/blank? (:file read)))))
+                       {:index index :error-type :invalid-read-file
+                        :file (:file read)}
+
+                       (not (vector? (:forms read)))
+                       {:index index :error-type :invalid-read-forms
+                        :file (:file read)}
+
+                       :else
+                       (let [probe (select-form (:file read) "(ns probe)"
+                                                (select-keys read [:forms :platform]))]
+                         (when (#{:invalid-forms-selector
+                                  :duplicate-form-selectors
+                                  :invalid-platform}
+                                (:error-type probe))
+                           {:index index :file (:file read)
+                            :error-type (:error-type probe)
+                            :error (:error probe)}))))))
+               (remove nil?)
+               vec))
+        canonical-files
+        (when (and (vector? reads) (empty? entry-failures))
+          (mapv #(-> (:file %) io/file .getCanonicalPath) reads))
+        duplicates
+        (when canonical-files
+          (->> canonical-files frequencies
+               (keep (fn [[file count]] (when (> count 1) file)))
+               sort vec))
+        requested-file-count (when (vector? reads) (count reads))
+        requested-form-count (when (vector? reads)
+                               (reduce + 0 (map #(count (:forms %)) reads)))
+        source-limit (get limits :source-chars max-batch-source-chars)]
+    (cond
+      (not (map? spec))
+      (spec-error :invalid-read-spec "Read spec must be an EDN map" {})
+
+      (seq root-unknown)
+      (spec-error :unknown-read-spec-keys "Read spec contains unknown keys"
+                  {:unknown-keys root-unknown})
+
+      (or (not (vector? reads)) (empty? reads) (> (count reads) max-batch-files))
+      (spec-error :invalid-reads
+                  (str ":reads must be a nonempty vector of at most "
+                       max-batch-files " file reads")
+                  {:max-file-count max-batch-files})
+
+      (seq entry-failures)
+      (spec-error :invalid-read-entries "One or more file reads are invalid"
+                  {:failure-count (count entry-failures)
+                   :failures entry-failures})
+
+      (seq duplicates)
+      (spec-error :duplicate-read-files
+                  "Each physical file may appear only once in a read transaction"
+                  {:duplicate-files duplicates})
+
+      (not (map? expect))
+      (spec-error :invalid-read-expectation
+                  ":expect must declare exact :file-count and :form-count" {})
+
+      (seq expect-unknown)
+      (spec-error :unknown-read-expectation-keys
+                  ":expect contains unknown keys"
+                  {:unknown-keys expect-unknown})
+
+      (not= #{:file-count :form-count} (set (keys expect)))
+      (spec-error :invalid-read-expectation
+                  ":expect must declare exactly :file-count and :form-count" {})
+
+      (or (not (pos-int? (:file-count expect)))
+          (not (pos-int? (:form-count expect))))
+      (spec-error :invalid-read-expectation
+                  "Expected file and form counts must be positive integers" {})
+
+      (or (not= requested-file-count (:file-count expect))
+          (not= requested-form-count (:form-count expect)))
+      (spec-error :read-expectation-mismatch
+                  "Declared read counts do not match the manifest"
+                  {:expected expect
+                   :actual {:file-count requested-file-count
+                            :form-count requested-form-count}})
+
+      (and (contains? spec :limits) (not (map? limits)))
+      (spec-error :invalid-read-limits ":limits must be an EDN map" {})
+
+      (seq limit-unknown)
+      (spec-error :unknown-read-limit-keys ":limits contains unknown keys"
+                  {:unknown-keys limit-unknown})
+
+      (not (and (pos-int? source-limit)
+                (<= source-limit max-batch-source-chars)))
+      (spec-error :invalid-read-source-limit
+                  (str ":limits :source-chars must be a positive integer no greater than "
+                       max-batch-source-chars)
+                  {:source-char-limit max-batch-source-chars})
+
+      :else
+      {:reads reads
+       :expect expect
+       :source-limit source-limit})))
+
+(defn show-files
+  "Read exact named forms across several files as one all-or-nothing result."
+  [spec]
+  (let [validated (validate-read-spec spec)]
+    (if (:error validated)
+      validated
+      (let [{:keys [reads expect source-limit]} validated
+            results (mapv (fn [{:keys [file] :as read}]
+                            (try
+                              (forms/init-from-file! file)
+                              (show-file read)
+                              (catch Exception exception
+                                {:operation :show-form
+                                 :file file
+                                 :selector (select-keys read [:forms :platform])
+                                 :error (str "Cannot initialize source file: "
+                                             (.getMessage exception))
+                                 :error-type :file-read-failed})))
+                          reads)
+            failures (->> results
+                          (map-indexed
+                            (fn [index result]
+                              (when (:error result)
+                                (merge {:index index :file (:file result)}
+                                       (select-keys result
+                                                    [:error :error-type
+                                                     :requested-form-count
+                                                     :resolved-form-count
+                                                     :failure-count
+                                                     :failures])))))
+                          (remove nil?) vec)
+            source-char-count (reduce + 0 (keep :source-char-count results))]
+        (cond
+          (seq failures)
+          (spec-error :read-transaction-failed
+                      "One or more file reads failed; no source is returned"
+                      {:expected expect
+                       :failure-count (count failures)
+                       :failures failures})
+
+          (> source-char-count source-limit)
+          (spec-error :read-source-limit-exceeded
+                      "Combined cross-file source exceeds the declared limit"
+                      {:expected expect
+                       :source-char-count source-char-count
+                       :source-char-limit source-limit
+                       :remedy "Request fewer or smaller forms"})
+
+          :else
+          {:operation :show-form
+           :selector {:spec :cross-file}
+           :file-count (:file-count expect)
+           :form-count (:form-count expect)
+           :source-char-count source-char-count
+           :source-char-limit source-limit
+           :files results})))))
+
+(defn- semantic-form
+  [form]
+  (let [semantic-source (-> (:source form) z/of-string z/sexpr pr-str)]
+    {:header {:name (:name form)
+              :line (:line form)
+              :end-line (:end-line form)}
+     :source semantic-source}))
+
+(defn- semantic-file
+  [index file-result]
+  {:header {:index index
+            :file (:file file-result)
+            :source-hash (:source-hash file-result)
+            :form-count (:form-count file-result)}
+   :forms (mapv semantic-form (:forms file-result))})
+
+(defn render-semantic
+  "Render a successful cross-file result as compact canonical Clojure data.
+   Comments and layout are omitted; the complete-file hashes fence the source."
+  [result]
+  (try
+    (let [files (mapv semantic-file (range 1 (inc (:file-count result)))
+                      (:files result))
+          semantic-char-count
+          (reduce + 0 (for [file files form (:forms file)]
+                        (count (:source form))))
+          header {:version 1
+                  :file-count (:file-count result)
+                  :form-count (:form-count result)
+                  :source-char-count (:source-char-count result)
+                  :semantic-char-count semantic-char-count}
+          output
+          (with-out-str
+            (println "CLJ-SURGEON-SEMANTIC" (pr-str header))
+            (doseq [file files]
+              (println "FILE"
+                       (get-in file [:header :index])
+                       (pr-str (get-in file [:header :file]))
+                       (get-in file [:header :source-hash]))
+              (doseq [[index form] (map-indexed vector (:forms file))]
+                (println "FORM"
+                         (inc index)
+                         (pr-str (get-in form [:header :name]))
+                         (str (get-in form [:header :line]) ":"
+                              (get-in form [:header :end-line])))
+                (println (:source form)))))]
+      (if (> (count output) max-batch-source-chars)
+        (spec-error :semantic-output-limit-exceeded
+                    "Semantic read output exceeds the safe transcript limit"
+                    {:semantic-output-char-count (count output)
+                     :semantic-output-char-limit max-batch-source-chars
+                     :remedy "Request fewer forms"})
+        output))
+    (catch Exception exception
+      (spec-error :semantic-render-failed
+                  "A selected form cannot be represented as canonical Clojure data"
+                  {:reason (.getMessage exception)}))))
+
+(defn show
+  "Dispatch one-file selectors or one cross-file read manifest."
+  [{:keys [spec format] :as opts}]
+  (if (contains? opts :spec)
+    (let [conflicts (->> direct-read-keys (filter #(contains? opts %)) sort vec)]
+      (cond
+        (seq conflicts)
+        (spec-error :conflicting-read-inputs
+                    "Do not combine :spec or :spec-file with direct read arguments"
+                    {:conflicting-keys conflicts})
+
+        (and (contains? opts :format)
+             (not (supported-output-formats format)))
+        (spec-error :invalid-read-format
+                    ":format must be :edn or :semantic"
+                    {:format format :supported-formats (sort supported-output-formats)})
+
+        :else
+        (let [result (show-files spec)]
+          (if (and (= :semantic format) (not (:error result)))
+            (render-semantic result)
+            result))))
+    (if (contains? opts :format)
+      (spec-error :read-format-requires-spec
+                  ":format is available only with :spec or :spec-file" {})
+      (show-file opts))))

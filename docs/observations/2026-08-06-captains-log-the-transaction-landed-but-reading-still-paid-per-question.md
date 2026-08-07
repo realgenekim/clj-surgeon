@@ -359,6 +359,61 @@ An adversarial output test added one more boundary: combined batch source over
 65,536 characters refuses before returning any form record. Faster must not
 mean faster context-window exhaustion.
 
+### A bounded caller test found the real win boundary
+
+The first clean Mothership replay was not a useful speed test. An open-ended
+log diagnosis let the caller load broad architecture guidance, enumerate the
+repository, inspect live processes, aggregate a changing log, and repeatedly
+confirm its hypothesis. The first turn took 474.59 seconds. The complete
+three-turn exchange took 632.47 seconds. Only two successful Surgeon source
+reads occurred in the first turn. The task measured forensic stopping behavior,
+not the named-form read surface.
+
+A replacement task froze one repository commit and asked two bare Codex callers
+the same deterministic question. Each caller had to explain one reader protocol
+from named forms in `source_reader.clj`. The temporary native environment had no
+personal skills or global Clojure instructions. The temporary Surgeon
+environment added only the installed clj-surgeon skill. Both were read-only and
+ephemeral.
+
+The pilot looked like the desired product win:
+
+| Measure | Native control | `:cat :forms` | Change |
+|---|---:|---:|---:|
+| Complete task wall | 73.64 s | 57.13 s | **−16.51 s (−22.4%)** |
+| Source-bearing actions | 4 | 1 | −3 |
+| Input tokens | 84,558 | 49,505 | −35,053 (−41.5%) |
+| Source output | 20,171 chars | 9,052 chars | −11,119 (−55.1%) |
+
+That task accidentally omitted two helper forms needed for the exact answer.
+The native caller's broad ranges included one helper anyway, while the
+structural caller correctly stayed inside the requested set. The pilot therefore
+had unequal evidence and could not be the keep result.
+
+The corrected task named every required helper and reversed run order:
+
+| Measure | Native control | `:cat :forms` | Change |
+|---|---:|---:|---:|
+| Complete task wall | 57.61 s | 57.18 s | −0.43 s (noise) |
+| Source-bearing actions | 3 | 1 | −2 |
+| Total command actions | 3 | 2, including skill load | −1 |
+| Input tokens | 63,146 | 50,227 | −12,919 (−20.5%) |
+| Source output | 12,159 chars | 10,600 chars | −1,559 (−12.8%) |
+| Answer correctness | complete | complete | tied |
+
+The corrected replication did not cross the 5–10 second wall-time gate.
+`:forms` reliably reduced source actions, source output, and input tokens. It
+did not reliably beat a competent native caller that combined location search
+and broad ranges into three actions. The 16.51-second pilot gain came from one
+additional native range-repair turn.
+
+This identifies the next large lever. The skill load consumes one action before
+the structural read, and same-file batching can remove only a few native actions.
+A cross-file read transaction can remove many more. A first-class tool surface
+could also make the structural call directly, without a separate skill-read
+action. Either experiment must beat the corrected native control by at least
+five seconds; lower token use alone is not the product claim.
+
 The proposed caller shape deliberately reuses the write-transaction model:
 
 ```clojure
@@ -385,3 +440,282 @@ confirm that four post-window wrong calls came from one outer action. Three
 repeated `/usr/bin/time` probes measured sequential reads, one-process reads,
 and startup components. `make study-agent-usage-self-test` verifies the
 collector and privacy contract after this document is written.
+
+## Cross-file `:cat` made the complete read declarative
+
+The next implementation kept the API small. It extended `:cat` instead of
+adding a batch command:
+
+```bash
+clj-surgeon :op :cat :spec-file - <<'EDN'
+{:reads [{:file "src/a.clj" :forms [start stop]}
+         {:file "src/b.clj" :forms [route]}]
+ :expect {:file-count 2 :form-count 3}
+ :limits {:source-chars 65536}}
+EDN
+```
+
+The transaction preserves file and form order, reads each distinct physical
+file once, and returns one complete-file hash per file. It refuses before
+returning partial source when the manifest has unknown keys, duplicate
+canonical paths, incorrect file or form counts, invalid selectors, missing or
+ambiguous forms, unreadable files, or excessive combined output.
+
+Permanent tests cover the pure and CLI contracts. They instrument source I/O,
+require exactly one read per file, test stdin and saved manifests, verify
+ordering and hashes, reject path aliases, and search every refusal recursively
+for leaked `:source` fields. The full repository gate passed 525 tests and
+4,430 assertions with zero failures. The stable installer copied the CLI and
+both agent skills after the test run.
+
+The first self-hosting call read four implementation forms from
+`show_form.clj` and `core.clj` in one command. A three-file Mothership call then
+read nine exact owners and returned the expected 6,982 source characters in
+0.7 seconds of direct tool wall. The mechanism worked.
+
+## A cold nine-form task exposed the fixed acquisition cost
+
+The first clean task asked for nine deterministic facts from nine named forms
+in three frozen Mothership files. Logs, broad search, edits, tests, and Git were
+out of scope. Both callers returned nine correct lines.
+
+| Measure | Native control | Cross-file `:cat` | Change |
+|---|---:|---:|---:|
+| Complete task wall | 35.39 s | 55.61 s | **+20.22 s (+57.1%)** |
+| Source actions | 1 | 1 | tied |
+| Skill-load actions | 0 | 1 | +1 |
+| Input tokens | 33,063 | 109,153 | +76,090 |
+| Output tokens | 1,233 | 1,483 | +250 |
+| Correct answers | 9 / 9 | 9 / 9 | tied |
+
+Native Codex generated a Ruby balanced-form extractor and read all nine owners
+in one source action. Surgeon also used one source action, but first read the
+90-line skill. That extra tool round repeated the large agent context and
+dominated the small task. The skill's byte count was not the main cost; the
+additional deliberation round was.
+
+This suggested a JVM-warmup model:
+
+```text
+total wall = fixed skill acquisition + repeated task cost + mistakes and rework
+```
+
+If Surgeon saved five seconds on every later task, a 20-second cold cost would
+break even near task four. If it saved only one second, break-even would move
+near task 20. A longer benchmark was necessary.
+
+## A resumed-turn warmup attempt was invalid and was discarded
+
+The first warmup design sent five sequential prompts to two resumed Codex
+sessions. Stage 1 was valid. On resume, the CLI process used the benchmark
+driver's working directory instead of the frozen Mothership directory. Both
+callers correctly reported that the relative source paths were absent in stage
+2. Native then returned the required nine refusal lines without reading source.
+Surgeon later recovered by using absolute paths. Those later walls did not
+measure the same work and are excluded.
+
+The failure also corrected the warmup analogy. The agent policy requires a
+skill read in every new user turn that triggers the skill. A sequence of five
+resumed prompts therefore pays skill acquisition five times. Skill warmup can
+be amortized across the multiple tool actions of one long user request, not
+automatically across separate user turns.
+
+## The valid five-times-larger task made the loss larger
+
+The replacement benchmark put all five sections in one user request. It named
+45 exact forms across the same three frozen files and required five headings
+with nine ordered answers each. Both callers ran concurrently, read-only, with
+the same prompt. The requested forms contained 58,569 source characters, below
+the transaction's 65,536-character guard.
+
+Both callers returned all five headings and all 45 numbered lines. Manual
+comparison against the exact form sources found both answers substantively
+correct. Surgeon was sometimes more explicit about branch conditions, but it
+did not change the correctness verdict.
+
+| Measure | Native control | Cross-file `:cat` | Change |
+|---|---:|---:|---:|
+| Complete task wall | 101.87 s | 145.33 s | **+43.46 s (+42.7%)** |
+| Total shell actions | 2 | 5 | +3 |
+| Successful source actions | 2 | 3 | +1 |
+| Command output | 87,836 chars | 113,952 chars | +26,116 (+29.7%) |
+| Input tokens | 87,716 | 206,270 | +118,554 (+135.2%) |
+| Cached input tokens | 63,488 | 160,512 | +97,024 |
+| Output tokens | 4,470 | 4,996 | +526 |
+| Reasoning-output tokens | 245 | 808 | +563 |
+| Correct ordered answers | 45 / 45 | 45 / 45 | tied |
+
+There was no crossover. The longer task amplified the disadvantage.
+
+### Why the transaction did not remain one call
+
+The exact Surgeon route was:
+
+```text
+read the skill
+    -> invoke `clj-surgeon :op :cat :spec-file -` without attached stdin
+       -> command waited and was interrupted with exit 130
+    -> pipe the complete 45-form manifest to `:cat`
+       -> transaction succeeded
+       -> result exceeded the agent transcript's useful visible window
+    -> reread the forms hidden at the end of the transcript
+    -> reread the final three hidden forms
+    -> answer
+```
+
+The tool accepted the complete source payload, but its EDN result repeated the
+operation, file, selector, platform, line, hash, and source-string envelope for
+every record. Escaped newlines and quotes expanded the representation further.
+The successful one-process result was therefore too large for the caller to
+consume as one visible result. Transaction success at the CLI boundary did not
+produce transaction success at the agent boundary.
+
+Native also crossed its first output boundary. Its generated Python extractor
+made one broad attempt, then one recovery read for forms hidden or missed near
+the end. It still needed only two actions and emitted 26,116 fewer command
+characters than Surgeon.
+
+The failed bare-stdin call is a separate adoption defect. The skill taught the
+shape but not the safest encoding for this tool environment. The agent invoked
+the command and waited for interactive input instead of attaching the manifest
+to the command. Its next attempt used `printf` successfully.
+
+## Corrected product thesis
+
+The unit of optimization is one model deliberation, not one process, file, or
+selector. A useful transaction must fit through every boundary:
+
+```text
+model intent
+    -> one tool action
+    -> one bounded visible result
+    -> enough evidence for the decision
+```
+
+Cross-file scheduling and one-snapshot semantics remain valuable. They did not
+clear the product keep gate because the visible representation and cold tool
+entrance erased those gains.
+
+The next experiments are ordered by expected wall-clock impact:
+
+1. Add an agent-compact result layout. Print each file hash once and each form
+   as a short header plus raw source. Do not repeat result maps or EDN-escape
+   complete source bodies. The 58,569-character payload must remain below the
+   caller's transcript boundary without a recovery read.
+2. Teach a noninteractive pipe as the canonical stdin spelling. The clean
+   caller must attach the document on its first attempt and must never wait for
+   interactive stdin.
+3. Test a tiny preloaded route card or a minimal typed MCP entrance. The model
+   should call the read transaction without a separate skill-loading action or
+   shell escaping. Keep the tool surface to `inspect`, `change`, and `refactor`
+   rather than exposing every CLI operation.
+4. Repeat the exact 45-form task. Keep the compact route only if it returns all
+   45 sources in one visible action, preserves both correctness and guards, and
+   beats the 101.87-second native control by at least five seconds.
+5. After the read gate passes, run one long mixed workload that inspects,
+   computes, changes, refuses one stale expectation, and verifies. Measure the
+   cumulative number of model deliberation rounds, not only shell calls.
+
+The ambitious target remains three cognitive transactions:
+
+```text
+inspect -> decide -> change and verify
+```
+
+The present result is a real negative result, not a reason to weaken the tests
+or lower the speed gate. Native `apply_patch` and generated shell programs are
+fearsome competitors. clj-surgeon becomes irresistible only when its stronger
+structural guarantees arrive with fewer model rounds and less visible output.
+
+## The first remediation crossed the five-second keep gate
+
+The benchmark failure immediately produced two product changes.
+
+First, a bare `:spec-file -` no longer waits indefinitely for later input. When
+no document is ready on stdin, the command refuses in about 0.36 seconds with
+`:missing-spec-stdin` and an executable `printf | clj-surgeon` remedy. This is a
+guard, not only documentation; the clean caller ignored the skill's explicit
+warning and made the bare call again.
+
+Second, cross-file `:cat` accepts `:format :semantic`. The default remains the
+exact lexical-source EDN contract. Semantic format instead prints each file
+hash once, a short name/range header per form, and one canonical Clojure value
+per form. It omits comments and layout and may expand shorthand such as `#()`.
+The tradeoff is explicit and appropriate for behavior and architecture reads.
+Malformed semantic data or output above 65,536 characters refuses before any
+partial semantic output is printed.
+
+On the frozen 45-form payload:
+
+| Representation | Output |
+|---|---:|
+| Exact-source EDN | 68,339 chars |
+| First semantic rendering | 51,231 chars |
+| Final short-header semantic rendering | 47,814 chars |
+| Reduction from exact EDN | **20,525 chars (30.0%)** |
+
+New adversarial tests prove requested order, file hashes, canonical shorthand
+expansion, explicit comment/layout loss, unchanged default EDN, invalid-format
+refusal, semantic parse refusal, semantic output limits, CLI stdin behavior,
+and the fast missing-stdin remedy. The strengthened repository gate passed 528
+tests and 4,478 assertions with zero failures before installation.
+
+### The exact rerace reversed the result
+
+The native control and the installed semantic Surgeon reran the identical
+45-form prompt concurrently from fresh ephemeral sessions. Both returned all
+five headings and 45 ordered answers. Manual comparison found both
+substantively correct.
+
+| Measure | Native v2 | Semantic Surgeon | Change |
+|---|---:|---:|---:|
+| Complete task wall | 108.39 s | **102.48 s** | **−5.91 s (−5.5%)** |
+| Total shell actions | 2 | 4 | +2 |
+| Successful source actions | 2 | 2 | tied |
+| Command output | 88,308 chars | **63,766 chars** | −24,542 (−27.8%) |
+| Input tokens | **74,458** | 115,513 | +41,055 (+55.1%) |
+| Cached input tokens | **50,432** | 82,688 | +32,256 |
+| Output tokens | 3,504 | 3,580 | +76 |
+| Reasoning-output tokens | 258 | 260 | +2 |
+| Correct ordered answers | 45 / 45 | 45 / 45 | tied |
+
+The fixed Surgeon crossed the promised five-second wall-time gate. Relative to
+its first 45-form run, it improved from 145.33 to 102.48 seconds, removed 50,186
+command-output characters, and removed 90,757 input tokens.
+
+The exact fixed route was:
+
+```text
+read skill
+    -> incorrectly invoke bare stdin
+       -> fast structured refusal instead of a hang
+    -> pipe one 45-form semantic manifest
+       -> 47,651 visible command characters
+    -> reread five forms hidden from the middle of the transcript
+    -> answer all 45 questions
+```
+
+Native again used two generated Ruby extraction commands. Surgeon matched its
+two successful source actions and won complete wall despite paying both a skill
+read and a fast refusal.
+
+This is a keep result, not the final ideal. The 47,651-character semantic
+result still crossed the caller's middle-truncation boundary, so the agent
+reread five forms. The one-process transaction has not yet become one fully
+visible agent transaction. Input tokens also remain 55% above native because
+of the additional skill and refusal rounds.
+
+The next frontier is now narrower:
+
+1. A typed `inspect` entrance should attach the manifest without shell stdin
+   ceremony and without a separate skill-loading action.
+2. Large semantic reads need per-form projections or another transcript-native
+   representation below approximately 40,000 visible characters.
+3. The exact 45-form race remains the regression benchmark. A later version
+   must preserve 45 / 45 correctness, use one successful visible source action,
+   and improve on the 102.48-second Surgeon wall rather than comparing only
+   with the older failure.
+
+The lesson is not that generic text defeated structural editing. The general
+caller generated a formidable temporary extractor. The structural product won
+only after its input and presentation layers stopped sabotaging the engine.

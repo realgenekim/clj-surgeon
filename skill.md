@@ -21,6 +21,7 @@ Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-
 - Unknown top-level form: `clj-surgeon :op :ls :file FILE`.
 - Known owner name(s), containing line, or distinctive text: call `:cat` with exactly one of `:form`, `:forms`, `:line`, or `:contains`.
   Use `:forms '[a b c]'` for one ordered, all-or-nothing snapshot capped at 65,536 source characters; do not run `:ls` solely as a preflight.
+- Known owners across files: pipe one manifest noninteractively: `printf '%s\n' '{:reads [{:file "FILE" :forms [a b]}] :expect {:file-count 1 :form-count 2}}' | clj-surgeon :op :cat :spec-file - :format :semantic`. This compact behavior view omits comments/layout and may expand shorthand; omit `:format` for exact-source EDN. Never invoke `:spec-file -` and wait for later input.
 - Unknown owner, known EDN form pattern: call `:match-form`. `:match` is not regex; use bounded `rg -l` for textual discovery, then one `:cat :contains` or `:cat :line`.
 - Related syntax or computed facts: call `:xray`. Use `(line N)` for an unnamed top-level owner.
 - Exact nested edit: call `:edit`. Use `transform` when the replacement depends on selected source.
@@ -86,5 +87,4 @@ Literal replacements inline in `:expr` preserve `#()`, comments, commas, metadat
 `transform` receives quoted syntax, not runtime values. Do not preflight whether plan paths exist. Review hashes and do not reopen the plan file. Do not edit the plan; generate a new plan.
 Never chain plan generation and application. Trust the apply receipt's `:verified` read-back hash and whole-file parse. Never reproduce a plan with `apply_patch`.
 
-For dependencies, extraction, declares, moves, renames, or CLJC operations, read [the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md).
-Compatibility aliases include `:find-subform` and `:grep-form`.
+For dependencies, extraction, declares, moves, renames, or CLJC operations, read [the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md). Compatibility aliases include `:find-subform` and `:grep-form`.

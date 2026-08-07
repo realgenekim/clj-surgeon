@@ -811,7 +811,7 @@
                 nil :conflicting-spec-inputs]
                ["missing input" [":op" ":change"] nil :missing-spec-input]
                ["empty stdin" [":op" ":change" ":spec-file" "-"] ""
-                :invalid-spec-document]
+                :missing-spec-stdin]
                ["trailing form" [":op" ":change" ":spec-file" "-"]
                 (str (pr-str change-spec) "\n:extra")
                 :invalid-spec-document]]]

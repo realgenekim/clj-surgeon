@@ -478,6 +478,188 @@
       (finally
         (fs/delete-tree tmp-dir)))))
 
+(deftest cross-file-cat-reads-each-snapshot-once-in-manifest-order
+  (let [temp-dir (fs/create-temp-dir {:prefix "cross-file-cat-"})
+        first-file (str (fs/path temp-dir "first.clj"))
+        second-file (str (fs/path temp-dir "second.clj"))
+        reads (atom [])
+        original show-form/read-source
+        spec {:reads [{:file second-file :forms ['second-b 'second-a]}
+                      {:file first-file :forms ['first-a]}]
+              :expect {:file-count 2 :form-count 3}}]
+    (try
+      (spit first-file "(ns first)\n(defn first-a [] :a)\n")
+      (spit second-file
+            "(ns second)\n(defn second-a [] :a)\n(defn second-b [] :b)\n")
+      (with-redefs [show-form/read-source
+                    (fn [file]
+                      (swap! reads conj file)
+                      (original file))]
+        (let [result (show-form/show-files spec)]
+          (is (= :show-form (:operation result)))
+          (is (= {:spec :cross-file} (:selector result)))
+          (is (= 2 (:file-count result)))
+          (is (= 3 (:form-count result)))
+          (is (= [second-file first-file] (mapv :file (:files result))))
+          (is (= [['second-b 'second-a] ['first-a]]
+                 (mapv #(mapv :name (:forms %)) (:files result))))
+          (is (= [second-file first-file] @reads))
+          (is (every? :source-hash (:files result)))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest cross-file-cat-validates-the-whole-contract-before-reading
+  (let [temp-dir (fs/create-temp-dir {:prefix "cross-file-cat-contract-"})
+        file (str (fs/path temp-dir "sample.clj"))
+        alias-file (str (fs/path temp-dir "." "sample.clj"))
+        valid-read {:file file :forms ['target]}
+        cases [["root type" [] :invalid-read-spec]
+               ["unknown root key"
+                {:reads [valid-read] :expect {:file-count 1 :form-count 1}
+                 :surprise true "also-surprise" true}
+                :unknown-read-spec-keys]
+               ["empty reads"
+                {:reads [] :expect {:file-count 1 :form-count 1}}
+                :invalid-reads]
+               ["unknown entry key"
+                {:reads [(assoc valid-read :line 1)]
+                 :expect {:file-count 1 :form-count 1}}
+                :invalid-read-entries]
+               ["invalid forms"
+                {:reads [(assoc valid-read :forms ['target "target"])]
+                 :expect {:file-count 1 :form-count 2}}
+                :invalid-read-entries]
+               ["duplicate physical file"
+                {:reads [valid-read {:file alias-file :forms ['other]}]
+                 :expect {:file-count 2 :form-count 2}}
+                :duplicate-read-files]
+               ["incomplete expectation"
+                {:reads [valid-read] :expect {:file-count 1}}
+                :invalid-read-expectation]
+               ["wrong expectation"
+                {:reads [valid-read] :expect {:file-count 1 :form-count 2}}
+                :read-expectation-mismatch]
+               ["excessive limit"
+                {:reads [valid-read] :expect {:file-count 1 :form-count 1}
+                 :limits {:source-chars 65537}}
+                :invalid-read-source-limit]
+               ["explicit nil limits"
+                {:reads [valid-read] :expect {:file-count 1 :form-count 1}
+                 :limits nil}
+                :invalid-read-limits]]]
+    (try
+      (spit file "(ns sample)\n(defn target [] :ok)\n")
+      (with-redefs [show-form/read-source
+                    (fn [_] (throw (ex-info "must validate before I/O" {})))]
+        (doseq [[label spec error-type] cases]
+          (testing label
+            (let [result (show-form/show-files spec)]
+              (is (= error-type (:error-type result)))
+              (is (not-any? #(and (map? %) (contains? % :source))
+                            (tree-seq coll? seq result)))))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest cross-file-cat-refuses-any-failed-owner-and-the-global-source-cap
+  (let [temp-dir (fs/create-temp-dir {:prefix "cross-file-cat-refusal-"})
+        first-file (str (fs/path temp-dir "first.clj"))
+        second-file (str (fs/path temp-dir "second.clj"))
+        payload (apply str (repeat 33000 "x"))]
+    (try
+      (spit first-file
+            (str "(ns first)\n(def first-large " (pr-str payload) ")\n"))
+      (spit second-file
+            (str "(ns second)\n(def second-large " (pr-str payload) ")\n"))
+      (let [missing-result
+            (show-form/show-files
+              {:reads [{:file first-file :forms ['first-large]}
+                       {:file second-file :forms ['missing]}]
+               :expect {:file-count 2 :form-count 2}})
+            oversized-result
+            (show-form/show-files
+              {:reads [{:file first-file :forms ['first-large]}
+                       {:file second-file :forms ['second-large]}]
+               :expect {:file-count 2 :form-count 2}})]
+        (is (= :read-transaction-failed (:error-type missing-result)))
+        (is (= :batch-form-selection-failed
+               (get-in missing-result [:failures 0 :error-type])))
+        (is (= :read-source-limit-exceeded (:error-type oversized-result)))
+        (is (= 65536 (:source-char-limit oversized-result)))
+        (doseq [result [missing-result oversized-result]]
+          (is (not (contains? result :files)))
+          (is (not-any? #(and (map? %) (contains? % :source))
+                        (tree-seq coll? seq result)))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest semantic-cross-file-cat-is-compact-ordered-and-explicitly-lossy
+  (let [temp-dir (fs/create-temp-dir {:prefix "semantic-cross-file-cat-"})
+        first-file (str (fs/path temp-dir "first.clj"))
+        second-file (str (fs/path temp-dir "second.clj"))
+        spec {:reads [{:file second-file :forms ['second-b 'second-a]}
+                      {:file first-file :forms ['first-a]}]
+              :expect {:file-count 2 :form-count 3}}]
+    (try
+      (spit first-file "(ns first)\n;; lexical comment\n(defn first-a [] #(+ % 1))\n")
+      (spit second-file
+            "(ns second)\n(defn second-a [] :a)\n(defn second-b [] :b)\n")
+      (let [exact-result (show-form/show {:spec spec})
+            semantic-result (show-form/show {:spec spec :format :semantic})]
+        (is (map? exact-result))
+        (is (string? semantic-result))
+        (is (str/starts-with? semantic-result "CLJ-SURGEON-SEMANTIC "))
+        (is (< (.indexOf semantic-result (str "FILE 1 " (pr-str second-file)))
+               (.indexOf semantic-result (str "FILE 2 " (pr-str first-file)))))
+        (is (< (.indexOf semantic-result "FORM 1 second-b ")
+               (.indexOf semantic-result "FORM 2 second-a ")))
+        (is (str/includes? semantic-result "(fn* [p1__"))
+        (is (not (str/includes? semantic-result "lexical comment")))
+        (is (not (str/includes? semantic-result "#(+ % 1)")))
+        (is (every? #(str/includes? semantic-result (:source-hash %))
+                    (:files exact-result)))
+        (is (< (count semantic-result) (count (pr-str exact-result)))))
+      (finally
+        (fs/delete-tree temp-dir)))))
+
+(deftest semantic-render-refuses-before-returning-malformed-or-oversized-output
+  (let [base {:operation :show-form
+              :file-count 1
+              :form-count 1
+              :source-char-count 1
+              :files [{:file "sample.clj"
+                       :source-hash "hash"
+                       :form-count 1
+                       :forms [{:name 'sample
+                                :type 'def
+                                :line 1
+                                :end-line 1
+                                :source "("}]}]}
+        malformed (show-form/render-semantic base)
+        payload (apply str (repeat 65520 "x"))
+        oversized (show-form/render-semantic
+                    (-> base
+                        (assoc :source-char-count (count payload))
+                        (assoc-in [:files 0 :forms 0 :source]
+                                  (str "(def sample " (pr-str payload) ")"))))]
+    (is (= :semantic-render-failed (:error-type malformed)))
+    (is (= :semantic-output-limit-exceeded (:error-type oversized)))
+    (doseq [result [malformed oversized]]
+      (is (map? result))
+      (is (not (contains? result :output)))
+      (is (not-any? #(and (map? %) (contains? % :source))
+                    (tree-seq coll? seq result))))))
+
+(deftest read-format-is-explicit-and-cross-file-only
+  (let [spec {:reads [{:file "sample.clj" :forms ['sample]}]
+              :expect {:file-count 1 :form-count 1}}]
+    (is (= :invalid-read-format
+           (:error-type (show-form/show {:spec spec :format :brief}))))
+    (is (= :read-format-requires-spec
+           (:error-type
+             (show-form/show {:file "sample.clj"
+                              :form 'sample
+                              :format :semantic}))))))
+
 (deftest invocation-remedy-is-narrow-executable-and-space-safe
   (let [opts {:file "dir with space/state.clj" :form "alpha"}
         remedy (show-form/invocation-remedy opts)]
@@ -600,6 +782,70 @@
           (is (str/blank? err))))
       (finally
         (fs/delete-tree tmp-dir)))))
+
+(deftest cli-cross-file-cat-loads-one-manifest-from-file-or-stdin
+  (let [temp-dir (fs/create-temp-dir {:prefix "cross-file-cat-cli-"})
+        first-file (str (fs/path temp-dir "first.clj"))
+        second-file (str (fs/path temp-dir "second.clj"))
+        spec-file (str (fs/path temp-dir "read.edn"))
+        spec {:reads [{:file first-file :forms ['first-a]}
+                      {:file second-file :forms ['second-a 'second-b]}]
+              :expect {:file-count 2 :form-count 3}
+              :limits {:source-chars 4096}}
+        run-with-input
+        (fn [args input]
+          @(proc/process (into ["bb" "-m" "clj-surgeon.core"] args)
+                         (cond-> {:out :string :err :string}
+                           input (assoc :in input))))]
+    (try
+      (spit first-file "(ns first)\n(defn first-a [] :a)\n")
+      (spit second-file
+            "(ns second)\n(defn second-a [] :a)\n(defn second-b [] :b)\n")
+      (spit spec-file (pr-str spec))
+      (doseq [[label args input]
+              [["file" [":op" ":cat" ":spec-file" spec-file] nil]
+               ["stdin" [":op" ":cat" ":spec-file" "-"] (pr-str spec)]]]
+        (testing label
+          (let [{:keys [exit out err]} (run-with-input args input)
+                result (edn/read-string out)]
+            (is (zero? exit) err)
+            (is (= 2 (:file-count result)))
+            (is (= 3 (:form-count result)))
+            (is (= [first-file second-file] (mapv :file (:files result))))
+            (is (str/blank? err)))))
+      (testing "semantic stdin is one noninteractive source-complete call"
+        (let [{:keys [exit out err]}
+              (run-with-input [":op" ":cat" ":spec-file" "-"
+                               ":format" ":semantic"]
+                              (pr-str spec))]
+          (is (zero? exit) err)
+          (is (str/starts-with? out "CLJ-SURGEON-SEMANTIC "))
+          (is (= 3 (count (re-seq #"(?m)^FORM " out))))
+          (is (< (.indexOf out " first-a ")
+                 (.indexOf out " second-a ")
+                 (.indexOf out " second-b ")))
+          (is (str/includes? out "(defn first-a [] :a)"))
+          (is (str/blank? err))))
+      (doseq [[label args input error-type]
+              [["empty stdin" [":op" ":cat" ":spec-file" "-"] ""
+                :missing-spec-stdin]
+               ["trailing form" [":op" ":cat" ":spec-file" "-"]
+                (str (pr-str spec) "\n:extra") :invalid-spec-document]
+               ["direct selector conflict"
+                [":op" ":cat" ":spec" (pr-str spec)
+                 ":file" first-file :forms "[first-a]"]
+                nil :conflicting-read-inputs]]]
+        (testing label
+          (let [{:keys [exit out err]} (run-with-input args input)
+                result (edn/read-string out)]
+            (is (pos? exit))
+            (is (= error-type (:error-type result)))
+            (when (= :missing-spec-stdin error-type)
+              (is (str/includes? (:remedy result) "printf"))
+              (is (str/includes? (:remedy result) ":spec-file -")))
+            (is (str/blank? err)))))
+      (finally
+        (fs/delete-tree temp-dir)))))
 
 (deftest cli-show-form-refusals-and-historical-guesses-have-actionable-exits
   (let [tmp-dir (fs/create-temp-dir {:prefix "show form remedy "})
@@ -883,6 +1129,19 @@
                             "changelog" changelog
                             "show-form help" help}]
       (is (str/includes? text ":forms") surface))
+    (doseq [[surface text] {"README" readme
+                            "installed skill" skill
+                            "legacy skill" legacy-skill
+                            "changelog" changelog
+                            "show-form help" help}]
+      (let [normalized (str/replace text #"\s+" " ")]
+        (is (str/includes? normalized ":spec-file -") surface)
+        (is (str/includes? normalized ":file-count") surface)
+        (is (str/includes? normalized ":form-count") surface)
+        (is (str/includes? normalized ":format :semantic") surface)
+        (is (str/includes? normalized "printf") surface)
+        (is (str/includes? normalized "comments") surface)
+        (is (str/includes? normalized "layout") surface)))
     (doseq [[surface text] {"README" readme
                             "installed skill" skill
                             "legacy skill" legacy-skill

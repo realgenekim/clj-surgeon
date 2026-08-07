@@ -31,8 +31,8 @@ It searches for text, recovers a line number, prints a range, patches syntax,
 and rereads the file.
 
 clj-surgeon gives coding agents a composable structural interface. `:ls`
-inventories a namespace. `:cat` returns one selected form. `:xray` reads or
-computes over a Clojure path.
+inventories a namespace. `:cat` returns exact selected forms from one or more
+files. `:xray` reads or computes over a Clojure path.
 
 `:match-form` finds syntax instead of textual lookalikes. Dependency operations
 expose the graph. `:change!` compiles a complete exact edit plan into one
@@ -168,6 +168,17 @@ approximately 0.5 seconds in one Babashka process. The receipt was 3,466 bytes,
 and both final file hashes equaled their starting hashes. This proves bounded
 mechanism cost and reversibility. It does not yet prove an agent speedup over native patching.
 
+A later paired read benchmark asked fresh Codex callers 45 exact behavior
+questions about 45 named forms in three frozen files. Both answers passed all
+45 checks. Exact-source EDN made Surgeon 43.46 seconds slower because the
+result exceeded the visible transcript boundary and caused recovery reads.
+The explicit `:format :semantic` view reduced the transaction from 68,339 to
+47,814 characters. On the identical rerace, Surgeon finished in 102.48 seconds
+versus 108.39 seconds for native generated extractors: **5.91 seconds (5.5%)
+faster**, with 27.8% less command output. This is one paired roll, not a stable
+median. The complete negative and positive stages are preserved in the
+[transaction/read Captain's Log](docs/observations/2026-08-06-captains-log-the-transaction-landed-but-reading-still-paid-per-question.md).
+
 ## Production examples
 
 clj-surgeon renamed this project from `ns-surgeon` to `clj-surgeon` in less
@@ -295,7 +306,7 @@ clj-surgeon :op :ls :file src/writer/state.clj
 
 Every top-level form with exact line boundaries, types, names, arglists, and forward reference detection. 236 forms in a 2768-line file, returned in ~200ms.
 
-#### `:cat` — Read one or several complete top-level forms
+#### `:cat` — Read exact top-level forms from one or more files
 
 Use a name:
 
@@ -316,6 +327,30 @@ The batch is all-or-nothing. If any name is invalid, missing, duplicated, or
 ambiguous, the command returns compact per-name evidence and no partial source.
 Combined source over 65,536 characters also refuses without partial source. Add
 one `:platform` to disambiguate the complete CLJC batch.
+
+When known owners span files, send one manifest through stdin instead of one
+shell command per file:
+
+```bash
+printf '%s\n' \
+  '{:reads [{:file "src/app/routes.clj" :forms [route-request conflict-response]} {:file "src/app/events.clj" :forms [publish-conflict! clear-conflict!]}] :expect {:file-count 2 :form-count 4} :limits {:source-chars 65536}}' |
+  clj-surgeon :op :cat :spec-file - :format :semantic
+```
+
+The manifest preserves file and form order. It reads each distinct physical
+file once and returns one complete-file hash per file. `:expect` must declare
+the exact file and form counts. The command rejects unknown keys, duplicate
+physical paths, count mismatches, failed form selection, and output above the
+declared or hard limit. Every refusal returns no partial source. Use
+`:spec-file PATH` for a saved manifest. Inline `:spec` remains available for a
+small manifest, but stdin avoids shell escaping.
+
+Always attach stdin in the same shell action. Do not invoke `:spec-file -` and
+wait to send the manifest later. `:format :semantic` is the compact behavior
+and architecture view. It prints canonical Clojure data with file hashes and a
+hard output cap. It omits comments and layout, and reader shorthand such as
+`#()` may expand. Omit `:format` when comments, layout, exact token spelling, or
+other lexical evidence matters; the default EDN result preserves exact source.
 
 Or use a line contained by the form:
 
@@ -351,9 +386,10 @@ reader-conditional definitions, add `:platform :clj` or `:platform :cljs`.
 
 Single-form success returns the exact parsed form source, type, optional name,
 platforms, line range, attached-comment start, and complete-file source hash.
-Batch success returns the same records in an ordered `:forms` vector under one
-complete-file source hash. A missing or ambiguous selector returns structured
-EDN and exits nonzero. The command never chooses the first match.
+Same-file batch success returns the records in an ordered `:forms` vector under
+one complete-file source hash. Cross-file success returns the ordered file
+results under `:files`. A missing or ambiguous selector returns structured EDN
+and exits nonzero. The command never chooses the first match.
 
 `:cat` never dumps the complete file.
 
