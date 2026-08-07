@@ -6,8 +6,9 @@
 missed its keep gate. The
 [3x assessment](../observations/2026-08-07-captains-log-the-3x-mechanism-exists-but-the-product-is-not-there.md)
 revises the next sequence to workspace-scoped inspection, a hash-bound
-decision register, and closed verification profiles. Result-register
-drill-down now waits for measured output truncation.
+[proof-carrying change buffer](proof-carrying-change-buffer.md), and closed
+verification profiles. Result-register drill-down now waits for measured
+output truncation.
 
 **Motivating evidence:**
 

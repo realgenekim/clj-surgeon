@@ -12,6 +12,10 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Proof-carrying change buffer](proof-carrying-change-buffer.md) — return one
+  bounded editable decision projection plus the exact next
+  `apply_clojure_changes` call; the model fills only explicit `keep` or
+  `replace` holes.
 - [Typed MCP inspect entrance](typed-mcp-inspect-entrance.md) — batch ordered
   forms, outlines, structural matches, and capability-limited X-ray against
   once-read snapshots; its first experiment passed correctness but missed the
