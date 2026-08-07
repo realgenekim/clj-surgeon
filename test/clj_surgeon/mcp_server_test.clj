@@ -33,6 +33,10 @@
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
+    (is (= false (get-in tools [1 :schema :additionalProperties])))
+    (is (= #{"basis" "decisions" "verify" "changes" "expect"}
+           (set (keys (get-in tools [1 :schema :properties])))))
+    (is (= 2 (count (get-in tools [1 :schema :oneOf]))))
     (is (= inspect-tool/inspect-annotations
            (:annotations (first tools))))
     (is (str/includes? inspect-tool/tool-description

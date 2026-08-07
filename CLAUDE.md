@@ -74,6 +74,12 @@ updates, and verification gates. It is not a chronological coding diary.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
+- If one fully qualified Var names the change but exact sites are unknown, call
+  `inspect_clojure` with `mode=prepare-change`, `subject=namespace/name`, and one
+  concise `intent`. Copy its `next_call`. Replace every decision `null` with
+  exactly one `keep=true` or one replacement form. Call
+  `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
+  selectors, counts, hashes, basis IDs, or site IDs.
 - cclsp does not have write authority in this repository. Use clj-surgeon for
   structural writes, guarded transactions, and receipts.
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`
@@ -159,3 +165,35 @@ updates, and verification gates. It is not a chronological coding diary.
 - Do not declare a feature complete from a green legacy suite alone. Show the
   new tests that fail before the implementation, pass afterward, and cover the
   real invocation that motivated the work.
+
+## Live MCP development
+
+`make mcp-start` starts the complete repository-scoped stack:
+
+```text
+clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
+                         |
+                         v
+              clj-surgeon http://127.0.0.1:7888/mcp
+```
+
+- cclsp uses the pinned Bun under `../cclsp-structural-results/node_modules`.
+  Its launchd job runs `bun --watch`. TypeScript changes load under the same
+  URL. Run `make cclsp-status` to verify the provider.
+- clj-surgeon runs an embedded nREPL. Confirm that the port belongs to the live
+  MCP JVM before loading code:
+
+  ```bash
+  PORT=$(cat ~/.local/state/clj-surgeon/mcp/nrepl-port)
+  lsof -nP -iTCP:$PORT -sTCP:LISTEN
+  clj-nrepl-eval --port "$PORT" \
+    "(require 'clj-surgeon.mcp-inspect-tool :reload)"
+  ```
+
+- Handler Vars are dereferenced for each request. A handler or pure-kernel
+  reload does not restart port 7888 or the coding-agent session.
+- The MCP SDK publishes tool names and JSON schemas at server initialization.
+  After a schema or catalog change, run `make mcp-stop && make mcp-start`.
+- `make mcp-status` verifies both loopback services, the launchd job, and the
+  Codex registration.
+- Run `make mcp-test` after each live patch. Run `make test` before completion.

@@ -20,8 +20,14 @@ MCP_READY_FILE := $(MCP_STATE_DIR)/ready.edn
 MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
 MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
 CLOJURE_BIN ?= $(shell command -v clojure)
+CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
+CCLSP_URL ?= http://127.0.0.1:7890/mcp
+CCLSP_CONFIG ?= $(CLJ_SURGEON_HOME)cclsp.json
+CCLSP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/cclsp
+CCLSP_LOG_FILE := $(CCLSP_STATE_DIR)/server.log
+CCLSP_LAUNCH_LABEL ?= com.realgenekim.cclsp-clj-surgeon
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark cclsp-start cclsp-stop cclsp-status mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -31,8 +37,9 @@ help:
 	@echo "  make mcp-smoke                 Verify initialize, two-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
+	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
-	@echo "  make mcp-status                Check the local MCP process, endpoint, and Codex registration"
+	@echo "  make mcp-status                Check both hot MCPs, nREPL, and Codex registration"
 	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
 	@echo "  make install                   Stable copied CLI, Codex skill, and Claude skill"
 	@echo "  make install-cli               Install only the stable copied CLI"
@@ -83,7 +90,44 @@ mcp-serve:
 mcp-serve-benchmark:
 	clojure -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
 
-mcp-start:
+cclsp-start:
+	@set -eu; \
+	  mkdir -p "$(CCLSP_STATE_DIR)"; \
+	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" >/dev/null 2>&1; then \
+	    echo "cclsp already ready at $(CCLSP_URL)"; \
+	    exit 0; \
+	  fi; \
+	  test -x "$(CCLSP_HOME)/node_modules/.bin/bun" || { echo "Run make setup in $(CCLSP_HOME)" >&2; exit 1; }; \
+	  launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	  launchctl submit -l "$(CCLSP_LAUNCH_LABEL)" \
+	    -o "$(CCLSP_LOG_FILE)" -e "$(CCLSP_LOG_FILE)" -- \
+	    /bin/sh -c 'cd "$$1"; shift; export CCLSP_CONFIG_PATH="$$1"; shift; exec "$$@"' _ \
+	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" \
+	    "$(CCLSP_HOME)/node_modules/.bin/bun" run --watch index.ts serve-http --host 127.0.0.1 --port 7890; \
+	  ready=false; \
+	  for attempt in $$(seq 1 60); do \
+	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \
+	    if ! launchctl print "gui/$$(id -u)/$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1; then break; fi; \
+	    sleep 0.5; \
+	  done; \
+	  if [ "$$ready" != true ]; then \
+	    echo "cclsp did not become ready; recent log:" >&2; \
+	    tail -60 "$(CCLSP_LOG_FILE)" >&2 || true; \
+	    launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	    exit 1; \
+	  fi; \
+	  echo "cclsp ready at $(CCLSP_URL) with restart-on-save TypeScript"
+
+cclsp-stop:
+	@launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true
+	@echo "cclsp stopped"
+
+cclsp-status:
+	@curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" \
+	  || { echo "cclsp endpoint unavailable: $(CCLSP_URL)" >&2; exit 1; }
+	@echo
+
+mcp-start: cclsp-start
 	@set -eu; \
 	  mkdir -p "$(MCP_STATE_DIR)"; \
 	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then \
@@ -95,12 +139,13 @@ mcp-start:
 	  rm -f "$(MCP_READY_FILE)" "$(MCP_PID_FILE)"; \
 	  launchctl submit -l "$(MCP_LAUNCH_LABEL)" \
 	    -o "$(MCP_LOG_FILE)" -e "$(MCP_LOG_FILE)" -- \
-	    /bin/sh -c 'cd "$$1"; shift; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
+	    /bin/sh -c 'cd "$$1"; shift; export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$$PATH"; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
 	    "$(CLOJURE_BIN)" -X:clj-surgeon/mcp \
 	    :project-dir '"$(CLJ_SURGEON_HOME)"' \
 	    :telemetry :full \
 	    :telemetry-dir '"$(MCP_STATE_DIR)/telemetry"' \
 	    :run-id '"dogfood"' \
+	    :cclsp-url '"$(CCLSP_URL)"' \
 	    :ready-file '"$(MCP_READY_FILE)"' \
 	    :port-file '"$(MCP_STATE_DIR)/nrepl-port"'; \
 	  ready=false; \
@@ -124,8 +169,9 @@ mcp-stop:
 	  launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
 	  rm -f "$(MCP_PID_FILE)" "$(MCP_READY_FILE)" "$(MCP_STATE_DIR)/nrepl-port"; \
 	  echo "clj-surgeon MCP stopped"
+	@$(MAKE) --no-print-directory cclsp-stop
 
-mcp-status:
+mcp-status: cclsp-status
 	@set -eu; \
 	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))"; then echo; else echo "MCP endpoint unavailable: $(MCP_URL)"; fi; \
 	  if [ -f "$(MCP_READY_FILE)" ]; then echo "Readiness: $$(cat "$(MCP_READY_FILE)")"; fi; \

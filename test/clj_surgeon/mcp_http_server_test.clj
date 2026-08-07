@@ -143,6 +143,9 @@
         (is (= true (get-in tools [0 :annotations :idempotentHint])))
         (is (= false (get-in tools [0 :annotations :openWorldHint])))
         (is (= false (get-in tools [0 :inputSchema :additionalProperties])))
+        (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
+        (is (= #{:basis :decisions :verify :changes :expect}
+               (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (= false (:isError result)))
         (is (str/starts-with? (get-in result [:content 0 :text])
                               "inspect_clojure\n"))
@@ -151,6 +154,79 @@
         (is (= "(def answer 42)"
                (get-in result [:structuredContent :results 0 :forms 0 :source])))
         (is (= true (get-in result [:structuredContent :read_complete]))))
+      (finally
+        (http-server/stop-http-server! running)
+        (delete-tree! project)))))
+
+(deftest one-http-session-prepares-decides-and-applies-one-proof-carrying-change
+  (let [project (temp-dir)
+        source-file (io/file project "src/demo.clj")
+        receipt-dir (io/file project "receipts")
+        _created (.mkdirs (.getParentFile source-file))
+        _written (spit source-file "(ns demo)\n(defn shell []\n  [:body])\n")
+        running (http-server/start-http-server!
+                  {:project-dir (.getPath project)
+                   :receipt-dir (.getPath receipt-dir)
+                   :port 0
+                   :telemetry :off
+                   :nrepl-port :none
+                   :semantic-resolver
+                   (fn [_]
+                     {:ok true
+                      :definition {:file_path (.getCanonicalPath source-file)
+                                   :line 2 :character 7 :name "shell"}
+                      :references []})
+                   :verify! (fn [_ profile _ files]
+                              {:ok true :profile profile :files files})})]
+    (try
+      (let [client (HttpClient/newHttpClient)
+            initialized
+            (post-json client (:url running) nil
+                       {:jsonrpc "2.0" :id 1 :method "initialize"
+                        :params {:protocolVersion "2025-03-26"
+                                 :capabilities {}
+                                 :clientInfo {:name "change-buffer-protocol-test"
+                                              :version "1"}}})
+            session-id (-> initialized .headers (.firstValue "Mcp-Session-Id")
+                           (.orElse nil))
+            _notification
+            (post-json client (:url running) session-id
+                       {:jsonrpc "2.0" :method "notifications/initialized"})
+            prepared
+            (post-json client (:url running) session-id
+                       {:jsonrpc "2.0" :id 2 :method "tools/call"
+                        :params {:name "inspect_clojure"
+                                 :arguments
+                                 {:mode "prepare-change"
+                                  :subject "demo/shell"
+                                  :intent "Change the shell body class"}}})
+            prepare-result (:result (sse-json prepared))
+            evidence (:structuredContent prepare-result)
+            site (first (:sites evidence))
+            applied
+            (post-json client (:url running) session-id
+                       {:jsonrpc "2.0" :id 3 :method "tools/call"
+                        :params {:name "apply_clojure_changes"
+                                 :arguments
+                                 {:basis (:basis evidence)
+                                  :decisions
+                                  [{:site (:id site)
+                                    :replace "(defn shell []\n  [:body.page])"}]
+                                  :verify "fast"}}})
+            apply-result (:result (sse-json applied))]
+        (is (= 200 (.statusCode initialized)))
+        (is (false? (:isError prepare-result)))
+        (is (str/starts-with? (get-in prepare-result [:content 0 :text])
+                              "inspect_clojure prepare-change"))
+        (is (= "(defn shell []\n  [:body])" (:source site)))
+        (is (= "definition" (:role site)))
+        (is (false? (:isError apply-result)))
+        (is (= 1 (get-in apply-result [:structuredContent :match-count])))
+        (is (= "fast" (get-in apply-result [:structuredContent :verification :profile])))
+        (is (str/starts-with? (get-in apply-result [:content 0 :text]) "Applied 1"))
+        (is (= "(ns demo)\n(defn shell []\n  [:body.page])\n"
+               (slurp source-file)))
+        (is (= 1 (count (filter #(.isFile %) (file-seq receipt-dir))))))
       (finally
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
@@ -207,8 +283,10 @@
                                                   :files 1}}}})]
         (is (= 200 (.statusCode initialized)))
         (is (some? session-id))
-        (is (true? (-> before sse-json :result :content first :text
-                       (json/parse-string true) :verification_complete)))
+        (is (true? (-> before sse-json :result :structuredContent
+                       :verification_complete)))
+        (is (.startsWith ^String (-> before sse-json :result :content first :text)
+                         "Applied "))
         (is (= "(ns demo)\n\n(defn shell []\n  [:body.page])\n"
                (slurp source-file)))
         (is (= 1 (count (filter #(.isFile %) (file-seq receipt-dir)))))
@@ -219,7 +297,9 @@
                      "(alter-var-root "
                      "#'clj-surgeon.mcp-tool/handle-clj-change "
                      "(constantly (fn [_ _ callback] "
-                     "(callback [\"HOT_RELOAD_OK\"] false)))) "
+                     "(callback [\"HOT_RELOAD_OK\"] false "
+                     "{:ok true :operation \"apply_clojure_changes\" "
+                     ":hot true})))) "
                      "(alter-var-root "
                      "#'clj-surgeon.mcp-inspect-tool/handle-inspect "
                      "(constantly (fn [_ _ callback] "

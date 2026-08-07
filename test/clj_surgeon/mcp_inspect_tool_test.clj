@@ -232,3 +232,64 @@
         (is (not (str/includes? raw "private.clj"))))
       (finally
         (delete-tree! directory)))))
+
+(deftest prepare-change-normalizes-the-real-java-map-boundary
+  (let [project (temp-dir)
+        source (write-source! project "src/sample/core.clj"
+                              "(ns sample.core)\n(defn target [] :ok)\n")
+        params (doto (java.util.HashMap.)
+                 (.put "mode" "prepare-change")
+                 (.put "subject" "sample.core/target")
+                 (.put "intent" "Prepare one exact target change")
+                 (.put "verify" "fast"))]
+    (try
+      (let [result
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath project)
+               :semantic-resolver
+               (fn [_]
+                 {:ok true
+                  :definition {:file_path (.getCanonicalPath source)
+                               :line 2 :character 7}
+                  :references []})}
+              params)]
+        (is (:ok result))
+        (is (= "inspect_clojure" (:operation result)))
+        (is (= "prepare-change" (:mode result)))
+        (is (:read_complete result))
+        (is (= 1 (:site-count result))))
+      (finally
+        (delete-tree! project)))))
+
+(deftest prepare-change-callback-is-compact-and-carries-the-full-basis-structurally
+  (let [project (temp-dir)
+        source (write-source! project "src/sample/core.clj"
+                              "(ns sample.core)\n(defn target [] :ok)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init!
+        {:project-root (.getPath project)
+         :semantic-resolver
+         (fn [_]
+           {:ok true
+            :definition {:file_path (.getCanonicalPath source)
+                         :line 2 :character 7}
+            :references []})})
+      (inspect-tool/handle-inspect
+        nil
+        {"mode" "prepare-change"
+         "subject" "sample.core/target"
+         "intent" "Prepare one exact target change"}
+        (fn [content error? structured]
+          (swap! calls conj {:content (first content)
+                             :error? error?
+                             :structured structured})))
+      (is (false? (:error? (first @calls))))
+      (is (.startsWith ^String (:content (first @calls))
+                       "inspect_clojure prepare-change"))
+      (is (not (.contains ^String (:content (first @calls)) "(defn target")))
+      (is (= "(defn target [] :ok)"
+             (get-in @calls [0 :structured :sites 0 :source])))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))

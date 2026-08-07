@@ -258,7 +258,7 @@
       (contains? result :remedies) (assoc :remedies (:remedies result)))))
 
 (defn normalize-success-receipt
-  "Reduce a complete kernel result to terminal verification evidence."
+  "Reduce a complete kernel result to terminal verification evidence. Requires read-back hashes and an inverse receipt."
   [project-root result]
   (when-not (and (:ok result)
                  (:committed result)

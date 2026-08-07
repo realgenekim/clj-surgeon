@@ -74,7 +74,8 @@
 (defn start-http-server!
   "Start one nonblocking, loopback-only, repository-scoped MCP server."
   [{:keys [project-dir receipt-dir telemetry-dir run-id port ready-file
-           nrepl-port port-file log-file]
+           nrepl-port port-file log-file cclsp-url verification-profiles
+           semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
   (let [project-dir (str (or project-dir (System/getProperty "user.dir")))
         host default-host
@@ -90,7 +91,20 @@
         _ (configure-logging! log-file)
         _ (mcp-tool/init! {:project-root project-dir
                            :receipt-dir receipt-dir
-                           :telemetry telemetry-state})
+                           :telemetry telemetry-state
+                           :cclsp-url cclsp-url
+                           :semantic-resolver semantic-resolver
+                           :verify! verify!
+                           :read-source read-source
+                           :write-source! write-source!
+                           :verification-profiles
+                           (or verification-profiles
+                               {"fast"
+                                {:commands
+                                 [["clj-kondo" "--lint" "{files}"]
+                                  ["npx" "@chrisoakman/standard-clojure-style"
+                                   "check" "{files}"]]}
+                                "full" ["make" "test"]})})
         transport (-> (HttpServletStreamableServerTransportProvider/builder)
                       (.jsonMapper (McpJsonMapper/getDefault))
                       (.mcpEndpoint endpoint)

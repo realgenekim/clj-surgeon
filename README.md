@@ -48,7 +48,9 @@ For resolved definitions, references, implementations, and call hierarchy,
 search the deferred MCP catalog for `mcp__cclsp__*` before falling back to source. Use
 clj-surgeon for concrete syntax, structural computation, guarded writes, and
 receipts. cclsp supplies semantic evidence. It does not have write authority
-in this workflow.
+in this workflow. [The Clojure Agent Tool Stack](docs/architecture-stack.md)
+documents the clj-kondo, clojure-lsp, cclsp, and clj-surgeon runtimes and
+authority boundaries.
 
 Run `clj-surgeon :op :help` for the complete caller surface. Unknown operations
 list the preferred names, not compatibility spellings. When an invalid call
@@ -219,6 +221,22 @@ removed guessed-field failures. Owner-enriched references removed
 line-to-form lookup. Each result is one replication, not a stable median. See the
 [semantic-sensor Captain's Log](docs/observations/2026-08-07-captains-log-rent-the-graph-keep-the-transaction.md).
 
+The first clean proof-carrying change-buffer task started with only a Var and a
+return-contract goal. After one negative design stage, `inspect_clojure`
+returned the complete definition and complete named owner of every semantic
+reference. The caller then used the returned basis in one
+`apply_clojure_changes` call.
+
+| Route | Correct | Wall | Source reads after skill | Mutation calls |
+|---|---:|---:|---:|---:|
+| Native source tools | yes | 54.13 s | 4 | 1 |
+| Proof-carrying basis | yes | **31.00 s** | **0** | **1** |
+
+The basis route was 23.13 seconds faster, a 42.7% wall reduction and 1.75x
+speedup. It used exactly two MCP calls: prepare, then apply and verify. This is
+one paired probe, not a replicated median or a 3x claim. See the
+[transaction Captain's Log](docs/observations/2026-08-07-captains-log-the-decision-became-a-transaction.md).
+
 ## Production examples
 
 clj-surgeon renamed this project from `ns-surgeon` to `clj-surgeon` in less
@@ -312,11 +330,12 @@ What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 
 Keep this branch-local while the MCP contract is under evaluation. The
 development installer points the CLI and both skills at the current checkout,
-starts one repository-scoped Streamable HTTP server on loopback, and registers
-exactly two tools with Codex:
+starts the hot clj-surgeon and cclsp services on loopback, and registers exactly
+two clj-surgeon tools with Codex:
 
-- `inspect_clojure` for failure-atomic, read-only structural batches;
-- `apply_clojure_changes` for guarded structural mutation.
+- `inspect_clojure` for read-only structural batches and proof-carrying change
+  preparation;
+- `apply_clojure_changes` for guarded direct or basis-backed mutation.
 
 ```bash
 make install-mcp-codex-dev
@@ -332,6 +351,37 @@ terminal and Codex restarts. It listens only on `127.0.0.1:7888` and records
 full local telemetry under `~/.local/state/clj-surgeon/mcp`. The experimental
 job is session-persistent, not a permanent login item; rerun the installer
 after logging out or rebooting.
+
+When one fully qualified Var names the subject but the exact edit sites are
+unknown, compile the decision in two calls:
+
+```text
+inspect_clojure prepare-change -> fill keep/replace holes -> apply_clojure_changes
+```
+
+```json
+{
+  "mode": "prepare-change",
+  "subject": "clj-surgeon.mcp-contract/normalize-success-receipt",
+  "intent": "Add context to the terminal receipt without changing callers"
+}
+```
+
+The response contains the complete definition and each complete named owner
+that refers to it. It also contains a complete `next_call`. Preserve its basis,
+site IDs, and verification profile. Replace every `null` with `{"keep":true}`
+or `{"replace":"ONE FORM"}`. Submit that basis request to
+`apply_clojure_changes` once. Do not reconstruct a direct `changes` request.
+Apply uses the retained source hashes and zipper paths. It does not repeat
+semantic resolution or selection. Omit `verify` from prepare unless the user
+explicitly requests the full repository suite; the default is `fast`.
+
+The basis is process-local and expires after one hour. The server retains at
+most 32 bases. Prepare refuses before publishing a basis when the surface
+exceeds 24 sites, 12,000 visible source characters, or 4 MiB of retained source.
+The `fast` profile runs clj-kondo and Standard Clojure Style on changed files.
+The `full` profile runs `make test`. Verification failure restores the original
+files before it returns.
 
 An inspect call declares all knowable reads in one `requests` vector. The four
 operation variants are `forms`, `outline`, `match`, and `xray`; every variant
@@ -365,6 +415,12 @@ than the CLI structural route's 32.44 seconds, not the hypothesized 2× and not
 the 30% keep threshold. Treat the tool as experimental and preserve that
 negative result when evaluating the next iteration.
 
+The first self-hosted proof-carrying change resolved one definition and two
+call sites in 0.45 seconds. Its original `fast` profile accidentally ran the
+complete MCP suite and took 45.65 seconds. Changed-file verification reduced
+that gate to 2.69 seconds: 0.19 seconds for clj-kondo and 2.50 seconds for the
+style check. This is component evidence, not yet a 3x clean-agent result.
+
 For an isolated evaluation, start the server with
 `BENCH_MCP_PORT=7889 make benchmark-inspect-mcp`; the harness creates a fresh
 temporary Codex home per run and writes only this registration there:
@@ -387,6 +443,11 @@ Check or remove the experimental entrance with:
 make mcp-status
 make uninstall-mcp-codex-dev
 ```
+
+`make mcp-status` checks both loopback services. cclsp listens on port 7890 and
+clj-surgeon listens on port 7888. TypeScript changes reload under the stable
+cclsp URL. Clojure handler changes can load through the embedded nREPL without
+restarting the MCP listener. See `CLAUDE.md` for the live-patch commands.
 
 `make install` remains the stable copied CLI-and-skills installation. It does
 not enable the experimental MCP server.

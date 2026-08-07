@@ -22,6 +22,19 @@ ecosystem.
 
 The audit established this boundary by elimination, not ambition.
 
+The complete implementation and runtime comparison now lives in
+[The Clojure Agent Tool Stack](../architecture-stack.md). The important
+distinction is that clojure-lsp is Clojure compiled as a GraalVM native image,
+while cclsp is a TypeScript/Bun MCP bridge and clj-surgeon's MCP server is a
+persistent Clojure/JVM process.
+
+| Layer | Runtime in this experiment | Authority |
+|---|---|---|
+| clj-kondo | Embedded in clojure-lsp's GraalVM native image | Resolved analysis and lint facts |
+| clojure-lsp | Clojure, GraalVM native executable, persistent LSP process | Incremental workspace semantics |
+| cclsp | TypeScript on Bun, persistent Streamable HTTP MCP | MCP-to-LSP translation and semantic result shaping |
+| clj-surgeon MCP | Clojure on HotSpot, Jetty and clojure-mcp, persistent Streamable HTTP MCP | Exact source, retained bases, guarded writes, rollback, and receipts |
+
 ## What the audit found, verified at the meter
 
 - **clojure-lsp 2026.02.20** (embedding clj-kondo 2026.01.19) installed,

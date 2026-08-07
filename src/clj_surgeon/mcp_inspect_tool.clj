@@ -2,6 +2,7 @@
   "Imperative MCP shell for one-read project-confined Clojure inspection."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -19,6 +20,13 @@
     "writes source, plans, receipts, or manifests. Use forms for exact named "
     "top-level source, outline for compact :ls-equivalent structure, match for "
     "Clojure syntax rather than text, and xray for shipped sandboxed analysis."
+    " When the desired change names one fully qualified Var but the exact edit "
+    "sites are not known, use mode=prepare-change with subject=namespace/name "
+    "and one concise intent. Omit verify unless the user explicitly requests "
+    "the full repository suite. Reference sites contain complete named owner "
+    "forms. Fill every null in the returned next_call with keep=true or one "
+    "complete replacement form. Submit that exact basis request to "
+    "apply_clojure_changes once; do not reconstruct a direct changes request."
     " One success with read_complete=true is terminal; do not repeat the call."
     " For example, count one def initializer with: (-> (form 'numeric-fields) "
     "initializer (expect-count 1) (analyze (fn [[fields]] (count fields))))."))
@@ -43,7 +51,7 @@
      properties)
    :required (into ["id" "operation" "file"] required)})
 
-(def inspect-schema
+(def typed-inspect-schema
   {:type "object"
    :additionalProperties false
    :properties
@@ -93,20 +101,46 @@
      :required ["requests" "files"]}}
    :required ["requests" "expect"]})
 
+(def prepare-change-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"mode" {:type "string" :const "prepare-change"}
+    "subject" {:type "string" :minLength 3
+               :description "One fully qualified Clojure Var: namespace/name."}
+    "intent" {:type "string" :minLength 1
+              :description "One concise semantic change decision."}
+    "verify" {:type "string" :enum ["fast" "full"] :default "fast"
+              :description "Omit for changed-file verification. Use full only when the user explicitly requests the complete repository suite."}}
+   :required ["mode" "subject" "intent"]})
+
+(def inspect-schema
+  {:type "object"
+   :additionalProperties false
+   :properties (merge (:properties typed-inspect-schema)
+                      (:properties prepare-change-schema))
+   :oneOf [{:required ["requests" "expect"]}
+           {:required ["mode" "subject" "intent"]}]})
+
 (def inspect-output-schema
   {:type "object"
    :additionalProperties true
    :properties
    {"ok" {:type "boolean"}
-    "operation" {:const "inspect_clojure"}
+    "operation" {:type "string"}
     "read_complete" {:type "boolean"}
     "request_count" {:type "integer"}
     "file_count" {:type "integer"}
     "results" {:type "array"}
     "file_hashes" {:type "object"}
     "source_character_count" {:type "integer"}
-    "next_action" {:type "string"}}
-   :required ["ok" "operation" "read_complete"]})
+    "next_action" {:type "string"}
+    "basis" {:type "string"}
+    "sites" {:type "array"}
+    "next_call" {:type "object"}}
+   :required ["ok" "operation"]
+   :anyOf [{:required ["read_complete"]}
+           {:required ["basis" "sites" "next_call"]}]})
 
 (def inspect-annotations
   {:title "Inspect Clojure"
@@ -118,9 +152,19 @@
 
 (defonce ^:private runtime-config (atom nil))
 
+(defn- semantic-init!
+  [config]
+  ((requiring-resolve 'clj-surgeon.mcp-semantic-client/init!) config))
+
+(defn- resolve-var!
+  [request]
+  ((requiring-resolve 'clj-surgeon.mcp-semantic-client/resolve-var!) request))
+
 (defn init!
   "Set the live inspect configuration. Passing nil disarms the handler."
   [config]
+  (when-let [cclsp-url (:cclsp-url config)]
+    (semantic-init! {:url cclsp-url}))
   (reset! runtime-config config))
 
 (defn- elapsed-ms
@@ -203,25 +247,33 @@
 
 (defn execute-inspect!
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
-  [{:keys [project-root telemetry read-source output-limits]} params]
+  [{:keys [project-root telemetry read-source output-limits semantic-resolver] :as config}
+   params]
   (let [started (System/nanoTime)
-        validated (inspect/validate-inspect-params params)
+        normalized-params (json/parse-string (json/generate-string params) true)
+        prepare? (= "prepare-change" (:mode normalized-params))
+        validated (when-not prepare? (inspect/validate-inspect-params params))
         result
         (assoc
-          (if-not (:ok validated)
-            (inspect-refusal validated)
-            (let [normalized (:params validated)
-                  captured (capture-snapshots
-                             project-root (:requests normalized)
-                             (or read-source slurp)
-                             (get-in normalized [:expect :files]))]
-              (if-not (:ok captured)
-                (inspect-refusal captured)
-                (assoc
-                  (inspect/evaluate-snapshots
-                    normalized (:snapshots captured)
-                    (merge inspect/default-output-limits output-limits))
-                  :file_read_count (:file_read_count captured)))))
+          (if prepare?
+            (change-buffer/prepare-change!
+              (assoc config
+                     :semantic-resolver (or semantic-resolver resolve-var!))
+              normalized-params)
+            (if-not (:ok validated)
+              (inspect-refusal validated)
+              (let [normalized (:params validated)
+                    captured (capture-snapshots
+                               project-root (:requests normalized)
+                               (or read-source slurp)
+                               (get-in normalized [:expect :files]))]
+                (if-not (:ok captured)
+                  (inspect-refusal captured)
+                  (assoc
+                    (inspect/evaluate-snapshots
+                      normalized (:snapshots captured)
+                      (merge inspect/default-output-limits output-limits))
+                    :file_read_count (:file_read_count captured))))))
           :elapsed_ms (elapsed-ms started))]
     (when telemetry
       (telemetry/record-inspect-call!
@@ -240,9 +292,16 @@
                   :read_complete false
                   :source_unchanged true
                   :next_action "restart_server"})
-        summary (if (:ok result)
-                  (inspect/concise-summary result)
-                  (json/generate-string result))]
+        summary (cond
+                  (not (:ok result)) (json/generate-string result)
+                  (= "prepare-change" (:mode result))
+                  (format (str "inspect_clojure prepare-change\n"
+                               "  %s sites · %s files · basis %s\n\n"
+                               "✓ semantic surface resolved\n"
+                               "✓ source hashes retained\n"
+                               "→ fill next_call decisions, then call apply_clojure_changes once")
+                          (:site-count result) (:file-count result) (:basis result))
+                  :else (inspect/concise-summary result))]
     (callback [summary] (not (:ok result)) result)
     (json/generate-string result)))
 

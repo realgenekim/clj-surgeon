@@ -113,6 +113,45 @@
         (recur parent path)
         (vec path)))))
 
+(defn- position<=?
+  [left-line left-character right-line right-character]
+  (not (pos? (compare [left-line left-character]
+                      [right-line right-character]))))
+
+(defn- contains-position?
+  [form-node line character]
+  (let [{:keys [row col end-row end-col]} (meta form-node)]
+    (and row col end-row end-col
+         (position<=? row col line character)
+         (position<=? line character end-row end-col))))
+
+(defn addressed-form-at
+  "Return the smallest complete collection form containing a 1-indexed source
+   position, together with its stable structural address."
+  [source {:keys [line character]}]
+  (when (and (string? source) (pos-int? line) (pos-int? character))
+    (let [root (z/of-string source {:track-position? true})]
+      (some->
+        (->> (zipper-locations root)
+             (map-indexed vector)
+             (keep (fn [[preorder candidate]]
+                     (let [candidate-node (z/node candidate)]
+                       (when (and (node/inner? candidate-node)
+                                  (not (node/whitespace-or-comment? candidate-node))
+                                  (contains-position? candidate-node line character))
+                         (let [{:keys [row end-row]} (meta candidate-node)
+                               size (node-size candidate-node)]
+                           {:address {:preorder preorder}
+                            :path (location-path candidate)
+                            :end-preorder (+ preorder size -1)
+                            :line row
+                            :end-line end-row
+                            :before (z/string candidate)
+                            :node-size size})))))
+             (sort-by :node-size)
+             first)
+        (dissoc :node-size)))))
+
 (defn- supported-file?
   [file]
   (and (string? file)
@@ -654,6 +693,68 @@
     (catch Exception e
       {:error (.getMessage e)
        :error-type :intent-compiler-failure})))
+
+(defn compile-addressed-transaction
+  "Compile retained structural addresses without rerunning a selector. Each edit
+   must contain :id, :file, :address or :path, :before, :after, :line,
+   :end-line, and :end-preorder."
+  [sources edits]
+  (try
+    (when-not (and (map? sources) (vector? edits) (seq edits))
+      (refuse! :invalid-addressed-transaction
+               "Addressed compilation requires source snapshots and at least one edit"))
+    (let [ids (mapv :id edits)]
+      (when-not (and (every? #(and (string? %) (seq %)) ids)
+                     (= (count ids) (count (distinct ids))))
+        (refuse! :invalid-addressed-transaction
+                 "Addressed edit IDs must be non-empty and unique")))
+    (let [prepared
+          (mapv
+            (fn [intent-index {:keys [file before after address path
+                                      line end-line end-preorder] :as edit}]
+              (when-not (and (string? file)
+                             (string? (get sources file))
+                             (string? before)
+                             (string? after)
+                             (or (map? address) (vector? path))
+                             (pos-int? line)
+                             (pos-int? end-line)
+                             (nat-int? end-preorder))
+                (refuse! :invalid-addressed-edit
+                         "Addressed edit is missing a retained source, address, or range"
+                         {:intent-index intent-index :id (:id edit)}))
+              (parse-one-form before ":before")
+              (parse-one-form after ":after")
+              (assoc edit :intent-index intent-index))
+            (range)
+            edits)
+          files (vec (distinct (map :file prepared)))
+          _ (doseq [file files]
+              (validate-complete-source! file (get sources file) :invalid-source))
+          edits-by-file (group-by :file prepared)
+          compiled-files (mapv #(compile-file % (get sources %) (get edits-by-file %))
+                               files)
+          intents (mapv (fn [{:keys [id file]}]
+                          {:id id :files [file] :match-count 1})
+                        prepared)]
+      {:ok true
+       :operation :change
+       :transaction-version transaction-version
+       :intent-count (count prepared)
+       :match-count (count prepared)
+       :changed-file-count (count compiled-files)
+       :intents intents
+       :files (mapv #(dissoc % :result-source :diff) compiled-files)
+       :diff (apply str (keep :diff compiled-files))
+       :original-sources (select-keys sources files)
+       :future-sources (into {} (map (juxt :file :result-source) compiled-files))
+       :validated {:whole-files-parsed true
+                   :file-count (count compiled-files)
+                   :retained-addresses true}})
+    (catch clojure.lang.ExceptionInfo e
+      (merge {:error (.getMessage e)} (ex-data e)))
+    (catch Exception e
+      {:error (.getMessage e) :error-type :intent-compiler-failure})))
 
 (defn- spec-files
   [spec]

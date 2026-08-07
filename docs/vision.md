@@ -393,6 +393,26 @@ inspect_clojure          perception, read-only, batched
 apply_clojure_changes    action, guarded transaction
 ```
 
+The proof-carrying change buffer joins these tools without adding a third
+surface. `inspect_clojure` can resolve one fully qualified Var through the hot
+semantic provider, anchor its definition and references to lossless source,
+and return the exact next basis-backed apply request. The model fills only
+`keep` or `replace` holes. `apply_clojure_changes` reuses retained addresses and
+hashes, then verifies and publishes the receipt. This is the first implemented
+route where one coherent model decision remains one edit transaction even when
+the exact sites were not known before inspection.
+
+The first self-hosted prepare took 0.45 seconds. Changed-file lint and style
+verification took 2.69 seconds. The earlier whole-MCP-suite profile took 45.65
+seconds and was removed from the inner loop.
+
+A later clean caller completed the intended route in exactly two MCP calls.
+It took 31.00 seconds versus 54.13 seconds for the correct native control. The
+42.7% reduction saved 23.13 seconds and produced a 1.75x speedup. This is one
+paired probe, not a replicated median or a 3x result. It proves that complete
+named owner forms and a basis-backed apply request can remove recovery and
+manifest reconstruction from a real return-contract edit.
+
 Batching is the intended source of a large read-side gain. A hot process alone
 is not sufficient evidence. The representative read portfolio compares
 complete task wall, calls, tokens, evidence bytes, and correctness against both

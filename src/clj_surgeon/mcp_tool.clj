@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -13,7 +14,9 @@
 
 (def tool-description
   (str
-    "STRUCTURAL CLOJURE EDITING. PREFER this over apply_patch when a request "
+    "IF inspect_clojure returned a basis and next_call, submit that basis route "
+    "exactly once. Do not reconstruct files, selectors, counts, or a direct "
+    "changes request. Otherwise, PREFER this over apply_patch when a request "
     "supplies two or more exact Clojure replacements or spans files. It avoids "
     "fragile patch-context mismatches, applies the whole decision in one tool "
     "call, and reduces source reads and generated tokens. When every source "
@@ -25,7 +28,10 @@
     "changed file, and publishes an inverse receipt. A success with "
     "verification_complete=true is terminal mutation proof: do not reread or "
     "diff unless the user explicitly requested aggregate review. Prefer native "
-    "patching for prose or one unique text edit. Example: changes=[{id:\"body\","
+    "patching for prose or one unique text edit. In a returned next_call, "
+    "preserve the basis, site IDs, and verify value. Replace every null with "
+    "exactly one keep or complete-form replace decision. "
+    "Example: changes=[{id:\"body\","
     "files:[\"src/ui.clj\"],forms:[\"shell\"],find:\":body\","
     "replace:\":body.page\",expect:{matches:1,each_form:1}}],"
     "expect={changes:1,edits:1,files:1}."))
@@ -33,7 +39,7 @@
 (def ^:private positive-integer-schema
   {:type "integer" :minimum 1})
 
-(def clj-change-schema
+(def explicit-change-schema
   {:type "object"
    :additionalProperties false
    :properties
@@ -78,6 +84,35 @@
       "files" (assoc positive-integer-schema :description "Total files that must change.")}
      :required ["changes" "edits" "files"]}}
    :required ["changes" "expect"]})
+
+(def basis-change-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"basis" {:type "string" :pattern "^cb-"
+             :description "Opaque basis returned by inspect_clojure prepare-change."}
+    "decisions"
+    {:type "array" :minItems 1
+     :description "Exactly one keep or replacement decision for every returned site."
+     :items
+     {:type "object"
+      :additionalProperties false
+      :properties
+      {"site" {:type "string" :minLength 1}
+       "keep" {:type "boolean" :const true}
+       "replace" {:type "string" :minLength 1}}
+      :required ["site"]
+      :oneOf [{:required ["keep"]} {:required ["replace"]}]}}
+    "verify" {:type "string" :enum ["fast" "full"] :default "fast"}}
+   :required ["basis" "decisions"]})
+
+(def clj-change-schema
+  {:type "object" :additionalProperties false :properties (merge (:properties basis-change-schema) (:properties explicit-change-schema)) :oneOf [{:required ["basis" "decisions"] :not {:anyOf [{:required ["changes"]} {:required ["expect"]}]}} {:required ["changes" "expect"] :not {:anyOf [{:required ["basis"]} {:required ["decisions"]} {:required ["verify"]}]}}]})
+
+(def clj-change-output-schema
+  {:type "object"
+   :properties {"ok" {:type "boolean"}}
+   :required ["ok"]})
 
 (defonce ^:private runtime-config (atom nil))
 
@@ -141,52 +176,63 @@
 
 (defn execute-request!
   "Validate, confine, and execute one typed request through the loaded kernel."
-  [{:keys [project-root receipt-dir telemetry]} params]
-  (let [total-start (System/nanoTime)
+  [{:keys [project-root receipt-dir telemetry] :as config} params]
+  (let [normalized-params (json/parse-string (json/generate-string params) true)
+        basis? (string? (:basis normalized-params))
+        total-start (System/nanoTime)
         [validated validation-ms]
-        (timed #(contract/validate-tool-params params))]
-    (if-not (:ok validated)
-      (record-result! telemetry params (contract/normalize-refusal validated)
-                      total-start {:validation_ms validation-ms})
-      (try
-        (let [[prepared confinement-ms]
-              (timed
-                #(let [root (real-root project-root)
-                       translated
-                       (contract/tool-params->transaction (:params validated))]
-                   {:root root
-                    :resolved (resolve-transaction-paths root translated)}))
-              {:keys [root resolved]} prepared]
-          (if-not (:ok resolved)
-            (record-result! telemetry params resolved total-start
-                            {:validation_ms validation-ms
-                             :confinement_ms confinement-ms})
-            (let [directory (str (or receipt-dir (default-receipt-dir)))
-                  directory-file (io/file directory)
-                  existed? (.exists directory-file)
-                  _ (.mkdirs directory-file)
-                  receipt (str (io/file directory
-                                        (str (UUID/randomUUID) ".edn")))
-                  [result kernel-ms]
-                  (timed #(transaction/execute-change!
-                            {:spec (:spec resolved) :receipt-out receipt}))
-                  classified (contract/classify-kernel-result
-                               (.toString root) result)]
-              (when-not (:ok classified)
-                (delete-empty-dir! directory (not existed?)))
-              (record-result! telemetry params classified total-start
+        (timed #(if basis?
+                  (change-buffer/validate-basis-request normalized-params)
+                  (contract/validate-tool-params params)))]
+    (if basis?
+      (record-result!
+        telemetry params
+        (if (:ok validated)
+          (change-buffer/apply-basis! config normalized-params)
+          validated)
+        total-start {:validation_ms validation-ms})
+      (if-not (:ok validated)
+        (record-result! telemetry params (contract/normalize-refusal validated)
+                        total-start {:validation_ms validation-ms})
+        (try
+          (let [[prepared confinement-ms]
+                (timed
+                  #(let [root (real-root project-root)
+                         translated
+                         (contract/tool-params->transaction (:params validated))]
+                     {:root root
+                      :resolved (resolve-transaction-paths root translated)}))
+                {:keys [root resolved]} prepared]
+            (if-not (:ok resolved)
+              (record-result! telemetry params resolved total-start
                               {:validation_ms validation-ms
-                               :confinement_ms confinement-ms
-                               :kernel_ms kernel-ms}))))
-        (catch Exception error
-          (record-result!
-            telemetry params
-            {:ok false
-             :error_type "mcp-adapter-failure"
-             :error (.getMessage error)
-             :source_unchanged true
-             :remedy "Correct the project root or request and call apply_clojure_changes once."}
-            total-start {:validation_ms validation-ms}))))))
+                               :confinement_ms confinement-ms})
+              (let [directory (str (or receipt-dir (default-receipt-dir)))
+                    directory-file (io/file directory)
+                    existed? (.exists directory-file)
+                    _ (.mkdirs directory-file)
+                    receipt (str (io/file directory
+                                          (str (UUID/randomUUID) ".edn")))
+                    [result kernel-ms]
+                    (timed #(transaction/execute-change!
+                              {:spec (:spec resolved) :receipt-out receipt}))
+                    classified (contract/classify-kernel-result
+                                 (.toString root) result)]
+                (when-not (:ok classified)
+                  (delete-empty-dir! directory (not existed?)))
+                (record-result! telemetry params classified total-start
+                                {:validation_ms validation-ms
+                                 :confinement_ms confinement-ms
+                                 :kernel_ms kernel-ms}))))
+          (catch Exception error
+            (record-result!
+              telemetry params
+              {:ok false
+               :error_type "mcp-adapter-failure"
+               :error (.getMessage error)
+               :source_unchanged true
+               :remedy "Correct the project root or request and call apply_clojure_changes once."}
+              total-start {:validation_ms validation-ms})))))))
 
 (defn handle-clj-change
   "clojure-mcp callback handler. Kept as a Var for live nREPL redefinition."
@@ -198,8 +244,14 @@
                   :error "apply_clojure_changes server is not initialized"
                   :source_unchanged true
                   :remedy "Restart the configured clj-surgeon MCP server."})
-        body (json/generate-string result)]
-    (callback [body] (not (:ok result)))
+        body (json/generate-string result)
+        summary (if (:ok result)
+                  (format "Applied %s structural edit(s) across %s file(s); verification %s."
+                          (or (:match-count result) 0)
+                          (or (:changed-file-count result) 0)
+                          (or (get-in result [:verification :profile]) "complete"))
+                  body)]
+    (callback [summary] (not (:ok result)) result)
     body))
 
 (def clj-change-tool
@@ -207,6 +259,8 @@
    :name "apply_clojure_changes"
    :description tool-description
    :schema clj-change-schema
+   :output-schema clj-change-output-schema
+   :structured? true
    :tool-fn #'handle-clj-change})
 
 (defn all-tools

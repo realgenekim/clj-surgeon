@@ -1,6 +1,5 @@
 (ns clj-surgeon.mcp-tool-test
   (:require
-   [cheshire.core :as json]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
@@ -122,6 +121,17 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest basis-route-refuses-mixed-fields-before-basis-lookup
+  (let [result (mcp-tool/execute-request!
+                 {:project-root "."}
+                 {"basis" "cb-does-not-exist"
+                  "decisions" []
+                  "changes" []})]
+    (is (false? (:ok result)))
+    (is (= :invalid-mcp-request (:error-type result)))
+    (is (= ["changes"] (:unknown-fields result)))
+    (is (:source-unchanged result))))
+
 (deftest confines-real-targets-to-the-project-root
   (let [workspace (temp-dir)
         outside (temp-dir)
@@ -155,8 +165,9 @@
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")
         calls (atom [])
-        callback (fn [content error?]
-                   (swap! calls conj {:payload (json/parse-string (first content))
+        callback (fn [content error? structured]
+                   (swap! calls conj {:content (first content)
+                                      :payload structured
                                       :error? error?}))]
     (try
       (copy-tree! (str fixture-root "/before") workspace)
@@ -164,13 +175,14 @@
                        :receipt-dir (.getPath receipt-dir)})
       (mcp-tool/handle-clj-change nil decision-request callback)
       (is (= false (:error? (first @calls))))
-      (is (= true (get-in @calls [0 :payload "verification_complete"])))
+      (is (= true (get-in @calls [0 :payload :verification_complete])))
+      (is (.startsWith ^String (get-in @calls [0 :content]) "Applied "))
       (mcp-tool/handle-clj-change nil
                                   (assoc decision-request "unexpected" true)
                                   callback)
       (is (= true (:error? (second @calls))))
       (is (= "invalid-mcp-request"
-             (get-in @calls [1 :payload "error_type"])))
+             (get-in @calls [1 :payload :error_type])))
       (finally
         (mcp-tool/init! nil)
         (delete-tree! workspace)))))

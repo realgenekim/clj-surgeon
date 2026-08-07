@@ -13,8 +13,9 @@ have not crossed 3x in a replicated end-to-end product lane.
 
 The strongest replicated write result is 1.76x faster than native. The best
 mutually correct semantic-reference result is 1.93x faster than native, from
-one replication. The generic read batch is only 1.16x faster than the current
-CLI route.
+one replication. The first correct proof-carrying change-buffer task is 1.75x
+faster than native, from one paired probe. The generic read batch is only 1.16x
+faster than the current CLI route.
 
 These are substantial gains, but they are not nirvana.
 
@@ -35,6 +36,7 @@ Correctness gates all timing claims.
 |---|---:|---:|---:|---|
 | Typed guarded write | Native 43.190 s | MCP 24.530 s | **1.76x** | Four counterbalanced correct runs |
 | Project-rule write adoption | Native 43.190 s | MCP 27.432 s | **1.57x** | Four correct runs. Voluntary adoption: 4/4 |
+| Proof-carrying return-contract edit | Native 54.13 s | Basis route 31.00 s | **1.75x** | One correct paired probe; exact two-call route |
 | Generic structural read | CLI 32.442 s | MCP 27.969 s | **1.16x** | Four counterbalanced correct runs |
 | Reference-owner task | Native 46.686 s | cclsp 24.252 s | **1.93x** | One mutually correct replication |
 | Outgoing-call task | Native 60.777 s, incorrect | cclsp 20.049 s, correct | **3.03x wall** | Not a valid efficiency comparison because native failed correctness |
@@ -81,6 +83,13 @@ caller work.
 
 This is the best clue in the current evidence base: return the next decision's
 inputs, not low-level coordinates.
+
+The first proof-carrying change-buffer replay confirmed the direction on a
+complete edit. Returning call expressions made the treatment take 95.75
+seconds and forced source reconstruction. Returning complete named owners made
+the same route finish in 31.00 seconds with no source read and no fallback. The
+result did not cross 3x, but it removed 64.75 seconds from the failed product
+shape.
 
 ## The route to nirvana
 

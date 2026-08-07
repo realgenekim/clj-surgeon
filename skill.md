@@ -6,7 +6,6 @@ description: >-
 ---
 
 # clj-surgeon
-
 Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-surgeon` from `PATH`.
 
 ## Minimize total turns
@@ -14,6 +13,7 @@ Before Read, Edit, grep, sed, or cat touches an existing Clojure file, use `clj-
 - For cross-file definitions, references, implementations, and call hierarchy, search the deferred MCP catalog for `mcp__cclsp__*` before falling back to source. For several known structural questions, prefer `inspect_clojure` when available. Use published tool schemas; do not guess arguments or reread evidence that already names its owner. Treat Surgeon as a lens, not a quota. On a bounded feature, stop after three source reads; choose one batch, X-ray, or native route instead of reconstructing a namespace form by form.
 - Native Write is right for new files. Use native tools for JavaScript, tests, and prose/comments. Use a normal patch when the requested Clojure change cannot be stated as exact structural substitutions.
 - Do not use cclsp rename or edit tools. Use clj-surgeon for structural writes, guarded transactions, and receipts. A known literal edit may be the first source-bearing call: one `:edit` with `:expect` applies and verifies it. Do not pre-read known relationships or use Surgeon after tests merely to prove parsing.
+- When the goal names one fully qualified Var but the exact sites are unknown, call `inspect_clojure` with `mode=prepare-change`, `subject=namespace/name`, and one concise `intent`. Omit `verify` unless the user explicitly requests the full repository suite. Do not call cclsp or read source first. Each reference site contains its complete named owner. Copy `next_call`; replace every `null` with exactly one `keep=true` or one complete replacement form. Submit that basis request once; never reconstruct a direct `changes` request. A successful `verification_complete=true` result is terminal; do not reread or diff only to reproduce its evidence.
 - Stop on nonzero exit or EDN `:error`. Call `clj-surgeon :op OP --help` only when the routes below do not cover the task.
 
 ## Smallest structural route
