@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "clj_surgeon",
+  "project_id": "965eaeb3-e506-490c-bd53-04cda1233aee"
+}

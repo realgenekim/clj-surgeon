@@ -24,6 +24,12 @@ updates, and verification gates. It is not a chronological coding diary.
 ## Testing
 
 - Run: `make test`
+- For the inner Clojure development loop, first run
+  `clj-nrepl-eval --discover-ports` and reuse the project-local nREPL. Reload
+  the changed namespaces and run focused test vars or pure semantic probes in
+  that warm JVM. Reserve fresh `clojure -M` or `make` test processes for
+  milestone gates, because cold runs verify classpath, startup, and isolation
+  behavior that a warm JVM can hide.
 - **Read [docs/testing-guidelines.md](docs/testing-guidelines.md)** before writing tests.
 - Core rule: pure functions take data and return data. Test them with literals, not temp files.
 - If you need a temp file to test a function, the function needs refactoring, not the test.
@@ -66,6 +72,10 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Key conventions
 
+- Use the hottest capable entrance. Prefer `inspect_clojure` and
+  `apply_clojure_changes` over the process-starting CLI. Use the CLI only when
+  MCP is unavailable, the operation is not exposed there, or the CLI itself is
+  under test.
 - For cross-file definitions, references, implementations, incoming calls,
   and outgoing calls, search the deferred MCP catalog for `mcp__cclsp__*` before
   falling back to source. Use the published tool schema; do not guess
@@ -74,10 +84,11 @@ updates, and verification gates. It is not a chronological coding diary.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
-- If one fully qualified Var names the change but exact sites are unknown, call
-  `inspect_clojure` with `mode=prepare-change`, `subject=namespace/name`, and one
-  concise `intent`. Copy its `next_call`. Replace every decision `null` with
-  exactly one `keep=true` or one replacement form. Call
+- If one Var or one related Var set names the change but exact sites are
+  unknown, call `inspect_clojure` with `mode=prepare-change`, one concise
+  `intent`, and either `subject=namespace/name` or an ordered `subjects` array.
+  Copy its `next_call`. Replace every decision `null` with exactly one
+  `keep=true` or one replacement form. Call
   `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
   selectors, counts, hashes, basis IDs, or site IDs.
 - cclsp does not have write authority in this repository. Use clj-surgeon for
@@ -88,7 +99,8 @@ updates, and verification gates. It is not a chronological coding diary.
 - All ops return EDN data, not side effects (except `!`-suffixed ops which write files)
 - Errors use a human-readable `:error` string plus a stable keyword
   `:error-type` and structured diagnostic fields.
-- Before native Read, Edit, grep, sed, or cat touches an existing Clojure,
+- The following are CLI fallback conventions. Before native Read, Edit, grep,
+  sed, or cat touches an existing Clojure,
   ClojureScript, or CLJC file, load the working-tree skill and use
   clj-surgeon. Native Write remains appropriate for new files; use native
   editing for unsupported prose- or comment-heavy changes. For a file over
@@ -168,7 +180,7 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Live MCP development
 
-`make mcp-start` starts the complete repository-scoped stack:
+`make mcp-start` starts the shared local stack:
 
 ```text
 clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
@@ -177,11 +189,22 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
               clj-surgeon http://127.0.0.1:7888/mcp
 ```
 
+- Join a workspace with `clj-surgeon up [WORKSPACE]`; do not create a new
+  server pair for each repository. The command is idempotent and keeps older
+  Make onboarding targets only as compatibility aliases.
+- For a non-default workspace, pass its canonical absolute `workspace_root`
+  to both MCP tools. Preserve `workspace_root` from a prepared `next_call`.
+  Workspace routing is request data, not MCP server identity.
+
 - cclsp uses the pinned Bun under `../cclsp-structural-results/node_modules`.
   Its launchd job runs `bun --watch`. TypeScript changes load under the same
   URL. Run `make cclsp-status` to verify the provider.
-- clj-surgeon runs an embedded nREPL. Confirm that the port belongs to the live
-  MCP JVM before loading code:
+- clj-surgeon runs an embedded nREPL. For interactive probes, prefer the
+  persistent Clojure MCP `clojure_eval` tool with that port. It avoids shell
+  quoting and returns one structured result while retaining the same live JVM
+  and definitions. Use `clj-nrepl-eval` for Make automation or when the MCP
+  tool is unavailable. Confirm that the port belongs to the live MCP JVM before
+  loading code:
 
   ```bash
   PORT=$(cat ~/.local/state/clj-surgeon/mcp/nrepl-port)
@@ -190,10 +213,23 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
     "(require 'clj-surgeon.mcp-inspect-tool :reload)"
   ```
 
-- Handler Vars are dereferenced for each request. A handler or pure-kernel
-  reload does not restart port 7888 or the coding-agent session.
-- The MCP SDK publishes tool names and JSON schemas at server initialization.
-  After a schema or catalog change, run `make mcp-stop && make mcp-start`.
+  In an agent session, the equivalent preferred probe is:
+
+  ```text
+  clojure_eval(port=PORT,
+    code="(require 'clj-surgeon.mcp-inspect-tool :reload)")
+  ```
+
+- Handler Vars are dereferenced for each request. Run `make mcp-reload` after a
+  handler, schema, description, annotation, or catalog change. The command runs
+  the focused gate, reloads the namespaces, synchronizes the live registry, and
+  reports contract hashes. It does not restart port 7888.
+- The server advertises `tools.listChanged=true` and emits
+  `notifications/tools/list_changed`. A supporting client re-lists the tool
+  catalog on the same connection. The current Codex client can keep its
+  model-visible schema text for the life of a turn. Start a new Codex session
+  only when that cached schema prevents the next call. Do not restart the MCP
+  server for a Clojure or tool-contract change.
 - `make mcp-status` verifies both loopback services, the launchd job, and the
   Codex registration.
 - Run `make mcp-test` after each live patch. Run `make test` before completion.
