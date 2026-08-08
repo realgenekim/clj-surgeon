@@ -300,7 +300,11 @@
       (contains? result :match-count)
       (assoc :match_count (:match-count result))
       (contains? result :failure-count)
-      (assoc :failure_count (:failure-count result)))))
+      (assoc :failure_count (:failure-count result))
+      (contains? result :available-form-count)
+      (assoc :available_form_count (:available-form-count result))
+      (contains? result :form-candidates)
+      (assoc :form_candidates (json-data (:form-candidates result))))))
 
 (defn- forms-result
   [request snapshot]
@@ -308,7 +312,30 @@
                 (:file request) (:source snapshot)
                 {:forms (mapv symbol (:forms request))})]
     (if (:error found)
-      found
+      (let [requested (mapv str (:forms request))
+            available
+            (->> (outline/outline-source (:file request) (:source snapshot))
+                 :forms
+                 (keep :name)
+                 (map str)
+                 distinct
+                 vec)
+            common-prefix-length
+            (fn [left right]
+              (count (take-while true? (map = left right))))
+            candidates
+            (->> available
+                 (sort-by
+                   (fn [candidate]
+                     [(- (apply max 0
+                                (map #(common-prefix-length % candidate)
+                                     requested)))
+                      candidate]))
+                 (take 8)
+                 vec)]
+        (assoc found
+               :available-form-count (count available)
+               :form-candidates candidates))
       {:id (:id request)
        :operation "forms"
        :file (:file request)
@@ -326,7 +353,14 @@
                   :name (str (:name form))
                   :platforms (mapv name (:platforms form))
                   :file (:file request)
-                  :file_hash (:hash snapshot)}
+                  :file_hash (:hash snapshot)
+                  :source_anchor {:file (:file request)
+                                  :source_sha256 (:hash snapshot)
+                                  :owner (str (:name form))
+                                  :range {:start {:line (dec (:line form))
+                                                  :character 0}
+                                          :end {:line (:end-line form)
+                                                :character 0}}}}
                  (:comment-start form)
                  (assoc :comment_start (:comment-start form))))
              (:forms found))})))

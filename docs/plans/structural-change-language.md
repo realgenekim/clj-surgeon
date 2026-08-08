@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted design. The exact scoped find/replace slice is implemented. Relational
-paths, captures, insertion, deletion, and computed transforms remain
-evidence-gated proposals.
+Accepted design. Exact scoped replacement and guarded comment-free sibling
+insertion are implemented. Relational paths, captures, deletion, and computed
+transforms remain evidence-gated proposals.
 
 This design extends the shipped exact `:change` transaction. It does not
 replace that contract. The purpose of the paper exercises is to find the
@@ -720,7 +720,7 @@ After that slice passes real dogfood, test in this order:
 
 1. existing lens `:path` selection;
 2. one-subtree capture templates;
-3. comment-free sibling insertion;
+3. comment-free sibling insertion; **implemented and live-proven**
 4. deletion with an explicit gap contract;
 5. integration of specialized move and dependency-aware intents.
 

@@ -84,6 +84,14 @@ updates, and verification gates. It is not a chronological coding diary.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
+- A named-form result includes the exact `source_anchor` required by cclsp.
+  Copy it into `resolve_var_surface`. For up to four related known Vars, use
+  one ordered `resolve_var_surfaces` call. Do not discard exact evidence and
+  restart with an unanchored workspace-symbol query.
+- For an unanchored fully qualified Var, keep the caller's canonical
+  `workspace_root` even when the Var may live in a configured sibling project.
+  Do not guess a sibling path. Onboarding publishes source roots; cclsp returns
+  the authoritative workspace and the exact shortlist or fallback evidence.
 - If one Var or one related Var set names the change but exact sites are
   unknown, call `inspect_clojure` with `mode=prepare-change`, one concise
   `intent`, and either `subject=namespace/name` or an ordered `subjects` array.
@@ -91,6 +99,9 @@ updates, and verification gates. It is not a chronological coding diary.
   `keep=true` or one replacement form. Call
   `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
   selectors, counts, hashes, basis IDs, or site IDs.
+- If cclsp does not index a known owner, prepare it with project-relative
+  `file` plus exact top-level `form`. This exact-source route does not claim a
+  reference surface.
 - cclsp does not have write authority in this repository. Use clj-surgeon for
   structural writes, guarded transactions, and receipts.
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`
@@ -195,10 +206,31 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
 - For a non-default workspace, pass its canonical absolute `workspace_root`
   to both MCP tools. Preserve `workspace_root` from a prepared `next_call`.
   Workspace routing is request data, not MCP server identity.
+- A direct `changes` item uses `id`, `files`, exactly one of `forms` or
+  `owner`, `expect`, and exactly one action: `replace`, `insert_before`,
+  `insert_after`, `rename_binding`, or `assoc_entry`. Replacement, insertion,
+  and `assoc_entry` also require one complete `find` form. Sibling insertion preserves the existing
+  whitespace gap and refuses when that gap contains comments or detached
+  source. A binding pair or map entry is sibling syntax; target its complete
+  value form instead of submitting the pair as a form prefix.
+- Use `rename_binding` to preserve an external `:keys` keyword while renaming
+  one resolved local binding per named owner. Use `assoc_entry` to preserve
+  comments in logically equal maps. Add `inside` to select one semantic
+  ancestor when equal maps occur in the same owner.
 
 - cclsp uses the pinned Bun under `../cclsp-structural-results/node_modules`.
   Its launchd job runs `bun --watch`. TypeScript changes load under the same
-  URL. Run `make cclsp-status` to verify the provider.
+  URL. Run `make cclsp-status` to verify the provider. The exact health
+  endpoint is `http://127.0.0.1:7890/healthz`; it reports per-workspace LSP
+  sessions, child PIDs, outstanding requests, and recovery history.
+- Interactive semantic requests have a 10-second timeout; cold initialization
+  has a separate 30-second timeout. A `textDocument/documentSymbol` timeout
+  triggers one exact-root recovery. cclsp cancels the request, waits for the
+  old child to exit, initializes one replacement, and retries under its new
+  session. The triggering result reports old/new sessions and PIDs, exit mode,
+  and termination time in `semantic_recovery`. Inspect
+  `~/.local/state/clj-surgeon/cclsp/server.log` for the JSONL request flight
+  recorder. Do not restart the shared parent or unrelated workspace children.
 - clj-surgeon runs an embedded nREPL. For interactive probes, prefer the
   persistent Clojure MCP `clojure_eval` tool with that port. It avoids shell
   quoting and returns one structured result while retaining the same live JVM
@@ -230,6 +262,9 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
   model-visible schema text for the life of a turn. Start a new Codex session
   only when that cached schema prevents the next call. Do not restart the MCP
   server for a Clojure or tool-contract change.
+- `/healthz` is a functional readiness check: it returns success only when the
+  shared tool runtime and live tool registry are both ready. After reload work,
+  verify one real `inspect_clojure` request as the final authority.
 - `make mcp-status` verifies both loopback services, the launchd job, and the
   Codex registration.
 - Run `make mcp-test` after each live patch. Run `make test` before completion.

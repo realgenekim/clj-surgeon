@@ -363,7 +363,16 @@
       (testing label
         (let [result (transaction/compile-transaction sources spec)]
           (is (= error (:error-type result)))
-          (is (nil? (:future-sources result))))))))
+          (is (nil? (:future-sources result))))))
+    (testing "a parse refusal names the exact change and field"
+      (let [result (transaction/compile-transaction
+                     sources
+                     (change-spec [(assoc valid :find "(defn incomplete")]
+                                  valid-expect))]
+        (is (= :invalid-intent-form (:error-type result)))
+        (is (= 0 (:change-index result)))
+        (is (= :body (:change-id result)))
+        (is (= ":find" (:field result)))))))
 
 (deftest refuses-overlapping-intents-before-producing-future-source
   (let [sources
@@ -481,6 +490,296 @@
         (is (= source (slurp canonical-file))))
       (finally
         (fs/delete-tree temp-dir)))))
+
+(deftest assoc-entry-matches-semantic-maps-and-preserves-comments
+  (let [source
+        (str "(ns demo)\n"
+             "(defn assertions []\n"
+             "  [(is (= {:a 1 :b 2} actual-a))\n"
+             "   (is (= {:a 1\n"
+             "           ;; This contract comment must remain attached.\n"
+             "           :b 2} actual-b))])\n")
+        spec
+        {:changes
+         [{:id :add-status
+           :in ["src/demo.clj"]
+           :forms ['assertions]
+           :find "{:a 1 :b 2}"
+           :do [:assoc-entry {:key ":status" :value ":ready"}]
+           :expect {:matches 2 :each-file 2}}]
+         :expect {:changes 1 :edits 2 :files 1}}
+        result (transaction/compile-transaction {"src/demo.clj" source} spec)
+        future (get-in result [:future-sources "src/demo.clj"])]
+    (is (:ok result))
+    (is (= 2 (:match-count result)))
+    (is (str/includes? future "{:a 1 :b 2 :status :ready}"))
+    (is (str/includes? future
+                       ";; This contract comment must remain attached."))
+    (is (str/includes? future ":b 2 :status :ready}"))))
+
+(deftest assoc-entry-semantic-ancestor-selects-one-comment-bearing-map
+  (let [source
+        (str "(ns demo)\n"
+             "(defn assertions []\n"
+             "  [(is (= {:a 1 :b 2} actual-a))\n"
+             "   (is (= {:a 1\n"
+             "           ;; Keep this exact explanation.\n"
+             "           :b 2} actual-b))])\n")
+        change
+        {:id :add-status
+         :in ["src/demo.clj"]
+         :forms ['assertions]
+         :find "{:a 1 :b 2}"
+         :inside "(is (= {:a 1 :b 2} actual-b))"
+         :do [:assoc-entry {:key ":status" :value ":ready"}]
+         :expect {:matches 1}}
+        result
+        (transaction/compile-transaction
+          {"src/demo.clj" source}
+          {:changes [change]
+           :expect {:changes 1 :edits 1 :files 1}})
+        future (get-in result [:future-sources "src/demo.clj"])]
+    (is (:ok result))
+    (is (str/includes? future "{:a 1 :b 2} actual-a"))
+    (is (str/includes? future ";; Keep this exact explanation."))
+    (is (str/includes? future ":b 2 :status :ready} actual-b")))
+  (let [source (str "(ns demo)\n"
+                    "(defn assertions [] [{:a 1} {:a 1}])\n")
+        result
+        (transaction/compile-transaction
+          {"src/demo.clj" source}
+          {:changes
+           [{:id :ambiguous
+             :in ["src/demo.clj"]
+             :forms ['assertions]
+             :find "{:a 1}"
+             :do [:assoc-entry {:key ":status" :value ":ready"}]
+             :expect {:matches 1}}]
+           :expect {:changes 1 :edits 1 :files 1}})]
+    (is (= :expect-count-mismatch (:error-type result)))
+    (is (nil? (:future-sources result)))))
+
+(deftest assoc-entry-refuses-an-existing-key-before-producing-source
+  (let [source (str "(ns demo)\n"
+                    "(defn assertion [] {:a 1 :status :old})\n")
+        result
+        (transaction/compile-transaction
+          {"src/demo.clj" source}
+          {:changes
+           [{:id :duplicate-status
+             :in ["src/demo.clj"]
+             :forms ['assertion]
+             :find "{:a 1 :status :old}"
+             :do [:assoc-entry {:key ":status" :value ":ready"}]
+             :expect {:matches 1}}]
+           :expect {:changes 1 :edits 1 :files 1}})]
+    (is (= :map-key-already-present (:error-type result)))
+    (is (nil? (:future-sources result)))))
+
+(def ^:private two-owner-binding-analysis
+  {:locals
+   [{:row 2 :col 21 :end-row 2 :end-col 28 :name 'sort-by :id 1}
+    {:row 3 :col 22 :end-row 3 :end-col 29 :name 'sort-by :id 2}]
+   :local-usages
+   [{:row 2 :col 35 :end-row 2 :end-col 42 :name 'sort-by :id 1}
+    {:row 2 :col 54 :end-row 2 :end-col 61 :name 'sort-by :id 1}
+    {:row 3 :col 39 :end-row 3 :end-col 46 :name 'sort-by :id 2}]
+   :keywords
+   [{:row 2 :col 21 :end-row 2 :end-col 28
+     :name "sort-by" :keys-destructuring true}
+    {:row 3 :col 22 :end-row 3 :end-col 29
+     :name "sort-by" :keys-destructuring true}]})
+
+(defn- binding-rename-spec
+  [matches]
+  {:changes
+   [{:id :rename-sort-binding
+     :in ["src/demo.clj"]
+     :forms ['feed 'table]
+     :do [:rename-binding
+          {:from 'sort-by
+           :to 'sort-field
+           :preserve-external-key true}]
+     :expect {:matches matches :each-form 1}}]
+   :expect {:changes 1 :edits matches :files 1}})
+
+(deftest binding-rename-preserves-external-keys-across-several-owners
+  (let [source (str "(ns demo)\n"
+                    "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
+                    "(defn table [{:keys [sort-by]}] (name sort-by))\n")
+        result (binding [transaction/*binding-analyzer*
+                         (fn [_ _] two-owner-binding-analysis)]
+                 (transaction/compile-transaction
+                   {"src/demo.clj" source}
+                   (binding-rename-spec 5)))]
+    (is (:ok result))
+    (is (= 5 (:match-count result)))
+    (is (= 2 (get-in result [:changes 0 :binding-count])))
+    (is (= (str "(ns demo)\n"
+                "(defn feed [{:keys [] :or {sort-field :score} sort-field :sort-by}] [sort-field :sort-by clojure.core/sort-by])\n"
+                "(defn table [{:keys [] sort-field :sort-by}] (name sort-field))\n")
+           (get-in result [:future-sources "src/demo.clj"])))
+    (is (str/includes?
+          (get-in result [:future-sources "src/demo.clj"])
+          "clojure.core/sort-by"))))
+
+(deftest binding-rename-refuses-stale-count-ambiguity-and-capture
+  (let [source (str "(ns demo)\n"
+                    "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
+                    "(defn table [{:keys [sort-by]}] (name sort-by))\n")
+        compile-with
+        (fn [analysis matches]
+          (binding [transaction/*binding-analyzer* (fn [_ _] analysis)]
+            (transaction/compile-transaction
+              {"src/demo.clj" source}
+              (binding-rename-spec matches))))]
+    (is (= :expect-count-mismatch
+           (:error-type (compile-with two-owner-binding-analysis 6))))
+    (is (= :binding-identity-ambiguous
+           (:error-type
+             (compile-with
+               (update two-owner-binding-analysis :locals conj
+                       {:row 2 :col 54 :end-row 2 :end-col 61
+                        :name 'sort-by :id 3})
+               5))))
+    (is (= :binding-capture-risk
+           (:error-type
+             (compile-with
+               (update two-owner-binding-analysis :locals conj
+                       {:row 2 :col 54 :end-row 2 :end-col 64
+                        :name 'sort-field :id 3})
+               5))))))
+
+(deftest binding-rename-refuses-comment-sensitive-destructuring
+  (let [source (str "(ns demo)\n"
+                    "(defn feed [{:keys [sort-by ; public key\n"
+                    "                     ]}] sort-by)\n"
+                    "(defn table [{:keys [sort-by]}] sort-by)\n")
+        analysis
+        {:locals
+         [{:row 2 :col 21 :end-row 2 :end-col 28 :name 'sort-by :id 1}
+          {:row 4 :col 22 :end-row 4 :end-col 29 :name 'sort-by :id 2}]
+         :local-usages
+         [{:row 3 :col 26 :end-row 3 :end-col 33 :name 'sort-by :id 1}
+          {:row 4 :col 32 :end-row 4 :end-col 39 :name 'sort-by :id 2}]}
+        result (binding [transaction/*binding-analyzer* (fn [_ _] analysis)]
+                 (transaction/compile-transaction
+                   {"src/demo.clj" source}
+                   (binding-rename-spec 4)))]
+    (is (= :comment-sensitive-binding (:error-type result)))
+    (is (nil? (:future-sources result)))))
+
+(deftest guarded-sibling-insertion-preserves-collection-style
+  (doseq [[label source find operator inserted expected]
+          [[:vector "(ns sample)\n(def xs [:a :c])\n"
+            ":a" :insert-right [":b"]
+            "(ns sample)\n(def xs [:a :b :c])\n"]
+           [:set "(ns sample)\n(def xs #{:a :c})\n"
+            ":c" :insert-left [":b"]
+            "(ns sample)\n(def xs #{:a :b :c})\n"]
+           [:map "(ns sample)\n(def xs {:a 1 :c 3})\n"
+            ":c" :insert-left [":b" "2"]
+            "(ns sample)\n(def xs {:a 1 :b 2 :c 3})\n"]
+           [:list "(ns sample)\n(defn run [] (f a c))\n"
+            "a" :insert-right ["b"]
+            "(ns sample)\n(defn run [] (f a b c))\n"]
+           [:multiline "(ns sample)\n(def xs [:a\n         :c])\n"
+            ":c" :insert-left [":b"]
+            "(ns sample)\n(def xs [:a\n         :b\n         :c])\n"]
+           [:boundary "(ns sample)\n(def xs [:a])\n"
+            ":a" :insert-right [":b" ":c"]
+            "(ns sample)\n(def xs [:a :b :c])\n"]]]
+    (testing (name label)
+      (let [owner (if (= :list label) 'run 'xs)
+            spec {:changes [{:id :insert
+                             :in ["src/sample.clj"]
+                             :forms [owner]
+                             :find find
+                             :do [operator inserted]
+                             :expect {:matches 1}}]
+                  :expect {:changes 1 :edits 1 :files 1}}
+            result (transaction/compile-transaction
+                     {"src/sample.clj" source} spec)]
+        (is (:ok result))
+        (is (= expected (get-in result [:future-sources "src/sample.clj"])))
+        (is (valid-source? expected))))))
+
+(deftest guarded-sibling-insertion-refuses-comment-bearing-or-invalid-gaps
+  (doseq [[label operator]
+          [[:before-comment :insert-left]
+           [:after-comment :insert-right]]]
+    (testing (name label)
+      (let [source "(ns sample)\n(def xs [:a\n ;; belongs to :c\n :c])\n"
+            find (if (= :insert-left operator) ":c" ":a")
+            result
+            (transaction/compile-transaction
+              {"src/sample.clj" source}
+              {:changes [{:id :ambiguous
+                          :in ["src/sample.clj"]
+                          :forms ['xs]
+                          :find find
+                          :do [operator [":b"]]
+                          :expect {:matches 1}}]
+               :expect {:changes 1 :edits 1 :files 1}})]
+        (is (= :ambiguous-insertion-gap (:error-type result)))
+        (is (= :ambiguous (:change-id result)))
+        (is (= "src/sample.clj" (:file result))))))
+  (doseq [[operator inserted]
+          [[:insert-left []]
+           [:insert-right [" "]]
+           [:insert-left ["(:broken"]]]]
+    (let [result
+          (transaction/compile-transaction
+            {"src/sample.clj" "(ns sample)\n(def xs [:a])\n"}
+            {:changes [{:id :invalid
+                        :in ["src/sample.clj"]
+                        :forms ['xs]
+                        :find ":a"
+                        :do [operator inserted]
+                        :expect {:matches 1}}]
+             :expect {:changes 1 :edits 1 :files 1}})]
+      (is (contains? #{:unsupported-change-operator :invalid-intent-form}
+                     (:error-type result))))))
+
+(deftest namespace-owner-is-an-exact-structural-scope
+  (let [sources {"src/app.clj"
+                 (str "(ns app.core\n"
+                      "  (:require [legacy.api :as legacy]))\n"
+                      "(defn use-api [] [legacy.api :as legacy])\n")}
+        change {:id :namespace-require
+                :in ["src/app.clj"]
+                :owner {:kind :namespace :name 'app.core}
+                :find "[legacy.api :as legacy]"
+                :do [:replace "[current.api :as current]"]
+                :expect {:matches 1 :each-file 1}}
+        result (transaction/compile-transaction
+                 sources
+                 (change-spec [change]
+                              {:changes 1 :edits 1 :files 1}))]
+    (is (:ok result))
+    (is (= (str "(ns app.core\n"
+                "  (:require [current.api :as current]))\n"
+                "(defn use-api [] [legacy.api :as legacy])\n")
+           (get-in result [:future-sources "src/app.clj"])))
+    (is (= {:kind :namespace :name 'app.core}
+           (get-in result [:intents 0 :owner])))
+    (doseq [[label invalid error]
+            [["wrong namespace"
+              (assoc-in change [:owner :name] 'app.other)
+              :change-owner-mismatch]
+             ["unsupported owner kind"
+              (assoc-in change [:owner :kind] :file)
+              :invalid-change-owner]
+             ["owner and forms are mutually exclusive"
+              (assoc change :forms ['use-api])
+              :ambiguous-change-owner]]]
+      (testing label
+        (let [refusal (transaction/compile-transaction
+                        sources
+                        (change-spec [invalid]
+                                     {:changes 1 :edits 1 :files 1}))]
+          (is (= error (:error-type refusal)))
+          (is (nil? (:future-sources refusal))))))))
 
 (deftest intent-order-does-not-change-compiled-future-files
   (let [sources {"src/a.clj" "(ns app.a)\n(def value [(old x) :body])\n"}
@@ -746,6 +1045,45 @@
            (get-in inverse [:files 0 :result-hash])))
     (is (valid-source? (get (:future-sources inverse) "src/a.clj")))))
 
+(deftest addressed-delete-owns-only-attached-comments-and-round-trips
+  (let [original (str "(ns app.a)\n\n"
+                      ";; attached to doomed\n"
+                      "(defn doomed [] 1)\n\n"
+                      ";; detached from kept\n\n"
+                      "(defn kept [] 2)\n")
+        doomed (transaction/addressed-form-at
+                 original {:line 4 :character 1})
+        kept (transaction/addressed-form-at
+               original {:line 8 :character 1})
+        compiled (transaction/compile-addressed-transaction
+                   {"src/a.clj" original}
+                   [(assoc doomed :id "delete-doomed" :file "src/a.clj"
+                           :delete true)
+                    (assoc kept :id "update-kept" :file "src/a.clj"
+                           :after "(defn kept [] 3)")])
+        expected (str "(ns app.a)\n\n"
+                      ";; detached from kept\n\n"
+                      "(defn kept [] 3)\n")
+        receipt (when (:ok compiled) (transaction/build-receipt compiled))
+        inverse (when receipt
+                  (transaction/compile-inverse
+                    receipt {"src/a.clj" expected}))]
+    (is (:ok compiled))
+    (is (= expected (get (:future-sources compiled) "src/a.clj")))
+    (is (:ok inverse))
+    (is (= original (get (:future-sources inverse) "src/a.clj")))))
+
+(deftest addressed-delete-protects-the-namespace-form
+  (let [source "(ns app.a)\n(defn kept [] 2)\n"
+        namespace-form (transaction/addressed-form-at
+                         source {:line 1 :character 1})
+        result (transaction/compile-addressed-transaction
+                 {"src/a.clj" source}
+                 [(assoc namespace-form :id "delete-ns" :file "src/a.clj"
+                         :delete true)])]
+    (is (= :protected-namespace-form (:error-type result)))
+    (is (nil? (:future-sources result)))))
+
 (deftest inverse-refuses-stale-corrupt-and-unsupported-receipts
   (let [compiled (compiled-two-file-change)
         receipt (transaction/build-receipt compiled)
@@ -907,7 +1245,9 @@
 
 (deftest public-docs-preserve-the-one-shot-transaction-contract
   (let [readme (slurp "README.md")
-        skill (slurp "skills/clj-surgeon/SKILL.md")
+        skill (str (slurp "skills/clj-surgeon/SKILL.md")
+                   "\n"
+                   (slurp "skills/clj-surgeon/references/cli-fallback.md"))
         changelog (slurp "CHANGELOG.md")
         vision (slurp "docs/vision.md")]
     (doseq [[label text] [["README" readme]

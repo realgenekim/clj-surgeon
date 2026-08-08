@@ -670,8 +670,12 @@
   (let [global (core/format-global-help core/ops-registry)
         help (core/format-op-help :xray (get core/ops-registry :xray))
         surfaces {"README" (slurp "README.md")
-                  "canonical skill" (slurp "skills/clj-surgeon/SKILL.md")
-                  "legacy skill" (slurp "skill.md")
+                  "canonical skill" (str (slurp "skills/clj-surgeon/SKILL.md")
+                                      "\n"
+                                      (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+                  "legacy skill" (str (slurp "skill.md")
+                                   "\n"
+                                   (slurp "skills/clj-surgeon/references/cli-fallback.md"))
                   "repository instructions" (slurp "CLAUDE.md")
                   "vision" (slurp "docs/vision.md")
                   "changelog" (slurp "CHANGELOG.md")
@@ -706,8 +710,8 @@
               surface))))
     (is (str/includes? help "End a literal path with (expect-count n)"))
     (is (<= (count (str/split-lines
-                     (get surfaces "canonical skill")))
-            90))))
+                     (slurp "skills/clj-surgeon/SKILL.md")))
+            70))))
 
 (deftest parse-args-preserves-xray-expression-verbatim
   (let [expression "(-> (form 'data) (xray #(mapv count %)))"]

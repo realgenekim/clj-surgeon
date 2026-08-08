@@ -213,7 +213,13 @@
               result (inspect/evaluate-snapshots params base-snapshot)]
           (is (false? (:ok result)))
           (is (= expected (:error_type result)))
-          (is (nil? (:results result))))))))
+          (do
+            (is (nil? (:results result)))
+            (when (= :missing label)
+              (is (= 1 (:available_form_count result)))
+              (is (= ["duplicate"] (:form_candidates result)))
+              (is (not (contains? result :source)))
+              (is (not (contains? result :results))))))))))
 
 (deftest output-budget-boundaries-are-inclusive-and-fail-closed
   (doseq [[label size limit ok?]

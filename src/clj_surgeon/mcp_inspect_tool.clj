@@ -2,34 +2,33 @@
   "Imperative MCP shell for one-read project-confined Clojure inspection."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.forms :as forms]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-runtime :as runtime]
+   [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.structural-lens :as structural-lens]))
 
 (def tool-description
   (str
-    "PREFER inspect_clojure over repeated source reads, grep, or CLI calls for "
-    "Clojure structural questions that are known up front. Batch named forms, "
-    "outlines, exact structural matches, and capability-limited X-ray analysis "
-    "in one ordered read-only call. Each distinct project-relative source file "
-    "is read once; every result is hash-bound to that coherent snapshot. The "
-    "complete batch refuses on any missing or ambiguous form, invalid pattern, "
-    "cardinality mismatch, path escape, parse failure, or output limit. It never "
-    "writes source, plans, receipts, or manifests. Use forms for exact named "
-    "top-level source, outline for compact :ls-equivalent structure, match for "
-    "Clojure syntax rather than text, and xray for shipped sandboxed analysis."
-    " When the desired change names one fully qualified Var but the exact edit "
-    "sites are not known, use mode=prepare-change with subject=namespace/name "
-    "and one concise intent. Omit verify unless the user explicitly requests "
-    "the full repository suite. Reference sites contain complete named owner "
-    "forms. Fill every null in the returned next_call with keep=true or one "
-    "complete replacement form. Submit that exact basis request to "
-    "apply_clojure_changes once; do not reconstruct a direct changes request."
-    " One success with read_complete=true is terminal; do not repeat the call."
-    " For example, count one def initializer with: (-> (form 'numeric-fields) "
-    "initializer (expect-count 1) (analyze (fn [[fields]] (count fields))))."))
+    "Read Clojure structure in one bounded snapshot. Batch all known forms, "
+    "outlines, exact structural matches, and X-ray requests. Use "
+    "mode=prepare-change when one Var or related Var set names the goal but "
+    "exact sites are unknown. Every returned named form includes a ready-to-use source_anchor for resolve_var_surface; copy it instead of making an unanchored workspace-symbol query. For an unindexed file, use file plus form to "
+    "prepare one exact-source definition without claiming references. "
+    "scope=definition returns every definition and "
+    "reference as one compact surface vector, but attaches source only to the "
+    "definition decision. scope=surface makes every site a decision. An "
+    "optional label must match ^[a-z][a-z0-9-]{0,39}$ and gives sites readable names such as rename/s01. "
+    "Use basis with view=sites and ordered open IDs to reopen exact named forms "
+    "from the retained snapshot without file reads. Copy next_call, fill every "
+    "decision with keep, one complete named-form replacement, whole-site delete, or one compact "
+    "edit, then call apply_clojure_changes once. The whole request refuses on "
+    "ambiguity, count, path, parse, or budget failure. read_complete=true is "
+    "terminal. Never writes."))
 
 (def ^:private positive-integer-schema {:type "integer" :minimum 1})
 (def ^:private non-negative-integer-schema {:type "integer" :minimum 0})
@@ -55,7 +54,9 @@
   {:type "object"
    :additionalProperties false
    :properties
-   {"requests"
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "requests"
     {:type "array"
      :minItems 1
      :maxItems inspect/max-requests
@@ -105,22 +106,67 @@
   {:type "object"
    :additionalProperties false
    :properties
-   {"mode" {:type "string" :const "prepare-change"}
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "mode" {:type "string" :const "prepare-change"}
+    "scope" {:type "string" :enum ["definition" "surface"]
+             :description "Semantic preparation defaults to surface. Exact file/form preparation supports and defaults to definition."}
+    "label" {:type "string" :pattern "^[a-z][a-z0-9-]{0,39}$"
+             :description "Optional cosmetic site namespace. Must match ^[a-z][a-z0-9-]{0,39}$; for example rename produces rename/s01. Omit for change/s01."}
+    "file" (assoc source-file-schema
+                  :description "Exact-source route only: project-relative file containing the named form. Use together with form instead of subject/subjects.")
+    "form" {:type "string" :minLength 1
+            :description "Exact-source route only: one exact named top-level form. Use together with file instead of subject/subjects."}
     "subject" {:type "string" :minLength 3
                :description "One fully qualified Clojure Var: namespace/name."}
+    "subjects" {:type "array" :minItems 1 :uniqueItems true
+                :items {:type "string" :minLength 3}
+                :description "Related fully qualified Vars to resolve as one proof union."}
     "intent" {:type "string" :minLength 1
               :description "One concise semantic change decision."}
     "verify" {:type "string" :enum ["fast" "full"] :default "fast"
               :description "Omit for changed-file verification. Use full only when the user explicitly requests the complete repository suite."}}
-   :required ["mode" "subject" "intent"]})
+   :required ["mode" "intent"]
+   :oneOf
+   [{:required ["subject"]
+     :not {:anyOf [{:required ["subjects"]}
+                   {:required ["file"]}
+                   {:required ["form"]}]}}
+    {:required ["subjects"]
+     :not {:anyOf [{:required ["subject"]}
+                   {:required ["file"]}
+                   {:required ["form"]}]}}
+    {:required ["file" "form"]
+     :not {:anyOf [{:required ["subject"]}
+                   {:required ["subjects"]}]}}]})
+
+(def basis-view-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "basis" {:type "string" :minLength 1
+             :description "Opaque retained basis from prepare-change."}
+    "view" {:type "string" :const "sites"}
+    "open" {:type "array" :minItems 1 :uniqueItems true
+            :items {:type "string" :minLength 3}
+            :description "Ordered retained site IDs, for example rename/s01."}
+    "context" {:type "string" :const "form" :default "form"
+               :description "Return the complete named form from the retained snapshot."}}
+   :required ["basis" "view" "open"]})
 
 (def inspect-schema
   {:type "object"
    :additionalProperties false
    :properties (merge (:properties typed-inspect-schema)
-                      (:properties prepare-change-schema))
+                      (:properties prepare-change-schema)
+                      (:properties basis-view-schema))
    :oneOf [{:required ["requests" "expect"]}
-           {:required ["mode" "subject" "intent"]}]})
+           {:required ["mode" "subject" "intent"]}
+           {:required ["mode" "subjects" "intent"]}
+           {:required ["mode" "file" "form" "intent"]}
+           {:required ["basis" "view" "open"]}]})
 
 (def inspect-output-schema
   {:type "object"
@@ -136,11 +182,16 @@
     "source_character_count" {:type "integer"}
     "next_action" {:type "string"}
     "basis" {:type "string"}
-    "sites" {:type "array"}
+    "surface" {:type "array"}
+    "decision-site-ids" {:type "array"}
+    "decision-sites" {:type "array"}
+    "buffers" {:type "array"}
     "next_call" {:type "object"}}
    :required ["ok" "operation"]
    :anyOf [{:required ["read_complete"]}
-           {:required ["basis" "sites" "next_call"]}]})
+           {:required ["basis" "surface" "decision-site-ids"
+                       "decision-sites" "next_call"]}
+           {:required ["basis" "buffers" "read_complete"]}]})
 
 (def inspect-annotations
   {:title "Inspect Clojure"
@@ -150,26 +201,220 @@
    :open-world false
    :return-direct false})
 
-(defonce ^:private runtime-config (atom nil))
+(def ^:private runtime-config runtime/tool-config)
+
+(def max-public-result-bytes (* 32 1024))
 
 (defn- semantic-init!
   [config]
   ((requiring-resolve 'clj-surgeon.mcp-semantic-client/init!) config))
 
-(defn- resolve-var!
-  [request]
-  ((requiring-resolve 'clj-surgeon.mcp-semantic-client/resolve-var!) request))
+(defn- local-source-anchors
+  [{:keys [project-root read-source project-aliases]} subject]
+  (let [root (mcp-paths/real-root project-root)]
+    (->> (source-anchor/candidate-relative-files project-root subject)
+         (keep
+           (fn [relative-file]
+             (let [resolved (mcp-paths/resolve-source-path root relative-file)]
+               (when (:ok resolved)
+                 (let [source ((or read-source slurp) (:path resolved))
+                       aliases (or project-aliases
+                                   (forms/load-project-aliases (:path resolved)))
+                       built (source-anchor/build-source-anchor
+                               subject relative-file source aliases)]
+                   (when (:ok built)
+                     (:source-anchor built)))))))
+         vec)))
+
+(defn- confirm-source-anchor
+  [provider subject anchor]
+  (let [anchored (provider anchor)]
+    (cond
+      (not (:ok anchored))
+      anchored
+
+      (not= "source-anchor" (:resolution anchored))
+      {:ok false
+       :error-type :semantic-source-anchor-not-confirmed
+       :error "cclsp did not confirm source-anchor resolution"
+       :subject subject
+       :file (:file anchor)
+       :source-unchanged true}
+
+      (not= anchor (:source_anchor anchored))
+      {:ok false
+       :error-type :semantic-source-anchor-mismatch
+       :error "cclsp returned a different source anchor"
+       :subject subject
+       :file (:file anchor)
+       :source-unchanged true}
+
+      :else
+      anchored)))
+
+(defn resolve-var!
+  "Resolve one Var through a candidate-file discovery and an exact source anchor."
+  [{:keys [project-root read-source project-aliases semantic-provider]} subject]
+  (let [provider
+        (or semantic-provider
+            (fn [source-anchor]
+              ((requiring-resolve 'clj-surgeon.mcp-semantic-client/resolve-var!)
+               project-root subject source-anchor)))
+        local-anchors (local-source-anchors
+                        {:project-root project-root
+                         :read-source read-source
+                         :project-aliases project-aliases}
+                        subject)]
+    (cond
+      (= 1 (count local-anchors))
+      (confirm-source-anchor provider subject (first local-anchors))
+
+      (> (count local-anchors) 1)
+      {:ok false
+       :error-type :semantic-local-definition-ambiguous
+       :error "More than one conventional source file defines the requested Var"
+       :subject subject
+       :files (mapv :file local-anchors)
+       :source-unchanged true}
+
+      :else
+      (let [discovery (provider nil)]
+        (if-not (:ok discovery)
+          discovery
+          (let [candidate-file (get-in discovery [:definition :file])
+                root (mcp-paths/real-root project-root)
+                resolved (when (string? candidate-file)
+                           (mcp-paths/resolve-source-path root candidate-file))]
+            (cond
+              (not (string? candidate-file))
+              {:ok false
+               :error-type :semantic-candidate-file-missing
+               :error "The semantic discovery result did not name a candidate definition file"
+               :subject subject
+               :source-unchanged true}
+
+              (not (:ok resolved))
+              (assoc resolved :subject subject :source-unchanged true)
+
+              :else
+              (let [source ((or read-source slurp) (:path resolved))
+                    aliases (or project-aliases
+                                (forms/load-project-aliases (:path resolved)))
+                    built (source-anchor/build-source-anchor
+                            subject candidate-file source aliases)]
+                (if-not (:ok built)
+                  built
+                  (confirm-source-anchor provider subject
+                                         (:source-anchor built)))))))))))
 
 (defn init!
   "Set the live inspect configuration. Passing nil disarms the handler."
   [config]
-  (when-let [cclsp-url (:cclsp-url config)]
-    (semantic-init! {:url cclsp-url}))
-  (reset! runtime-config config))
+  (let [configured (when config
+                     (if (:workspace-router config)
+                       config
+                       (assoc config :workspace-router
+                              (workspace/router config))))]
+    (when-let [cclsp-url (:cclsp-url configured)]
+      (semantic-init! {:url cclsp-url}))
+    (reset! runtime-config configured)))
 
 (defn- elapsed-ms
   [started-ns]
   (/ (double (- (System/nanoTime) started-ns)) 1000000.0))
+
+(defn mcp-result-byte-count
+  "Measure the complete public MCP result shape, including its text summary."
+  [summary result]
+  (count
+    (.getBytes
+      (json/generate-string
+        {:content [{:type "text" :text summary}]
+         :structuredContent result
+         :isError (not (:ok result))})
+      "UTF-8")))
+
+(defn prepare-change-summary
+  "Render the compact quickfix-style surface without repeating source bodies."
+  [result]
+  (let [surface-lines
+        (apply str
+               (map (fn [{:keys [id role file form line]}]
+                      (format "  :%-18s %-10s %s:%s · %s\n"
+                              id (name role) file line form))
+                    (:surface result)))]
+    (format
+      (str "inspect_clojure · prepare-change\n"
+           "  %s surface sites · %s decisions · %s files · basis %s\n\n"
+           "%s\n"
+           "✓ complete semantic surface resolved\n"
+           "✓ source hashes independently verified\n"
+           "✓ decision source attached once in structured content\n"
+           "→ fill next_call decisions, then call apply_clojure_changes once")
+      (:surface-site-count result)
+      (:site-count result)
+      (:file-count result)
+      (:basis result)
+      surface-lines)))
+
+(defn basis-view-summary
+  "Render retained structural buffers without duplicating their source."
+  [result]
+  (let [buffer-lines
+        (apply str
+               (map (fn [{:keys [id role file form line]}]
+                      (format "  :%-18s %-10s %s:%s · %s\n"
+                              id (name role) file line form))
+                    (:buffers result)))]
+    (format
+      (str "inspect_clojure · retained buffers\n"
+           "  %s buffers · %s source characters · 0 file reads\n\n"
+           "%s\n"
+           "✓ rendered from the immutable basis snapshot\n"
+           "✓ exact named-form source attached once in structured content\n"
+           "→ decide, or open another retained site")
+      (:buffer-count result)
+      (:source-character-count result)
+      buffer-lines)))
+
+(defn enforce-public-result-budget
+  "Refuse an oversized public result without returning partial source."
+  [summary result]
+  (let [required-bytes (mcp-result-byte-count summary result)
+        prepare? (= "prepare-change" (:mode result))]
+    (if (<= required-bytes max-public-result-bytes)
+      result
+      (do
+        (when (and prepare? (:basis result))
+          (change-buffer/discard-basis! (:basis result)))
+        {:ok false
+         :operation "inspect_clojure"
+         :mode (:mode result)
+         :error-type (if prepare?
+                       :decision-output-budget-exceeded
+                       :structural-buffer-output-budget-exceeded)
+         :error (if prepare?
+                  "The complete decision packet exceeds the public MCP output budget"
+                  "The requested structural buffers exceed the public MCP output budget")
+         :required (cond-> {:public-result-bytes required-bytes}
+                     prepare?
+                     (assoc :surface-sites (:surface-site-count result)
+                            :decision-sites (:site-count result)
+                            :decision-source-characters
+                            (:visible-character-count result))
+                     (not prepare?)
+                     (assoc :buffers (:buffer-count result)
+                            :source-characters (:source-character-count result)))
+         :limits {:public-result-bytes max-public-result-bytes}
+         :source-unchanged true
+         :basis-retained (not prepare?)
+         :next-action (if prepare?
+                        "narrow-decision-surface"
+                        "open-fewer-buffers")
+         :remedies (if prepare?
+                     [{:scope "definition"}
+                      {:message "Narrow the subjects or add an exact structural focus."}]
+                     [{:message "Open fewer retained site IDs in one call."}])}))))
 
 (defn- inspect-refusal
   [result]
@@ -245,63 +490,103 @@
        :source_unchanged true
        :next_action "correct_request"})))
 
-(defn execute-inspect!
+(defn- execute-inspect-in-context!
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
   [{:keys [project-root telemetry read-source output-limits semantic-resolver] :as config}
    params]
   (let [started (System/nanoTime)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
-        validated (when-not prepare? (inspect/validate-inspect-params params))
+        basis-view? (= "sites" (:view normalized-params))
+        validated (when-not (or prepare? basis-view?)
+                    (inspect/validate-inspect-params params))
         result
         (assoc
-          (if prepare?
+          (cond
+            prepare?
             (change-buffer/prepare-change!
               (assoc config
-                     :semantic-resolver (or semantic-resolver resolve-var!))
+                     :semantic-resolver (or semantic-resolver
+                                            (partial resolve-var! config)))
               normalized-params)
-            (if-not (:ok validated)
-              (inspect-refusal validated)
-              (let [normalized (:params validated)
-                    captured (capture-snapshots
-                               project-root (:requests normalized)
-                               (or read-source slurp)
-                               (get-in normalized [:expect :files]))]
-                (if-not (:ok captured)
-                  (inspect-refusal captured)
-                  (assoc
-                    (inspect/evaluate-snapshots
-                      normalized (:snapshots captured)
-                      (merge inspect/default-output-limits output-limits))
-                    :file_read_count (:file_read_count captured))))))
+
+            basis-view?
+            (change-buffer/open-basis-sites!
+              project-root
+              (:basis normalized-params)
+              (:open normalized-params)
+              (or (:context normalized-params) "form"))
+
+            (not (:ok validated))
+            (inspect-refusal validated)
+
+            :else
+            (let [normalized (:params validated)
+                  captured (capture-snapshots
+                             project-root (:requests normalized)
+                             (or read-source slurp)
+                             (get-in normalized [:expect :files]))]
+              (if-not (:ok captured)
+                (inspect-refusal captured)
+                (assoc
+                  (inspect/evaluate-snapshots
+                    normalized (:snapshots captured)
+                    (merge inspect/default-output-limits output-limits))
+                  :file_read_count (:file_read_count captured)))))
           :elapsed_ms (elapsed-ms started))]
     (when telemetry
       (telemetry/record-inspect-call!
         telemetry params result {:total_ms (:elapsed_ms result)}))
     result))
 
+(defn execute-inspect!
+  "Route one inspect request to a canonical workspace context, then execute it."
+  [config params]
+  (let [normalized (json/parse-string (json/generate-string params) true)
+        explicit-root? (contains? normalized :workspace_root)]
+    (if-not explicit-root?
+      (let [result (execute-inspect-in-context! config normalized)
+            resolved (workspace/canonical-root (:project-root config))]
+        (cond-> result
+          (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
+      (let [workspace-router (or (:workspace-router config)
+                                 (workspace/router config))
+            routed (workspace/resolve-request workspace-router normalized)]
+        (if-not (:ok routed)
+          routed
+          (assoc (execute-inspect-in-context! (:config routed) (:params routed))
+                 :workspace_root (:workspace-root routed)))))))
+
 (defn handle-inspect
   "Structured clojure-mcp callback handler, retained as a Var for hot reload."
   [_exchange params callback]
-  (let [result (if-let [config @runtime-config]
-                 (execute-inspect! config params)
-                 {:ok false
-                  :operation "inspect_clojure"
-                  :error_type "server-not-initialized"
-                  :error "inspect_clojure server is not initialized"
-                  :read_complete false
-                  :source_unchanged true
-                  :next_action "restart_server"})
-        summary (cond
-                  (not (:ok result)) (json/generate-string result)
-                  (= "prepare-change" (:mode result))
-                  (format (str "inspect_clojure prepare-change\n"
-                               "  %s sites · %s files · basis %s\n\n"
-                               "✓ semantic surface resolved\n"
-                               "✓ source hashes retained\n"
-                               "→ fill next_call decisions, then call apply_clojure_changes once")
-                          (:site-count result) (:file-count result) (:basis result))
-                  :else (inspect/concise-summary result))]
+  (let [raw-result
+        (if-let [config @runtime-config]
+          (execute-inspect! config params)
+          {:ok false
+           :operation "inspect_clojure"
+           :error_type "server-not-initialized"
+           :error "inspect_clojure server is not initialized"
+           :read_complete false
+           :source_unchanged true
+           :next_action "restart_server"})
+        raw-summary
+        (cond
+          (not (:ok raw-result)) (json/generate-string raw-result)
+          (= "prepare-change" (:mode raw-result))
+          (prepare-change-summary raw-result)
+          (= "basis-view" (:mode raw-result))
+          (basis-view-summary raw-result)
+          :else (inspect/concise-summary raw-result))
+        result
+        (if (and (:ok raw-result)
+                 (#{"prepare-change" "basis-view"} (:mode raw-result)))
+          (enforce-public-result-budget raw-summary raw-result)
+          raw-result)
+        summary
+        (if (:ok result)
+          raw-summary
+          (json/generate-string result))]
     (callback [summary] (not (:ok result)) result)
     (json/generate-string result)))
 

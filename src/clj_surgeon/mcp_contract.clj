@@ -6,7 +6,8 @@
 
 (def ^:private top-fields #{"changes" "expect"})
 (def ^:private change-fields
-  #{"id" "files" "forms" "find" "replace" "expect"})
+  #{"id" "files" "forms" "owner" "find" "inside" "replace"
+    "insert_before" "insert_after" "rename_binding" "assoc_entry" "expect"})
 (def ^:private change-expect-fields #{"matches" "each_form" "each_file"})
 (def ^:private aggregate-expect-fields #{"changes" "edits" "files"})
 (def ^:private supported-source-extensions #{"clj" "cljs" "cljc"})
@@ -86,7 +87,8 @@
         missing (vec (sort (remove #(contains? actual %) required)))]
     (when (seq unknown)
       (refuse! :unknown-fields path "Request contains unknown fields"
-               {:unknown unknown}))
+               {:unknown unknown
+                :allowed (vec (sort allowed))}))
     (when (seq missing)
       (refuse! :missing-fields path "Request is missing required fields"
                {:missing missing}))))
@@ -146,24 +148,119 @@
 
 (defn- validate-change!
   [change index]
-  (let [path ["changes" index]]
-    (validate-fields! change change-fields change-fields path)
-    (let [id (nonblank-string! (field change "id") (conj path "id"))
-          files (nonempty-array! (field change "files") (conj path "files"))
-          forms (nonempty-array! (field change "forms") (conj path "forms"))]
-      {:id id
-       :files (mapv (fn [file file-index]
-                      (source-path! file (conj path "files" file-index)))
-                    files (range))
-       :forms (mapv (fn [form form-index]
-                      (nonblank-string! form (conj path "forms" form-index)))
-                    forms (range))
-       :find (nonblank-string! (field change "find") (conj path "find"))
-       :replace (nonblank-string! (field change "replace") (conj path "replace"))
-       :expect (validate-count-map!
-                 (field change "expect")
-                 change-expect-fields #{"matches"}
-                 (conj path "expect"))})))
+  (let [path ["changes" index]
+        binding-rename? (and (map? change)
+                             (present? change "rename_binding"))
+        required (cond-> #{"id" "files" "expect"}
+                   (not binding-rename?) (conj "find"))]
+    (validate-fields! change change-fields required path)
+    (let [forms? (present? change "forms")
+          owner? (present? change "owner")]
+      (when (= forms? owner?)
+        (refuse! :ambiguous-change-owner path
+                 "Provide exactly one of forms or owner"))
+      (let [actions (filterv #(present? change %)
+                             ["replace" "insert_before" "insert_after"
+                              "rename_binding" "assoc_entry"])]
+        (when-not (= 1 (count actions))
+          (refuse! :ambiguous-change-action path
+                   "Provide exactly one change action"))
+        (let [id (nonblank-string! (field change "id") (conj path "id"))
+              files (nonempty-array! (field change "files") (conj path "files"))
+              forms (when forms?
+                      (nonempty-array! (field change "forms")
+                                       (conj path "forms")))
+              owner (when owner?
+                      (let [value (field change "owner")
+                            owner-path (conj path "owner")
+                            fields #{"kind" "name"}]
+                        (validate-fields! value fields fields owner-path)
+                        (let [kind (nonblank-string! (field value "kind")
+                                                     (conj owner-path "kind"))
+                              name (nonblank-string! (field value "name")
+                                                     (conj owner-path "name"))]
+                          (when-not (= "namespace" kind)
+                            (refuse! :invalid-owner-kind
+                                     (conj owner-path "kind")
+                                     "Owner kind must be namespace"))
+                          {:kind :namespace :name (symbol name)})))
+              action (first actions)
+              action-value
+              (cond
+                (= "replace" action)
+                (nonblank-string! (field change action) (conj path action))
+
+                (= "rename_binding" action)
+                (let [rename (field change action)
+                      rename-path (conj path action)
+                      rename-fields #{"from" "to" "preserve_external_key"}]
+                  (validate-fields! rename rename-fields rename-fields rename-path)
+                  (let [from (nonblank-string! (field rename "from")
+                                               (conj rename-path "from"))
+                        to (nonblank-string! (field rename "to")
+                                             (conj rename-path "to"))
+                        preserve? (field rename "preserve_external_key")]
+                    (when-not (= true preserve?)
+                      (refuse! :unsafe-binding-rename
+                               (conj rename-path "preserve_external_key")
+                               "Binding rename requires preserve_external_key=true"))
+                    {:from from :to to :preserve-external-key true}))
+
+                (= "assoc_entry" action)
+                (let [entry (field change action)
+                      entry-path (conj path action)
+                      entry-fields #{"key" "value"}]
+                  (validate-fields! entry entry-fields entry-fields entry-path)
+                  {:key (nonblank-string! (field entry "key")
+                                          (conj entry-path "key"))
+                   :value (nonblank-string! (field entry "value")
+                                            (conj entry-path "value"))})
+
+                :else
+                (let [sources (nonempty-array! (field change action)
+                                               (conj path action))]
+                  (mapv (fn [source source-index]
+                          (nonblank-string! source
+                                            (conj path action source-index)))
+                        sources (range))))]
+          (when (and (= "rename_binding" action) (not forms?))
+            (refuse! :invalid-binding-rename-owner path
+                     "rename_binding requires exact named forms"))
+          (when (and (= "rename_binding" action) (present? change "find"))
+            (refuse! :unexpected-binding-rename-find path
+                     "rename_binding does not accept find"))
+          (when (and (present? change "inside")
+                     (not= "assoc_entry" action))
+            (refuse! :invalid-ancestor-selector path
+                     "inside is only valid with assoc_entry"))
+          (cond->
+            {:id id
+             :files (mapv (fn [file file-index]
+                            (source-path! file (conj path "files" file-index)))
+                          files (range))
+             :expect (validate-count-map!
+                       (field change "expect")
+                       change-expect-fields #{"matches"}
+                       (conj path "expect"))}
+            (not= "rename_binding" action)
+            (assoc :find
+                   (nonblank-string! (field change "find") (conj path "find")))
+            (present? change "inside")
+            (assoc :inside
+                   (nonblank-string! (field change "inside")
+                                     (conj path "inside")))
+            forms (assoc :forms
+                         (mapv (fn [form form-index]
+                                 (nonblank-string!
+                                   form
+                                   (conj path "forms" form-index)))
+                               forms (range)))
+            owner (assoc :owner owner)
+            (= "replace" action) (assoc :replace action-value)
+            (= "insert_before" action) (assoc :insert-before action-value)
+            (= "insert_after" action) (assoc :insert-after action-value)
+            (= "rename_binding" action) (assoc :rename-binding action-value)
+            (= "assoc_entry" action) (assoc :assoc-entry action-value)))))))
 
 (defn json-containers->clj
   "Recursively convert Java JSON containers from MCP SDKs to Clojure values."
@@ -212,13 +309,27 @@
   [{:keys [changes expect]}]
   {:changes
    (mapv
-     (fn [{:keys [id files forms find replace expect]}]
-       {:id (keyword id)
-        :in files
-        :forms (mapv symbol forms)
-        :find find
-        :do [:replace replace]
-        :expect expect})
+     (fn [{:keys [id files forms owner find inside replace insert-before insert-after
+                  rename-binding assoc-entry expect]}]
+       (cond->
+         {:id (keyword id)
+          :in files
+          :find find
+          :do (cond
+                replace [:replace replace]
+                insert-before [:insert-left insert-before]
+                insert-after [:insert-right insert-after]
+                rename-binding [:rename-binding
+                                {:from (symbol (:from rename-binding))
+                                 :to (symbol (:to rename-binding))
+                                 :preserve-external-key
+                                 (:preserve-external-key rename-binding)}]
+                :else [:assoc-entry assoc-entry])
+          :expect expect}
+         rename-binding (dissoc :find)
+         inside (assoc :inside inside)
+         forms (assoc :forms (mapv symbol forms))
+         owner (assoc :owner owner)))
      changes)
    :expect expect})
 
@@ -240,21 +351,55 @@
 (defn normalize-refusal
   "Return the stable, compact refusal surface used by the MCP callback."
   [result]
-  (let [error-type (:error-type result)]
+  (let [error-type (:error-type result)
+        change-index (if (contains? result :change-index)
+                       (:change-index result)
+                       (:intent-index result))
+        change-id (let [value (:change-id result)]
+                    (if (keyword? value) (name value) value))
+        field (:field result)
+        remedy (or
+                 (:remedy result)
+                 (when (= :invalid-intent-form error-type)
+                   (format
+                     "Pass exactly one complete parseable Clojure form in %s for change %s%s."
+                     (or field "the named field")
+                     (if (some? change-index) change-index "unknown")
+                     (if change-id (str " (" change-id ")") "")))
+                 "Correct the declared scope or count and call apply_clojure_changes once.")]
     (cond->
       {:ok false
        :error_type (if (keyword? error-type) (name error-type) (str error-type))
        :error (or (:error result) "apply_clojure_changes refused")
-       :source_unchanged (boolean
-                           (or (:rolled-back result)
-                               (contains? prewrite-error-types error-type)))
-       :remedy "Correct the declared scope or count and call apply_clojure_changes once."}
+       :source_unchanged
+       (if (contains? result :source-unchanged)
+         (boolean (:source-unchanged result))
+         (boolean
+           (or (:rolled-back result)
+               (contains? prewrite-error-types error-type))))
+       :remedy remedy}
       (contains? result :expected) (assoc :expected (:expected result))
       (contains? result :actual) (assoc :actual (:actual result))
-      (contains? result :change-index) (assoc :change_index (:change-index result))
-      (contains? result :change-id) (assoc :change_id (:change-id result))
+      (contains? result :reason) (assoc :reason (some-> (:reason result) name))
+      (contains? result :path) (assoc :path (:path result))
+      (contains? result :unknown) (assoc :unknown (:unknown result))
+      (contains? result :allowed) (assoc :allowed (:allowed result))
+      (contains? result :missing) (assoc :missing (:missing result))
+      (some? change-index) (assoc :change_index change-index)
+      (contains? result :change-id) (assoc :change_id change-id)
+      (contains? result :field) (assoc :field field)
+      (contains? result :form-count) (assoc :form_count (:form-count result))
+      (contains? result :expected-count) (assoc :expected_count (:expected-count result))
+      (contains? result :actual-count) (assoc :actual_count (:actual-count result))
+      (contains? result :per-file-counts) (assoc :per_file_counts (:per-file-counts result))
+      (contains? result :per-form-counts) (assoc :per_form_counts (:per-form-counts result))
+      (contains? result :distribution) (assoc :distribution (some-> (:distribution result) name))
+      (contains? result :operation) (assoc :kernel_operation (some-> (:operation result) name))
+      (contains? result :phase) (assoc :kernel_phase (some-> (:phase result) name))
+      (contains? result :owner) (assoc :owner (:owner result))
       (contains? result :file) (assoc :file (:file result))
       (contains? result :rolled-back) (assoc :rolled_back (:rolled-back result))
+      (contains? result :cause-error) (assoc :cause_error (:cause-error result))
       (contains? result :remedies) (assoc :remedies (:remedies result)))))
 
 (defn normalize-success-receipt
@@ -294,7 +439,10 @@
   "Classify one direct kernel result without weakening incomplete success."
   [project-root result]
   (if (:error result)
-    (assoc (normalize-refusal result) :reason :kernel-refusal)
+    (let [normalized (normalize-refusal result)]
+      (cond-> (assoc normalized :phase "kernel")
+        (not (contains? normalized :reason))
+        (assoc :reason (:error_type normalized))))
     (try
       (normalize-success-receipt project-root result)
       (catch clojure.lang.ExceptionInfo error

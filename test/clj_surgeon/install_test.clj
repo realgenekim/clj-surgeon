@@ -49,14 +49,36 @@
        "When working inside the clj-surgeon repository, the working-tree skill.md\n"
        "supersedes this copy.\n"))
 
-(def ^:private canonical-reference-path
-  (fs/path project-root "skills" "clj-surgeon" "references" "advanced-operations.md"))
+(def ^:private canonical-reference-paths
+  {:advanced
+   (fs/path project-root "skills" "clj-surgeon" "references" "advanced-operations.md")
+   :cli-fallback
+   (fs/path project-root "skills" "clj-surgeon" "references" "cli-fallback.md")})
 
 (defn- assert-skill-contracts
-  [label skill]
+  [label skill cli-fallback]
   (doseq [contract ["Invoke before using Read, Edit, grep, sed, or cat"
+                    "Discover the hot entrance first"
+                    "deferred/all-tools catalog"
+                    "`inspect_clojure`"
+                    "`apply_clojure_changes`"
+                    "`mcp__cclsp__*`"
+                    "inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback"
+                    "`read_complete=true`"
+                    "`mode=prepare-change`"
+                    "`subject`"
+                    "`subjects`"
+                    "owner authority"
+                    "`next_call`"
+                    "`verify` is basis-only"
+                    "`verification_complete=true`"
                     "Native Write is right for new files"
-                    ":op :xray"
+                    "[CLI fallback](references/cli-fallback.md)"
+                    "CLI only when MCP is unavailable"]]
+    (is (str/includes? (str/replace skill #"\s+" " ")
+                       (str/replace contract #"\s+" " "))
+        (str label " must retain the MCP-first " contract " contract")))
+  (doseq [contract [":op :xray"
                     "End a literal path with `expect-count`"
                     "capability-limited, not termination-proof"
                     ":op :edit"
@@ -82,30 +104,38 @@
                     "no selected ancestor"
                     "There is no variadic wildcard"
                     "(loop _ _)"
-                    "do not reopen the plan file"
+                    "Do not reopen the plan file"
                     "refuses"
-                    ":verified"]]
-    (is (str/includes? skill contract)
-        (str label " must retain the shared " contract " contract"))))
+                    "`:verified`"]]
+    (is (str/includes? (str/replace cli-fallback #"\s+" " ")
+                       (str/replace contract #"\s+" " "))
+        (str label " CLI fallback must retain the shared " contract " contract"))))
 
 (deftest repository-agent-skill-entrances-do-not-drift
   (let [canonical (slurp-path canonical-skill-path)
+        canonical-cli (slurp-path (:cli-fallback canonical-reference-paths))
         claude-native (slurp ".claude/skills/clj-surgeon/SKILL.md")
+        claude-cli (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md")
         legacy (-> (slurp "skill.md")
                    (str/replace
-                     "[the advanced operations reference](skills/clj-surgeon/references/advanced-operations.md)"
-                     "[references/advanced-operations.md](references/advanced-operations.md)"))]
+                     "[advanced operations](skills/clj-surgeon/references/advanced-operations.md)"
+                     "[advanced operations](references/advanced-operations.md)")
+                   (str/replace
+                     "[CLI fallback](skills/clj-surgeon/references/cli-fallback.md)"
+                     "[CLI fallback](references/cli-fallback.md)"))]
     (testing "the native Claude package is byte-identical to the canonical package"
       (is (= canonical claude-native))
-      (is (= (slurp-path canonical-reference-path)
-             (slurp ".claude/skills/clj-surgeon/references/advanced-operations.md"))))
-    (testing "the root legacy entrance differs only by its valid relative reference"
+      (is (= (slurp-path (:advanced canonical-reference-paths))
+             (slurp ".claude/skills/clj-surgeon/references/advanced-operations.md")))
+      (is (= canonical-cli claude-cli)))
+    (testing "the root legacy entrance differs only by its valid relative references"
       (is (= canonical legacy))
-      (is (<= (count (str/split-lines (slurp "skill.md"))) 90)))
-    (testing "X-ray, planning, refusal, and receipt guidance is shared"
-      (assert-skill-contracts "canonical Codex skill" canonical)
-      (assert-skill-contracts "native Claude skill" claude-native)
-      (assert-skill-contracts "legacy Claude entrance" legacy))))
+      (is (<= (count (str/split-lines (slurp "skill.md"))) 70)))
+    (testing "the default entrance is compact and MCP-first while the fallback stays complete"
+      (is (not (str/includes? canonical ":op :xray")))
+      (assert-skill-contracts "canonical Codex skill" canonical canonical-cli)
+      (assert-skill-contracts "native Claude skill" claude-native claude-cli)
+      (assert-skill-contracts "legacy Claude entrance" legacy canonical-cli))))
 
 (deftest install-help-makes-both-destinations-explicit
   (let [{:keys [exit out err]} (run-make "help")]
@@ -127,6 +157,25 @@
     (testing "bounded clean-context acceptance batteries are discoverable"
       (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-usage-self-test" "retain-benchmark-result" "verify-benchmark-retention"]]
         (is (str/includes? out target))))))
+
+(deftest mcp-reload-manifest-covers-the-routed-runtime
+  (let [makefile (slurp (str (fs/path project-root "Makefile")))]
+    (doseq [namespace ["clj-surgeon.file-ops"
+                       "clj-surgeon.outline"
+                       "clj-surgeon.structural-lens"
+                       "clj-surgeon.intent-transaction"
+                       "clj-surgeon.mcp-paths"
+                       "clj-surgeon.mcp-workspace"
+                       "clj-surgeon.mcp-contract"
+                       "clj-surgeon.mcp-semantic-client"
+                       "clj-surgeon.mcp-source-anchor"
+                       "clj-surgeon.mcp-change-buffer"
+                       "clj-surgeon.mcp-inspect"
+                       "clj-surgeon.mcp-inspect-tool"
+                       "clj-surgeon.mcp-tool"
+                       "clj-surgeon.mcp-server"]]
+      (is (str/includes? makefile namespace)
+          (str "make mcp-reload must reload " namespace)))))
 
 (deftest benchmark-agent-skill-targets-are-bounded-and-composable
   (let [{codex-exit :exit codex-out :out codex-err :err}
@@ -199,6 +248,7 @@
         codex-home (fs/path tmp-dir "codex")
         claude-home (fs/path tmp-dir "claude")
         install-root (fs/path tmp-dir "packages")
+        control-plane-root (fs/path install-root "control-plane-root")
         codex-skill (fs/path codex-home "skills" "clj-surgeon")
         claude-skill (fs/path claude-home "skills" "clj-surgeon")]
     (try
@@ -237,7 +287,14 @@
           (let [launcher (slurp-path cli-path)]
             (is (str/includes? launcher "clj-surgeon stable launcher"))
             (is (str/includes? launcher (str install-root)))
-            (is (not (str/includes? launcher project-root)))))
+            (is (str/includes? launcher "CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE"))
+            (is (not (str/includes? launcher project-root)))
+            (is (= project-root
+                   (.getCanonicalPath
+                     (io/file (str/trim (slurp-path control-plane-root))))))
+            (is (str/includes?
+                  (slurp (str control-plane-root ".receipt.edn"))
+                  ":artifact :control-plane-root"))))
         (testing "a hostile caller bb.edn cannot shadow the copied runtime"
           (let [hostile-root (fs/path tmp-dir "hostile-checkout")
                 hostile-src (fs/path hostile-root "src" "clj_surgeon")]
@@ -264,10 +321,13 @@
               (is (str/includes? content ":package")))))
         (testing "installed agent surfaces retain identical contracts"
           (let [codex (slurp-path (fs/path codex-skill "SKILL.md"))
-                claude (slurp-path (fs/path claude-skill "SKILL.md"))]
+                claude (slurp-path (fs/path claude-skill "SKILL.md"))
+                codex-cli (slurp-path (fs/path codex-skill "references" "cli-fallback.md"))
+                claude-cli (slurp-path (fs/path claude-skill "references" "cli-fallback.md"))]
             (is (= codex claude))
-            (assert-skill-contracts "installed Codex skill" codex)
-            (assert-skill-contracts "installed Claude skill" claude))))
+            (is (= codex-cli claude-cli))
+            (assert-skill-contracts "installed Codex skill" codex codex-cli)
+            (assert-skill-contracts "installed Claude skill" claude claude-cli))))
       (finally
         (delete-temp-tree tmp-dir)))))
 

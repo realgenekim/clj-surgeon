@@ -1,11 +1,14 @@
 (ns clj-surgeon.mcp-inspect-tool-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is]])
+   [clojure.test :refer [deftest is testing]])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
@@ -74,9 +77,39 @@
         (is (= 1 (get-in result [:results 2 :match_count])))
         (is (= ":old" (get-in result [:results 2 :matches 0 :source])))
         (is (= (get-in result [:file_hashes "src/demo.clj"])
-               (get-in result [:results 0 :file_hash]))))
+               (get-in result [:results 0 :file_hash]))) (is (= {:file "src/demo.clj"
+                                                                 :source_sha256 (get-in result [:file_hashes "src/demo.clj"])
+                                                                 :owner "alpha"
+                                                                 :range {:start {:line 1 :character 0}
+                                                                         :end {:line 2 :character 0}}}
+                                                                (get-in result [:results 0 :forms 0 :source_anchor]))))
       (finally
         (delete-tree! project)))))
+
+(deftest routes-one-shared-inspector-to-the-requested-canonical-workspace
+  (let [default-root (temp-dir)
+        requested-root (temp-dir)
+        _ (write-source! default-root "src/demo.clj"
+                         "(ns demo)\n(def marker :default)\n")
+        _ (write-source! requested-root "src/demo.clj"
+                         "(ns demo)\n(def marker :requested)\n")
+        request
+        {"workspace_root" (.getPath requested-root)
+         "requests" [{"id" "marker" "operation" "forms"
+                      "file" "src/demo.clj" "forms" ["marker"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 1 "files" 1}}]
+    (try
+      (let [result (inspect-tool/execute-inspect!
+                     {:project-root (.getPath default-root)} request)]
+        (is (:ok result))
+        (is (= (.getPath (.getCanonicalFile requested-root))
+               (:workspace_root result)))
+        (is (= "(def marker :requested)"
+               (get-in result [:results 0 :forms 0 :source]))))
+      (finally
+        (delete-tree! default-root)
+        (delete-tree! requested-root)))))
 
 (deftest confines-symlinks-and-canonical-file-expectations-before-read
   (let [project (temp-dir)
@@ -208,6 +241,29 @@
         (inspect-tool/init! nil)
         (delete-tree! project)))))
 
+(deftest handler-namespace-reload-preserves-the-live-runtime
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(def answer 42)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (require 'clj-surgeon.mcp-inspect-tool :reload)
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "outline" "operation" "outline"
+                      "file" "src/demo.clj"}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (is (= false (:error? (first @calls))))
+      (is (= true (get-in @calls [0 :structured :read_complete])))
+      (is (= "outline" (get-in @calls [0 :structured :results 0 :id])))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
 (deftest metrics-telemetry-never-records-source-bodies
   (let [directory (temp-dir)
         state (telemetry/start! {:mode :metrics
@@ -248,10 +304,20 @@
               {:project-root (.getPath project)
                :semantic-resolver
                (fn [_]
-                 {:ok true
-                  :definition {:file_path (.getCanonicalPath source)
-                               :line 2 :character 7}
-                  :references []})}
+                 (let [session "lsp-test-session"]
+                   {:ok true
+                    :version 2
+                    :lsp_session session
+                    :definition {:lsp_session session
+                                 :file "src/sample/core.clj"
+                                 :file_path (.getCanonicalPath source)
+                                 :source_sha256 (structural-lens/source-hash (slurp source))
+                                 :owner "target"
+                                 :range {:start {:line 1 :character 6}
+                                         :end {:line 1 :character 12}}
+                                 :line 2 :character 7
+                                 :name "target"}
+                    :references []}))}
               params)]
         (is (:ok result))
         (is (= "inspect_clojure" (:operation result)))
@@ -271,13 +337,24 @@
         {:project-root (.getPath project)
          :semantic-resolver
          (fn [_]
-           {:ok true
-            :definition {:file_path (.getCanonicalPath source)
-                         :line 2 :character 7}
-            :references []})})
+           (let [session "lsp-test-session"]
+             {:ok true
+              :version 2
+              :lsp_session session
+              :definition {:lsp_session session
+                           :file "src/sample/core.clj"
+                           :file_path (.getCanonicalPath source)
+                           :source_sha256 (structural-lens/source-hash (slurp source))
+                           :owner "target"
+                           :range {:start {:line 1 :character 6}
+                                   :end {:line 1 :character 12}}
+                           :line 2 :character 7
+                           :name "target"}
+              :references []}))})
       (inspect-tool/handle-inspect
         nil
         {"mode" "prepare-change"
+         "scope" "definition"
          "subject" "sample.core/target"
          "intent" "Prepare one exact target change"}
         (fn [content error? structured]
@@ -286,10 +363,269 @@
                              :structured structured})))
       (is (false? (:error? (first @calls))))
       (is (.startsWith ^String (:content (first @calls))
-                       "inspect_clojure prepare-change"))
+                       "inspect_clojure · prepare-change"))
       (is (not (.contains ^String (:content (first @calls)) "(defn target")))
+      (is (= "definition" (get-in @calls [0 :structured :scope])))
       (is (= "(defn target [] :ok)"
-             (get-in @calls [0 :structured :sites 0 :source])))
+             (get-in @calls [0 :structured :decision-sites 0 :source])))
+      (is (= [{:id "change/s01"
+               :role :definition
+               :file "src/sample/core.clj"
+               :form "target"
+               :line 2
+               :end-line 2
+               :subjects ["sample.core/target"]}]
+             (get-in @calls [0 :structured :surface])))
+      (is (<= (inspect-tool/mcp-result-byte-count
+                (:content (first @calls))
+                (:structured (first @calls)))
+              inspect-tool/max-public-result-bytes))
       (finally
         (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest oversized-public-decision-packet-refuses-and-retains-no-basis
+  ;; Regression for the live definition-scoped call that overflowed the caller
+  ;; even though only one named form required a decision.
+  (change-buffer/clear-bases!)
+  (let [project (temp-dir)
+        source (write-source! project "src/sample/core.clj"
+                              "(ns sample.core)\n(defn target [] :ok)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init!
+        {:project-root (.getPath project)
+         :semantic-resolver
+         (fn [_]
+           (let [session "lsp-test-session"]
+             {:ok true
+              :version 2
+              :lsp_session session
+              :definition {:lsp_session session
+                           :file "src/sample/core.clj"
+                           :file_path (.getCanonicalPath source)
+                           :source_sha256 (structural-lens/source-hash (slurp source))
+                           :owner "target"
+                           :range {:start {:line 1 :character 6}
+                                   :end {:line 1 :character 12}}
+                           :line 2 :character 7
+                           :name "target"}
+              :references []}))})
+      (with-redefs [inspect-tool/max-public-result-bytes 128]
+        (inspect-tool/handle-inspect
+          nil
+          {"mode" "prepare-change"
+           "scope" "definition"
+           "subject" "sample.core/target"
+           "intent" "Prepare one exact target change"}
+          (fn [content error? structured]
+            (swap! calls conj {:content (first content)
+                               :error? error?
+                               :structured structured}))))
+      (is (:error? (first @calls)))
+      (is (= :decision-output-budget-exceeded
+             (get-in @calls [0 :structured :error-type])))
+      (is (false? (get-in @calls [0 :structured :basis-retained])))
+      (is (nil? (get-in @calls [0 :structured :basis])))
+      (is (zero? (change-buffer/retained-basis-count)))
+      (is (< (count ^String (:content (first @calls))) 2048)
+          "the refusal itself remains bounded")
+      (finally
+        (inspect-tool/init! nil)
+        (change-buffer/clear-bases!)
+        (delete-tree! project)))))
+
+(deftest exact-source-anchor-is-pure-and-refuses-wrong-or-ambiguous-owners
+  ;; Field regression: formatting moved post-card while workspace/symbol kept
+  ;; its previous range. The consumer must derive a new anchor from its bytes.
+  (let [source (str "(ns sample.core)\n\n"
+                    "(>defn target\n"
+                    "  []\n"
+                    "  :ok)\n")
+        built (source-anchor/build-source-anchor
+                "sample.core/target" "src/sample/core.clj" source {})]
+    (is (:ok built))
+    (is (= {:file "src/sample/core.clj"
+            :source_sha256 (structural-lens/source-hash source)
+            :owner "target"
+            :range {:start {:line 2 :character 0}
+                    :end {:line 4 :character 6}}}
+           (:source-anchor built)))
+    (is (= :semantic-candidate-namespace-mismatch
+           (:error-type
+             (source-anchor/build-source-anchor
+               "other.core/target" "src/sample/core.clj" source {}))))
+    (is (= :semantic-candidate-owner-mismatch
+           (:error-type
+             (source-anchor/build-source-anchor
+               "sample.core/missing" "src/sample/core.clj" source {}))))
+    (is (= 2
+           (:owner-count
+             (source-anchor/build-source-anchor
+               "sample.core/target"
+               "src/sample/core.clj"
+               (str source "\n(>defn target [] :duplicate)\n")
+               {}))))))
+
+(deftest workspace-source-roots-are-deterministic-and-confined
+  (let [root (temp-dir)]
+    (try
+      (spit (io/file root "deps.edn")
+            "{:paths [\"src\" \"../escape\" \"/tmp/absolute\"] :aliases {:test {:extra-paths [\"test\"]}}}\n")
+      (spit (io/file root "bb.edn") "{:paths [\"script\"]}\n")
+      (is (= ["" "src" "test" "dev" "script"]
+             (source-anchor/workspace-source-roots root)))
+      (finally
+        (delete-tree! root)))))
+
+(deftest prepare-prefers-a-local-fqn-anchor-and-retains-fuzzy-discovery-only-as-fallback
+  (testing "a conventional namespace path never pays for fuzzy workspace-symbol discovery"
+    (let [root (temp-dir)
+          relative "src/sample/core.clj"
+          source (str "(ns sample.core)\n\n"
+                      "(defn target [] :current)\n")
+          _ (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+          _ (write-source! root relative source)
+          calls (atom [])
+          provider
+          (fn [anchor]
+            (swap! calls conj anchor)
+            (if anchor
+              {:ok true
+               :resolution "source-anchor"
+               :source_anchor anchor
+               :definition {:file relative}}
+              {:ok false
+               :error-type :fuzzy-discovery-must-not-run}))]
+      (try
+        (let [result (inspect-tool/resolve-var!
+                       {:project-root (.getCanonicalPath root)
+                        :project-aliases {}
+                        :semantic-provider provider}
+                       "sample.core/target")
+              anchor (first @calls)]
+          (is (:ok result))
+          (is (= 1 (count @calls)))
+          (is (= relative (:file anchor)))
+          (is (= "target" (:owner anchor)))
+          (is (= {:start {:line 2 :character 0}
+                  :end {:line 2 :character 25}}
+                 (:range anchor)))
+          (is (= (structural-lens/source-hash source)
+                 (:source_sha256 anchor))))
+        (finally
+          (delete-tree! root)))))
+
+  (testing "a nonstandard source path keeps the unanchored compatibility route"
+    (let [root (temp-dir)
+          relative "unusual/location.clj"
+          source (str "(ns sample.core)\n\n"
+                      "(defn target [] :current)\n")
+          _ (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+          _ (write-source! root relative source)
+          calls (atom [])
+          provider
+          (fn [anchor]
+            (swap! calls conj anchor)
+            (if anchor
+              {:ok true
+               :resolution "source-anchor"
+               :source_anchor anchor
+               :definition {:file relative}}
+              {:ok true
+               :definition {:file relative
+                            :range {:start {:line 0 :character 0}
+                                    :end {:line 0 :character 1}}}}))]
+      (try
+        (let [result (inspect-tool/resolve-var!
+                       {:project-root (.getCanonicalPath root)
+                        :project-aliases {}
+                        :semantic-provider provider}
+                       "sample.core/target")]
+          (is (:ok result))
+          (is (= 2 (count @calls)))
+          (is (nil? (first @calls)))
+          (is (= relative (:file (second @calls)))))
+        (finally
+          (delete-tree! root))))))
+
+(deftest prepare-refuses-when-cclsp-does-not-confirm-the-exact-anchor
+  (let [root (temp-dir)
+        relative "src/sample/core.clj"
+        _ (write-source! root relative "(ns sample.core)\n(defn target [] :ok)\n")]
+    (try
+      (let [result
+            (inspect-tool/resolve-var!
+              {:project-root (.getCanonicalPath root)
+               :project-aliases {}
+               :semantic-provider
+               (fn [anchor]
+                 (if anchor
+                   {:ok true :resolution "workspace-symbol"}
+                   {:ok true :definition {:file relative}}))}
+              "sample.core/target")]
+        (is (= :semantic-source-anchor-not-confirmed (:error-type result)))
+        (is (true? (:source-unchanged result))))
+      (finally
+        (delete-tree! root)))))
+
+(deftest retained-buffer-callback-opens-frozen-source-without-rereading-disk
+  (change-buffer/clear-bases!)
+  (let [project (temp-dir)
+        source-text "(ns sample.core)\n(defn target [] :ok)\n"
+        source (write-source! project "src/sample/core.clj" source-text)
+        session "lsp-test-session"
+        prepared
+        (change-buffer/prepare-change!
+          {:project-root (.getPath project)
+           :semantic-resolver
+           (fn [_]
+             {:ok true
+              :version 2
+              :lsp_session session
+              :definition {:lsp_session session
+                           :file "src/sample/core.clj"
+                           :file_path (.getCanonicalPath source)
+                           :source_sha256 (structural-lens/source-hash source-text)
+                           :owner "target"
+                           :range {:start {:line 1 :character 6}
+                                   :end {:line 1 :character 12}}
+                           :line 2 :character 7
+                           :name "target"}
+              :references []})}
+          {:subject "sample.core/target"
+           :intent "Open one retained named form"
+           :label "open-form"
+           :scope "definition"})
+        calls (atom [])]
+    (try
+      (spit source "(ns sample.core)\n;; changed after preparation\n")
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"basis" (:basis prepared)
+         "view" "sites"
+         "open" ["open-form/s01"]
+         "context" "form"}
+        (fn [content error? structured]
+          (swap! calls conj {:content (first content)
+                             :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)]
+        (is (false? error?))
+        (is (.startsWith ^String content "inspect_clojure · retained buffers"))
+        (is (not (.contains ^String content "(defn target"))
+            "the text summary does not duplicate source")
+        (is (= "basis-view" (:mode structured)))
+        (is (= ["open-form/s01"] (mapv :id (:buffers structured))))
+        (is (= ["(defn target [] :ok)"]
+               (mapv :source (:buffers structured))))
+        (is (= "(ns sample.core)\n;; changed after preparation\n"
+               (slurp source))
+            "opening the buffer does not reread or rewrite changed disk bytes")
+        (is (<= (inspect-tool/mcp-result-byte-count content structured)
+                inspect-tool/max-public-result-bytes)))
+      (finally
+        (inspect-tool/init! nil)
+        (change-buffer/clear-bases!)
         (delete-tree! project)))))

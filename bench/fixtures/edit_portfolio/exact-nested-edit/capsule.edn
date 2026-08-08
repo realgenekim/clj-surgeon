@@ -1,0 +1,11 @@
+{:id :exact-nested-edit
+ :decision-boundary :complete-single-edit-supplied
+ :provenance {:kind :paired-decision-boundary
+              :source "pair-view-expect-edit neutral native control"
+              :minimized "identical before/after bytes; removed guarded-editor-specific task language"}
+ :targets ["src/bench/pair_view.clj"]
+ :hashes {"src/bench/pair_view.clj"
+          {:before "3d24b439a00b8b5410011cf4ae565c13fa9f2ea9ff7dc6be4050d020ab71cd6e"
+           :after "05012ad4f42ebbbab074e01be60081caa9894c4b5f993c2e4ec86e91febb5c9a"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 1 :edits 1}}

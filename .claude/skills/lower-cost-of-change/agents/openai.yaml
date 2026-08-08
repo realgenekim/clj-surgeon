@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lower Cost of Change"
+  short_description: "Make development feedback loops live, fast, and provable"
+  default_prompt: "Use $lower-cost-of-change to remove restart, reload, discovery, or verification friction from this development loop."

@@ -1093,8 +1093,12 @@
 
 (deftest agent-facing-surfaces-do-not-drift
   (let [readme (slurp "README.md")
-        skill (slurp "skills/clj-surgeon/SKILL.md")
-        legacy-skill (slurp "skill.md")
+        skill (str (slurp "skills/clj-surgeon/SKILL.md")
+                "\n"
+                (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+        legacy-skill (str (slurp "skill.md")
+                       "\n"
+                       (slurp "skills/clj-surgeon/references/cli-fallback.md"))
         changelog (slurp "CHANGELOG.md")
         help (core/format-op-help
                :show-form

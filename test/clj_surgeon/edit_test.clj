@@ -123,16 +123,23 @@
 (deftest agent-facing-surfaces-teach-the-native-edit-boundary
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))
         operational {"README" (slurp "README.md")
-                     "installed skill" (slurp "skills/clj-surgeon/SKILL.md")
-                     "Claude skill" (slurp ".claude/skills/clj-surgeon/SKILL.md")
-                     "legacy skill" (slurp "skill.md")
+                     "installed skill" (str (slurp "skills/clj-surgeon/SKILL.md")
+                                         "\n"
+                                         (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+                     "Claude skill" (str (slurp ".claude/skills/clj-surgeon/SKILL.md")
+                                      "\n"
+                                      (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md"))
+                     "legacy skill" (str (slurp "skill.md")
+                                      "\n"
+                                      (slurp "skills/clj-surgeon/references/cli-fallback.md"))
                      "edit help" help}
         durable (assoc operational
                        "vision" (slurp "docs/vision.md")
                        "changelog" (slurp "CHANGELOG.md"))]
-    (is (<= (count (str/split-lines (get operational "installed skill")))
-            90)
-        "The installed skill must fit in one compact 1-90 line read")
+    (is (<= (count (str/split-lines
+                     (slurp "skills/clj-surgeon/SKILL.md")))
+            70)
+        "The default skill entrance must fit in one compact 1-70 line read")
     (doseq [[surface text] durable]
       (testing surface
         (let [normalized (-> text

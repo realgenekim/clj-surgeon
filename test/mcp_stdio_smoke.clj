@@ -72,7 +72,7 @@
               tools (get-in tools-list [:result :tools])
               refusal-text (get-in invalid-call
                                    [:result :content 0 :text])
-              refusal (json/parse-string refusal-text true)
+              refusal (get-in invalid-call [:result :structuredContent])
               capabilities (get-in initialize [:result :capabilities])]
           (assert! (= "clj-surgeon"
                       (get-in initialize [:result :serverInfo :name]))
@@ -101,6 +101,12 @@
           (assert! (= "invalid-mcp-request" (:error_type refusal))
                    "Invalid call must preserve its stable refusal type"
                    {:refusal refusal})
+          (assert! (= true (:source_unchanged refusal))
+                   "Invalid call must prove that source was unchanged"
+                   {:refusal refusal})
+          (assert! (str/includes? refusal-text "refused · missing-fields")
+                   "Invalid call must include a concise human-readable refusal"
+                   {:refusal-text refusal-text})
           (println
             (pr-str
               {:ok true

@@ -31,7 +31,7 @@
                       (.build))
         client (-> (McpClient/sync transport)
                    (.initializationTimeout (Duration/ofSeconds 5))
-                   (.requestTimeout (Duration/ofSeconds 15))
+                   (.requestTimeout (Duration/ofSeconds 40))
                    (.build))]
     (.initialize client)
     client))
@@ -81,27 +81,35 @@
        :error "cclsp returned no structuredContent for resolve_var_surface"})))
 
 (defn- call-resolve-var!
-  [^McpSyncClient client qualified-var]
+  [^McpSyncClient client workspace-root qualified-var source-anchor]
   (normalize-result
     (.callTool client
                (McpSchema$CallToolRequest.
                  "resolve_var_surface"
-                 {"var" qualified-var
-                  "include_declaration" true}))))
+                 (cond-> {"var" qualified-var
+                          "include_declaration" true}
+                   workspace-root (assoc "workspace_root" workspace-root)
+                   source-anchor (assoc "source_anchor"
+                                        (json/parse-string
+                                          (json/generate-string source-anchor))))))))
 
 (defn resolve-var!
   "Resolve one fully qualified Clojure Var. Reconnect once after a provider restart."
-  [qualified-var]
-  (try
-    (call-resolve-var! (client!) qualified-var)
-    (catch Exception first-error
-      (close!)
-      (try
-        (call-resolve-var! (client!) qualified-var)
-        (catch Exception retry-error
-          {:ok false
-           :error-type :semantic-provider-unavailable
-           :error (.getMessage retry-error)
-           :first-error (.getMessage first-error)
-           :remedy (str "Start or repair cclsp at " (:url @runtime)
-                        ", then retry the same inspect_clojure call.")})))))
+  ([qualified-var]
+   (resolve-var! nil qualified-var nil))
+  ([workspace-root qualified-var]
+   (resolve-var! workspace-root qualified-var nil))
+  ([workspace-root qualified-var source-anchor]
+   (try
+     (call-resolve-var! (client!) workspace-root qualified-var source-anchor)
+     (catch Exception first-error
+       (close!)
+       (try
+         (call-resolve-var! (client!) workspace-root qualified-var source-anchor)
+         (catch Exception retry-error
+           {:ok false
+            :error-type :semantic-provider-unavailable
+            :error (.getMessage retry-error)
+            :first-error (.getMessage first-error)
+            :remedy (str "Start or repair cclsp at " (:url @runtime)
+                         ", then retry the same inspect_clojure call.")}))))))

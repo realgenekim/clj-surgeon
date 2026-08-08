@@ -200,7 +200,7 @@
 (deftest refuses-incomplete-or-unsafe-success-results
   (doseq [[label result reason]
           [[:kernel-error {:error "no" :error-type :scope-mismatch}
-            :kernel-refusal]
+            "scope-mismatch"]
            [:not-committed {:ok true :committed false :verified {}}
             :incomplete-verification]
            [:no-whole-file-proof {:ok true :committed true
@@ -222,19 +222,197 @@
         (is (false? (:ok normalized)))
         (is (= reason (:reason normalized)))))))
 
-(deftest normalizes-kernel-refusal-with-stable-remedy
-  (let [result
-        (contract/normalize-refusal
-          {:error "Compiled transaction does not match aggregate expectations"
-           :error-type :transaction-expectation-mismatch
-           :expected {:intent-count 1 :edit-count 2 :changed-file-count 1}
-           :actual {:intent-count 1 :edit-count 1 :changed-file-count 1}
-           :remedies {:count "Set matches to 1"}})]
+(deftest classifies-kernel-refusal-with-the-exact-actionable-diagnostic
+  (let [refusal {:error ":find must contain exactly one complete form with no detached comments"
+                 :error-type :invalid-intent-form
+                 :reason :invalid-intent-form
+                 :field ":find"
+                 :form-count 0
+                 :intent-index 2
+                 :change-id :gallery-renderer}
+        result (contract/classify-kernel-result "/work/project" refusal)
+        custom-result
+        (contract/classify-kernel-result
+          "/work/project"
+          (assoc refusal :remedy "Pass one complete parseable Clojure form in :find."))]
     (is (= false (:ok result)))
-    (is (= "transaction-expectation-mismatch" (:error_type result)))
-    (is (= true (:source_unchanged result)))
-    (is (= {:intent-count 1 :edit-count 2 :changed-file-count 1}
-           (:expected result)))
-    (is (= {:count "Set matches to 1"} (:remedies result)))
-    (is (= "Correct the declared scope or count and call apply_clojure_changes once."
-           (:remedy result)))))
+    (is (= "invalid-intent-form" (:error_type result)))
+    (is (= "invalid-intent-form" (:reason result)))
+    (is (= "kernel" (:phase result)))
+    (is (= 2 (:change_index result)))
+    (is (= "gallery-renderer" (:change_id result)))
+    (is (= ":find" (:field result)))
+    (is (= 0 (:form_count result)))
+    (is (:source_unchanged result))
+    (is (= "Pass exactly one complete parseable Clojure form in :find for change 2 (gallery-renderer)."
+           (:remedy result)))
+    (is (= "Pass one complete parseable Clojure form in :find."
+           (:remedy custom-result)))))
+
+(deftest normalized-refusal-preserves-an-actionable-compiler-diagnostic
+  (let [result (contract/normalize-refusal
+                 {:ok false
+                  :error-type :invalid-mcp-request
+                  :reason :unknown-fields
+                  :path ["changes" 3]
+                  :unknown ["owner"]
+                  :allowed ["expect" "files" "find" "forms" "id" "replace"]
+                  :error "Request contains unknown fields"})]
+    (is (= "unknown-fields" (:reason result)))
+    (is (= ["changes" 3] (:path result)))
+    (is (= ["owner"] (:unknown result)))
+    (is (= ["expect" "files" "find" "forms" "id" "replace"]
+           (:allowed result)))
+    (is (:source_unchanged result))))
+
+(deftest namespace-owner-crosses-the-json-boundary-as-closed-data
+  (let [change (-> (get valid-request "changes") first
+                   (dissoc "forms")
+                   (assoc "owner" {"kind" "namespace"
+                                   "name" "bench.app-shell"}))
+        request (assoc valid-request "changes" [change])
+        validated (contract/validate-tool-params request)
+        transaction (contract/tool-params->transaction (:params validated))]
+    (is (:ok validated))
+    (is (= {:kind :namespace :name 'bench.app-shell}
+           (get-in transaction [:changes 0 :owner])))
+    (doseq [[label owner expected]
+            [["unsupported kind" {"kind" "file" "name" "bench.app-shell"}
+              "invalid-owner-kind"]
+             ["blank name" {"kind" "namespace" "name" ""}
+              "non-blank-string"]
+             ["unknown field" {"kind" "namespace" "name" "bench.app-shell"
+                               "index" 0}
+              "unknown-fields"]]]
+      (testing label
+        (let [result (contract/validate-tool-params
+                       (assoc valid-request "changes"
+                              [(assoc change "owner" owner)]))]
+          (is (false? (:ok result)))
+          (is (= expected (some-> (:reason result) name))))))
+    (let [result (contract/validate-tool-params
+                   (assoc valid-request "changes"
+                          [(assoc change "forms" ["ide-shell"])]))]
+      (is (false? (:ok result)))
+      (is (= "ambiguous-change-owner" (some-> (:reason result) name))))))
+
+(deftest validates-and-compiles-guarded-sibling-insertion
+  (doseq [[field operator]
+          [["insert_before" :insert-left]
+           ["insert_after" :insert-right]]]
+    (testing field
+      (let [request
+            {"changes"
+             [(-> (get-in valid-request ["changes" 0])
+                  (dissoc "replace")
+                  (assoc field [":mcp-calls" ":mcp-successes"]))]
+             "expect" {"changes" 1 "edits" 1 "files" 1}}
+            validated (contract/validate-tool-params request)]
+        (is (:ok validated))
+        (is (= [operator [":mcp-calls" ":mcp-successes"]]
+               (get-in (contract/tool-params->transaction (:params validated))
+                       [:changes 0 :do]))))))
+  (doseq [[label request reason path]
+          [[:mixed-actions
+            (assoc-in valid-request ["changes" 0 "insert_after"] [":extra"])
+            :ambiguous-change-action ["changes" 0]]
+           [:missing-action
+            (update-in valid-request ["changes" 0] dissoc "replace")
+            :ambiguous-change-action ["changes" 0]]
+           [:empty-insert
+            (-> valid-request
+                (update-in ["changes" 0] dissoc "replace")
+                (assoc-in ["changes" 0 "insert_before"] []))
+            :non-empty-array ["changes" 0 "insert_before"]]
+           [:blank-insert
+            (-> valid-request
+                (update-in ["changes" 0] dissoc "replace")
+                (assoc-in ["changes" 0 "insert_after"] [" "]))
+            :non-blank-string ["changes" 0 "insert_after" 0]]]]
+    (testing (name label)
+      (let [result (contract/validate-tool-params request)]
+        (is (false? (:ok result)))
+        (is (= reason (:reason result)))
+        (is (= path (:path result)))))))
+
+(deftest validates-and-compiles-binding-aware-local-rename
+  (let [request
+        {"changes"
+         [{"id" "rename-sort-binding"
+           "files" ["src/demo.clj"]
+           "forms" ["feed" "table"]
+           "rename_binding"
+           {"from" "sort-by"
+            "to" "sort-field"
+            "preserve_external_key" true}
+           "expect" {"matches" 5 "each_form" 1}}]
+         "expect" {"changes" 1 "edits" 5 "files" 1}}
+        validated (contract/validate-tool-params request)]
+    (is (:ok validated))
+    (is (= {:changes
+            [{:id :rename-sort-binding
+              :in ["src/demo.clj"]
+              :forms ['feed 'table]
+              :do [:rename-binding
+                   {:from 'sort-by
+                    :to 'sort-field
+                    :preserve-external-key true}]
+              :expect {:matches 5 :each-form 1}}]
+            :expect {:changes 1 :edits 5 :files 1}}
+           (contract/tool-params->transaction (:params validated)))))
+  (doseq [[label request reason path]
+          [[:missing-forms
+            {"changes"
+             [{"id" "rename" "files" ["src/demo.clj"]
+               "owner" {"kind" "namespace" "name" "demo"}
+               "rename_binding"
+               {"from" "sort-by" "to" "sort-field"
+                "preserve_external_key" true}
+               "expect" {"matches" 2}}]
+             "expect" {"changes" 1 "edits" 2 "files" 1}}
+            :invalid-binding-rename-owner ["changes" 0]]
+           [:unsafe-key-change
+            {"changes"
+             [{"id" "rename" "files" ["src/demo.clj"] "forms" ["feed"]
+               "rename_binding"
+               {"from" "sort-by" "to" "sort-field"
+                "preserve_external_key" false}
+               "expect" {"matches" 2}}]
+             "expect" {"changes" 1 "edits" 2 "files" 1}}
+            :unsafe-binding-rename
+            ["changes" 0 "rename_binding" "preserve_external_key"]]
+           [:mixed-find
+            {"changes"
+             [{"id" "rename" "files" ["src/demo.clj"] "forms" ["feed"]
+               "find" "sort-by"
+               "rename_binding"
+               {"from" "sort-by" "to" "sort-field"
+                "preserve_external_key" true}
+               "expect" {"matches" 2}}]
+             "expect" {"changes" 1 "edits" 2 "files" 1}}
+            :unexpected-binding-rename-find ["changes" 0]]]]
+    (testing (name label)
+      (let [result (contract/validate-tool-params request)]
+        (is (false? (:ok result)))
+        (is (= reason (:reason result)))
+        (is (= path (:path result)))))))
+
+(deftest validates-and-compiles-comment-preserving-map-entry-insertion
+  (let [request
+        {"changes"
+         [{"id" "add-status"
+           "files" ["test/demo_test.clj"]
+           "forms" ["contract-test"]
+           "find" "{:a 1 :b 2}"
+           "inside" "(is (= {:a 1 :b 2} actual))"
+           "assoc_entry" {"key" ":status" "value" ":ready"}
+           "expect" {"matches" 2}}]
+         "expect" {"changes" 1 "edits" 2 "files" 1}}
+        validated (contract/validate-tool-params request)]
+    (is (:ok validated))
+    (is (= [:assoc-entry {:key ":status" :value ":ready"}]
+           (get-in (contract/tool-params->transaction (:params validated))
+                   [:changes 0 :do])))
+    (is (= "(is (= {:a 1 :b 2} actual))"
+           (get-in (contract/tool-params->transaction (:params validated))
+                   [:changes 0 :inside])))))

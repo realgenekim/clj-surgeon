@@ -5,7 +5,7 @@
    [clj-surgeon.mcp-tool :as tool]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is]]
+   [clojure.test :refer [deftest is testing]]
    [nrepl.core :as nrepl]
    [nrepl.server :as nrepl-server])
   (:import
@@ -34,24 +34,98 @@
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
-    (is (= #{"basis" "decisions" "verify" "changes" "expect"}
+    (is (= #{"basis" "decisions" "verify" "changes" "expect"
+             "workspace_root"}
            (set (keys (get-in tools [1 :schema :properties])))))
     (is (= 2 (count (get-in tools [1 :schema :oneOf]))))
+    (testing "verify is basis-only at the published schema boundary"
+      (let [direct-route (second (get-in tools [1 :schema :oneOf]))
+            excluded (set (map (comp set :required)
+                               (get-in direct-route [:not :anyOf])))]
+        (is (contains? excluded #{"verify"}))))
+    (is (str/includes?
+          (get-in tools [1 :schema :properties "verify" :description])
+          "Basis route only"))
     (is (= inspect-tool/inspect-annotations
            (:annotations (first tools))))
     (is (str/includes? inspect-tool/tool-description
-                       "(-> (form 'numeric-fields) initializer"))
+                       "mode=prepare-change"))
     (is (str/includes? inspect-tool/tool-description
                        "read_complete=true is terminal"))
+    (testing "prepare-change publishes its exact-source route and label grammar"
+      (is (some #(= {:required ["mode" "file" "form" "intent"]} %)
+                (get-in tools [0 :schema :oneOf])))
+      (is (= "^[a-z][a-z0-9-]{0,39}$"
+             (get-in tools [0 :schema :properties "label" :pattern])))
+      (is (str/includes?
+            (get-in tools [0 :schema :properties "label" :description])
+            "Must match ^[a-z][a-z0-9-]{0,39}$")))
     (is (< (count server/server-instructions) 512))
     (is (str/includes? server/server-instructions
-                       "PREFER inspect_clojure"))
+                       "Batch known Clojure reads"))
     (is (str/includes? tool/tool-description
-                       "avoids fragile patch-context mismatches"))
+                       "failure-atomic Clojure transaction"))
     (is (str/includes? server/server-instructions
-                       "do not read first"))
-    (is (str/includes? server/server-instructions
-                       "verification_complete=true"))))
+                       "two or more exact edits"))
+    (testing "a clean caller can construct both requests from tools/list"
+      (is (str/includes? server/server-instructions
+                         "verification_complete=true"))
+      (is (= #{"id" "files" "forms" "owner" "find" "inside" "replace"
+               "insert_before" "insert_after" "rename_binding"
+               "assoc_entry" "expect"}
+             (set (keys (get-in tools [1 :schema :properties "changes" :items :properties])))))
+      (is (= false
+             (get-in tools [1 :schema :properties "changes" :items :additionalProperties])))
+      (let [[owner-rule action-rule]
+            (get-in tools [1 :schema :properties "changes" :items :allOf])]
+        (is (= #{#{"forms"} #{"owner"}}
+               (set (map (comp set :required) (:oneOf owner-rule)))))
+        (is (= #{#{"find" "replace"}
+                 #{"find" "insert_before"}
+                 #{"find" "insert_after"}
+                 #{"forms" "rename_binding"}
+                 #{"find" "assoc_entry"}}
+               (set (map (comp set :required) (:oneOf action-rule))))))
+      (is (str/includes? tool/tool-description
+                         "For named top-level def or defn owners, use forms: [name]"))
+      (is (str/includes? tool/tool-description
+                         "exactly one action"))
+      (is (str/includes? tool/tool-description
+                         "refuse comment-bearing gaps"))
+      (doseq [tool-index [0 1]]
+        (let [description
+              (get-in tools [tool-index :schema :properties "workspace_root" :description])]
+          (is (str/includes? description "Omit to use the server default"))
+          (is (str/includes? description "Preserve the returned workspace_root")))))))
+
+(deftest live-tool-sync-plans-contract-changes-without-handler-churn
+  (let [handler-a (fn [& _])
+        handler-b (fn [& _])
+        inspect {:name "inspect" :description "read"
+                 :schema {:type "object"}
+                 :annotations {:read-only true}
+                 :tool-fn handler-a}
+        apply-tool {:name "apply" :description "write"
+                    :schema {:type "object"}
+                    :annotations {:read-only false}
+                    :tool-fn handler-a}
+        registered (server/tool-contracts [inspect apply-tool])]
+    (testing "handler redefinition is already hot and does not churn tools/list"
+      (is (= {:remove [] :upsert []}
+             (server/tool-sync-plan
+               registered
+               [(assoc inspect :tool-fn handler-b) apply-tool]))))
+    (testing "schema, description, and annotation changes replace the tool"
+      (doseq [changed [(assoc inspect :schema {:type "object" :required ["x"]})
+                       (assoc inspect :description "better read")
+                       (assoc inspect :annotations {:read-only false})]]
+        (is (= {:remove [] :upsert ["inspect"]}
+               (server/tool-sync-plan registered [changed apply-tool])))))
+    (testing "addition and removal are explicit and stably ordered"
+      (is (= {:remove ["apply"] :upsert ["third"]}
+             (server/tool-sync-plan
+               registered
+               [inspect (assoc apply-tool :name "third")]))))))
 
 (deftest embedded-nrepl-redefines-the-live-handler-var
   (let [directory (temp-dir)

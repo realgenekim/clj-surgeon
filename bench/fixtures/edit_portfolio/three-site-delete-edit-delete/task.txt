@@ -1,0 +1,3 @@
+Remove the obsolete Var bench.legacy-adapter/legacy-adapter and the obsolete test bench.legacy-adapter-test/legacy-adapter-test. Update every live caller of the adapter to call bench.consumer/current-handler directly. Preserve every unrelated form and byte.
+
+The complete affected surface is not supplied. Discover it from the named Var, then apply the delete/edit/delete decision as one coherent transaction if your available editor supports it. Verify every changed file and report the discovery route, mutation route, and first-attempt success.

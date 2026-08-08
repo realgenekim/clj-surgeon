@@ -12,6 +12,10 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Binding-aware local rename](binding-aware-local-rename.md) — preserve an
+  external `:keys` data contract while renaming only one resolved local binding
+  and its usages through the existing verified transaction.
+- [Live MCP contract and semantic/source handshake](live-contract-and-semantic-source-handshake.md) — complete: one idempotent shared multi-workspace stack, live contract synchronization, exact-root semantic recovery, and session-bound independently verified evidence before basis storage.
 - [Proof-carrying change buffer](proof-carrying-change-buffer.md) — implemented
   experiment that resolves one fully qualified Var, returns bounded exact
   decision sites and the next `apply_clojure_changes` call, then applies
@@ -27,9 +31,9 @@ Active plans:
 - [Atlas paper exercises](atlas-paper-exercises.md) — seven real goals on
   this codebase run through the atlas design on paper; produced five design
   changes including workspace-scoped match and exploration-mode budgets.
-- [Typed MCP change entrance](typed-mcp-change-entrance.md) — expose the
-  shipped guarded transaction compiler as one typed stdio tool and test whether
-  removing CLI ceremony beats native patching by a material margin.
+- [Typed MCP change entrance](typed-mcp-change-entrance.md) — implemented typed
+  guarded transactions; revalidating the wall-time keep gate after stale
+  direct-change guidance caused one recovery round in every clean run.
 - [Representative edit portfolio](representative-edit-portfolio.md) — frozen
   prompt/snapshot/diff capsules for hill-climbing complete agent editing
   workflows against native and local-microscope controls.

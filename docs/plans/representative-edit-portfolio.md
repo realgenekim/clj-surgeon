@@ -48,6 +48,22 @@ recent anonymized usage studies:
 The 45-form comprehension puzzle remains a synthetic skill-amortization and
 transcript-capacity stress test. It is not part of this product portfolio.
 
+### Wall-clock crossover extensions
+
+The end-to-end timing experiment adds three opt-in capsules while preserving
+the original five-task default matrix:
+
+| Task | Decision boundary | Purpose |
+|---|---|---|
+| `exact-nested-edit` | One exact owner-scoped edit supplied | Establish the lower crossover boundary against native patching without guarded-editor wording. |
+| `exploratory-shell-edit` | Behavioral goal supplied; owners, forms, replacements, and counts withheld | Compare `inspect_clojure -> decision -> apply_clojure_changes` with native discovery over bytes paired to `decision-batch-edit`. |
+| `three-site-delete-edit-delete` | One obsolete Var supplied; semantic surface withheld | Test definition deletion, caller replacement, and obsolete-test deletion through one retained basis. |
+
+These tasks use the same correctness, isolation, retention, and interaction
+metrics as the original portfolio. They remain opt-in because a replicated
+matrix is paid and because the semantic deletion capsule currently pins the
+workspace-path blocker tracked by `clj-surgeon-g08`.
+
 ## Frozen-capsule contract
 
 Each task lives under `bench/fixtures/edit_portfolio/TASK/` and contains:

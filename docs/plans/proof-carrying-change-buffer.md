@@ -65,6 +65,12 @@ source, or silently treat unresolved evidence as absent.
 must contain one concise model decision. `verify` is optional and defaults to
 `fast`. Unknown fields refuse through the closed MCP schema.
 
+When a known owner lives in a Clojure file that the semantic provider does not
+index, the caller can instead provide one project-relative `file` and one exact
+named top-level `form`. This exact-source route proves confinement, a unique
+owner, source hash, and structural address. It returns one definition decision
+and explicitly claims no references or LSP session.
+
 The successful `structuredContent` has this shape:
 
 ```json
@@ -253,8 +259,12 @@ clojure-lsp <-> cclsp :7890 <-> clj-surgeon :7888 <-> coding agent
 
 cclsp uses a pinned repo-local Bun and reloads TypeScript on save. The
 clj-surgeon process exposes nREPL. Reload changed handler namespaces without
-restarting the MCP listener. A tool schema or catalog change still requires a
-server restart because the SDK publishes that contract at initialization.
+restarting the MCP listener. Tool schema and catalog changes synchronize into
+the live registry and publish `tools/list_changed`; clients may cache their
+model-visible schema until a new agent session. Process-lifetime tool config
+and registry state live in a reload-stable runtime nucleus. `/healthz` returns
+success only when both are ready, and one real tool call is the authoritative
+post-reload probe.
 
 ## Required evidence
 

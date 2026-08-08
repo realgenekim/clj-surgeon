@@ -1,0 +1,7 @@
+Modernize the IDE and source-reader experience under src/bench. Determine the affected files, forms, and exact edit sites from the source before changing anything.
+
+- The IDE page, but not the email page, must replace its existing /app.css stylesheet with /command-center.css and use the namespaced :body.ide-shell-page element.
+- The interactive source reader must accept a document title separately from the artifact identifier. Its browser title must be "<document title> — Workbench". Its tab label must display the document title while retaining the artifact identifier as the element's :title tooltip. It must also use :body.ide-shell-page.
+- The static reader must remain unchanged.
+
+Preserve every unrelated byte. Apply the complete discovered decision as one coherent mutation action if your available editor supports it. Verify all changed files and report the discovery and mutation routes, including whether the mutation succeeded on the first attempt.

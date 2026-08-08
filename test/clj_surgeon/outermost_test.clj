@@ -162,15 +162,18 @@
         (is (vector? (:supported-query-steps result)))))))
 
 (deftest operational-surfaces-preserve-the-placement-contract
-  (doseq [[surface path]
-          {"README" "README.md"
-           "canonical skill" "skills/clj-surgeon/SKILL.md"
-           "legacy skill" "skill.md"
-           "repository instructions" "CLAUDE.md"
-           "vision" "docs/vision.md"
-           "changelog" "CHANGELOG.md"}]
+  (doseq [[surface text]
+          {"README" (slurp "README.md")
+           "canonical skill" (str (slurp "skills/clj-surgeon/SKILL.md")
+                                  "\n"
+                                  (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+           "legacy skill" (str (slurp "skill.md")
+                               "\n"
+                               (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+           "repository instructions" (slurp "CLAUDE.md")
+           "vision" (slurp "docs/vision.md")
+           "changelog" (slurp "CHANGELOG.md")}]
     (testing surface
-      (let [text (slurp path)]
-        (is (str/includes? text ":outermost"))
-        (is (str/includes? text ":up :outermost"))
-        (is (str/includes? text ":outermost :up"))))))
+      (is (str/includes? text ":outermost"))
+      (is (str/includes? text ":up :outermost"))
+      (is (str/includes? text ":outermost :up")))))

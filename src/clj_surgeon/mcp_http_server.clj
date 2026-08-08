@@ -1,9 +1,12 @@
 (ns clj-surgeon.mcp-http-server
   (:require
+   [cheshire.core :as json]
+   [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure-mcp.logging :as mcp-logging]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [nrepl.server :as nrepl-server])
   (:import
@@ -21,6 +24,86 @@
 (def default-host "127.0.0.1")
 (def default-port 7888)
 (def default-endpoint "/mcp")
+
+(def default-verification-profiles
+  {"fast"
+   {:commands
+    [["clj-kondo" "--lint" "{files}"]
+     ["npx" "@chrisoakman/standard-clojure-style" "check" "{files}"]]}
+   "full" ["make" "test"]})
+
+(defn- verification-command?
+  [command]
+  (and (vector? command)
+       (seq command)
+       (every? string? command)))
+
+(defn- verification-profile?
+  [profile]
+  (or (verification-command? profile)
+      (and (map? profile)
+           (= #{:commands} (set (keys profile)))
+           (vector? (:commands profile))
+           (seq (:commands profile))
+           (every? verification-command? (:commands profile)))))
+
+(defn verification-profiles-from-config
+  "Return a validated closed verification-profile map from project data."
+  [config]
+  (when-let [profiles (:verification-profiles config)]
+    (when-not (and (map? profiles)
+                   (seq profiles)
+                   (every? string? (keys profiles))
+                   (every? verification-profile? (vals profiles)))
+      (throw
+        (ex-info "Invalid project verification profiles"
+                 {:error-type :invalid-project-verification-profiles})))
+    profiles))
+
+(defn resolve-verification-profiles
+  "Select explicit, project-owned, or built-in closed verification profiles."
+  [explicit project-config]
+  (cond
+    explicit
+    {:profiles (or (verification-profiles-from-config
+                     {:verification-profiles explicit})
+                   default-verification-profiles)
+     :source :process}
+
+    (:verification-profiles project-config)
+    {:profiles (verification-profiles-from-config project-config)
+     :source :project}
+
+    :else
+    {:profiles default-verification-profiles
+     :source :built-in}))
+
+(defn- read-project-config
+  [project-dir]
+  (let [config-file (io/file project-dir ".clj-surgeon.edn")]
+    (if-not (.isFile config-file)
+      {}
+      (try
+        (edn/read-string (slurp config-file))
+        (catch Exception error
+          (throw
+            (ex-info "Invalid .clj-surgeon.edn"
+                     {:error-type :invalid-project-verification-profiles
+                      :file (.getPath config-file)}
+                     error)))))))
+
+(defn workspace-context
+  "Build one root-specific context extension. Verification profiles are read
+   lazily on every basis application so one workspace cannot inherit another
+   root's configuration and an intentional config change does not require a
+   server restart."
+  [verification-profiles workspace-root]
+  {:verification-profiles-fn
+   (fn []
+     (:profiles
+       (resolve-verification-profiles
+         verification-profiles
+         (read-project-config workspace-root))))})
 
 (defn allowed-origin?
   "Allow non-browser clients and loopback browser origins only."
@@ -49,12 +132,13 @@
   []
   (proxy [HttpServlet] []
     (doGet [^HttpServletRequest _request ^HttpServletResponse response]
-      (.setStatus response 200)
-      (.setContentType response "application/json")
-      (.setCharacterEncoding response "UTF-8")
-      (doto (.getWriter response)
-        (.write "{\"ok\":true,\"server\":\"clj-surgeon\"}")
-        (.flush)))))
+      (let [readiness (runtime/readiness)]
+        (.setStatus response (if (:ok readiness) 200 503))
+        (.setContentType response "application/json")
+        (.setCharacterEncoding response "UTF-8")
+        (doto (.getWriter response)
+          (.write (json/generate-string readiness))
+          (.flush))))))
 
 (defn- configure-logging!
   [log-file]
@@ -78,6 +162,9 @@
            semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
   (let [project-dir (str (or project-dir (System/getProperty "user.dir")))
+        project-config (read-project-config project-dir)
+        verification-selection
+        (resolve-verification-profiles verification-profiles project-config)
         host default-host
         port (int (or port default-port))
         endpoint default-endpoint
@@ -97,14 +184,11 @@
                            :verify! verify!
                            :read-source read-source
                            :write-source! write-source!
-                           :verification-profiles
-                           (or verification-profiles
-                               {"fast"
-                                {:commands
-                                 [["clj-kondo" "--lint" "{files}"]
-                                  ["npx" "@chrisoakman/standard-clojure-style"
-                                   "check" "{files}"]]}
-                                "full" ["make" "test"]})})
+                           :verification-profiles (:profiles verification-selection)
+                           :workspace-context-factory
+                           (fn [workspace-root]
+                             (workspace-context verification-profiles
+                                                workspace-root))})
         transport (-> (HttpServletStreamableServerTransportProvider/builder)
                       (.jsonMapper (McpJsonMapper/getDefault))
                       (.mcpEndpoint endpoint)
@@ -112,6 +196,7 @@
         mcp (-> (McpServer/async transport)
                 (mcp-server/configure-specification)
                 (.build))
+        _registered (mcp-server/register-live-server! mcp)
         jetty (Server. (InetSocketAddress. host port))
         context (ServletContextHandler. "/")]
     (.addServlet context transport endpoint)
@@ -132,7 +217,9 @@
                        :port actual-port
                        :url url
                        :pid (.pid (java.lang.ProcessHandle/current))
-                       :project-root project-dir}]
+                       :project-root project-dir
+                       :verification-profile-source
+                       (:source verification-selection)}]
         (write-ready-file! ready-file readiness)
         (telemetry/emit!
           telemetry-state :server.start
@@ -162,6 +249,7 @@
   (try
     (telemetry/emit! telemetry :server.stop {})
     (finally
+      (when mcp (mcp-server/unregister-live-server! mcp))
       (when mcp (.close mcp))
       (when jetty (.stop jetty))
       (when nrepl (nrepl-server/stop-server nrepl))

@@ -1,0 +1,19 @@
+{:id :three-site-delete-edit-delete
+ :decision-boundary :semantic-surface-from-named-var
+ :provenance {:kind :real-task-derived
+              :source "anonymized obsolete adapter removal"
+              :minimized "one obsolete definition, one live caller, one obsolete test, and unrelated owners"}
+ :targets ["src/bench/legacy_adapter.clj"
+           "src/bench/consumer.clj"
+           "test/bench/legacy_adapter_test.clj"]
+ :hashes {"src/bench/legacy_adapter.clj"
+          {:before "6921a2f6ac4af719099801c2ccd2f33fb4cea6c565bd9d62a3c249377754f982"
+           :after "2efde1fa8c9657a73f1f60a2880d8b13f30f6eea924bb7cb2f515a8f19f18e8a"}
+          "src/bench/consumer.clj"
+          {:before "49d2ede67daf817b558987f001090a7b978fa1dab17a36cccdcdb4aa0239b82c"
+           :after "dca6a36492f89fedf45eae3ddaa6064561b7bb627c38b0beacbe7e6b30d1680b"}
+          "test/bench/legacy_adapter_test.clj"
+          {:before "46c39d815499f44f42521af7b21524947a27ef641eda48014f56ab0ae53f20c7"
+           :after "97bef6fa36afabb4e139f3f14a77d52b3dcd9becf2b76a03de57699c047bd0e8"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 3 :edits 3}}

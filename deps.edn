@@ -39,4 +39,11 @@
     cider/cider-nrepl {:mvn/version "0.50.2"}
     org.eclipse.jetty.ee10/jetty-ee10-servlet {:mvn/version "12.0.13"}
     org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
-   :main-opts ["-m" "clj-surgeon.mcp-test-runner"]}}}
+   :main-opts ["-m" "clj-surgeon.mcp-test-runner"]}
+
+  :clj-surgeon/nrepl
+  {:extra-paths ["test"]
+   :extra-deps {babashka/fs {:mvn/version "0.5.30"}
+                babashka/process {:mvn/version "0.6.23"}
+                nrepl/nrepl {:mvn/version "1.3.1"}}
+   :main-opts ["-m" "nrepl.cmdline" "--port" "0"]}}}

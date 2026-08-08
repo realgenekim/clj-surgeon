@@ -15,7 +15,7 @@ now_ms() {
 write_state() {
   local destination=$1
   shift
-  local stage="$destination.tmp.$BASHPID"
+  local stage="$destination.tmp.${BASHPID:-$$}"
   : > "$stage"
   while [ "$#" -gt 0 ]; do
     printf '%s\t%s\n' "$1" "$2" >> "$stage"
@@ -33,7 +33,7 @@ bounded_exec() {
   started_ms=$(now_ms)
   write_state "$run_dir/state.tsv" \
     state running \
-    pid "$BASHPID" \
+    pid "${BASHPID:-$$}" \
     started_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     started_ms "$started_ms" \
     deadline_seconds "$deadline" \
@@ -202,7 +202,7 @@ write_state "$result_dir/matrix.tsv" \
 
 make_launcher() {
   local destination=$1
-  local stage="$destination.tmp.$BASHPID"
+  local stage="$destination.tmp.${BASHPID:-$$}"
   printf '%s\n' \
     '#!/usr/bin/env bb' \
     ';; benchmark launcher pinned to an immutable installed package' \

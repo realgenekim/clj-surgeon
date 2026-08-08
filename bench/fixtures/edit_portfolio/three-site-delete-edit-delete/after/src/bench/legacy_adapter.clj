@@ -1,0 +1,1 @@
+(ns bench.legacy-adapter)

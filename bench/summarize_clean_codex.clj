@@ -95,33 +95,82 @@
                       (percent :plan-apply-separate rows))}))
 
 (defn markdown [runs]
-  (let [summaries (->> runs
+  (let [number-value (fn [row key]
+                       (let [value (get row key)]
+                         (cond
+                           (number? value) value
+                           (string? value) (Double/parseDouble value)
+                           :else 0)))
+        summaries (->> runs
                        (group-by (juxt :task :context :version))
-                       (map summarize-group)
-                       (sort-by (juxt :task :context :version)))]
+                       (map
+                         (fn [[_ group-runs :as group]]
+                           (let [summary (summarize-group group)
+                                 efficient (filter :correct group-runs)
+                                 interaction-runs
+                                 (filter #(pos? (number-value % :user-turns)) efficient)
+                                 rate-median (fn [f] (median (map f interaction-runs)))]
+                             (assoc summary
+                               :turns (rate-median #(number-value % :user-turns))
+                               :turns-per-minute
+                               (rate-median
+                                 #(/ (* 60000.0 (number-value % :user-turns)) (:wall-ms %)))
+                               :seconds-per-turn
+                               (rate-median
+                                 #(/ (:wall-ms %) 1000.0 (number-value % :user-turns)))
+                               :tool-actions-per-turn
+                               (rate-median
+                                 #(/ (number-value % :tool-round-trips)
+                                     (number-value % :user-turns)))
+                               :discovery-round-trips
+                               (rate-median #(number-value % :discovery-round-trips))
+                               :post-decision-round-trips
+                               (rate-median #(number-value % :post-decision-round-trips))))))
+                       (sort-by (juxt :task :context :version)))
+        fmt-rate #(if (some? %) (format "%.2f" (double %)) "—")]
     (str
       "# Clean Codex benchmark summary\n\n"
       "Correctness is a gate. Efficiency medians include only correct runs. "
-      "Token counts are the final cumulative usage reported by each Codex session.\n\n"
-      "| Task | Context | Version | n | Efficiency n | Correct | Exact presentation | Median wall | Median input | Median uncached | Median output | Shell calls | MCP calls | File changes | Source output | MCP output | Post-decision reads | Failed mutations | MCP failures | Skill read | change | change! | Single change transaction | MCP first mutation | Temp manifest patch | q | xray | partition-all | edit | expr | First source edit | Text reader | show-form | Separate plan/apply |\n"
-      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
+      "Token counts are the final cumulative usage reported by each Codex session. "
+      "A user-visible turn is one completed Codex turn. An internal tool round trip is one started "
+      "command execution, file change, or MCP tool call. The first mutation starts the post-decision "
+      "phase; earlier internal round trips are discovery. Interaction rates are computed per correct run "
+      "before taking each median.\n\n"
+      "| Task | Context | Version | n | Efficiency n | Correct | Exact presentation | Median wall | "
+      "Turns/task | Turns/min | Seconds/turn | Tool actions/turn | Discovery tool turns | "
+      "Post-decision tool turns | Median input | Median uncached | "
+      "Median output | Shell calls | MCP calls | File changes | Source output | MCP output | "
+      "Post-decision reads | Failed mutations | MCP failures | Skill read | change | change! | "
+      "Single change transaction | MCP first mutation | Temp manifest patch | q | xray | partition-all | "
+      "edit | expr | First source edit | Text reader | show-form | Separate plan/apply |\n"
+      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+      "---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+      "---:|---:|\n"
       (str/join
         ""
-        (for [{:keys [task context version runs efficiency-runs correct exact wall input uncached output
-                      commands mcp-calls file-changes source-bytes mcp-output-bytes
+        (for [{:keys [task context version runs efficiency-runs correct exact wall
+                      turns turns-per-minute seconds-per-turn tool-actions-per-turn
+                      discovery-round-trips post-decision-round-trips
+                      input uncached output commands mcp-calls file-changes source-bytes mcp-output-bytes
                       post-decision-reads failed-mutations mcp-failures
                       skill-read change-used change-apply single-change mcp-first-mutation temp-manifest
                       q-used xray-used partition-all edit-used expr-used first-edit
                       text-reader show-form plan-separate]}
               summaries]
-          (format "| %s | %s | %s | %d | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %s | %sB | %sB | %s | %s | %s | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %s |\n"
-                  task context version runs efficiency-runs correct exact (fmt-int wall) (fmt-int input)
-                  (fmt-int uncached) (fmt-int output) (fmt-int commands) (fmt-int mcp-calls)
-                  (fmt-int file-changes) (fmt-int source-bytes) (fmt-int mcp-output-bytes)
-                  (fmt-int post-decision-reads) (fmt-int failed-mutations) (fmt-int mcp-failures)
-                  skill-read change-used change-apply single-change mcp-first-mutation temp-manifest
-                  q-used xray-used partition-all edit-used expr-used first-edit text-reader show-form
-                  (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))
+          (format
+            (str "| %s | %s | %s | %d | %d | %.0f%% | %.0f%% | %sms | %s | %s | %s | %s | %s | %s | "
+                 "%s | %s | %s | %s | %s | %s | %sB | %sB | %s | %s | %s | %.0f%% | %.0f%% | "
+                 "%.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | %.0f%% | "
+                 "%.0f%% | %.0f%% | %.0f%% | %s |\n")
+            task context version runs efficiency-runs correct exact (fmt-int wall)
+            (fmt-rate turns) (fmt-rate turns-per-minute) (fmt-rate seconds-per-turn)
+            (fmt-rate tool-actions-per-turn) (fmt-rate discovery-round-trips)
+            (fmt-rate post-decision-round-trips) (fmt-int input) (fmt-int uncached) (fmt-int output)
+            (fmt-int commands) (fmt-int mcp-calls) (fmt-int file-changes) (fmt-int source-bytes)
+            (fmt-int mcp-output-bytes) (fmt-int post-decision-reads) (fmt-int failed-mutations)
+            (fmt-int mcp-failures) skill-read change-used change-apply single-change mcp-first-mutation
+            temp-manifest q-used xray-used partition-all edit-used expr-used first-edit text-reader
+            show-form (if (some? plan-separate) (format "%.0f%%" plan-separate) "—")))))))
 
 (defn self-test []
   (let [rows [{:task "task" :context "context" :version "pre"
@@ -163,7 +212,21 @@
     (assert (= 0.0 (:mcp-failures summary)))
     (assert (< (Math/abs (- (/ 200.0 3.0) (:single-change summary))) 0.001))
     (assert (< (Math/abs (- (/ 200.0 3.0) (:mcp-first-mutation summary))) 0.001))
-    (assert (str/includes? (markdown rows) "MCP first mutation"))
+    (do
+      (assert (str/includes? (markdown rows) "MCP first mutation"))
+      (let [interaction-rows
+            (mapv (fn [index row]
+                    (assoc row
+                      :user-turns (nth [2 99 4] index)
+                      :tool-round-trips (nth [3 99 8] index)
+                      :discovery-round-trips (nth [1 50 3] index)
+                      :post-decision-round-trips (nth [2 49 5] index)))
+                  (range)
+                  rows)
+            report (markdown interaction-rows)]
+        (assert (str/includes? report "A user-visible turn is one completed Codex turn."))
+        (assert
+          (str/includes? report "| 200ms | 3.00 | 1000.00 | 0.06 | 1.75 | 2.00 | 3.50 |"))))
     (println "benchmark summary self-test passed")))
 
 (let [[argument] *command-line-args*]

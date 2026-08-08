@@ -83,6 +83,45 @@ clj-surgeon use is not inherently better.
 The selection contract and keep gates are in
 [the representative edit portfolio plan](../docs/plans/representative-edit-portfolio.md).
 
+### End-to-end crossover extensions
+
+Three opt-in capsules extend the original five-task portfolio without changing
+its default paid matrix:
+
+- `exact-nested-edit` supplies one exact nested change and is the lower-bound
+  native-patch control;
+- `exploratory-shell-edit` keeps the same accepted bytes as
+  `decision-batch-edit` but withholds owners, exact forms, replacements, and
+  counts; and
+- `three-site-delete-edit-delete` names one obsolete Var whose definition,
+  live caller, and obsolete test must be discovered as one semantic surface.
+
+Run the replicated exact one-shot comparison with:
+
+```bash
+BENCH_TASKS=exact-nested-edit \
+BENCH_RUN_MATRIX='mcp:mcp-hint-no-skill native:no-skill' \
+BENCH_REPLICATES=4 \
+BENCH_PARALLELISM=1 \
+make benchmark-edit-portfolio
+```
+
+Run the exploratory reader-plus-transaction comparison with:
+
+```bash
+BENCH_TASKS=exploratory-shell-edit \
+BENCH_RUN_MATRIX='mcp:mcp-exploratory-rule-no-skill native:no-skill' \
+BENCH_REPLICATES=4 \
+BENCH_PARALLELISM=1 \
+make benchmark-edit-portfolio
+```
+
+For counterbalanced release evidence, run half the replicas in that order and
+resume the same result directory with the two matrix cells reversed. The
+three-site semantic capsule currently serves as the regression case for Beads
+issue `clj-surgeon-g08`; do not report its wall time until semantic workspace
+path identity produces a valid Surgeon basis.
+
 ## Bounded clean-agent skill acceptance
 
 Use the six-session acceptance battery to exercise the installed Claude and
@@ -280,6 +319,21 @@ The output directory contains `runs.tsv`, `summary.md`, and one directory per
 run with the exact prompt, raw JSONL, stderr, final response, command list,
 fixture hashes, and diff. The runner uses isolated Codex homes and
 commit-specific CLI wrappers. It never changes the checkout under test.
+
+Interaction metrics distinguish the outer agent loop from internal tool work.
+A user-visible agent turn is one `turn.completed` event in the Codex JSONL
+stream. An internal tool round trip is one started `command_execution`,
+`file_change`, or `mcp_tool_call` item. The summary reports median turns per
+task, turns per minute, seconds per turn, and tool actions per turn across
+correct runs. The first mutation starts the post-decision phase. Internal tool
+round trips before that boundary are discovery turns; the mutation and all
+subsequent internal tool round trips are post-decision turns. Runs with no
+mutation classify every internal round trip as discovery.
+
+`mcp_calls` counts every clj-surgeon MCP call, including structural reads and
+mutations. Source output includes exact source characters surfaced by
+`inspect_clojure` as well as source-bearing shell output. This prevents an
+exploratory MCP lane from appearing to have zero read cost.
 
 See [the experiment plan](../docs/plans/clean-codex-benchmark.md) for the matrix,
 scoring contract, and confounds.

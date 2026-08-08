@@ -1,6 +1,6 @@
 # Typed MCP change entrance
 
-**Status:** Implemented experiment; write keep gate passed
+**Status:** Implemented experiment; recovery-round revalidation passed
 
 **Motivating evidence:**
 
@@ -360,6 +360,53 @@ skill, CLI help, implementation, plan, tests, and expected command. Assert:
 The four-replicate native, CLI, assisted MCP, no-hint MCP, and project-rule MCP
 lanes are complete. Incorrect runs remain in the correctness denominator and
 never contribute to efficiency medians.
+
+### Recovery-round elimination extension
+
+A later four-replica MCP lane exposed one systematic regression. Every caller
+used an obsolete string `owner` field, received a fail-closed refusal in about
+10 ms, and then spent a 20.460-second median interval constructing the current
+`forms` request. The successful six-edit transaction took 348.954 ms median.
+The complete MCP turn was 50.619 seconds versus 47.215 seconds for native.
+
+This extension tests whether contract congruence removes that recovery round.
+It does not change the frozen task or infer a counterfactual by subtraction.
+
+1. Update the direct-change description and example to name `id`, `files`,
+   `forms`, `find`, `replace`, and `expect` exactly.
+2. Validate the published example with the production validator.
+3. Reject obsolete direct-change field names in contract tests.
+4. Reload the live tool registry and inspect the published contract.
+5. Run four clean MCP replicas and four fresh counterbalanced native replicas.
+6. Record time to first mutation, direct tool time, refusal-to-retry time,
+   success-to-final time, complete wall, actions, tokens, and correctness.
+
+The extension passes only when MCP produces 4 / 4 exact results, accepts all
+four first calls, uses one mutation action per run, removes discovery and
+post-success source actions, improves the flawed MCP median by at least 10
+seconds, and beats the fresh native median by at least 5 seconds.
+
+If the first calls are correct but the wall gate fails, do not tune the
+subsecond kernel. First identify whether request construction or final-response
+generation dominates. Test a more compact request representation only when
+request construction dominates and retain it only after a measured five-second
+gain with unchanged safety guarantees.
+
+### Recovery-round result
+
+The corrected contract passed the extension gate. Five of five MCP runs used
+one mutation call and produced exact bytes. Four of five native controls were
+valid and correct; the invalid control is retained in the correctness record.
+
+| Route | Median wall | Correct efficiency runs |
+|---|---:|---:|
+| One-shot MCP | **27.976 s** | 5 / 5 |
+| Fresh native control | 68.932 s | 4 / 5 |
+
+The MCP route removed the 20.460-second median recovery interval, beat native
+by 40.956 seconds, and reduced complete wall time by 59.4%. This establishes a
+2.46x median advantage for the frozen complete-decision task. It does not yet
+establish the same advantage for exploratory read-decide-edit work.
 
 ## Documentation and release checklist
 

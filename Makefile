@@ -3,6 +3,7 @@ CLI_DEST ?= $(HOME)/bin/clj-surgeon
 CODEX_HOME ?= $(HOME)/.codex
 CLAUDE_HOME ?= $(HOME)/.claude
 INSTALL_ROOT ?= $(HOME)/.local/share/clj-surgeon
+CONTROL_PLANE_ROOT_FILE ?= $(INSTALL_ROOT)/control-plane-root
 SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
 CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
 CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
@@ -14,20 +15,26 @@ CLI_PACKAGE := $(VERSION_ROOT)/cli-$(CLI_SOURCE_HASH)
 SKILL_PACKAGE := $(VERSION_ROOT)/skill-$(SKILL_SOURCE_HASH)
 
 MCP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/mcp
-MCP_URL ?= http://127.0.0.1:7888/mcp
+MCP_PORT ?= 7888
+MCP_URL ?= http://127.0.0.1:$(MCP_PORT)/mcp
+MCP_PROJECT_DIR ?= $(CLJ_SURGEON_HOME)
 MCP_PID_FILE := $(MCP_STATE_DIR)/server.pid
 MCP_READY_FILE := $(MCP_STATE_DIR)/ready.edn
 MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
 MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
+MCP_START_ATTEMPTS ?= 120
 CLOJURE_BIN ?= $(shell command -v clojure)
+CLOJURE_LSP_BIN ?= $(shell command -v clojure-lsp)
 CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
-CCLSP_URL ?= http://127.0.0.1:7890/mcp
+CCLSP_PORT ?= 7890
+CCLSP_URL ?= http://127.0.0.1:$(CCLSP_PORT)/mcp
 CCLSP_CONFIG ?= $(CLJ_SURGEON_HOME)cclsp.json
 CCLSP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/cclsp
 CCLSP_LOG_FILE := $(CCLSP_STATE_DIR)/server.log
 CCLSP_LAUNCH_LABEL ?= com.realgenekim.cclsp-clj-surgeon
+WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark cclsp-start cclsp-stop cclsp-status mcp-start mcp-stop mcp-status install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload cclsp-start cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -37,9 +44,12 @@ help:
 	@echo "  make mcp-smoke                 Verify initialize, two-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
+	@echo "  make mcp-reload                Test, reload live Clojure, and publish changed tool schemas"
 	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
 	@echo "  make mcp-status                Check both hot MCPs, nREPL, and Codex registration"
+	@echo "  make workspace-mcp-onboard WORKSPACE=/repo  Compatibility alias for clj-surgeon up"
+	@echo "  make workspace-mcp-status WORKSPACE=/repo   Verify the shared stack and local config"
 	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
 	@echo "  make install                   Stable copied CLI, Codex skill, and Claude skill"
 	@echo "  make install-cli               Install only the stable copied CLI"
@@ -68,6 +78,7 @@ help:
 	@echo "  CODEX_HOME=/path/to/.codex     Codex home (default: $(CODEX_HOME))"
 	@echo "  CLAUDE_HOME=/path/to/.claude   Claude home (default: $(CLAUDE_HOME))"
 	@echo "  INSTALL_ROOT=/path/to/packages Stable copied package root (default: $(INSTALL_ROOT))"
+	@echo "  CONTROL_PLANE_ROOT_FILE=/path  Local pointer used only by experimental 'clj-surgeon up'"
 	@echo ""
 	@echo "Direct usage:"
 	@echo "  bb -m clj-surgeon.core :op :ls :file src/my/ns.clj"
@@ -90,12 +101,45 @@ mcp-serve:
 mcp-serve-benchmark:
 	clojure -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
 
+mcp-reload: mcp-test
+	@set -eu; \
+	  port_file="$(MCP_STATE_DIR)/nrepl-port"; \
+	  test -f "$$port_file" || { echo "No live MCP nREPL port at $$port_file; run make mcp-start" >&2; exit 1; }; \
+	  port=$$(cat "$$port_file"); \
+	  result=$$(clj-nrepl-eval --port "$$port" \
+	    "(do (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.binding-rename clj-surgeon.intent-transaction clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-contract clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-change-buffer clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))))"); \
+	  echo "$$result"; \
+	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \
+	  echo "Clients that honor tools/list_changed re-list automatically. The current Codex turn can cache model-visible schemas until a new session."
+
 cclsp-start:
 	@set -eu; \
 	  mkdir -p "$(CCLSP_STATE_DIR)"; \
-	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" >/dev/null 2>&1; then \
-	    echo "cclsp already ready at $(CCLSP_URL)"; \
-	    exit 0; \
+	  start_status="$(CCLSP_STATE_DIR)/last-start.edn"; \
+	  write_status() { \
+	    stage="$$start_status.tmp.$$$$"; \
+	    printf '{:server-restarted %s :config-path "%s"}\n' "$$1" "$$expected_config" > "$$stage"; \
+	    mv "$$stage" "$$start_status"; \
+	  }; \
+	  rm -f "$$start_status"; \
+	  restarted=false; \
+	  health_url="$(patsubst %/mcp,%/healthz,$(CCLSP_URL))"; \
+	  expected_config=$$(python3 -c 'import pathlib; print(pathlib.Path("$(CCLSP_CONFIG)").resolve())'); \
+	  if health=$$(curl -fsS --max-time 1 "$$health_url" 2>/dev/null); then \
+	    actual_config=$$(printf '%s' "$$health" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("config_path") or "")'); \
+	    if [ "$$actual_config" = "$$expected_config" ]; then \
+	      write_status false; \
+	      echo "cclsp already ready at $(CCLSP_URL)"; \
+	      exit 0; \
+	    fi; \
+	    if launchctl print "gui/$$(id -u)/$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1; then \
+	      echo "cclsp is healthy with a different config; reloading the managed service"; \
+	      restarted=true; \
+	      launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	    else \
+	      echo "cclsp port $(CCLSP_PORT) is owned by an unmanaged service using '$$actual_config'; refusing to replace it" >&2; \
+	      exit 1; \
+	    fi; \
 	  fi; \
 	  test -x "$(CCLSP_HOME)/node_modules/.bin/bun" || { echo "Run make setup in $(CCLSP_HOME)" >&2; exit 1; }; \
 	  launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
@@ -103,7 +147,7 @@ cclsp-start:
 	    -o "$(CCLSP_LOG_FILE)" -e "$(CCLSP_LOG_FILE)" -- \
 	    /bin/sh -c 'cd "$$1"; shift; export CCLSP_CONFIG_PATH="$$1"; shift; exec "$$@"' _ \
 	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" \
-	    "$(CCLSP_HOME)/node_modules/.bin/bun" run --watch index.ts serve-http --host 127.0.0.1 --port 7890; \
+	    "$(CCLSP_HOME)/node_modules/.bin/bun" run --watch index.ts serve-http --host 127.0.0.1 --port "$(CCLSP_PORT)"; \
 	  ready=false; \
 	  for attempt in $$(seq 1 60); do \
 	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \
@@ -116,6 +160,7 @@ cclsp-start:
 	    launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
 	    exit 1; \
 	  fi; \
+	  write_status "$$restarted"; \
 	  echo "cclsp ready at $(CCLSP_URL) with restart-on-save TypeScript"
 
 cclsp-stop:
@@ -141,7 +186,8 @@ mcp-start: cclsp-start
 	    -o "$(MCP_LOG_FILE)" -e "$(MCP_LOG_FILE)" -- \
 	    /bin/sh -c 'cd "$$1"; shift; export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$$PATH"; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
 	    "$(CLOJURE_BIN)" -X:clj-surgeon/mcp \
-	    :project-dir '"$(CLJ_SURGEON_HOME)"' \
+	    :project-dir '"$(MCP_PROJECT_DIR)"' \
+	    :port '$(MCP_PORT)' \
 	    :telemetry :full \
 	    :telemetry-dir '"$(MCP_STATE_DIR)/telemetry"' \
 	    :run-id '"dogfood"' \
@@ -149,7 +195,7 @@ mcp-start: cclsp-start
 	    :ready-file '"$(MCP_READY_FILE)"' \
 	    :port-file '"$(MCP_STATE_DIR)/nrepl-port"'; \
 	  ready=false; \
-	  for attempt in $$(seq 1 60); do \
+	  for attempt in $$(seq 1 $(MCP_START_ATTEMPTS)); do \
 	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \
 	    if ! launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then break; fi; \
 	    sleep 0.5; \
@@ -177,6 +223,32 @@ mcp-status: cclsp-status
 	  if [ -f "$(MCP_READY_FILE)" ]; then echo "Readiness: $$(cat "$(MCP_READY_FILE)")"; fi; \
 	  if launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then echo "Service: launchd job $(MCP_LAUNCH_LABEL) is loaded"; else echo "Service: not loaded"; fi; \
 	  codex mcp get clj-surgeon 2>/dev/null || echo "Codex registration: absent"
+
+workspace-mcp-start:
+	@set -eu; \
+	  test -n "$(WORKSPACE)" || { echo "WORKSPACE=/absolute/repository/path is required" >&2; exit 1; }; \
+	  bb -m clj-surgeon.core up "$(abspath $(WORKSPACE))"
+
+workspace-mcp-stop:
+	@echo "No per-workspace process exists. Use make mcp-stop only to stop the shared stack."
+
+workspace-mcp-status:
+	@set -eu; \
+	  test -n "$(WORKSPACE)" || { echo "WORKSPACE=/absolute/repository/path is required" >&2; exit 1; }; \
+	  curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))"; echo; \
+	  curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))"; echo; \
+	  test -f "$(abspath $(WORKSPACE))/.codex/config.toml"; \
+	  grep -Fq '# BEGIN clj-surgeon workspace tools' "$(abspath $(WORKSPACE))/.codex/config.toml"; \
+	  python3 -c 'import pathlib,tomllib; tomllib.loads(pathlib.Path("$(abspath $(WORKSPACE))/.codex/config.toml").read_text())'; \
+	  grep -Fq '"rootDir" : "$(abspath $(WORKSPACE))"' "$(HOME)/.local/state/clj-surgeon/cclsp.json"; \
+	  echo "Shared MCP stack is ready for $(abspath $(WORKSPACE))."
+
+workspace-mcp-onboard: workspace-mcp-start
+	@$(MAKE) --no-print-directory workspace-mcp-status WORKSPACE="$(abspath $(WORKSPACE))"
+	@echo "Restart the coding-agent session only if this command changed .codex/config.toml."
+
+workspace-mcp-install-codex: workspace-mcp-onboard
+	@echo "workspace-mcp-install-codex is a compatibility alias for workspace-mcp-onboard."
 
 install-mcp-codex-dev: install-dev mcp-start
 	@set -eu; \
@@ -218,6 +290,8 @@ install-cli: prepare-cli-package
 	@set -eu; \
 	  dest="$(CLI_DEST)"; \
 	  receipt="$(CLI_DEST).receipt.edn"; \
+	  control_plane="$(CONTROL_PLANE_ROOT_FILE)"; \
+	  control_plane_receipt="$(CONTROL_PLANE_ROOT_FILE).receipt.edn"; \
 	  if [ -e "$$dest" ] && \
 	     ! grep -q '^## clj-surgeon stable launcher' "$$dest" && \
 	     ! grep -q '^;; clj-surgeon development launcher' "$$dest" && \
@@ -226,13 +300,19 @@ install-cli: prepare-cli-package
 	    exit 1; \
 	  fi; \
 	  if [ -e "$$receipt" ] && { [ ! -f "$$receipt" ] || ! grep -q ':artifact :cli' "$$receipt"; }; then echo "Refusing to replace unrelated receipt $$receipt"; exit 1; fi; \
+	  if [ -e "$$control_plane" ] && { [ ! -f "$$control_plane_receipt" ] || ! grep -q ':artifact :control-plane-root' "$$control_plane_receipt"; }; then echo "Refusing to replace unrelated control-plane pointer $$control_plane"; exit 1; fi; \
+	  mkdir -p "$$(dirname "$$control_plane")"; \
+	  control_plane_stage="$$control_plane.tmp.$$$$"; \
+	  printf '%s\n' "$(CLJ_SURGEON_HOME)" > "$$control_plane_stage"; \
+	  mv "$$control_plane_stage" "$$control_plane"; \
+	  printf '%s\n' '{:artifact :control-plane-root' ' :mode :local-pointer' ' :source-commit "$(SOURCE_COMMIT)"' ' :path "$(CLJ_SURGEON_HOME)"}' > "$$control_plane_receipt"; \
 	  stage="$$dest.tmp.$$$$"; \
-	  trap 'rm -f "$$stage"' EXIT HUP INT TERM; \
-	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'exec bb --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
+	  trap 'rm -f "$$stage" "$$control_plane_stage"' EXIT HUP INT TERM; \
+	  printf '%s\n' '#!/bin/sh' '## clj-surgeon stable launcher' 'CLJ_SURGEON_CONTROL_PLANE_ROOT_FILE="$(CONTROL_PLANE_ROOT_FILE)" exec bb --classpath "$(CLI_PACKAGE)/src" -m clj-surgeon.core "$$@"' > "$$stage"; \
 	  chmod +x "$$stage"; \
 	  mv "$$stage" "$$dest"; \
 	  trap - EXIT HUP INT TERM; \
-	  printf '%s\n' '{:artifact :cli' ' :mode :stable-copy' ' :source-commit "$(SOURCE_COMMIT)"' ' :source-hash "$(CLI_SOURCE_HASH)"' ' :destination "$(CLI_DEST)"' ' :package "$(CLI_PACKAGE)"}' > "$$receipt"
+	  printf '%s\n' '{:artifact :cli' ' :mode :stable-copy' ' :source-commit "$(SOURCE_COMMIT)"' ' :source-hash "$(CLI_SOURCE_HASH)"' ' :destination "$(CLI_DEST)"' ' :package "$(CLI_PACKAGE)"' ' :control-plane-root-file "$(CONTROL_PLANE_ROOT_FILE)"}' > "$$receipt"
 	@echo "Installed stable CLI $(CLI_DEST) from commit $(SOURCE_COMMIT), source hash $(CLI_SOURCE_HASH)"
 	@echo "Receipt: $(CLI_DEST).receipt.edn"
 
@@ -364,7 +444,7 @@ install-dev-claude-skill:
 	@echo "DEVELOPMENT LINK: $(CLAUDE_SKILL_DEST) -> $(SKILL_SOURCE) (branch-coupled)"
 
 nrepl:
-	cd $(CLJ_SURGEON_HOME) && bb nrepl-server 0
+	cd $(CLJ_SURGEON_HOME) && clojure -M:clj-surgeon/mcp-test:clj-surgeon/nrepl
 
 benchmark-clean-codex:
 	bash bench/run_clean_codex.sh

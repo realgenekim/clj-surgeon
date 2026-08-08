@@ -929,10 +929,11 @@
                     (group-by (fn [[_ v]] (:category v))))]
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
+    (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
     (.append sb "       clj-surgeon --help              show this message\n")
     (.append sb "       clj-surgeon :op :help           show this message\n")
     (.append sb "       clj-surgeon --version           show machine-readable version\n")
-    (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n")
+    (.append sb "       clj-surgeon :op <cmd> --help    show command details\n\n  Agent entrance:\n      Prefer persistent MCP inspect_clojure and apply_clojure_changes.\n      Use this process-starting CLI when MCP is unavailable or lacks the operation.\n\n")
     (doseq [cat category-order
             :let [label (get category-labels cat)
                   ops   (get by-cat cat)]]
@@ -1190,6 +1191,23 @@
             (= ["--version"] (vec args))
             (pp/pprint {:tool "clj-surgeon"
                         :version structural-lens/tool-version})
+
+            (= "up" (first args))
+            (let [[_ workspace & extra] args]
+              (cond
+                (= "--help" workspace)
+                (println (str "Usage: clj-surgeon up [WORKSPACE]\n\n"
+                              "Idempotently joins an existing workspace to one shared "
+                              "clj-surgeon and cclsp MCP stack. WORKSPACE defaults to cwd."))
+
+                (seq extra)
+                (throw (ex-info "Usage: clj-surgeon up [WORKSPACE]"
+                                {:error-type :invalid-arguments}))
+
+                :else
+                (pp/pprint
+                  ((requiring-resolve 'clj-surgeon.workspace-onboarding/up!)
+                   {:workspace workspace}))))
 
             :else
             (let [opts (parse-args args)]

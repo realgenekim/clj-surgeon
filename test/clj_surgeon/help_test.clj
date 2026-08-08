@@ -147,9 +147,13 @@
       (is (str/includes? help "Read-only"))
       (is (str/includes? help "Write"))
       (is (str/includes? help "CLJC")))
-    (testing "contains usage line"
+    (testing "contains usage and MCP-first agent routing"
       (is (str/includes? help "Usage:"))
-      (is (str/includes? help "clj-surgeon :op :help")))
+      (is (str/includes? help "clj-surgeon :op :help"))
+      (is (str/includes? help "Prefer persistent MCP inspect_clojure"))
+      (is (str/includes? help "apply_clojure_changes"))
+      (is (str/includes? help
+                         "Use this process-starting CLI when MCP is unavailable")))
     (testing "contains quick start examples"
       (is (str/includes? help "Quick start:"))
       (is (str/includes? help

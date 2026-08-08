@@ -195,6 +195,20 @@ one-sentence project `AGENTS.md` rule changed adoption from 0 / 4 to 4 / 4
 without loading the skill. See the
 [complete Captain's Log](docs/observations/2026-08-07-captains-log-one-call-crossed-the-double-digit-gate.md).
 
+A later rerun removed one ambiguous `owner` recovery round from that same
+six-edit task. Every one-shot MCP run was correct; four of five native controls
+were valid and correct.
+
+| Route | Correct efficiency runs | Median wall | Tool actions | Source bytes surfaced |
+|---|---:|---:|---:|---:|
+| One-shot Surgeon MCP | 5 / 5 | **27.976 s** | **1.0** | **0** |
+| Fresh native control | 4 / 5 | 68.932 s | 3.5 | 3,577 |
+
+In this complete supplied-decision stratum, native took 2.46 times as long;
+one-shot MCP reduced median wall time by 59.4%. The claim is intentionally
+bounded: exploratory read-decide-edit work remains the next falsifier. See the
+[end-to-end timing log](docs/observations/2026-08-07-captains-log-end-to-end-structural-transaction-timings.md).
+
 A later paired read benchmark asked fresh Codex callers 45 exact behavior
 questions about 45 named forms in three frozen files. Both answers passed all
 45 checks. Exact-source EDN made Surgeon 43.46 seconds slower because the
@@ -339,49 +353,206 @@ two clj-surgeon tools with Codex:
 
 ```bash
 make install-mcp-codex-dev
+
+# Join any repository to the same hot clj-surgeon and cclsp processes.
+clj-surgeon up /absolute/repository
 ```
 
-Restart Codex after the command completes. A qualifying edit can then be one
-native tool call: send all known Clojure replacements, scopes, and cardinality
-guards to `apply_clojure_changes`; a successful
-`verification_complete=true` receipt is terminal evidence, so do not reread or
-diff the files afterward. The server remains hot across Codex sessions and is
-confined to this checkout. On macOS, a local `launchd` job keeps it alive across
-terminal and Codex restarts. It listens only on `127.0.0.1:7888` and records
-full local telemetry under `~/.local/state/clj-surgeon/mcp`. The experimental
-job is session-persistent, not a permanent login item; rerun the installer
-after logging out or rebooting.
+`clj-surgeon up [WORKSPACE]` defaults to the current directory. It discovers
+the effective clj-kondo configuration, registers the canonical workspace with
+the shared cclsp provider, starts the shared loopback services when needed, and
+installs the two MCP entries in the workspace's `.codex/config.toml`. It
+preserves unrelated TOML, migrates older per-repository tables, validates the
+result, and is idempotent. `make workspace-mcp-onboard WORKSPACE=/repo` remains
+a compatibility alias.
 
-When one fully qualified Var names the subject but the exact edit sites are
-unknown, compile the decision in two calls:
+Start a new Codex session in the target repository only when onboarding changed
+its `.codex/config.toml`. Do not start another MCP server for the repository.
+For a workspace other than the server default, send its canonical absolute
+`workspace_root` on `inspect_clojure` and `apply_clojure_changes`. A prepared
+`next_call` already carries the same root; preserve it unchanged.
+
+A qualifying edit can then be one native tool call. Send all known Clojure
+replacements, scopes, and cardinality guards to `apply_clojure_changes`. A
+successful `verification_complete=true` receipt is terminal evidence, so do
+not reread or diff the files afterward. One server remains hot across projects
+and Codex sessions. Each request is confined to its selected canonical
+`workspace_root`; a relative path cannot escape that root. On macOS, a local
+`launchd` job keeps the service alive across terminal and Codex restarts. It
+listens only on `127.0.0.1:7888` and records full local telemetry under
+`~/.local/state/clj-surgeon/mcp`. The job is session-persistent, not a permanent
+login item; rerun the installer after logging out or rebooting.
+
+The direct route uses one closed object per change:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "changes": [{
+    "id": "status",
+    "files": ["src/app.clj"],
+    "forms": ["render"],
+    "find": ":old",
+    "replace": ":new",
+    "expect": {"matches": 1, "each_form": 1}
+  }],
+  "expect": {"changes": 1, "edits": 1, "files": 1}
+}
+```
+
+Use exactly one of `forms` or `owner` and exactly one mutation action in each
+change. The actions are `replace`, `insert_before`, `insert_after`,
+`rename_binding`, and `assoc_entry`. `find`, a replacement, and every inserted
+member must be one complete parseable Clojure form. Insertion preserves the selected sibling's existing whitespace
+separator. It refuses when that gap contains comments or detached source;
+replace a larger exact span when comment placement is part of the decision.
+
+For example, add two members after one exact set or vector member without
+replacing the whole owner:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "changes": [{
+    "id": "add-metrics",
+    "files": ["src/metrics.clj"],
+    "forms": ["numeric-fields"],
+    "find": ":wall-ms",
+    "insert_after": [":cached-input-tokens", ":uncached-input-tokens"],
+    "expect": {"matches": 1, "each_form": 1, "each_file": 1}
+  }],
+  "expect": {"changes": 1, "edits": 1, "files": 1}
+}
+```
+
+Use `rename_binding` when a local name must change but its external `:keys`
+keyword must not change. Name every owner. `matches` counts the binding and its
+resolved local usages. `each_form: 1` requires one selected binding per owner.
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "changes": [{
+    "id": "rename-sort-binding",
+    "files": ["src/app.clj"],
+    "forms": ["feed-page", "table-page"],
+    "rename_binding": {
+      "from": "sort-by",
+      "to": "sort-field",
+      "preserve_external_key": true
+    },
+    "expect": {"matches": 12, "each_form": 1}
+  }],
+  "expect": {"changes": 1, "edits": 12, "files": 1}
+}
+```
+
+Use `assoc_entry` to add one entry to maps that have the same Clojure value but
+different comments or layout. Existing source trivia remains in place. Add
+`inside` when one complete ancestor form must distinguish equivalent maps.
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "changes": [{
+    "id": "add-contract-field",
+    "files": ["test/app_test.clj"],
+    "forms": ["contract-test"],
+    "find": "{:a 1 :b 2}",
+    "inside": "(is (= {:a 1 :b 2} actual))",
+    "assoc_entry": {"key": ":status", "value": ":ready"},
+    "expect": {"matches": 1}
+  }],
+  "expect": {"changes": 1, "edits": 1, "files": 1}
+}
+```
+
+When one Var or one related Var set names the subject but the exact edit sites
+are unknown, compile the decision in two calls:
 
 ```text
-inspect_clojure prepare-change -> fill keep/replace holes -> apply_clojure_changes
+inspect_clojure prepare-change -> fill keep/replace/delete holes -> apply_clojure_changes
 ```
 
 ```json
 {
   "mode": "prepare-change",
-  "subject": "clj-surgeon.mcp-contract/normalize-success-receipt",
+  "subjects": [
+    "clj-surgeon.mcp-contract/normalize-success-receipt",
+    "clj-surgeon.mcp-tool/success-summary"
+  ],
   "intent": "Add context to the terminal receipt without changing callers"
 }
 ```
 
-The response contains the complete definition and each complete named owner
-that refers to it. It also contains a complete `next_call`. Preserve its basis,
-site IDs, and verification profile. Replace every `null` with `{"keep":true}`
-or `{"replace":"ONE FORM"}`. Submit that basis request to
-`apply_clojure_changes` once. Do not reconstruct a direct `changes` request.
+If the owner is known but cclsp does not index the file, use the exact-source
+route instead:
+
+```json
+{
+  "mode": "prepare-change",
+  "file": "bench/summarize_clean_codex.clj",
+  "form": "numeric-fields",
+  "intent": "Add one benchmark metric",
+  "label": "metrics"
+}
+```
+
+This route proves the exact file hash, unique named owner, and structural
+address. It intentionally reports zero references because it does not claim
+language-server coverage.
+
+The response contains a compact, complete `surface` vector for every definition
+and reference. With `scope=definition`, only the definition decision carries
+source; open selected retained site IDs when more owner source is required.
+With `scope=surface`, every site is a decision and carries its complete named
+owner. The response also contains a complete `next_call`. Preserve its
+`workspace_root`, basis, site IDs, and verification profile. Replace every
+`null` with `{"keep":true}`, `{"replace":"ONE FORM"}`,
+`{"delete":true}`, or one compact nested edit. A whole-site delete removes the
+prepared owner and its contiguous leading comment block; use it for obsolete
+definitions, call sites, tests, and `declare` forms. Submit that basis request
+to `apply_clojure_changes` once.
+
+Do not reconstruct a direct `changes` request.
 Apply uses the retained source hashes and zipper paths. It does not repeat
 semantic resolution or selection. Omit `verify` from prepare unless the user
 explicitly requests the full repository suite; the default is `fast`.
 
 The basis is process-local and expires after one hour. The server retains at
-most 32 bases. Prepare refuses before publishing a basis when the surface
-exceeds 24 sites, 12,000 visible source characters, or 4 MiB of retained source.
+most 32 bases. Prepare refuses before publishing a basis when the decision set
+exceeds 24 sites, 32 KiB of visible decision source, or 4 MiB of retained
+source. `scope=definition` can still report a larger compact proof surface
+because references do not become decisions or carry visible source.
 The `fast` profile runs clj-kondo and Standard Clojure Style on changed files.
 The `full` profile runs `make test`. Verification failure restores the original
 files before it returns.
+
+cclsp binds every definition and reference to one LSP session, a canonical
+project-relative file, an exact range, and the SHA-256 of the synchronized
+source bytes. clj-surgeon independently reads and hashes those files before it
+stores a basis. A language-server owner must match the exact-source owner. For
+a version-3 ownerless reference inside a project macro, clj-surgeon must derive
+one exact-source owner. Missing evidence, mixed sessions, stale bytes, owner
+ambiguity, and owner disagreement refuse before basis storage.
+
+An unanchored fully qualified Var may live in another workspace already joined
+to the shared stack. Pass the caller's canonical `workspace_root`; do not use
+`../` paths or guess the owning project. `clj-surgeon up` publishes each
+workspace's confined Clojure source roots. cclsp converts the namespace to its
+canonical file suffix, queries only workspaces that contain that file, and
+returns both `requested_workspace_root` and `authoritative_workspace_root`.
+`workspace_search.selection` records the shortlist and every queried outcome.
+If any workspace lacks source-root metadata, cclsp falls back to all configured
+Clojure workspaces and preserves typed zero, ambiguous, error, and timeout
+results instead of claiming uniqueness.
+
+Every named form returned by `inspect_clojure` includes a `source_anchor` with
+the exact file, SHA-256, owner, and zero-based range. Copy that object into
+cclsp `resolve_var_surface`; do not restart discovery with an unanchored
+workspace-symbol query. For one architectural question involving up to four
+known Vars, call `resolve_var_surfaces` once with the ordered anchored subjects.
+It returns every complete surface or typed refusal in the same order.
 
 An inspect call declares all knowable reads in one `requests` vector. The four
 operation variants are `forms`, `outline`, `match`, and `xray`; every variant
@@ -446,8 +617,34 @@ make uninstall-mcp-codex-dev
 
 `make mcp-status` checks both loopback services. cclsp listens on port 7890 and
 clj-surgeon listens on port 7888. TypeScript changes reload under the stable
-cclsp URL. Clojure handler changes can load through the embedded nREPL without
-restarting the MCP listener. See `CLAUDE.md` for the live-patch commands.
+cclsp URL. Run `make mcp-reload` for Clojure handler or tool-contract changes.
+The command preserves the MCP PID and URL, synchronizes the live registry, and
+reports before/after contract hashes.
+
+`http://127.0.0.1:7888/healthz` is a functional readiness check. It returns
+success only when both the shared tool runtime and live tool registry are
+ready. A real bounded `inspect_clojure` request remains the authoritative
+post-reload probe.
+
+A client that honors
+`tools/list_changed` re-lists without reconnecting. The current Codex turn can
+cache its model-visible schema text. Start a new session only when that cached
+schema prevents a required call. See `CLAUDE.md` for the exact hot/warm/cold
+boundary.
+
+cclsp starts one lazy `clojure-lsp` child for each workspace that receives a
+semantic request. Shared onboarding configures a 10-second interactive request
+timeout and a separate 30-second cold-initialization timeout. If
+`textDocument/documentSymbol` times out, cclsp cancels the request, waits for
+that exact workspace child to exit, starts and initializes its replacement,
+and retries once under the new LSP session. The triggering result reports a
+self-contained `semantic_recovery` with old/new sessions and PIDs, exit mode,
+and termination time. A missing lifecycle receipt is a typed refusal, not a
+reported success. `http://127.0.0.1:7890/healthz` reports each workspace's
+session, child PID, outstanding requests, recovery count, and last recovery.
+The durable JSONL flight recorder is
+`~/.local/state/clj-surgeon/cclsp/server.log`. Other workspace children and the
+shared cclsp parent remain running during a root-scoped recovery.
 
 `make install` remains the stable copied CLI-and-skills installation. It does
 not enable the experimental MCP server.
@@ -459,19 +656,21 @@ This repository ships a native project skill at
 package to `~/.claude/skills/clj-surgeon` for use outside this checkout. The
 root `skill.md` remains a compact legacy entrance for configurations that
 explicitly read a Markdown file. A test checks it against the canonical skill,
-with only its repository-relative advanced-reference link allowed to differ.
+with only its repository-relative reference links allowed to differ.
 
 The canonical package keeps uncommon move, extraction, dependency, and CLJC
-guidance in `references/advanced-operations.md`. Simple tasks load only the
-one-shot read and edit routes.
+guidance in `references/advanced-operations.md`. It keeps the complete
+process-starting CLI manual in `references/cli-fallback.md`. The default skill
+is a compact MCP-first contract. It tells agents to inspect the deferred tool
+catalog before they start a shell process.
 
 The skill activates before an agent uses native Read, Edit, grep, sed, or cat
-on an existing Clojure file. It routes compact reads and structural changes to
-clj-surgeon while retaining native Write for new files and native editing for
-unsupported transformations. A known exact multi-edit plan uses one
-`:change!`. A plan that needs combined review uses `:change`. A computed single
-edit uses the plan/apply route. For an existing file over 500 lines, the first
-unknown-form inspection is `:ls`. When the owner is known, start with `:cat`.
+on an existing Clojure file. It routes coherent reads to `inspect_clojure`,
+semantic graph questions to cclsp, and structural writes to
+`apply_clojure_changes`. It retains native Write for new files and native
+editing for unsupported transformations. The CLI reference is loaded only
+when MCP is unavailable, the operation is not exposed, or the CLI is under
+test.
 
 `make install` also installs the same canonical package for Codex at
 `${CODEX_HOME:-$HOME/.codex}/skills/clj-surgeon`. Do not maintain separate

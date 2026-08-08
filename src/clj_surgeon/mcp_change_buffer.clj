@@ -4,10 +4,13 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.set :as set]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [rewrite-clj.zip :as z])
   (:import
    (java.nio.file LinkOption Path Paths)
    (java.util UUID)
@@ -16,13 +19,24 @@
 (def max-bases 32)
 (def basis-ttl-ms (* 60 60 1000))
 (def max-sites 24)
-(def max-visible-characters 12000)
+(def max-visible-characters (* 32 1024))
 (def max-snapshot-characters (* 4 1024 1024))
 (defonce basis-store (atom {}))
 
 (defn clear-bases!
   []
   (reset! basis-store {}))
+
+(defn discard-basis!
+  "Forget one unpublished or abandoned basis. Never changes project source."
+  [basis-id]
+  (swap! basis-store dissoc basis-id)
+  nil)
+
+(defn retained-basis-count
+  "Return the number of live retained bases. Intended for readiness and tests."
+  []
+  (count @basis-store))
 
 (defn- now-ms [] (System/currentTimeMillis))
 
@@ -36,6 +50,94 @@
                   (sort-by (comp :created-ms val) >)
                   (take max-bases)
                   (into {}))))))
+
+(defn select-basis-buffers
+  "Select immutable named-form views from one retained basis. Pure data in/out."
+  [basis site-ids context]
+  (let [all-sites (or (:surface-sites basis) (:sites basis))
+        by-id (into {} (map (juxt :id identity) all-sites))
+        invalid-ids? (not (and (vector? site-ids)
+                               (seq site-ids)
+                               (every? string? site-ids)
+                               (= (count site-ids) (count (distinct site-ids)))))
+        missing (when-not invalid-ids?
+                  (filterv #(not (contains? by-id %)) site-ids))]
+    (cond
+      invalid-ids?
+      {:ok false
+       :error-type :invalid-buffer-selection
+       :error "open must contain unique retained site IDs"
+       :source-unchanged true}
+
+      (not= "form" context)
+      {:ok false
+       :error-type :unsupported-buffer-context
+       :error "The first structural-buffer version supports context=form"
+       :context context
+       :source-unchanged true
+       :remedy "Retry with context=form."}
+
+      (seq missing)
+      {:ok false
+       :error-type :unknown-buffer-site
+       :error "One or more requested site IDs are not in the retained basis"
+       :sites missing
+       :source-unchanged true}
+
+      :else
+      (let [subjects (:subjects basis)
+            buffers
+            (mapv
+              (fn [site-id]
+                (let [site (get by-id site-id)]
+                  {:id site-id
+                   :role (:role site)
+                   :file (:relative-file site)
+                   :form (:owner site)
+                   :line (:line site)
+                   :end-line (:end-line site)
+                   :subjects (filterv (:subjects site) subjects)
+                   :authority (:owner-authority site)
+                   :context "form"
+                   :source (:before site)}))
+              site-ids)]
+        {:ok true
+         :operation "inspect_clojure"
+         :mode "basis-view"
+         :basis (:id basis)
+         :context "form"
+         :buffer-count (count buffers)
+         :source-character-count (reduce + 0 (map (comp count :source) buffers))
+         :buffers buffers
+         :read_complete true
+         :source-unchanged true
+         :next-action "decide-or-open-more"}))))
+
+(defn open-basis-sites!
+  "Open retained structural buffers without reading project files again."
+  [project-root basis-id site-ids context]
+  (prune-bases!)
+  (if-let [basis (get @basis-store basis-id)]
+    (if (not= (.toString (mcp-paths/real-root project-root))
+              (.toString (mcp-paths/real-root (:workspace-root basis))))
+      {:ok false
+       :operation "inspect_clojure"
+       :mode "basis-view"
+       :error-type :basis-workspace-mismatch
+       :error "The retained basis belongs to a different workspace"
+       :basis-workspace-root (:workspace-root basis)
+       :request-workspace-root (.toString (mcp-paths/real-root project-root))
+       :source-unchanged true
+       :remedy "Copy workspace_root from the prepared result and retry once."}
+      (assoc (select-basis-buffers basis site-ids context)
+             :workspace-root (:workspace-root basis)))
+    {:ok false
+     :operation "inspect_clojure"
+     :mode "basis-view"
+     :error-type :unknown-or-expired-basis
+     :error "The prepared change basis is unknown or expired"
+     :source-unchanged true
+     :remedy "Call inspect_clojure prepare-change again."}))
 
 (defn- relative-file
   [^Path root file]
@@ -53,6 +155,78 @@
                       (make-array LinkOption 0)))
     (catch Exception _ nil)))
 
+(defn validate-semantic-evidence
+  [{:keys [version lsp_session definition references]}]
+  (let [locations (cons (assoc definition :role :definition)
+                        (map #(assoc % :role :reference) references))
+        complete-range? (fn [range]
+                          (every? #(and (integer? %)
+                                        (not (neg? %)))
+                                  [(get-in range [:start :line])
+                                   (get-in range [:start :character])
+                                   (get-in range [:end :line])
+                                   (get-in range [:end :character])]))
+        owner-status (fn [location]
+                       (some-> (:owner_status location) name))
+        named-owner? (fn [location]
+                       (and (string? (:owner location))
+                            (seq (:owner location))))
+        complete-owner? (fn [location]
+                          (cond
+                            (= 2 version)
+                            (named-owner? location)
+
+                            (= :definition (:role location))
+                            (and (= "found" (owner-status location))
+                                 (named-owner? location))
+
+                            :else
+                            (or (and (= "found" (owner-status location))
+                                     (named-owner? location))
+                                (and (= "unresolved" (owner-status location))
+                                     (nil? (:owner location))))))
+        complete-location? (fn [location]
+                             (and (string? (:lsp_session location))
+                                  (seq (:lsp_session location))
+                                  (string? (:file location))
+                                  (seq (:file location))
+                                  (string? (:file_path location))
+                                  (string? (:source_sha256 location))
+                                  (re-matches #"[0-9a-f]{64}" (:source_sha256 location))
+                                  (complete-owner? location)
+                                  (complete-range? (:range location))))
+        sessions (set (keep :lsp_session locations))]
+    (cond
+      (not (contains? #{2 3} version))
+      {:ok false
+       :error-type :semantic-evidence-incomplete
+       :error "cclsp semantic evidence must use version 2 or 3"
+       :source-unchanged true}
+
+      (not (and (string? lsp_session) (seq lsp_session)))
+      {:ok false
+       :error-type :semantic-evidence-incomplete
+       :error "cclsp semantic evidence is missing lsp_session"
+       :source-unchanged true}
+
+      (not= #{lsp_session} sessions)
+      {:ok false
+       :error-type :semantic-session-drift
+       :error "cclsp semantic locations do not share one LSP session"
+       :lsp-session lsp_session
+       :location-sessions sessions
+       :source-unchanged true}
+
+      (not-every? complete-location? locations)
+      {:ok false
+       :error-type :semantic-evidence-incomplete
+       :error "Every cclsp location must include session, file, path, hash, owner status, and range"
+       :lsp-session lsp_session
+       :source-unchanged true}
+
+      :else
+      {:ok true :lsp-session lsp_session :locations locations})))
+
 (defn- semantic-locations
   [{:keys [definition references]}]
   (:locations
@@ -68,11 +242,47 @@
       (cons (assoc definition :role :definition)
             (map #(assoc % :role :reference) references)))))
 
+(defn- requested-subjects
+  [{:keys [subject subjects]}]
+  (cond
+    (and (string? subject) (nil? subjects)) [subject]
+    (and (nil? subject) (vector? subjects) (seq subjects)) subjects
+    :else nil))
+
+(defn- resolve-semantic-bundle
+  [semantic-resolver subjects]
+  (let [resolved
+        (reduce
+          (fn [results subject]
+            (let [semantic (semantic-resolver subject)]
+              (if-not (:ok semantic)
+                (reduced (assoc semantic :source-unchanged true :subject subject))
+                (let [evidence (validate-semantic-evidence semantic)]
+                  (if-not (:ok evidence)
+                    (reduced (assoc evidence :subject subject))
+                    (conj results {:subject subject
+                                   :semantic semantic
+                                   :evidence evidence}))))))
+          []
+          subjects)]
+    (if (map? resolved)
+      resolved
+      (let [sessions (set (map (comp :lsp-session :evidence) resolved))]
+        (if-not (= 1 (count sessions))
+          {:ok false
+           :error-type :semantic-session-drift
+           :error "All requested Vars must resolve in one LSP session"
+           :lsp-sessions sessions
+           :source-unchanged true}
+          {:ok true
+           :lsp-session (first sessions)
+           :resolved resolved})))))
+
 (defn- capture-files
   [project-root locations read-source]
   (let [root (mcp-paths/real-root project-root)]
     (reduce
-      (fn [captured {:keys [file_path]}]
+      (fn [captured {:keys [file file_path source_sha256]}]
         (let [relative (relative-file root file_path)]
           (if-not relative
             (reduced {:ok false
@@ -80,146 +290,463 @@
                       :error "cclsp returned a source path outside the configured project"
                       :path file_path
                       :source-unchanged true})
-            (let [resolved (mcp-paths/resolve-source-path root relative)]
-              (if-not (:ok resolved)
-                (reduced resolved)
-                (let [absolute (:path resolved)]
-                  (if (contains? (:sources captured) absolute)
-                    captured
-                    (try
-                      (let [source (read-source absolute)]
-                        (-> captured
-                            (assoc-in [:relative absolute] relative)
-                            (assoc-in [:sources absolute] source)
-                            (update :source-character-count + (count source))))
-                      (catch Exception error
+            (if-not (= relative file)
+              (reduced {:ok false
+                        :error-type :semantic-evidence-incomplete
+                        :error "cclsp relative and absolute source paths disagree"
+                        :file file
+                        :actual-file relative
+                        :source-unchanged true})
+              (let [resolved (mcp-paths/resolve-source-path root relative)]
+                (if-not (:ok resolved)
+                  (reduced resolved)
+                  (let [absolute (:path resolved)]
+                    (if (contains? (:sources captured) absolute)
+                      (if (= source_sha256 (get-in captured [:provider-hashes absolute]))
+                        captured
                         (reduced {:ok false
-                                  :error-type :source-read-failed
-                                  :error (.getMessage error)
+                                  :error-type :semantic-evidence-incomplete
+                                  :error "cclsp returned conflicting hashes for one file"
                                   :file relative
-                                  :source-unchanged true}))))))))))
-      {:ok true :root root :sources {} :relative {} :source-character-count 0}
+                                  :source-unchanged true}))
+                      (try
+                        (let [source (read-source absolute)
+                              actual-hash (structural-lens/source-hash source)]
+                          (if-not (= source_sha256 actual-hash)
+                            (reduced {:ok false
+                                      :error-type :semantic-source-drift
+                                      :error "cclsp semantic evidence does not describe the captured source"
+                                      :file relative
+                                      :provider-hash source_sha256
+                                      :actual-hash actual-hash
+                                      :source-unchanged true
+                                      :remedy "Retry inspect_clojure prepare-change after the language server catches up."})
+                            (-> captured
+                                (assoc-in [:relative absolute] relative)
+                                (assoc-in [:sources absolute] source)
+                                (assoc-in [:provider-hashes absolute] source_sha256)
+                                (update :source-character-count + (count source)))))
+                        (catch Exception error
+                          (reduced {:ok false
+                                    :error-type :source-read-failed
+                                    :error (.getMessage error)
+                                    :file relative
+                                    :source-unchanged true})))))))))))
+      {:ok true :root root :sources {} :relative {} :provider-hashes {}
+       :source-character-count 0}
       locations)))
 
+(defn- structural-owner-at
+  [file source location]
+  (let [target-line (or (:line location)
+                        (some-> (get-in location [:range :start :line]) inc))
+        owners (->> (outline/top-level-form-records file source)
+                    (filter (fn [{owner-line :line
+                                  owner-end-line :end-line
+                                  :keys [name]}]
+                              (and name target-line owner-line owner-end-line
+                                   (<= owner-line target-line owner-end-line)))))]
+    (when (= 1 (count owners))
+      (let [owner (first owners)
+            selected (transaction/addressed-form-at
+                       source {:line (:line owner) :character 1})]
+        (when selected
+          {:name (str (:name owner))
+           :selected selected})))))
+
 (defn- build-sites
-  [locations {:keys [sources relative]}]
-  (->> locations
-       (keep
-         (fn [{:keys [file_path line character role owner] :as location}]
-           (let [canonical (canonical-file file_path)
-                 absolute (some #(when (= canonical %) %) (keys sources))
-                 owner-line (when (= :reference role) (:start_line owner))
-                 selected (when absolute
-                            (transaction/addressed-form-at
-                              (get sources absolute)
-                              {:line (or owner-line line)
-                               :character (if owner-line 1 character)}))]
-             (when selected
-               (merge selected
-                      {:file absolute
-                       :relative-file (get relative absolute)
-                       :role role
-                       :owner (or (:name owner)
-                                  (:name location))})))))
-       (reduce (fn [dedup site]
-                 (let [key [(:file site) (:path site)]]
-                   (if (contains? dedup key)
-                     dedup
-                     (assoc dedup key site))))
-               (array-map))
-       vals
-       (sort-by (juxt :relative-file :line (comp :preorder :address)))
-       (map-indexed (fn [index site]
-                      (assoc site :id (str "s" (inc index)))))
-       vec))
-
-(defn prepare-change!
-  [{:keys [project-root semantic-resolver read-source]} {:keys [subject intent verify]}]
-  (cond
-    (not (and (string? subject) (str/includes? subject "/")))
-    {:ok false :error-type :invalid-change-subject
-     :error "prepare-change requires subject as namespace/name"
-     :source-unchanged true}
-
-    (not (and (string? intent) (seq intent)))
-    {:ok false :error-type :invalid-change-intent
-     :error "prepare-change requires a concise non-empty intent"
-     :source-unchanged true}
-
-    :else
-    (let [semantic (semantic-resolver subject)]
-      (if-not (:ok semantic)
-        (assoc semantic :source-unchanged true)
-        (let [locations (semantic-locations semantic)
-              captured (capture-files project-root locations (or read-source slurp))]
-          (if-not (:ok captured)
-            captured
-            (let [sites (build-sites locations captured)
-                  visible-characters (reduce + 0 (map (comp count :before) sites))
-                  over-budget? (or (> (count sites) max-sites)
-                                   (> visible-characters max-visible-characters)
-                                   (> (:source-character-count captured)
-                                      max-snapshot-characters))]
+  [locations {:keys [sources relative]} label]
+  (let [built
+        (reduce
+          (fn [sites {:keys [file_path role owner subject] :as location}]
+            (let [canonical (canonical-file file_path)
+                  absolute (some #(when (= canonical %) %) (keys sources))
+                  source (get sources absolute)
+                  structural (when source
+                               (structural-owner-at
+                                 (get relative absolute) source location))
+                  structural-owner (:name structural)]
               (cond
-                (empty? sites)
-                {:ok false
-                 :error-type :semantic-sites-not-addressable
-                 :error "No complete structural forms contained the cclsp locations"
-                 :source-unchanged true}
+                (nil? structural)
+                (reduced
+                  {:ok false
+                   :error-type :semantic-owner-not-found
+                   :error "No named structural form contains the semantic location"
+                   :file (get relative absolute)
+                   :subject subject
+                   :role role
+                   :range (:range location)
+                   :provider-form owner
+                   :source-unchanged true})
 
-                over-budget?
-                {:ok false
-                 :error-type :change-buffer-budget-exceeded
-                 :error "The semantic surface exceeds the closed change-buffer budget"
-                 :site-count (count sites)
-                 :visible-characters visible-characters
-                 :snapshot-characters (:source-character-count captured)
-                 :limits {:sites max-sites
-                          :visible-characters max-visible-characters
-                          :snapshot-characters max-snapshot-characters}
-                 :source-unchanged true
-                 :remedy "Narrow the subject or use typed inspect requests for a manual decision."}
+                (and owner (not= owner structural-owner))
+                (reduced
+                  {:ok false
+                   :error-type :semantic-owner-drift
+                   :error "The language-server form disagrees with the exact-source form"
+                   :file (get relative absolute)
+                   :subject subject
+                   :role role
+                   :range (:range location)
+                   :provider-form owner
+                   :actual-form structural-owner
+                   :source-unchanged true})
 
                 :else
-                (let [basis-id (str "cb-" (UUID/randomUUID))
-                      public-sites
-                      (mapv #(-> %
-                                 (select-keys [:id :relative-file :role :owner :line
-                                               :end-line :before])
-                                 (set/rename-keys {:relative-file :file
-                                                   :before :source}))
-                            sites)
-                      next-call
-                      {:basis basis-id
-                       :decisions (mapv (fn [{:keys [id]}]
-                                          {:site id :replace nil})
-                                        sites)
-                       :verify (or verify "fast")}
-                      basis {:id basis-id
-                             :created-ms (now-ms)
-                             :subject subject
-                             :intent intent
-                             :verify (or verify "fast")
-                             :sites sites
-                             :sources (:sources captured)
-                             :source-hashes (update-vals (:sources captured)
-                                                         structural-lens/source-hash)}]
-                  (prune-bases!)
-                  (swap! basis-store assoc basis-id basis)
-                  {:ok true
-                   :operation "inspect_clojure"
-                   :mode "prepare-change"
-                   :basis basis-id
-                   :subject subject
-                   :intent intent
-                   :site-count (count sites)
-                   :file-count (count (:sources captured))
-                   :visible-character-count visible-characters
-                   :sites public-sites
-                   :decision-rule "Replace every null with either {\"keep\":true} or {\"replace\":\"ONE FORM\"}; then call apply_clojure_changes once."
-                   :next_call next-call
-                   :read_complete true
-                   :source-unchanged true})))))))))
+                (conj sites
+                      (merge (:selected structural)
+                             {:file absolute
+                              :relative-file (get relative absolute)
+                              :role role
+                              :owner structural-owner
+                              :owner-authority (if owner
+                                                 :language-server+exact-source
+                                                 :exact-source)
+                              :subjects #{subject}})))))
+          []
+          locations)]
+    (if (map? built)
+      built
+      {:ok true
+       :sites
+       (->> built
+            (reduce (fn [dedup site]
+                      (let [key [(:file site) (:path site)]]
+                        (if (contains? dedup key)
+                          (update-in dedup [key :subjects] set/union (:subjects site))
+                          (assoc dedup key site))))
+                    (array-map))
+            vals
+            (sort-by (juxt #(if (= :definition (:role %)) 0 1)
+                           :relative-file
+                           :line
+                           (comp :preorder :address)))
+            (map-indexed (fn [index site]
+                           (assoc site :id
+                                  (str label "/s" (format "%02d" (inc index))))))
+            vec)})))
+
+(defn- prepare-exact-owner!
+  [{:keys [project-root read-source]}
+   {:keys [file form intent verify scope label subject subjects]}]
+  (let [label (or label "change")
+        scope (or scope "definition")]
+    (cond
+      (or subject subjects)
+      {:ok false
+       :error-type :ambiguous-change-subject
+       :error "Use either subject/subjects or file/form, not both"
+       :source-unchanged true}
+
+      (not (and (string? file) (seq file)
+                (string? form) (seq form)))
+      {:ok false
+       :error-type :invalid-exact-owner
+       :error "Exact-source preparation requires one file and one form"
+       :source-unchanged true}
+
+      (not (and (string? intent) (seq intent)))
+      {:ok false
+       :error-type :invalid-change-intent
+       :error "prepare-change requires a concise non-empty intent"
+       :source-unchanged true}
+
+      (not= "definition" scope)
+      {:ok false
+       :error-type :exact-owner-scope-unsupported
+       :error "Exact-source preparation supports only definition scope because it does not claim a reference surface"
+       :scope scope
+       :source-unchanged true}
+
+      (not (and (string? label)
+                (re-matches #"[a-z][a-z0-9-]{0,39}" label)))
+      {:ok false
+       :error-type :invalid-change-label
+       :error "prepare-change label must start with a lowercase letter and contain only lowercase letters, digits, or hyphens"
+       :label label
+       :source-unchanged true}
+
+      :else
+      (let [root (mcp-paths/real-root project-root)
+            resolved (mcp-paths/resolve-source-path root file)]
+        (if-not (:ok resolved)
+          (-> resolved
+              (set/rename-keys {:error_type :error-type
+                                :source_unchanged :source-unchanged})
+              (update :error-type keyword))
+          (try
+            (let [absolute (:path resolved)
+                  source ((or read-source slurp) absolute)
+                  candidates
+                  (->> (outline/top-level-form-records file source)
+                       (filter #(= form (some-> (:name %) str)))
+                       vec)]
+              (cond
+                (empty? candidates)
+                {:ok false
+                 :error-type :exact-owner-not-found
+                 :error "No exact named form exists in the requested file"
+                 :file file
+                 :form form
+                 :source-unchanged true}
+
+                (> (count candidates) 1)
+                {:ok false
+                 :error-type :exact-owner-ambiguous
+                 :error "More than one exact named form exists in the requested file"
+                 :file file
+                 :form form
+                 :candidates (mapv #(select-keys % [:line :end-line :type])
+                                   candidates)
+                 :source-unchanged true}
+
+                :else
+                (let [record (first candidates)
+                      selected (transaction/addressed-form-at
+                                 source {:line (:line record) :character 1})]
+                  (if-not selected
+                    {:ok false
+                     :error-type :exact-owner-not-addressable
+                     :error "The exact named form has no stable structural address"
+                     :file file
+                     :form form
+                     :source-unchanged true}
+                    (let [site-id (str label "/s01")
+                          site (merge selected
+                                      {:id site-id
+                                       :file absolute
+                                       :relative-file file
+                                       :role :definition
+                                       :owner form
+                                       :owner-authority :exact-source
+                                       :subjects #{}})
+                          visible-characters (count (:before site))
+                          snapshot-characters (count source)]
+                      (if (or (> visible-characters max-visible-characters)
+                              (> snapshot-characters max-snapshot-characters))
+                        {:ok false
+                         :error-type :change-buffer-budget-exceeded
+                         :error "The exact owner exceeds the closed change-buffer budget"
+                         :site-count 1
+                         :visible-characters visible-characters
+                         :snapshot-characters snapshot-characters
+                         :limits {:sites max-sites
+                                  :visible-characters max-visible-characters
+                                  :snapshot-characters max-snapshot-characters}
+                         :source-unchanged true
+                         :remedy "Use typed inspect requests for a smaller decision."}
+                        (let [basis-id (str "cb-" (UUID/randomUUID))
+                              compact-site {:id site-id
+                                            :file file
+                                            :role :definition
+                                            :form form
+                                            :line (:line site)
+                                            :end-line (:end-line site)
+                                            :subjects []}
+                              decision-site (assoc compact-site
+                                                   :authority :exact-source
+                                                   :source (:before site))
+                              next-call {:workspace_root (str root)
+                                         :basis basis-id
+                                         :decisions [{:site site-id :replace nil}]
+                                         :verify (or verify "fast")}
+                              basis {:id basis-id
+                                     :created-ms (now-ms)
+                                     :workspace-root (str root)
+                                     :lsp-session nil
+                                     :subjects []
+                                     :intent intent
+                                     :label label
+                                     :scope "definition"
+                                     :verify (or verify "fast")
+                                     :surface-sites [site]
+                                     :sites [site]
+                                     :sources {absolute source}
+                                     :source-hashes
+                                     {absolute (structural-lens/source-hash source)}}]
+                          (prune-bases!)
+                          (swap! basis-store assoc basis-id basis)
+                          {:ok true
+                           :operation "inspect_clojure"
+                           :mode "prepare-change"
+                           :basis basis-id
+                           :authority :exact-source
+                           :file file
+                           :form form
+                           :intent intent
+                           :label label
+                           :scope "definition"
+                           :reference-count 0
+                           :surface-location-count 1
+                           :surface-site-count 1
+                           :site-count 1
+                           :file-count 1
+                           :visible-character-count visible-characters
+                           :surface [compact-site]
+                           :decision-site-ids [site-id]
+                           :decision-sites [decision-site]
+                           :decision-rule "Set the decision to keep, one complete named-form replacement, whole-site delete, or one compact edit; then call apply_clojure_changes once."
+                           :next_call next-call
+                           :read_complete true
+                           :source-unchanged true})))))))
+            (catch Exception error
+              {:ok false
+               :error-type :source-read-failed
+               :error (.getMessage error)
+               :file file
+               :source-unchanged true})))))))
+
+(defn prepare-change!
+  [{:keys [project-root semantic-resolver read-source] :as config}
+   {:keys [intent verify scope label] :as request}]
+  (if (or (contains? request :file) (contains? request :form))
+    (prepare-exact-owner! config request)
+    (let [subjects (requested-subjects request)
+          scope (or scope "surface")
+          label (or label "change")]
+      (cond
+        (not (and (vector? subjects)
+                  (every? #(and (string? %) (str/includes? % "/")) subjects)
+                  (= (count subjects) (count (distinct subjects)))))
+        {:ok false :error-type :invalid-change-subject
+         :error "prepare-change requires one subject or a unique non-empty subjects array of namespace/name Vars"
+         :source-unchanged true}
+
+        (not (and (string? intent) (seq intent)))
+        {:ok false :error-type :invalid-change-intent
+         :error "prepare-change requires a concise non-empty intent"
+         :source-unchanged true}
+
+        (not (#{"definition" "surface"} scope))
+        {:ok false :error-type :invalid-change-scope
+         :error "prepare-change scope must be definition or surface"
+         :scope scope
+         :source-unchanged true}
+
+        (not (and (string? label)
+                  (re-matches #"[a-z][a-z0-9-]{0,39}" label)))
+        {:ok false :error-type :invalid-change-label
+         :error "prepare-change label must start with a lowercase letter and contain only lowercase letters, digits, or hyphens"
+         :label label
+         :source-unchanged true}
+
+        :else
+        (let [bundle (resolve-semantic-bundle semantic-resolver subjects)]
+          (if-not (:ok bundle)
+            bundle
+            (let [surface-locations
+                  (vec
+                    (mapcat (fn [{:keys [subject semantic]}]
+                              (map #(assoc % :subject subject)
+                                   (semantic-locations semantic)))
+                            (:resolved bundle)))
+                  reference-count
+                  (count (filter #(= :reference (:role %))
+                                 surface-locations))
+                  captured
+                  (capture-files project-root surface-locations (or read-source slurp))]
+              (if-not (:ok captured)
+                captured
+                (let [built (build-sites surface-locations captured label)]
+                  (if-not (:ok built)
+                    built
+                    (let [surface-sites (:sites built)
+                          sites (if (= "definition" scope)
+                                  (filterv #(= :definition (:role %)) surface-sites)
+                                  surface-sites)
+                          visible-characters (reduce + 0 (map (comp count :before) sites))
+                          over-budget? (or (> (count sites) max-sites)
+                                           (> visible-characters max-visible-characters)
+                                           (> (:source-character-count captured)
+                                              max-snapshot-characters))]
+                      (cond
+                        (empty? sites)
+                        {:ok false
+                         :error-type :semantic-sites-not-addressable
+                         :error "No complete named forms contained the requested semantic locations"
+                         :source-unchanged true}
+
+                        over-budget?
+                        {:ok false
+                         :error-type :change-buffer-budget-exceeded
+                         :error "The decision surface exceeds the closed change-buffer budget"
+                         :site-count (count sites)
+                         :surface-site-count (count surface-sites)
+                         :visible-characters visible-characters
+                         :snapshot-characters (:source-character-count captured)
+                         :limits {:sites max-sites
+                                  :visible-characters max-visible-characters
+                                  :snapshot-characters max-snapshot-characters}
+                         :source-unchanged true
+                         :remedy "Use scope=definition, narrow the subjects, or use typed inspect requests for a smaller decision."}
+
+                        :else
+                        (let [basis-id (str "cb-" (UUID/randomUUID))
+                              compact-site
+                              (fn [site]
+                                (-> site
+                                    (select-keys [:id :relative-file :role :owner
+                                                  :line :end-line :subjects])
+                                    (update :subjects
+                                            (fn [site-subjects]
+                                              (filterv site-subjects subjects)))
+                                    (set/rename-keys {:relative-file :file
+                                                      :owner :form})))
+                              decision-site
+                              (fn [site]
+                                (-> (compact-site site)
+                                    (assoc :authority (:owner-authority site)
+                                           :source (:before site))))
+                              public-surface (mapv compact-site surface-sites)
+                              public-decisions (mapv decision-site sites)
+                              decision-site-ids (mapv :id sites)
+                              next-call
+                              {:workspace_root project-root
+                               :basis basis-id
+                               :decisions (mapv (fn [id]
+                                                  {:site id :replace nil})
+                                                decision-site-ids)
+                               :verify (or verify "fast")}
+                              basis {:id basis-id
+                                     :created-ms (now-ms)
+                                     :workspace-root project-root
+                                     :lsp-session (:lsp-session bundle)
+                                     :subjects subjects
+                                     :intent intent
+                                     :label label
+                                     :scope scope
+                                     :verify (or verify "fast")
+                                     :surface-sites surface-sites
+                                     :sites sites
+                                     :sources (:sources captured)
+                                     :source-hashes
+                                     (update-vals (:sources captured)
+                                                  structural-lens/source-hash)}]
+                          (prune-bases!)
+                          (swap! basis-store assoc basis-id basis)
+                          {:ok true
+                           :operation "inspect_clojure"
+                           :mode "prepare-change"
+                           :basis basis-id
+                           :lsp_session (:lsp-session bundle)
+                           :subject (when (= 1 (count subjects)) (first subjects))
+                           :subjects subjects
+                           :intent intent
+                           :label label
+                           :scope scope
+                           :reference-count reference-count
+                           :surface-location-count (count surface-locations)
+                           :surface-site-count (count surface-sites)
+                           :site-count (count sites)
+                           :file-count (count (:sources captured))
+                           :visible-character-count visible-characters
+                           :surface public-surface
+                           :decision-site-ids decision-site-ids
+                           :decision-sites public-decisions
+                           :decision-rule "Set every decision to keep, one complete named-form replacement, whole-site delete, or one compact edit containing find and replace/delete; then call apply_clojure_changes once."
+                           :next_call next-call
+                           :read_complete true
+                           :source-unchanged true})))))))))))))
 
 (defn- validate-decisions
   [basis decisions]
@@ -227,12 +754,27 @@
         sites-by-id (into {} (map (juxt :id identity) (:sites basis)))
         actual (set (map :site decisions))
         duplicate? (not= (count decisions) (count actual))
-        invalid (filterv (fn [decision]
-                           (let [keep? (= true (:keep decision))
-                                 replace? (and (string? (:replace decision))
-                                               (seq (:replace decision)))]
-                             (= keep? (boolean replace?))))
-                         decisions)
+        valid-edit?
+        (fn [edit]
+          (let [replace? (and (string? (:replace edit))
+                              (seq (:replace edit)))
+                delete? (= true (:delete edit))]
+            (and (map? edit)
+                 (every? #{:find :replace :delete} (keys edit))
+                 (string? (:find edit))
+                 (seq (:find edit))
+                 (not= (boolean replace?) delete?))))
+        invalid
+        (filterv
+          (fn [decision]
+            (let [keep? (= true (:keep decision))
+                  replace? (and (string? (:replace decision))
+                                (seq (:replace decision)))
+                  edit? (valid-edit? (:edit decision))
+                  delete? (= true (:delete decision))]
+              (not= 1 (count (filter true?
+                                     [keep? (boolean replace?) edit? delete?])))))
+          decisions)
         unchanged (filterv (fn [{:keys [site replace]}]
                              (and (string? replace)
                                   (= replace (:before (get sites-by-id site)))))
@@ -246,7 +788,7 @@
 
       (seq invalid)
       {:ok false :error-type :invalid-basis-decision
-       :error "Each decision must contain keep true or one replacement form"
+       :error "Each decision must contain exactly one keep, owner replacement, whole-site delete, or compact edit"
        :sites (mapv :site invalid)}
 
       (seq unchanged)
@@ -256,11 +798,164 @@
 
       :else {:ok true})))
 
+(defn- line-offsets
+  [source]
+  (loop [from 0
+         offsets [0]]
+    (let [newline (.indexOf ^String source "\n" (int from))]
+      (if (neg? newline)
+        offsets
+        (recur (inc newline) (conj offsets (inc newline)))))))
+
+(defn delete-subform-source
+  [source find-source]
+  (let [found (structural-lens/find-subforms source {:match find-source})]
+    (cond
+      (:error found)
+      found
+
+      (not= 1 (:match-count found))
+      {:ok false
+       :error-type (if (zero? (:match-count found)) :no-match :ambiguous-match)
+       :error (str "Expected exactly one compact delete match, found "
+                   (:match-count found))
+       :match-count (:match-count found)}
+
+      :else
+      (let [{match-line :line match-source :source} (first (:matches found))
+            root (z/of-string source {:track-position? true})
+            target
+            (loop [loc root]
+              (cond
+                (z/end? loc) nil
+                (and (= match-line (:row (meta (z/node loc))))
+                     (= match-source (z/string loc))) loc
+                :else (recur (z/next loc))))]
+        (cond
+          (nil? target)
+          {:ok false :error-type :basis-edit-address-drift
+           :error "The compact delete match could not be re-addressed"}
+
+          (nil? (z/up target))
+          {:ok false :error-type :basis-edit-covers-owner
+           :error "A compact delete cannot remove the retained owner itself"}
+
+          :else
+          (let [{:keys [row col end-row end-col]} (meta (z/node target))
+                offsets (line-offsets source)
+                lines (str/split source #"\n" -1)
+                target-start (+ (nth offsets (dec row)) (dec col))
+                target-end (+ (nth offsets (dec end-row)) (dec end-col))
+                line-start (nth offsets (dec row))
+                line-oriented? (str/blank? (subs source line-start target-start))
+                first-comment-line
+                (when line-oriented?
+                  (loop [line-index (- row 2)
+                         first-index nil]
+                    (if (and (>= line-index 0)
+                             (re-matches #"\s*;+.*" (nth lines line-index)))
+                      (recur (dec line-index) line-index)
+                      first-index)))
+                raw-start
+                (if line-oriented?
+                  (nth offsets (or first-comment-line (dec row)))
+                  (loop [at target-start]
+                    (if (and (pos? at)
+                             (contains? #{\space \tab}
+                                        (.charAt ^String source (long (dec at)))))
+                      (recur (dec at))
+                      at)))
+                delete-start
+                (let [default-start
+                      (if (and line-oriented?
+                               (pos? raw-start)
+                               (= \newline
+                                  (.charAt ^String source
+                                           (long (dec raw-start)))))
+                        (dec raw-start)
+                        raw-start)]
+                  (if-let [previous
+                           (and line-oriented?
+                                (nil? (z/right target))
+                                (z/left target))]
+                    (let [{previous-end-row :end-row
+                           previous-end-col :end-col} (meta (z/node previous))
+                          previous-end (+ (nth offsets (dec previous-end-row))
+                                          (dec previous-end-col))
+                          interstitial (subs source previous-end target-start)]
+                      (if (or first-comment-line
+                              (not (str/includes? interstitial ";")))
+                        previous-end
+                        default-start))
+                    default-start))
+                updated
+                (str (subs source 0 delete-start)
+                     (let [line-end (or (str/index-of source "\n"
+                                                      (long target-end))
+                                        (count source))
+                           trailing-source (subs source target-end line-end)]
+                       (subs source
+                             (if (and line-oriented?
+                                      (re-matches #"\s*;+.*" trailing-source))
+                               line-end
+                               target-end))))]
+            (try
+              (when (str/blank? updated)
+                (throw (ex-info "A compact delete cannot empty the retained owner"
+                                {:error-type :basis-edit-covers-owner})))
+              (z/of-string updated {:track-position? true})
+              {:ok true :source updated}
+              (catch Exception error
+                {:ok false
+                 :error-type (or (:error-type (ex-data error))
+                                 :invalid-compact-delete-result)
+                 :error (.getMessage error)}))))))))
+
+(defn- materialize-compact-edit
+  [site {:keys [find replace delete]}]
+  (let [result
+        (if delete
+          (delete-subform-source (:before site) find)
+          (let [plan (structural-lens/plan-replacement
+                       (:before site)
+                       {:match find :with replace :file (:file site)})]
+            (if (:error plan)
+              plan
+              (structural-lens/apply-plan (:before site) plan))))]
+    (cond
+      (not (:ok result))
+      (assoc result :site (:id site))
+
+      (= (:before site) (:source result))
+      {:ok false :error-type :unchanged-basis-decision
+       :error "A compact edit must change its retained owner"
+       :site (:id site)}
+
+      :else
+      {:ok true
+       :decision {:site (:id site) :replace (:source result)}})))
+
+(defn- materialize-decisions
+  [basis decisions]
+  (let [sites-by-id (into {} (map (juxt :id identity) (:sites basis)))]
+    (loop [remaining decisions
+           materialized []]
+      (if-let [decision (first remaining)]
+        (if-let [edit (:edit decision)]
+          (let [result (materialize-compact-edit
+                         (get sites-by-id (:site decision)) edit)]
+            (if (:ok result)
+              (recur (next remaining) (conj materialized (:decision result)))
+              result))
+          (recur (next remaining) (conj materialized decision)))
+        {:ok true :decisions materialized}))))
+
 (defn validate-basis-request
   "Refuse fields outside the closed basis route before any retained state is read."
   [request]
   (let [allowed-request-keys #{:basis :decisions :verify}
-        allowed-decision-keys #{:site :keep :replace}
+        allowed-decision-keys #{:site :keep :replace :delete :edit}
+        allowed-edit-keys #{:find :replace :delete}
         request-fields (->> (keys request)
                             (remove allowed-request-keys)
                             (map name)
@@ -271,9 +966,14 @@
              (map-indexed
                (fn [index decision]
                  (when (map? decision)
-                   (for [field (sort (remove allowed-decision-keys
-                                             (keys decision)))]
-                     (str "decisions[" index "]." (name field))))))
+                   (concat
+                     (for [field (sort (remove allowed-decision-keys
+                                               (keys decision)))]
+                       (str "decisions[" index "]." (name field)))
+                     (when (map? (:edit decision))
+                       (for [field (sort (remove allowed-edit-keys
+                                                 (keys (:edit decision))))]
+                         (str "decisions[" index "].edit." (name field))))))))
              (mapcat identity)
              vec)
         unknown-fields (into request-fields decision-fields)]
@@ -283,7 +983,7 @@
        :error "Basis requests contain unknown or mixed-route fields"
        :unknown-fields unknown-fields
        :source-unchanged true
-       :remedy "Copy the returned next_call and change only each decision's keep or replace value."}
+       :remedy "Copy next_call and set exactly one keep, replace, delete, or compact edit per site."}
       {:ok true})))
 
 (defn- expand-command
@@ -368,70 +1068,93 @@
    {:keys [basis decisions verify]}]
   (prune-bases!)
   (if-let [prepared (get @basis-store basis)]
-    (let [validation (validate-decisions prepared decisions)]
-      (if-not (:ok validation)
-        (assoc validation :source-unchanged true)
-        (let [decisions-by-site (into {} (map (juxt :site identity) decisions))
-              edits (->> (:sites prepared)
-                         (keep (fn [site]
-                                 (when-let [replacement (:replace (get decisions-by-site (:id site)))]
-                                   (-> site
-                                       (assoc :after replacement)
-                                       (dissoc :relative-file :role :owner)))))
-                         vec)]
-          (if (empty? edits)
-            {:ok false :error-type :empty-basis-change
-             :error "Every prepared site was kept; no transaction was applied"
-             :source-unchanged true}
-            (let [compiled (transaction/compile-addressed-transaction
-                             (:sources prepared) edits)]
-              (if-not (:ok compiled)
-                (assoc compiled :source-unchanged true)
-                (let [io-opts (cond-> {}
-                                read-source (assoc :read-source read-source)
-                                write-source! (assoc :write-source! write-source!))
-                      committed (if (seq io-opts)
-                                  (transaction/commit-compiled! compiled io-opts)
-                                  (transaction/commit-compiled! compiled))]
-                  (if-not (:ok committed)
-                    committed
-                    (let [receipt (transaction/build-receipt compiled)
-                          profile (or verify (:verify prepared))
-                          verification ((or verify! default-verify!)
-                                        project-root profile verification-profiles
-                                        (mapv :file (:files compiled)))]
-                      (if-not (:ok verification)
-                        (let [inverse (transaction/compile-inverse
-                                        receipt (:future-sources compiled))
-                              rollback (if (:ok inverse)
-                                         (if (seq io-opts)
-                                           (transaction/commit-compiled! inverse io-opts)
-                                           (transaction/commit-compiled! inverse))
-                                         inverse)]
-                          {:ok false
-                           :error-type :verification-failed
-                           :error "Verification failed; the addressed transaction was rolled back"
-                           :verification verification
-                           :rolled-back (boolean (:ok rollback))
-                           :rollback rollback})
-                        (let [receipt-file (publish-receipt!
-                                             (or receipt-dir
-                                                 (str (io/file project-root
-                                                               ".clj-surgeon-receipts")))
-                                             receipt)]
-                          (swap! basis-store dissoc basis)
-                          (merge committed
-                                 {:ok true
-                                  :operation "apply-basis"
-                                  :basis basis
-                                  :match-count (:match-count compiled)
-                                  :receipt-file receipt-file
-                                  :receipt-hash (:receipt-hash receipt)
-                                  :verification_complete true
-                                  :read_back_hashes (get-in committed
-                                                            [:verified :read-back-hashes])
-                                  :next_action "none"
-                                  :verification verification}))))))))))))
+    (if (and (:workspace-root prepared)
+             (not= (.toString (mcp-paths/real-root project-root))
+                   (.toString (mcp-paths/real-root (:workspace-root prepared)))))
+      {:ok false
+       :error-type :basis-workspace-mismatch
+       :error "The prepared basis belongs to a different workspace"
+       :basis-workspace-root (:workspace-root prepared)
+       :request-workspace-root (.toString (mcp-paths/real-root project-root))
+       :source-unchanged true
+       :remedy "Copy workspace_root from the returned next_call and retry once."}
+      (let [validation (validate-decisions prepared decisions)
+            materialized (when (:ok validation)
+                           (materialize-decisions prepared decisions))
+            outcome (or materialized validation)
+            materialized-decisions (:decisions materialized)]
+        (if-not (:ok outcome)
+          (assoc outcome :source-unchanged true)
+          (let [decisions-by-site (into {} (map (juxt :site identity) materialized-decisions))
+                edits (->> (:sites prepared)
+                           (keep (fn [site]
+                                   (let [{:keys [replace delete]}
+                                         (get decisions-by-site (:id site))]
+                                     (cond
+                                       replace
+                                       (-> site
+                                           (assoc :after replace)
+                                           (dissoc :relative-file :role :owner))
+
+                                       delete
+                                       (-> site
+                                           (assoc :delete true)
+                                           (dissoc :relative-file :role :owner))
+
+                                       :else nil))))
+                           vec)]
+            (if (empty? edits)
+              {:ok false :error-type :empty-basis-change
+               :error "Every prepared site was kept; no transaction was applied"
+               :source-unchanged true}
+              (let [compiled (transaction/compile-addressed-transaction
+                               (:sources prepared) edits)]
+                (if-not (:ok compiled)
+                  (assoc compiled :source-unchanged true)
+                  (let [io-opts (cond-> {}
+                                  read-source (assoc :read-source read-source)
+                                  write-source! (assoc :write-source! write-source!))
+                        committed (if (seq io-opts)
+                                    (transaction/commit-compiled! compiled io-opts)
+                                    (transaction/commit-compiled! compiled))]
+                    (if-not (:ok committed)
+                      committed
+                      (let [receipt (transaction/build-receipt compiled)
+                            profile (or verify (:verify prepared))
+                            verification ((or verify! default-verify!)
+                                          project-root profile verification-profiles
+                                          (mapv :file (:files compiled)))]
+                        (if-not (:ok verification)
+                          (let [inverse (transaction/compile-inverse
+                                          receipt (:future-sources compiled))
+                                rollback (if (:ok inverse)
+                                           (if (seq io-opts)
+                                             (transaction/commit-compiled! inverse io-opts)
+                                             (transaction/commit-compiled! inverse))
+                                           inverse)]
+                            {:ok false
+                             :error-type :verification-failed
+                             :error "Verification failed; the addressed transaction was rolled back"
+                             :verification verification
+                             :rolled-back (boolean (:ok rollback))
+                             :rollback rollback})
+                          (let [receipt-file (publish-receipt!
+                                               (or receipt-dir
+                                                   (workspace/receipt-dir project-root))
+                                               receipt)]
+                            (swap! basis-store dissoc basis)
+                            (merge committed
+                                   {:ok true
+                                    :operation "apply-basis"
+                                    :basis basis
+                                    :match-count (:match-count compiled)
+                                    :receipt-file receipt-file
+                                    :receipt-hash (:receipt-hash receipt)
+                                    :verification_complete true
+                                    :read_back_hashes (get-in committed
+                                                              [:verified :read-back-hashes])
+                                    :next_action "none"
+                                    :verification verification})))))))))))))
     {:ok false :error-type :unknown-or-expired-basis
      :error "The prepared change basis is unknown or expired"
      :source-unchanged true

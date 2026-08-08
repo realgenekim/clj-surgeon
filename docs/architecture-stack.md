@@ -136,3 +136,48 @@ This separation is the performance strategy. Keep semantic indexes and MCP
 servers hot. Return complete decision context once. Let the model decide once.
 Then apply and verify one transaction without asking the model to reconstruct
 files, positions, hashes, or partial progress.
+
+## TypeScript types and Clojure data
+
+The exact-source handshake clarifies where each language helps. cclsp's
+TypeScript layer benefits from a closed local transport shape:
+
+```ts
+type SourceAnchor = {
+  file: string;
+  source_sha256: string;
+  owner: string;
+  range: SourceRange;
+};
+```
+
+The compiler catches missing fields, misspelled properties, and invalid local
+assumptions while cclsp translates MCP data to LSP calls. This is useful at a
+protocol boundary. It does not prove the important runtime invariants. A type
+cannot prove that the hash matches current bytes, synchronization occurred
+before symbol resolution, the returned symbol is inside the anchored form, all
+locations came from one LSP session, or a refusal retained no basis.
+
+Those properties remain explicit runtime data and adversarial tests. That is
+also why the clj-surgeon side uses immutable maps rather than a class hierarchy.
+Maps keep proofs serializable, inspectable, and easy to extend. Pure functions
+validate and transform them. Protocols remain appropriate when the program has
+a real polymorphic boundary; nominal inheritance does not improve this
+contract.
+
+The preferred balance is therefore:
+
+| Capability | Relative value here |
+|---|---:|
+| Immutable maps and pure functions | 10 / 10 |
+| Runtime schemas at system boundaries | 9 / 10 |
+| Editor and static inference for those schemas | 6 / 10 |
+| Closed result variants or sum-type-like dispatch | 4 / 10 |
+| Nominal classes and inheritance | 1 / 10 |
+
+More optional data-shape feedback in Clojure would be welcome, especially if
+Malli or spec contracts flowed directly into clj-kondo and editor diagnostics.
+The core architecture should remain data-first. TypeScript makes the bridge's
+local plumbing more comfortable; Clojure remains the better expression of the
+product idea: proof is data, decisions are data, and transactions transform
+data.

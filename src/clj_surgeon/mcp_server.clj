@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-server
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure-mcp.core :as mcp-core]
@@ -22,13 +23,11 @@
 
 (def server-instructions
   (str
-    "PREFER inspect_clojure when several known Clojure structural questions can "
-    "be batched. It reads each distinct file once and returns ordered hash-bound "
-    "evidence; after read_complete=true, do not repeat or split the read. PREFER "
-    "apply_clojure_changes over apply_patch for 2+ exact replacements or edits "
-    "spanning files. If every file, owner, before form, replacement, and count "
-    "is known, do not read first. After verification_complete=true, do not "
-    "reread or diff unless explicitly requested."))
+    "Batch known Clojure reads with inspect_clojure. Use prepare-change when one "
+    "fully qualified Var names the goal but exact sites are unknown. Compile "
+    "two or more exact edits or any cross-file decision into one "
+    "apply_clojure_changes call. Do not repeat reads after read_complete=true or "
+    "inspect writes after verification_complete=true."))
 
 (defn- warn
   [& messages]
@@ -39,6 +38,36 @@
   "clojure-mcp factory. Tool handlers are Vars so nREPL redefinition is live."
   [_nrepl-client-atom _working-dir]
   (mcp-tool/all-tools))
+
+(def ^:private live-tool-state runtime/live-tool-state)
+
+(defn tool-contract
+  "Return only fields whose change requires a tools/list refresh."
+  [tool]
+  (select-keys tool
+               [:name :description :schema :output-schema
+                :annotations :structured?]))
+
+(defn tool-contracts
+  "Index stable, handler-free tool contracts by name."
+  [tools]
+  (into (sorted-map)
+        (map (fn [tool] [(:name tool) (tool-contract tool)]))
+        tools))
+
+(defn tool-sync-plan
+  "Pure add/replace/remove plan from registered contracts to desired tools."
+  [registered desired-tools]
+  (let [desired (tool-contracts desired-tools)
+        desired-names (set (keys desired))]
+    {:remove (->> (keys registered)
+                  (remove desired-names)
+                  sort
+                  vec)
+     :upsert (->> (keys desired)
+                  (filter #(not= (get registered %) (get desired %)))
+                  sort
+                  vec)}))
 
 (defn- structured-call-result
   [json-mapper content error? structured]
@@ -100,6 +129,74 @@
     (create-structured-async-tool tool)
     (mcp-core/create-async-tool tool)))
 
+(defn- add-tool!
+  [server tool]
+  (.block (.addTool server (create-async-tool tool))))
+
+(defn- remove-tool!
+  [server tool-name]
+  (.block (.removeTool server tool-name)))
+
+(defn register-live-server!
+  "Record one live SDK server and the contracts installed at construction."
+  [server]
+  (let [registered (tool-contracts (mcp-tool/all-tools))]
+    (reset! live-tool-state {:server server :registered registered})
+    {:ok true :status :registered :tool-count (count registered)}))
+
+(defn unregister-live-server!
+  "Forget server only when it is still the registered live instance."
+  [server]
+  (swap! live-tool-state
+         (fn [state]
+           (if (identical? server (:server state)) nil state)))
+  {:ok true :status :unregistered})
+
+(defn sync-tools!
+  "Synchronize current tool contracts into the connected SDK server.
+
+  Handler-only Var changes do not churn tools/list. SDK add/remove operations
+  emit notifications/tools/list_changed because the server advertises that
+  capability. A failed operation leaves the recorded registry at the last
+  successfully installed state."
+  []
+  (if-let [{:keys [server registered]} @live-tool-state]
+    (let [desired-tools (mcp-tool/all-tools)
+          desired-by-name (into {} (map (juxt :name identity)) desired-tools)
+          desired-contracts (tool-contracts desired-tools)
+          {:keys [remove upsert]}
+          (tool-sync-plan registered desired-tools)]
+      (try
+        (doseq [tool-name remove]
+          (remove-tool! server tool-name)
+          (swap! live-tool-state update :registered dissoc tool-name))
+        (doseq [tool-name upsert]
+          (add-tool! server (get desired-by-name tool-name))
+          (swap! live-tool-state assoc-in
+                 [:registered tool-name]
+                 (get desired-contracts tool-name)))
+        {:ok true
+         :status :synchronized
+         :removed remove
+         :upserted upsert
+         :tool-count (count desired-contracts)
+         :before-contract-hash (format "%08x" (hash registered))
+         :after-contract-hash (format "%08x" (hash desired-contracts))
+         :server-restart-required false
+         :agent-session-restart :client-dependent}
+        (catch Exception error
+          {:ok false
+           :status :sync-failed
+           :removed remove
+           :upserted upsert
+           :registered (vec (keys (:registered @live-tool-state)))
+           :error (.getMessage error)
+           :remedy "Fix the reload error and run sync-tools! again."})))
+    {:ok false
+     :status :server-unavailable
+     :error "No live clj-surgeon MCP server is registered"
+     :remedy "Start the MCP server before synchronizing tool contracts."}))
+
 (defn configure-specification
   "Attach the complete minimal clj-surgeon contract to an MCP server builder."
   [specification]
@@ -108,7 +205,7 @@
       (.instructions server-instructions)
       (.capabilities
         (-> (McpSchema$ServerCapabilities/builder)
-            (.tools false)
+            (.tools true)
             (.build)))
       (.tools (mapv create-async-tool (mcp-tool/all-tools)))))
 
@@ -117,7 +214,8 @@
   []
   (let [transport (StdioServerTransportProvider. (McpJsonMapper/getDefault))
         specification (configure-specification (McpServer/async transport))]
-    (.build specification)))
+    (doto (.build specification)
+      (register-live-server!))))
 
 (defn start-embedded-nrepl!
   "Start an nREPL inside the live MCP JVM. Failure never blocks the MCP server."
