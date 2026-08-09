@@ -28,13 +28,15 @@ CLOJURE_LSP_BIN ?= $(shell command -v clojure-lsp)
 CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
 CCLSP_PORT ?= 7890
 CCLSP_URL ?= http://127.0.0.1:$(CCLSP_PORT)/mcp
-CCLSP_CONFIG ?= $(CLJ_SURGEON_HOME)cclsp.json
+CCLSP_CONFIG ?= $(HOME)/.local/state/clj-surgeon/cclsp.json
 CCLSP_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/cclsp
 CCLSP_LOG_FILE := $(CCLSP_STATE_DIR)/server.log
 CCLSP_LAUNCH_LABEL ?= com.realgenekim.cclsp-clj-surgeon
+CCLSP_HEALTH_ATTEMPTS ?= 20
+CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload cclsp-start cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -57,7 +59,7 @@ help:
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
-	@echo "  make study-agent-usage         Compare Codex and Claude since the latest study marker"
+	@echo "  make study-agent-usage         Join agent routes with Surgeon, cclsp, and LSP telemetry"
 	@echo "  make study-agent-usage-self-test Test the bounded cross-agent history collector"
 	@echo "  make benchmark-clean-codex     Run the 32-session clean Codex benchmark"
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
@@ -91,6 +93,7 @@ install: install-cli install-codex-skill install-claude-skill
 
 mcp-test:
 	clojure -M:clj-surgeon/mcp-test
+	@$(MAKE) --no-print-directory cclsp-start-self-test
 
 mcp-smoke:
 	bb test/mcp_stdio_smoke.clj
@@ -112,6 +115,10 @@ mcp-reload: mcp-test
 	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \
 	  echo "Clients that honor tools/list_changed re-list automatically. The current Codex turn can cache model-visible schemas until a new session."
 
+cclsp-start-self-test:
+	@sh test/cclsp_start_test.sh
+	@sh test/cclsp_launch_path_test.sh
+
 cclsp-start:
 	@set -eu; \
 	  mkdir -p "$(CCLSP_STATE_DIR)"; \
@@ -125,7 +132,14 @@ cclsp-start:
 	  restarted=false; \
 	  health_url="$(patsubst %/mcp,%/healthz,$(CCLSP_URL))"; \
 	  expected_config=$$(python3 -c 'import pathlib; print(pathlib.Path("$(CCLSP_CONFIG)").resolve())'); \
-	  if health=$$(curl -fsS --max-time 1 "$$health_url" 2>/dev/null); then \
+	  healthy=false; \
+	  health=; \
+	  for attempt in $$(seq 1 $(CCLSP_HEALTH_ATTEMPTS)); do \
+	    if health=$$(curl -fsS --max-time 1 "$$health_url" 2>/dev/null); then healthy=true; break; fi; \
+	    if ! launchctl print "gui/$$(id -u)/$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1; then break; fi; \
+	    sleep $(CCLSP_HEALTH_INTERVAL); \
+	  done; \
+	  if [ "$$healthy" = true ]; then \
 	    actual_config=$$(printf '%s' "$$health" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("config_path") or "")'); \
 	    if [ "$$actual_config" = "$$expected_config" ]; then \
 	      write_status false; \
@@ -145,8 +159,8 @@ cclsp-start:
 	  launchctl remove "$(CCLSP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
 	  launchctl submit -l "$(CCLSP_LAUNCH_LABEL)" \
 	    -o "$(CCLSP_LOG_FILE)" -e "$(CCLSP_LOG_FILE)" -- \
-	    /bin/sh -c 'cd "$$1"; shift; export CCLSP_CONFIG_PATH="$$1"; shift; exec "$$@"' _ \
-	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" \
+	    /bin/sh -c 'cd "$$1"; export CCLSP_CONFIG_PATH="$$2"; export PATH="$$3"; shift 3; exec "$$@"' _ \
+	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" "$(PATH)" \
 	    "$(CCLSP_HOME)/node_modules/.bin/bun" run --watch index.ts serve-http --host 127.0.0.1 --port "$(CCLSP_PORT)"; \
 	  ready=false; \
 	  for attempt in $$(seq 1 60); do \

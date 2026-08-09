@@ -930,6 +930,8 @@
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
+    (.append sb "       clj-surgeon recover [WORKSPACE] repair and prove the hot MCP stack\n")
+    (.append sb "       clj-surgeon report-failure --receipt PATH\n")
     (.append sb "       clj-surgeon --help              show this message\n")
     (.append sb "       clj-surgeon :op :help           show this message\n")
     (.append sb "       clj-surgeon --version           show machine-readable version\n")
@@ -1208,6 +1210,48 @@
                 (pp/pprint
                   ((requiring-resolve 'clj-surgeon.workspace-onboarding/up!)
                    {:workspace workspace}))))
+
+            (= "recover" (first args))
+            (let [[_ workspace & extra] args]
+              (cond
+                (= "--help" workspace)
+                (println
+                  (str "Usage: clj-surgeon recover [WORKSPACE]\n\n"
+                       "Make one bounded repair attempt, then prove tools/list, "
+                       "one exact semantic surface, and one guarded write. "
+                       "WORKSPACE defaults to cwd."))
+
+                (seq extra)
+                (throw (ex-info "Usage: clj-surgeon recover [WORKSPACE]"
+                                {:error-type :invalid-arguments}))
+
+                :else
+                (pp/pprint
+                  ((requiring-resolve 'clj-surgeon.recovery/recover!)
+                   {:workspace workspace}))))
+
+            (= "report-failure" (first args))
+            (let [[_ flag receipt-file & extra] args]
+              (cond
+                (= "--help" flag)
+                (println
+                  (str "Usage: clj-surgeon report-failure --receipt PATH\n\n"
+                       "Redact and deduplicate one local recovery failure. "
+                       "Never uploads source, prompts, URLs, or workspace paths."))
+
+                (or (not= "--receipt" flag)
+                    (str/blank? receipt-file)
+                    (seq extra))
+                (throw
+                  (ex-info
+                    "Usage: clj-surgeon report-failure --receipt PATH"
+                    {:error-type :invalid-arguments}))
+
+                :else
+                (pp/pprint
+                  ((requiring-resolve
+                     'clj-surgeon.failure-report/report-failure!)
+                   {:receipt-file receipt-file}))))
 
             :else
             (let [opts (parse-args args)]

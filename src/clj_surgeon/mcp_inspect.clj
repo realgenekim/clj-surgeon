@@ -5,6 +5,7 @@
    [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.mcp-contract :as mcp-contract]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -344,25 +345,26 @@
        :source_character_count (:source-char-count found)
        :forms
        (mapv (fn [form]
-               (cond->
-                 {:source (:source form)
-                  :hash (structural-lens/source-hash (:source form))
-                  :line (:line form)
-                  :end_line (:end-line form)
-                  :form_type (str (:type form))
-                  :name (str (:name form))
-                  :platforms (mapv name (:platforms form))
-                  :file (:file request)
-                  :file_hash (:hash snapshot)
-                  :source_anchor {:file (:file request)
-                                  :source_sha256 (:hash snapshot)
-                                  :owner (str (:name form))
-                                  :range {:start {:line (dec (:line form))
-                                                  :character 0}
-                                          :end {:line (:end-line form)
-                                                :character 0}}}}
-                 (:comment-start form)
-                 (assoc :comment_start (:comment-start form))))
+               (let [built-anchor
+                     (source-anchor/build-form-source-anchor
+                       (:file request) (:source snapshot) form)]
+                 (when-not (:ok built-anchor)
+                   (throw
+                     (ex-info "Selected form has no exact source anchor"
+                              built-anchor)))
+                 (cond->
+                   {:source (:source form)
+                    :hash (structural-lens/source-hash (:source form))
+                    :line (:line form)
+                    :end_line (:end-line form)
+                    :form_type (str (:type form))
+                    :name (str (:name form))
+                    :platforms (mapv name (:platforms form))
+                    :file (:file request)
+                    :file_hash (:hash snapshot)
+                    :source_anchor (:source-anchor built-anchor)}
+                   (:comment-start form)
+                   (assoc :comment_start (:comment-start form)))))
              (:forms found))})))
 
 (defn- outline-result

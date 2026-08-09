@@ -30,6 +30,23 @@ Production use subsequently established two distinct scales of value:
 1. Top-level operations reduce huge namespaces to small, relevant form sets.
 2. Structural lenses locate and replace exact nested syntax inside large forms.
 
+The current persistent MCP route also demonstrated complete-turn wall-clock
+wins against matched native controls. The correctness-gated medians were 21.595
+versus 26.749 seconds for one supplied nested edit, 27.976 versus 68.932 seconds
+for six supplied edits, and 62.876 versus 81.730 seconds for the exploratory
+version of that six-edit task. These results apply to a shared hot service and
+the tested Clojure change strata. They do not apply to arbitrary text,
+JavaScript, prose, or cold per-task startup.
+
+The mechanism is interaction compression. Direct MCP read and write work was
+subsecond. One ambiguous field caused a 9.7-millisecond refusal and a
+20.46-second model recovery round. After the contract made the first call
+unambiguous, the same six-edit task used one transaction and reduced median
+wall by 59.4%.
+
+The latest current-state synthesis is
+[Last Night's Hill Climb](observations/2026-08-08-captains-log-last-nights-hill-climb.md).
+
 On a 4,036-line namespace with 322 top-level forms, `:ls` immediately exposed
 the relevant synchronization forms. Nested searches then proved that particular
 state calls and Hiccup elements occurred exactly once. In later work, agents
@@ -371,10 +388,11 @@ one complete six-edit decision still had to load guidance, encode EDN, cross a
 process boundary, and interpret a CLI receipt. A typed persistent MCP entrance
 removed that translation without changing the judgment boundary.
 
-Four counterbalanced correct `apply_clojure_changes` runs completed at a
-24.530-second median. The matched native median was 43.190 seconds, and the
-current CLI-and-skill median was 36.396 seconds. Every MCP run used one call,
-zero shell commands, zero source reads, and one terminal verified receipt.
+The first counterbalanced `apply_clojure_changes` experiment completed at a
+24.530-second median versus 43.190 seconds for native. A later five-run MCP
+matrix removed one ambiguous request shape. Its median was 27.976 seconds
+versus 68.932 seconds for four valid native controls. Every MCP run used one
+call, zero shell commands, zero source reads, and one terminal verified receipt.
 
 Transport did not make tool choice automatic. When MCP was available but no
 routing rule named it, Codex ignored it in four of four runs. One short project
@@ -392,6 +410,13 @@ not infer which question to ask next. The two-tool target is therefore:
 inspect_clojure          perception, read-only, batched
 apply_clojure_changes    action, guarded transaction
 ```
+
+These tools run through one shared multi-workspace stack. Requests carry the
+canonical caller `workspace_root`. cclsp routes semantic work to lazy
+workspace-specific clojure-lsp children and binds results to one LSP session,
+source hashes, ranges, and owner evidence. clj-surgeon independently verifies
+the source and retains the prepared basis. The model does not choose a
+provider, reconstruct paths across repositories, or carry partial edit state.
 
 The proof-carrying change buffer joins these tools without adding a third
 surface. `inspect_clojure` can resolve one fully qualified Var through the hot

@@ -81,7 +81,9 @@
                                                                  :source_sha256 (get-in result [:file_hashes "src/demo.clj"])
                                                                  :owner "alpha"
                                                                  :range {:start {:line 1 :character 0}
-                                                                         :end {:line 2 :character 0}}}
+                                                                         :end {:line 1 :character 16}}
+                                                                 :selection_range {:start {:line 1 :character 5}
+                                                                                   :end {:line 1 :character 10}}}
                                                                 (get-in result [:results 0 :forms 0 :source_anchor]))))
       (finally
         (delete-tree! project)))))
@@ -449,7 +451,9 @@
             :source_sha256 (structural-lens/source-hash source)
             :owner "target"
             :range {:start {:line 2 :character 0}
-                    :end {:line 4 :character 6}}}
+                    :end {:line 4 :character 6}}
+            :selection_range {:start {:line 2 :character 7}
+                              :end {:line 2 :character 13}}}
            (:source-anchor built)))
     (is (= :semantic-candidate-namespace-mismatch
            (:error-type
@@ -466,6 +470,41 @@
                "src/sample/core.clj"
                (str source "\n(>defn target [] :duplicate)\n")
                {}))))))
+
+(deftest source-anchor-selects-exact-owner-tokens-across-defining-syntax
+  (doseq [{:keys [label definition aliases]}
+          [{:label "ordinary defn"
+            :definition "(defn target [] :ok)"
+            :aliases {}}
+           {:label "private defn"
+            :definition "(defn- target [] :ok)"
+            :aliases {}}
+           {:label "metadata-wrapped owner"
+            :definition "(defn ^:private target [] :ok)"
+            :aliases {}}
+           {:label "custom defining-form alias"
+            :definition "(defendpoint target [] :ok)"
+            :aliases {"defendpoint" {:kind :defn}}}
+           {:label "non-ASCII metadata before owner"
+            :definition "(defn ^{:doc \"🧪\"} target [] :ok)"
+            :aliases {}}]]
+    (testing label
+      (let [source (str "(ns sample.core)\n\n" definition "\n")
+            built (source-anchor/build-source-anchor
+                    "sample.core/target" "src/sample/core.clj" source aliases)
+            {:keys [start end]} (get-in built [:source-anchor :selection_range])
+            definition-line (nth (str/split-lines source) (:line start))]
+        (is (:ok built))
+        (is (= 2 (:line start) (:line end)))
+        (is (= "target"
+               (subs definition-line (:character start) (:character end)))))))
+  (testing "a claimed owner absent from the exact form refuses before LSP"
+    (let [missing (source-anchor/build-form-source-anchor
+                    "src/sample/core.clj"
+                    "(defn other [] :ok)\n"
+                    {:name "target" :line 1 :end-line 1})]
+      (is (false? (:ok missing)))
+      (is (= :semantic-candidate-selection-missing (:error-type missing))))))
 
 (deftest workspace-source-roots-are-deterministic-and-confined
   (let [root (temp-dir)]

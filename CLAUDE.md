@@ -203,6 +203,11 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
 - Join a workspace with `clj-surgeon up [WORKSPACE]`; do not create a new
   server pair for each repository. The command is idempotent and keeps older
   Make onboarding targets only as compatibility aliases.
+- For a stale MCP session, missing tools after onboarding, or false-green
+  health, run `clj-surgeon recover [WORKSPACE]` once. Continue only after its
+  real semantic and guarded-write proof returns `:terminal-state :recovered`.
+  On failure, execute the returned redacted `report-command` once and use the
+  named fallback. Never loop on recovery or restart healthy shared services.
 - For a non-default workspace, pass its canonical absolute `workspace_root`
   to both MCP tools. Preserve `workspace_root` from a prepared `next_call`.
   Workspace routing is request data, not MCP server identity.
@@ -220,17 +225,18 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
 
 - cclsp uses the pinned Bun under `../cclsp-structural-results/node_modules`.
   Its launchd job runs `bun --watch`. TypeScript changes load under the same
-  URL. Run `make cclsp-status` to verify the provider. The exact health
-  endpoint is `http://127.0.0.1:7890/healthz`; it reports per-workspace LSP
-  sessions, child PIDs, outstanding requests, and recovery history.
+  URL. The managed launcher must pass its complete shell PATH because
+  clojure-lsp invokes the separate `clojure` executable for classpath discovery.
+  Use cclsp `inspect_runtime` before logs or process inspection; scope it to one
+  workspace or request. Run `make cclsp-status` only for provider health.
 - Interactive semantic requests have a 10-second timeout; cold initialization
-  has a separate 30-second timeout. A `textDocument/documentSymbol` timeout
-  triggers one exact-root recovery. cclsp cancels the request, waits for the
-  old child to exit, initializes one replacement, and retries under its new
-  session. The triggering result reports old/new sessions and PIDs, exit mode,
-  and termination time in `semantic_recovery`. Inspect
-  `~/.local/state/clj-surgeon/cclsp/server.log` for the JSONL request flight
-  recorder. Do not restart the shared parent or unrelated workspace children.
+  has a separate 45-second timeout. Exact source anchors call references at the
+  proven owner token and must make zero document-symbol requests. Runtime state
+  reports the LSP session, child PID, outstanding calls, queue, recoveries, and
+  initialization error. `/healthz` refuses stale stateful runtime generations;
+  a root-scoped `restart_server` can initialize a configured workspace whose
+  old child already exited. Use the JSONL flight recorder only when that bounded
+  state is insufficient. Do not restart the shared parent or unrelated children.
 - clj-surgeon runs an embedded nREPL. For interactive probes, prefer the
   persistent Clojure MCP `clojure_eval` tool with that port. It avoids shell
   quoting and returns one structured result while retaining the same live JVM

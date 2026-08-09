@@ -36,6 +36,33 @@
       (finally
         (delete-tree! root)))))
 
+(deftest canonical-root-collapses-repository-symlink-aliases
+  (let [parent (temp-dir)
+        root (doto (io/file parent "root") .mkdirs)
+        alias (io/file parent "alias")]
+    (try
+      (java.nio.file.Files/createSymbolicLink
+        (.toPath alias)
+        (.toPath root)
+        (make-array java.nio.file.attribute.FileAttribute 0))
+      (is (= (workspace/canonical-root (.getPath root))
+             (workspace/canonical-root (.getPath alias))))
+      (let [builds (atom [])
+            router (workspace/router
+                     {:project-root (.getPath root)
+                      :workspace-context-factory
+                      (fn [workspace-root]
+                        (swap! builds conj workspace-root)
+                        {})})]
+        (is (:ok (workspace/resolve-request
+                   router {:workspace_root (.getPath root) :requests []})))
+        (is (:ok (workspace/resolve-request
+                   router {:workspace_root (.getPath alias) :requests []})))
+        (is (= 1 (count @builds)))
+        (is (= 1 (count (workspace/cached-roots router)))))
+      (finally
+        (delete-tree! parent)))))
+
 (deftest contexts-are-lazy-canonical-deduplicated-and-isolated
   (let [root-a (temp-dir)
         root-b (temp-dir)

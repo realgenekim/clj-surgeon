@@ -5,6 +5,21 @@ is not exposed through MCP, or the CLI itself is under test. Stop on a nonzero
 exit or EDN `:error`. Use `clj-surgeon :op OP --help` when this reference does
 not cover the operation.
 
+## Recover the hot entrance once
+
+For `invalid-mcp-session`, absent tools after onboarding, or a green health
+check followed by a failed structural call, run:
+
+```bash
+clj-surgeon recover "$PWD"
+```
+
+Continue through MCP only when the receipt says `:terminal-state :recovered`
+and `:next-action :none`. On `:fallback-safe`, execute its `:report-command`
+once on a machine with the repo-local `.beads` database, then continue with the
+smallest CLI route below. On `:restart-required`, restart the named client
+boundary once. Never loop on `up` or `recover`; health alone is not proof.
+
 ## Smallest structural read
 
 - Unknown top-level form: `clj-surgeon :op :ls :file FILE`.

@@ -205,9 +205,14 @@ were valid and correct.
 | Fresh native control | 4 / 5 | 68.932 s | 3.5 | 3,577 |
 
 In this complete supplied-decision stratum, native took 2.46 times as long;
-one-shot MCP reduced median wall time by 59.4%. The claim is intentionally
-bounded: exploratory read-decide-edit work remains the next falsifier. See the
-[end-to-end timing log](docs/observations/2026-08-07-captains-log-end-to-end-structural-transaction-timings.md).
+one-shot MCP reduced median wall time by 59.4%. The later exploratory lane also
+crossed over: 62.876 seconds for Surgeon versus 81.730 seconds for native, a
+23.1% reduction. One supplied nested edit showed a smaller 19.3% reduction.
+The claims apply to a shared hot service and these tested Clojure change
+strata. See the
+[end-to-end timing log](docs/observations/2026-08-07-captains-log-end-to-end-structural-transaction-timings.md)
+and the current
+[last-night synthesis](docs/observations/2026-08-08-captains-log-last-nights-hill-climb.md).
 
 A later paired read benchmark asked fresh Codex callers 45 exact behavior
 questions about 45 named forms in three frozen files. Both answers passed all
@@ -365,6 +370,36 @@ installs the two MCP entries in the workspace's `.codex/config.toml`. It
 preserves unrelated TOML, migrates older per-repository tables, validates the
 result, and is idempotent. `make workspace-mcp-onboard WORKSPACE=/repo` remains
 a compatibility alias.
+
+The managed cclsp service inherits the invoking shell's complete PATH. This is
+part of semantic correctness: clojure-lsp is a native executable, but it still
+invokes the separate `clojure` command to discover a project's classpath.
+
+If an already-onboarded agent reports `invalid-mcp-session`, missing tools, or
+a green health check followed by a failed structural call, use the bounded
+reset button once:
+
+```bash
+clj-surgeon recover /absolute/repository
+```
+
+Success means more than healthy processes. The command opens fresh MCP
+sessions, checks the actual tool catalog, resolves one hash-bound Clojure Var
+through cclsp, performs one temporary failure-atomic write with read-back
+verification, removes its fixture, and returns `:terminal-state :recovered`
+with `:next-action :none`. It does not restart healthy shared services.
+
+Failure returns one terminal state, a redacted receipt path, and one executable
+report command. Run that command once on this development machine:
+
+```bash
+clj-surgeon report-failure --receipt ~/.local/state/clj-surgeon/recovery/last-failure.edn
+```
+
+The reporter creates or updates one local Bead by stable failure fingerprint.
+It never uploads or retains source, prompts, URLs, or workspace paths. When a
+local `.beads` database is unavailable, it returns the same safe issue draft as
+data and performs no write. Do not loop on `up` or `recover`.
 
 Start a new Codex session in the target repository only when onboarding changed
 its `.codex/config.toml`. Do not start another MCP server for the repository.
@@ -634,17 +669,26 @@ boundary.
 
 cclsp starts one lazy `clojure-lsp` child for each workspace that receives a
 semantic request. Shared onboarding configures a 10-second interactive request
-timeout and a separate 30-second cold-initialization timeout. If
-`textDocument/documentSymbol` times out, cclsp cancels the request, waits for
-that exact workspace child to exit, starts and initializes its replacement,
-and retries once under the new LSP session. The triggering result reports a
-self-contained `semantic_recovery` with old/new sessions and PIDs, exit mode,
-and termination time. A missing lifecycle receipt is a typed refusal, not a
-reported success. `http://127.0.0.1:7890/healthz` reports each workspace's
-session, child PID, outstanding requests, recovery count, and last recovery.
-The durable JSONL flight recorder is
+timeout and a separate 45-second cold-initialization timeout. Exact Surgeon
+source anchors include the owner-token position, so the primary semantic route
+calls `textDocument/references` without a redundant `documentSymbol` round.
+
+Use cclsp's read-only `inspect_runtime` MCP tool before reading logs or
+inspecting processes. It returns a compact server summary and bounded
+structured state for one workspace or semantic request: runtime/config
+identity, LSP session, child PID, initialization state, outstanding calls,
+queue, recoveries, and the last initialization error. A timed-out semantic
+request is a typed refusal, not a reported success. The durable JSONL flight
+recorder is
 `~/.local/state/clj-surgeon/cclsp/server.log`. Other workspace children and the
 shared cclsp parent remain running during a root-scoped recovery.
+
+cclsp health also binds readiness to the stateful runtime generation. If core
+LSP source changed after that runtime was constructed, `/healthz` returns 503
+with `runtime_current=false` and `restart_required=true`. Tool-only hot reloads
+keep the stable URL. `restart_server` can start an exact configured workspace
+whose previous LSP child already exited; it reports `previous_exit=not-running`
+and waits for replacement initialization before returning success.
 
 `make install` remains the stable copied CLI-and-skills installation. It does
 not enable the experimental MCP server.
@@ -1579,12 +1623,14 @@ The canonical package lives under `skills/study-agent-usage`. The repository
 exposes it to Codex through `.agents/skills/` and to Claude Code through
 `.claude/skills/`, both as links to that one package.
 
-It scans both providers from the newest completed study marker and emits a
-versioned JSON receipt without transcript prose or workspace paths. The
-receipt distinguishes skill visibility, skill loading, real clj-surgeon
-invocations, native Clojure actions, direct tool wall, and complete Codex turn
-wall. A completed study records the emitted `next_marker`, which becomes the
-next automatic "since last time" boundary.
+It scans both providers from the newest completed study marker, prints a
+compact aggregate, and writes the complete versioned JSON receipt to the
+reported temporary path. Pass `--receipt-out PATH` through
+`AGENT_USAGE_ARGS` to retain it elsewhere. Neither surface contains transcript
+prose or workspace paths. The receipt distinguishes skill visibility, skill
+loading, real clj-surgeon invocations, native Clojure actions, direct tool
+wall, and complete Codex turn wall. A completed study records the emitted
+`next_marker`, which becomes the next automatic "since last time" boundary.
 Run `make study-agent-usage-self-test` to verify both history parsers and the
 privacy contract.
 

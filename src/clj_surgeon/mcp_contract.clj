@@ -362,10 +362,11 @@
                  (:remedy result)
                  (when (= :invalid-intent-form error-type)
                    (format
-                     "Pass exactly one complete parseable Clojure form in %s for change %s%s."
+                     "Correct %s for change %s%s. Complete-input parser: %s Submit exactly one complete Clojure form."
                      (or field "the named field")
                      (if (some? change-index) change-index "unknown")
-                     (if change-id (str " (" change-id ")") "")))
+                     (if change-id (str " (" change-id ")") "")
+                     (or (:error result) "the input was not exactly one form.")))
                  "Correct the declared scope or count and call apply_clojure_changes once.")]
     (cond->
       {:ok false

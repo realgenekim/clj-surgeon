@@ -108,7 +108,7 @@
             "command" [lsp-command]
             "rootDir" workspace
             "requestTimeout" 10000
-            "initializationTimeout" 30000 "sourceRoots" (source-anchor/workspace-source-roots workspace)}
+            "initializationTimeout" 45000 "sourceRoots" (source-anchor/workspace-source-roots workspace)}
      kondo-config-dir
      (assoc "initializationOptions"
             {"kondo-config-dir" kondo-config-dir}))))
@@ -159,6 +159,23 @@
           updated (assoc parsed "servers" servers)]
       (str (json/generate-string updated {:pretty true}) "\n"))))
 
+(defonce ^:private cclsp-config-locks (atom {}))
+
+(defn- cclsp-config-lock
+  [target]
+  (let [path (.getPath target)]
+    (or (get @cclsp-config-locks path)
+        (get (swap! cclsp-config-locks
+                    #(if (contains? % path)
+                       %
+                       (assoc % path (Object.))))
+             path))))
+
+(defn- exact-server-persisted?
+  [source expected]
+  (let [parsed (json/parse-string source)]
+    (boolean (some #(= expected %) (get parsed "servers")))))
+
 (defn install-cclsp-workspace!
   "Atomically upsert one canonical workspace into the shared cclsp config."
   [{:keys [workspace config-file lsp-command kondo-config-dir]}]
@@ -169,20 +186,36 @@
     (when-not (.isDirectory root)
       (throw (ex-info "Workspace must be an existing directory"
                       {:error-type :invalid-workspace :workspace workspace})))
-    (let [before (if (.isFile target) (slurp target) "")
-          after (upsert-cclsp-workspace
-                  before {:workspace (.getPath root)
-                          :lsp-command lsp-command
-                          :kondo-config-dir kondo-config-dir})]
-      (.mkdirs (.getParentFile target))
-      (when (not= before after)
-        (file-ops/atomic-write! target after))
-      {:ok true
-       :operation :upsert-shared-cclsp-workspace
-       :workspace (.getPath root)
-       :kondo-config-dir kondo-config-dir
-       :config-file (.getPath target)
-       :changed (not= before after)})))
+    (.mkdirs (.getParentFile target))
+    (let [monitor (cclsp-config-lock target)
+          lock-file (io/file (str (.getPath target) ".lock"))]
+      (locking monitor
+        (with-open [lock-handle (java.io.RandomAccessFile. lock-file "rw")
+                    channel (.getChannel lock-handle)]
+          (let [_file-lock (.lock channel)
+                before (if (.isFile target) (slurp target) "")
+                expected (cclsp-server (.getPath root)
+                                       lsp-command
+                                       kondo-config-dir)
+                after (upsert-cclsp-workspace
+                        before {:workspace (.getPath root)
+                                :lsp-command lsp-command
+                                :kondo-config-dir kondo-config-dir})]
+            (when (not= before after)
+              (file-ops/atomic-write! target after))
+            (let [read-back (slurp target)]
+              (when-not (exact-server-persisted? read-back expected)
+                (throw (ex-info "cclsp workspace registration was not persisted exactly"
+                                {:error-type :cclsp-registration-not-persisted
+                                 :workspace (.getPath root)
+                                 :config-file (.getPath target)}))))
+            {:ok true
+             :operation :upsert-shared-cclsp-workspace
+             :workspace (.getPath root)
+             :kondo-config-dir kondo-config-dir
+             :config-file (.getPath target)
+             :changed (not= before after)
+             :persisted true}))))))
 
 (defn install-cclsp-config!
   "Atomically install one repo-rooted cclsp config."

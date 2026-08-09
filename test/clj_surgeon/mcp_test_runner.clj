@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-http-server-test]
    [clj-surgeon.mcp-inspect-contract-test]
    [clj-surgeon.mcp-inspect-tool-test]
+   [clj-surgeon.mcp-recovery-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
    [clj-surgeon.mcp-telemetry-test]
@@ -24,6 +25,7 @@
           'clj-surgeon.mcp-http-server-test
           'clj-surgeon.mcp-inspect-contract-test
           'clj-surgeon.mcp-inspect-tool-test
+          'clj-surgeon.mcp-recovery-test
           'clj-surgeon.mcp-telemetry-test
           'clj-surgeon.mcp-tool-test
           'clj-surgeon.mcp-workspace-test

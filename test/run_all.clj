@@ -11,6 +11,7 @@
    [clj-surgeon.edit-test]
    [clj-surgeon.edn-config-integration-test]
    [clj-surgeon.extract-test]
+   [clj-surgeon.failure-report-test]
    [clj-surgeon.file-ops-test]
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
@@ -20,6 +21,7 @@
    [clj-surgeon.lens-query-test]
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-recovery-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.move-dependency-test]
@@ -28,9 +30,11 @@
    [clj-surgeon.outline-test]
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
+   [clj-surgeon.recovery-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
+   [clj-surgeon.workspace-onboarding-test]
    [clj-surgeon.xray-test]
    [clojure.test :refer [run-tests]]))
 
@@ -42,6 +46,7 @@
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
                    'clj-surgeon.extract-test
+                   'clj-surgeon.failure-report-test
                    'clj-surgeon.file-ops-test
                    'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
@@ -63,7 +68,10 @@
                    'clj-surgeon.install-test
                    'clj-surgeon.intent-transaction-test
                    'clj-surgeon.mcp-contract-test
+                   'clj-surgeon.mcp-recovery-test
                    'clj-surgeon.mcp-telemetry-test
                    'clj-surgeon.mcp-tool-test
+                   'clj-surgeon.workspace-onboarding-test
+                   'clj-surgeon.recovery-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))

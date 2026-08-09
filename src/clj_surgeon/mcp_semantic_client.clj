@@ -1,7 +1,8 @@
 (ns clj-surgeon.mcp-semantic-client
   "Persistent, restart-safe client for the local cclsp semantic provider."
   (:require
-   [cheshire.core :as json])
+   [cheshire.core :as json]
+   [clojure.string :as str])
   (:import
    (io.modelcontextprotocol.client McpClient McpSyncClient)
    (io.modelcontextprotocol.client.transport HttpClientStreamableHttpTransport)
@@ -62,15 +63,22 @@
               (swap! runtime assoc :client client)
               client)))))
 
+(defn- invalid-session-error?
+  [error]
+  (str/includes? (str error) "invalid-mcp-session"))
+
 (defn normalize-result
   "Turn an SDK CallToolResult into the keyword-keyed provider contract."
   [result]
   (let [structured (.structuredContent result)]
     (cond
       (true? (.isError result))
-      {:ok false
-       :error-type :semantic-provider-refusal
-       :error (some-> result .content first str)}
+      (let [error (some-> result .content first str)]
+        {:ok false
+         :error-type (if (invalid-session-error? error)
+                       :invalid-mcp-session
+                       :semantic-provider-refusal)
+         :error error})
 
       structured
       (assoc (json/parse-string (json/generate-string structured) true) :ok true)
@@ -101,7 +109,13 @@
    (resolve-var! workspace-root qualified-var nil))
   ([workspace-root qualified-var source-anchor]
    (try
-     (call-resolve-var! (client!) workspace-root qualified-var source-anchor)
+     (let [result
+           (call-resolve-var! (client!) workspace-root qualified-var source-anchor)]
+       (if (= :invalid-mcp-session (:error-type result))
+         (do
+           (close!)
+           (call-resolve-var! (client!) workspace-root qualified-var source-anchor))
+         result))
      (catch Exception first-error
        (close!)
        (try

@@ -1,6 +1,6 @@
 ---
 name: study-agent-usage
-description: Analyze recent Codex and Claude Code history when Gene asks to review agent usage, repeat an ethnographic study, compare callers, reconstruct tool routes, assess clj-surgeon adoption, or inspect behavior since the last study.
+description: Analyze recent Codex and Claude Code history plus clj-surgeon MCP, cclsp, and clojure-lsp telemetry when Gene asks to review agent usage, repeat an ethnographic study, compare callers, reconstruct tool routes, assess clj-surgeon adoption, or inspect behavior since the last study.
 ---
 
 # Study Agent Usage
@@ -25,11 +25,27 @@ The collector reads the newest `agent-usage-window-end` marker under
 make study-agent-usage AGENT_USAGE_ARGS='--since 2026-08-05T00:00:00Z --until 2026-08-06T00:00:00Z'
 ```
 
-The JSON receipt is the counting authority. It emits no transcript prose or
-workspace paths. It reports hashed session keys, evidence filenames, skill
-visibility and loads, actual clj-surgeon operations, native Clojure actions,
-tool payload sizes, direct tool wall, complete Codex turn wall, and collapsed
-privacy-safe `route_phases` for each Codex task and provider session.
+The command prints a compact aggregate and writes the complete JSON receipt to
+the reported temporary `receipt_path`. Pass `--receipt-out PATH` to choose the
+location or `--full` only when a downstream program needs the complete receipt
+on stdout. The complete receipt is the counting authority. It emits no
+transcript prose, source bodies, raw service events, or workspace paths. It
+reports hashed session keys, evidence filenames, skill visibility and loads,
+CLI and MCP clj-surgeon operations, cclsp semantic reads, native Clojure
+actions, tool payload sizes, direct tool wall, complete Codex turn wall, and
+collapsed privacy-safe `route_phases` for each Codex task and provider session.
+
+The same receipt joins service telemetry for the exact time window:
+
+- clj-surgeon MCP calls, outcomes, refusal types, request shapes, file reads,
+  source-character volume, and wall distributions;
+- cclsp MCP admissions when available;
+- clojure-lsp method counts, completions, timeouts, document syncs, recoveries,
+  and wall distributions as recorded by cclsp.
+
+Old cclsp logs can predate durable MCP-admission events. Preserve that as a
+coverage limit. Do not infer zero cclsp calls from a zero admission count when
+agent route phases show cclsp use.
 
 Read `route_phases` as the agent's keystroke sequence. Each phase contains only
 behavioral kinds, action and Surgeon-call counts, input/output sizes, and wall:
@@ -114,5 +130,5 @@ make study-agent-usage-self-test
 ```
 
 The self-test covers both transcript formats, marker discovery, skill
-visibility versus loading, real operation counting, native-action counting,
-and the privacy contract.
+visibility versus loading, CLI and MCP route counting, native-action counting,
+Surgeon and LSP service aggregation, and the privacy contract.

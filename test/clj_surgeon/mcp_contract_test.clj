@@ -244,7 +244,9 @@
     (is (= ":find" (:field result)))
     (is (= 0 (:form_count result)))
     (is (:source_unchanged result))
-    (is (= "Pass exactly one complete parseable Clojure form in :find for change 2 (gallery-renderer)."
+    (is (= (str "Correct :find for change 2 (gallery-renderer). "
+                "Complete-input parser: :find must contain exactly one complete form "
+                "with no detached comments Submit exactly one complete Clojure form.")
            (:remedy result)))
     (is (= "Pass one complete parseable Clojure form in :find."
            (:remedy custom-result)))))

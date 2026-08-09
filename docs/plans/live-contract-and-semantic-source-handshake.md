@@ -571,8 +571,8 @@ erase candidates returned by completed workspaces.
 
 | Gate | Evidence |
 |---|---|
-| Full clj-surgeon suite | 574 primary tests with 5,077 assertions; 111 MCP tests with 977 assertions; zero failures or errors |
-| cclsp suite | 289 passing tests with 915 expectations plus 4 execution tests with 23 expectations; 5 intentional unit skips and 2 intentional execution skips; zero failures |
+| Full clj-surgeon suite | 574 primary tests with 5,082 assertions; 113 MCP tests with 990 assertions; zero failures or errors |
+| cclsp suite | 291 passing tests with 917 expectations; 5 intentional unit skips; zero failures |
 | Static gates | Biome, TypeScript typecheck, Bun build, stdio smoke, benchmark self-tests, retention checks, and `git diff --check` passed |
 | Stable installation | `make install` installed the CLI and matching Codex and Claude skills |
 | Idempotent shared services | Repeated onboarding preserved clj-surgeon PID 12712 and cclsp PID 68685 |
@@ -584,9 +584,32 @@ erase candidates returned by completed workspaces.
 | Bounded discovery | A wrong named form returned 10 available names and the nearest candidate from the already-read snapshot without returning partial source |
 | Mothership semantic recovery | Four anchored surfaces resolved in 2.539 s. A forced child wedge recovered in 12.457 s after the timeout split, down from 32.452 s. |
 | Batched related-Var audit | `resolve_var_surfaces` resolves up to four ordered anchored Vars without independent workspace-symbol discovery and retains each complete result or typed refusal. |
-| Cross-workspace Var routing | A server2 request resolved sibling `reddit.mongodb.mongodb/start`, the identical SHA, and 81 references by querying one of six configured workspaces: 9.237 s first run and 0.210 s warm versus 27.371 s for all-root fan-out. |
+| Cross-workspace Var routing | A nested-project request resolved a sibling workspace Var, the identical SHA, and 81 references by querying one of six configured workspaces: 9.237 s first run and 0.210 s warm versus 27.371 s for all-root fan-out. |
 
 The live health surface showed six configured roots with source-root metadata,
 no outstanding requests, and no initialization errors. The
 public MCP surface remained exactly `inspect_clojure` and
 `apply_clojure_changes`.
+
+## 2026-08-08 contract hardening
+
+Three production-derived failures tightened the completed contract without
+adding another public tool:
+
+1. The live `inspect_clojure` registry now publishes the exact-source
+   `file`/`form` prepare route. A private owner prepared in 82 ms with
+   `authority=exact-source`, a basis, and one executable `next_call`.
+2. cclsp canonicalizes configured roots before they become session, scheduler,
+   health, or evidence identities. `/tmp`, `/private/tmp`, and a repository
+   symlink collapse to one root. A live symlink request produced one verified
+   two-site basis in 459 ms.
+3. `clj-surgeon up` holds an in-process and cross-process lock around its full
+   read–merge–write–read-back operation. Every successful registration verifies
+   its exact persisted server block before reporting readiness. A deterministic
+   concurrent regression proves that both workspace blocks and an unrelated
+   server survive.
+
+The agent-usage collector now joins agent route phases with bounded
+clj-surgeon MCP, cclsp, and clojure-lsp telemetry. It emits aggregate evidence
+only; it does not retain source, commands, transcript prose, workspace paths,
+or raw service records.

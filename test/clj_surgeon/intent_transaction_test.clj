@@ -332,6 +332,10 @@
           :spec (change-spec [(assoc valid :find ":body :other")]
                              valid-expect)
           :error :invalid-intent-form}
+         {:label "valid Hiccup plus a trailing parent delimiter"
+          :spec (change-spec [(assoc valid :find "[:body :child]]")]
+                             valid-expect)
+          :error :invalid-intent-form}
          {:label "unsupported operator"
           :spec (change-spec [(assoc valid :do [:delete])] valid-expect)
           :error :unsupported-change-operator}
@@ -364,15 +368,22 @@
         (let [result (transaction/compile-transaction sources spec)]
           (is (= error (:error-type result)))
           (is (nil? (:future-sources result))))))
-    (testing "a parse refusal names the exact change and field"
-      (let [result (transaction/compile-transaction
-                     sources
-                     (change-spec [(assoc valid :find "(defn incomplete")]
-                                  valid-expect))]
-        (is (= :invalid-intent-form (:error-type result)))
-        (is (= 0 (:change-index result)))
-        (is (= :body (:change-id result)))
-        (is (= ":find" (:field result)))))))
+    (testing "parse refusals name the change, field, and complete-input failure"
+      (let [incomplete (transaction/compile-transaction
+                         sources
+                         (change-spec [(assoc valid :find "(defn incomplete")]
+                                      valid-expect))
+            trailing-parent (transaction/compile-transaction
+                              sources
+                              (change-spec [(assoc valid :find "[:body :child]]")]
+                                           valid-expect))]
+        (is (= :invalid-intent-form (:error-type incomplete)))
+        (is (= 0 (:change-index incomplete)))
+        (is (= :body (:change-id incomplete)))
+        (is (= ":find" (:field incomplete)))
+        (is (= :invalid-intent-form (:error-type trailing-parent)))
+        (is (str/includes? (:error trailing-parent) "Unmatched delimiter: ]"))
+        (is (nil? (:future-sources trailing-parent)))))))
 
 (deftest refuses-overlapping-intents-before-producing-future-source
   (let [sources

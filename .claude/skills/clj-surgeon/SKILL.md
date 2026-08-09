@@ -1,23 +1,24 @@
 ---
 name: clj-surgeon
 description: >-
-  Invoke before using Read, Edit, grep, sed, or cat on existing Clojure, ClojureScript, or CLJC files.
-  Prefer the persistent MCP tools for coherent structural reads and verified transactions.
+  Invoke before using Read, Edit, grep, sed, or cat on Clojure/Script/CLJC; prefer persistent MCP structural reads and verified transactions.
 ---
 
 # clj-surgeon
 
 ## Discover the hot entrance first
 
-Before a shell process reads Clojure, inspect the deferred/all-tools catalog for
-`inspect_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; absence from the initial catalog proves nothing.
-Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. cclsp reads
-cross-file semantics; clj-surgeon owns exact source and every write.
+Before a shell process reads Clojure, inspect the deferred/all-tools catalog for `inspect_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; initial absence proves nothing.
+Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. cclsp reads cross-file semantics; clj-surgeon owns exact source and writes.
 
 ## Join one shared workspace stack
 
-- If tools are absent or use the wrong repository, run `clj-surgeon up [WORKSPACE]`
-  once. It joins the repository to the shared hot processes. Do not add a server.
+- If tools are absent or use the wrong repository, run `clj-surgeon up [WORKSPACE]` once. It joins the shared hot processes. Do not add a server.
+- If a semantic call stalls, inspect that workspace once with cclsp
+  `inspect_runtime`; for invalid sessions, missing tools, or false-green health,
+  run `clj-surgeon recover [WORKSPACE]` exactly once.
+  Continue only on `:recovered` plus `:next-action :none`; otherwise run its redacted
+  `:report-command` once and use the named fallback. Never loop.
 - Set canonical caller `workspace_root` on non-default requests and preserve prepared roots.
   For sibling Vars, never guess `../`; cclsp returns the owner root and route evidence.
 - After a tool schema change, run `make mcp-reload` in the source checkout.
@@ -63,7 +64,7 @@ cross-file semantics; clj-surgeon owns exact source and every write.
 
 ## Fall back deliberately
 
-Native Write is right for new files; native patching for JavaScript, prose,
-comments, top-level insertion, or one unsupported text edit. Use the CLI only
+Native Write is right for new files; native patching for JavaScript, prose, comments,
+top-level insertion, or one unsupported text edit. Use the CLI only
 when MCP is unavailable or unsupported. Read [CLI fallback](references/cli-fallback.md)
 or [advanced operations](references/advanced-operations.md).

@@ -220,6 +220,16 @@
       (is (zero? exit))
       (is (str/includes? out "Map namespaces across a directory tree")))))
 
+(deftest cli-recovery-commands-teach-the-complete-one-shot-contract
+  (let [recover (run-cli "recover" "--help")
+        report (run-cli "report-failure" "--help")]
+    (is (zero? (:exit recover)))
+    (is (str/includes? (:out recover) "one exact semantic surface"))
+    (is (str/includes? (:out recover) "one guarded write"))
+    (is (zero? (:exit report)))
+    (is (str/includes? (:out report) "--receipt PATH"))
+    (is (str/includes? (:out report) "Never uploads source"))))
+
 (deftest cli-mv-refusal-is-edn-nonzero-and-preserves-source
   (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
         tmp (java.io.File/createTempFile "clj-surgeon-cli-mv-guard" ".clj")]

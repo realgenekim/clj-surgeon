@@ -12,6 +12,9 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Recover and report failure](recover-and-report-failure.md) — one bounded
+  real-transaction reset button plus privacy-safe, fingerprinted local Bead
+  reporting; no health-only success and no recovery loops.
 - [Binding-aware local rename](binding-aware-local-rename.md) — preserve an
   external `:keys` data contract while renaming only one resolved local binding
   and its usages through the existing verified transaction.

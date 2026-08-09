@@ -22,7 +22,7 @@
     (is (= ["clj" "cljs" "cljc" "edn"] (:extensions server)))
     (is (= ["" "src" "test" "dev"] (:sourceRoots server)))
     (is (= 10000 (:requestTimeout server)))
-    (is (= 30000 (:initializationTimeout server)))
+    (is (= 45000 (:initializationTimeout server)))
     (is (= "/tmp/repository/.clj-kondo"
            (get-in server [:initializationOptions :kondo-config-dir])))
     (is (str/ends-with? source "}\n"))))
@@ -207,6 +207,49 @@
     (is (:ok receipt))
     (is (= (.getCanonicalPath root) (:workspace receipt)))
     (is (str/includes? (slurp target) (.getCanonicalPath root)))))
+
+(deftest concurrent-cclsp-registrations-are-lossless-and-read-back-verified
+  (let [parent (io/file (System/getProperty "java.io.tmpdir")
+                        (str "clj-surgeon-concurrent-up-" (random-uuid)))
+        workspace-a (doto (io/file parent "workspace-a") .mkdirs)
+        workspace-b (doto (io/file parent "workspace-b") .mkdirs)
+        config-file (io/file parent "cclsp.json")
+        unrelated {"extensions" ["ts"]
+                   "command" ["typescript-language-server" "--stdio"]
+                   "rootDir" (.getCanonicalPath parent)}
+        original-upsert onboarding/upsert-cclsp-workspace
+        first-entered (promise)
+        second-entered (promise)
+        release-first (promise)
+        calls (atom 0)]
+    (spit config-file
+          (str (json/generate-string {"servers" [unrelated]} {:pretty true}) "\n"))
+    (with-redefs [onboarding/upsert-cclsp-workspace
+                  (fn [source options]
+                    (case (swap! calls inc)
+                      1 (do (deliver first-entered true)
+                            @release-first)
+                      2 (deliver second-entered true)
+                      nil)
+                    (original-upsert source options))]
+      (let [install #(onboarding/install-cclsp-workspace!
+                       {:workspace (.getPath %)
+                        :config-file (.getPath config-file)
+                        :lsp-command "/usr/local/bin/clojure-lsp"})
+            first-result (future (install workspace-a))]
+        (is (= true (deref first-entered 1000 ::timeout)))
+        (let [second-result (future (install workspace-b))]
+          (is (= ::timeout (deref second-entered 100 ::timeout))
+              "the second read-modify-write waits outside the locked boundary")
+          (deliver release-first true)
+          (is (:persisted @first-result))
+          (is (:persisted @second-result)))))
+    (let [servers (get (json/parse-string (slurp config-file)) "servers")
+          roots (set (map #(get % "rootDir") servers))]
+      (is (= 3 (count servers)))
+      (is (contains? roots (.getCanonicalPath workspace-a)))
+      (is (contains? roots (.getCanonicalPath workspace-b)))
+      (is (some #(= unrelated %) servers)))))
 
 (deftest up-is-one-idempotent-shared-stack-entrance
   (let [root (.toFile

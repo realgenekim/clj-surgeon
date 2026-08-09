@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA = "clj-surgeon.agent-usage-ethnography.v2"
+SCHEMA = "clj-surgeon.agent-usage-ethnography.v3"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
@@ -34,9 +34,10 @@ ROUTE_KIND_ORDER = {
     "surgeon-apply": 3,
     "native-read": 4,
     "native-patch": 5,
-    "live-probe": 6,
-    "verify": 7,
-    "git": 8,
+    "semantic-read": 6,
+    "live-probe": 7,
+    "verify": 8,
+    "git": 9,
 }
 SURGEON_READ_OPS = {
     ":cat", ":deps", ":find-subform", ":get", ":get-form", ":grep-form",
@@ -114,7 +115,7 @@ def js_tool_methods(source: str) -> set[str]:
             index += 2
             continue
         if source.startswith("tools.", index):
-            match = re.match(r"tools\.([A-Za-z_][A-Za-z0-9_]*)", source[index:])
+            match = re.match(r"tools\.([A-Za-z_][A-Za-z0-9_-]*)", source[index:])
             if match:
                 methods.add(match.group(1))
                 index += len(match.group(0))
@@ -139,6 +140,17 @@ def distribution(values: list[int]) -> dict:
     }
 
 
+def quantity_distribution(values: list[int]) -> dict:
+    timed = distribution(values)
+    return {
+        "count": timed["count"],
+        "total": timed["total_ms"],
+        "median": timed["median_ms"],
+        "p90": timed["p90_ms"],
+        "max": timed["max_ms"],
+    }
+
+
 def route_kinds(text: str, action: str) -> list[str]:
     """Classify one outer tool action without retaining command or path text."""
     if action == "apply_patch":
@@ -146,6 +158,15 @@ def route_kinds(text: str, action: str) -> list[str]:
     kinds = set()
     matches = list(SURGEON_RE.finditer(text))
     ops = {match.group(1) or ":help" for match in matches}
+    nested_methods = js_tool_methods(text)
+    surgeon_methods = {
+        method for method in nested_methods
+        if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+    }
+    cclsp_methods = {
+        method for method in nested_methods
+        if method.startswith("mcp__cclsp__")
+    }
     if SKILL_LOAD_RE.search(text) or action == "skill-load":
         kinds.add("skill-load")
     if ops:
@@ -155,6 +176,12 @@ def route_kinds(text: str, action: str) -> list[str]:
             kinds.add("surgeon-plan")
         if ops & SURGEON_READ_OPS:
             kinds.add("surgeon-read")
+    if any(method.endswith("__inspect_clojure") for method in surgeon_methods):
+        kinds.add("surgeon-read")
+    if any(method.endswith("__apply_clojure_changes") for method in surgeon_methods):
+        kinds.add("surgeon-apply")
+    if cclsp_methods:
+        kinds.add("semantic-read")
     has_clojure_path = bool(CLJ_PATH_RE.search(text))
     if action == "apply_patch" and has_clojure_path and not ops:
         kinds.add("native-patch")
@@ -311,11 +338,18 @@ def record_time(session: dict, timestamp: datetime) -> None:
 
 def record_tool_text(session: dict, text: str, action: str, scan_commands: bool = True) -> None:
     matches = list(SURGEON_RE.finditer(text)) if scan_commands else []
-    if matches:
+    nested_methods = js_tool_methods(text)
+    surgeon_methods = sorted(
+        method for method in nested_methods
+        if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+    )
+    if matches or surgeon_methods:
         session["clj_surgeon_tool_actions"] += 1
-        session["clj_surgeon_calls"] += len(matches)
+        session["clj_surgeon_calls"] += len(matches) + len(surgeon_methods)
         for match in matches:
             session["clj_surgeon_ops"][match.group(1) or ":help"] += 1
+        for method in surgeon_methods:
+            session["clj_surgeon_ops"][method.rsplit("__", 1)[-1]] += 1
         feature_patterns = {
             "contains": r":contains\b",
             "expect": r":expect\b",
@@ -427,8 +461,16 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
             has_shell = bool({"exec_command", "write_stdin"} & tool_methods)
             has_patch = "apply_patch" in tool_methods
             command_text = tool_input if has_shell else ""
-            surgeon_action = bool(SURGEON_RE.search(command_text))
-            surgeon_call_count = len(SURGEON_RE.findall(command_text))
+            surgeon_methods = {
+                method for method in tool_methods
+                if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
+            }
+            mcp_methods = {
+                method for method in tool_methods
+                if method.startswith("mcp__")
+            }
+            surgeon_action = bool(SURGEON_RE.search(command_text) or surgeon_methods)
+            surgeon_call_count = len(SURGEON_RE.findall(command_text)) + len(surgeon_methods)
             native_apply_patch = "tools.apply_patch" in tool_input and bool(CLJ_PATH_RE.search(tool_input)) and not surgeon_action
             if current_turn:
                 current_turn["clj_surgeon_calls"] += surgeon_call_count
@@ -440,7 +482,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                 action = "shell"
             else:
                 action = name
-            route_text = tool_input if action == "apply_patch" else command_text
+            route_text = tool_input if action == "apply_patch" or mcp_methods else command_text
             action_route = route_action(route_text, action, surgeon_call_count)
             if action_route:
                 session["route_actions"].append(action_route)
@@ -457,7 +499,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                 }
             record_tool_text(
                 session,
-                tool_input if action == "apply_patch" else command_text,
+                tool_input if action == "apply_patch" or mcp_methods else command_text,
                 action,
                 scan_commands=action != "apply_patch",
             )
@@ -527,6 +569,7 @@ def analyze_claude_file(path: Path, since: datetime, until: datetime) -> dict | 
             name = str(tool.get("name") or "unknown")
             tool_input = tool.get("input") or {}
             rendered = json.dumps(tool_input, separators=(",", ":"), ensure_ascii=False)
+            mcp_rendered = f"tools.{name}({rendered})" if name.startswith("mcp__") else rendered
             session["tool_input_chars"] += len(rendered)
             if tool.get("id"):
                 tool_names[tool["id"]] = {"name": name, "clojure_read": False, "route_action": None}
@@ -544,6 +587,8 @@ def analyze_claude_file(path: Path, since: datetime, until: datetime) -> dict | 
                 record_tool_text(session, str(tool_input.get("command") or ""), "shell")
             elif name == "Skill":
                 record_tool_text(session, rendered, name.lower())
+            elif name.startswith("mcp__"):
+                record_tool_text(session, mcp_rendered, name.lower())
             if name == "Bash":
                 route_text = str(tool_input.get("command") or "")
                 route_action_name = "shell"
@@ -551,7 +596,7 @@ def analyze_claude_file(path: Path, since: datetime, until: datetime) -> dict | 
                 route_text = str(tool_input.get("file_path") or "")
                 route_action_name = name.lower()
             else:
-                route_text = rendered
+                route_text = mcp_rendered
                 route_action_name = "skill-load" if name == "Skill" and tool_input.get("skill") == "clj-surgeon" else name.lower()
             action_route = route_action(route_text, route_action_name, len(SURGEON_RE.findall(route_text)))
             if action_route:
@@ -647,6 +692,162 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
     }
 
 
+def value_time(value: dict) -> datetime | None:
+    timestamp = value.get("timestamp")
+    if not isinstance(timestamp, str):
+        return None
+    try:
+        return parse_time(timestamp)
+    except ValueError:
+        return None
+
+
+def in_window(value: dict, since: datetime, until: datetime) -> bool:
+    timestamp = value_time(value)
+    return timestamp is not None and since <= timestamp <= until
+
+
+def collect_surgeon_telemetry(root: Path, since: datetime, until: datetime) -> dict:
+    events = []
+    for path in candidate_files(root, "*.jsonl", since):
+        events.extend(value for value in iter_jsonl(path) if in_window(value, since, until))
+
+    starts = [event for event in events if event.get("event") == "server.start"]
+    calls = [event for event in events if event.get("event") == "tool.call"]
+    tools = Counter()
+    outcomes = Counter()
+    errors = Counter()
+    operations = Counter()
+    timings = []
+    timings_by_tool: dict[str, list[int]] = {}
+    file_reads = 0
+    source_characters = 0
+    inspect_requests = []
+    inspect_files = []
+    apply_edits = []
+    apply_files = []
+    for call in calls:
+        tool = str(call.get("tool") or "unknown")
+        tools[tool] += 1
+        outcome = call.get("outcome") if isinstance(call.get("outcome"), dict) else {}
+        response = call.get("response") if isinstance(call.get("response"), dict) else {}
+        shape = call.get("request_shape") if isinstance(call.get("request_shape"), dict) else {}
+        ok = outcome.get("ok") is True or response.get("ok") is True
+        outcomes["ok" if ok else "refused"] += 1
+        error_type = (
+            response.get("error_type")
+            or response.get("error-type")
+            or outcome.get("error_type")
+            or outcome.get("error-type")
+        )
+        if error_type:
+            errors[str(error_type)] += 1
+        for operation, count in (shape.get("operations") or {}).items():
+            if isinstance(count, int):
+                operations[str(operation)] += count
+        total_ms = (call.get("timings_ms") or {}).get("total_ms")
+        if isinstance(total_ms, (int, float)):
+            elapsed = round(total_ms)
+            timings.append(elapsed)
+            timings_by_tool.setdefault(tool, []).append(elapsed)
+        file_reads += int(outcome.get("file_reads") or 0)
+        source_characters += int(outcome.get("source_characters") or 0)
+        if tool == "inspect_clojure" and ok:
+            inspect_requests.append(int(outcome.get("requests") or 0))
+            inspect_files.append(int(outcome.get("files") or 0))
+        if tool == "apply_clojure_changes" and ok:
+            apply_edits.append(int(outcome.get("edits") or 0))
+            apply_files.append(int(outcome.get("files") or 0))
+
+    return {
+        "status": "ok" if events else "no-events",
+        "event_count": len(events),
+        "server_starts": len(starts),
+        "sessions": len({str(event.get("session_id")) for event in events if event.get("session_id")}),
+        "mcp_tool_calls": len(calls),
+        "tools": dict(sorted(tools.items())),
+        "outcomes": dict(sorted(outcomes.items())),
+        "error_types": dict(sorted(errors.items())),
+        "inspect_operations": dict(sorted(operations.items())),
+        "tool_wall": distribution(timings),
+        "tool_wall_by_name": {
+            tool: distribution(values) for tool, values in sorted(timings_by_tool.items())
+        },
+        "file_reads": file_reads,
+        "source_characters_returned": source_characters,
+        "inspect_request_batch": quantity_distribution(inspect_requests),
+        "inspect_file_batch": quantity_distribution(inspect_files),
+        "apply_edit_batch": quantity_distribution(apply_edits),
+        "apply_file_batch": quantity_distribution(apply_files),
+        "multi_edit_apply_calls": sum(value >= 2 for value in apply_edits),
+        "multi_file_apply_calls": sum(value >= 2 for value in apply_files),
+    }
+
+
+def collect_cclsp_telemetry(path: Path, since: datetime, until: datetime) -> dict:
+    events = [value for value in iter_jsonl(path) if in_window(value, since, until)]
+    event_types = Counter(str(event.get("event") or "unknown") for event in events)
+    workspaces = {
+        stable_key(str(event.get("workspace_root")))
+        for event in events
+        if event.get("workspace_root")
+    }
+    sessions = {str(event.get("lsp_session")) for event in events if event.get("lsp_session")}
+    lsp_methods = Counter()
+    lsp_outcomes = Counter()
+    lsp_outcomes_by_method: dict[str, Counter] = {}
+    lsp_wall = []
+    lsp_wall_by_method: dict[str, list[int]] = {}
+    mcp_tools = Counter()
+    mcp_statuses = Counter()
+    mcp_wall = []
+    for event in events:
+        event_type = event.get("event")
+        if event_type in {"lsp_request_complete", "lsp_request_timeout"}:
+            method = str(event.get("method") or "unknown")
+            lsp_methods[method] += 1
+            outcome = "timeout" if event_type == "lsp_request_timeout" else "complete"
+            lsp_outcomes[outcome] += 1
+            lsp_outcomes_by_method.setdefault(method, Counter())[outcome] += 1
+            elapsed = event.get("elapsed_ms")
+            if isinstance(elapsed, (int, float)):
+                rounded = round(elapsed)
+                lsp_wall.append(rounded)
+                lsp_wall_by_method.setdefault(method, []).append(rounded)
+        elif event_type == "mcp_request_complete":
+            mcp_tools[str(event.get("tool") or "unknown")] += 1
+            mcp_statuses[str(event.get("status") or "unknown")] += 1
+            elapsed = event.get("elapsed_ms")
+            if isinstance(elapsed, (int, float)):
+                mcp_wall.append(round(elapsed))
+
+    return {
+        "status": "ok" if events else "no-events",
+        "event_count": len(events),
+        "events": dict(sorted(event_types.items())),
+        "workspace_count": len(workspaces),
+        "workspace_keys": sorted(workspaces),
+        "lsp_sessions": len(sessions),
+        "lsp_requests": sum(lsp_methods.values()),
+        "lsp_methods": dict(sorted(lsp_methods.items())),
+        "lsp_outcomes": dict(sorted(lsp_outcomes.items())),
+        "lsp_outcomes_by_method": {
+            method: dict(sorted(values.items()))
+            for method, values in sorted(lsp_outcomes_by_method.items())
+        },
+        "lsp_wall": distribution(lsp_wall),
+        "lsp_wall_by_method": {
+            method: distribution(values) for method, values in sorted(lsp_wall_by_method.items())
+        },
+        "document_syncs": event_types.get("lsp_document_sync", 0),
+        "workspace_recoveries": event_types.get("lsp_workspace_recovered", 0),
+        "cclsp_mcp_calls": sum(mcp_tools.values()),
+        "cclsp_mcp_tools": dict(sorted(mcp_tools.items())),
+        "cclsp_mcp_statuses": dict(sorted(mcp_statuses.items())),
+        "cclsp_mcp_wall": distribution(mcp_wall),
+    }
+
+
 def collect(args) -> dict:
     marker, marker_source = newest_marker(Path(args.observations_root))
     if args.since:
@@ -694,10 +895,19 @@ def collect(args) -> dict:
             "transcript_prose_emitted": False,
             "workspace_paths_emitted": False,
             "session_keys_hashed": True,
+            "raw_service_events_emitted": False,
         },
         "providers": {
             "codex": provider_summary("codex", codex_sessions),
             "claude": provider_summary("claude", claude_sessions),
+        },
+        "services": {
+            "clj_surgeon_mcp": collect_surgeon_telemetry(
+                Path(args.surgeon_telemetry_root), since, until
+            ),
+            "cclsp_and_clojure_lsp": collect_cclsp_telemetry(
+                Path(args.cclsp_log), since, until
+            ),
         },
         "next_marker": f"<!-- agent-usage-window-end: {iso_time(until)} -->",
     }
@@ -733,6 +943,9 @@ def self_test() -> int:
     assert js_tool_methods(
         '// tools.write_stdin({})\nconst note = "tools.exec_command"; /* tools.apply_patch */'
     ) == set()
+    assert js_tool_methods(
+        'tools.mcp__clj-surgeon__inspect_clojure({})'
+    ) == {"mcp__clj-surgeon__inspect_clojure"}
     with tempfile.TemporaryDirectory(prefix="study-agent-usage-") as tmp:
         root = Path(tmp)
         observations = root / "docs" / "observations"
@@ -764,12 +977,30 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T01:03:00Z", "type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t3", "name": "Read", "input": {"file_path": "src/other.clj"}}]}},
             ],
         )
+        write_fixture(
+            root / "surgeon-telemetry" / "session.jsonl",
+            [
+                {"timestamp": "2026-08-05T01:10:00Z", "event": "server.start", "session_id": "private-session", "mcp_ready_ms": 100},
+                {"timestamp": "2026-08-05T01:11:00Z", "event": "tool.call", "session_id": "private-session", "tool": "inspect_clojure", "request_shape": {"operations": {"forms": 2}}, "outcome": {"ok": True, "file_reads": 1, "source_characters": 40}, "timings_ms": {"total_ms": 12.4}, "request": {"private": "not emitted"}},
+                {"timestamp": "2026-08-05T01:12:00Z", "event": "tool.call", "session_id": "private-session", "tool": "apply_clojure_changes", "request_shape": {}, "outcome": {"ok": False}, "response": {"error_type": "match-count-mismatch"}, "timings_ms": {"total_ms": 8.2}},
+            ],
+        )
+        write_fixture(
+            root / "cclsp.log",
+            [
+                {"timestamp": "2026-08-05T01:13:00Z", "event": "lsp_request_complete", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "workspace/symbol", "elapsed_ms": 25},
+                {"timestamp": "2026-08-05T01:14:00Z", "event": "lsp_request_timeout", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "textDocument/references", "elapsed_ms": 30000},
+                {"timestamp": "2026-08-05T01:15:00Z", "event": "mcp_request_complete", "workspace_root": "/private/workspace", "tool": "resolve_var_surface", "status": "refused", "elapsed_ms": 30010},
+            ],
+        )
         args = argparse.Namespace(
             since=None,
             until="2026-08-05T02:00:00Z",
             observations_root=str(observations),
             codex_root=str(root / "codex"),
             claude_root=str(root / "claude"),
+            surgeon_telemetry_root=str(root / "surgeon-telemetry"),
+            cclsp_log=str(root / "cclsp.log"),
         )
         receipt = collect(args)
         codex = receipt["providers"]["codex"]
@@ -806,6 +1037,20 @@ def self_test() -> int:
             "surgeon-read": 1,
         }
         assert receipt["privacy"]["transcript_prose_emitted"] is False
+        assert receipt["services"]["clj_surgeon_mcp"]["mcp_tool_calls"] == 2
+        assert receipt["services"]["clj_surgeon_mcp"]["error_types"] == {
+            "match-count-mismatch": 1
+        }
+        assert receipt["services"]["cclsp_and_clojure_lsp"]["lsp_outcomes"] == {
+            "complete": 1,
+            "timeout": 1,
+        }
+        assert receipt["services"]["cclsp_and_clojure_lsp"]["lsp_outcomes_by_method"] == {
+            "textDocument/references": {"timeout": 1},
+            "workspace/symbol": {"complete": 1},
+        }
+        assert receipt["services"]["cclsp_and_clojure_lsp"]["workspace_count"] == 1
+        assert "/private/workspace" not in json.dumps(receipt)
         assert "private service goal" not in json.dumps(receipt)
     print("study-agent-usage self-test passed")
     return 0
@@ -818,9 +1063,64 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--observations-root", default="docs/observations")
     result.add_argument("--codex-root", default=str(Path.home() / ".codex" / "sessions"))
     result.add_argument("--claude-root", default=str(Path.home() / ".claude" / "projects"))
+    result.add_argument(
+        "--surgeon-telemetry-root",
+        default=str(Path.home() / ".local" / "state" / "clj-surgeon" / "mcp" / "telemetry"),
+    )
+    result.add_argument(
+        "--cclsp-log",
+        default=str(Path.home() / ".local" / "state" / "clj-surgeon" / "cclsp" / "server.log"),
+    )
+    result.add_argument(
+        "--receipt-out",
+        help="Write the complete receipt here; defaults to a bounded file under /tmp",
+    )
+    result.add_argument(
+        "--full",
+        action="store_true",
+        help="Also emit the complete receipt on stdout instead of the compact summary",
+    )
     result.add_argument("--pretty", action="store_true")
     result.add_argument("--self-test", action="store_true")
     return result
+
+
+def default_receipt_path(receipt: dict) -> Path:
+    window = receipt.get("window", {})
+
+    def filename_time(value: object) -> str:
+        return re.sub(r"[^0-9A-Za-z]+", "", str(value or "unknown"))
+
+    since = filename_time(window.get("since"))
+    until = filename_time(window.get("until"))
+    return Path("/tmp") / f"clj-surgeon-agent-usage-{since}-{until}.json"
+
+
+def compact_summary(receipt: dict, receipt_path: Path) -> dict:
+    providers = {}
+    for name, provider in receipt.get("providers", {}).items():
+        sessions = provider.get("sessions", [])
+        task_turns = [turn for session in sessions for turn in session.get("task_turns", [])]
+        surgeon_turns = [turn for turn in task_turns if turn.get("clj_surgeon_calls", 0)]
+        providers[name] = {
+            "sessions_in_window": provider.get("sessions_in_window", 0),
+            "clojure_relevant_sessions": provider.get("clojure_relevant_sessions", 0),
+            "task_turns": len(task_turns),
+            "surgeon_using_turns": len(surgeon_turns),
+            "clj_surgeon_calls": provider.get("clj_surgeon_calls", 0),
+            "clj_surgeon_ops": provider.get("clj_surgeon_ops", {}),
+            "route_action_kinds": provider.get("route_action_kinds", {}),
+        }
+    return {
+        "status": receipt.get("status"),
+        "schema_version": receipt.get("schema_version"),
+        "window": receipt.get("window"),
+        "next_marker": receipt.get("next_marker"),
+        "receipt_path": str(receipt_path),
+        "privacy": receipt.get("privacy"),
+        "providers": providers,
+        "services": receipt.get("services", {}),
+    }
 
 
 def main() -> int:
@@ -828,7 +1128,11 @@ def main() -> int:
     if args.self_test:
         return self_test()
     receipt = collect(args)
-    json.dump(receipt, sys.stdout, indent=2 if args.pretty else None, sort_keys=True)
+    receipt_path = Path(args.receipt_out).expanduser() if args.receipt_out else default_receipt_path(receipt)
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output = receipt if args.full else compact_summary(receipt, receipt_path)
+    json.dump(output, sys.stdout, indent=2 if args.pretty else None, sort_keys=True)
     sys.stdout.write("\n")
     return 0 if receipt.get("status") == "ok" else 2
 
