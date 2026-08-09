@@ -23,6 +23,9 @@ MCP_READY_FILE := $(MCP_STATE_DIR)/ready.edn
 MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
 MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
 MCP_START_ATTEMPTS ?= 120
+MCP_JAVA_HOME ?= $(JAVA_HOME)
+MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
+MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx2g
 CLOJURE_BIN ?= $(shell command -v clojure)
 CLOJURE_LSP_BIN ?= $(shell command -v clojure-lsp)
 CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
@@ -36,7 +39,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -81,6 +84,8 @@ help:
 	@echo "  CLAUDE_HOME=/path/to/.claude   Claude home (default: $(CLAUDE_HOME))"
 	@echo "  INSTALL_ROOT=/path/to/packages Stable copied package root (default: $(INSTALL_ROOT))"
 	@echo "  CONTROL_PLANE_ROOT_FILE=/path  Local pointer used only by experimental 'clj-surgeon up'"
+	@echo "  MCP_JAVA_HOME=/path/to/jdk     Java home for the shared MCP (default: inherited JAVA_HOME)"
+	@echo "  MCP_JAVA_CMD=/path/to/java     Java command (default: MCP_JAVA_HOME/bin/java, then PATH)"
 	@echo ""
 	@echo "Direct usage:"
 	@echo "  bb -m clj-surgeon.core :op :ls :file src/my/ns.clj"
@@ -93,16 +98,20 @@ install: install-cli install-codex-skill install-claude-skill
 
 mcp-test:
 	clojure -M:clj-surgeon/mcp-test
+	@$(MAKE) --no-print-directory mcp-heap-config-self-test
 	@$(MAKE) --no-print-directory cclsp-start-self-test
 
 mcp-smoke:
 	bb test/mcp_stdio_smoke.clj
 
 mcp-serve:
-	clojure -X:clj-surgeon/mcp :telemetry :full
+	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full
 
 mcp-serve-benchmark:
-	clojure -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
+	JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" clojure $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp :telemetry :full :nrepl-port :none :run-id '"$${RUN_ID:-manual}"'
+
+mcp-heap-config-self-test:
+	@sh test/mcp_heap_config_test.sh
 
 mcp-reload: mcp-test
 	@set -eu; \
@@ -194,12 +203,14 @@ mcp-start: cclsp-start
 	    exit 0; \
 	  fi; \
 	  test -n "$(CLOJURE_BIN)" || { echo "clojure is required" >&2; exit 1; }; \
+	  test -x "$(MCP_JAVA_CMD)" || { echo "MCP Java runtime is not executable: $(MCP_JAVA_CMD)" >&2; exit 1; }; \
 	  launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
 	  rm -f "$(MCP_READY_FILE)" "$(MCP_PID_FILE)"; \
 	  launchctl submit -l "$(MCP_LAUNCH_LABEL)" \
 	    -o "$(MCP_LOG_FILE)" -e "$(MCP_LOG_FILE)" -- \
 	    /bin/sh -c 'cd "$$1"; shift; export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$$PATH"; exec "$$@"' _ "$(CLJ_SURGEON_HOME)" \
-	    "$(CLOJURE_BIN)" -X:clj-surgeon/mcp \
+	    /usr/bin/env JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" \
+	    "$(CLOJURE_BIN)" $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp \
 	    :project-dir '"$(MCP_PROJECT_DIR)"' \
 	    :port '$(MCP_PORT)' \
 	    :telemetry :full \
@@ -210,7 +221,8 @@ mcp-start: cclsp-start
 	    :port-file '"$(MCP_STATE_DIR)/nrepl-port"'; \
 	  ready=false; \
 	  for attempt in $$(seq 1 $(MCP_START_ATTEMPTS)); do \
-	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \
+	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1 \
+	      && test -f "$(MCP_READY_FILE)"; then ready=true; break; fi; \
 	    if ! launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then break; fi; \
 	    sleep 0.5; \
 	  done; \
