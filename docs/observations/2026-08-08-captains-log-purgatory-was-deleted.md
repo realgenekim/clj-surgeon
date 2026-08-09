@@ -37,6 +37,48 @@ was routed away before its old block was removed.
 The final deletion landed in Mothership commit `ae0a87d`,
 `refactor: delete app purgatory`.
 
+## The all-time deletion record
+
+The celebration prompted a repository-history audit. The correct comparison
+was not raw repository deletions: one prior day removed a 26,595-line runtime
+log, and another mechanically concatenated 29 JavaScript files into the three
+legacy bundles. Neither event represented application-code retirement.
+
+The bounded metric was gross lines deleted from `app-doomed.js` and
+`app-purgatory.js`, with additions shown separately. By that measure,
+2026-08-08 was Mothership's all-time high by a large margin:
+
+```text
+Gross lines deleted from app-doomed.js + app-purgatory.js
+Scale: # ~= 30 lines
+
+2026-04-05   596  ####################
+2026-04-06   143  #####
+2026-04-25    56  ##
+2026-05-01    83  ###
+2026-07-18   103  ###
+2026-08-04    84  ###
+2026-08-08  1469  #################################################
+```
+
+The day's balance was:
+
+```text
+legacy lines added        15
+legacy lines deleted   1,469
+net legacy shrink      1,454
+```
+
+That is 2.46 times the previous gross-deletion record and almost 19 times the
+previous meaningful net-shrink record of 78 lines. Across all production code,
+the formatter-normalized net reduction was 352 lines, the second-largest daily
+production shrink in repository history behind 456 lines on 2026-03-18.
+
+This distinction matters. The gross production diff for the day includes a
+formatter commit that rewrote roughly 3,000 lines in each direction. The legacy
+bundle result does not depend on that churn. It records a real loss of obsolete
+implementation.
+
 ## The strangler worked
 
 The operating rule was simple:
@@ -57,8 +99,8 @@ The last deletion was boring. That was the victory.
 
 ## How instrumental was clj-surgeon?
 
-**8/10 overall. Genuinely instrumental, but not the author of the
-architecture.**
+**8/10 overall, and 8/10 for the extent to which this record was made possible
+by Surgeon. Genuinely instrumental, but not the author of the architecture.**
 
 Surgeon did not decide that Mothership should be server-rendered, choose the
 Datastar strangler pattern, design the JavaScript adapters, or exercise the
@@ -87,6 +129,19 @@ Surgeon was most instrumental at the exact moment a strangler migration is
 usually frightening: proving that the old loader no longer had a live caller.
 It converted that proof from a narrative claim into a source-anchored reference
 surface plus guarded edits.
+
+The 8/10 “made possible” rating means the record was not literally impossible
+without Surgeon. Native tools performed the JavaScript deletions, as Surgeon's
+contract requires. The user and agent supplied the strangler architecture, and
+the repository tests and browser checks supplied execution evidence.
+
+Surgeon made the *safe scale* of the deletion possible. It kept large Clojure
+owners bounded, proved caller surfaces before loader removal, compiled related
+owner changes atomically, and preserved the starting bytes when a proposed
+change lacked sufficient evidence. Without it, the same campaign would have
+depended on more broad reads, hand-maintained caller lists, repeated grep, and
+faith that no shell had been missed. The likely outcome would have been smaller
+cuts, more hesitation, or both.
 
 ## Receipts
 
