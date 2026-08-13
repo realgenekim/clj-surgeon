@@ -183,6 +183,28 @@
     (is (= 7 (reduce + (map :form_count (:results result)))))
     (is (= before (tree-state "bench")))))
 
+(deftest metadata-only-forms-retain-proof-without-source-bodies
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(def alpha {:answer 42})\n")
+        request {"requests" [{"id" "alpha" "operation" "forms"
+                               "file" "src/demo.clj" "forms" ["alpha"]
+                               "include_source" false
+                               "expect" {"forms" 1}}]
+                 "expect" {"requests" 1 "files" 1}}]
+    (try
+      (let [result (inspect-tool/execute-inspect!
+                     {:project-root (.getPath project)} request)
+            form (get-in result [:results 0 :forms 0])]
+        (is (:ok result))
+        (is (= 24 (get-in result [:results 0 :source_character_count])))
+        (is (= "alpha" (:name form)))
+        (is (string? (:hash form)))
+        (is (= "alpha" (get-in form [:source_anchor :owner])))
+        (is (not (contains? form :source))))
+      (finally
+        (delete-tree! project)))))
+
 (deftest boundary-batch-runs-real-outline-match-and-xray-with-no-artifacts
   (let [project (temp-dir)
         _source (write-source!

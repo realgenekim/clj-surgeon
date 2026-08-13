@@ -23,12 +23,12 @@
 (def ^:private top-expect-fields #{"requests" "files"})
 (def ^:private common-request-fields #{"id" "operation" "file"})
 (def ^:private operation-fields
-  {"forms" (into common-request-fields ["forms" "expect"])
+  {"forms" (into common-request-fields ["forms" "expect" "include_source"])
    "outline" common-request-fields
    "match" (into common-request-fields ["match" "inside" "expect"])
    "xray" (conj common-request-fields "expression")})
 (def ^:private operation-required
-  {"forms" (get operation-fields "forms")
+  {"forms" (into common-request-fields ["forms" "expect"])
    "outline" common-request-fields
    "match" (conj common-request-fields "match")
    "xray" (get operation-fields "xray")})
@@ -105,6 +105,12 @@
     (refuse! :non-negative-integer path "Expected a non-negative integer"))
   value)
 
+(defn- boolean!
+  [value path]
+  (when-not (instance? Boolean value)
+    (refuse! :boolean path "Expected a boolean"))
+  value)
+
 (defn- source-path!
   [value path]
   (when-not (mcp-paths/relative-source-path? value)
@@ -175,10 +181,15 @@
                              {:maximum max-forms :actual (count raw-forms)}))
                 forms (unique-strings! raw-forms (conj path "forms")
                                        :duplicate-form)]
-            {:id id :operation operation :file file :forms forms
-             :expect (validate-forms-expect!
-                       (field request "expect") (conj path "expect")
-                       (count forms))})
+            (cond->
+              {:id id :operation operation :file file :forms forms
+               :expect (validate-forms-expect!
+                         (field request "expect") (conj path "expect")
+                         (count forms))}
+              (present? request "include_source")
+              (assoc :include-source
+                     (boolean! (field request "include_source")
+                               (conj path "include_source")))))
 
           "outline"
           {:id id :operation operation :file file}
@@ -353,8 +364,7 @@
                      (ex-info "Selected form has no exact source anchor"
                               built-anchor)))
                  (cond->
-                   {:source (:source form)
-                    :hash (structural-lens/source-hash (:source form))
+                   {:hash (structural-lens/source-hash (:source form))
                     :line (:line form)
                     :end_line (:end-line form)
                     :form_type (str (:type form))
@@ -363,6 +373,8 @@
                     :file (:file request)
                     :file_hash (:hash snapshot)
                     :source_anchor (:source-anchor built-anchor)}
+                   (not= false (:include-source request))
+                   (assoc :source (:source form))
                    (:comment-start form)
                    (assoc :comment_start (:comment-start form)))))
              (:forms found))})))

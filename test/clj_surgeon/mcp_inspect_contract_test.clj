@@ -50,6 +50,19 @@
          (inspect/validate-inspect-params
            (java-json-containers forms-request)))))
 
+(deftest validates-metadata-only-form-projection
+  (let [request (assoc-in forms-request
+                          ["requests" 0 "include_source"] false)
+        result (inspect/validate-inspect-params request)]
+    (is (:ok result))
+    (is (false? (get-in result [:params :requests 0 :include-source]))))
+  (let [request (assoc-in forms-request
+                          ["requests" 0 "include_source"] "false")
+        result (inspect/validate-inspect-params request)]
+    (is (false? (:ok result)))
+    (is (= :boolean (:reason result)))
+    (is (= ["requests" 0 "include_source"] (:path result)))))
+
 (deftest rejects-schema-and-cardinality-errors-with-exact-paths
   (doseq [[label request reason path]
           [[:top-not-map [] :expected-object []]

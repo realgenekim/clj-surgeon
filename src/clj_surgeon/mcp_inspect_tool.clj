@@ -18,6 +18,8 @@
   (str
     "Read Clojure structure in one bounded snapshot. Batch all known forms, "
     "outlines, exact structural matches, and X-ray requests. Use "
+    "include_source=false on forms requests when only names, ranges, counts, "
+    "and hashes are needed; omit it when exact form source is needed. Use "
     "mode=prepare-change when one Var or related Var set names the goal but "
     "exact sites are unknown. Its caller proof unions resolved references with "
     "lossless #'x and (var x) references; every surface site names its authority. "
@@ -75,6 +77,8 @@
          {"forms" {:type "array" :minItems 1 :maxItems inspect/max-forms
                    :uniqueItems true
                    :items {:type "string" :minLength 1}}
+          "include_source" {:type "boolean" :default true
+                            :description "Set false for metadata-only form reads; line ranges, source character counts, hashes, and source anchors remain, while exact source bodies are omitted. Omit for exact source."}
           "expect" {:type "object" :additionalProperties false
                     :properties {"forms" positive-integer-schema}
                     :required ["forms"]}}
