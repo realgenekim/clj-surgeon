@@ -3,10 +3,10 @@
     {"name": "numeric-fields", "line": 7, "end_line": 13},
     {"name": "boolean-fields", "line": 15, "end_line": 20},
     {"name": "summarize-group", "line": 57, "end_line": 95},
-    {"name": "markdown", "line": 97, "end_line": 124},
-    {"name": "self-test", "line": 126, "end_line": 167}
+    {"name": "markdown", "line": 97, "end_line": 173},
+    {"name": "self-test", "line": 175, "end_line": 230}
   ],
-  "summary_source_characters": 7896,
+  "summary_source_characters": 11295,
   "rescore_forms": [
     {"name": "rescore-row", "line": 37, "end_line": 106},
     {"name": "emit-table", "line": 108, "end_line": 115}
