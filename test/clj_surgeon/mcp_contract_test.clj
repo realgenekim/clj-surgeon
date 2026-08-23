@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-contract-test
   (:require
    [clj-surgeon.mcp-contract :as contract]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (def valid-request
@@ -12,6 +13,14 @@
      "replace" ":body.ide-shell-page"
      "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
    "expect" {"changes" 1 "edits" 1 "files" 1}})
+
+(def gesture-request
+  {"edits"
+   [{"file" "src/bench/pair_view.clj"
+     "within" {"form" "route-event"}
+     "from" ":done"
+     "to" ":complete"}]
+   "verify" "fast"})
 
 (defn- java-json-containers
   [value]
@@ -41,6 +50,78 @@
               :expect {:matches 1 :each-form 1 :each-file 1}}]
             :expect {:changes 1 :edits 1 :files 1}}
            (contract/tool-params->transaction (:params validated))))))
+
+(deftest validates-and-compiles-one-editor-gesture
+  (let [validated (contract/validate-tool-params gesture-request)]
+    (is (:ok validated))
+    (is (= "fast" (get-in validated [:params :verify])))
+    (is (= {:changes
+            [{:id :edit-1
+              :in ["src/bench/pair_view.clj"]
+              :forms ['route-event]
+              :find ":done"
+              :do [:replace ":complete"]
+              :expect {:matches 1 :each-form 1 :each-file 1}}]
+            :expect {:changes 1 :edits 1 :files 1}}
+           (contract/tool-params->transaction (:params validated))))))
+
+(deftest editor-gesture-derives-aggregate-counts
+  (let [request
+        {"edits"
+         [{"file" "src/a.clj" "within" {"form" "a"}
+           "from" ":old-a" "to" ":new-a" "matches" 2}
+          {"file" "src/a.clj" "within" {"form" "b"}
+           "from" ":old-b" "to" ":new-b"}
+          {"file" "src/b.clj" "within" {"form" "c"}
+           "from" ":old-c" "to" ":new-c"}]}
+        validated (contract/validate-tool-params request)]
+    (is (:ok validated))
+    (is (= {:changes 3 :edits 4 :files 2}
+           (get-in validated [:params :expect])))
+    (is (= {:matches 2 :each-form 2 :each-file 2}
+           (get-in validated [:params :changes 0 :expect])))
+    (is (= ["edit-1" "edit-2" "edit-3"]
+           (mapv :id (get-in validated [:params :changes]))))))
+
+(deftest editor-gesture-refuses-invalid-or-mixed-locations
+  (doseq [[label request reason path]
+          [[:empty-edits (assoc gesture-request "edits" [])
+            :non-empty-array ["edits"]]
+           [:unknown-top (assoc gesture-request "changes" [])
+            :unknown-fields []]
+           [:unknown-edit (assoc-in gesture-request ["edits" 0 "occurrence"]
+                                    1)
+            :unknown-fields ["edits" 0]]
+           [:zero-matches (assoc-in gesture-request ["edits" 0 "matches"] 0)
+            :positive-integer ["edits" 0 "matches"]]
+           [:absolute-file (assoc-in gesture-request ["edits" 0 "file"]
+                                     "/tmp/a.clj")
+            :invalid-relative-source-path ["edits" 0 "file"]]
+           [:blank-form (assoc-in gesture-request ["edits" 0 "within" "form"]
+                                  " ")
+            :non-blank-string ["edits" 0 "within" "form"]]
+           [:unknown-location (assoc-in gesture-request ["edits" 0 "within" "line"]
+                                        12)
+            :unknown-fields ["edits" 0 "within"]]
+           [:blank-from (assoc-in gesture-request ["edits" 0 "from"] "")
+            :non-blank-string ["edits" 0 "from"]]
+           [:blank-to (assoc-in gesture-request ["edits" 0 "to"] "\n")
+            :non-blank-string ["edits" 0 "to"]]]]
+    (testing (name label)
+      (let [result (contract/validate-tool-params request)]
+        (is (false? (:ok result)))
+        (is (= reason (:reason result)))
+        (is (= path (:path result)))
+        (is (:source-unchanged result))))))
+
+(deftest direct-change-accepts-only-closed-verification-profiles
+  (let [validated (contract/validate-tool-params
+                    (assoc valid-request "verify" "fast"))]
+    (is (:ok validated))
+    (is (= "fast" (get-in validated [:params :verify])))
+    (is (= :invalid-enum
+           (:reason (contract/validate-tool-params
+                      (assoc valid-request "verify" "eventually")))))))
 
 (deftest accepts-java-json-containers-from-the-mcp-sdk
   (let [clojure-result (contract/validate-tool-params valid-request)
@@ -197,6 +278,36 @@
             :next_action "none"}
            (contract/normalize-success-receipt root result)))))
 
+(deftest normalizes-a-running-cold-proof-without-pretending-it-is-terminal
+  (let [root "/work/project"
+        next-call {:tool "inspect_clojure"
+                   :workspace_root root
+                   :verification_job "verify/123"
+                   :view "verification"}
+        result {:ok true
+                :committed true
+                :change-count 1
+                :match-count 2
+                :changed-file-count 1
+                :receipt-file "/work/project/.receipts/undo.edn"
+                :receipt-hash "receipt-hash"
+                :verified {:whole-files true
+                           :read-back-hashes
+                           {"/work/project/src/a.clj" "a-hash"}}
+                :verification
+                {:ok true
+                 :cold-verification
+                 {:ok true :status :running
+                  :verification_complete false
+                  :next_call next-call}}}
+        receipt (contract/normalize-success-receipt root result)]
+    (is (:ok receipt))
+    (is (:committed receipt))
+    (is (false? (:verification_complete receipt)))
+    (is (= "inspect_verification_job" (:next_action receipt)))
+    (is (= next-call (:next_call receipt)))
+    (is (= "/work/project/.receipts/undo.edn" (:undo_receipt receipt)))))
+
 (deftest refuses-incomplete-or-unsafe-success-results
   (doseq [[label result reason]
           [[:kernel-error {:error "no" :error-type :scope-mismatch}
@@ -265,7 +376,37 @@
     (is (= ["owner"] (:unknown result)))
     (is (= ["expect" "files" "find" "forms" "id" "replace"]
            (:allowed result)))
+    (is (:source_unchanged result)))
+  (let [result (contract/normalize-refusal
+                 {:error-type :overlapping-intents
+                  :error "Changes overlap in src/app.clj"
+                  :change-ids [:namespace :render]
+                  :intent-indexes [0 2]
+                  :source-unchanged true})]
+    (is (= ["namespace" "render"] (:change_ids result)))
+    (is (= [0 2] (:change_indexes result)))
+    (is (str/includes? (:remedy result) "namespace and render"))
     (is (:source_unchanged result))))
+
+(deftest verification-refusal-names-the-failed-check-and-bounds-its-output
+  (let [long-output (apply str (repeat 3000 "x"))
+        result (contract/normalize-refusal
+                 {:ok false
+                  :error-type :verification-failed
+                  :error "Verification failed; rolled back"
+                  :rolled-back true
+                  :verification
+                  {:ok false
+                   :profile "fast"
+                   :checks [{:ok false :command "clj-kondo" :exit 2
+                             :output long-output}]}})]
+    (is (= "verification-failed" (:error_type result)))
+    (is (true? (:source_unchanged result)))
+    (is (true? (:rolled_back result)))
+    (is (str/includes? (:remedy result) "fast verification check `clj-kondo`"))
+    (is (str/includes? (:remedy result) "exit 2"))
+    (is (str/includes? (:remedy result) "retry the same request once"))
+    (is (= 2000 (count (get-in result [:verification :checks 0 :output]))))))
 
 (deftest namespace-owner-crosses-the-json-boundary-as-closed-data
   (let [change (-> (get valid-request "changes") first
@@ -297,6 +438,37 @@
                           [(assoc change "forms" ["ide-shell"])]))]
       (is (false? (:ok result)))
       (is (= "ambiguous-change-owner" (some-> (:reason result) name))))))
+
+(deftest defmethod-owner-crosses-the-json-boundary-as-closed-data
+  (let [request (assoc-in valid-request ["changes" 0 "forms"]
+                          [{"kind" "defmethod"
+                            "name" "render"
+                            "dispatch" ":card"}])
+        validated (contract/validate-tool-params request)
+        transaction (contract/tool-params->transaction (:params validated))]
+    (is (:ok validated))
+    (is (= [{:kind :defmethod :name 'render :dispatch ":card"}]
+           (get-in transaction [:changes 0 :forms])))
+    (doseq [[label form-owner expected]
+            [["unsupported kind"
+              {"kind" "defn" "name" "render" "dispatch" ":card"}
+              "invalid-form-owner-kind"]
+             ["blank name"
+              {"kind" "defmethod" "name" "" "dispatch" ":card"}
+              "non-blank-string"]
+             ["blank dispatch"
+              {"kind" "defmethod" "name" "render" "dispatch" ""}
+              "non-blank-string"]
+             ["unknown field"
+              {"kind" "defmethod" "name" "render" "dispatch" ":card"
+               "line" 42}
+              "unknown-fields"]]]
+      (testing label
+        (let [result (contract/validate-tool-params
+                       (assoc-in valid-request ["changes" 0 "forms"]
+                                 [form-owner]))]
+          (is (false? (:ok result)))
+          (is (= expected (some-> (:reason result) name))))))))
 
 (deftest validates-and-compiles-guarded-sibling-insertion
   (doseq [[field operator]
@@ -335,6 +507,40 @@
       (let [result (contract/validate-tool-params request)]
         (is (false? (:ok result)))
         (is (= reason (:reason result)))
+        (is (= path (:path result)))))))
+
+(deftest validates-top-level-insertion-without-repeating-owner-source
+  (let [change (-> (get-in valid-request ["changes" 0])
+                   (dissoc "find" "replace")
+                   (assoc "insert_after" ["(defn helper [] :ready)"]))
+        request {"changes" [change]
+                 "expect" {"changes" 1 "edits" 1 "files" 1}}
+        validated (contract/validate-tool-params request)
+        transaction (some-> validated :params contract/tool-params->transaction)]
+    (is (:ok validated))
+    (is (not (contains? (get-in transaction [:changes 0]) :find)))
+    (is (= [:insert-right ["(defn helper [] :ready)"]]
+           (get-in transaction [:changes 0 :do]))))
+  (doseq [[label change path]
+          [[:several-owners
+            (-> (get-in valid-request ["changes" 0])
+                (dissoc "find" "replace")
+                (assoc "forms" ["ide-shell" "source-reader-shell"]
+                       "insert_after" ["(defn helper [] :ready)"]))
+            ["changes" 0 "forms"]]
+           [:namespace-owner
+            (-> (get-in valid-request ["changes" 0])
+                (dissoc "find" "replace" "forms")
+                (assoc "owner" {"kind" "namespace"
+                                "name" "bench.app-shell"}
+                       "insert_after" ["(defn helper [] :ready)"]))
+            ["changes" 0 "owner"]]]]
+    (testing (name label)
+      (let [result (contract/validate-tool-params
+                     {"changes" [change]
+                      "expect" {"changes" 1 "edits" 1 "files" 1}})]
+        (is (false? (:ok result)))
+        (is (= :invalid-top-level-insertion-owner (:reason result)))
         (is (= path (:path result)))))))
 
 (deftest validates-and-compiles-binding-aware-local-rename
@@ -418,3 +624,24 @@
     (is (= "(is (= {:a 1 :b 2} actual))"
            (get-in (contract/tool-params->transaction (:params validated))
                    [:changes 0 :inside])))))
+
+(deftest validates-and-compiles-whole-owner-deletion-without-find
+  (let [request
+        {"changes"
+         [{"id" "delete-obsolete"
+           "files" ["src/demo.clj"]
+           "forms" ["alpha" "beta"]
+           "delete" true
+           "expect" {"matches" 2 "each_form" 1}}]
+         "expect" {"changes" 1 "edits" 2 "files" 1}}
+        validated (contract/validate-tool-params request)
+        transaction (contract/tool-params->transaction (:params validated))]
+    (is (:ok validated))
+    (is (= [:delete true] (get-in transaction [:changes 0 :do])))
+    (is (not (contains? (get-in transaction [:changes 0]) :find)))
+    (is (= {:matches 2 :each-form 1}
+           (get-in transaction [:changes 0 :expect])))
+    (is (= :invalid-delete-action
+           (:reason
+             (contract/validate-tool-params
+               (assoc-in request ["changes" 0 "delete"] false)))))))

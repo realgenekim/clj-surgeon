@@ -10,10 +10,11 @@
 
    This composition keeps the implementation small and proves merge/split
    are real inverses, not just for the round-trip test."
-  (:require [rewrite-clj.zip :as z]
-            [rewrite-clj.node :as n]
-            [clj-surgeon.cljc.merge :as merge]
-            [clj-surgeon.cljc.split :as split]))
+  (:require
+   [clj-surgeon.cljc.merge :as merge]
+   [clj-surgeon.cljc.split :as split]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; Single-file require insertion
@@ -36,21 +37,32 @@
                      (= ":require" (some-> % z/down z/string))))
        first))
 
+(defn- token-vector-node [symbols]
+  (n/vector-node
+    (vec (interpose (n/spaces 1) (map n/token-node symbols)))))
+
 (defn- entry-node
   "Build a rewrite-clj vector node like [foo.bar :as fb] or [\"npm-pkg\" :as p].
    String `ns-sym` produces an npm-style string literal; symbols produce a
    namespace token."
-  [ns-sym alias]
-  (let [head (cond
-               (string? ns-sym) (n/string-node ns-sym)
-               (symbol? ns-sym) (n/token-node ns-sym)
-               :else            (n/token-node (symbol ns-sym)))
-        parts (cond-> [head]
-                alias (into [(n/spaces 1)
-                             (n/keyword-node :as)
-                             (n/spaces 1)
-                             (n/token-node (symbol alias))]))]
-    (n/vector-node parts)))
+  ([ns-sym alias]
+   (entry-node ns-sym alias nil))
+  ([ns-sym alias referred]
+   (let [head (cond
+                (string? ns-sym) (n/string-node ns-sym)
+                (symbol? ns-sym) (n/token-node ns-sym)
+                :else            (n/token-node (symbol ns-sym)))
+         parts (cond-> [head]
+                 alias (into [(n/spaces 1)
+                              (n/keyword-node :as)
+                              (n/spaces 1)
+                              (n/token-node (symbol alias))])
+                 (seq referred) (into [(n/spaces 1)
+                                       (n/keyword-node :refer)
+                                       (n/spaces 1)
+                                       (token-vector-node
+                                         (mapv symbol referred))]))]
+     (n/vector-node parts))))
 
 (defn- existing-alias-target
   "Return the ns symbol bound to alias `a` in src, or nil if no such alias.
@@ -85,27 +97,30 @@
 (defn insert-into-require
   "Add a single [ns-sym :as alias] entry to the (:require ...) block of src.
    If src has no :require form, one is created. Returns updated source string."
-  [src ns-sym alias]
-  (let [ns-zl (ns-zloc src)
-        _ (when (nil? ns-zl)
-            (throw (ex-info "Cannot insert require: source has no ns form" {})))
-        req-zl (require-form-zloc ns-zl)
-        new-entry (entry-node ns-sym alias)]
-    (if req-zl
-      (-> req-zl
-          (z/append-child (n/newlines 1))
-          (z/append-child (n/spaces 3))
-          (z/append-child new-entry)
-          z/root-string)
-      ;; No :require form yet — append one to the ns form.
-      (-> ns-zl
-          (z/append-child (n/newlines 1))
-          (z/append-child (n/spaces 2))
-          (z/append-child (n/list-node [(n/keyword-node :require)
-                                        (n/newlines 1)
-                                        (n/spaces 3)
-                                        new-entry]))
-          z/root-string))))
+  ([src ns-sym alias]
+   (insert-into-require src ns-sym alias nil))
+  ([src ns-sym alias referred]
+   (let [ns-zl (ns-zloc src)
+         _ (when (nil? ns-zl)
+             (throw (ex-info "Cannot insert require: source has no ns form" {})))
+         req-zl (require-form-zloc ns-zl)
+         new-entry (entry-node ns-sym alias referred)]
+     (if req-zl
+       (-> req-zl
+           (z/append-child* (n/newlines 1))
+           (z/append-child* (n/spaces 3))
+           (z/append-child* new-entry)
+           z/root-string)
+       ;; No :require form yet — append one to the ns form.
+       (-> ns-zl
+           (z/append-child* (n/newlines 1))
+           (z/append-child* (n/spaces 2))
+           (z/append-child*
+             (n/list-node [(n/keyword-node :require)
+                           (n/newlines 1)
+                           (n/spaces 3)
+                           new-entry]))
+           z/root-string)))))
 
 ;; ============================================================
 ;; Public API: CLJC-level require ops

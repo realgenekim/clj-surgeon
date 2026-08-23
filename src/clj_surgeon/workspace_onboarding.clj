@@ -108,7 +108,9 @@
             "command" [lsp-command]
             "rootDir" workspace
             "requestTimeout" 10000
-            "initializationTimeout" 45000 "sourceRoots" (source-anchor/workspace-source-roots workspace)}
+            "initializationTimeout" 120000
+            "sourceRoots" (source-anchor/workspace-source-roots workspace)
+            "managedBy" "clj-surgeon"}
      kondo-config-dir
      (assoc "initializationOptions"
             {"kondo-config-dir" kondo-config-dir}))))
@@ -132,9 +134,18 @@
   (boolean
     (some (set clojure-extensions) (get server "extensions" []))))
 
+(defn managed-clojure-server?
+  "Recognize current marked entries and the exact legacy shape published by clj-surgeon."
+  [server]
+  (let [command (get server "command")]
+    (and (clojure-server? server) (or (= "clj-surgeon" (get server "managedBy")) (and (= (set clojure-extensions) (set (get server "extensions" []))) (= 10000 (get server "requestTimeout")) (contains? #{45000 120000} (get server "initializationTimeout")) (vector? (get server "sourceRoots")) (= 1 (count command)) (string? (first command)) (str/ends-with? (first command) "clojure-lsp"))))))
+
 (defn upsert-cclsp-workspace
-  "Return one deterministic multi-root cclsp config with workspace upserted."
-  [source {:keys [workspace lsp-command kondo-config-dir]}]
+  "Return one deterministic multi-root cclsp config with workspace upserted.
+
+  When existing-workspace-roots is supplied, remove only missing entries that
+  carry clj-surgeon's marker or exact legacy signature."
+  [source {:keys [workspace lsp-command kondo-config-dir existing-workspace-roots]}]
   (let [parsed (if (str/blank? source)
                  {"servers" []}
                  (json/parse-string source))
@@ -142,7 +153,16 @@
     (when-not (and (map? parsed) (vector? servers))
       (throw (ex-info "cclsp config must contain a servers array"
                       {:error-type :invalid-cclsp-config})))
-    (let [replacement (cclsp-server workspace lsp-command kondo-config-dir)
+    (let [servers (if (set? existing-workspace-roots)
+                    (filterv
+                      (fn [server]
+                        (let [root (get server "rootDir")]
+                          (or (= workspace root)
+                              (not (managed-clojure-server? server))
+                              (contains? existing-workspace-roots root))))
+                      servers)
+                    servers)
+          replacement (cclsp-server workspace lsp-command kondo-config-dir)
           [found? servers]
           (reduce
             (fn [[found? updated] server]
@@ -177,7 +197,7 @@
     (boolean (some #(= expected %) (get parsed "servers")))))
 
 (defn install-cclsp-workspace!
-  "Atomically upsert one canonical workspace into the shared cclsp config."
+  "Atomically upsert one canonical workspace and prune missing managed roots."
   [{:keys [workspace config-file lsp-command kondo-config-dir]}]
   (let [root (.getCanonicalFile (io/file workspace))
         target (.getCanonicalFile (io/file config-file))
@@ -194,13 +214,24 @@
                     channel (.getChannel lock-handle)]
           (let [_file-lock (.lock channel)
                 before (if (.isFile target) (slurp target) "")
+                parsed-before (if (str/blank? before)
+                                {"servers" []}
+                                (json/parse-string before))
+                existing-workspace-roots
+                (->> (get parsed-before "servers" []) (keep #(get % "rootDir")) (filter string?) (filter #(.isDirectory (io/file %))) set)
                 expected (cclsp-server (.getPath root)
                                        lsp-command
                                        kondo-config-dir)
                 after (upsert-cclsp-workspace
                         before {:workspace (.getPath root)
                                 :lsp-command lsp-command
-                                :kondo-config-dir kondo-config-dir})]
+                                :kondo-config-dir kondo-config-dir
+                                :existing-workspace-roots existing-workspace-roots})
+                before-roots (set (keep #(get % "rootDir")
+                                        (get parsed-before "servers" [])))
+                after-roots (set (keep #(get % "rootDir")
+                                       (get (json/parse-string after) "servers" [])))
+                pruned-workspaces (sort (remove after-roots before-roots))]
             (when (not= before after)
               (file-ops/atomic-write! target after))
             (let [read-back (slurp target)]
@@ -215,6 +246,7 @@
              :kondo-config-dir kondo-config-dir
              :config-file (.getPath target)
              :changed (not= before after)
+             :pruned-workspaces pruned-workspaces
              :persisted true}))))))
 
 (defn install-cclsp-config!

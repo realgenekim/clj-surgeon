@@ -2,6 +2,7 @@
   "One bounded reset button for the shared structural tool stack."
   (:require
    [clj-surgeon.mcp-recovery :as mcp-recovery]
+   [clj-surgeon.mcp-workspace :as mcp-workspace]
    [clj-surgeon.workspace-onboarding :as onboarding]
    [clojure.java.io :as io]
    [clojure.pprint :as pp]))
@@ -11,9 +12,8 @@
   (/ (double (- (System/nanoTime) started)) 1000000.0))
 
 (defn- failure-receipt-path
-  []
-  (io/file (System/getProperty "user.home")
-           ".local" "state" "clj-surgeon" "recovery" "last-failure.edn"))
+  [workspace]
+  (io/file (mcp-workspace/receipt-dir workspace) "last-failure.edn"))
 
 (defn- write-failure-receipt!
   [target receipt]
@@ -61,22 +61,27 @@
       (catch Exception error
         (let [error-data (ex-data error)
               restart-required? (true? (:agent-session-restart-required error-data))
-              target (io/file (or failure-receipt (failure-receipt-path)))
-              receipt {:ok false
-                       :operation :clj-surgeon-recover
-                       :phase (or (:phase error-data) @phase)
-                       :terminal-state (if restart-required?
-                                         :restart-required
-                                         :fallback-safe)
-                       :workspace workspace
-                       :error-type (or (:error-type error-data)
-                                       :recovery-failed)
-                       :error (.getMessage error)
-                       :agent-session-restart-required restart-required?
-                       :elapsed-ms {:total (elapsed-ms started)}
-                       :next-action (if restart-required?
-                                      :restart-agent-session-once
-                                      :report-failure-and-use-cli-fallback)}
+              target (io/file (or failure-receipt (failure-receipt-path workspace)))
+              receipt (merge
+                        {:ok false
+                         :operation :clj-surgeon-recover
+                         :phase (or (:phase error-data) @phase)
+                         :terminal-state (if restart-required?
+                                           :restart-required
+                                           :fallback-safe)
+                         :workspace workspace
+                         :error-type (or (:error-type error-data)
+                                         :recovery-failed)
+                         :error (.getMessage error)
+                         :agent-session-restart-required restart-required?
+                         :elapsed-ms {:total (elapsed-ms started)}
+                         :next-action (if restart-required?
+                                        :restart-agent-session-once
+                                        :report-failure-and-use-cli-fallback)}
+                        (select-keys error-data
+                                     [:capabilities :safe-route
+                                      :retained-source-anchor
+                                      :fallback-command]))
               receipt-path (write-failure-receipt! target receipt)]
           (assoc receipt
                  :failure-receipt receipt-path

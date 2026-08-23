@@ -1,8 +1,12 @@
 (ns clj-surgeon.extract-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.extract :as extract]
-            [clojure.string :as str]
-            [clojure.java.io :as io]))
+  (:require
+   [clj-surgeon.extract :as extract]
+   [clj-surgeon.file-ops :as file-ops]
+   [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [rewrite-clj.parser :as parser]))
 
 (defn- create-temp-project!
   "Create a minimal project with a monolith file."
@@ -39,6 +43,50 @@
     (doseq [child (.listFiles f)]
       (delete-recursive! child)))
   (.delete f))
+
+(defn- dependency-minimal-source []
+  (str "(ns fixture.views\n  (:require\n"
+       (apply str
+              (for [index (range 1 17)]
+                (format "   [fixture.dep%02d :as d%02d]\n" index index)))
+       "   [fixture.domain.schedule :as schedule]))\n\n"
+       "(defn day-tab []\n"
+       "  [d01/value d02/value d03/value d04/value d05/value d06/value])\n\n"
+       "(defn agenda-page []\n  (day-tab))\n\n"
+       "(defn unrelated-page [] :ok)\n"))
+
+(defn- create-dependency-minimal-project!
+  "Create the minimized production shape from clj-surgeon-to4."
+  []
+  (let [root (java.io.File/createTempFile "extract-dependencies" "")
+        _ (.delete root)
+        _ (.mkdirs root)
+        src-dir (io/file root "src")
+        views-file (io/file src-dir "fixture" "views.clj")]
+    (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+    (doseq [index (range 1 17)]
+      (let [ns-name (format "fixture.dep%02d" index)
+            file (io/file src-dir "fixture" (format "dep%02d.clj" index))]
+        (.mkdirs (.getParentFile file))
+        (spit file (format "(ns %s)\n\n(def value :dep-%02d)\n" ns-name index))))
+    (let [schedule-file (io/file src-dir "fixture" "domain" "schedule.clj")]
+      (.mkdirs (.getParentFile schedule-file))
+      (spit schedule-file
+            "(ns fixture.domain.schedule)\n\n(def existing :schedule)\n"))
+    (.mkdirs (.getParentFile views-file))
+    (spit views-file (dependency-minimal-source))
+    root))
+
+(defn- cold-require-result [root & namespaces]
+  (shell/sh "clojure"
+            "-Sdeps" (pr-str {:paths [(str (io/file root "src"))]})
+            "-M" "-e"
+            (str "(require " (str/join " " (map #(str "'" %) namespaces)) ")")))
+
+(defn- cold-eval-result [root expression]
+  (shell/sh "clojure"
+            "-Sdeps" (pr-str {:paths [(str (io/file root "src"))]})
+            "-M" "-e" expression))
 
 ;; ============================================================
 ;; Pure unit tests for file-path->ns-name
@@ -189,8 +237,13 @@
           (is (not (str/includes? (slurp source) "defn render-loud"))))
         (testing "non-extracted form remains"
           (is (str/includes? (slurp source) "defn render-quiet")))
-        (testing "source has require for new ns"
-          (is (str/includes? (slurp source) "my.helpers"))))
+        (testing "callerless source does not gain a new require"
+          (is (not (str/includes? (slurp source) "my.helpers"))))
+        (testing "target keeps the used ClojureScript dependency"
+          (is (= ["clojure.string"] (:target-requires result)))
+          (is (str/includes? (slurp target) "clojure.string")))
+        (testing "receipt reports that no source require was necessary"
+          (is (false? (get-in result [:summary :source-require-added])))))
       (finally (delete-recursive! root)))))
 
 ;; ============================================================
@@ -219,6 +272,33 @@
           (is (str/includes? (:new-file-preview p) "defn refine"))))
       (finally (delete-recursive! root)))))
 
+(deftest test-plan-proves-quoted-var-callers-without-textual-lookalikes
+  (let [root (create-temp-project!)
+        test-file (io/file root "test/my/app_test.clj")]
+    (try
+      (.mkdirs (.getParentFile test-file))
+      (spit test-file
+            (str "(ns my.app-test\n"
+                 "  (:require [my.app :as app]))\n"
+                 "(deftest aliased-private-var (is (var? #'app/distill)))\n"
+                 "(deftest qualified-private-var (is (var? #'my.app/refine)))\n"
+                 "(def text \"#'my.app/refine\")\n"
+                 ";; #'my.app/distill\n"
+                 "(def data '(var my.app/refine))\n"))
+      (let [source (str (.getPath root) "/src/my/app.clj")
+            target (str (.getPath root) "/src/my/distillery.clj")
+            plan (extract/plan {:file source
+                                :forms '[distill refine]
+                                :to target})]
+        (is (nil? (:error plan)))
+        (is (= 2 (count (:quoted-var-references plan))))
+        (is (= #{"my.app/distill" "my.app/refine"}
+               (set (map :subject (:quoted-var-references plan)))))
+        (is (= #{:structural-var-quote}
+               (set (map :reference-authority
+                         (:quoted-var-references plan))))))
+      (finally (delete-recursive! root)))))
+
 (deftest test-plan-missing-form
   (let [root (create-temp-project!)]
     (try
@@ -232,7 +312,7 @@
           (is (str/includes? (:error p) "nonexistent"))))
       (finally (delete-recursive! root)))))
 
-(deftest test-plan-preserves-requires
+(deftest test-plan-omits-unused-requires
   (let [root (create-temp-project!)]
     (try
       (let [source (str (.getPath root) "/src/my/app.clj")
@@ -240,8 +320,10 @@
             p (extract/plan {:file source
                              :forms '[distill]
                              :to target})]
-        (testing "new file has source's requires (over-include)"
-          (is (str/includes? (:new-file-preview p) "clojure.string"))))
+        (testing "new file omits dependencies unused by the moved form"
+          (is (empty? (:target-requires p)))
+          (is (= ["clojure.string"] (:omitted-target-requires p)))
+          (is (not (str/includes? (:new-file-preview p) "clojure.string")))))
       (finally (delete-recursive! root)))))
 
 ;; ============================================================
@@ -265,9 +347,10 @@
           (let [content (slurp target)]
             (is (str/includes? content "(defn distill"))
             (is (str/includes? content "(defn refine"))))
-        (testing "new file has requires from source"
+        (testing "new file omits unused source requires"
           (let [content (slurp target)]
-            (is (str/includes? content "clojure.string"))))
+            (is (not (str/includes? content "clojure.string")))
+            (is (empty? (:target-requires result)))))
         (testing "summary correct"
           (is (= 2 (-> result :summary :forms-extracted)))))
       (finally (delete-recursive! root)))))
@@ -290,6 +373,162 @@
           (is (str/includes? source-content "(def config")))
         (testing "source ns still intact"
           (is (str/includes? source-content "ns my.app"))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-execute-does-not-consume-the-next-form-without-a-blank-line
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")]
+    (try
+      (spit source
+            "(ns my.app)\n\n(defn move-me [] :moved)\n(defn event-resume-path [event]\n  (:resume-path event))\n")
+      (extract/execute! {:file (.getPath source)
+                         :forms '[move-me]
+                         :to (.getPath target)})
+      (let [rewritten (slurp source)]
+        (testing "the complete rewritten namespace still parses"
+          (is (some? (parser/parse-string-all rewritten))))
+        (testing "the adjacent form remains byte-for-byte intact"
+          (is (str/includes? rewritten
+                             "(defn event-resume-path [event]\n  (:resume-path event))"))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-execute-refuses-an-existing-target-without-changing-either-file
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")
+        original-source (slurp source)
+        original-target "existing target\n"]
+    (try
+      (spit target original-target)
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[distill refine]
+                                      :to (.getPath target)})]
+        (is (= :extraction-target-exists (:error-type result)))
+        (is (true? (:source-unchanged result)))
+        (is (= original-source (slurp source)))
+        (is (= original-target (slurp target))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-execute-rolls-back-the-created-target-when-source-commit-fails
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")
+        original-source (slurp source)
+        real-atomic-write! file-ops/atomic-write!
+        write-count (atom 0)]
+    (try
+      (let [failure
+            (try
+              (with-redefs [file-ops/atomic-write!
+                            (fn [file content]
+                              (if (= 2 (swap! write-count inc))
+                                (throw (ex-info "simulated source write failure" {}))
+                                (real-atomic-write! file content)))]
+                (extract/execute! {:file (.getPath source)
+                                   :forms '[distill refine]
+                                   :to (.getPath target)}))
+              nil
+              (catch Exception e e))]
+        (is (= :extraction-commit-failed (-> failure ex-data :error-type)))
+        (is (true? (-> failure ex-data :source-restored)))
+        (is (true? (-> failure ex-data :target-removed)))
+        (is (= original-source (slurp source)))
+        (is (not (.exists target))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-extraction-receipt-undo-restores-the-original-source
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")
+        receipt (io/file root "receipts" "extract.edn")
+        original-source (slurp source)]
+    (try
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[distill refine]
+                                      :to (.getPath target)
+                                      :receipt-out (.getPath receipt)})]
+        (is (= (.getCanonicalPath receipt) (:receipt-file result)))
+        (is (.exists target))
+        (is (.exists receipt))
+        (let [undo (extract/undo! {:receipt (.getPath receipt)})]
+          (is (true? (:ok undo)))
+          (is (= original-source (slurp source)))
+          (is (not (.exists target))))
+        (testing "the same inverse cannot be applied twice"
+          (let [second-undo (extract/undo! {:receipt (.getPath receipt)})]
+            (is (= :stale-extraction-result (:error-type second-undo)))
+            (is (= original-source (slurp source))))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-extraction-undo-refuses-a-modified-target-before-writing
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")
+        receipt (io/file root "extract.edn")]
+    (try
+      (extract/execute! {:file (.getPath source)
+                         :forms '[distill refine]
+                         :to (.getPath target)
+                         :receipt-out (.getPath receipt)})
+      (let [extracted-source (slurp source)
+            changed-target (str (slurp target) "\n;; user change\n")]
+        (spit target changed-target)
+        (let [undo (extract/undo! {:receipt (.getPath receipt)})]
+          (is (= :stale-extraction-result (:error-type undo)))
+          (is (true? (:source-unchanged undo)))
+          (is (= extracted-source (slurp source)))
+          (is (= changed-target (slurp target)))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-execute-refuses-a-source-that-changed-after-planning
+  (let [root (create-temp-project!)
+        source (io/file root "src" "my" "app.clj")
+        target (io/file root "src" "my" "distillery.clj")
+        real-plan extract/plan
+        concurrent-source (str (slurp source) "\n;; concurrent user change\n")]
+    (try
+      (let [result
+            (with-redefs [extract/plan
+                          (fn [opts]
+                            (let [planned (real-plan opts)]
+                              (spit source concurrent-source)
+                              planned))]
+              (extract/execute! {:file (.getPath source)
+                                 :forms '[distill refine]
+                                 :to (.getPath target)}))]
+        (is (= :stale-extraction-source (:error-type result)))
+        (is (true? (:source-unchanged result)))
+        (is (= concurrent-source (slurp source)))
+        (is (not (.exists target))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-production-shaped-adjacent-extraction-is-parseable-and-reversible
+  (let [root (create-temp-project!)
+        source (io/file root "src" "fixtures" "extract_adjacent.clj")
+        target (io/file root "src" "fixtures" "stages.clj")
+        receipt (io/file root "extract-adjacent.edn")
+        fixture (slurp (io/file "test" "fixtures" "extract_adjacent.clj"))
+        forms (mapv #(symbol (format "stage-%02d" %)) (range 1 16))]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit source fixture)
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms forms
+                                      :to (.getPath target)
+                                      :receipt-out (.getPath receipt)})
+            future-source (slurp source)
+            future-target (slurp target)]
+        (is (= 15 (get-in result [:summary :forms-extracted])))
+        (is (some? (parser/parse-string-all future-source)))
+        (is (some? (parser/parse-string-all future-target)))
+        (is (str/includes?
+              future-source
+              ";; This documented neighbor has no sacrificial blank line before it.\n(defn event-resume-path [event]\n  (:resume-path event))"))
+        (is (= 15 (count (re-seq #"\(defn stage-" future-target))))
+        (is (true? (:ok (extract/undo! {:receipt (.getPath receipt)}))))
+        (is (= fixture (slurp source)))
+        (is (not (.exists target))))
       (finally (delete-recursive! root)))))
 
 (deftest test-execute-adds-require-to-source
@@ -337,12 +576,171 @@
     (try
       (let [source (str (.getPath root) "/src/my/app.clj")
             target (str (.getPath root) "/src/my/app/distillery.clj")
-            result (extract/execute! {:file source
-                                      :forms '[distill]
-                                      :to target})]
+            _ (extract/execute! {:file source
+                                 :forms '[distill]
+                                 :to target})]
         (testing "subdirectory created"
           (is (.exists (io/file target))))
         (testing "ns name derived from path"
           (let [content (slurp target)]
             (is (str/includes? content "ns my.app.distillery")))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-production-extraction-keeps-only-used-requires-and-avoids-alias-collision
+  ;; Minimized from sessionize-sched-killer, 2026-08-10, clj-surgeon-to4.
+  (let [root (create-dependency-minimal-project!)
+        source (io/file root "src" "fixture" "views.clj")
+        target (io/file root "src" "fixture" "views" "schedule.clj")
+        receipt (io/file root "dependency-minimal-receipt.edn")]
+    (try
+      (testing "the field fixture is valid before extraction"
+        (is (zero? (:exit (cold-require-result root "fixture.views")))))
+      (let [plan (extract/plan {:file (.getPath source)
+                                :forms '[day-tab agenda-page]
+                                :to (.getPath target)})]
+        (testing "the target header contains exactly the six used dependencies"
+          (is (= (mapv #(format "fixture.dep%02d" %) (range 1 7))
+                 (:target-requires plan)))
+          (is (= 11 (count (:omitted-target-requires plan))))
+          (is (= 6 (count (re-seq #"\[fixture\.dep" (:_new-file-content plan)))))
+          (is (not (str/includes? (:_new-file-content plan)
+                                  "fixture.domain.schedule"))))
+        (testing "the unused colliding alias does not cause a source require"
+          (is (= "schedule2" (:target-alias plan)))
+          (is (empty? (:remaining-source-callers plan)))
+          (is (empty? (:source-referred-forms plan)))
+          (is (false? (:source-require-added plan))))
+        (testing "the source is never reported as its own external caller"
+          (is (not-any? #(= (.getCanonicalPath source)
+                            (.getCanonicalPath (io/file %)))
+                        (:callers-to-review plan))))
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[day-tab agenda-page]
+                                        :to (.getPath target)
+                                        :receipt-out (.getPath receipt)})]
+          (testing "both generated namespaces load"
+            (is (= 2 (get-in result [:summary :forms-extracted])))
+            (let [runtime (cold-require-result root
+                                               "fixture.views"
+                                               "fixture.views.schedule")]
+              (is (zero? (:exit runtime)) (:err runtime))))
+          (testing "the callerless source has no destination require"
+            (is (not (str/includes? (slurp source) "fixture.views.schedule"))))
+          (testing "undo restores both paths exactly"
+            (is (true? (:ok (extract/undo! {:receipt (.getPath receipt)}))))
+            (is (= (dependency-minimal-source) (slurp source)))
+            (is (not (.exists target))))))
+      (finally (delete-recursive! root)))))
+
+(deftest test-source-caller-gets-one-runtime-valid-refer-entry
+  (let [root (java.io.File/createTempFile "extract-source-caller" "")
+        _ (.delete root)
+        _ (.mkdirs root)
+        source (io/file root "src" "fixture" "callers.clj")
+        target (io/file root "src" "fixture" "moved.clj")
+        receipt (io/file root "caller-receipt.edn")]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+      (spit source
+            "(ns fixture.callers)\n\n(defn moved [] :ok)\n\n(defn caller [] (moved))\n")
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[moved]
+                                      :to (.getPath target)
+                                      :receipt-out (.getPath receipt)})]
+        (is (= [{:owner "caller" :moved-vars ["moved"]}]
+               (:remaining-source-callers result)))
+        (is (= ["moved"] (:source-referred-forms result)))
+        (is (str/includes? (slurp source)
+                           "[fixture.moved :as moved :refer [moved]]"))
+        (let [runtime (cold-eval-result
+                        root
+                        "(require 'fixture.callers) (assert (= :ok (fixture.callers/caller)))")]
+          (is (zero? (:exit runtime)) (:err runtime)))
+        (is (true? (:ok (extract/undo! {:receipt (.getPath receipt)})))))
+      (finally (delete-recursive! root)))))
+
+(deftest pure-compile-plan-separates-conservative-movement-from-minimization
+  (let [source
+        (str "(ns sample.core\n"
+             "  (:require ;; keep this side effect\n"
+             "   [alpha.side-effects]\n"
+             "   [clojure.string :as str]))\n\n"
+             "(defn helper [] (str/upper-case \"x\"))\n"
+             "(defn moved [] (helper))\n"
+             "(defn remains [] (moved))\n")
+        input {:file "src/sample/core.clj"
+               :source source
+               :forms '[helper moved]
+               :to "src/sample/extracted.clj"
+               :target-ns "sample.extracted"
+               :workspace-sources
+               {"src/sample/consumer.clj"
+                (str "(ns sample.consumer\n"
+                     "  (:require [sample.core :as core]))\n"
+                     "(def pinned #'core/moved)\n")}}
+        minimal (extract/compile-plan (assoc input :require-policy :minimal))
+        conservative (extract/compile-plan
+                       (assoc input :require-policy :copy-all))
+        candidates
+        (extract/compile-candidates
+          {:source source
+           :source-file (:file input)
+           :target-file (:to input)
+           :form-ranges (:_form-texts conservative)
+           :target-source (:_new-file-content conservative)
+           :target-ns (:target-ns conservative)
+           :target-alias (:target-alias conservative)
+           :source-referred-forms (:_source-referred-forms conservative)})]
+    (testing "minimal proof still refuses an unproved side-effect require"
+      (is (false? (:ok minimal)))
+      (is (= :unsupported-require-minimization (:error-type minimal)))
+      (is (= :comment-bearing-require-clause (:reason minimal))))
+
+    (testing "copy-all moves exact header syntax without dependency judgment"
+      (is (= :copy-all (:require-policy conservative)))
+      (is (= 2 (:copied-require-count conservative)))
+      (is (= :copied-exactly (:target-requires conservative)))
+      (is (str/includes? (:_new-file-content conservative)
+                         "(:require ;; keep this side effect"))
+      (is (str/includes? (:_new-file-content conservative)
+                         "[alpha.side-effects]"))
+      (is (= ["helper" "moved"] (:forms-to-extract conservative)))
+      (is (= ["moved"] (:source-referred-forms conservative)))
+      (is (nil? (:target-alias conservative))
+          "copy-all needs no invented alias for a refer-only source edge")
+      (is (= ["src/sample/consumer.clj"]
+             (:callers-to-review conservative)))
+      (is (= ["src/sample/consumer.clj"]
+             (mapv :file (:quoted-var-references conservative)))))
+
+    (testing "the complete future namespace pair parses from immutable data"
+      (is (str/includes? (:source candidates)
+                         "[sample.extracted :refer [moved]]"))
+      (is (not (str/includes? (:source candidates) ":as nil")))
+      (do
+        (is (str/includes? (:target candidates)
+                           "(defn moved [] (helper))"))
+        (is (str/ends-with? (:_new-file-content conservative) ")\n"))
+        (is (not (str/ends-with? (:_new-file-content conservative) "\n\n"))
+            "the generated target is formatter-stable at end of file")))))
+
+(deftest test-unsupported-require-minimization-refuses-before-writing
+  (let [root (java.io.File/createTempFile "extract-side-effect-require" "")
+        _ (.delete root)
+        _ (.mkdirs root)
+        source (io/file root "src" "fixture" "effects.clj")
+        target (io/file root "src" "fixture" "moved.clj")
+        original "(ns fixture.effects (:require [fixture.side-effects]))\n\n(defn moved [] :ok)\n"]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+      (spit source original)
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[moved]
+                                      :to (.getPath target)})]
+        (is (= :unsupported-require-minimization (:error-type result)))
+        (is (= :side-effect-only-require (:reason result)))
+        (is (= original (slurp source)))
+        (is (not (.exists target))))
       (finally (delete-recursive! root)))))

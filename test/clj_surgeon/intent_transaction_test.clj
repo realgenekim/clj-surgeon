@@ -50,18 +50,18 @@
          "(ns app.b)\n\n(defn shell []\n  [:main :body])\n"}
         result
         (transaction/compile-transaction
-          sources
-          (spec [(intent ["src/a.clj"]
-                         "(old-call x)"
-                         "#(new-call %)"
-                         1)
-                 (intent ["src/a.clj" "src/b.clj"]
-                         ":body"
-                         ":body.ide-shell-page"
-                         2)]
-                {:intent-count 2
-                 :edit-count 3
-                 :changed-file-count 2}))]
+         sources
+         (spec [(intent ["src/a.clj"]
+                        "(old-call x)"
+                        "#(new-call %)"
+                        1)
+                (intent ["src/a.clj" "src/b.clj"]
+                        ":body"
+                        ":body.ide-shell-page"
+                        2)]
+               {:intent-count 2
+                :edit-count 3
+                :changed-file-count 2}))]
     (is (= true (:ok result)))
     (is (= :change (:operation result)))
     (is (= 2 (:intent-count result)))
@@ -82,12 +82,12 @@
   (testing "whitespace may vary, but literal replacement spelling is exact"
     (let [result
           (transaction/compile-transaction
-            {"src/a.clj" "(ns app.a)\n(def values [(old-call   x) (old-call x)])\n"}
-            (spec [(intent ["src/a.clj"]
-                           "(old-call x)"
-                           "(new-call\n  x)"
-                           2)]
-                  {:intent-count 1 :edit-count 2 :changed-file-count 1}))]
+           {"src/a.clj" "(ns app.a)\n(def values [(old-call   x) (old-call x)])\n"}
+           (spec [(intent ["src/a.clj"]
+                          "(old-call x)"
+                          "(new-call\n  x)"
+                          2)]
+                 {:intent-count 1 :edit-count 2 :changed-file-count 1}))]
       (is (:ok result))
       (is (= "(ns app.a)\n(def values [(new-call\n  x) (new-call\n  x)])\n"
              (get-in result [:future-sources "src/a.clj"])))))
@@ -97,9 +97,9 @@
           sources {"src/a.clj" source}
           result
           (transaction/compile-transaction
-            sources
-            (spec [(intent ["src/a.clj"] "(old-call x)" "(new-call x)" 1)]
-                  {:intent-count 1 :edit-count 1 :changed-file-count 1}))]
+           sources
+           (spec [(intent ["src/a.clj"] "(old-call x)" "(new-call x)" 1)]
+                 {:intent-count 1 :edit-count 1 :changed-file-count 1}))]
       (is (= :expect-count-mismatch (:error-type result)))
       (is (= 0 (:actual-count result)))
       (is (= {"src/a.clj" source} sources))))
@@ -107,12 +107,12 @@
   (testing "declaring the interior comment permits the replacement"
     (let [result
           (transaction/compile-transaction
-            {"src/a.clj" "(ns app.a)\n(def value (old-call ; keep this reason\n             x))\n"}
-            (spec [(intent ["src/a.clj"]
-                           "(old-call ; keep this reason\n x)"
-                           "(new-call ; replacement keeps the reason\n x)"
-                           1)]
-                  {:intent-count 1 :edit-count 1 :changed-file-count 1}))]
+           {"src/a.clj" "(ns app.a)\n(def value (old-call ; keep this reason\n             x))\n"}
+           (spec [(intent ["src/a.clj"]
+                          "(old-call ; keep this reason\n x)"
+                          "(new-call ; replacement keeps the reason\n x)"
+                          1)]
+                 {:intent-count 1 :edit-count 1 :changed-file-count 1}))]
       (is (:ok result))
       (is (str/includes? (get-in result [:future-sources "src/a.clj"])
                          "; replacement keeps the reason")))))
@@ -125,12 +125,12 @@
              "(def value (old-call x))\n")
         result
         (transaction/compile-transaction
-          {"src/a.clj" source}
-          (spec [(intent ["src/a.clj"]
-                         "(old-call x)"
-                         "(wrapper (old-call x))"
-                         1)]
-                {:intent-count 1 :edit-count 1 :changed-file-count 1}))
+         {"src/a.clj" source}
+         (spec [(intent ["src/a.clj"]
+                        "(old-call x)"
+                        "(wrapper (old-call x))"
+                        1)]
+               {:intent-count 1 :edit-count 1 :changed-file-count 1}))
         future (get-in result [:future-sources "src/a.clj"])]
     (is (:ok result))
     (is (= 3 (count (re-seq #"\(old-call x\)" future))))
@@ -211,21 +211,21 @@
               "  [(views/static \"/a.css\")])\n")}
         result
         (transaction/compile-transaction
-          sources
-          (change-spec
-            [(change :shell-body
-                     ["src/layout.clj"]
-                     ['ide-shell 'source-reader-shell]
-                     ":body"
-                     ":body.ide-shell-page"
-                     {:matches 2 :each-form 1})
-             (change :static-head
-                     ["src/common.clj"]
-                     ['stylesheets]
-                     "views/static"
-                     "assets/static"
-                     {:matches 1 :each-file 1})]
-            {:changes 2 :edits 3 :files 2}))]
+         sources
+         (change-spec
+          [(change :shell-body
+                   ["src/layout.clj"]
+                   ['ide-shell 'source-reader-shell]
+                   ":body"
+                   ":body.ide-shell-page"
+                   {:matches 2 :each-form 1})
+           (change :static-head
+                   ["src/common.clj"]
+                   ['stylesheets]
+                   "views/static"
+                   "assets/static"
+                   {:matches 1 :each-file 1})]
+          {:changes 2 :edits 3 :files 2}))]
     (is (:ok result))
     (is (= 2 (:change-count result)))
     (is (= 3 (:match-count result)))
@@ -237,6 +237,39 @@
     (is (= "(ns app.common)\n\n(defn stylesheets []\n  [(assets/static \"/a.css\")])\n"
            (get-in result [:future-sources "src/common.clj"])))
     (is (every? valid-source? (vals (:future-sources result))))))
+
+(deftest deletes-several-exact-owners-as-one-compiled-change
+  (let [source (str "(ns sample.core)\n\n"
+                    ";; belongs to alpha\n"
+                    "(defn alpha [] :a)\n\n"
+                    "(defn beta [] :b)\n\n"
+                    "(defn keep-me [] :kept)\n")
+        result
+        (transaction/compile-transaction
+         {"src/sample/core.clj" source}
+         (change-spec
+          [{:id :delete-obsolete
+            :in ["src/sample/core.clj"]
+            :forms ['alpha 'beta]
+            :do [:delete true]
+            :expect {:matches 2 :each-form 1}}]
+          {:changes 1 :edits 2 :files 1}))
+        receipt (when (:ok result) (transaction/build-receipt result))
+        inverse (when receipt
+                  (transaction/compile-inverse
+                   receipt (:future-sources result)))]
+    (is (:ok result))
+    (is (= 2 (:match-count result)))
+    (is (= :delete (get-in result [:changes 0 :operator])))
+    (is (= "(ns sample.core)\n\n(defn keep-me [] :kept)\n"
+           (get-in result [:future-sources "src/sample/core.clj"])))
+    (is (valid-source? (get-in result [:future-sources "src/sample/core.clj"])))
+    (is (not (str/includes?
+              (get-in result [:future-sources "src/sample/core.clj"])
+              "belongs to alpha")))
+    (is (:ok inverse))
+    (is (= source
+           (get-in inverse [:future-sources "src/sample/core.clj"])))))
 
 (deftest scoped-change-guards-prove-owner-and-file-distribution
   (let [sources
@@ -262,13 +295,13 @@
                 ":body.page"
                 {:matches 2 :each-file 1})]
     (is (:ok (transaction/compile-transaction
-               sources
-               (change-spec [aggregate]
-                            {:changes 1 :edits 2 :files 1}))))
+              sources
+              (change-spec [aggregate]
+                           {:changes 1 :edits 2 :files 1}))))
     (let [result (transaction/compile-transaction
-                   sources
-                   (change-spec [each-form]
-                                {:changes 1 :edits 2 :files 1}))]
+                  sources
+                  (change-spec [each-form]
+                               {:changes 1 :edits 2 :files 1}))]
       (is (= :change-distribution-mismatch (:error-type result)))
       (is (= :each-form (:distribution result)))
       (is (= {"src/a.clj"
@@ -276,14 +309,88 @@
              (:actual result)))
       (is (nil? (:future-sources result))))
     (let [result (transaction/compile-transaction
-                   sources
-                   (change-spec [across-files]
-                                {:changes 1 :edits 2 :files 1}))]
+                  sources
+                  (change-spec [across-files]
+                               {:changes 1 :edits 2 :files 1}))]
       (is (= :change-distribution-mismatch (:error-type result)))
       (is (= :each-file (:distribution result)))
       (is (= {"src/a.clj" 2 "src/b.clj" 0}
              (:actual result)))
       (is (nil? (:future-sources result))))))
+
+(deftest defmethod-owner-addresses-one-name-and-dispatch-without-lines
+  (let [source (str "(ns app.render)\n"
+                    "(defmulti render :kind)\n"
+                    "(defmethod render :card [x] [:card :old x])\n"
+                    "(defmethod render [:panel :wide] [x] [:wide :old x])\n"
+                    "(defmethod other :card [x] [:other :old x])\n")
+        owner {:kind :defmethod :name 'render :dispatch ":card"}
+        requested (change :card-method ["src/render.clj"] [owner]
+                          ":old" ":new" {:matches 1 :each-form 1})
+        result (transaction/compile-transaction
+                {"src/render.clj" source}
+                (change-spec [requested]
+                             {:changes 1 :edits 1 :files 1}))]
+    (is (:ok result))
+    (is (= (str "(ns app.render)\n"
+                "(defmulti render :kind)\n"
+                "(defmethod render :card [x] [:card :new x])\n"
+                "(defmethod render [:panel :wide] [x] [:wide :old x])\n"
+                "(defmethod other :card [x] [:other :old x])\n")
+           (get-in result [:future-sources "src/render.clj"])))
+    (is (= {"src/render.clj" {owner 1}}
+           (get-in result [:changes 0 :per-form-counts]))))
+  (testing "dispatch structure is exact and duplicate methods refuse"
+    (let [owner {:kind :defmethod :name 'render :dispatch "[:panel :wide]"}
+          requested (change :wide-method ["src/render.clj"] [owner]
+                            ":old" ":new" {:matches 1})
+          duplicate-source
+          (str "(ns app.render)\n"
+               "(defmethod render [:panel :wide] [x] [:first :old x])\n"
+               "(defmethod render [:panel :wide] [x] [:second :old x])\n")
+          duplicate (transaction/compile-transaction
+                     {"src/render.clj" duplicate-source}
+                     (change-spec [requested]
+                                  {:changes 1 :edits 1 :files 1}))
+          malformed (transaction/compile-transaction
+                     {"src/render.clj" duplicate-source}
+                     (change-spec [(assoc-in requested [:forms 0 :dispatch]
+                                             "[:panel")]
+                                  {:changes 1 :edits 1 :files 1}))]
+      (is (= :change-owner-mismatch (:error-type duplicate)))
+      (is (= 2 (:actual-count duplicate)))
+      (is (nil? (:future-sources duplicate)))
+      (is (= :invalid-intent-form (:error-type malformed)))
+      (is (= ":forms dispatch" (:field malformed)))
+      (is (nil? (:future-sources malformed))))))
+
+(deftest staged-future-sources-become-the-hashed-reversible-transaction
+  (let [original "(ns app.core)\n(defn render [] [:old])\n"
+        compiled (transaction/compile-transaction
+                  {"src/app/core.clj" original}
+                  (change-spec
+                   [(change :render ["src/app/core.clj"] ['render]
+                            ":old" ":new" {:matches 1})]
+                   {:changes 1 :edits 1 :files 1}))
+        formatted "(ns app.core)\n\n(defn render\n  []\n  [:new])\n"
+        prepared (transaction/with-future-sources
+                   compiled {"src/app/core.clj" formatted})
+        receipt (transaction/build-receipt prepared)
+        inverse (transaction/compile-inverse
+                 receipt (:future-sources prepared))]
+    (is (:ok prepared))
+    (is (= formatted (get-in prepared [:future-sources "src/app/core.clj"])))
+    (is (= 1 (get-in prepared [:format :changed-file-count])))
+    (is (= 1 (count (get-in prepared [:files 0 :edits]))))
+    (is (true? (get-in prepared [:files 0 :edits 0 :raw])))
+    (is (:ok inverse))
+    (is (= original (get-in inverse [:future-sources "src/app/core.clj"])))
+    (doseq [invalid [{}
+                     {"src/app/core.clj" formatted "src/extra.clj" "(ns extra)"}
+                     {"src/app/core.clj" "(defn broken ["}]]
+      (let [result (transaction/with-future-sources compiled invalid)]
+        (is (not (:ok result)))
+        (is (nil? (:committed result)))))))
 
 (deftest scoped-changes-refuse-every-field-and-owner-error-as-data
   (let [sources
@@ -370,13 +477,13 @@
           (is (nil? (:future-sources result))))))
     (testing "parse refusals name the change, field, and complete-input failure"
       (let [incomplete (transaction/compile-transaction
-                         sources
-                         (change-spec [(assoc valid :find "(defn incomplete")]
-                                      valid-expect))
+                        sources
+                        (change-spec [(assoc valid :find "(defn incomplete")]
+                                     valid-expect))
             trailing-parent (transaction/compile-transaction
-                              sources
-                              (change-spec [(assoc valid :find "[:body :child]]")]
-                                           valid-expect))]
+                             sources
+                             (change-spec [(assoc valid :find "[:body :child]]")]
+                                          valid-expect))]
         (is (= :invalid-intent-form (:error-type incomplete)))
         (is (= 0 (:change-index incomplete)))
         (is (= :body (:change-id incomplete)))
@@ -391,13 +498,19 @@
          "(ns app.a)\n(def value (outer (inner x)))\n"}
         result
         (transaction/compile-transaction
-          sources
-          (spec [(intent ["src/a.clj"] "(outer (inner x))" "(outer (new x))" 1)
-                 (intent ["src/a.clj"] "(inner x)" "(new x)" 1)]
-                {:intent-count 2 :edit-count 2 :changed-file-count 1}))]
+         sources
+         (change-spec
+          [(change :outer ["src/a.clj"] ['value]
+                   "(outer (inner x))" "(outer (new x))"
+                   {:matches 1 :each-file 1 :each-form 1})
+           (change :inner ["src/a.clj"] ['value]
+                   "(inner x)" "(new x)"
+                   {:matches 1 :each-file 1 :each-form 1})]
+          {:changes 2 :edits 2 :files 1}))]
     (is (= :overlapping-intents (:error-type result)))
     (is (= "src/a.clj" (:file result)))
     (is (= #{0 1} (set (:intent-indexes result))))
+    (is (= [:outer :inner] (:change-ids result)))
     (is (nil? (:future-sources result)))))
 
 (deftest metadata-reader-syntax-and-token-spelling-are-exact
@@ -405,10 +518,10 @@
         "(ns app.a)\n(def values [^String x ^{:tag String} x #_ignored 1 1N])\n"
         result
         (transaction/compile-transaction
-          {"src/a.clj" source}
-          (spec [(intent ["src/a.clj"] "^String x" "^String renamed" 1)
-                 (intent ["src/a.clj"] "1N" "2N" 1)]
-                {:intent-count 2 :edit-count 2 :changed-file-count 1}))
+         {"src/a.clj" source}
+         (spec [(intent ["src/a.clj"] "^String x" "^String renamed" 1)
+                (intent ["src/a.clj"] "1N" "2N" 1)]
+               {:intent-count 2 :edit-count 2 :changed-file-count 1}))
         future (get-in result [:future-sources "src/a.clj"])]
     (is (:ok result))
     (is (str/includes? future "^String renamed"))
@@ -443,9 +556,9 @@
                                  (reset! read? true)
                                  "")]
                    (transaction/plan-change
-                     {:op :change
-                      :spec {:intents [] :expect {}}
-                      :surprise true}))]
+                    {:op :change
+                     :spec {:intents [] :expect {}}
+                     :surprise true}))]
       (is (= :unknown-arguments (:error-type result)))
       (is (false? @read?))))
 
@@ -478,7 +591,7 @@
         (doseq [{:keys [spec error]} malformed]
           (is (= error
                  (:error-type
-                   (transaction/plan-change {:op :change :spec spec}))))))
+                  (transaction/plan-change {:op :change :spec spec}))))))
       (is (false? @read?)))))
 
 (deftest change-preview-canonicalizes-one-physical-file-across-intents
@@ -546,9 +659,9 @@
          :expect {:matches 1}}
         result
         (transaction/compile-transaction
-          {"src/demo.clj" source}
-          {:changes [change]
-           :expect {:changes 1 :edits 1 :files 1}})
+         {"src/demo.clj" source}
+         {:changes [change]
+          :expect {:changes 1 :edits 1 :files 1}})
         future (get-in result [:future-sources "src/demo.clj"])]
     (is (:ok result))
     (is (str/includes? future "{:a 1 :b 2} actual-a"))
@@ -558,15 +671,15 @@
                     "(defn assertions [] [{:a 1} {:a 1}])\n")
         result
         (transaction/compile-transaction
-          {"src/demo.clj" source}
-          {:changes
-           [{:id :ambiguous
-             :in ["src/demo.clj"]
-             :forms ['assertions]
-             :find "{:a 1}"
-             :do [:assoc-entry {:key ":status" :value ":ready"}]
-             :expect {:matches 1}}]
-           :expect {:changes 1 :edits 1 :files 1}})]
+         {"src/demo.clj" source}
+         {:changes
+          [{:id :ambiguous
+            :in ["src/demo.clj"]
+            :forms ['assertions]
+            :find "{:a 1}"
+            :do [:assoc-entry {:key ":status" :value ":ready"}]
+            :expect {:matches 1}}]
+          :expect {:changes 1 :edits 1 :files 1}})]
     (is (= :expect-count-mismatch (:error-type result)))
     (is (nil? (:future-sources result)))))
 
@@ -575,15 +688,15 @@
                     "(defn assertion [] {:a 1 :status :old})\n")
         result
         (transaction/compile-transaction
-          {"src/demo.clj" source}
-          {:changes
-           [{:id :duplicate-status
-             :in ["src/demo.clj"]
-             :forms ['assertion]
-             :find "{:a 1 :status :old}"
-             :do [:assoc-entry {:key ":status" :value ":ready"}]
-             :expect {:matches 1}}]
-           :expect {:changes 1 :edits 1 :files 1}})]
+         {"src/demo.clj" source}
+         {:changes
+          [{:id :duplicate-status
+            :in ["src/demo.clj"]
+            :forms ['assertion]
+            :find "{:a 1 :status :old}"
+            :do [:assoc-entry {:key ":status" :value ":ready"}]
+            :expect {:matches 1}}]
+          :expect {:changes 1 :edits 1 :files 1}})]
     (is (= :map-key-already-present (:error-type result)))
     (is (nil? (:future-sources result)))))
 
@@ -621,8 +734,8 @@
         result (binding [transaction/*binding-analyzer*
                          (fn [_ _] two-owner-binding-analysis)]
                  (transaction/compile-transaction
-                   {"src/demo.clj" source}
-                   (binding-rename-spec 5)))]
+                  {"src/demo.clj" source}
+                  (binding-rename-spec 5)))]
     (is (:ok result))
     (is (= 5 (:match-count result)))
     (is (= 2 (get-in result [:changes 0 :binding-count])))
@@ -631,8 +744,8 @@
                 "(defn table [{:keys [] sort-field :sort-by}] (name sort-field))\n")
            (get-in result [:future-sources "src/demo.clj"])))
     (is (str/includes?
-          (get-in result [:future-sources "src/demo.clj"])
-          "clojure.core/sort-by"))))
+         (get-in result [:future-sources "src/demo.clj"])
+         "clojure.core/sort-by"))))
 
 (deftest binding-rename-refuses-stale-count-ambiguity-and-capture
   (let [source (str "(ns demo)\n"
@@ -642,24 +755,24 @@
         (fn [analysis matches]
           (binding [transaction/*binding-analyzer* (fn [_ _] analysis)]
             (transaction/compile-transaction
-              {"src/demo.clj" source}
-              (binding-rename-spec matches))))]
+             {"src/demo.clj" source}
+             (binding-rename-spec matches))))]
     (is (= :expect-count-mismatch
            (:error-type (compile-with two-owner-binding-analysis 6))))
     (is (= :binding-identity-ambiguous
            (:error-type
-             (compile-with
-               (update two-owner-binding-analysis :locals conj
-                       {:row 2 :col 54 :end-row 2 :end-col 61
-                        :name 'sort-by :id 3})
-               5))))
+            (compile-with
+             (update two-owner-binding-analysis :locals conj
+                     {:row 2 :col 54 :end-row 2 :end-col 61
+                      :name 'sort-by :id 3})
+             5))))
     (is (= :binding-capture-risk
            (:error-type
-             (compile-with
-               (update two-owner-binding-analysis :locals conj
-                       {:row 2 :col 54 :end-row 2 :end-col 64
-                        :name 'sort-field :id 3})
-               5))))))
+            (compile-with
+             (update two-owner-binding-analysis :locals conj
+                     {:row 2 :col 54 :end-row 2 :end-col 64
+                      :name 'sort-field :id 3})
+             5))))))
 
 (deftest binding-rename-refuses-comment-sensitive-destructuring
   (let [source (str "(ns demo)\n"
@@ -675,8 +788,8 @@
           {:row 4 :col 32 :end-row 4 :end-col 39 :name 'sort-by :id 2}]}
         result (binding [transaction/*binding-analyzer* (fn [_ _] analysis)]
                  (transaction/compile-transaction
-                   {"src/demo.clj" source}
-                   (binding-rename-spec 4)))]
+                  {"src/demo.clj" source}
+                  (binding-rename-spec 4)))]
     (is (= :comment-sensitive-binding (:error-type result)))
     (is (nil? (:future-sources result)))))
 
@@ -710,10 +823,41 @@
                              :expect {:matches 1}}]
                   :expect {:changes 1 :edits 1 :files 1}}
             result (transaction/compile-transaction
-                     {"src/sample.clj" source} spec)]
+                    {"src/sample.clj" source} spec)]
         (is (:ok result))
         (is (= expected (get-in result [:future-sources "src/sample.clj"])))
         (is (valid-source? expected))))))
+
+(deftest guarded-top-level-insertion-targets-one-owner-without-repeating-it
+  (let [file "src/sample.clj"
+        source (str "(ns sample)\n\n"
+                    "(defn alpha [] :a)\n\n"
+                    "(defn omega [] :z)\n")
+        expected (str "(ns sample)\n\n"
+                      "(defn alpha [] :a)\n\n"
+                      "(defn beta [] :b)\n\n"
+                      "(defn gamma [] :c)\n\n"
+                      "(defn omega [] :z)\n")
+        compiled
+        (transaction/compile-transaction
+         {file source}
+         {:changes [{:id :add-neighbors
+                     :in [file]
+                     :forms ['alpha]
+                     :do [:insert-right
+                          ["(defn beta [] :b)"
+                           "(defn gamma [] :c)"]]
+                     :expect {:matches 1 :each-file 1 :each-form 1}}]
+          :expect {:changes 1 :edits 1 :files 1}})
+        receipt (when (:ok compiled) (transaction/build-receipt compiled))
+        inverse (when receipt
+                  (transaction/compile-inverse
+                   receipt (:future-sources compiled)))]
+    (is (:ok compiled))
+    (is (= expected (get-in compiled [:future-sources file])))
+    (is (= 1 (:match-count receipt)))
+    (is (:ok inverse))
+    (is (= {file source} (:future-sources inverse)))))
 
 (deftest guarded-sibling-insertion-refuses-comment-bearing-or-invalid-gaps
   (doseq [[label operator]
@@ -724,14 +868,14 @@
             find (if (= :insert-left operator) ":c" ":a")
             result
             (transaction/compile-transaction
-              {"src/sample.clj" source}
-              {:changes [{:id :ambiguous
-                          :in ["src/sample.clj"]
-                          :forms ['xs]
-                          :find find
-                          :do [operator [":b"]]
-                          :expect {:matches 1}}]
-               :expect {:changes 1 :edits 1 :files 1}})]
+             {"src/sample.clj" source}
+             {:changes [{:id :ambiguous
+                         :in ["src/sample.clj"]
+                         :forms ['xs]
+                         :find find
+                         :do [operator [":b"]]
+                         :expect {:matches 1}}]
+              :expect {:changes 1 :edits 1 :files 1}})]
         (is (= :ambiguous-insertion-gap (:error-type result)))
         (is (= :ambiguous (:change-id result)))
         (is (= "src/sample.clj" (:file result))))))
@@ -741,14 +885,14 @@
            [:insert-left ["(:broken"]]]]
     (let [result
           (transaction/compile-transaction
-            {"src/sample.clj" "(ns sample)\n(def xs [:a])\n"}
-            {:changes [{:id :invalid
-                        :in ["src/sample.clj"]
-                        :forms ['xs]
-                        :find ":a"
-                        :do [operator inserted]
-                        :expect {:matches 1}}]
-             :expect {:changes 1 :edits 1 :files 1}})]
+           {"src/sample.clj" "(ns sample)\n(def xs [:a])\n"}
+           {:changes [{:id :invalid
+                       :in ["src/sample.clj"]
+                       :forms ['xs]
+                       :find ":a"
+                       :do [operator inserted]
+                       :expect {:matches 1}}]
+            :expect {:changes 1 :edits 1 :files 1}})]
       (is (contains? #{:unsupported-change-operator :invalid-intent-form}
                      (:error-type result))))))
 
@@ -764,9 +908,9 @@
                 :do [:replace "[current.api :as current]"]
                 :expect {:matches 1 :each-file 1}}
         result (transaction/compile-transaction
-                 sources
-                 (change-spec [change]
-                              {:changes 1 :edits 1 :files 1}))]
+                sources
+                (change-spec [change]
+                             {:changes 1 :edits 1 :files 1}))]
     (is (:ok result))
     (is (= (str "(ns app.core\n"
                 "  (:require [current.api :as current]))\n"
@@ -786,9 +930,9 @@
               :ambiguous-change-owner]]]
       (testing label
         (let [refusal (transaction/compile-transaction
-                        sources
-                        (change-spec [invalid]
-                                     {:changes 1 :edits 1 :files 1}))]
+                       sources
+                       (change-spec [invalid]
+                                    {:changes 1 :edits 1 :files 1}))]
           (is (= error (:error-type refusal)))
           (is (nil? (:future-sources refusal))))))))
 
@@ -798,23 +942,67 @@
         second-intent (intent ["src/a.clj"] ":body" ":body.page" 1)
         expected {:intent-count 2 :edit-count 2 :changed-file-count 1}
         forward (transaction/compile-transaction
-                  sources (spec [first-intent second-intent] expected))
+                 sources (spec [first-intent second-intent] expected))
         reverse (transaction/compile-transaction
-                  sources (spec [second-intent first-intent] expected))]
+                 sources (spec [second-intent first-intent] expected))]
     (is (:ok forward))
     (is (:ok reverse))
     (is (= (:future-sources forward) (:future-sources reverse)))
     (is (= (mapv :result-hash (:files forward))
            (mapv :result-hash (:files reverse))))))
 
+(defn- small-permutations
+  [values]
+  (if (empty? values)
+    [[]]
+    (vec
+     (mapcat
+      (fn [value]
+        (map #(into [value] %)
+             (small-permutations (vec (remove #{value} values)))))
+      values))))
+
+(deftest independent-change-permutations-compile-and-invert-identically
+  (let [sources {"src/a.clj"
+                 "(ns app.a)\n(def value [(old x) :body :tail])\n"
+                 "src/b.clj"
+                 "(ns app.b)\n(def view {:status :idle :untouched 42})\n"}
+        intents [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+                 (intent ["src/a.clj"] ":body" ":body.page" 1)
+                 (intent ["src/b.clj"] ":idle" ":ready" 1)]
+        expected {:intent-count 3 :edit-count 3 :changed-file-count 2}
+        compiled
+        (mapv #(transaction/compile-transaction
+                sources (spec % expected))
+              (small-permutations intents))
+        future-sources (mapv :future-sources compiled)]
+    (is (= 6 (count compiled)))
+    (is (every? :ok compiled))
+    (is (apply = future-sources)
+        "all independent intent orders materialize identical bytes")
+    (is (every? #(str/includes? (get % "src/a.clj") ":tail")
+                future-sources)
+        "unselected source survives every permutation")
+    (is (every? #(str/includes? (get % "src/b.clj") ":untouched 42")
+                future-sources)
+        "unselected map entries survive every permutation")
+    (doseq [plan compiled]
+      (let [receipt (transaction/build-receipt plan)
+            inverse (transaction/compile-inverse
+                     receipt (:future-sources plan))]
+        (is (:ok inverse))
+        (is (= sources (:future-sources inverse)))
+        (is (every? valid-source? (vals (:future-sources plan))))
+        (is (every? valid-source? (vals (:future-sources inverse))))))))
+
 (deftest intents-match-only-original-snapshots-and-never-cascade
   (let [source "(ns app.a)\n(def values [(old x) (new y)])\n"
         result
         (transaction/compile-transaction
-          {"src/a.clj" source}
-          (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
-                 (intent ["src/a.clj"] "(new y)" "(final y)" 1)]
-                {:intent-count 2 :edit-count 2 :changed-file-count 1}))
+         {"src/a.clj" source}
+         (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+                (intent ["src/a.clj"] "(new y)" "(final y)" 1)]
+               {:intent-count 2 :edit-count 2 :changed-file-count 1}))
         future (get-in result [:future-sources "src/a.clj"])]
     (is (:ok result))
     (is (= "(ns app.a)\n(def values [(new x) (final y)])\n" future))
@@ -828,25 +1016,25 @@
         original-reader (slurp reader-file)
         change-spec
         (spec
-          [(intent [shell-file reader-file]
-                   ":body" ":body.ide-shell-page" 2)
-           (intent [reader-file]
-                   "[project-id projects artifact current-location reader-region show-all?]"
-                   "[project-id projects artifact document-title current-location reader-region show-all?]"
-                   1)
-           (intent [reader-file]
-                   "[:title \"Workbench\"]"
-                   "[:title (str document-title \" — Workbench\")]"
-                   1)
-           (intent [reader-file]
-                   "[:span.tab-label artifact]"
-                   "[:span.tab-label {:title artifact} document-title]"
-                   1)
-           (intent [shell-file]
-                   "#(str \"/assets\" %)"
-                   "(partial str \"/assets\")"
-                   1)]
-          {:intent-count 5 :edit-count 6 :changed-file-count 2})
+         [(intent [shell-file reader-file]
+                  ":body" ":body.ide-shell-page" 2)
+          (intent [reader-file]
+                  "[project-id projects artifact current-location reader-region show-all?]"
+                  "[project-id projects artifact document-title current-location reader-region show-all?]"
+                  1)
+          (intent [reader-file]
+                  "[:title \"Workbench\"]"
+                  "[:title (str document-title \" — Workbench\")]"
+                  1)
+          (intent [reader-file]
+                  "[:span.tab-label artifact]"
+                  "[:span.tab-label {:title artifact} document-title]"
+                  1)
+          (intent [shell-file]
+                  "#(str \"/assets\" %)"
+                  "(partial str \"/assets\")"
+                  1)]
+         {:intent-count 5 :edit-count 6 :changed-file-count 2})
         result (transaction/plan-change {:op :change :spec change-spec})]
     (is (:ok result))
     (is (= 5 (:intent-count result)))
@@ -866,11 +1054,11 @@
 (defn- compiled-two-file-change
   []
   (transaction/compile-transaction
-    {"src/a.clj" "(ns app.a)\n(def value (old x))\n"
-     "src/b.clj" "(ns app.b)\n(def value :body)\n"}
-    (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
-           (intent ["src/b.clj"] ":body" ":body.page" 1)]
-          {:intent-count 2 :edit-count 2 :changed-file-count 2})))
+   {"src/a.clj" "(ns app.a)\n(def value (old x))\n"
+    "src/b.clj" "(ns app.b)\n(def value :body)\n"}
+   (spec [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+          (intent ["src/b.clj"] ":body" ":body.page" 1)]
+         {:intent-count 2 :edit-count 2 :changed-file-count 2})))
 
 (defn- memory-io
   [state write-fn]
@@ -886,11 +1074,11 @@
         writes (atom [])
         result
         (transaction/commit-compiled!
-          compiled
-          (memory-io state
-                     (fn [state file source]
-                       (swap! writes conj file)
-                       (swap! state assoc file source))))]
+         compiled
+         (memory-io state
+                    (fn [state file source]
+                      (swap! writes conj file)
+                      (swap! state assoc file source))))]
     (is (:ok result))
     (is (= :change! (:operation result)))
     (is (:committed result))
@@ -908,11 +1096,11 @@
         writes (atom 0)
         result
         (transaction/commit-compiled!
-          compiled
-          (memory-io state
-                     (fn [state file source]
-                       (swap! writes inc)
-                       (swap! state assoc file source))))]
+         compiled
+         (memory-io state
+                    (fn [state file source]
+                      (swap! writes inc)
+                      (swap! state assoc file source))))]
     (is (= :source-hash-mismatch (:error-type result)))
     (is (= "src/b.clj" (:file result)))
     (is (zero? @writes))
@@ -928,13 +1116,13 @@
         write-count (atom 0)
         result
         (transaction/commit-compiled!
-          compiled
-          (memory-io state
-                     (fn [state file source]
-                       (swap! state assoc file source)
-                       (when (= 2 (swap! write-count inc))
-                         (throw (ex-info "injected second-write failure"
-                                         {:error-type :injected-write-failure}))))))]
+         compiled
+         (memory-io state
+                    (fn [state file source]
+                      (swap! state assoc file source)
+                      (when (= 2 (swap! write-count inc))
+                        (throw (ex-info "injected second-write failure"
+                                        {:error-type :injected-write-failure}))))))]
     (is (= :transaction-write-failed (:error-type result)))
     (is (= :injected-write-failure (:cause-error-type result)))
     (is (true? (:rolled-back result)))
@@ -950,12 +1138,12 @@
         write-count (atom 0)
         result
         (transaction/commit-compiled!
-          compiled
-          (memory-io state
-                     (fn [state file source]
-                       (swap! state assoc file source)
-                       (when (= 1 (swap! write-count inc))
-                         (swap! state assoc "src/b.clj" concurrent)))))]
+         compiled
+         (memory-io state
+                    (fn [state file source]
+                      (swap! state assoc file source)
+                      (when (= 1 (swap! write-count inc))
+                        (swap! state assoc "src/b.clj" concurrent)))))]
     (is (= :transaction-recovery-required (:error-type result)))
     (is (false? (:rolled-back result)))
     (is (= "src/b.clj" (:file result)))
@@ -974,17 +1162,17 @@
         b-result (get (:future-sources compiled) "src/b.clj")
         result
         (transaction/commit-compiled!
-          compiled
-          {:read-source
-           (fn [file]
-             (let [source (get @state file)]
-               (if (and (= "src/b.clj" file)
-                        (= b-result source)
-                        (compare-and-set! corrupt-read-once? true false))
-                 (str source "\n; corrupted read")
-                 source)))
-           :write-source! (fn [file source]
-                            (swap! state assoc file source))})]
+         compiled
+         {:read-source
+          (fn [file]
+            (let [source (get @state file)]
+              (if (and (= "src/b.clj" file)
+                       (= b-result source)
+                       (compare-and-set! corrupt-read-once? true false))
+                (str source "\n; corrupted read")
+                source)))
+          :write-source! (fn [file source]
+                           (swap! state assoc file source))})]
     (is (= :transaction-write-failed (:error-type result)))
     (is (= :read-back-hash-mismatch (:cause-error-type result)))
     (is (true? (:rolled-back result)))
@@ -998,26 +1186,26 @@
         forward-failed? (atom false)
         result
         (transaction/commit-compiled!
-          compiled
-          (memory-io
-            state
-            (fn [state file source]
-              (cond
-                (and (= "src/b.clj" file)
-                     (= source (get futures file))
-                     (compare-and-set! forward-failed? false true))
-                (do
-                  (swap! state assoc file source)
-                  (throw (ex-info "injected forward failure"
-                                  {:error-type :injected-write-failure})))
+         compiled
+         (memory-io
+          state
+          (fn [state file source]
+            (cond
+              (and (= "src/b.clj" file)
+                   (= source (get futures file))
+                   (compare-and-set! forward-failed? false true))
+              (do
+                (swap! state assoc file source)
+                (throw (ex-info "injected forward failure"
+                                {:error-type :injected-write-failure})))
 
-                (and (= "src/b.clj" file)
-                     (= source (get originals file)))
-                (throw (ex-info "injected rollback failure"
-                                {:error-type :injected-rollback-failure}))
+              (and (= "src/b.clj" file)
+                   (= source (get originals file)))
+              (throw (ex-info "injected rollback failure"
+                              {:error-type :injected-rollback-failure}))
 
-                :else
-                (swap! state assoc file source)))))]
+              :else
+              (swap! state assoc file source)))))]
     (is (= :transaction-recovery-required (:error-type result)))
     (is (false? (:rolled-back result)))
     (is (= (get originals "src/a.clj") (get @state "src/a.clj")))
@@ -1030,16 +1218,16 @@
   (let [original "(ns app.a)\n(def views [#(old %) (old account) (old account)])\n"
         compiled
         (transaction/compile-transaction
-          {"src/a.clj" original}
-          (spec [(intent ["src/a.clj"]
-                         "(old account)"
-                         "(wrapper (new value) {:deep true})"
-                         2)]
-                {:intent-count 1 :edit-count 2 :changed-file-count 1}))
+         {"src/a.clj" original}
+         (spec [(intent ["src/a.clj"]
+                        "(old account)"
+                        "(wrapper (new value) {:deep true})"
+                        2)]
+               {:intent-count 1 :edit-count 2 :changed-file-count 1}))
         receipt (transaction/build-receipt compiled)
         round-tripped (edn/read-string (pr-str receipt))
         inverse (transaction/compile-inverse
-                  round-tripped (:future-sources compiled))]
+                 round-tripped (:future-sources compiled))]
     (is (:ok compiled))
     (is (string? (:receipt-hash receipt)))
     (is (= 1 (:receipt-version receipt)))
@@ -1056,6 +1244,33 @@
            (get-in inverse [:files 0 :result-hash])))
     (is (valid-source? (get (:future-sources inverse) "src/a.clj")))))
 
+(deftest formatter-coalescing-keeps-logical-and-physical-counts-independent
+  (let [file "src/sample.clj"
+        original (str "(ns sample.core)\n"
+                      "(defn alpha [] :old-a)\n"
+                      "(defn beta [] :old-b)\n")
+        compiled
+        (transaction/compile-transaction
+         {file original}
+         (spec [(intent [file] "sample.core" "sample.next" 1)
+                (intent [file] ":old-a" ":new-a" 1)
+                (intent [file] ":old-b" ":new-b" 1)]
+               {:intent-count 3 :edit-count 3 :changed-file-count 1}))
+        formatted (str "(ns sample.next)\n\n"
+                       "(defn alpha\n  []\n  :new-a)\n\n"
+                       "(defn beta\n  []\n  :new-b)\n")
+        coalesced (transaction/with-future-sources compiled {file formatted})
+        receipt (transaction/build-receipt coalesced)
+        inverse (transaction/compile-inverse
+                 receipt (:future-sources coalesced))]
+    (is (:ok compiled))
+    (is (:ok coalesced))
+    (is (= 3 (:match-count receipt)))
+    (is (= 1 (:inverse-edit-count receipt)))
+    (is (= 1 (count (get-in receipt [:files 0 :inverse-edits]))))
+    (is (:ok inverse))
+    (is (= {file original} (:future-sources inverse)))))
+
 (deftest addressed-delete-owns-only-attached-comments-and-round-trips
   (let [original (str "(ns app.a)\n\n"
                       ";; attached to doomed\n"
@@ -1063,22 +1278,22 @@
                       ";; detached from kept\n\n"
                       "(defn kept [] 2)\n")
         doomed (transaction/addressed-form-at
-                 original {:line 4 :character 1})
+                original {:line 4 :character 1})
         kept (transaction/addressed-form-at
-               original {:line 8 :character 1})
+              original {:line 8 :character 1})
         compiled (transaction/compile-addressed-transaction
-                   {"src/a.clj" original}
-                   [(assoc doomed :id "delete-doomed" :file "src/a.clj"
-                           :delete true)
-                    (assoc kept :id "update-kept" :file "src/a.clj"
-                           :after "(defn kept [] 3)")])
+                  {"src/a.clj" original}
+                  [(assoc doomed :id "delete-doomed" :file "src/a.clj"
+                          :delete true)
+                   (assoc kept :id "update-kept" :file "src/a.clj"
+                          :after "(defn kept [] 3)")])
         expected (str "(ns app.a)\n\n"
                       ";; detached from kept\n\n"
                       "(defn kept [] 3)\n")
         receipt (when (:ok compiled) (transaction/build-receipt compiled))
         inverse (when receipt
                   (transaction/compile-inverse
-                    receipt {"src/a.clj" expected}))]
+                   receipt {"src/a.clj" expected}))]
     (is (:ok compiled))
     (is (= expected (get (:future-sources compiled) "src/a.clj")))
     (is (:ok inverse))
@@ -1087,11 +1302,11 @@
 (deftest addressed-delete-protects-the-namespace-form
   (let [source "(ns app.a)\n(defn kept [] 2)\n"
         namespace-form (transaction/addressed-form-at
-                         source {:line 1 :character 1})
+                        source {:line 1 :character 1})
         result (transaction/compile-addressed-transaction
-                 {"src/a.clj" source}
-                 [(assoc namespace-form :id "delete-ns" :file "src/a.clj"
-                         :delete true)])]
+                {"src/a.clj" source}
+                [(assoc namespace-form :id "delete-ns" :file "src/a.clj"
+                        :delete true)])]
     (is (= :protected-namespace-form (:error-type result)))
     (is (nil? (:future-sources result)))))
 
@@ -1110,14 +1325,14 @@
         (is (nil? (:future-sources result)))))
     (testing "receipt contents are hash fenced"
       (let [result (transaction/compile-inverse
-                     (assoc receipt :diff "tampered")
-                     (:future-sources compiled))]
+                    (assoc receipt :diff "tampered")
+                    (:future-sources compiled))]
         (is (= :invalid-transaction-receipt (:error-type result)))
         (is (str/includes? (:error result) "hash"))))
     (testing "unknown versions refuse before inverse compilation"
       (let [result (transaction/compile-inverse
-                     (assoc receipt :receipt-version 999)
-                     (:future-sources compiled))]
+                    (assoc receipt :receipt-version 999)
+                    (:future-sources compiled))]
         (is (= :invalid-transaction-receipt (:error-type result)))
         (is (= 1 (:supported-receipt-version result)))))
     (testing "a corrupt path refuses even when its receipt hash is recomputed"
@@ -1125,16 +1340,31 @@
                                [0 999])
             rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
             result (transaction/compile-inverse
-                     rehashed (:future-sources compiled))]
+                    rehashed (:future-sources compiled))]
         (is (= :invalid-transaction-receipt (:error-type result)))
         (is (= :stale-path (:cause-error-type result)))))
-    (testing "aggregate evidence must agree with concrete inverse edits"
-      (let [tampered (update receipt :match-count inc)
-            rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
-            result (transaction/compile-inverse
-                     rehashed (:future-sources compiled))]
-        (is (= :invalid-transaction-receipt (:error-type result)))
-        (is (str/includes? (:error result) "match count"))))))
+    (testing "logical and physical receipt counts are independently guarded"
+      (testing "logical matches agree with intent evidence"
+        (let [tampered (update receipt :match-count inc)
+              rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
+              result (transaction/compile-inverse
+                      rehashed (:future-sources compiled))]
+          (is (= :invalid-transaction-receipt (:error-type result)))
+          (is (str/includes? (:error result) "logical match count"))))
+      (testing "physical inverse count agrees with inverse records"
+        (let [tampered (update receipt :inverse-edit-count inc)
+              rehashed (assoc tampered :receipt-hash (receipt-hash-fn tampered))
+              result (transaction/compile-inverse
+                      rehashed (:future-sources compiled))]
+          (is (= :invalid-transaction-receipt (:error-type result)))
+          (is (str/includes? (:error result) "inverse edit count"))))
+      (testing "legacy ordinary receipts derive inverse count from match count"
+        (let [legacy (dissoc receipt :inverse-edit-count)
+              rehashed (assoc legacy :receipt-hash (receipt-hash-fn legacy))
+              result (transaction/compile-inverse
+                      rehashed (:future-sources compiled))]
+          (is (:ok result))
+          (is (= (:original-sources compiled) (:future-sources result))))))))
 
 (deftest receipt-publication-failure-restores-source-and-preserves-old-receipt
   (let [temp-dir (fs/create-temp-dir {:prefix "intent-receipt-failure-"})
@@ -1156,7 +1386,7 @@
                  (throw (ex-info "injected publication failure"
                                  {:error-type :injected-publish-failure})))}
               #(transaction/execute-change!
-                 {:spec change-spec :receipt-out receipt-file}))]
+                {:spec change-spec :receipt-out receipt-file}))]
         (is (= :receipt-write-failed (:error-type result)))
         (is (true? (:rolled-back result)))
         (is (= source (slurp file)))
@@ -1182,31 +1412,31 @@
       (spit malformed-receipt "{:not valid")
       (testing "a receipt may not alias source"
         (let [result (transaction/execute-change!
-                       {:spec change-spec :receipt-out file})]
+                      {:spec change-spec :receipt-out file})]
           (is (= :invalid-receipt-path (:error-type result)))
           (is (= source (slurp file)))))
       (testing "a missing receipt parent refuses before commit"
         (let [result (transaction/execute-change!
-                       {:spec change-spec
-                        :receipt-out missing-parent-receipt})]
+                      {:spec change-spec
+                       :receipt-out missing-parent-receipt})]
           (is (= :invalid-receipt-path (:error-type result)))
           (is (= source (slurp file)))))
       (testing "a plan refusal preserves a pre-existing receipt"
         (let [bad-spec (assoc-in change-spec [:intents 0 :expect-count] 2)
               result (transaction/execute-change!
-                       {:spec bad-spec :receipt-out receipt-file})]
+                      {:spec bad-spec :receipt-out receipt-file})]
           (is (= :expect-count-mismatch (:error-type result)))
           (is (= source (slurp file)))
           (is (= "{:old-receipt true}\n" (slurp receipt-file)))))
       (testing "malformed undo receipt cannot reach source mutation"
         (let [result (transaction/execute-undo!
-                       {:receipt malformed-receipt})]
+                      {:receipt malformed-receipt})]
           (is (= :invalid-transaction-receipt (:error-type result)))
           (is (= source (slurp file)))))
       (testing "unknown mutation flags refuse"
         (let [result (transaction/execute-change!
-                       {:spec change-spec :receipt-out receipt-file
-                        :surprise true})]
+                      {:spec change-spec :receipt-out receipt-file
+                       :surprise true})]
           (is (= :unknown-arguments (:error-type result)))
           (is (= source (slurp file)))
           (is (= "{:old-receipt true}\n" (slurp receipt-file)))))
@@ -1461,20 +1691,20 @@
         (slurp "test/fixtures/intent_transaction/source_reader.clj")
         scoped-spec
         (change-spec
-          [(change :app-body [app-file] ['ide-shell]
-                   ":body" ":body.scoped-page"
-                   {:matches 1 :each-form 1 :each-file 1})
-           (change :reader-body [reader-file] ['source-reader-shell]
-                   ":body" ":body.scoped-page"
-                   {:matches 1 :each-form 1 :each-file 1})
-           (change :app-css [app-file] ['ide-shell]
-                   "\"/app.css\"" "\"/scoped.css\""
-                   {:matches 1 :each-form 1 :each-file 1})
-           (change :reader-title [reader-file] ['source-reader-shell]
-                   "[:title \"Workbench\"]"
-                   "[:title \"Scoped Workbench\"]"
-                   {:matches 1 :each-form 1 :each-file 1})]
-          {:changes 4 :edits 4 :files 2})]
+         [(change :app-body [app-file] ['ide-shell]
+                  ":body" ":body.scoped-page"
+                  {:matches 1 :each-form 1 :each-file 1})
+          (change :reader-body [reader-file] ['source-reader-shell]
+                  ":body" ":body.scoped-page"
+                  {:matches 1 :each-form 1 :each-file 1})
+          (change :app-css [app-file] ['ide-shell]
+                  "\"/app.css\"" "\"/scoped.css\""
+                  {:matches 1 :each-form 1 :each-file 1})
+          (change :reader-title [reader-file] ['source-reader-shell]
+                  "[:title \"Workbench\"]"
+                  "[:title \"Scoped Workbench\"]"
+                  {:matches 1 :each-form 1 :each-file 1})]
+         {:changes 4 :edits 4 :files 2})]
     (try
       (spit app-file original-app)
       (spit reader-file original-reader)
@@ -1524,10 +1754,10 @@
              "(defn second-owner [] [:other])\n")
         scoped-spec
         (change-spec
-          [(change :body-class [source-file] ['first-owner 'second-owner]
-                   ":body" ":body.scoped-page"
-                   {:matches 2 :each-form 1})]
-          {:changes 1 :edits 2 :files 1})]
+         [(change :body-class [source-file] ['first-owner 'second-owner]
+                  ":body" ":body.scoped-page"
+                  {:matches 2 :each-form 1})]
+         {:changes 1 :edits 2 :files 1})]
     (try
       (spit source-file original-source)
       (let [{:keys [exit out err]}

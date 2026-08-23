@@ -22,7 +22,7 @@
     (is (= ["clj" "cljs" "cljc" "edn"] (:extensions server)))
     (is (= ["" "src" "test" "dev"] (:sourceRoots server)))
     (is (= 10000 (:requestTimeout server)))
-    (is (= 45000 (:initializationTimeout server)))
+    (is (= 120000 (:initializationTimeout server)))
     (is (= "/tmp/repository/.clj-kondo"
            (get-in server [:initializationOptions :kondo-config-dir])))
     (is (str/ends-with? source "}\n"))))
@@ -68,6 +68,36 @@
     (is (not (str/includes? once "\"old\"")))
     (is (= 2 (count (re-seq #"/repo/a" once))))
     (is (str/includes? once "/bin/clojure-lsp"))))
+
+(deftest shared-cclsp-config-prunes-only-missing-managed-roots
+  (let [managed-live {"extensions" ["clj" "cljs" "cljc" "edn"]
+                      "command" ["/bin/clojure-lsp"]
+                      "rootDir" "/repo/live"
+                      "requestTimeout" 10000
+                      "initializationTimeout" 45000
+                      "sourceRoots" ["src"]}
+        managed-missing (assoc managed-live "rootDir" "/repo/missing")
+        marked-missing (assoc managed-missing "managedBy" "clj-surgeon")
+        unmanaged-clojure {"extensions" ["clj"]
+                           "command" ["custom-lsp"]
+                           "rootDir" "/custom/missing"}
+        unrelated {"extensions" ["ts"]
+                   "command" ["ts-lsp"]
+                   "rootDir" "/typescript/missing"}
+        before (str (json/generate-string
+                      {"servers" [managed-live managed-missing marked-missing
+                                  unmanaged-clojure unrelated]})
+                    "\n")
+        after (onboarding/upsert-cclsp-workspace
+                before
+                {:workspace "/repo/live"
+                 :lsp-command "/bin/clojure-lsp"
+                 :existing-workspace-roots #{"/repo/live"}})
+        servers (get (json/parse-string after) "servers")]
+    (is (= #{"/repo/live" "/custom/missing" "/typescript/missing"}
+           (set (map #(get % "rootDir") servers))))
+    (is (= "clj-surgeon" (get (first servers) "managedBy")))
+    (is (= "custom-lsp" (first (get (second servers) "command"))))))
 
 (deftest shared-cclsp-config-does-not-reorder-an-already-onboarded-workspace
   (let [a {:workspace "/repo/a" :lsp-command "/bin/clojure-lsp"}
@@ -207,6 +237,26 @@
     (is (:ok receipt))
     (is (= (.getCanonicalPath root) (:workspace receipt)))
     (is (str/includes? (slurp target) (.getCanonicalPath root)))))
+
+(deftest cclsp-config-installation-prunes-a-missing-managed-worktree
+  (let [root (.toFile
+               (java.nio.file.Files/createTempDirectory
+                 "clj-surgeon-cclsp-prune"
+                 (make-array java.nio.file.attribute.FileAttribute 0)))
+        missing (io/file root "deleted-worktree")
+        target (io/file root "state" "cclsp.json")]
+    (.mkdirs (.getParentFile target))
+    (spit target
+          (str (json/generate-string
+                 {"servers" [(onboarding/cclsp-server
+                               (.getPath missing)
+                               "/opt/homebrew/bin/clojure-lsp")]})
+               "\n"))
+    (let [receipt (onboarding/install-cclsp-workspace! {:workspace (.getPath root) :config-file (.getPath target) :lsp-command "/opt/homebrew/bin/clojure-lsp"})
+          servers (get (json/parse-string (slurp target)) "servers")]
+      (is (= [(.getPath missing)] (:pruned-workspaces receipt)))
+      (is (= [(.getCanonicalPath root)]
+             (mapv #(get % "rootDir") servers))))))
 
 (deftest concurrent-cclsp-registrations-are-lossless-and-read-back-verified
   (let [parent (io/file (System/getProperty "java.io.tmpdir")

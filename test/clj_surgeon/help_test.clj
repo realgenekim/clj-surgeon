@@ -107,7 +107,7 @@
                      :ls-extract :ls-deps
                      :rename-ns :rename-ns!
                      :fix-declares :fix-declares!
-                     :extract :extract!
+                     :extract :extract! :undo-extract!
                      :find-subform :lens :xray :edit :change :change! :undo-change!
                      :replace-subform :replace-subform!
                      :cljc-merge :cljc-split :cljc-add-require :cljc-analyze}]
@@ -301,6 +301,30 @@
     (is (str/includes? help "matches exactly one subtree"))
     (is (str/includes? help "There is no variadic wildcard"))
     (is (str/includes? help ":match '(loop _ _)'"))))
+
+(deftest extraction-help-teaches-the-failure-atomic-and-guarded-undo-contract
+  (let [plan-help (core/format-op-help
+                    :extract (get core/ops-registry :extract))
+        apply-help (core/format-op-help
+                     :extract! (get core/ops-registry :extract!))
+        undo-help (core/format-op-help
+                    :undo-extract! (get core/ops-registry :undo-extract!))]
+    (is (str/includes? plan-help "dependency-minimal"))
+    (is (str/includes? plan-help "quoted-Var proof"))
+    (is (str/includes? plan-help ":require-policy"))
+    (is (str/includes? plan-help ":copy-all"))
+    (is (str/includes? apply-help ":receipt-out"))
+    (is (str/includes? apply-help ":require-policy"))
+    (is (str/includes? apply-help ":copy-all"))
+    (is (str/includes? apply-help "target-requires"))
+    (is (str/includes? apply-help "remaining-source-callers"))
+    (is (str/includes? apply-help "Unsupported require shapes refuse"))
+    (is (str/includes? apply-help "quoted-var-references"))
+    (is (str/includes? apply-help "parses them, hash-fences the source"))
+    (is (str/includes? apply-help "roll back"))
+    (is (str/includes? apply-help ":undo-extract!"))
+    (is (str/includes? undo-help "both result files still match"))
+    (is (str/includes? undo-help "refuses before writing"))))
 
 ;; ============================================================
 ;; parse-val — string to value (pure)

@@ -1,15 +1,22 @@
 (ns clj-surgeon.mcp-tool
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.extract :as extract]
+   [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-extraction :as extraction]
+   [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
+   [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
-   [clojure.java.io :as io])
+   [clojure.java.io :as io]
+   [clojure.string :as str])
   (:import
    (java.nio.file Files Path)
    (java.util UUID)))
@@ -18,15 +25,22 @@
   (str
     "Apply one failure-atomic Clojure transaction. If inspect_clojure returned "
     "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
-    "fill every decision and submit once. Otherwise, use changes for two or more "
-    "exact replacements or several files. Each changes item contains id, files, "
-    "expect, exactly one of forms or owner, and exactly one action: replace, "
+    "fill every decision and submit once. To move named owners into one new "
+    "namespace, use extraction once; include exact caller_changes or explicitly "
+    "ignored_caller_files, and exact forms, caller_edits, and files counts. "
+    "Direct extraction reports structural caller candidates, not semantic completeness. "
+    "For exact nested replacement, use edits with file, within {form}, from, and to. Omit matches for one occurrence, or set matches to the exact known count; Surgeon derives all transaction counts. Otherwise, use changes for different edits or several files. "
+    "exact changes or several files. Each changes item contains id, files, "
+    "expect, exactly one of forms or owner, and exactly one action: replace, delete, "
     "insert_before, insert_after, rename_binding, or assoc_entry. Exact replacement, "
     "insertion, and assoc_entry "
-    "items also contain find. Insertion actions contain one or more complete "
+    "items contain find, except guarded top-level insertion: omit find and name exactly one forms owner. To delete two or more known named owners, use forms "
+    "with delete: true once; do not create marker forms or wait for semantic preparation. "
+    "Insertion actions contain one or more complete "
     "form strings and refuse comment-bearing gaps. For named top-level "
     "def or defn owners, use forms: [name]. owner is only for the namespace form "
     "and must be {kind: namespace, name: ns-name}; never pass owner as a string. "
+    "For one multimethod implementation, use forms: [{kind: defmethod, name: render, dispatch: :card}]. "
     "find and replace must each contain one complete Clojure form. Example item: "
     "{id: status, files: [src/app.clj], forms: [render], find: :old, "
     "replace: :new, expect: {matches: 1, each_form: 1}}. "
@@ -36,189 +50,13 @@
     "To add one key/value to logically equal maps while preserving comments, use "
     "find with assoc_entry: {key: :status, value: :ready}. "
     "Top-level expect contains changes, edits, and files. Any mismatch refuses "
-    "the whole request. Success parses and reads back every file and publishes "
-    "an inverse receipt. verification_complete=true is terminal. Use native "
+    "the whole request. Optional verify is fast or full. Staged formatting, "
+    "commands, and hot laws roll back on failure. A configured cold job returns "
+    "verification_complete=false plus one inspect next_call; continue useful "
+    "work and copy it once instead of replaying the edit. Success parses and "
+    "reads back every file and publishes an inverse receipt. "
+    "verification_complete=true is terminal. Use native "
     "patching for prose or one arbitrary text edit."))
-
-(def ^:private positive-integer-schema
-  {:type "integer" :minimum 1})
-
-(def explicit-change-schema
-  {:type "object"
-   :additionalProperties false
-   :properties
-   {"workspace_root" {:type "string" :minLength 1
-                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
-    "changes"
-    {:type "array"
-     :minItems 1
-     :description "Complete structural changes. IDs must be unique."
-     :items
-     {:type "object"
-      :additionalProperties false
-      :properties
-      {"id" {:type "string" :minLength 1
-             :description "Stable diagnostic label, for example body-class."}
-       "files" {:type "array" :minItems 1
-                :description "Project-relative .clj, .cljs, or .cljc paths. No .. or absolute paths."
-                :items {:type "string" :minLength 1}}
-       "forms" {:type "array" :minItems 1
-                :description "Exact named top-level owner forms."
-                :items {:type "string" :minLength 1}}
-       "owner" {:type "object"
-                :additionalProperties false
-                :description "Exact non-Var owner scope."
-                :properties
-                {"kind" {:type "string" :enum ["namespace"]}
-                 "name" {:type "string" :minLength 1}}
-                :required ["kind" "name"]}
-       "find" {:type "string" :minLength 1
-               :description "Exactly one Clojure form in its required source spelling."}
-       "inside" {:type "string" :minLength 1
-                 :description "assoc_entry only. Restrict the map to this complete semantic ancestor; comments do not change identity."}
-       "replace" {:type "string" :minLength 1
-                  :description "Replacement action: exactly one Clojure form. Source spelling is preserved."}
-       "insert_before" {:type "array" :minItems 1
-                        :description "Insertion action: one or more complete Clojure forms to insert before every selected sibling. Comment-bearing gaps refuse."
-                        :items {:type "string" :minLength 1}}
-       "insert_after" {:type "array" :minItems 1
-                       :description "Insertion action: one or more complete Clojure forms to insert after every selected sibling. Comment-bearing gaps refuse."
-                       :items {:type "string" :minLength 1}}
-       "rename_binding"
-       {:type "object"
-        :additionalProperties false
-        :description "Binding-aware local rename. Preserves :keys data keys and renames only resolved local usages."
-        :properties
-        {"from" {:type "string" :minLength 1
-                 :description "Existing unqualified local binding name."}
-         "to" {:type "string" :minLength 1
-               :description "New unqualified local binding name."}
-         "preserve_external_key"
-         {:type "boolean"
-          :enum [true]
-          :description "Required true. Keep external destructuring keys unchanged."}}
-        :required ["from" "to" "preserve_external_key"]}
-       "assoc_entry"
-       {:type "object"
-        :additionalProperties false
-        :description "Insert one key/value into structurally equal maps while preserving their existing comments and source spelling."
-        :properties
-        {"key" {:type "string" :minLength 1
-                :description "Exactly one Clojure map key form."}
-         "value" {:type "string" :minLength 1
-                  :description "Exactly one Clojure value form."}}
-        :required ["key" "value"]}
-       "expect" {:type "object"
-                 :additionalProperties false
-                 :properties
-                 {"matches" (assoc positive-integer-schema
-                                   :description "Required total matches for this change.")
-                  "each_form" (assoc positive-integer-schema
-                                     :description "Optional required matches in every named owner.")
-                  "each_file" (assoc positive-integer-schema
-                                     :description "Optional required matches in every named file.")}
-                 :required ["matches"]}}
-      :required ["id" "files" "expect"]
-      :allOf
-      [{:oneOf [{:required ["forms"]}
-                {:required ["owner"]}]}
-       {:oneOf
-        [{:required ["find" "replace"]
-          :not {:anyOf [{:required ["insert_before"]}
-                        {:required ["insert_after"]}
-                        {:required ["rename_binding"]}
-                        {:required ["assoc_entry"]}
-                        {:required ["inside"]}]}}
-         {:required ["find" "insert_before"]
-          :not {:anyOf [{:required ["replace"]}
-                        {:required ["insert_after"]}
-                        {:required ["rename_binding"]}
-                        {:required ["assoc_entry"]}
-                        {:required ["inside"]}]}}
-         {:required ["find" "insert_after"]
-          :not {:anyOf [{:required ["replace"]}
-                        {:required ["insert_before"]}
-                        {:required ["rename_binding"]}
-                        {:required ["assoc_entry"]}
-                        {:required ["inside"]}]}}
-         {:required ["forms" "rename_binding"]
-          :not {:anyOf [{:required ["find"]}
-                        {:required ["owner"]}
-                        {:required ["replace"]}
-                        {:required ["insert_before"]}
-                        {:required ["insert_after"]}
-                        {:required ["assoc_entry"]}
-                        {:required ["inside"]}]}}
-         {:required ["find" "assoc_entry"]
-          :not {:anyOf [{:required ["replace"]}
-                        {:required ["insert_before"]}
-                        {:required ["insert_after"]}
-                        {:required ["rename_binding"]}]}}]}]}}
-    "expect"
-    {:type "object"
-     :additionalProperties false
-     :description "Aggregate transaction cardinality. All three counts are required."
-     :properties
-     {"changes" (assoc positive-integer-schema :description "Number of change objects.")
-      "edits" (assoc positive-integer-schema :description "Total exact replacements.")
-      "files" (assoc positive-integer-schema :description "Total files that must change.")}
-     :required ["changes" "edits" "files"]}}
-   :required ["changes" "expect"]})
-
-(def basis-change-schema
-  {:type "object"
-   :additionalProperties false
-   :properties
-   {"workspace_root" {:type "string" :minLength 1
-                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
-    "basis" {:type "string" :pattern "^cb-"
-             :description "Opaque basis returned by inspect_clojure prepare-change."}
-    "decisions"
-    {:type "array" :minItems 1
-     :description "Exactly one keep, owner replacement, whole-site delete, or compact nested edit per site."
-     :items
-     {:type "object"
-      :additionalProperties false
-      :properties
-      {"site" {:type "string" :minLength 1}
-       "keep" {:type "boolean" :const true}
-       "replace" {:type "string" :minLength 1}
-       "delete" {:type "boolean" :const true
-                 :description "Delete the prepared owner and its contiguous leading comment block."}
-       "edit"
-       {:type "object"
-        :additionalProperties false
-        :description "Compile one exact nested replacement or deletion inside retained source."
-        :properties
-        {"find" {:type "string" :minLength 1
-                 :description "Exactly one structural Clojure form."}
-         "replace" {:type "string" :minLength 1
-                    :description "Exactly one replacement form."}
-         "delete" {:type "boolean" :const true
-                   :description "Delete the match and its contiguous leading comment block."}}
-        :required ["find"]
-        :oneOf [{:required ["replace"]} {:required ["delete"]}]}}
-      :required ["site"]
-      :oneOf [{:required ["keep"]}
-              {:required ["replace"]}
-              {:required ["delete"]}
-              {:required ["edit"]}]}}
-    "verify" {:type "string" :enum ["fast" "full"] :default "fast"
-              :description "Basis route only. Omit when changes is present."}}
-   :required ["basis" "decisions"]})
-
-(def clj-change-schema
-  {:type "object"
-   :additionalProperties false
-   :properties (merge (:properties basis-change-schema)
-                      (:properties explicit-change-schema))
-   :oneOf
-   [{:required ["basis" "decisions"]
-     :not {:anyOf [{:required ["changes"]} {:required ["expect"]}]}}
-    {:required ["changes" "expect"]
-     :not {:anyOf [{:required ["basis"]}
-                   {:required ["decisions"]}
-                   {:required ["verify"]}]}}]})
 
 (def clj-change-output-schema
   {:type "object"
@@ -258,6 +96,120 @@
                        (assoc change :in (mapv :path paths))))))
       {:ok true :spec (assoc spec :changes resolved)})))
 
+(defn- resolve-extraction-paths
+  [root {:keys [file to caller-changes ignored-caller-files expect] :as request}]
+  (let [source (mcp-paths/resolve-source-path root file)
+        target (mcp-paths/resolve-new-source-path root to)
+        caller-spec (contract/tool-params->transaction
+                      {:changes caller-changes
+                       :expect {:changes (count caller-changes)
+                                :edits (:caller-edits expect)
+                                :files (count (distinct (mapcat :files caller-changes)))}})
+        callers (resolve-transaction-paths root caller-spec)
+        ignored (mapv #(mcp-paths/resolve-source-path root %)
+                      ignored-caller-files)
+        refusal (first (remove :ok (concat [source target callers] ignored)))]
+    (if refusal
+      refusal
+      {:ok true
+       :extraction
+       (assoc request
+              :file (:path source)
+              :to (:path target)
+              :caller-changes (get-in callers [:spec :changes])
+              :ignored-caller-files (mapv :path ignored))})))
+
+(defn- workspace-sources
+  [root]
+  (->> (file-seq (.toFile root))
+       (filter #(.isFile %))
+       (filter #(re-matches #".*\.clj[sc]?$" (.getName %)))
+       (remove #(str/includes? (.getPath %) "/.git/"))
+       (map (fn [file] [(.getCanonicalPath file) (slurp file)]))
+       (into (sorted-map))))
+
+(defn- execute-extraction!
+  [config root request receipt verify]
+  (let [sources (workspace-sources root)
+        request (assoc request
+                       :source (get sources (:file request))
+                       :target-ns (extract/file-path->ns-name
+                                    (:to request) ["src" "test" "dev"])
+                       :workspace-sources sources)
+        compiled (extraction/compile-extraction request)
+        compiled
+        (if (and (:ok compiled) (:formatter config))
+          (let [format! (or (:format-candidates! config)
+                            formatter/format-candidates!)
+                formatted (format! (.toString root) (:formatter config)
+                                   (:future-sources compiled))]
+            (if (:ok formatted)
+              (let [prepared (extraction/with-future-sources
+                               compiled (:future-sources formatted))]
+                (if (:ok prepared)
+                  (assoc prepared :format
+                         (dissoc formatted :future-sources :ok))
+                  prepared))
+              formatted))
+          compiled)]
+    (if-not (:ok compiled)
+      compiled
+      (let [project-root (.toString root)
+            original-files (vec (keys (:original-sources compiled)))
+            future-files (vec (keys (:future-sources compiled)))
+            baseline (when verify
+                       (cond
+                         (:capture-verification-baseline! config)
+                         ((:capture-verification-baseline! config)
+                          project-root verify (:verification-profiles config)
+                          original-files)
+
+                         (nil? (:verify! config))
+                         (change-buffer/capture-verification-baseline!
+                           project-root verify (:verification-profiles config)
+                           original-files)))]
+        (if (and baseline (not (:ok baseline)))
+          {:error "Verification baseline capture failed before extraction"
+           :error-type :verification-baseline-failed
+           :verification baseline
+           :source-unchanged true}
+          (let [result (extraction/commit! compiled)]
+            (if-not (:ok result)
+              result
+              (try
+                (file-ops/atomic-write! receipt (pr-str (:receipt result)))
+                (let [result (assoc result :receipt-file receipt)
+                      verification
+                      (when verify
+                        (if-let [verify! (:verify! config)]
+                          (verify! project-root verify
+                                   (:verification-profiles config) future-files)
+                          (change-buffer/run-verification!
+                            project-root verify (:verification-profiles config)
+                            future-files baseline)))]
+                  (if (or (nil? verification) (:ok verification))
+                    (do
+                      (cold-verify/attach-undo-from-verification!
+                        project-root verification (:receipt-file result) (:receipt-hash result))
+                      (cond-> result verification (assoc :verification verification)))
+                    (let [rollback (extraction/undo! (:receipt result))
+                          rolled-back (boolean (:ok rollback))]
+                      (when rolled-back (.delete (io/file receipt)))
+                      {:error "Verification failed; extraction was rolled back"
+                       :error-type :verification-failed
+                       :verification verification
+                       :rolled-back rolled-back
+                       :recovery rollback
+                       :source-unchanged rolled-back})))
+                (catch Exception error
+                  (let [rollback (extraction/undo! (:receipt result))]
+                    {:error "Could not publish extraction receipt"
+                     :error-type :receipt-publish-failed
+                     :cause-error (.getMessage error)
+                     :rolled-back (boolean (:ok rollback))
+                     :recovery rollback
+                     :source-unchanged (boolean (:ok rollback))}))))))))))
+
 (defn- default-receipt-dir
   [project-root]
   (workspace/receipt-dir project-root))
@@ -287,14 +239,105 @@
       (assoc timings :total_ms (elapsed-ms total-start))))
   response)
 
+(defn- execute-explicit-change!
+  [config root resolved receipt verify]
+  (let [files (->> (get-in resolved [:spec :changes])
+                   (mapcat :in)
+                   distinct
+                   vec)
+        project-root (.toString root)
+        baseline (when verify
+                   (cond
+                     (:capture-verification-baseline! config)
+                     ((:capture-verification-baseline! config)
+                      project-root verify (:verification-profiles config) files)
+
+                     (nil? (:verify! config))
+                     (change-buffer/capture-verification-baseline!
+                       project-root verify (:verification-profiles config) files)))
+        baseline-refusal? (and baseline (not (:ok baseline)))]
+    (if baseline-refusal?
+      {:error "Verification baseline capture failed before the direct transaction"
+       :error-type :verification-baseline-failed
+       :verification baseline
+       :source-unchanged true}
+      (let [prepare-compiled! (:prepare-compiled! config)
+            result (transaction/execute-change!
+                     (cond-> {:spec (:spec resolved) :receipt-out receipt}
+                       prepare-compiled!
+                       (assoc :prepare-compiled!
+                              #(prepare-compiled! project-root %))))]
+        (if (or (:error result) (nil? verify))
+          result
+          (let [verification (if-let [verify! (:verify! config)]
+                               (verify! project-root verify
+                                        (:verification-profiles config) files)
+                               (change-buffer/run-verification!
+                                 project-root verify
+                                 (:verification-profiles config) files baseline))]
+            (if (:ok verification)
+              (do
+                (cold-verify/attach-undo-from-verification!
+                  project-root verification (:receipt-file result) (:receipt-hash result))
+                (assoc result :verification verification))
+              (let [rollback (transaction/execute-undo!
+                               {:receipt (:receipt-file result)})
+                    rolled-back? (boolean (:ok rollback))
+                    hot-rollback (when rolled-back?
+                                   (change-buffer/reload-after-rollback!
+                                     project-root verify
+                                     (:verification-profiles config)))]
+                (when rolled-back?
+                  (.delete (io/file (:receipt-file result))))
+                {:error "Verification failed; the direct transaction was rolled back"
+                 :error-type :verification-failed
+                 :verification verification
+                 :rolled-back rolled-back?
+                 :hot-rollback hot-rollback
+                 :recovery rollback
+                 :source-unchanged rolled-back?}))))))))
+
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params]
   (let [config (if-let [profiles-fn (:verification-profiles-fn config)]
                  (assoc config :verification-profiles (profiles-fn))
                  config)
+        config (cond
+                 (:formatter-fn config)
+                 (assoc config :formatter ((:formatter-fn config)))
+
+                 ;; Managed workspace contexts that predate formatter-fn must
+                 ;; adopt the hot-loaded default without a server restart.
+                 (:verification-profiles-fn config)
+                 (assoc config :formatter formatter/default-command)
+
+                 :else config)
+        config (if-let [command (:formatter config)]
+                 (assoc config
+                        :verification-profiles
+                        (formatter/verification-profiles-after-format
+                          (:verification-profiles config) command)
+                        :prepare-compiled!
+                        (fn [project-root compiled]
+                          (let [format! (or (:format-candidates! config)
+                                            formatter/format-candidates!)
+                                formatted (format! project-root command
+                                                   (:future-sources compiled))]
+                            (if (:ok formatted)
+                              (let [prepared (transaction/with-future-sources
+                                               compiled
+                                               (:future-sources formatted))]
+                                (if (:ok prepared)
+                                  (assoc prepared :format
+                                         (dissoc formatted
+                                                 :future-sources :ok))
+                                  prepared))
+                              formatted))))
+                 config)
         normalized-params (json/parse-string (json/generate-string params) true)
         basis? (string? (:basis normalized-params))
+        extraction? (map? (:extraction normalized-params))
         total-start (System/nanoTime)
         [validated validation-ms]
         (timed #(if basis?
@@ -313,11 +356,16 @@
         (try
           (let [[prepared confinement-ms]
                 (timed
-                  #(let [root (real-root project-root)
-                         translated
-                         (contract/tool-params->transaction (:params validated))]
+                  #(let [root (real-root project-root)]
                      {:root root
-                      :resolved (resolve-transaction-paths root translated)}))
+                      :resolved
+                      (if extraction?
+                        (resolve-extraction-paths
+                          root (get-in validated [:params :extraction]))
+                        (resolve-transaction-paths
+                          root
+                          (contract/tool-params->transaction
+                            (:params validated))))}))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
               (record-result! telemetry params resolved total-start
@@ -330,8 +378,13 @@
                     receipt (str (io/file directory
                                           (str (UUID/randomUUID) ".edn")))
                     [result kernel-ms]
-                    (timed #(transaction/execute-change!
-                              {:spec (:spec resolved) :receipt-out receipt}))
+                    (timed #(if extraction?
+                              (execute-extraction!
+                                config root (:extraction resolved) receipt
+                                (get-in validated [:params :verify]))
+                              (execute-explicit-change!
+                                config root resolved receipt
+                                (get-in validated [:params :verify]))))
                     classified (contract/classify-kernel-result
                                  (.toString root) result)]
                 (when-not (:ok classified)
@@ -372,13 +425,37 @@
   "Render compact visible content; the full receipt remains structuredContent."
   [result]
   (if (:ok result)
-    (format (str "apply_clojure_changes\n"
-                 "  %s edits · %s files\n\n"
-                 "✓ atomic commit complete\n"
-                 "✓ written bytes read back and verified\n"
-                 "✓ terminal evidence · verification_complete=true · next action none")
-            (or (:edits result) (:match-count result) 0)
-            (or (:files result) (:changed-file-count result) 0))
+    (let [caller-proof (get-in result [:caller_proof :level])
+          caller-proof-line
+          (case caller-proof
+            "semantic-complete"
+            "\n✓ caller proof · semantic complete for one hash-bound session"
+
+            "structural-candidates-only"
+            "\n⚠ caller proof · structural candidates only; not semantic completeness"
+
+            "caller-proof-unavailable"
+            "\n⚠ caller proof unavailable · absence cannot authorize deletion"
+
+            "")]
+      (if (:verification_complete result)
+        (format (str "apply_clojure_changes\n"
+                     "  %s edits · %s files\n\n"
+                     "✓ atomic commit complete\n"
+                     "✓ written bytes read back and verified"
+                     caller-proof-line "\n"
+                     "✓ terminal evidence · verification_complete=true · next action none")
+                (or (:edits result) (:match-count result) 0)
+                (or (:files result) (:changed-file-count result) 0))
+        (format (str "apply_clojure_changes\n"
+                     "  %s edits · %s files\n\n"
+                     "✓ atomic commit complete\n"
+                     "✓ written bytes read back and hot proof complete"
+                     caller-proof-line "\n"
+                     "… cold verification running · edit remains committed\n"
+                     "→ copy next_call to inspect_clojure after doing other useful work")
+                (or (:edits result) (:match-count result) 0)
+                (or (:files result) (:changed-file-count result) 0))))
     (let [reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
           reason (if (keyword? reason) (name reason) reason)
@@ -427,7 +504,7 @@
   {:id :clj-change
    :name "apply_clojure_changes"
    :description tool-description
-   :schema clj-change-schema
+   :schema mcp-schema/clj-change-schema
    :output-schema clj-change-output-schema
    :structured? true
    :tool-fn #'handle-clj-change})

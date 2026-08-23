@@ -1,7 +1,9 @@
 (ns clj-surgeon.mcp-semantic-client-test
   (:require
    [clj-surgeon.mcp-semantic-client :as semantic]
-   [clojure.test :refer [deftest is]]))
+   [clojure.test :refer [deftest is]])
+  (:import
+   (io.modelcontextprotocol.spec McpSchema$CallToolResult)))
 
 (deftest init-preserves-a-hot-client-at-the-same-url
   (let [sentinel (Object.)]
@@ -29,6 +31,28 @@
                  "invalid-mcp-session: reconnect, then retry the same request")))
     (is (false? (invalid-session-error?
                   "No definition found for sample.core/missing")))))
+
+(deftest typed-provider-refusals-retain-machine-readable-recovery-evidence
+  (let [result (McpSchema$CallToolResult.
+                 []
+                 true
+                 {"status" "warming"
+                  "error_type" "semantic-provider-warming"
+                  "lsp_session" "lsp-1"
+                  "child_pid" 42
+                  "source_unchanged" true
+                  "retained_definition_evidence" {"owner" "target"}
+                  "next_action" "wait_for_workspace"
+                  "next_call" {"tool" "resolve_var_surface"}})
+        normalized (semantic/normalize-result result)]
+    (is (false? (:ok normalized)))
+    (is (= :semantic-provider-warming (:error-type normalized)))
+    (is (= "warming" (:status normalized)))
+    (is (= "lsp-1" (:lsp_session normalized)))
+    (is (= 42 (:child_pid normalized)))
+    (is (= {:owner "target"} (:retained_definition_evidence normalized)))
+    (is (= "wait_for_workspace" (:next_action normalized)))
+    (is (= {:tool "resolve_var_surface"} (:next_call normalized)))))
 
 (deftest resolve-var-reconnects-exactly-once-after-a-typed-expired-session
   (let [client-var (ns-resolve 'clj-surgeon.mcp-semantic-client 'client!)

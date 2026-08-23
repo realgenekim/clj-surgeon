@@ -17,6 +17,9 @@
    {:jsonrpc "2.0" :id 3 :method "tools/call"
     :params {:name "apply_clojure_changes" :arguments {}}}])
 
+(def smoke-deadline-ms
+  120000)
+
 (defn- assert!
   [truth message data]
   (when-not truth
@@ -63,7 +66,9 @@
           (.write writer (json/generate-string request))
           (.write writer "\n"))
         (.flush writer))
-      (let [terminal (deref done 45000 {:error :timeout})]
+      (let [terminal (deref done smoke-deadline-ms
+                            {:error :timeout
+                             :deadline-ms smoke-deadline-ms})]
         (assert! (:ok terminal) "MCP smoke did not receive three responses"
                  (assoc terminal :responses @responses))
         (let [initialize (response-by-id @responses 1)

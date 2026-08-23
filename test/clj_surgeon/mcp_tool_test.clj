@@ -1,16 +1,25 @@
 (ns clj-surgeon.mcp-tool-test
   (:require
+   [clj-surgeon.extract :as extract]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [nrepl.server :as nrepl-server])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
 
 (def fixture-root "bench/fixtures/edit_portfolio/decision-batch-edit")
+
+(deftest hot-transaction-law
+  (is (= :live :live)))
 
 (def decision-request
   {"changes"
@@ -84,7 +93,7 @@
                      {:project-root (.getPath workspace)
                       :receipt-dir (.getPath receipt-dir)}
                      decision-request)]
-        (is (:ok result))
+        (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (= 6 (:changes result)))
         (is (= 6 (:edits result)))
@@ -102,6 +111,517 @@
                             "src/bench/source_reader.clj"]]
             (is (= (slurp (io/file fixture-root "before" relative))
                    (slurp (io/file workspace relative)))))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest editor-gesture-is-exact-guarded-and-undoable
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        before (str "(ns demo)\n\n"
+                    "(defn route-event [event]\n"
+                    "  (case event\n"
+                    "    :pending :wait\n"
+                    "    :done))\n\n")
+        after (str "(ns demo)\n\n"
+                   "(defn route-event [event]\n"
+                   "  (case event\n"
+                   "    :pending :wait\n"
+                   "    :complete))\n\n")
+        request
+        {"edits"
+         [{"file" "src/demo.clj"
+           "within" {"form" "route-event"}
+           "from" ":done"
+           "to" ":complete"}]
+         "verify" "fast"}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands []}}
+                      :verify! (fn [_root profile _profiles _files]
+                                 {:ok true :profile profile :checks []})}
+                     request)]
+        (is (:ok result) (pr-str result))
+        (is (:verification_complete result))
+        (is (= 1 (:changes result)))
+        (is (= 1 (:edits result)))
+        (is (= 1 (:files result)))
+        (is (= after (slurp source-file))
+            "every unrelated byte, including the extra EOF newline, survives")
+        (let [stale (mcp-tool/execute-request!
+                      {:project-root (.getPath workspace)
+                       :receipt-dir (.getPath receipt-dir)
+                       :verification-profiles {"fast" {:commands []}}
+                       :verify! (fn [_root profile _profiles _files]
+                                  {:ok true :profile profile :checks []})}
+                      request)]
+          (is (false? (:ok stale)))
+          (is (= "expect-count-mismatch" (:error_type stale)))
+          (is (:source_unchanged stale))
+          (is (= after (slurp source-file))))
+        (let [undo (transaction/execute-undo!
+                     {:receipt (:undo_receipt result)})]
+          (is (:ok undo))
+          (is (= before (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest editor-gesture-replaces-exact-known-multiplicity
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        before (str "(ns demo)\n\n"
+                    "(defn repeated-status [] [:old :old])\n")
+        after (str "(ns demo)\n\n"
+                   "(defn repeated-status [] [:new :new])\n")
+        request
+        {"edits"
+         [{"file" "src/demo.clj"
+           "within" {"form" "repeated-status"}
+           "from" ":old"
+           "to" ":new"
+           "matches" 2}]}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     request)]
+        (is (:ok result) (pr-str result))
+        (is (= 1 (:changes result)))
+        (is (= 2 (:edits result)))
+        (is (= after (slurp source-file)))
+        (let [stale (mcp-tool/execute-request!
+                      {:project-root (.getPath workspace)
+                       :receipt-dir (.getPath receipt-dir)}
+                      request)]
+          (is (false? (:ok stale)))
+          (is (= "expect-count-mismatch" (:error_type stale)))
+          (is (:source_unchanged stale))
+          (is (= after (slurp source-file))))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= before (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest same-file-namespace-and-form-edits-format-commit-and-undo-once
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample.clj")
+        receipt-dir (io/file workspace "receipts")
+        original (str "(ns sample.core)\n"
+                      "(defn alpha [] :old-a)\n"
+                      "(defn beta [] :old-b)\n")
+        formatted (str "(ns sample.next)\n\n"
+                       "(defn alpha\n  []\n  :new-a)\n\n"
+                       "(defn beta\n  []\n  :new-b)\n")
+        request
+        {"changes"
+         [{"id" "namespace"
+           "files" ["src/sample.clj"]
+           "owner" {"kind" "namespace" "name" "sample.core"}
+           "find" "sample.core"
+           "replace" "sample.next"
+           "expect" {"matches" 1 "each_file" 1}}
+          {"id" "alpha"
+           "files" ["src/sample.clj"]
+           "forms" ["alpha"]
+           "find" ":old-a"
+           "replace" ":new-a"
+           "expect" {"matches" 1 "each_form" 1 "each_file" 1}}
+          {"id" "beta"
+           "files" ["src/sample.clj"]
+           "forms" ["beta"]
+           "find" ":old-b"
+           "replace" ":new-b"
+           "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
+         "expect" {"changes" 3 "edits" 3 "files" 1}}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 1
+                  :elapsed_ms 0.1
+                  :future-sources
+                  (into {} (map (fn [[file _]] [file formatted]))
+                        future-sources)})}
+              request)]
+        (is (:ok result) (pr-str result))
+        (is (= 3 (:changes result)))
+        (is (= 3 (:edits result)))
+        (is (= 1 (:files result)))
+        (is (:verification_complete result))
+        (is (= formatted (slurp source-file)))
+        (when (:ok result)
+          (let [receipt (edn/read-string (slurp (:undo_receipt result)))]
+            (is (= 3 (:match-count receipt)))
+            (is (= 1 (:inverse-edit-count receipt)))
+            (is (= 1 (count (get-in receipt [:files 0 :inverse-edits])))))
+          (is (:ok (transaction/execute-undo!
+                     {:receipt (:undo_receipt result)})))
+          (is (= original (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest compiles-one-extraction-through-the-public-mcp-boundary
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")
+        target-file (io/file workspace "src/sample/moved.clj")
+        caller-file (io/file workspace "src/sample/user.clj")
+        receipt-dir (io/file workspace "receipts")
+        original (str "(ns sample.core\n"
+                      "  (:require [clojure.string :as str]))\n\n"
+                      "(defn helper [x] (str/upper-case x))\n\n"
+                      "(defn retained [] :ok)\n")
+        caller-original (str "(ns sample.user)\n\n"
+                             "(defn use-helper [x]\n"
+                             "  (sample.core/helper x))\n")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (spit caller-file caller-original)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {:extraction
+               {:file "src/sample/core.clj"
+                :to "src/sample/moved.clj"
+                :forms ["helper"]
+                :require_policy "copy-all"
+                :caller_changes
+                [{:id "redirect-helper"
+                  :files ["src/sample/user.clj"]
+                  :forms ["use-helper"]
+                  :find "sample.core/helper"
+                  :replace "sample.moved/helper"
+                  :expect {:matches 1 :each_form 1 :each_file 1}}]
+                :ignored_caller_files []
+                :expect {:forms 1 :caller_edits 1 :files 3}}})]
+        (is (:ok result) (pr-str result))
+        (is (:verification_complete result))
+        (is (string? (:receipt_hash result)))
+        (is (= "structural-candidates-only"
+               (get-in result [:caller_proof :level])))
+        (is (false? (get-in result
+                            [:caller_proof :zero_callers_authoritative])))
+        (is (str/includes? (mcp-tool/concise-summary result)
+                           "not semantic completeness"))
+        (is (= 1 (:changes result)))
+        (is (= 2 (:edits result)))
+        (is (= 3 (:files result)))
+        (is (.exists target-file))
+        (is (= "(ns sample.core\n  (:require [clojure.string :as str]))\n\n(defn retained [] :ok)\n"
+               (slurp source-file)))
+        (is (= (str "(ns sample.user)\n\n"
+                    "(defn use-helper [x]\n"
+                    "  (sample.moved/helper x))\n")
+               (slurp caller-file)))
+        (let [_receipt-is-edn (edn/read-string (slurp (:undo_receipt result)))
+              undo (extract/undo! {:receipt (:undo_receipt result)})]
+          (is (:ok undo) (pr-str undo))
+          (is (= original (slurp source-file)))
+          (is (= caller-original (slurp caller-file)))
+          (is (not (.exists target-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest direct-change-runs-the-declared-verification-profile
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        calls (atom [])]
+    (try
+      (copy-tree! (str fixture-root "/before") workspace)
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :verify! (fn [root profile profiles files]
+                                 (swap! calls conj
+                                        {:root root :profile profile
+                                         :profiles profiles :files files})
+                                 {:ok true :profile profile :checks []})}
+                     (assoc decision-request "verify" "fast"))]
+        (is (:ok result))
+        (is (= "fast" (get-in result [:verification :profile])))
+        (is (= 1 (count @calls)))
+        (is (= "fast" (:profile (first @calls))))
+        (is (= 2 (count (:files (first @calls)))))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)}))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest direct-change-returns-after-hot-proof-and-publishes-a-cold-job
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")]
+    (try
+      (cold-verify/clear-jobs!)
+      (copy-tree! (str fixture-root "/before") workspace)
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles
+                      {"full" {:cold {:command ["/bin/sh" "-c"
+                                                "sleep 0.05; printf cold-proof"]
+                                      :timeout-ms 1000}}}}
+                     (assoc decision-request "verify" "full"))
+            job (get-in result [:next_call :verification_job])
+            cold-result
+            (loop [attempt 0]
+              (let [status (cold-verify/status (.getPath workspace) job)]
+                (if (or (:verification_complete status) (>= attempt 100))
+                  status
+                  (do (Thread/sleep 10) (recur (inc attempt))))))]
+        (is (:ok result))
+        (is (:committed result))
+        (is (false? (:verification_complete result)))
+        (is (= "inspect_verification_job" (:next_action result)))
+        (is (string? job))
+        (is (:ok cold-result))
+        (is (:passed cold-result))
+        (is (= "cold-proof" (:output cold-result)))
+        (is (= (:undo_receipt result) (:undo_receipt cold-result)))
+        (is (= (:receipt_hash result) (:receipt_hash cold-result)))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)}))))
+      (finally
+        (cold-verify/clear-jobs!)
+        (delete-tree! workspace)))))
+
+(deftest direct-change-addresses-one-defmethod-dispatch-and-undoes
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/app/render.clj")
+        formatter-calls (atom [])
+        before (str "(ns app.render)\n"
+                    "(defmulti render :kind)\n"
+                    "(defmethod render :card [x] [:card :old x])\n"
+                    "(defmethod render :panel [x] [:panel :old x])\n")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :format-candidates!
+               (fn [root command future-sources]
+                 (swap! formatter-calls conj
+                        {:root root :command command
+                         :files (vec (keys future-sources))})
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 0
+                  :elapsed_ms 0.5
+                  :future-sources future-sources})
+               :verification-profiles-fn
+               (fn [] {"fast" {:commands ["ignored"]}})
+               :verify! (fn [_ _ _ _]
+                          {:ok true :profile "fast" :checks []})}
+              {"changes"
+               [{"id" "card-method"
+                 "files" ["src/app/render.clj"]
+                 "forms" [{"kind" "defmethod"
+                           "name" "render"
+                           "dispatch" ":card"}]
+                 "find" ":old"
+                 "replace" ":new"
+                 "expect" {"matches" 1 "each_form" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}
+               "verify" "fast"})]
+        (is (:ok result))
+        (is (= (str "(ns app.render)\n"
+                    "(defmulti render :kind)\n"
+                    "(defmethod render :card [x] [:card :new x])\n"
+                    "(defmethod render :panel [x] [:panel :old x])\n")
+               (slurp source-file)))
+        (is (true? (:verification_complete result)))
+        (is (= 1 (count @formatter-calls)))
+        (is (= ["npx" "@chrisoakman/standard-clojure-style" "fix" "{files}"]
+               (:command (first @formatter-calls))))
+        (is (= :complete (get-in result [:format :status])))
+        (is (= 0 (get-in result [:format :changed-file-count])))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= before (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest direct-change-proves-focused-laws-in-the-configured-application-nrepl
+  (let [project-root (System/getProperty "user.dir")
+        workspace (io/file project-root (str ".hot-transaction-" (random-uuid)))
+        relative-root (.getName workspace)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/app/render.clj")
+        port-file (io/file workspace ".app-nrepl-port")
+        server (nrepl-server/start-server :bind "127.0.0.1" :port 0)]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file
+            (str "(ns app.render)\n"
+                 "(defn render [] :old)\n"))
+      (spit port-file (:port server))
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root project-root
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["format" "{files}"]
+               :format-candidates!
+               (fn [_ _ future-sources]
+                 {:ok true :status :complete :file-count 1
+                  :changed-file-count 0 :elapsed_ms 0.1
+                  :future-sources future-sources})
+               :verification-profiles
+               {"fast"
+                {:commands [["/usr/bin/true"]]
+                 :hot {:port-file (str relative-root "/.app-nrepl-port")
+                       :reload []
+                       :tests ["clj-surgeon.mcp-tool-test/hot-transaction-law"]
+                       :timeout-ms 5000}}}}
+              {"changes"
+               [{"id" "render"
+                 "files" [(str relative-root "/src/app/render.clj")]
+                 "forms" ["render"]
+                 "find" ":old"
+                 "replace" ":new"
+                 "expect" {"matches" 1 "each_form" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}
+               "verify" "fast"})]
+        (is (:ok result))
+        (is (= :complete
+               (get-in result [:verification :hot-verification :status])))
+        (is (= 1 (get-in result
+                         [:verification :hot-verification :summary :test])))
+        (is (= "application"
+               (get-in result [:verification :hot-verification :jvm])))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)}))))
+      (finally
+        (nrepl-server/stop-server server)
+        (delete-tree! workspace)))))
+
+(deftest direct-change-refuses-before-write-when-the-baseline-is-unavailable
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        verification-called? (atom false)]
+    (try
+      (copy-tree! (str fixture-root "/before") workspace)
+      (let [before (into {}
+                         (for [relative ["src/bench/app_shell.clj"
+                                         "src/bench/source_reader.clj"]]
+                           [relative (slurp (io/file workspace relative))]))
+            result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :capture-verification-baseline!
+                      (fn [_ _ _ _]
+                        {:ok false
+                         :error-type :invalid-diagnostic-output})
+                      :verify! (fn [_ _ _ _]
+                                 (reset! verification-called? true)
+                                 {:ok true})}
+                     (assoc decision-request "verify" "fast"))]
+        (is (false? (:ok result)))
+        (is (= "verification-baseline-failed" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? @verification-called?))
+        (doseq [[relative source] before]
+          (is (= source (slurp (io/file workspace relative)))))
+        (is (or (not (.exists receipt-dir))
+                (empty? (seq (.listFiles receipt-dir))))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest direct-change-rolls-back-when-declared-verification-fails
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")]
+    (try
+      (copy-tree! (str fixture-root "/before") workspace)
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :verify! (fn [_ _ _ _]
+                                 {:ok false :profile "fast"
+                                  :checks [{:ok false :exit 1}]})}
+                     (assoc decision-request "verify" "fast"))]
+        (is (false? (:ok result)))
+        (is (= "verification-failed" (:error_type result)))
+        (is (true? (:rolled_back result)))
+        (doseq [relative ["src/bench/app_shell.clj"
+                          "src/bench/source_reader.clj"]]
+          (is (= (slurp (io/file fixture-root "before" relative))
+                 (slurp (io/file workspace relative))))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest direct-change-accepts-only-the-diagnostic-delta
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source (io/file workspace "src/sample/core.clj")
+        original (str "(ns sample.core)\n"
+                      "(defn target [] {:status :old :value missing})\n")
+        profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]]}}
+        request (fn [replacement]
+                  {"changes"
+                   [{"id" "status"
+                     "files" ["src/sample/core.clj"]
+                     "forms" ["target"]
+                     "find" ":old"
+                     "replace" replacement
+                     "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
+                   "expect" {"changes" 1 "edits" 1 "files" 1}
+                   "verify" "fast"})]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit source original)
+      (testing "a retained pre-existing diagnostic does not block the change"
+        (let [result (mcp-tool/execute-request!
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath receipt-dir)
+                        :verification-profiles profiles}
+                       (request ":new"))]
+          (is (:ok result))
+          (is (= 1 (get-in result
+                           [:verification :checks 0 :diagnostic-delta
+                            :unchanged-count])))
+          (is (zero? (get-in result
+                             [:verification :checks 0 :diagnostic-delta
+                              :blocking-introduced-count])))
+          (is (:ok (transaction/execute-undo!
+                     {:receipt (:undo_receipt result)})))
+          (is (= original (slurp source)))))
+
+      (testing "one new diagnostic rolls the complete change back"
+        (let [result (mcp-tool/execute-request!
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath receipt-dir)
+                        :verification-profiles profiles}
+                       (request "another-missing"))]
+          (is (false? (:ok result)))
+          (is (= "verification-failed" (:error_type result)))
+          (is (true? (:rolled_back result)))
+          (is (= 1 (get-in result
+                           [:verification :checks 0 :diagnostic-delta
+                            :blocking-introduced-count])))
+          (is (= original (slurp source)))))
       (finally
         (delete-tree! workspace)))))
 
@@ -179,7 +699,7 @@
     (is (= 2 @loads) "the workspace verification profile is read for every basis request")))
 
 (deftest basis-schema-exposes-whole-site-delete-as-a-decision
-  (let [decision-schema (get-in mcp-tool/basis-change-schema
+  (let [decision-schema (get-in mcp-schema/basis-change-schema
                                 [:properties "decisions" :items])]
     (is (= {:type "boolean" :const true
             :description
@@ -301,7 +821,10 @@
     (try
       (copy-tree! (str fixture-root "/before") workspace)
       (mcp-tool/init! {:project-root (.getPath workspace)
-                       :receipt-dir (.getPath receipt-dir)})
+                       :receipt-dir (.getPath receipt-dir)
+                       :verification-profiles {"fast" {:commands ["ignored"]}}
+                       :verify! (fn [_ profile _ _]
+                                  {:ok true :profile profile :checks []})})
       (mcp-tool/handle-clj-change nil decision-request callback)
       (testing "the direct route steers named forms away from namespace owner syntax"
         (is (re-find #"For named top-level def or defn owners, use forms: \[name\]"
@@ -326,17 +849,15 @@
                    (get-in @calls [1 :content])))
       (is (not (re-find #"\{\"ok\""
                         (get-in @calls [1 :content]))))
-      (testing "the handler enforces the same basis-only verify boundary"
+      (testing "the handler accepts and executes the same verify field it advertises"
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (get-in @calls [0 :payload :undo_receipt])})))
         (mcp-tool/handle-clj-change nil
                                     (assoc decision-request "verify" "fast")
                                     callback)
-        (is (= true (:error? (nth @calls 2))))
-        (is (= "invalid-mcp-request"
-               (get-in @calls [2 :payload :error_type])))
-        (is (= "unknown-fields"
-               (get-in @calls [2 :payload :reason])))
-        (is (= [] (get-in @calls [2 :payload :path])))
-        (is (= true (get-in @calls [2 :payload :source_unchanged]))))
+        (is (= false (:error? (nth @calls 2))))
+        (is (= true (get-in @calls [2 :payload :verification_complete])))
+        (is (= "fast" (get-in @calls [2 :payload :verification :profile]))))
       (testing "refusal summaries preserve the actionable diagnostic"
         (testing "keyword refusal types and rollback state remain truthful"
           (is (re-find #"refused · verification-failed"

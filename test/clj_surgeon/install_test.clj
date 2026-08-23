@@ -70,8 +70,12 @@
                     "`subjects`"
                     "owner authority"
                     "`next_call`"
-                    "`verify` is basis-only"
-                    "`verification_complete=true`"
+                    "`forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`"
+                    "Formatting and hot laws run inside `verify=fast|full`; hot failure rolls back"
+                    "`verification_complete=true` is terminal"
+                    "On cold pending, copy `next_call` once"
+                    "its status keeps the same undo receipt"
+                    "Never replay or poll"
                     "Native Write is right for new files"
                     "[CLI fallback](references/cli-fallback.md)"
                     "CLI only when MCP is unavailable"]]
@@ -166,16 +170,27 @@
                        "clj-surgeon.intent-transaction"
                        "clj-surgeon.mcp-paths"
                        "clj-surgeon.mcp-workspace"
+                       "clj-surgeon.mcp-schema"
                        "clj-surgeon.mcp-contract"
                        "clj-surgeon.mcp-semantic-client"
                        "clj-surgeon.mcp-source-anchor"
+                       "clj-surgeon.mcp-process"
+                       "clj-surgeon.mcp-hot-verify"
+                       "clj-surgeon.mcp-cold-verify"
                        "clj-surgeon.mcp-change-buffer"
+                       "clj-surgeon.mcp-formatter"
+                       "clj-surgeon.mcp-extraction"
                        "clj-surgeon.mcp-inspect"
                        "clj-surgeon.mcp-inspect-tool"
                        "clj-surgeon.mcp-tool"
-                       "clj-surgeon.mcp-server"]]
+                       "clj-surgeon.mcp-server"
+                       "clj-surgeon.mcp-http-server"]]
       (is (str/includes? makefile namespace)
-          (str "make mcp-reload must reload " namespace)))))
+          (str "make mcp-reload must reload " namespace)))
+    (is (str/includes? makefile "catch Throwable error")
+        "reload failures must become typed values instead of false-green output")
+    (is (str/includes? makefile "*\":ok true\"*)")
+        "the shell must reject every reload result that is not explicitly green")))
 
 (deftest benchmark-agent-skill-targets-are-bounded-and-composable
   (let [{codex-exit :exit codex-out :out codex-err :err}

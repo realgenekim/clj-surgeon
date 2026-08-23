@@ -7,6 +7,11 @@ not cover the operation.
 
 ## Recover the hot entrance once
 
+A typed `semantic-provider-warming` result is not a recovery condition. Keep
+its session, PID, retained anchor, and `next_call`; wait, then retry that call
+once. Do not run `up`, `recover`, or `restart_server` while the same
+initialization lease is warming.
+
 For `invalid-mcp-session`, absent tools after onboarding, or a green health
 check followed by a failed structural call, run:
 
@@ -16,8 +21,8 @@ clj-surgeon recover "$PWD"
 
 Continue through MCP only when the receipt says `:terminal-state :recovered`
 and `:next-action :none`. On `:fallback-safe`, execute its `:report-command`
-once on a machine with the repo-local `.beads` database, then continue with the
-smallest CLI route below. On `:restart-required`, restart the named client
+once on a machine with the repo-local `.beads` database, then execute its
+`:fallback-command` from the receipt's workspace. On `:restart-required`, restart the named client
 boundary once. Never loop on `up` or `recover`; health alone is not proof.
 
 ## Smallest structural read
@@ -101,11 +106,25 @@ clj-surgeon :op :change! :spec-file - :receipt-out /tmp/api-change.edn <<'EDN'
 EDN
 ```
 
+Delete complete named owners without a discovery read or marker cleanup:
+
+```bash
+clj-surgeon :op :change! :spec-file - :receipt-out /tmp/delete.edn <<'EDN'
+{:changes [{:id :obsolete
+            :in ["src/app.clj"]
+            :forms [old-handler old-test]
+            :do [:delete true]
+            :expect {:matches 2 :each-form 1}}]
+ :expect {:changes 1 :edits 2 :files 1}}
+EDN
+```
+
 Each named owner must resolve exactly once. Use `:each-form` or `:each-file`
 when a total count could hide the wrong distribution. Count mismatch, overlap,
 parse failure, or stale bytes refuses the entire transaction. Legacy exact
 `:intents` remain accepted; never mix the two schemas.
-The supported scoped operator is literal `[:replace SOURCE]`.
+The scoped operators include literal `[:replace SOURCE]` and whole-owner
+`[:delete true]`. Deletion requires exact named `:forms` and omits `:find`.
 
 A successful receipt includes `:verified` read-back evidence and a reversible
 inverse. Do not open the saved receipt. Undo only while all result hashes still

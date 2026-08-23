@@ -223,12 +223,35 @@
   (when (some? forms)
     (when-not (and (vector? forms)
                    (seq forms)
-                   (every? symbol? forms)
+                   (every? #(or (symbol? %)
+                                (and (map? %)
+                                     (= #{:kind :name :dispatch} (set (keys %)))
+                                     (= :defmethod (:kind %))
+                                     (symbol? (:name %))
+                                     (string? (:dispatch %))))
+                           forms)
                    (= (count forms) (count (distinct forms))))
       (refuse! :invalid-change-forms
-               "Change :forms must be a non-empty vector of distinct symbols"
+               "Change :forms must contain distinct symbols or exact defmethod owners"
                {:change-index change-index :forms forms})))
+  (doseq [form-owner forms
+          :when (map? form-owner)]
+    (parse-one-form (:dispatch form-owner) ":forms dispatch"))
   forms)
+
+(defn- defmethod-dispatch
+  [record]
+  (when (= 'defmethod (:type record))
+    (some-> (:source record)
+            z/of-string
+            z/down
+            z/right
+            z/right
+            z/sexpr)))
+
+(defn- owner-identity
+  [owner-record]
+  (or (:selector owner-record) (:name owner-record)))
 
 (defn- validate-change-expectation!
   [expectation forms change-index change-id]
@@ -275,6 +298,9 @@
       (and (vector? operator) (= 2 (count operator)) (= :replace kind))
       {:kind :replace
        :form (parse-one-form value ":do replacement")}
+
+      (and (vector? operator) (= [:delete true] operator))
+      {:kind :delete}
 
       (and (vector? operator)
            (= 2 (count operator))
@@ -326,11 +352,12 @@
 
       :else
       (refuse! :unsupported-change-operator
-               "Structural changes support replacement, sibling insertion, or binding rename"
+               "Structural changes support replacement, deletion, sibling insertion, map entry insertion, or binding rename"
                {:change-index change-index
                 :change-id change-id
                 :operator operator
                 :supported [[:replace "SOURCE"]
+                            [:delete true]
                             [:insert-left ["SOURCE" "..."]]
                             [:insert-right ["SOURCE" "..."]]
                             [:rename-binding
@@ -374,7 +401,12 @@
                     :owner owner})))
       (let [operator (validate-change-operator! (:do change) change-index change-id)
             binding-rename? (= :rename-binding (:kind operator))
-            from (when-not binding-rename?
+            delete? (= :delete (:kind operator))
+            from (when-not (or binding-rename?
+                               delete?
+                               (and (#{:insert-left :insert-right}
+                                     (:kind operator))
+                                    (nil? (:find change))))
                    (parse-one-form (:find change) ":find"))
             inside (when-let [inside-source (:inside change)]
                      (when-not (= :assoc-entry (:kind operator))
@@ -384,6 +416,15 @@
                      (parse-one-form inside-source ":inside"))
             expectation (validate-change-expectation!
                           (:expect change) forms change-index change-id)]
+        (when (and (#{:insert-left :insert-right} (:kind operator))
+                   (nil? (:find change))
+                   (or owner (not= 1 (count forms))))
+          (refuse! :invalid-top-level-insertion-owner
+                   "Top-level insertion without :find requires exactly one named :forms owner"
+                   {:change-index change-index
+                    :change-id change-id
+                    :forms forms
+                    :owner owner}))
         (when (and binding-rename? (or (nil? forms) owner))
           (refuse! :invalid-binding-rename-owner
                    "Binding rename requires exact named :forms"
@@ -391,6 +432,14 @@
         (when (and binding-rename? (some? (:find change)))
           (refuse! :invalid-binding-rename
                    "Binding rename does not accept :find"
+                   {:change-index change-index :change-id change-id}))
+        (when (and delete? (or (nil? forms) owner))
+          (refuse! :invalid-delete-owner
+                   "Whole-owner deletion requires exact named :forms"
+                   {:change-index change-index :change-id change-id}))
+        (when (and delete? (some? (:find change)))
+          (refuse! :invalid-delete-find
+                   "Whole-owner deletion does not accept :find"
                    {:change-index change-index :change-id change-id}))
         (when (and (= :replace (:kind operator))
                    (= (:fingerprint from)
@@ -419,7 +468,10 @@
           (= :replace (:kind operator)) (assoc :to (:form operator))
           (#{:insert-left :insert-right} (:kind operator))
           (assoc :insert-side (:kind operator)
-                 :insert-sources (mapv :source (:forms operator))))))))
+                 :insert-sources (mapv :source (:forms operator)))
+          (and (#{:insert-left :insert-right} (:kind operator))
+               (nil? (:find change)))
+          (assoc :target-owner true))))))
 
 (defn- validate-changes!
   [changes]
@@ -542,17 +594,32 @@
       forms
       (let [by-name (group-by :name records)]
         (mapv
-          (fn [form-name]
-            (let [matches (get by-name form-name [])]
+          (fn [form-owner]
+            (let [form-name (if (map? form-owner)
+                              (:name form-owner)
+                              form-owner)
+                  dispatch (when (map? form-owner)
+                             (-> (parse-one-form (:dispatch form-owner)
+                                                 ":forms dispatch")
+                                 :node
+                                 node/sexpr))
+                  matches (cond->> (get by-name form-name [])
+                            (map? form-owner)
+                            (filter #(and (= 'defmethod (:type %))
+                                          (= dispatch (defmethod-dispatch %)))))
+                  matches (mapv #(cond-> %
+                                   (map? form-owner)
+                                   (assoc :selector form-owner))
+                                matches)]
               (when-not (= 1 (count matches))
                 (refuse! :change-owner-mismatch
-                         (str "Change owner " form-name " in " file
+                         (str "Change owner " form-owner " in " file
                               " must resolve exactly once, found "
                               (count matches))
                          {:change-index intent-index
                           :change-id id
                           :file file
-                          :owner form-name
+                          :owner form-owner
                           :actual-count (count matches)
                           :candidates (mapv #(select-keys %
                                                           [:type :name :platforms
@@ -600,65 +667,83 @@
             owner-records))))
 
 (defn- matching-edits
-  [source file {:keys [intent-index from to forms owner insert-side
-                       insert-sources assoc-key assoc-value inside id] :as intent}]
+  [source file {:keys [intent-index from to forms owner operator insert-side
+                       insert-sources assoc-key assoc-value inside id target-owner]
+                :as intent}]
   (let [root (z/of-string source {:track-position? true})
         owner-records (scoped-owner-records! source file intent)
         scoped? (or forms owner)
         semantic-find (when assoc-key (node/sexpr (:node from)))
         semantic-inside (when inside (node/sexpr (:node inside)))]
-    (->> (zipper-locations root)
-         (map-indexed vector)
-         (keep (fn [[preorder candidate]]
-                 (let [candidate-node (z/node candidate)
-                       containing (containing-owner owner-records candidate-node)]
-                   (when (and (if assoc-key
-                                (and (= :map (node/tag candidate-node))
-                                     (= semantic-find
-                                        (node/sexpr candidate-node)))
-                                (= (:fingerprint from)
-                                   (lossless-node-fingerprint candidate-node)))
-                              (or (not scoped?) containing)
-                              (or (nil? semantic-inside)
-                                  (some #(= semantic-inside
-                                            (node/sexpr (z/node %)))
-                                        (rest (take-while some?
-                                                          (iterate z/up candidate))))))
-                     (let [{:keys [row end-row]} (meta candidate-node)
-                           size (node-size candidate-node)
-                           candidate-source (z/string candidate)
-                           candidate-value (when assoc-key
-                                             (node/sexpr candidate-node))
-                           key-value (when assoc-key
-                                       (node/sexpr (:node assoc-key)))
-                           closing (when assoc-key
-                                     (str/last-index-of candidate-source "}"))]
-                       (when (and assoc-key (contains? candidate-value key-value))
-                         (refuse! :map-key-already-present
-                                  "Matched map already contains the requested key"
-                                  {:file file :owner (:name containing)
-                                   :key (:source assoc-key)}))
-                       (cond->
-                         {:intent-index intent-index
+    (if (or (= :delete operator) target-owner)
+      (mapv (fn [owner-record]
+              (let [addressed (addressed-form-at
+                                source {:line (:line owner-record) :character 1})]
+                (when-not addressed
+                  (refuse! :delete-owner-not-addressable
+                           "The exact named owner has no stable structural address"
+                           {:file file :owner (:name owner-record)}))
+                (cond-> (assoc addressed
+                          :intent-index intent-index
                           :change-id id
-                          :owner (:name containing)
-                          :file file
-                          :address {:preorder preorder}
-                          :path (location-path candidate)
-                          :end-preorder (+ preorder size -1)
-                          :line row
-                          :end-line end-row
-                          :before candidate-source}
-                         to (assoc :after (:source to))
-                         assoc-key
-                         (assoc :after
-                                (str (subs candidate-source 0 closing)
-                                     " " (:source assoc-key)
-                                     " " (:source assoc-value)
-                                     (subs candidate-source closing)))
-                         insert-side (assoc :insert-side insert-side
-                                            :insert-sources insert-sources)))))))
-         vec)))
+                          :owner (owner-identity owner-record)
+                          :file file)
+                  (= :delete operator) (assoc :delete true)
+                  target-owner (assoc :insert-side insert-side
+                                      :insert-sources insert-sources))))
+            owner-records)
+      (->> (zipper-locations root)
+           (map-indexed vector)
+           (keep (fn [[preorder candidate]]
+                   (let [candidate-node (z/node candidate)
+                         containing (containing-owner owner-records candidate-node)]
+                     (when (and (if assoc-key
+                                  (and (= :map (node/tag candidate-node))
+                                       (= semantic-find
+                                          (node/sexpr candidate-node)))
+                                  (= (:fingerprint from)
+                                     (lossless-node-fingerprint candidate-node)))
+                                (or (not scoped?) containing)
+                                (or (nil? semantic-inside)
+                                    (some #(= semantic-inside
+                                              (node/sexpr (z/node %)))
+                                          (rest (take-while some?
+                                                            (iterate z/up candidate))))))
+                       (let [{:keys [row end-row]} (meta candidate-node)
+                             size (node-size candidate-node)
+                             candidate-source (z/string candidate)
+                             candidate-value (when assoc-key
+                                               (node/sexpr candidate-node))
+                             key-value (when assoc-key
+                                         (node/sexpr (:node assoc-key)))
+                             closing (when assoc-key
+                                       (str/last-index-of candidate-source "}"))]
+                         (when (and assoc-key (contains? candidate-value key-value))
+                           (refuse! :map-key-already-present
+                                    "Matched map already contains the requested key"
+                                    {:file file :owner (:name containing)
+                                     :key (:source assoc-key)}))
+                         (cond->
+                           {:intent-index intent-index
+                            :change-id id
+                            :owner (owner-identity containing)
+                            :file file
+                            :address {:preorder preorder}
+                            :path (location-path candidate)
+                            :end-preorder (+ preorder size -1)
+                            :line row
+                            :end-line end-row
+                            :before candidate-source}
+                           to (assoc :after (:source to))
+                           assoc-key
+                           (assoc :after
+                                  (str (subs candidate-source 0 closing)
+                                       " " (:source assoc-key)
+                                       " " (:source assoc-value)
+                                       (subs candidate-source closing)))
+                           insert-side (assoc :insert-side insert-side
+                                              :insert-sources insert-sources)))))))
+           vec))))
 
 (def ^:dynamic *binding-analyzer*
   "Test seam for binding analysis of an exact source snapshot."
@@ -844,10 +929,11 @@
     (doseq [[left right] (partition 2 1 ordered)]
       (when (overlap? left right)
         (refuse! :overlapping-intents
-                 (str "Intents overlap in " file)
+                 (str "Changes overlap in " file)
                  {:file file
                   :intent-indexes [(:intent-index left)
                                    (:intent-index right)]
+                  :change-ids [(:change-id left) (:change-id right)]
                   :edits [(dissoc left :address-preorder)
                           (dissoc right :address-preorder)]})))
     (mapv #(dissoc % :address-preorder) ordered)))
@@ -905,25 +991,30 @@
 (defn- insertion-gap
   [source target side edit]
   (let [parent (z/up target)
-        parent-tag (some-> parent z/tag)]
-    (when-not (#{:list :vector :map :set} parent-tag)
+        parent-tag (some-> parent z/tag)
+        top-level? (= :forms parent-tag)]
+    (when-not (#{:forms :list :vector :map :set} parent-tag)
       (refuse! :unsupported-insertion-parent
-               "Sibling insertion requires a list, vector, map, or set parent"
+               "Sibling insertion requires a top-level form sequence, list, vector, map, or set parent"
                {:change-id (:change-id edit)
                 :file (:file edit)
                 :parent-tag parent-tag}))
     (let [{target-start :start target-end :end} (node-offsets source target)
           {parent-start :start parent-end :end} (node-offsets source parent)
           parent-source (z/string parent)
-          opening-width (if (str/starts-with? parent-source "#{") 2 1)
+          opening-boundary (if top-level?
+                             parent-start
+                             (+ parent-start
+                                (if (str/starts-with? parent-source "#{") 2 1)))
+          closing-boundary (if top-level? parent-end (dec parent-end))
           neighbor (if (= :insert-left side) (z/left target) (z/right target))
           neighbor-offsets (when neighbor (node-offsets source neighbor))
           [gap-start gap-end]
           (if (= :insert-left side)
-            [(or (:end neighbor-offsets) (+ parent-start opening-width))
+            [(or (:end neighbor-offsets) opening-boundary)
              target-start]
             [target-end
-             (or (:start neighbor-offsets) (dec parent-end))])
+             (or (:start neighbor-offsets) closing-boundary)])
           gap (subs source gap-start gap-end)]
       (when-not (re-matches #"[\s,]*" gap)
         (refuse! :ambiguous-insertion-gap
@@ -1032,7 +1123,9 @@
   (reduce replace-at-address
           source
           (sort-by #(if (:raw %)
-                      [(:offset %) (count (:before %))]
+                      [(:offset %)
+                       (count (:before %))
+                       (or (:source-offset %) 0)]
                       [(or (get-in % [:address :preorder]) 0) 0])
                    (fn [left right] (compare right left))
                    edits)))
@@ -1124,6 +1217,61 @@
     (catch Exception e
       {:error (.getMessage e)
        :error-type :intent-compiler-failure})))
+
+(defn with-future-sources
+  "Replace a compiled transaction's candidate sources with staged transformed
+   sources. A changed candidate becomes one hash-guarded raw edit so inverse
+   receipts restore the exact original bytes. Performs no I/O."
+  [compiled future-sources]
+  (try
+    (when-not (and (:ok compiled)
+                   (map? future-sources)
+                   (= (set (keys (:future-sources compiled)))
+                      (set (keys future-sources))))
+      (refuse! :invalid-future-sources
+               "Transformed future sources must cover the compiled file set exactly"))
+    (let [file-plans
+          (mapv
+            (fn [plan]
+              (let [file (:file plan)
+                    original (get-in compiled [:original-sources file])
+                    candidate (get-in compiled [:future-sources file])
+                    transformed (get future-sources file)]
+                (validate-complete-source! file transformed :invalid-result-source)
+                (if (= candidate transformed)
+                  plan
+                  (let [edit {:intent-index -1
+                              :raw true
+                              :offset 0
+                              :source-offset 0
+                              :line 1
+                              :end-line (max 1 (count (str/split-lines original)))
+                              :before original
+                              :after transformed}]
+                    (assoc plan
+                           :result-hash (structural-lens/source-hash transformed)
+                           :edits [edit])))))
+            (:files compiled))]
+      (assoc compiled
+             :files file-plans
+             :future-sources future-sources
+             :diff (apply str
+                          (map (fn [{:keys [file edits]}]
+                                 (file-diff file edits))
+                               file-plans))
+             :format {:status :complete
+                      :file-count (count future-sources)
+                      :changed-file-count
+                      (count (filter (fn [[file source]]
+                                       (not= source
+                                             (get-in compiled
+                                                     [:future-sources file])))
+                                     future-sources))}))
+    (catch clojure.lang.ExceptionInfo error
+      (merge {:error (.getMessage error)} (ex-data error)))
+    (catch Exception error
+      {:error (.getMessage error)
+       :error-type :future-source-transformation-failed})))
 
 (defn compile-addressed-transaction
   "Compile retained structural addresses without rerunning a selector. Each edit
@@ -1448,6 +1596,7 @@
                      {:intent-index intent-index
                       :raw true
                       :offset result-offset
+                      :source-offset offset
                       :line line
                       :end-line end-line
                       :before after
@@ -1481,6 +1630,7 @@
                  :operation :change!
                  :intent-count (:intent-count compiled)
                  :match-count (:match-count compiled)
+                 :inverse-edit-count inverse-edit-count
                  :changed-file-count (:changed-file-count compiled)
                  :files files
                  :intents (:intents compiled)
@@ -1489,8 +1639,7 @@
                            :guarded-file-count (count files)}}
         receipt (cond-> receipt
                   logical-match-count?
-                  (assoc :match-count-kind :binding-occurrences
-                         :inverse-edit-count inverse-edit-count))]
+                  (assoc :match-count-kind :binding-occurrences))]
     (assoc receipt :receipt-hash (receipt-hash receipt))))
 
 (defn- invalid-receipt!
@@ -1524,8 +1673,15 @@
       (invalid-receipt! "Receipt file paths must be distinct strings")))
   (when-not (= (:changed-file-count receipt) (count (:files receipt)))
     (invalid-receipt! "Receipt changed-file count does not match its files"))
-  (when-not (= (:intent-count receipt) (count (:intents receipt)))
-    (invalid-receipt! "Receipt intent count does not match its intents"))
+  (let [intents (:intents receipt)
+        intent-match-counts (mapv :match-count intents)]
+    (when-not (= (:intent-count receipt) (count intents))
+      (invalid-receipt! "Receipt intent count does not match its intents"))
+    (when-not (every? pos-int? intent-match-counts)
+      (invalid-receipt! "Receipt intent match counts must be positive integers"))
+    (when-not (= (:match-count receipt)
+                 (reduce + 0 intent-match-counts))
+      (invalid-receipt! "Receipt logical match count does not match its intents")))
   (let [logical-match-count? (= :binding-occurrences
                                 (:match-count-kind receipt))
         rename-intent? (some #(= :rename-binding (:operator %))
@@ -1533,14 +1689,18 @@
         _ (when-not (= logical-match-count? (boolean rename-intent?))
             (invalid-receipt!
               "Receipt logical match-count evidence does not match its intents"))
-        _ (when-not (= logical-match-count?
-                       (contains? receipt :inverse-edit-count))
+        inverse-edit-count? (contains? receipt :inverse-edit-count)
+        _ (when (and logical-match-count? (not inverse-edit-count?))
             (invalid-receipt!
-              "Receipt inverse edit count is only valid for logical binding occurrences"))
+              "Receipt binding-occurrence evidence requires an inverse edit count"))
+        _ (when (and inverse-edit-count?
+                     (not (pos-int? (:inverse-edit-count receipt))))
+            (invalid-receipt!
+              "Receipt inverse edit count must be a positive integer"))
         actual-inverse-count
         (reduce + 0 (map #(count (:inverse-edits %)) (:files receipt)))
         expected-inverse-count
-        (if logical-match-count?
+        (if inverse-edit-count?
           (:inverse-edit-count receipt)
           (:match-count receipt))]
     (when-not (= expected-inverse-count actual-inverse-count)
@@ -1686,9 +1846,10 @@
 
 (defn execute-change!
   "Compile, commit, verify, and publish one durable inverse receipt."
-  [{:keys [spec receipt-out] :as opts}]
+  [{:keys [spec receipt-out prepare-compiled!] :as opts}]
   (try
-    (let [unknown (vec (sort (remove #{:op :spec :receipt-out} (keys opts))))]
+    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled!}
+                                     (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
                  (str "Unknown :change! arguments: " (str/join ", " unknown))
@@ -1696,7 +1857,10 @@
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
     (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled]} (compile-change-spec spec)]
+          {:keys [spec compiled]} (compile-change-spec spec)
+          compiled (if (and (nil? (:error compiled)) prepare-compiled!)
+                     (prepare-compiled! compiled)
+                     compiled)]
       (assert-receipt-does-not-alias-source! receipt-path spec)
       (if (:error compiled)
         (assoc compiled :phase :compile :source-unchanged true)
@@ -1717,7 +1881,10 @@
                                     :match-count (:match-count compiled)
                                     :inverse (:inverse receipt)}
                              (:change-count compiled)
-                             (assoc :change-count (:change-count compiled)))))
+                             (assoc :change-count (:change-count compiled))
+
+                             (:format compiled)
+                             (assoc :format (:format compiled)))))
                   (catch Exception publish-error
                     (let [inverse (compile-inverse
                                     receipt (:future-sources compiled))

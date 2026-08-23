@@ -545,22 +545,38 @@
                        :category  :read}
 
     :extract          {:handler   extract/plan
-                       :desc      "Plan form extraction to new namespace (dry run)"
-                       :args      {:file  {:required true :desc "Source file"}
-                                   :forms {:required true :desc "EDN vector of form names, e.g. '[foo bar]'"}
-                                   :to    {:required true :desc "Target file path for new namespace"}}
+                       :desc      "Plan dependency-minimal form extraction with caller and quoted-Var proof (dry run)"
+                       :args      {:file           {:required true :desc "Source file"}
+                                   :forms          {:required true :desc "EDN vector of form names, e.g. '[foo bar]'"}
+                                   :to             {:required true :desc "Target file path for new namespace"}
+                                   :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}}
                        :examples  ["clj-surgeon :op :extract :file src/state.clj :forms '[distill refine]' :to src/distillery.clj"]
                        :category  :write
                        :pair      :extract!}
 
     :extract!         {:handler   extract/execute!
-                       :desc      "Execute form extraction to new namespace"
-                       :args      {:file  {:required true :desc "Source file"}
-                                   :forms {:required true :desc "EDN vector of form names"}
-                                   :to    {:required true :desc "Target file path for new namespace"}}
-                       :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj"]
+                       :desc      "Execute one failure-atomic form extraction to a new namespace"
+                       :args      {:file           {:required true :desc "Source file"}
+                                   :forms          {:required true :desc "EDN vector of form names"}
+                                   :to             {:required true :desc "New target file; existing files refuse"}
+                                   :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}
+                                   :receipt-out    {:desc "Optional new .edn path for a guarded inverse receipt"}}
+                       :workflow  ["Run :extract first. Review target-requires, omitted-target-requires, remaining-source-callers, callers-to-review, and authority-labeled quoted-var-references. Unsupported require shapes refuse instead of copying or dropping unproved dependencies."
+                                   "Application compiles both complete files from one source snapshot, parses them, hash-fences the source, writes atomically, and verifies read-back."
+                                   "Existing targets, stale source, invalid candidates, receipt aliases, and handled write failures refuse or roll back without leaving a partial extraction."
+                                   "Use :receipt-out when the extraction must be reversible. Pass that path to :undo-extract!; do not edit the receipt."]
+                       :examples  ["clj-surgeon :op :extract! :file src/state.clj :forms '[distill refine]' :to src/distillery.clj :receipt-out /tmp/distillery-extract.edn"]
                        :category  :write
                        :pair      :extract}
+
+    :undo-extract!    {:handler   extract/undo!
+                       :desc      "Undo an extraction while both result files still match its receipt"
+                       :args      {:receipt {:required true :desc "Guarded .edn receipt emitted by :extract!"}}
+                       :workflow  ["Supply the unchanged receipt emitted by :extract!."
+                                   "The command refuses before writing when either extraction result has changed or disappeared."
+                                   "Success restores the original source and removes only the exact target created by that extraction."]
+                       :examples  ["clj-surgeon :op :undo-extract! :receipt /tmp/distillery-extract.edn"]
+                       :category  :write}
 
     :edit             {:handler   run-edit
                        :desc      "Plan one hash-fenced structural edit; :expect can verify and apply a literal replacement in one call"
@@ -601,7 +617,7 @@
                                    :spec-file {:desc "EDN spec path, or - to read one document from stdin (preferred)"}}
                        :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - for a nontrivial plan, like kubectl apply -f -."
                                    "Express the complete mechanical model plan as one :changes document: :in, optional :forms, :find, :do, and :expect."
-                                   "Each change declares explicit :in, optional unique :forms, exact source :find, one [:replace SOURCE] :do, and positive :expect {:matches N}."
+                                   "Each change declares explicit :in, optional unique :forms, one supported :do, and positive :expect {:matches N}. Replacement uses exact source :find with [:replace SOURCE]; whole-owner [:delete true] requires named :forms and omits :find."
                                    "Declare aggregate :expect values for :changes, :edits, and :files. Use :each-form or :each-file when distribution matters."
                                    "This command reads each scoped file once, compiles every change against the original snapshots, and writes nothing."
                                    "Whitespace may differ. Comments, metadata, reader syntax, token spelling, and collection type must match exactly. Legacy exact :intents with :intent-count and :changed-file-count remain accepted."
@@ -619,12 +635,12 @@
                                    :receipt-out {:required true :desc "Durable .edn inverse receipt; must not alias a source file"}}
                        :workflow  ["Provide exactly one of :spec or :spec-file. Prefer :spec-file - so a large plan travels as data instead of shell-escaped text, like kubectl apply -f -."
                                    "Express the complete mechanical model plan once as the same guarded :changes document accepted by :change."
-                                   "Every :find, literal replacement, per-change count or distribution guard, and aggregate :expect value is consent to the exact materialized transaction. If the task already determines those counts, declare them without probing source only to confirm them."
+                                   "Every action, exact selector, per-change count or distribution guard, and aggregate :expect value is consent to the exact materialized transaction. If the task already supplies complete files and owners, declare them without probing source only to confirm them."
                                    "The command compiles from one snapshot, parses every complete future file, rechecks hashes, commits every file, verifies read-back hashes, and publishes the receipt last."
                                    "If a handled write or receipt-publication failure occurs, the command restores transaction-owned bytes and reports whether rollback was complete. It never overwrites unknown concurrent bytes."
                                    "The console result is compact. Do not open :receipt-out; pass its path as :receipt PATH to :undo-change!."
                                    "Use :change when review is required before mutation. Use :change! when the exact guarded intent set is already the model's approved plan."]
-                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
+                       :examples  ["clj-surgeon :op :change! :spec-file - :receipt-out /tmp/ui-change.edn <<'EDN'\n{:changes [{:id :body-class :in [\"src/ui.clj\"] :forms [shell reader] :find \":body\" :do [:replace \":body.page\"] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN\n\nclj-surgeon :op :change! :spec-file - :receipt-out /tmp/delete.edn <<'EDN'\n{:changes [{:id :obsolete :in [\"src/app.clj\"] :forms [old-handler old-test] :do [:delete true] :expect {:matches 2 :each-form 1}}] :expect {:changes 1 :edits 2 :files 1}}\nEDN"]
                        :category  :write
                        :pair      :change}
 
@@ -930,7 +946,7 @@
     (.append sb "clj-surgeon — structural operations on Clojure namespaces\n\n")
     (.append sb "Usage: clj-surgeon :op <command> [args...]\n")
     (.append sb "       clj-surgeon up [WORKSPACE]      join the shared hot MCP stack\n")
-    (.append sb "       clj-surgeon recover [WORKSPACE] repair and prove the hot MCP stack\n")
+    (.append sb "       clj-surgeon recover [WORKSPACE] repair once; receipt names fallback\n")
     (.append sb "       clj-surgeon report-failure --receipt PATH\n")
     (.append sb "       clj-surgeon --help              show this message\n")
     (.append sb "       clj-surgeon :op :help           show this message\n")
@@ -1219,7 +1235,10 @@
                   (str "Usage: clj-surgeon recover [WORKSPACE]\n\n"
                        "Make one bounded repair attempt, then prove tools/list, "
                        "one exact semantic surface, and one guarded write. "
-                       "WORKSPACE defaults to cwd."))
+                       "WORKSPACE defaults to cwd. A typed semantic-provider-warming "
+                       "result is not a recovery condition: wait and retry its "
+                       "next_call once. Fallback-safe receipts contain executable "
+                       "report-command and fallback-command vectors."))
 
                 (seq extra)
                 (throw (ex-info "Usage: clj-surgeon recover [WORKSPACE]"

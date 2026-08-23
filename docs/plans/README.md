@@ -12,6 +12,53 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Anvil as a durable development surface](anvil-development-surface.md) —
+  hybrid local/remote routing, durable detached work, and a measured Tailscale
+  pilot before latency-sensitive tweezer work moves off the laptop.
+- [Adaptive clj-surgeon interface ethnography](adaptive-clj-surgeon-interface-ethnography.md)
+  — privacy-safe natural history plus matched Anvil `cli` versus `cli-mcp`
+  versus `none` trials, advancing through 3-, 12-, and larger-run batches only
+  after explicit validity gates.
+- [Bounded cclsp workspace lifecycle](bounded-cclsp-workspace-lifecycle.md) —
+  four concurrent semantic workspace leases, eight warm residents, serialized
+  initialization, idle-only LRU/TTL reaping, and no all-root semantic fan-out.
+- [One compiler, two entrances](one-compiler-two-entrances.md) — converge exact
+  source, semantic proof, typed actions, formatting, verification, receipts,
+  diagnostics, and runtime observability without adding MCP tools or parallel
+  mutation paths.
+- [One-shot editor gesture](one-shot-editor-gesture.md) — compile
+  `within + from + to` into an implicitly anchored, one-match, verified
+  transaction, then prove it by hot-reloading and editing Surgeon with itself.
+- [Receipt-coherent same-file transactions](receipt-coherent-same-file-transactions.md)
+  — keep logical edit evidence distinct from formatter-coalesced inverse edits,
+  so several disjoint owners in one file commit and undo as one valid receipt.
+- [Sublime hot refactor loop](sublime-hot-refactor-loop.md) — address one
+  multimethod dispatch exactly, format before commit, prove the change in the
+  actual application nREPL, and launch a linked bounded cold gate from one
+  typed transaction.
+- [MCP-compiled extraction](mcp-compiled-extraction.md) — compile a multi-owner
+  move, exact caller rewrites, verification, and undo into one typed transaction.
+- [Functional-core test architecture](functional-core-test-architecture.md) —
+  move every combinatorial extraction, diagnostic, retained-basis, and
+  transaction behavior behind pure data compilers while retaining a minimal
+  real test for each external boundary.
+- [Compiled exact-owner deletion](compiled-owner-deletion.md) — delete several
+  proven named owners in one index-free, failure-atomic MCP transaction, with
+  no marker forms or native cleanup.
+- [Contract and runtime coherence](contract-and-runtime-coherence.md) —
+  single-source the direct-change schema and validator in clj-surgeon, and the
+  workspace lifecycle projection shared by cclsp health, admission, recovery,
+  and diagnostics.
+- [Dependency-minimal namespace extraction](dependency-minimal-extraction.md)
+  — compile the destination header from moved-form dependencies, add a source
+  require only for remaining callers, and allocate aliases without collisions.
+- [Quoted Var reference proof](quoted-var-reference-proof.md) — union exact
+  `#'x` and `(var x)` caller evidence with language-server references without
+  mislabeling its authority or admitting comments, strings, or quoted data.
+- [Failure-atomic namespace extraction](failure-atomic-extraction.md) — repair
+  the production adjacent-form corruption with one-snapshot candidate
+  compilation, syntax-aware requires, rollback, read-back proof, and a guarded
+  reversible receipt.
 - [Recover and report failure](recover-and-report-failure.md) — one bounded
   real-transaction reset button plus privacy-safe, fingerprinted local Bead
   reporting; no health-only success and no recovery loops.

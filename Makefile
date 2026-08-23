@@ -119,7 +119,8 @@ mcp-reload: mcp-test
 	  test -f "$$port_file" || { echo "No live MCP nREPL port at $$port_file; run make mcp-start" >&2; exit 1; }; \
 	  port=$$(cat "$$port_file"); \
 	  result=$$(clj-nrepl-eval --port "$$port" \
-	    "(do (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.binding-rename clj-surgeon.intent-transaction clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-contract clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-change-buffer clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))))"); \
+	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.binding-rename clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-schema clj-surgeon.mcp-contract clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-process clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-extraction clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
+	  case "$$result" in *":ok true"*) ;; *) echo "$$result" >&2; exit 1 ;; esac; \
 	  echo "$$result"; \
 	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \
 	  echo "Clients that honor tools/list_changed re-list automatically. The current Codex turn can cache model-visible schemas until a new session."
@@ -170,7 +171,9 @@ cclsp-start:
 	    -o "$(CCLSP_LOG_FILE)" -e "$(CCLSP_LOG_FILE)" -- \
 	    /bin/sh -c 'cd "$$1"; export CCLSP_CONFIG_PATH="$$2"; export PATH="$$3"; shift 3; exec "$$@"' _ \
 	    "$(CCLSP_HOME)" "$(CCLSP_CONFIG)" "$(PATH)" \
-	    "$(CCLSP_HOME)/node_modules/.bin/bun" run --watch index.ts serve-http --host 127.0.0.1 --port "$(CCLSP_PORT)"; \
+	    /usr/bin/env LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+	    CCLSP_BUN="$(CCLSP_HOME)/node_modules/.bin/bun" \
+	    node scripts/dev-http-supervisor.mjs serve-http --host 127.0.0.1 --port "$(CCLSP_PORT)"; \
 	  ready=false; \
 	  for attempt in $$(seq 1 60); do \
 	    if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(CCLSP_URL))" >/dev/null 2>&1; then ready=true; break; fi; \

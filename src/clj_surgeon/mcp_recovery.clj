@@ -198,7 +198,20 @@
                         (= "ok" (:status semantic-result)))
             (throw (ex-info "Semantic surface probe refused"
                             {:error-type (or (:error_type semantic-result)
-                                             :semantic-probe-failed)})))
+                                             :semantic-probe-failed)
+                             :capabilities
+                             {:structural-read :ready
+                              :structural-write :ready
+                              :semantic-surface
+                              (if (= "warming" (:status semantic-result))
+                                :warming
+                                :unavailable)
+                              :source-anchor :retained}
+                             :safe-route :exact-source
+                             :retained-source-anchor source-anchor
+                             :fallback-command
+                             ["clj-surgeon" ":op" ":cat"
+                              ":file" file ":form" (:name form)]})))
           {:subject subject
            :file file
            :lsp-session (:lsp_session semantic-result)

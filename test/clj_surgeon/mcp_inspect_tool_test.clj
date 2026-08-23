@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -243,6 +244,42 @@
         (inspect-tool/init! nil)
         (delete-tree! project)))))
 
+(deftest callback-queries-a-cold-job-without-rereading-source
+  (let [project (temp-dir)
+        calls (atom [])]
+    (try
+      (cold-verify/clear-jobs!)
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (let [launched (cold-verify/launch!
+                       (.getPath project) "full"
+                       {:command ["/bin/sh" "-c" "printf cold-ok"]
+                        :timeout-ms 1000})
+            job (:verification_job launched)]
+        (loop [attempt 0]
+          (when (and (not (:verification_complete
+                            (cold-verify/status (.getPath project) job)))
+                     (< attempt 100))
+            (Thread/sleep 10)
+            (recur (inc attempt))))
+        (inspect-tool/handle-inspect
+          nil
+          {"workspace_root" (.getPath project)
+           "verification_job" job
+           "view" "verification"}
+          (fn [content error? structured]
+            (swap! calls conj {:content content :error? error?
+                               :structured structured})))
+        (is (= false (:error? (first @calls))))
+        (is (str/starts-with? (first (:content (first @calls)))
+                              "inspect_clojure · cold verification\n"))
+        (is (= :passed (get-in @calls [0 :structured :status])))
+        (is (true? (get-in @calls [0 :structured :verification_complete])))
+        (is (= 0 (get-in @calls [0 :structured :file_read_count] 0))))
+      (finally
+        (cold-verify/clear-jobs!)
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
 (deftest handler-namespace-reload-preserves-the-live-runtime
   (let [project (temp-dir)
         _source (write-source! project "src/demo.clj"
@@ -329,6 +366,52 @@
       (finally
         (delete-tree! project)))))
 
+(deftest prepare-change-supplements-the-semantic-surface-with-quoted-vars
+  (let [project (temp-dir)
+        source (write-source! project "src/sample/core.clj"
+                              "(ns sample.core)\n(defn target [] :ok)\n")
+        _ (write-source! project "test/sample/core_test.clj"
+                         (str "(ns sample.core-test\n"
+                              "  (:require [sample.core :as sut]))\n"
+                              "(deftest private-var-test\n"
+                              "  (is (var? #'sut/target)))\n"))]
+    (try
+      (let [result
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath project)
+               :semantic-resolver
+               (fn [_]
+                 (let [session "lsp-quoted-var-test"]
+                   {:ok true
+                    :version 3
+                    :lsp_session session
+                    :definition {:lsp_session session
+                                 :file "src/sample/core.clj"
+                                 :file_path (.getCanonicalPath source)
+                                 :source_sha256
+                                 (structural-lens/source-hash (slurp source))
+                                 :owner_status "found"
+                                 :owner "target"
+                                 :range {:start {:line 1 :character 6}
+                                         :end {:line 1 :character 12}}
+                                 :line 2 :character 7
+                                 :name "target"}
+                    :references []}))}
+              {:mode "prepare-change"
+               :subject "sample.core/target"
+               :intent "Prove the private Var caller"
+               :scope "surface"
+               :label "quoted"
+               :verify "fast"})]
+        (is (:ok result))
+        (is (= 1 (get-in result [:quoted_var_proof :reference-count])))
+        (is (= ["target" "private-var-test"]
+               (mapv :form (:surface result))))
+        (is (= [:language-server+exact-source :structural-var-quote]
+               (mapv :authority (:surface result)))))
+      (finally
+        (delete-tree! project)))))
+
 (deftest prepare-change-callback-is-compact-and-carries-the-full-basis-structurally
   (let [project (temp-dir)
         source (write-source! project "src/sample/core.clj"
@@ -376,7 +459,8 @@
                :form "target"
                :line 2
                :end-line 2
-               :subjects ["sample.core/target"]}]
+               :subjects ["sample.core/target"]
+               :authority :language-server+exact-source}]
              (get-in @calls [0 :structured :surface])))
       (is (<= (inspect-tool/mcp-result-byte-count
                 (:content (first @calls))
@@ -384,6 +468,43 @@
               inspect-tool/max-public-result-bytes))
       (finally
         (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest exact-source-prepare-crosses-the-mcp-adapter-without-semantic-lookup
+  (let [project (temp-dir)
+        _source (write-source! project "src/sample/core.clj"
+                               "(ns sample.core)\n(defn target [] :ok)\n")
+        semantic-calls (atom 0)
+        calls (atom [])]
+    (try
+      (inspect-tool/init!
+        {:project-root (.getPath project)
+         :semantic-resolver
+         (fn [_]
+           (swap! semantic-calls inc)
+           (throw (ex-info "semantic resolver must not run" {})))})
+      (inspect-tool/handle-inspect
+        nil
+        {"mode" "prepare-change"
+         "file" "src/sample/core.clj"
+         "form" "target"
+         "intent" "Delete one exact owner"
+         "label" "delete"}
+        (fn [content error? structured]
+          (swap! calls conj {:content (first content)
+                             :error? error?
+                             :structured structured})))
+      (is (zero? @semantic-calls))
+      (is (false? (:error? (first @calls))))
+      (is (str/includes? (:content (first @calls))
+                         "exact named owner · no semantic index required"))
+      (is (= :exact-source
+             (get-in @calls [0 :structured :surface 0 :authority])))
+      (is (= [{:site "delete/s01" :replace nil}]
+             (get-in @calls [0 :structured :next_call :decisions])))
+      (finally
+        (inspect-tool/init! nil)
+        (change-buffer/clear-bases!)
         (delete-tree! project)))))
 
 (deftest oversized-public-decision-packet-refuses-and-retains-no-basis

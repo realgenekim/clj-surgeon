@@ -68,7 +68,13 @@
 
 (deftest project-verification-profiles-are-closed-data
   (let [profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]
-                                     ["npx" "formatter" "{files}"]]}
+                                     ["npx" "formatter" "{files}"]]
+                          :hot {:port-file ".nrepl-port"
+                                :reload ["app.core"]
+                                :tests ["app.core-test/law"]
+                                :timeout-ms 5000}
+                          :cold {:command ["make" "test"]
+                                 :timeout-ms 600000}}
                   "full" ["make" "test"]}]
     (is (= {:profiles profiles :source :project}
            (http-server/resolve-verification-profiles
@@ -76,12 +82,26 @@
     (is (= :process
            (:source (http-server/resolve-verification-profiles
                       profiles {:verification-profiles {"other" ["false"]}}))))
-    (is (= :built-in
-           (:source (http-server/resolve-verification-profiles nil {}))))
+    (let [built-in (http-server/resolve-verification-profiles nil {})]
+      (is (= :built-in (:source built-in)))
+      (is (= 1200000
+             (get-in built-in [:profiles "full" :cold :timeout-ms]))
+          "the built-in full gate must exceed this repository's measured ten-minute suite"))
     (doseq [invalid [{:verification-profiles {}}
                      {:verification-profiles {:fast ["make" "test"]}}
                      {:verification-profiles {"fast" "make test"}}
                      {:verification-profiles {"fast" {:commands []}}}
+                     {:verification-profiles
+                      {"fast" {:hot {:port-file ".nrepl-port"
+                                     :reload [] :tests []
+                                     :code "(+ 1 2)"}}}}
+                     {:verification-profiles
+                      {"fast" {:cold {:command "make test"
+                                      :timeout-ms 600000}}}}
+                     {:verification-profiles
+                      {"fast" {:cold {:command ["make" "test"]
+                                      :timeout-ms 600000
+                                      :code "(+ 1 2)"}}}}
                      {:verification-profiles {"fast" [["make" 42]]}}]]
       (let [error (try
                     (http-server/resolve-verification-profiles nil invalid)
@@ -89,6 +109,23 @@
                     (catch clojure.lang.ExceptionInfo error error))]
         (is (= :invalid-project-verification-profiles
                (:error-type (ex-data error))))))))
+
+(deftest project-formatter-is-closed-data-with-one-safe-default
+  (is (= http-server/default-formatter
+         (http-server/formatter-from-config {})))
+  (is (= ["format" "--write" "{files}"]
+         (http-server/formatter-from-config
+           {:formatter ["format" "--write" "{files}"]})))
+  (doseq [invalid [{:formatter []}
+                   {:formatter "format {files}"}
+                   {:formatter ["format" 42 "{files}"]}
+                   {:formatter ["format" "--write"]}]]
+    (let [error (try
+                  (http-server/formatter-from-config invalid)
+                  nil
+                  (catch clojure.lang.ExceptionInfo error error))]
+      (is (= :invalid-project-formatter
+             (:error-type (ex-data error)))))))
 
 (deftest workspace-verification-contexts-are-lazy-reloadable-and-isolated
   (let [root-a (temp-dir)
@@ -210,11 +247,18 @@
         (is (= false (get-in tools [0 :annotations :openWorldHint])))
         (is (= false (get-in tools [0 :inputSchema :additionalProperties])))
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
-        (is (= #{:basis :decisions :verify :changes :expect :workspace_root}
+        (is (= #{:basis :decisions :verify :changes :expect :edits :extraction
+                 :workspace_root}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?
               (get-in tools [1 :inputSchema :properties :verify :description])
-              "Basis route only"))
+              "cold job"))
+        (is (str/includes?
+              (get-in tools [1 :inputSchema :properties :verify :description])
+              "hot laws roll back"))
+        (is (= "^verify/.+"
+               (get-in tools [0 :inputSchema :properties
+                              :verification_job :pattern])))
         (is (= false (:isError result)))
         (is (str/starts-with? (get-in result [:content 0 :text])
                               "inspect_clojure\n"))
@@ -281,44 +325,42 @@
         (is (= true
                (get-in (sse-json initialized)
                        [:result :capabilities :tools :listChanged])))
-        (do
-          (is (= {:ok true
-                  :status :synchronized
-                  :removed []
-                  :upserted ["inspect_clojure" "temporary_probe"]
-                  :tool-count 3
-                  :server-restart-required false
-                  :agent-session-restart :client-dependent}
-                 (select-keys
-                   added
-                   [:ok :status :removed :upserted :tool-count
-                    :server-restart-required :agent-session-restart])))
-          (is (re-matches #"[0-9a-f]{8}" (:before-contract-hash added)))
-          (is (re-matches #"[0-9a-f]{8}" (:after-contract-hash added)))
-          (is (not= (:before-contract-hash added)
-                    (:after-contract-hash added))))
+        (is (= {:ok true
+                :status :synchronized
+                :removed []
+                :upserted ["inspect_clojure" "temporary_probe"]
+                :tool-count 3
+                :server-restart-required false
+                :agent-session-restart :client-dependent}
+               (select-keys
+                 added
+                 [:ok :status :removed :upserted :tool-count
+                  :server-restart-required :agent-session-restart])))
+        (is (re-matches #"[0-9a-f]{8}" (:before-contract-hash added)))
+        (is (re-matches #"[0-9a-f]{8}" (:after-contract-hash added)))
+        (is (not= (:before-contract-hash added)
+                  (:after-contract-hash added)))
         (is (= #{"inspect_clojure"
                  "apply_clojure_changes"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
                (get-in added-by-name ["inspect_clojure" :description])))
-        (do
-          (is (= {:ok true
-                  :status :synchronized
-                  :removed ["temporary_probe"]
-                  :upserted ["inspect_clojure"]
-                  :tool-count 2
-                  :server-restart-required false
-                  :agent-session-restart :client-dependent}
-                 (select-keys
-                   restored
-                   [:ok :status :removed :upserted :tool-count
-                    :server-restart-required :agent-session-restart])))
-          (is (= (:after-contract-hash added)
-                 (:before-contract-hash restored)))
-          (is (= (:before-contract-hash added)
-                 (:after-contract-hash restored))))
+        (is (= {:ok true
+                :status :synchronized
+                :removed ["temporary_probe"]
+                :upserted ["inspect_clojure"]
+                :tool-count 2
+                :server-restart-required false
+                :agent-session-restart :client-dependent}
+               (select-keys
+                 restored
+                 [:ok :status :removed :upserted :tool-count
+                  :server-restart-required :agent-session-restart])))
+        (is (= (:after-contract-hash added)
+               (:before-contract-hash restored)))
+        (is (= (:before-contract-hash added)
+               (:after-contract-hash restored)))
         (is (= #{"inspect_clojure" "apply_clojure_changes"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
@@ -470,7 +512,10 @@
                (slurp source-file)))
         (is (= 1 (count (filter #(.isFile %) (file-seq receipt-dir)))))
         (with-open [connection (nrepl/connect :port (-> running :nrepl :port))]
-          (let [client (nrepl/client connection 5000)
+          ;; The full suite can keep the shared JVM busy for longer than five
+          ;; seconds. Wait for the terminal nREPL reply so that a timed-out eval
+          ;; cannot apply these Var changes after the test has begun cleanup.
+          (let [client (nrepl/client connection 30000)
                 code
                 (str "(do "
                      "(alter-var-root "
@@ -509,8 +554,11 @@
                  (-> after-inspect sse-json :result :structuredContent :hot)))
           (is (false? (-> after-inspect sse-json :result :isError)))))
       (finally
+        ;; Stop the executor before restoring process-global Vars. Otherwise a
+        ;; late nREPL eval can overwrite the restored roots and contaminate the
+        ;; tests that follow this one.
+        (http-server/stop-http-server! running)
         (alter-var-root #'tool/handle-clj-change (constantly original))
         (alter-var-root #'inspect-tool/handle-inspect
                         (constantly original-inspect))
-        (http-server/stop-http-server! running)
         (delete-tree! project)))))

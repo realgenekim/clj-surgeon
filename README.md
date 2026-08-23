@@ -390,10 +390,13 @@ verification, removes its fixture, and returns `:terminal-state :recovered`
 with `:next-action :none`. It does not restart healthy shared services.
 
 Failure returns one terminal state, a redacted receipt path, and one executable
-report command. Run that command once on this development machine:
+report command. Receipts are scoped to the canonical workspace. Run the exact
+`:report-command` once on this development machine, then execute the receipt's
+`:fallback-command` from that workspace. For example:
 
 ```bash
-clj-surgeon report-failure --receipt ~/.local/state/clj-surgeon/recovery/last-failure.edn
+clj-surgeon report-failure --receipt \
+  ~/.local/state/clj-surgeon/workspaces/WORKSPACE_HASH/receipts/last-failure.edn
 ```
 
 The reporter creates or updates one local Bead by stable failure fingerprint.
@@ -401,14 +404,43 @@ It never uploads or retains source, prompts, URLs, or workspace paths. When a
 local `.beads` database is unavailable, it returns the same safe issue draft as
 data and performs no write. Do not loop on `up` or `recover`.
 
+A typed `semantic-provider-warming` result is different: one clojure-lsp child
+is still initializing under a bounded lease. Keep its `lsp_session`,
+`child_pid`, retained source anchor, and `next_call`. Do not restart or recover.
+Wait, then retry that exact call once. Structural MCP reads and exact-source
+writes remain available while the semantic graph warms.
+
 Start a new Codex session in the target repository only when onboarding changed
 its `.codex/config.toml`. Do not start another MCP server for the repository.
 For a workspace other than the server default, send its canonical absolute
 `workspace_root` on `inspect_clojure` and `apply_clojure_changes`. A prepared
 `next_call` already carries the same root; preserve it unchanged.
 
-A qualifying edit can then be one native tool call. Send all known Clojure
-replacements, scopes, and cardinality guards to `apply_clojure_changes`. A
+A qualifying edit can then be one native tool call. For an exact nested edit,
+name the file, top-level owner, old subtree, and replacement; Surgeon derives
+the transaction bookkeeping:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "edits": [{
+    "file": "src/app.clj",
+    "within": {"form": "render"},
+    "from": ":old",
+    "to": ":new"
+  }],
+  "verify": "fast"
+}
+```
+
+The old subtree is the compare-and-swap guard. One match is the default. When
+the same exact subtree must change a known number of times inside the owner,
+add `"matches": 2`; any other count refuses the whole request before write.
+Surgeon never offers an unbounded replace-all through this entrance.
+
+For different edits or more explicit transaction control, send all known
+Clojure replacements, scopes, and cardinality guards to
+`apply_clojure_changes`. A
 successful `verification_complete=true` receipt is terminal evidence, so do
 not reread or diff the files afterward. One server remains hot across projects
 and Codex sessions. Each request is confined to its selected canonical
@@ -431,16 +463,140 @@ The direct route uses one closed object per change:
     "replace": ":new",
     "expect": {"matches": 1, "each_form": 1}
   }],
-  "expect": {"changes": 1, "edits": 1, "files": 1}
+  "expect": {"changes": 1, "edits": 1, "files": 1},
+  "verify": "fast"
 }
 ```
 
+Address one multimethod implementation without line numbers by putting a typed
+owner in `forms`:
+
+```json
+{"kind": "defmethod", "name": "render", "dispatch": ":card"}
+```
+
+The method name and complete dispatch form must select exactly one top-level
+`defmethod`. Missing or duplicate dispatches refuse before mutation.
+
+Managed transactions format staged future bytes before the first live write.
+Projects can add a live application proof and a bounded cold suite with closed
+data in `.clj-surgeon.edn`; MCP callers can select a profile but cannot send a
+shell command or arbitrary nREPL expression:
+
+```clojure
+{:formatter ["npx" "@chrisoakman/standard-clojure-style" "fix" "{files}"]
+ :verification-profiles
+ {"fast" {:commands [["clj-kondo" "--lint" "{files}"]]
+          :hot {:port-file ".nrepl-port"
+                :reload ["app.model" "app.routes"]
+                :tests ["app.model-test/invariant"]
+                :timeout-ms 5000}}
+  "full" {:cold {:command ["make" "test"]
+                  :timeout-ms 1200000}}}}
+```
+
+Formatting, configured commands, application reload, and focused laws finish in
+the guarded hot transaction. Failure rolls back before the call returns. A
+configured `:cold` command starts only after the hot proof passes. The edit then
+returns immediately with `verification_complete=false` and one `next_call`:
+
+```json
+{
+  "tool": "inspect_clojure",
+  "workspace_root": "/absolute/workspace",
+  "verification_job": "verify/…",
+  "view": "verification"
+}
+```
+
+Continue useful work, then copy that call once. A cold failure never performs a
+surprise late rollback; it reports the bounded output and leaves the inverse
+receipt available. Running and terminal status carry the same `undo_receipt`
+and `receipt_hash`, so recovery needs no archaeology. Do not replay the edit or
+reread its source while the job is running.
+
+For a namespace extraction, send the architectural decision once. The typed
+route creates the absent destination, moves the named owners, applies every
+exact caller rewrite, verifies the coherent future file set, and emits one
+guarded undo receipt:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "extraction": {
+    "file": "src/app/core.clj",
+    "to": "src/app/render.clj",
+    "forms": ["render-card", "render-page"],
+    "require_policy": "copy-all",
+    "caller_changes": [{
+      "id": "redirect-render",
+      "files": ["src/app/routes.clj"],
+      "forms": ["routes"],
+      "find": "app.core/render-page",
+      "replace": "app.render/render-page",
+      "expect": {"matches": 1, "each_form": 1, "each_file": 1}
+    }],
+    "ignored_caller_files": [],
+    "expect": {"forms": 2, "caller_edits": 1, "files": 3}
+  },
+  "verify": "fast"
+}
+```
+
+Every caller candidate must be changed or explicitly ignored; omission refuses
+before mutation. The destination parent must exist inside the workspace, and
+the destination itself must be absent. Undo through the returned receipt:
+
+```bash
+clj-surgeon :op :undo-extract! :receipt /path/from/undo_receipt
+```
+
+Execution proof and caller proof are separate. A receipt reports one explicit
+caller-proof level:
+
+| Level | Meaning | Can an empty result authorize deletion? |
+|---|---|---:|
+| `semantic-complete` | Resolved definitions and references completed in one hash-bound semantic session. | Yes, within that declared semantic authority. |
+| `structural-candidates-only` | Exact structural candidate and quoted-Var scans completed; aliases, macros, or generated references may remain. This is the current direct-extraction level. | No |
+| `caller-proof-unavailable` | No trustworthy semantic or structural inventory completed. Successful extraction refuses rather than silently using this level. | No |
+
+`verification_complete=true` proves that the requested transaction committed,
+parsed, passed its configured verification, and was read back exactly. It does
+not upgrade `structural-candidates-only` into semantic caller completeness.
+
 Use exactly one of `forms` or `owner` and exactly one mutation action in each
 change. The actions are `replace`, `insert_before`, `insert_after`,
-`rename_binding`, and `assoc_entry`. `find`, a replacement, and every inserted
+`rename_binding`, `assoc_entry`, and `delete`. `find`, a replacement, and every inserted
 member must be one complete parseable Clojure form. Insertion preserves the selected sibling's existing whitespace
 separator. It refuses when that gap contains comments or detached source;
 replace a larger exact span when comment placement is part of the decision.
+Optional `verify` accepts only `fast` or `full` on either the direct or prepared
+route. Commands and live-JVM laws in the named closed profile run after the
+atomic commit and roll back on failure. A configured cold command runs as a
+bounded job and keeps `verification_complete=false` until its status receipt is
+terminal.
+
+Delete several known top-level owners directly—without marker forms, semantic
+preparation, or a native cleanup patch:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "changes": [{
+    "id": "delete-obsolete",
+    "files": ["src/app/server.clj"],
+    "forms": ["portal-drafts", "handle-portal"],
+    "delete": true,
+    "expect": {"matches": 2, "each_form": 1}
+  }],
+  "expect": {"changes": 1, "edits": 2, "files": 1},
+  "verify": "fast"
+}
+```
+
+The delete action owns each complete named form, its contiguous attached
+leading comments, and the necessary separator. It refuses before mutation if
+an owner is missing, duplicated, stale, or ambiguous.
 
 For example, add two members after one exact set or vector member without
 replacing the whole owner:
@@ -538,7 +694,12 @@ address. It intentionally reports zero references because it does not claim
 language-server coverage.
 
 The response contains a compact, complete `surface` vector for every definition
-and reference. With `scope=definition`, only the definition decision carries
+and reference. It unions cclsp's resolved references with a lossless proof of
+`#'name` and `(var name)` sites, including namespace aliases and fully qualified
+private Vars. Each site reports `authority`; structural supplements are never
+misrepresented as language-server evidence. Comments, strings, and quoted data
+do not become callers, so a separate literal sweep is unnecessary. With
+`scope=definition`, only the definition decision carries
 source; open selected retained site IDs when more owner source is required.
 With `scope=surface`, every site is a decision and carries its complete named
 owner. The response also contains a complete `next_call`. Preserve its
@@ -669,7 +830,7 @@ boundary.
 
 cclsp starts one lazy `clojure-lsp` child for each workspace that receives a
 semantic request. Shared onboarding configures a 10-second interactive request
-timeout and a separate 45-second cold-initialization timeout. Exact Surgeon
+timeout and a separate 120-second cold-initialization timeout. Exact Surgeon
 source anchors include the owner-token position, so the primary semantic route
 calls `textDocument/references` without a redundant `documentSymbol` round.
 
@@ -689,6 +850,14 @@ with `runtime_current=false` and `restart_required=true`. Tool-only hot reloads
 keep the stable URL. `restart_server` can start an exact configured workspace
 whose previous LSP child already exited; it reports `previous_exit=not-running`
 and waits for replacement initialization before returning success.
+Hot-added workspaces publish their configuration immediately and begin one
+initialization lease on the first semantic request. Interactive calls have a
+10-second deadline; the managed cold-start lease is 120 seconds.
+Caller deadlines and root-scoped recovery attach to that lease and never kill
+or multiply the initializing child. The shared launcher and runtime also
+publish an explicit UTF-8 locale. A missing locale is a readiness failure:
+under a launchd-style environment, Graal clojure-lsp can remain alive without
+answering `initialize` even for a tiny workspace.
 
 `make install` remains the stable copied CLI-and-skills installation. It does
 not enable the experimental MCP server.
@@ -1422,22 +1591,57 @@ clj-surgeon :op :extract :file src/writer/state.clj \
   :forms '[rebuild-ai-paragraphs! enter-distillery!]' \
   :to src/writer/state/distillery.clj    # plan (dry run)
 
+clj-surgeon :op :extract :file src/writer/state.clj \
+  :forms '[rebuild-ai-paragraphs! enter-distillery!]' \
+  :to src/writer/state/distillery.clj \
+  :require-policy :copy-all              # conservative plan
+
 clj-surgeon :op :extract! :file src/writer/state.clj \
   :forms '[rebuild-ai-paragraphs! enter-distillery!]' \
-  :to src/writer/state/distillery.clj    # execute
+  :to src/writer/state/distillery.clj \
+  :receipt-out /tmp/state-extraction.edn # execute
+
+clj-surgeon :op :undo-extract! \
+  :receipt /tmp/state-extraction.edn     # guarded inverse
 ```
 
 The compound extraction operation:
 
-1. Finds named forms and their exclusive private helpers (`:ls-extract` closure)
-2. Copies the source namespace form as a template and initially retains extra requires
-3. Writes forms to the new file in topological order
-4. Removes extracted forms from the source file
-5. Adds a require for the new namespace to the source file
-6. Reports callers that may need updating
+1. Moves the exact supplied forms; use `:ls-extract` first to choose a complete
+   dependency closure
+2. Compiles the target namespace header from dependencies used by those forms
+3. Adds a collision-free source require only when remaining source forms call
+   moved Vars; its sorted `:refer` list preserves unqualified calls
+4. Compiles and parses both complete future files from one source snapshot
+5. Commits both files atomically, verifies read-back hashes, and rolls back a
+   handled partial failure
+6. Reports callers that may need updating, including exact authority-labeled
+   `#'name` and `(var name)` references that semantic indexes can omit
+7. Optionally publishes a guarded inverse receipt
 
-Planning is pure. Only `:extract!` writes files. After extraction, use the
-compiler to find unresolved bare references and correct them.
+The preview reports `:target-requires`, `:omitted-target-requires`,
+`:remaining-source-callers`, and `:source-referred-forms`. Direct vector
+libspecs are minimized from free-symbol evidence. An unproved side-effect-only,
+reader-conditional, prefix-list, or comment-bearing require shape refuses with
+`:unsupported-require-minimization`; clj-surgeon never silently copies or drops
+it.
+
+Extraction separates movement from dependency cleanup. The default
+`:require-policy :minimal` proves the target's exact requirements and refuses
+when that proof would lose source meaning. Use `:require-policy :copy-all` when
+the first goal is a behavior-preserving move: it copies the complete source
+namespace header, including comments, reader conditionals, imports, and
+side-effect-only requires, and changes only the namespace name. The resulting
+target can have excess dependencies by design. Compile and test the move, then
+minimize dependencies as a separate, reviewable change. Both policies keep the
+same parse, hash, atomic-write, read-back, and undo guards.
+
+Planning is pure. Only `:extract!` writes files. It refuses an existing target,
+a stale source snapshot, an invalid candidate, or a receipt that aliases either
+source path. `:undo-extract!` restores the source and removes the new target
+only while both still match the receipt. Compile and test both namespaces after
+extraction; other namespaces in `:callers-to-review` still require an explicit
+migration decision.
 
 #### `:match-form` / `:replace-subform` — Nested structural edits
 
@@ -1697,12 +1901,27 @@ records.
 make test
 ```
 
+The complete gate keeps two runtimes explicit: Babashka runs the fast pure
+structural/core suite; the JVM MCP suite runs the real formatter, nREPL,
+HTTP, process, and hot-reload boundaries. `make test` runs both plus smoke and
+benchmark self-tests. JVM-only MCP namespaces are not duplicated inside the
+Babashka runner, so adding a real JVM boundary cannot silently break the fast
+suite or remove the boundary proof.
+
 Pure analysis functions take strings, zippers, or data and return data. Tests
 exercise those functions with literals. Filesystem and subprocess tests cover
 only contracts that require those boundaries. Write tests verify that refusal
 does not change bytes and that a successful candidate parses and passes the
 appropriate lint or compile check. See
 [docs/testing-guidelines.md](docs/testing-guidelines.md).
+
+The transaction, extraction, retained-basis, quoted-reference, and diagnostic
+delta decisions are pure compilers over captured values. Their tests enumerate
+ordering, ambiguity, budget, stale-evidence, trivia, inverse, and refusal
+states without starting a service or creating a project. A smaller retained
+integration layer proves snapshot capture, processes, atomic writes, MCP
+serialization, and read-back. Tests are never weakened when logic moves into a
+pure core; the real boundary proof remains.
 
 ## Architecture
 

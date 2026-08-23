@@ -1,12 +1,17 @@
 (ns clj-surgeon.mcp-change-buffer
   "Proof-carrying semantic selection followed by one addressed transaction."
   (:require
+   [clj-surgeon.diagnostic-delta :as diagnostic-delta]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str]
@@ -250,7 +255,7 @@
     :else nil))
 
 (defn- resolve-semantic-bundle
-  [semantic-resolver subjects]
+  [semantic-resolver structural-reference-resolver subjects]
   (let [resolved
         (reduce
           (fn [results subject]
@@ -274,9 +279,33 @@
            :error "All requested Vars must resolve in one LSP session"
            :lsp-sessions sessions
            :source-unchanged true}
-          {:ok true
-           :lsp-session (first sessions)
-           :resolved resolved})))))
+          (let [lsp-session (first sessions)
+                supplemental
+                (if structural-reference-resolver
+                  (structural-reference-resolver subjects)
+                  {:ok true :locations [] :reference-count 0})]
+            (if-not (:ok supplemental)
+              (assoc supplemental :source-unchanged true)
+              {:ok true
+               :lsp-session lsp-session
+               :quoted-var-proof
+               (select-keys supplemental
+                            [:scanned-file-count
+                             :candidate-file-count
+                             :reference-count])
+               :resolved
+               (mapv
+                 (fn [{:keys [subject] :as result}]
+                   (update-in result [:semantic :references]
+                              into
+                              (for [location (:locations supplemental)
+                                    :when (= subject (:subject location))]
+                                (-> location
+                                    (assoc :lsp_session lsp-session
+                                           :owner_status "unresolved"
+                                           :owner nil)
+                                    (dissoc :source :subject :role)))))
+                 resolved)})))))))
 
 (defn- capture-files
   [project-root locations read-source]
@@ -360,7 +389,8 @@
         (reduce
           (fn [sites {:keys [file_path role owner subject] :as location}]
             (let [canonical (canonical-file file_path)
-                  absolute (some #(when (= canonical %) %) (keys sources))
+                  absolute (or (when (contains? sources file_path) file_path)
+                               (some #(when (= canonical %) %) (keys sources)))
                   source (get sources absolute)
                   structural (when source
                                (structural-owner-at
@@ -399,9 +429,11 @@
                               :relative-file (get relative absolute)
                               :role role
                               :owner structural-owner
-                              :owner-authority (if owner
-                                                 :language-server+exact-source
-                                                 :exact-source)
+                              :owner-authority
+                              (or (:reference-authority location)
+                                  (if owner
+                                    :language-server+exact-source
+                                    :exact-source))
                               :subjects #{subject}})))))
           []
           locations)]
@@ -542,6 +574,7 @@
                                             :form form
                                             :line (:line site)
                                             :end-line (:end-line site)
+                                            :authority :exact-source
                                             :subjects []}
                               decision-site (assoc compact-site
                                                    :authority :exact-source
@@ -596,11 +629,291 @@
                :file file
                :source-unchanged true})))))))
 
+(defn- prepare-exact-owners!
+  [{:keys [project-root read-source] :as config}
+   {:keys [owners intent verify scope label subject subjects file form] :as request}]
+  (let [label (or label "change")
+        scope (or scope "definition")
+        valid-owner? (fn [owner]
+                       (and (map? owner)
+                            (string? (:file owner)) (seq (:file owner))
+                            (string? (:form owner)) (seq (:form owner))))]
+    (cond
+      (or subject subjects file form)
+      {:ok false
+       :error-type :ambiguous-change-subject
+       :error "Use owners by itself instead of subject/subjects or file/form"
+       :source-unchanged true}
+
+      (not (and (vector? owners)
+                (seq owners)
+                (every? valid-owner? owners)
+                (= (count owners)
+                   (count (distinct (map (juxt :file :form) owners))))))
+      {:ok false
+       :error-type :invalid-exact-owners
+       :error "Exact-source batch preparation requires a unique non-empty owners array of file/form objects"
+       :source-unchanged true}
+
+      (not (and (string? intent) (seq intent)))
+      {:ok false
+       :error-type :invalid-change-intent
+       :error "prepare-change requires a concise non-empty intent"
+       :source-unchanged true}
+
+      (not= "definition" scope)
+      {:ok false
+       :error-type :exact-owner-scope-unsupported
+       :error "Exact-source preparation supports only definition scope because it does not claim a reference surface"
+       :scope scope
+       :source-unchanged true}
+
+      (not (and (string? label)
+                (re-matches #"[a-z][a-z0-9-]{0,39}" label)))
+      {:ok false
+       :error-type :invalid-change-label
+       :error "prepare-change label must start with a lowercase letter and contain only lowercase letters, digits, or hyphens"
+       :label label
+       :source-unchanged true}
+
+      :else
+      (let [source-cache (atom {})
+            read-once (fn [path]
+                        (if-let [cached (get @source-cache path)]
+                          cached
+                          (let [source ((or read-source slurp) path)]
+                            (swap! source-cache assoc path source)
+                            source)))
+            provisional
+            (loop [remaining owners
+                   results []]
+              (if-let [{:keys [file form]} (first remaining)]
+                (let [result
+                      (prepare-exact-owner!
+                        (assoc config :read-source read-once)
+                        (-> request
+                            (dissoc :owners)
+                            (assoc :file file :form form)))]
+                  (if (:ok result)
+                    (recur (next remaining) (conj results result))
+                    {:failure result :results results}))
+                {:results results}))
+            provisional-results (:results provisional)
+            provisional-basis-ids (mapv :basis provisional-results)
+            discard-provisional! #(swap! basis-store
+                                         (fn [store]
+                                           (apply dissoc store provisional-basis-ids)))]
+        (if-let [failure (:failure provisional)]
+          (do
+            (discard-provisional!)
+            failure)
+          (let [provisional-bases (mapv #(get @basis-store %) provisional-basis-ids)
+                reindex (fn [index site]
+                          (assoc site :id (format "%s/s%02d" label (inc index))))
+                sites (mapv reindex (range)
+                            (mapcat :sites provisional-bases))
+                sources (apply merge (map :sources provisional-bases))
+                visible-characters (reduce + 0 (map (comp count :before) sites))
+                snapshot-characters (reduce + 0 (map count (vals sources)))
+                over-budget? (or (> (count sites) max-sites)
+                                 (> visible-characters max-visible-characters)
+                                 (> snapshot-characters max-snapshot-characters))]
+            (discard-provisional!)
+            (if over-budget?
+              {:ok false
+               :error-type :change-buffer-budget-exceeded
+               :error "The exact owner batch exceeds the closed change-buffer budget"
+               :site-count (count sites)
+               :visible-characters visible-characters
+               :snapshot-characters snapshot-characters
+               :limits {:sites max-sites
+                        :visible-characters max-visible-characters
+                        :snapshot-characters max-snapshot-characters}
+               :source-unchanged true
+               :remedy "Split the architectural decision into a smaller exact owner batch."}
+              (let [root (mcp-paths/real-root project-root)
+                    basis-id (str "cb-" (UUID/randomUUID))
+                    compact-site (fn [site]
+                                   {:id (:id site)
+                                    :file (:relative-file site)
+                                    :role :definition
+                                    :form (:owner site)
+                                    :line (:line site)
+                                    :end-line (:end-line site)
+                                    :authority :exact-source
+                                    :subjects []})
+                    public-surface (mapv compact-site sites)
+                    public-decisions
+                    (mapv #(assoc (compact-site %) :source (:before %)) sites)
+                    decision-site-ids (mapv :id sites)
+                    next-call {:workspace_root (str root)
+                               :basis basis-id
+                               :decisions (mapv (fn [id]
+                                                  {:site id :replace nil})
+                                                decision-site-ids)
+                               :verify (or verify "fast")}
+                    basis {:id basis-id
+                           :created-ms (now-ms)
+                           :workspace-root (str root)
+                           :lsp-session nil
+                           :subjects []
+                           :intent intent
+                           :label label
+                           :scope "definition"
+                           :verify (or verify "fast")
+                           :surface-sites sites
+                           :sites sites
+                           :sources sources
+                           :source-hashes
+                           (update-vals sources structural-lens/source-hash)}]
+                (prune-bases!)
+                (swap! basis-store assoc basis-id basis)
+                {:ok true
+                 :operation "inspect_clojure"
+                 :mode "prepare-change"
+                 :basis basis-id
+                 :authority :exact-source
+                 :owners owners
+                 :intent intent
+                 :label label
+                 :scope "definition"
+                 :reference-count 0
+                 :surface-location-count (count sites)
+                 :surface-site-count (count sites)
+                 :site-count (count sites)
+                 :file-count (count sources)
+                 :visible-character-count visible-characters
+                 :surface public-surface
+                 :decision-site-ids decision-site-ids
+                 :decision-sites public-decisions
+                 :decision-rule "Set every decision to keep, one complete named-form replacement, whole-site delete, or one compact edit; then call apply_clojure_changes once."
+                 :next_call next-call
+                 :read_complete true
+                 :source-unchanged true}))))))))
+
+(defn compile-prepared-basis
+  "Purely compile one retained semantic basis and its bounded public response
+  from captured source and semantic data. Basis identity and time are inputs."
+  [{:keys [project-root bundle subjects intent verify scope label
+           surface-locations reference-count captured basis-id created-ms
+           limits]
+    :or {verify "fast"
+         scope "surface"
+         label "change"
+         limits {:sites max-sites
+                 :visible-characters max-visible-characters
+                 :snapshot-characters max-snapshot-characters}}}]
+  (let [built (build-sites surface-locations captured label)]
+    (if-not (:ok built)
+      built
+      (let [surface-sites (:sites built)
+            sites (if (= "definition" scope)
+                    (filterv #(= :definition (:role %)) surface-sites)
+                    surface-sites)
+            visible-characters (reduce + 0 (map (comp count :before) sites))
+            over-budget? (or (> (count sites) (:sites limits))
+                             (> visible-characters (:visible-characters limits))
+                             (> (:source-character-count captured)
+                                (:snapshot-characters limits)))]
+        (cond
+          (empty? sites)
+          {:ok false
+           :error-type :semantic-sites-not-addressable
+           :error "No complete named forms contained the requested semantic locations"
+           :source-unchanged true}
+
+          over-budget?
+          {:ok false
+           :error-type :change-buffer-budget-exceeded
+           :error "The decision surface exceeds the closed change-buffer budget"
+           :site-count (count sites)
+           :surface-site-count (count surface-sites)
+           :visible-characters visible-characters
+           :snapshot-characters (:source-character-count captured)
+           :limits limits
+           :source-unchanged true
+           :remedy "Use scope=definition, narrow the subjects, or use typed inspect requests for a smaller decision."}
+
+          :else
+          (let [compact-site
+                (fn [site]
+                  (-> site
+                      (select-keys [:id :relative-file :role :owner
+                                    :line :end-line :subjects
+                                    :owner-authority])
+                      (update :subjects
+                              (fn [site-subjects]
+                                (filterv site-subjects subjects)))
+                      (set/rename-keys {:relative-file :file
+                                        :owner :form
+                                        :owner-authority :authority})))
+                decision-site
+                (fn [site]
+                  (-> (compact-site site)
+                      (assoc :authority (:owner-authority site)
+                             :source (:before site))))
+                public-surface (mapv compact-site surface-sites)
+                public-decisions (mapv decision-site sites)
+                decision-site-ids (mapv :id sites)
+                next-call
+                {:workspace_root project-root
+                 :basis basis-id
+                 :decisions (mapv (fn [id]
+                                    {:site id :replace nil})
+                                  decision-site-ids)
+                 :verify verify}
+                basis {:id basis-id
+                       :created-ms created-ms
+                       :workspace-root project-root
+                       :lsp-session (:lsp-session bundle)
+                       :subjects subjects
+                       :intent intent
+                       :label label
+                       :scope scope
+                       :verify verify
+                       :surface-sites surface-sites
+                       :sites sites
+                       :sources (:sources captured)
+                       :source-hashes
+                       (update-vals (:sources captured)
+                                    structural-lens/source-hash)}]
+            {:ok true
+             :basis basis
+             :response
+             {:ok true
+              :operation "inspect_clojure"
+              :mode "prepare-change"
+              :basis basis-id
+              :lsp_session (:lsp-session bundle)
+              :subject (when (= 1 (count subjects)) (first subjects))
+              :subjects subjects
+              :intent intent
+              :label label
+              :scope scope
+              :reference-count reference-count
+              :quoted_var_proof (:quoted-var-proof bundle)
+              :surface-location-count (count surface-locations)
+              :surface-site-count (count surface-sites)
+              :site-count (count sites)
+              :file-count (count (:sources captured))
+              :visible-character-count visible-characters
+              :surface public-surface
+              :decision-site-ids decision-site-ids
+              :decision-sites public-decisions
+              :decision-rule "Set every decision to keep, one complete named-form replacement, whole-site delete, or one compact edit containing find and replace/delete; then call apply_clojure_changes once."
+              :next_call next-call
+              :read_complete true
+              :source-unchanged true}}))))))
+
 (defn prepare-change!
   [{:keys [project-root semantic-resolver read-source] :as config}
    {:keys [intent verify scope label] :as request}]
-  (if (or (contains? request :file) (contains? request :form))
-    (prepare-exact-owner! config request)
+  (if (or (contains? request :owners)
+          (contains? request :file)
+          (contains? request :form))
+    (if (contains? request :owners)
+      (prepare-exact-owners! config request)
+      (prepare-exact-owner! config request))
     (let [subjects (requested-subjects request)
           scope (or scope "surface")
           label (or label "change")]
@@ -608,30 +921,37 @@
         (not (and (vector? subjects)
                   (every? #(and (string? %) (str/includes? % "/")) subjects)
                   (= (count subjects) (count (distinct subjects)))))
-        {:ok false :error-type :invalid-change-subject
+        {:ok false
+         :error-type :invalid-change-subject
          :error "prepare-change requires one subject or a unique non-empty subjects array of namespace/name Vars"
          :source-unchanged true}
 
         (not (and (string? intent) (seq intent)))
-        {:ok false :error-type :invalid-change-intent
+        {:ok false
+         :error-type :invalid-change-intent
          :error "prepare-change requires a concise non-empty intent"
          :source-unchanged true}
 
         (not (#{"definition" "surface"} scope))
-        {:ok false :error-type :invalid-change-scope
+        {:ok false
+         :error-type :invalid-change-scope
          :error "prepare-change scope must be definition or surface"
          :scope scope
          :source-unchanged true}
 
         (not (and (string? label)
                   (re-matches #"[a-z][a-z0-9-]{0,39}" label)))
-        {:ok false :error-type :invalid-change-label
+        {:ok false
+         :error-type :invalid-change-label
          :error "prepare-change label must start with a lowercase letter and contain only lowercase letters, digits, or hyphens"
          :label label
          :source-unchanged true}
 
         :else
-        (let [bundle (resolve-semantic-bundle semantic-resolver subjects)]
+        (let [bundle (resolve-semantic-bundle
+                       semantic-resolver
+                       (:structural-reference-resolver config)
+                       subjects)]
           (if-not (:ok bundle)
             bundle
             (let [surface-locations
@@ -641,112 +961,33 @@
                                    (semantic-locations semantic)))
                             (:resolved bundle)))
                   reference-count
-                  (count (filter #(= :reference (:role %))
-                                 surface-locations))
+                  (count (filter #(= :reference (:role %)) surface-locations))
                   captured
-                  (capture-files project-root surface-locations (or read-source slurp))]
+                  (capture-files project-root surface-locations
+                                 (or read-source slurp))]
               (if-not (:ok captured)
                 captured
-                (let [built (build-sites surface-locations captured label)]
-                  (if-not (:ok built)
-                    built
-                    (let [surface-sites (:sites built)
-                          sites (if (= "definition" scope)
-                                  (filterv #(= :definition (:role %)) surface-sites)
-                                  surface-sites)
-                          visible-characters (reduce + 0 (map (comp count :before) sites))
-                          over-budget? (or (> (count sites) max-sites)
-                                           (> visible-characters max-visible-characters)
-                                           (> (:source-character-count captured)
-                                              max-snapshot-characters))]
-                      (cond
-                        (empty? sites)
-                        {:ok false
-                         :error-type :semantic-sites-not-addressable
-                         :error "No complete named forms contained the requested semantic locations"
-                         :source-unchanged true}
-
-                        over-budget?
-                        {:ok false
-                         :error-type :change-buffer-budget-exceeded
-                         :error "The decision surface exceeds the closed change-buffer budget"
-                         :site-count (count sites)
-                         :surface-site-count (count surface-sites)
-                         :visible-characters visible-characters
-                         :snapshot-characters (:source-character-count captured)
-                         :limits {:sites max-sites
-                                  :visible-characters max-visible-characters
-                                  :snapshot-characters max-snapshot-characters}
-                         :source-unchanged true
-                         :remedy "Use scope=definition, narrow the subjects, or use typed inspect requests for a smaller decision."}
-
-                        :else
-                        (let [basis-id (str "cb-" (UUID/randomUUID))
-                              compact-site
-                              (fn [site]
-                                (-> site
-                                    (select-keys [:id :relative-file :role :owner
-                                                  :line :end-line :subjects])
-                                    (update :subjects
-                                            (fn [site-subjects]
-                                              (filterv site-subjects subjects)))
-                                    (set/rename-keys {:relative-file :file
-                                                      :owner :form})))
-                              decision-site
-                              (fn [site]
-                                (-> (compact-site site)
-                                    (assoc :authority (:owner-authority site)
-                                           :source (:before site))))
-                              public-surface (mapv compact-site surface-sites)
-                              public-decisions (mapv decision-site sites)
-                              decision-site-ids (mapv :id sites)
-                              next-call
-                              {:workspace_root project-root
-                               :basis basis-id
-                               :decisions (mapv (fn [id]
-                                                  {:site id :replace nil})
-                                                decision-site-ids)
-                               :verify (or verify "fast")}
-                              basis {:id basis-id
-                                     :created-ms (now-ms)
-                                     :workspace-root project-root
-                                     :lsp-session (:lsp-session bundle)
-                                     :subjects subjects
-                                     :intent intent
-                                     :label label
-                                     :scope scope
-                                     :verify (or verify "fast")
-                                     :surface-sites surface-sites
-                                     :sites sites
-                                     :sources (:sources captured)
-                                     :source-hashes
-                                     (update-vals (:sources captured)
-                                                  structural-lens/source-hash)}]
-                          (prune-bases!)
-                          (swap! basis-store assoc basis-id basis)
-                          {:ok true
-                           :operation "inspect_clojure"
-                           :mode "prepare-change"
-                           :basis basis-id
-                           :lsp_session (:lsp-session bundle)
-                           :subject (when (= 1 (count subjects)) (first subjects))
-                           :subjects subjects
-                           :intent intent
-                           :label label
-                           :scope scope
-                           :reference-count reference-count
-                           :surface-location-count (count surface-locations)
-                           :surface-site-count (count surface-sites)
-                           :site-count (count sites)
-                           :file-count (count (:sources captured))
-                           :visible-character-count visible-characters
-                           :surface public-surface
-                           :decision-site-ids decision-site-ids
-                           :decision-sites public-decisions
-                           :decision-rule "Set every decision to keep, one complete named-form replacement, whole-site delete, or one compact edit containing find and replace/delete; then call apply_clojure_changes once."
-                           :next_call next-call
-                           :read_complete true
-                           :source-unchanged true})))))))))))))
+                (let [basis-id (str "cb-" (UUID/randomUUID))
+                      compiled
+                      (compile-prepared-basis
+                        {:project-root project-root
+                         :bundle bundle
+                         :subjects subjects
+                         :intent intent
+                         :verify (or verify "fast")
+                         :scope scope
+                         :label label
+                         :surface-locations surface-locations
+                         :reference-count reference-count
+                         :captured captured
+                         :basis-id basis-id
+                         :created-ms (now-ms)})]
+                  (if-not (:ok compiled)
+                    compiled
+                    (do
+                      (prune-bases!)
+                      (swap! basis-store assoc basis-id (:basis compiled))
+                      (:response compiled))))))))))))
 
 (defn- validate-decisions
   [basis decisions]
@@ -986,7 +1227,7 @@
        :remedy "Copy next_call and set exactly one keep, replace, delete, or compact edit per site."}
       {:ok true})))
 
-(defn- expand-command
+(defn expand-command
   [command files]
   (let [expanded (vec (mapcat #(if (= "{files}" %) files [%]) command))
         executable (first expanded)
@@ -1003,57 +1244,176 @@
                          search-paths))]
     (assoc expanded 0 (or resolved executable))))
 
-(defn- run-check!
+(defn run-process!
   [project-root command]
   (let [started (System/nanoTime)
-        output-file (java.io.File/createTempFile "clj-surgeon-verify-" ".log")
-        builder (-> (ProcessBuilder. ^java.util.List command)
-                    (.directory (io/file project-root))
-                    (.redirectErrorStream true)
-                    (.redirectOutput output-file))
-        environment (.environment builder)
-        _ (.put environment "PATH"
-                (str "/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:"
-                     "/usr/local/bin:/usr/bin:/bin:"
-                     (get environment "PATH" "")))
-        process (.start builder)
-        finished? (.waitFor process 120 TimeUnit/SECONDS)
-        _ (when-not finished? (.destroyForcibly process))
-        raw-output (slurp output-file)
-        output (subs raw-output 0 (min 12000 (count raw-output)))
-        _ (.delete output-file)
-        exit (when finished? (.exitValue process))
+        output-file (java.io.File/createTempFile "clj-surgeon-verify-" ".log")]
+    (try
+      (let [builder (-> (ProcessBuilder. ^java.util.List command)
+                        (.directory (io/file project-root))
+                        (.redirectErrorStream true)
+                        (.redirectOutput output-file))
+            environment (.environment builder)
+            _ (process-env/configure-environment! environment)
+            process (.start builder)
+            finished? (.waitFor process 120 TimeUnit/SECONDS)
+            _ (when-not finished? (.destroyForcibly process))
+            raw-output (slurp output-file)]
+        {:finished? finished?
+         :exit (when finished? (.exitValue process))
+         :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+         :output (subs raw-output 0 (min 12000 (count raw-output)))})
+      (catch Exception error
+        {:finished? false
+         :exit nil
+         :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+         :output (or (.getMessage error) (.getName (class error)))})
+      (finally
+        (.delete output-file)))))
+
+(defn- run-check!
+  [project-root command]
+  (let [{:keys [finished? exit elapsed_ms output]}
+        (run-process! project-root command)
         ok (and finished? (zero? exit))]
     (cond-> {:ok ok
              :command (first command)
              :exit exit
-             :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)}
+             :elapsed_ms elapsed_ms}
       (not ok) (assoc :output output))))
 
-(defn- default-verify!
+(def diagnostic-output-config
+  "{:output {:format :edn}}")
+
+(defn- diagnostic-command?
+  [command]
+  (= "clj-kondo" (.getName (io/file (first command)))))
+
+(defn- diagnostic-command
+  [command files]
+  (into (expand-command command files)
+        ["--cache" "false" "--config" diagnostic-output-config]))
+
+(defn- run-diagnostic-check!
+  [project-root command files]
+  (let [{:keys [finished? exit elapsed_ms output]}
+        (run-process! project-root (diagnostic-command command files))
+        parsed (when finished?
+                 (try
+                   (edn/read-string output)
+                   (catch Exception _ nil)))
+        ok (and finished? (map? parsed) (vector? (:findings parsed)))]
+    (cond-> {:ok ok
+             :command (first command)
+             :exit exit
+             :elapsed_ms elapsed_ms}
+      ok (assoc :diagnostics parsed)
+      (not ok) (assoc :output output
+                      :error-type :invalid-diagnostic-output))))
+
+(defn capture-verification-baseline!
+  "Capture cache-independent diagnostic snapshots before a transaction writes."
   [project-root profile profiles files]
   (if-let [profile-spec (get profiles profile)]
     (let [commands (if (map? profile-spec)
-                     (:commands profile-spec)
+                     (or (:commands profile-spec) [])
                      [profile-spec])
-          checks (loop [remaining commands
-                        completed []]
-                   (if-let [command (first remaining)]
-                     (let [check (run-check! project-root
-                                             (expand-command command files))
-                           completed (conj completed check)]
-                       (if (:ok check)
-                         (recur (next remaining) completed)
-                         completed))
-                     completed))]
-      {:ok (and (= (count commands) (count checks))
-                (every? :ok checks))
+          checks (->> commands
+                      (filter diagnostic-command?)
+                      (mapv #(run-diagnostic-check! project-root % files)))]
+      {:ok (every? :ok checks)
        :profile profile
        :checks checks
        :elapsed_ms (reduce + 0.0 (map :elapsed_ms checks))})
-    {:ok false :profile profile
+    {:ok false
+     :profile profile
      :error-type :unknown-verification-profile
      :error (str "Unknown closed verification profile: " profile)}))
+
+(defn- diagnostic-delta-check
+  [baseline future]
+  (if-not (:ok future)
+    future
+    (let [delta (diagnostic-delta/diagnostic-delta
+                  (:diagnostics baseline)
+                  (:diagnostics future))]
+      (merge (select-keys future [:command :exit :elapsed_ms])
+             {:ok (:ok delta)
+              :diagnostic-delta
+              (-> delta
+                  (update :introduced #(vec (take 20 %)))
+                  (update :removed #(vec (take 20 %)))
+                  (update :blocking-introduced #(vec (take 20 %))))}))))
+
+(defn run-verification!
+  "Run one closed verification profile for the changed files. When a baseline
+  is supplied, cache-independent clj-kondo findings are compared as a delta."
+  ([project-root profile profiles files]
+   (run-verification! project-root profile profiles files nil))
+  ([project-root profile profiles files baseline]
+   (if-let [profile-spec (get profiles profile)]
+     (let [commands (if (map? profile-spec)
+                      (or (:commands profile-spec) [])
+                      [profile-spec])
+           checks (loop [remaining commands
+                         completed []
+                         diagnostic-index 0]
+                    (if-let [command (first remaining)]
+                      (let [diagnostic? (and baseline
+                                             (diagnostic-command? command))
+                            future (if diagnostic?
+                                     (run-diagnostic-check! project-root command files)
+                                     (run-check! project-root
+                                                 (expand-command command files)))
+                            check (if diagnostic?
+                                    (if-let [baseline-check
+                                             (nth (:checks baseline)
+                                                  diagnostic-index nil)]
+                                      (diagnostic-delta-check baseline-check future)
+                                      {:ok false
+                                       :command (first command)
+                                       :error-type :missing-diagnostic-baseline})
+                                    future)
+                            completed (conj completed check)]
+                        (if (:ok check)
+                          (recur (next remaining)
+                                 completed
+                                 (if diagnostic?
+                                   (inc diagnostic-index)
+                                   diagnostic-index))
+                          completed))
+                      completed))
+           command-ok? (and (= (count commands) (count checks))
+                            (every? :ok checks))
+           hot (when (and command-ok? (map? profile-spec) (:hot profile-spec))
+                 (hot-verify/verify! project-root (:hot profile-spec)))
+           hot-ok? (or (nil? hot) (:ok hot))
+           cold (when (and command-ok? hot-ok? (map? profile-spec)
+                           (:cold profile-spec))
+                  (cold-verify/launch!
+                    project-root profile
+                    (update (:cold profile-spec) :command
+                            #(expand-command % files))))]
+       {:ok (and command-ok? hot-ok? (or (nil? cold) (:ok cold)))
+        :profile profile
+        :checks checks
+        :hot-verification hot
+        :cold-verification cold
+        :verification_complete (not= :running (:status cold))
+        :elapsed_ms (+ (reduce + 0.0 (map :elapsed_ms checks))
+                       (double (or (:elapsed_ms hot) 0.0)))})
+     {:ok false
+      :profile profile
+      :error-type :unknown-verification-profile
+      :error (str "Unknown closed verification profile: " profile)})))
+
+(defn reload-after-rollback!
+  "Reload original namespaces in the configured application JVM after source
+   rollback. Focused laws are omitted because the original suite already owned
+   those bytes before the attempted transaction."
+  [project-root profile profiles]
+  (when-let [hot (get-in profiles [profile :hot])]
+    (hot-verify/verify! project-root (assoc hot :tests []))))
 
 (defn- publish-receipt!
   [receipt-dir receipt]
@@ -1064,7 +1424,8 @@
     path))
 
 (defn apply-basis!
-  [{:keys [project-root receipt-dir verification-profiles verify! read-source write-source!]}
+  [{:keys [project-root receipt-dir verification-profiles verify! read-source write-source!
+           prepare-compiled!]}
    {:keys [basis decisions verify]}]
   (prune-bases!)
   (if-let [prepared (get @basis-store basis)]
@@ -1108,53 +1469,90 @@
                :error "Every prepared site was kept; no transaction was applied"
                :source-unchanged true}
               (let [compiled (transaction/compile-addressed-transaction
-                               (:sources prepared) edits)]
+                               (:sources prepared) edits)
+                    compiled (if (and (:ok compiled) prepare-compiled!)
+                               (prepare-compiled! project-root compiled)
+                               compiled)]
                 (if-not (:ok compiled)
                   (assoc compiled :source-unchanged true)
                   (let [io-opts (cond-> {}
                                   read-source (assoc :read-source read-source)
                                   write-source! (assoc :write-source! write-source!))
-                        committed (if (seq io-opts)
-                                    (transaction/commit-compiled! compiled io-opts)
-                                    (transaction/commit-compiled! compiled))]
-                    (if-not (:ok committed)
-                      committed
-                      (let [receipt (transaction/build-receipt compiled)
-                            profile (or verify (:verify prepared))
-                            verification ((or verify! default-verify!)
-                                          project-root profile verification-profiles
-                                          (mapv :file (:files compiled)))]
-                        (if-not (:ok verification)
-                          (let [inverse (transaction/compile-inverse
-                                          receipt (:future-sources compiled))
-                                rollback (if (:ok inverse)
-                                           (if (seq io-opts)
-                                             (transaction/commit-compiled! inverse io-opts)
-                                             (transaction/commit-compiled! inverse))
-                                           inverse)]
-                            {:ok false
-                             :error-type :verification-failed
-                             :error "Verification failed; the addressed transaction was rolled back"
-                             :verification verification
-                             :rolled-back (boolean (:ok rollback))
-                             :rollback rollback})
-                          (let [receipt-file (publish-receipt!
-                                               (or receipt-dir
-                                                   (workspace/receipt-dir project-root))
-                                               receipt)]
-                            (swap! basis-store dissoc basis)
-                            (merge committed
-                                   {:ok true
-                                    :operation "apply-basis"
-                                    :basis basis
-                                    :match-count (:match-count compiled)
-                                    :receipt-file receipt-file
-                                    :receipt-hash (:receipt-hash receipt)
-                                    :verification_complete true
-                                    :read_back_hashes (get-in committed
-                                                              [:verified :read-back-hashes])
-                                    :next_action "none"
-                                    :verification verification})))))))))))))
+                        profile (or verify (:verify prepared))
+                        baseline (when profile
+                                   (if verify!
+                                     nil
+                                     (capture-verification-baseline!
+                                       project-root profile verification-profiles
+                                       (mapv :file (:files compiled)))))
+                        baseline-refusal? (and baseline (not (:ok baseline)))
+                        committed (when-not baseline-refusal?
+                                    (if (seq io-opts)
+                                      (transaction/commit-compiled! compiled io-opts)
+                                      (transaction/commit-compiled! compiled)))]
+                    (if baseline-refusal?
+                      {:ok false
+                       :error-type :verification-baseline-failed
+                       :error "Verification baseline capture failed before the addressed transaction"
+                       :verification baseline
+                       :source-unchanged true}
+                      (if-not (:ok committed)
+                        committed
+                        (let [receipt (transaction/build-receipt compiled)
+                              files (mapv :file (:files compiled))
+                              verification (if verify!
+                                             (verify! project-root profile
+                                                      verification-profiles files)
+                                             (run-verification!
+                                               project-root profile
+                                               verification-profiles files baseline))]
+                          (if-not (:ok verification)
+                            (let [inverse (transaction/compile-inverse
+                                            receipt (:future-sources compiled))
+                                  rollback (if (:ok inverse)
+                                             (if (seq io-opts)
+                                               (transaction/commit-compiled! inverse io-opts)
+                                               (transaction/commit-compiled! inverse))
+                                             inverse)
+                                  hot-rollback (when (:ok rollback)
+                                                 (reload-after-rollback!
+                                                   project-root profile
+                                                   verification-profiles))]
+                              {:ok false
+                               :error-type :verification-failed
+                               :error "Verification failed; the addressed transaction was rolled back"
+                               :verification verification
+                               :rolled-back (boolean (:ok rollback))
+                               :rollback rollback
+                               :hot-rollback hot-rollback})
+                            (let [receipt-file (publish-receipt!
+                                                 (or receipt-dir
+                                                     (workspace/receipt-dir project-root))
+                                                 receipt)
+                                  cold (:cold-verification verification)
+                                  _ (cold-verify/attach-undo-from-verification!
+                                      project-root verification receipt-file
+                                      (:receipt-hash receipt))
+                                  verification-complete? (not= :running (:status cold))]
+                              (swap! basis-store dissoc basis)
+                              (merge committed
+                                     {:ok true
+                                      :operation "apply-basis"
+                                      :basis basis
+                                      :match-count (:match-count compiled)
+                                      :receipt-file receipt-file
+                                      :receipt-hash (:receipt-hash receipt)
+                                      :verification_complete verification-complete?
+                                      :read_back_hashes (get-in committed
+                                                                [:verified :read-back-hashes])
+                                      :next_action (if verification-complete?
+                                                     "none"
+                                                     "inspect_verification_job")
+                                      :verification verification}
+                                     (when (and cold (not verification-complete?))
+                                       {:next_call (:next_call cold)})
+                                     (when (:format compiled)
+                                       {:format (:format compiled)})))))))))))))))
     {:ok false :error-type :unknown-or-expired-basis
      :error "The prepared change basis is unknown or expired"
      :source-unchanged true

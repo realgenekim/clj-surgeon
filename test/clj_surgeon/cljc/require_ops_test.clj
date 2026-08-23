@@ -1,10 +1,11 @@
 (ns clj-surgeon.cljc.require-ops-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
-            [clojure.tools.reader :as r]
-            [clojure.tools.reader.reader-types :as rt]
-            [clj-surgeon.cljc.require-ops :as ops]
-            [clj-surgeon.cljc.split :as split]))
+  (:require
+   [clj-surgeon.cljc.require-ops :as ops]
+   [clj-surgeon.cljc.split :as split]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [clojure.tools.reader :as r]
+   [clojure.tools.reader.reader-types :as rt]))
 
 (defn- parse-forms [src]
   (let [rdr (rt/string-push-back-reader src)]
@@ -118,3 +119,18 @@
           out  (ops/add-require bare {:platform :cljc :ns 'clojure.string :as 'str})]
       (is (contains? (requires-of out :clj)  '[clojure.string :as str]))
       (is (contains? (requires-of out :cljs) '[clojure.string :as str])))))
+
+(deftest insert-into-require-can-preserve-unqualified-callers
+  (let [source
+        "(ns sample.core\n  (:require\n   [clojure.string :as str]))\n\n(defn caller [] (moved))\n"
+        result (ops/insert-into-require source
+                                        'sample.extracted
+                                        'extracted
+                                        '[moved helper])]
+    (is (contains? (requires-of result :clj)
+                   '[sample.extracted :as extracted :refer [moved helper]]))
+    (is (str/includes?
+          result
+          "[clojure.string :as str]\n   [sample.extracted :as extracted"))
+    (is (not (str/includes? result "] \n"))
+        "insertion is formatter-stable at the existing require boundary")))

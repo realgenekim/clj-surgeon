@@ -2,6 +2,13 @@
 
 **Issue:** `clj-surgeon-9gj`
 
+**Status:** Implemented and field-verified. The 2026-08-09 cold-worktree
+repair added a shared cclsp initialization lease, typed warming results,
+attach-without-restart recovery, workspace-scoped receipts, capability
+matrices, exact executable CLI fallbacks, and an explicit UTF-8 runtime locale.
+See
+`docs/observations/2026-08-09-captains-log-cold-worktree-initialization-livelock.md`.
+
 ## Observable contract
 
 `clj-surgeon recover [WORKSPACE]` performs one bounded repair attempt against
@@ -80,6 +87,29 @@ response with a different config keeps the existing managed/unmanaged ownership
 rules. Bounded retries that never obtain health may still replace the managed
 service once.
 
+## Fourth production defect: cold-worktree initialization livelock
+
+A fresh application worktree contained no `.lsp` cache and an empty
+`.clj-kondo` directory. Semantic preparation, a second semantic witness, and
+the sanctioned recovery command launched three distinct clojure-lsp children.
+Each child timed out during `initialize` after 45 seconds and was discarded.
+No attempt could benefit from the work of the prior attempt. Exact structural
+MCP inspection remained healthy and returned two forms in two files in 167
+milliseconds.
+
+One canonical workspace must have one initialization lease. Concurrent callers
+and recovery attach to the lease. An interactive caller deadline may return a
+typed `:warming` or terminal result, but it must not kill the initializing child
+or start a replacement. Cold initialization has its own longer bounded budget
+and observable phase data.
+
+The failure receipt also exposed a degraded-mode contract defect. It used a
+global `last-failure.edn` path and omitted the promised executable fallback
+field. Terminal recovery data must use a workspace/fingerprint-scoped receipt,
+state structural-read, structural-write, and semantic-surface availability
+separately, and include one executable report and fallback action. A caller
+must not inspect the recovery directory or infer a command from prose.
+
 ## Anchored semantic fast path
 
 An exact Surgeon source anchor currently proves the owner and whole-form range,
@@ -96,6 +126,27 @@ range containment, and token bytes. A valid anchored request then calls
 fallback. Returned reference locations remain LSP authority; Surgeon maps them
 to exact source owners while it prepares the change basis.
 
+## Fifth production defect: the service environment had no locale
+
+The lifecycle repair made the failure honest but did not make the tiny cold
+workspace initialize. Direct `clojure-lsp dump`, a transparent LSP client, and
+cclsp's `ServerManager` all completed in well under two seconds from an
+ordinary shell. The same `ServerManager` hung under a launchd-shaped
+environment that omitted `LANG` and `LC_ALL`. Adding only `LANG=en_US.UTF-8`
+made initialization complete in 714 milliseconds.
+
+The service contract must therefore provide and publish an explicit UTF-8
+locale. The launch command, stable development supervisor, and HTTP runtime
+each enforce the invariant. `/healthz` exposes the effective locale. A real
+cold semantic query remains the authoritative acceptance probe; process health
+alone is insufficient.
+
+Hot config reload must also stop short of starting clojure-lsp inside the file
+watcher callback. Reload publishes the workspace configuration. The first real
+semantic request owns the one initialization lease. A stable Node supervisor
+replaces only the Bun HTTP child after source changes and waits for the prior
+generation to exit before starting the next one.
+
 ## Behavior matrix
 
 | Case | Result | Side effects |
@@ -105,9 +156,15 @@ to exact source owners while it prepares the change basis.
 | Invalid MCP/cclsp session | Recover only that workspace, then probe | Other workspaces unchanged |
 | cclsp performs one bounded child recovery | Wait up to 60 seconds for its typed result | No parent or unrelated child restart |
 | One cclsp health probe misses while the managed job remains live | Retry health, then retain the same service | No remove or submit |
+| Cold workspace is already initializing | Attach to the one initialization lease | No second child or discarded progress |
+| Interactive caller deadline expires while cold initialization continues | Return typed warming state and retained exact-source evidence | Initializing child remains live |
+| Recovery runs while workspace is warming | Observe or attach to the existing lease | No restart |
 | Exact source anchor includes a valid owner selection range | Query references directly | Zero `documentSymbol` requests |
+| Shared service environment omits a UTF-8 locale | Refuse readiness or supply the explicit default | No silently idle clojure-lsp child |
+| Hot-added workspace has not received a semantic request | Publish it as `cold` | No LSP spawn from a config-watcher callback |
 | Anchor selection is missing, outside the owner, stale, or names another token | Refuse or use the documented compatibility route | No false semantic proof |
 | Structural probe fails after repair | `:fallback-safe` | Redacted receipt available |
+| Semantic graph is unavailable but structural MCP is healthy | Capability-specific degraded result plus executable exact-source route | No false caller proof |
 | Client catalog cannot refresh | `:restart-required` | No server restart loop |
 | First report for fingerprint | Create one local Bead | Redacted data only |
 | Repeated report for fingerprint | Append evidence to same Bead | No duplicate issue |
@@ -148,6 +205,9 @@ to exact source owners while it prepares the change basis.
    restart.
 6. A real local recovery call that proves tool catalog, structural source,
    cclsp semantics, and a guarded write through fresh MCP sessions.
+7. A fresh-worktree boundary test with no semantic caches that launches two
+   semantic callers and recovery concurrently, proves one child and one
+   initialization identity, and verifies the warm follow-up under five seconds.
 
 ## Completion gates
 

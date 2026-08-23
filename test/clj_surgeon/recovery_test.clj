@@ -1,5 +1,6 @@
 (ns clj-surgeon.recovery-test
   (:require
+   [clj-surgeon.mcp-workspace :as mcp-workspace]
    [clj-surgeon.recovery :as recovery]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -34,17 +35,25 @@
                (java.nio.file.Files/createTempDirectory
                  "clj-surgeon-recover-failure"
                  (make-array java.nio.file.attribute.FileAttribute 0)))
-        receipt-file (io/file root "last-failure.edn")
+        receipt-file (io/file (mcp-workspace/receipt-dir (.getPath root))
+                              "last-failure.edn")
         result (recovery/recover!
                  {:workspace (.getPath root)
-                  :failure-receipt (.getPath receipt-file)
                   :up-fn (fn [_]
                            {:ok true :servers {:clj-surgeon "surgeon"
                                                :cclsp "cclsp"}})
                   :probe-fn (fn [_]
                               (throw (ex-info "expired"
-                                              {:error-type
-                                               :invalid-mcp-session})))})
+                                              {:error-type :invalid-mcp-session
+                                               :capabilities
+                                               {:structural-read :ready
+                                                :structural-write :ready
+                                                :semantic-surface :unavailable}
+                                               :safe-route :structural-cli
+                                               :fallback-command
+                                               ["clj-surgeon" ":op" ":cat"
+                                                ":file" "src/sample/core.clj"
+                                                ":form" "target"]})))})
         persisted (edn/read-string (slurp receipt-file))]
     (is (false? (:ok result)))
     (is (= :fallback-safe (:terminal-state result)))
@@ -53,4 +62,12 @@
     (is (= ["clj-surgeon" "report-failure" "--receipt"
             (.getCanonicalPath receipt-file)]
            (:report-command result)))
-    (is (= :report-failure-and-use-cli-fallback (:next-action persisted)))))
+    (is (= :report-failure-and-use-cli-fallback (:next-action persisted)))
+    (is (= :structural-cli (:safe-route persisted)))
+    (is (= {:structural-read :ready
+            :structural-write :ready
+            :semantic-surface :unavailable}
+           (:capabilities persisted)))
+    (is (= ["clj-surgeon" ":op" ":cat"
+            ":file" "src/sample/core.clj" ":form" "target"]
+           (:fallback-command result)))))

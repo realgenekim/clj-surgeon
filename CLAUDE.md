@@ -212,12 +212,26 @@ clojure-lsp <-> cclsp http://127.0.0.1:7890/mcp
   to both MCP tools. Preserve `workspace_root` from a prepared `next_call`.
   Workspace routing is request data, not MCP server identity.
 - A direct `changes` item uses `id`, `files`, exactly one of `forms` or
-  `owner`, `expect`, and exactly one action: `replace`, `insert_before`,
+  `owner`, `expect`, and exactly one action: `replace`, `delete`, `insert_before`,
   `insert_after`, `rename_binding`, or `assoc_entry`. Replacement, insertion,
   and `assoc_entry` also require one complete `find` form. Sibling insertion preserves the existing
   whitespace gap and refuses when that gap contains comments or detached
   source. A binding pair or map entry is sibling syntax; target its complete
   value form instead of submitting the pair as a form prefix.
+- To address one multimethod implementation, put a typed owner in `forms`:
+  `{:kind "defmethod" :name "render" :dispatch ":card"}`. Never recover it
+  from a line number or replace every same-named `defmethod`.
+- Managed writes format staged future bytes before commit. A configured hot
+  profile reloads the declared namespaces and runs exact law Vars in the
+  repository's application nREPL; hot failure rolls back source and reloads the
+  originals.
+- A configured cold profile returns `verification_complete=false` with one
+  `inspect_clojure` `next_call`. Continue useful work, then copy that call once.
+  Its status carries the original `undo_receipt` and `receipt_hash`. Do not
+  poll, rerun the mutation, or treat the cold suite as a late rollback.
+- To delete two or more known named owners, use one direct change with `forms`
+  and `delete=true`; do not create marker forms, wait for cclsp, or use native
+  cleanup.
 - Use `rename_binding` to preserve an external `:keys` keyword while renaming
   one resolved local binding per named owner. Use `assoc_entry` to preserve
   comments in logically equal maps. Add `inside` to select one semantic

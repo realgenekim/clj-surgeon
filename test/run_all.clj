@@ -7,9 +7,11 @@
    [clj-surgeon.cljc.merge-test]
    [clj-surgeon.cljc.require-ops-test]
    [clj-surgeon.cljc.split-test]
+   [clj-surgeon.diagnostic-delta-test]
    [clj-surgeon.edit-dsl-test]
    [clj-surgeon.edit-test]
    [clj-surgeon.edn-config-integration-test]
+   [clj-surgeon.extract-header-test]
    [clj-surgeon.extract-test]
    [clj-surgeon.failure-report-test]
    [clj-surgeon.file-ops-test]
@@ -20,16 +22,13 @@
    [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
    [clj-surgeon.ls-tree-test]
-   [clj-surgeon.mcp-contract-test]
-   [clj-surgeon.mcp-recovery-test]
-   [clj-surgeon.mcp-telemetry-test]
-   [clj-surgeon.mcp-tool-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
    [clj-surgeon.outermost-test]
    [clj-surgeon.outline-test]
    [clj-surgeon.partition-all-test]
    [clj-surgeon.platform-selector-test]
+   [clj-surgeon.quoted-var-refs-test]
    [clj-surgeon.recovery-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
@@ -43,8 +42,10 @@
                    'clj-surgeon.move-test
                    'clj-surgeon.move-dependency-test
                    'clj-surgeon.analyze-test
+                   'clj-surgeon.diagnostic-delta-test
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
+                   'clj-surgeon.extract-header-test
                    'clj-surgeon.extract-test
                    'clj-surgeon.failure-report-test
                    'clj-surgeon.file-ops-test
@@ -63,14 +64,11 @@
                    'clj-surgeon.outermost-test
                    'clj-surgeon.partition-all-test
                    'clj-surgeon.platform-selector-test
+                   'clj-surgeon.quoted-var-refs-test
                    'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test
                    'clj-surgeon.intent-transaction-test
-                   'clj-surgeon.mcp-contract-test
-                   'clj-surgeon.mcp-recovery-test
-                   'clj-surgeon.mcp-telemetry-test
-                   'clj-surgeon.mcp-tool-test
                    'clj-surgeon.workspace-onboarding-test
                    'clj-surgeon.recovery-test
                    'clj-surgeon.cli-dispatch-test)]

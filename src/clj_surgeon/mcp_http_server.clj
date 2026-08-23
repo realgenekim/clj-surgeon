@@ -1,6 +1,9 @@
 (ns clj-surgeon.mcp-http-server
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-formatter :as mcp-formatter]
+   [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -30,7 +33,22 @@
    {:commands
     [["clj-kondo" "--lint" "{files}"]
      ["npx" "@chrisoakman/standard-clojure-style" "check" "{files}"]]}
-   "full" ["make" "test"]})
+   "full" {:cold {:command ["make" "test"]
+                  :timeout-ms 1200000}}})
+
+(def default-formatter mcp-formatter/default-command)
+
+(defn formatter-from-config
+  "Return one closed formatter command from project data."
+  [config]
+  (let [formatter (or (:formatter config) default-formatter)]
+    (when-not (and (vector? formatter)
+                   (seq formatter)
+                   (every? #(and (string? %) (seq %)) formatter)
+                   (some #{"{files}"} formatter))
+      (throw (ex-info "Invalid project formatter"
+                      {:error-type :invalid-project-formatter})))
+    formatter))
 
 (defn- verification-command?
   [command]
@@ -42,10 +60,16 @@
   [profile]
   (or (verification-command? profile)
       (and (map? profile)
-           (= #{:commands} (set (keys profile)))
-           (vector? (:commands profile))
-           (seq (:commands profile))
-           (every? verification-command? (:commands profile)))))
+           (seq profile)
+           (every? #{:commands :hot :cold} (keys profile))
+           (or (nil? (:commands profile))
+               (and (vector? (:commands profile))
+                    (seq (:commands profile))
+                    (every? verification-command? (:commands profile))))
+           (or (nil? (:hot profile))
+               (hot-verify/valid-profile? (:hot profile)))
+           (or (nil? (:cold profile))
+               (cold-verify/valid-profile? (:cold profile))))))
 
 (defn verification-profiles-from-config
   "Return a validated closed verification-profile map from project data."
@@ -103,7 +127,10 @@
      (:profiles
        (resolve-verification-profiles
          verification-profiles
-         (read-project-config workspace-root))))})
+         (read-project-config workspace-root))))
+   :formatter-fn
+   (fn []
+     (formatter-from-config (read-project-config workspace-root)))})
 
 (defn allowed-origin?
   "Allow non-browser clients and loopback browser origins only."

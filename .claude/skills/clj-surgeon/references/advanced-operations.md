@@ -19,12 +19,37 @@ yourself. Preview extraction before executing it:
 ```bash
 clj-surgeon :op :extract :file src/state.clj \
   :forms '[distill refine helper]' :to src/state/distillery.clj
+clj-surgeon :op :extract :file src/state.clj \
+  :forms '[distill refine helper]' :to src/state/distillery.clj \
+  :require-policy :copy-all
 clj-surgeon :op :extract! :file src/state.clj \
-  :forms '[distill refine helper]' :to src/state/distillery.clj
+  :forms '[distill refine helper]' :to src/state/distillery.clj \
+  :receipt-out /tmp/state-extraction.edn
+clj-surgeon :op :undo-extract! :receipt /tmp/state-extraction.edn
 ```
 
-After execution, compile and test. Resolve bare references by qualification or
-parameters rather than introducing circular dependencies.
+The dry run reports `target-requires`, `omitted-target-requires`,
+`remaining-source-callers`, and `source-referred-forms`. It compiles the target
+header from dependencies used by the moved forms. It adds a collision-free
+source alias and sorted `:refer` list only when remaining source forms call a
+moved Var. An unproved side-effect-only, reader-conditional, prefix-list, or
+comment-bearing require shape refuses before mutation.
+
+Keep movement and cleanup as separate decisions. The default
+`:require-policy :minimal` proves a minimal target header. If that proof
+refuses, or if the task calls for the safest mechanical starting point, use
+`:require-policy :copy-all`. It preserves the complete source namespace header
+and changes only the namespace name, so comments, imports, reader conditionals,
+and side-effect requires survive. Compile and test that conservative move;
+remove excess requirements in a later change. Do not hand-assemble a new
+namespace header when `:copy-all` can preserve it exactly.
+
+The dry run also reports authority-labeled `quoted-var-references` for exact
+`#'name` and `(var name)` callers that semantic indexes can omit. Review all
+caller evidence before applying. Execution parses and hash-verifies both future
+files before it publishes the receipt. The inverse refuses if either result
+drifted. After execution, compile and test. Migrate other namespaces explicitly
+rather than introducing circular dependencies.
 
 When a namespace contains or gains `(declare ...)`, inspect first, then apply:
 

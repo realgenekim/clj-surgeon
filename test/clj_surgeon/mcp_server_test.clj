@@ -34,18 +34,22 @@
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
-    (is (= #{"basis" "decisions" "verify" "changes" "expect"
+    (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits" "extraction"
              "workspace_root"}
            (set (keys (get-in tools [1 :schema :properties])))))
-    (is (= 2 (count (get-in tools [1 :schema :oneOf]))))
-    (testing "verify is basis-only at the published schema boundary"
+    (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
+    (testing "the direct route accepts the same verify field it publishes"
       (let [direct-route (second (get-in tools [1 :schema :oneOf]))
             excluded (set (map (comp set :required)
                                (get-in direct-route [:not :anyOf])))]
-        (is (contains? excluded #{"verify"}))))
+        (is (= #{#{"basis"} #{"decisions"} #{"edits"} #{"extraction"}}
+               excluded))))
     (is (str/includes?
           (get-in tools [1 :schema :properties "verify" :description])
-          "Basis route only"))
+          "cold job"))
+    (is (str/includes?
+          (get-in tools [1 :schema :properties "verify" :description])
+          "hot laws roll back"))
     (is (= inspect-tool/inspect-annotations
            (:annotations (first tools))))
     (is (str/includes? inspect-tool/tool-description
@@ -54,6 +58,8 @@
                        "read_complete=true is terminal"))
     (testing "prepare-change publishes its exact-source route and label grammar"
       (is (some #(= {:required ["mode" "file" "form" "intent"]} %)
+                (get-in tools [0 :schema :oneOf])))
+      (is (some #(= {:required ["verification_job" "view"]} %)
                 (get-in tools [0 :schema :oneOf])))
       (is (= "^[a-z][a-z0-9-]{0,39}$"
              (get-in tools [0 :schema :properties "label" :pattern])))
@@ -70,26 +76,36 @@
     (testing "a clean caller can construct both requests from tools/list"
       (is (str/includes? server/server-instructions
                          "verification_complete=true"))
-      (is (= #{"id" "files" "forms" "owner" "find" "inside" "replace"
+      (is (= #{"id" "files" "forms" "owner" "find" "inside" "replace" "delete"
                "insert_before" "insert_after" "rename_binding"
                "assoc_entry" "expect"}
              (set (keys (get-in tools [1 :schema :properties "changes" :items :properties])))))
       (is (= false
              (get-in tools [1 :schema :properties "changes" :items :additionalProperties])))
+      (is (= #{"file" "to" "forms" "require_policy" "caller_changes"
+               "ignored_caller_files" "expect"}
+             (set (get-in tools [1 :schema :properties "extraction" :required]))))
       (let [[owner-rule action-rule]
             (get-in tools [1 :schema :properties "changes" :items :allOf])]
         (is (= #{#{"forms"} #{"owner"}}
                (set (map (comp set :required) (:oneOf owner-rule)))))
         (is (= #{#{"find" "replace"}
-                 #{"find" "insert_before"}
-                 #{"find" "insert_after"}
+                 #{"forms" "delete"}
+                 #{"insert_before"}
+                 #{"insert_after"}
                  #{"forms" "rename_binding"}
                  #{"find" "assoc_entry"}}
                (set (map (comp set :required) (:oneOf action-rule))))))
       (is (str/includes? tool/tool-description
                          "For named top-level def or defn owners, use forms: [name]"))
       (is (str/includes? tool/tool-description
+                         "kind: defmethod"))
+      (is (str/includes? tool/tool-description
+                         "verification_complete=false"))
+      (is (str/includes? tool/tool-description
                          "exactly one action"))
+      (is (str/includes? tool/tool-description
+                         "delete: true once"))
       (is (str/includes? tool/tool-description
                          "refuse comment-bearing gaps"))
       (doseq [tool-index [0 1]]

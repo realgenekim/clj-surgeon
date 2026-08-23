@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -199,9 +200,17 @@
                                   "  (compute-target x))")}
                    {:site (sites-by-form "target-test") :keep true}]
         verified (atom 0)
+        formatted (atom 0)
         result (change-buffer/apply-basis!
                  {:project-root (:root project)
                   :receipt-dir (io/file (:root project) "receipts")
+                  :prepare-compiled!
+                  (fn [_ compiled]
+                    (swap! formatted inc)
+                    (assoc compiled :format
+                           {:status :complete
+                            :file-count 2
+                            :changed-file-count 0}))
                   :verify! (fn [_ profile _ files]
                              (swap! verified inc)
                              {:ok true :profile profile :files files})}
@@ -210,6 +219,8 @@
                   :verify "fast"})]
     (is (:ok result))
     (is (= 1 @verified))
+    (is (= 1 @formatted))
+    (is (= :complete (get-in result [:format :status])))
     (is (.exists (io/file (:receipt-file result))))
     (is (= (str "(ns sample.core)\n"
                 "(defn compute-target [x] (inc x))\n"
@@ -218,6 +229,84 @@
                 "  (compute-target x))\n")
            (slurp (:source project))))
     (is (= test-source (slurp (:test-file project))))))
+
+(deftest prepared-basis-compilation-is-pure-deterministic-and-budget-closed
+  (let [source (str "(ns sample.core)\n"
+                    "(defn target [x] (inc x))\n"
+                    "(defn caller [x] (target x))\n")
+        captured {:ok true
+                  :sources {"src/sample/core.clj" source}
+                  :relative {"src/sample/core.clj" "src/sample/core.clj"}
+                  :source-character-count (count source)}
+        locations
+        [{:file_path "src/sample/core.clj"
+          :role :reference
+          :owner "caller"
+          :subject "sample.core/target"
+          :range {:start {:line 2 :character 17}
+                  :end {:line 2 :character 23}}}
+         {:file_path "src/sample/core.clj"
+          :role :definition
+          :owner "target"
+          :subject "sample.core/target"
+          :range {:start {:line 1 :character 6}
+                  :end {:line 1 :character 12}}}]
+        input {:project-root "/workspace"
+               :bundle {:lsp-session "lsp-fixed"
+                        :quoted-var-proof {:reference-count 0}}
+               :subjects ["sample.core/target"]
+               :intent "Rename target"
+               :verify "fast"
+               :scope "surface"
+               :label "rename"
+               :surface-locations locations
+               :reference-count 1
+               :captured captured
+               :basis-id "cb-fixed"
+               :created-ms 1000}
+        first-result (change-buffer/compile-prepared-basis input)
+        second-result (change-buffer/compile-prepared-basis
+                        (update input :surface-locations reverse))]
+    (change-buffer/clear-bases!)
+    (is (= first-result second-result)
+        "semantic input order cannot change structural site order")
+    (is (:ok first-result))
+    (is (= "cb-fixed" (get-in first-result [:basis :id])))
+    (is (= 1000 (get-in first-result [:basis :created-ms])))
+    (is (= ["rename/s01" "rename/s02"]
+           (get-in first-result [:response :decision-site-ids])))
+    (is (= ["target" "caller"]
+           (mapv :form (get-in first-result [:response :decision-sites]))))
+    (is (= [{:site "rename/s01" :replace nil}
+            {:site "rename/s02" :replace nil}]
+           (get-in first-result [:response :next_call :decisions])))
+    (is (zero? (change-buffer/retained-basis-count))
+        "pure compilation cannot publish into the global basis store")
+
+    (testing "definition scope changes the viewport, not the complete surface"
+      (let [result (change-buffer/compile-prepared-basis
+                     (assoc input :scope "definition"))]
+        (is (= 2 (get-in result [:response :surface-site-count])))
+        (is (= 1 (get-in result [:response :site-count])))
+        (is (= ["rename/s01"]
+               (get-in result [:response :decision-site-ids])))))
+
+    (testing "each closed budget refuses as data"
+      (doseq [limits [{:sites 1
+                       :visible-characters 1000
+                       :snapshot-characters 1000}
+                      {:sites 10
+                       :visible-characters 1
+                       :snapshot-characters 1000}
+                      {:sites 10
+                       :visible-characters 1000
+                       :snapshot-characters 1}]]
+        (let [result (change-buffer/compile-prepared-basis
+                       (assoc input :limits limits))]
+          (is (false? (:ok result)))
+          (is (= :change-buffer-budget-exceeded (:error-type result)))
+          (is (= limits (:limits result)))
+          (is (true? (:source-unchanged result))))))))
 
 (deftest definition-scope-returns-the-complete-surface-and-one-decision-viewport
   (change-buffer/clear-bases!)
@@ -258,6 +347,45 @@
            (mapv :source (:decision-sites prepared))))
     (is (= [{:site "rename/s01" :replace nil}]
            (get-in prepared [:next_call :decisions])))))
+
+(deftest prepare-change-unions-quoted-var-callers-with-honest-authority
+  (change-buffer/clear-bases!)
+  (let [project (temp-project)
+        quoted-source
+        (str "(ns sample.core-test\n"
+             "  (:require [sample.core :as sut]))\n"
+             "(deftest aliased-private-var\n"
+             "  (is (var? #'sut/target)))\n"
+             "(deftest fully-qualified-private-var\n"
+             "  (is (var? (var sample.core/target))))\n"
+             "(def text \"#'sample.core/target\")\n"
+             ";; #'sample.core/target\n"
+             "(def quoted-data '(var sample.core/target))\n")
+        _ (spit (:test-file project) quoted-source)
+        semantic (update (semantic-result project) :references subvec 0 2)
+        result
+        (change-buffer/prepare-change!
+          {:project-root (:root project)
+           :semantic-resolver (constantly semantic)
+           :structural-reference-resolver
+           #(quoted-var-refs/scan-workspace (:root project) % slurp)}
+          {:subject "sample.core/target"
+           :intent "Prove every ordinary and Var-quoted caller"
+           :label "quoted"
+           :scope "surface"
+           :verify "fast"})]
+    (is (:ok result))
+    (is (= 2 (get-in result [:quoted_var_proof :reference-count])))
+    (is (= ["target" "caller" "aliased-private-var"
+            "fully-qualified-private-var"]
+           (mapv :form (:surface result))))
+    (is (= [:language-server+exact-source
+            :language-server+exact-source
+            :structural-var-quote
+            :structural-var-quote]
+           (mapv :authority (:surface result))))
+    (is (not-any? #{"text" "quoted-data"}
+                  (map :form (:surface result))))))
 
 (deftest retained-structural-buffer-selection-is-pure-ordered-and-fail-closed
   (let [basis {:id "cb-test"
@@ -790,6 +918,103 @@
       (finally
         (change-buffer/clear-bases!)))))
 
+(deftest cache-independent-diagnostic-deltas-use-one-coherent-future-snapshot
+  (let [root (.toFile
+               (java.nio.file.Files/createTempDirectory
+                 "clj-surgeon-diagnostic-delta-"
+                 (make-array java.nio.file.attribute.FileAttribute 0)))
+        core (io/file root "src/sample/core.clj")
+        caller (io/file root "src/sample/caller.clj")
+        macros (io/file root "src/sample/macros.clj")
+        kondo-config (io/file root ".clj-kondo/config.edn")
+        profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]]}}
+        files ["src/sample/core.clj" "src/sample/caller.clj"
+               "src/sample/macros.clj"]]
+    (try
+      (doseq [file [core caller macros kondo-config]]
+        (.mkdirs (.getParentFile file)))
+      (spit kondo-config
+            "{:lint-as {sample.macros/>defn clojure.core/defn}}\n")
+      (spit caller "(ns sample.caller)\n")
+      (spit macros
+            (str "(ns sample.macros)\n"
+                 "(defmacro >defn [& body] (cons 'defn body))\n"))
+
+      (testing "an existing diagnostic survives unrelated line drift"
+        (spit core
+              (str "(ns sample.core)\n"
+                   "(defn legacy [] missing)\n"))
+        (let [baseline (change-buffer/capture-verification-baseline!
+                         root "fast" profiles files)]
+          (is (:ok baseline))
+          (is (= 1 (count (get-in baseline [:checks 0 :diagnostics :findings]))))
+          (spit core
+                (str "(ns sample.core)\n\n"
+                     "(def stable :stable)\n"
+                     "(defn legacy [] missing)\n"))
+          (let [verification (change-buffer/run-verification!
+                               root "fast" profiles files baseline)]
+            (is (:ok verification))
+            (is (= 1 (get-in verification
+                             [:checks 0 :diagnostic-delta :unchanged-count])))
+            (is (zero? (get-in verification
+                               [:checks 0 :diagnostic-delta
+                                :blocking-introduced-count]))))))
+
+      (testing "one additional diagnostic is a regression"
+        (spit core
+              (str "(ns sample.core)\n\n"
+                   "(def stable :stable)\n"
+                   "(defn legacy [] missing)\n"))
+        (let [baseline (change-buffer/capture-verification-baseline!
+                         root "fast" profiles files)]
+          (spit core
+                (str "(ns sample.core)\n\n"
+                     "(def stable :stable)\n"
+                     "(defn legacy [] missing)\n"
+                     "(defn added [] another-missing)\n"))
+          (let [verification (change-buffer/run-verification!
+                               root "fast" profiles files baseline)]
+            (is (false? (:ok verification)))
+            (is (= 1 (get-in verification
+                             [:checks 0 :diagnostic-delta
+                              :blocking-introduced-count]))))))
+
+      (testing "a macro-defined Var and its new caller resolve in one future run"
+        (spit core
+              (str "(ns sample.core\n"
+                   "  (:require [sample.macros :as macros]))\n"
+                   "(defn existing [] :ok)\n"))
+        (spit caller
+              (str "(ns sample.caller\n"
+                   "  (:require [sample.core :as core]))\n"
+                   "(def before (core/existing))\n"))
+        (let [baseline (change-buffer/capture-verification-baseline!
+                         root "fast" profiles files)]
+          (is (:ok baseline))
+          (is (= 1 (count (get-in baseline
+                                  [:checks 0 :diagnostics :findings])))
+              "the future transaction may remove a pre-existing warning")
+          (spit core
+                (str "(ns sample.core\n"
+                     "  (:require [sample.macros :as macros]))\n"
+                     "(defn existing [] :ok)\n"
+                     "(macros/>defn added [] :added)\n"))
+          (spit caller
+                (str "(ns sample.caller\n"
+                     "  (:require [sample.core :as core]))\n"
+                     "(def before (core/existing))\n"
+                     "(def after (core/added))\n"))
+          (let [verification (change-buffer/run-verification!
+                               root "fast" profiles files baseline)]
+            (is (:ok verification))
+            (is (empty? (get-in verification
+                                [:checks 0 :diagnostic-delta
+                                 :blocking-introduced]))))))
+      (finally
+        (doseq [file (reverse (file-seq root))]
+          (.delete file))))))
+
 (deftest exact-file-owner-preparation-is-confined-unique-and-definition-only
   (let [project (temp-project)
         file (io/file (:root project) "bench/unindexed_script.clj")]
@@ -825,5 +1050,47 @@
                        :intent "Change one form"})]
         (is (= :invalid-relative-source-path (:error-type outside)))
         (is (:source-unchanged outside)))
+      (finally
+        (change-buffer/clear-bases!)))))
+
+(deftest exact-owner-batch-reads-each-file-once-and-compiles-one-basis
+  (let [project (temp-project)
+        first-file (io/file (:root project) "src/sample/first.clj")
+        second-file (io/file (:root project) "src/sample/second.clj")
+        reads (atom [])
+        semantic-calls (atom 0)]
+    (try
+      (.mkdirs (.getParentFile first-file))
+      (spit first-file
+            "(ns sample.first)\n(defn alpha [] :a)\n(defn beta [] :b)\n")
+      (spit second-file
+            "(ns sample.second)\n(defn gamma [] :g)\n")
+      (let [prepared
+            (change-buffer/prepare-change!
+              {:project-root (:root project)
+               :read-source (fn [path]
+                              (swap! reads conj path)
+                              (slurp path))
+               :semantic-resolver (fn [_]
+                                    (swap! semantic-calls inc)
+                                    (throw (ex-info "must not run" {})))}
+              {:owners [{:file "src/sample/first.clj" :form "alpha"}
+                        {:file "src/sample/first.clj" :form "beta"}
+                        {:file "src/sample/second.clj" :form "gamma"}]
+               :intent "Delete three obsolete owners"
+               :label "delete"})]
+        (is (:ok prepared))
+        (is (zero? @semantic-calls))
+        (is (= 2 (count @reads)))
+        (is (= 2 (count (distinct @reads))))
+        (is (= 2 (:file-count prepared)))
+        (is (= 3 (:site-count prepared)))
+        (is (= ["delete/s01" "delete/s02" "delete/s03"]
+               (:decision-site-ids prepared)))
+        (is (= ["alpha" "beta" "gamma"]
+               (mapv :form (:decision-sites prepared))))
+        (is (every? #(= :exact-source (:authority %)) (:surface prepared)))
+        (is (= 1 (change-buffer/retained-basis-count))
+            "provisional single-owner bases never escape"))
       (finally
         (change-buffer/clear-bases!)))))

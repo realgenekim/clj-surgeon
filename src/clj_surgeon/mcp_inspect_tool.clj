@@ -4,12 +4,14 @@
    [cheshire.core :as json]
    [clj-surgeon.forms :as forms]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]))
 
 (def tool-description
@@ -17,14 +19,19 @@
     "Read Clojure structure in one bounded snapshot. Batch all known forms, "
     "outlines, exact structural matches, and X-ray requests. Use "
     "mode=prepare-change when one Var or related Var set names the goal but "
-    "exact sites are unknown. Every returned named form includes a ready-to-use source_anchor for resolve_var_surface; copy it instead of making an unanchored workspace-symbol query. For an unindexed file, use file plus form to "
+    "exact sites are unknown. Its caller proof unions resolved references with "
+    "lossless #'x and (var x) references; every surface site names its authority. "
+    "Every returned named form includes a ready-to-use source_anchor for resolve_var_surface; copy it instead of making an unanchored workspace-symbol query. For an unindexed file, use file plus form to "
     "prepare one exact-source definition without claiming references. "
     "scope=definition returns every definition and "
     "reference as one compact surface vector, but attaches source only to the "
     "definition decision. scope=surface makes every site a decision. An "
     "optional label must match ^[a-z][a-z0-9-]{0,39}$ and gives sites readable names such as rename/s01. "
     "Use basis with view=sites and ordered open IDs to reopen exact named forms "
-    "from the retained snapshot without file reads. Copy next_call, fill every "
+    "from the retained snapshot without file reads. When apply_clojure_changes "
+    "returns verification_complete=false, copy its next_call to inspect the "
+    "bounded cold verification job; do not block or rerun the edit. Copy "
+    "next_call, fill every "
     "decision with keep, one complete named-form replacement, whole-site delete, or one compact "
     "edit, then call apply_clojure_changes once. The whole request refuses on "
     "ambiguity, count, path, parse, or budget failure. read_complete=true is "
@@ -117,6 +124,14 @@
                   :description "Exact-source route only: project-relative file containing the named form. Use together with form instead of subject/subjects.")
     "form" {:type "string" :minLength 1
             :description "Exact-source route only: one exact named top-level form. Use together with file instead of subject/subjects."}
+    "owners" {:type "array" :minItems 1 :uniqueItems true
+              :description "Exact-source route only: ordered project-relative file/form owners compiled into one basis without a semantic index."
+              :items {:type "object"
+                      :additionalProperties false
+                      :properties
+                      {"file" source-file-schema
+                       "form" {:type "string" :minLength 1}}
+                      :required ["file" "form"]}}
     "subject" {:type "string" :minLength 3
                :description "One fully qualified Clojure Var: namespace/name."}
     "subjects" {:type "array" :minItems 1 :uniqueItems true
@@ -138,7 +153,13 @@
                    {:required ["form"]}]}}
     {:required ["file" "form"]
      :not {:anyOf [{:required ["subject"]}
-                   {:required ["subjects"]}]}}]})
+                   {:required ["subjects"]}
+                   {:required ["owners"]}]}}
+    {:required ["owners"]
+     :not {:anyOf [{:required ["subject"]}
+                   {:required ["subjects"]}
+                   {:required ["file"]}
+                   {:required ["form"]}]}}]})
 
 (def basis-view-schema
   {:type "object"
@@ -148,7 +169,7 @@
                       :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
     "basis" {:type "string" :minLength 1
              :description "Opaque retained basis from prepare-change."}
-    "view" {:type "string" :const "sites"}
+    "view" {:type "string" :enum ["sites" "verification"]}
     "open" {:type "array" :minItems 1 :uniqueItems true
             :items {:type "string" :minLength 3}
             :description "Ordered retained site IDs, for example rename/s01."}
@@ -156,17 +177,28 @@
                :description "Return the complete named form from the retained snapshot."}}
    :required ["basis" "view" "open"]})
 
+(def verification-job-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "verification_job" {:type "string" :pattern "^verify/.+"}}
+   :required ["verification_job" "view"]})
+
 (def inspect-schema
   {:type "object"
    :additionalProperties false
    :properties (merge (:properties typed-inspect-schema)
                       (:properties prepare-change-schema)
-                      (:properties basis-view-schema))
+                      (:properties basis-view-schema)
+                      (:properties verification-job-schema))
    :oneOf [{:required ["requests" "expect"]}
            {:required ["mode" "subject" "intent"]}
            {:required ["mode" "subjects" "intent"]}
            {:required ["mode" "file" "form" "intent"]}
-           {:required ["basis" "view" "open"]}]})
+           {:required ["basis" "view" "open"]}
+           {:required ["verification_job" "view"]}]})
 
 (def inspect-output-schema
   {:type "object"
@@ -186,12 +218,15 @@
     "decision-site-ids" {:type "array"}
     "decision-sites" {:type "array"}
     "buffers" {:type "array"}
+    "verification_job" {:type "string"}
+    "verification_complete" {:type "boolean"}
     "next_call" {:type "object"}}
    :required ["ok" "operation"]
    :anyOf [{:required ["read_complete"]}
            {:required ["basis" "surface" "decision-site-ids"
                        "decision-sites" "next_call"]}
-           {:required ["basis" "buffers" "read_complete"]}]})
+           {:required ["basis" "buffers" "read_complete"]}
+           {:required ["verification_job" "verification_complete"]}]})
 
 (def inspect-annotations
   {:title "Inspect Clojure"
@@ -337,17 +372,18 @@
 (defn prepare-change-summary
   "Render the compact quickfix-style surface without repeating source bodies."
   [result]
-  (let [surface-lines
+  (let [exact-source? (= :exact-source (:authority result))
+        surface-lines
         (apply str
-               (map (fn [{:keys [id role file form line]}]
-                      (format "  :%-18s %-10s %s:%s · %s\n"
-                              id (name role) file line form))
+               (map (fn [{:keys [id role file form line authority]}]
+                      (format "  :%-18s %-10s %s:%s · %s · %s\n"
+                              id (name role) file line form (name authority)))
                     (:surface result)))]
     (format
       (str "inspect_clojure · prepare-change\n"
            "  %s surface sites · %s decisions · %s files · basis %s\n\n"
            "%s\n"
-           "✓ complete semantic surface resolved\n"
+           "%s\n"
            "✓ source hashes independently verified\n"
            "✓ decision source attached once in structured content\n"
            "→ fill next_call decisions, then call apply_clojure_changes once")
@@ -355,7 +391,10 @@
       (:site-count result)
       (:file-count result)
       (:basis result)
-      surface-lines)))
+      surface-lines
+      (if exact-source?
+        "✓ exact named owner · no semantic index required"
+        "✓ complete caller surface · resolved references + exact quoted Vars"))))
 
 (defn basis-view-summary
   "Render retained structural buffers without duplicating their source."
@@ -376,6 +415,28 @@
       (:buffer-count result)
       (:source-character-count result)
       buffer-lines)))
+
+(defn verification-job-summary
+  "Render one bounded cold-verification job without repeating its full output."
+  [result]
+  (let [status (:status result)
+        terminal? (true? (:verification_complete result))
+        passed? (true? (:passed result))]
+    (format
+      (str "inspect_clojure · cold verification\n"
+           "  %s · %s · %.2f ms\n\n"
+           "%s\n"
+           "→ %s")
+      (:verification_job result)
+      (name status)
+      (double (or (:job_elapsed_ms result) 0.0))
+      (cond
+        (not terminal?) "… bounded job still running"
+        passed? "✓ cold verification passed"
+        :else "✗ cold verification failed; edit remains committed and undo receipt is available")
+      (if terminal?
+        (:next_action result)
+        "call next_call once after doing other useful work"))))
 
 (defn enforce-public-result-budget
   "Refuse an oversized public result without returning partial source."
@@ -498,16 +559,29 @@
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
         basis-view? (= "sites" (:view normalized-params))
-        validated (when-not (or prepare? basis-view?)
+        verification-job? (= "verification" (:view normalized-params))
+        validated (when-not (or prepare? basis-view? verification-job?)
                     (inspect/validate-inspect-params params))
         result
         (assoc
           (cond
+            verification-job?
+            (assoc
+              (cold-verify/status project-root
+                                  (:verification_job normalized-params))
+              :operation "inspect_clojure"
+              :mode "verification-job")
+
             prepare?
             (change-buffer/prepare-change!
               (assoc config
                      :semantic-resolver (or semantic-resolver
-                                            (partial resolve-var! config)))
+                                            (partial resolve-var! config))
+                     :structural-reference-resolver
+                     (or (:structural-reference-resolver config)
+                         (fn [subjects]
+                           (quoted-var-refs/scan-workspace
+                             project-root subjects (or read-source slurp)))))
               normalized-params)
 
             basis-view?
@@ -577,6 +651,8 @@
           (prepare-change-summary raw-result)
           (= "basis-view" (:mode raw-result))
           (basis-view-summary raw-result)
+          (= "verification-job" (:mode raw-result))
+          (verification-job-summary raw-result)
           :else (inspect/concise-summary raw-result))
         result
         (if (and (:ok raw-result)

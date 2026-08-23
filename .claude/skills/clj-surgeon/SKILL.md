@@ -14,11 +14,11 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 ## Join one shared workspace stack
 
 - If tools are absent or use the wrong repository, run `clj-surgeon up [WORKSPACE]` once. It joins the shared hot processes. Do not add a server.
-- If a semantic call stalls, inspect that workspace once with cclsp
-  `inspect_runtime`; for invalid sessions, missing tools, or false-green health,
-  run `clj-surgeon recover [WORKSPACE]` exactly once.
-  Continue only on `:recovered` plus `:next-action :none`; otherwise run its redacted
-  `:report-command` once and use the named fallback. Never loop.
+- On typed `semantic-provider-warming`, preserve session, PID, anchor, and `next_call`; never restart. Wait, then retry once.
+- Otherwise inspect one stall with cclsp `inspect_runtime`; for invalid sessions,
+  missing tools, or false-green health, run `clj-surgeon recover [WORKSPACE]`
+  once. Continue only on `:recovered`; otherwise execute its `:report-command`
+  and workspace-scoped `:fallback-command`. Never loop.
 - Set canonical caller `workspace_root` on non-default requests and preserve prepared roots.
   For sibling Vars, never guess `../`; cclsp returns the owner root and route evidence.
 - After a tool schema change, run `make mcp-reload` in the source checkout.
@@ -32,7 +32,8 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
   or send up to four related ordered anchors once with `resolve_var_surfaces`.
 - When exact sites are unknown, call `inspect_clojure` with
   `mode=prepare-change`, one concise `intent`, and either `subject` or an
-  ordered `subjects` array of fully qualified Vars.
+  ordered `subjects` array. Its authority-labeled surface already unions
+  resolved references with exact `#'name` and `(var name)` callers.
 - For an unindexed known owner, prepare with project-relative `file` plus exact
   top-level `form`; this proves source, not a reference surface.
 - Preparation returns complete owners, owner authority, one basis, and one
@@ -42,13 +43,14 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 ## Compile one decision into one transaction
 
-- For a prepared basis, copy `next_call`. Replace every `null` with exactly
-  one `keep=true`, one complete replacement form, or `delete=true` for the
-  whole prepared owner; call `apply_clojure_changes` once.
-- For two or more known exact changes, send one direct `changes` request with
-  `id`, `files`, exactly one of `forms` or `owner`, `expect`, and one action:
-  `replace`, `insert_before`, `insert_after`, `rename_binding`, or `assoc_entry`.
-  Add aggregate `changes`, `edits`, and `files` counts. `verify` is basis-only.
+- For a prepared basis, copy `next_call`, fill every `null` with one keep,
+  complete replacement, or whole-owner delete, and apply once.
+- For known exact changes, send one direct `changes` request with `id`, `files`,
+  `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
+  `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.
+  When the file and complete owner list are supplied, call this route directly:
+  its guards replace a preflight read. Delete named owners with `forms` plus `delete=true`; never create markers, wait for cclsp, or patch cleanup natively.
+- For a namespace move, send one `extraction` with `file`, absent `to`, `forms`, `require_policy`, every exact `caller_changes` or explicit `ignored_caller_files`, and exact counts. It creates, redirects, removes, verifies, and receipts once; direct extraction reports structural candidates, not semantic completeness.
 - Use `rename_binding` with named `forms`, `from`, `to`, and
   `preserve_external_key=true`. Use `assoc_entry` to preserve comments in
   logically equal maps; add `inside` to select one semantic ancestor.
@@ -59,12 +61,10 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 - Sibling insertion preserves the existing whitespace separator. A gap with a
   comment or detached source refuses; replace a larger exact span when comment
   placement is part of the decision.
-- `verification_complete=true` is terminal mutation evidence. Do not reread,
-  reopen a receipt, or reconstruct the transaction with `apply_patch`.
+- Formatting and hot laws run inside `verify=fast|full`; hot failure rolls back.
+  `verification_complete=true` is terminal. On cold pending, copy `next_call` once; its status keeps the same undo receipt. Never replay or poll.
 
 ## Fall back deliberately
 
-Native Write is right for new files; native patching for JavaScript, prose, comments,
-top-level insertion, or one unsupported text edit. Use the CLI only
-when MCP is unavailable or unsupported. Read [CLI fallback](references/cli-fallback.md)
-or [advanced operations](references/advanced-operations.md).
+Native Write is right for new files; native patching for JavaScript, prose, comments, top-level insertion, or one unsupported text edit. Use the CLI only when MCP is unavailable or unsupported.
+Read [CLI fallback](references/cli-fallback.md) or [advanced operations](references/advanced-operations.md).

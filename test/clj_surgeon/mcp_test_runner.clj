@@ -1,17 +1,24 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
    [clj-surgeon.mcp-change-buffer-test]
+   [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-compact-edit-test]
    [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-extraction-test]
+   [clj-surgeon.mcp-hot-verify-test]
    [clj-surgeon.mcp-http-server-test]
    [clj-surgeon.mcp-inspect-contract-test]
    [clj-surgeon.mcp-inspect-tool-test]
+   [clj-surgeon.mcp-paths-test]
+   [clj-surgeon.mcp-process-test]
    [clj-surgeon.mcp-recovery-test]
+   [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
+   [clj-surgeon.quoted-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]
    [clojure.test :refer [run-tests]]))
 
@@ -20,16 +27,23 @@
   (let [result
         (run-tests
           'clj-surgeon.mcp-contract-test
+          'clj-surgeon.mcp-extraction-test
           'clj-surgeon.mcp-change-buffer-test
+          'clj-surgeon.mcp-cold-verify-test
           'clj-surgeon.mcp-compact-edit-test
           'clj-surgeon.mcp-http-server-test
+          'clj-surgeon.mcp-hot-verify-test
           'clj-surgeon.mcp-inspect-contract-test
           'clj-surgeon.mcp-inspect-tool-test
           'clj-surgeon.mcp-recovery-test
+          'clj-surgeon.mcp-paths-test
+          'clj-surgeon.mcp-process-test
+          'clj-surgeon.mcp-schema-test
           'clj-surgeon.mcp-telemetry-test
           'clj-surgeon.mcp-tool-test
           'clj-surgeon.mcp-workspace-test
           'clj-surgeon.mcp-server-test
           'clj-surgeon.mcp-semantic-client-test
+          'clj-surgeon.quoted-var-refs-test
           'clj-surgeon.workspace-onboarding-test)]
     (System/exit (+ (:fail result) (:error result)))))

@@ -1009,10 +1009,20 @@ run_one() {
 
   local start_ms end_ms wall_ms exit_code sandbox
   start_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
-  sandbox=read-only
-  if is_portfolio_task "$task" || [[ "$task" == *-edit ]]; then
-    sandbox='workspace-write'
+  sandbox=${BENCH_SANDBOX_MODE:-}
+  if [ -z "$sandbox" ]; then
+    sandbox=read-only
+    if is_portfolio_task "$task" || [[ "$task" == *-edit ]]; then
+      sandbox='workspace-write'
+    fi
   fi
+  case "$sandbox" in
+    read-only|workspace-write|danger-full-access) ;;
+    *)
+      echo "BENCH_SANDBOX_MODE must be read-only, workspace-write, or danger-full-access: $sandbox" >&2
+      exit 2
+      ;;
+  esac
 
   set +e
   local codex_args=(exec --json --ephemeral)

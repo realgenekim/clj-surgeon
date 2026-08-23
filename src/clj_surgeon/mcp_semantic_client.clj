@@ -70,18 +70,23 @@
 (defn normalize-result
   "Turn an SDK CallToolResult into the keyword-keyed provider contract."
   [result]
-  (let [structured (.structuredContent result)]
+  (let [structured (.structuredContent result)
+        structured (when structured
+                     (json/parse-string (json/generate-string structured) true))]
     (cond
       (true? (.isError result))
-      (let [error (some-> result .content first str)]
-        {:ok false
-         :error-type (if (invalid-session-error? error)
-                       :invalid-mcp-session
-                       :semantic-provider-refusal)
-         :error error})
+      (let [content-error (some-> result .content first str)
+            error-type (or (some-> (:error_type structured) keyword)
+                           (when (invalid-session-error? content-error)
+                             :invalid-mcp-session)
+                           :semantic-provider-refusal)]
+        (merge structured
+               {:ok false
+                :error-type error-type
+                :error (or (:error structured) content-error)}))
 
       structured
-      (assoc (json/parse-string (json/generate-string structured) true) :ok true)
+      (assoc structured :ok true)
 
       :else
       {:ok false

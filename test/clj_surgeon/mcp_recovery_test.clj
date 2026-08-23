@@ -93,6 +93,64 @@
         (doseq [file (reverse (file-seq root))]
           (.delete file))))))
 
+(deftest semantic-refusal-retains-an-executable-exact-source-fallback
+  (let [root (.toFile
+               (java.nio.file.Files/createTempDirectory
+                 "clj-surgeon-semantic-fallback"
+                 (make-array java.nio.file.attribute.FileAttribute 0)))
+        source (io/file root "src" "sample" "core.clj")
+        tool-call
+        (fn [_session tool arguments]
+          (cond
+            (= tool "resolve_var_surface")
+            {:structuredContent {:ok false
+                                 :status "warming"
+                                 :error_type "semantic-provider-warming"}}
+
+            (= "outline" (get-in arguments [:requests 0 :operation]))
+            {:structuredContent
+             {:ok true
+              :results [{:outline {:ns "sample.core"
+                                   :forms [{:name "target" :type "defn"}]}}]}}
+
+            :else
+            {:structuredContent
+             {:ok true
+              :results [{:forms [{:source_anchor
+                                  {:file "src/sample/core.clj"
+                                   :source_sha256 "abc"
+                                   :owner "target"}}]}]}}))]
+    (try
+      (.mkdirs (.getParentFile source))
+      (spit source "(ns sample.core)\n(defn target [] :ok)\n")
+      (let [error (try
+                    (recovery/probe!
+                      {:workspace (.getPath root)
+                       :surgeon-url "surgeon"
+                       :cclsp-url "cclsp"
+                       :open-session (fn [url] {:url url})
+                       :request (fn [_ _ _]
+                                  {:tools [{:name "inspect_clojure"}
+                                           {:name "apply_clojure_changes"}]})
+                       :tool-call tool-call})
+                    nil
+                    (catch clojure.lang.ExceptionInfo failure failure))
+            data (ex-data error)]
+        (is (= :semantic-witness (:phase data)))
+        (is (= "semantic-provider-warming" (:error-type data)))
+        (is (= :exact-source (:safe-route data)))
+        (is (= {:structural-read :ready
+                :structural-write :ready
+                :semantic-surface :warming
+                :source-anchor :retained}
+               (:capabilities data)))
+        (is (= ["clj-surgeon" ":op" ":cat"
+                ":file" "src/sample/core.clj" ":form" "target"]
+               (:fallback-command data))))
+      (finally
+        (doseq [file (reverse (file-seq root))]
+          (.delete file))))))
+
 (deftest semantic-witness-outlives-one-bounded-cclsp-child-recovery
   ;; Field regression: the SMW worktree's cclsp request completed in 21.683 s
   ;; after one child recovery, but the outer recovery client expired at 10 s.

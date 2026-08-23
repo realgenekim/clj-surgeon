@@ -78,3 +78,56 @@
         (path-refusal :source-file-not-found "Source file does not exist" relative))
       (catch Exception error
         (path-refusal :invalid-source-path (.getMessage error) relative)))))
+
+(defn resolve-new-source-path
+  "Resolve one absent source path whose existing parent is confined to root.
+
+  The destination itself must not exist. Requiring an existing real parent
+  makes symlink confinement decidable before a transaction creates bytes."
+  [^Path root relative]
+  (if-not (relative-source-path? relative)
+    (path-refusal
+      :invalid-relative-source-path
+      "Expected a project-relative .clj, .cljs, or .cljc path without parent traversal"
+      relative)
+    (try
+      (let [lexical (.normalize (.resolve root relative))
+            parent (.getParent lexical)]
+        (cond
+          (not (.startsWith lexical root))
+          (path-refusal :path-outside-project
+                        "Target path escapes the configured project root"
+                        relative)
+
+          (Files/exists lexical (make-array LinkOption 0))
+          (path-refusal :target-already-exists
+                        "Extraction target already exists"
+                        relative)
+
+          (or (nil? parent)
+              (not (Files/exists parent (make-array LinkOption 0))))
+          (path-refusal :target-parent-not-found
+                        "Extraction target parent does not exist"
+                        relative)
+
+          :else
+          (let [real-parent (.toRealPath parent (make-array LinkOption 0))]
+            (cond
+              (not (.startsWith real-parent root))
+              (path-refusal :path-outside-project
+                            "Target parent symlink resolves outside the configured project root"
+                            relative)
+
+              (not (Files/isDirectory real-parent (make-array LinkOption 0)))
+              (path-refusal :target-parent-not-directory
+                            "Extraction target parent is not a directory"
+                            relative)
+
+              :else
+              (let [canonical (.resolve real-parent (.getFileName lexical))]
+                {:ok true
+                 :relative relative
+                 :path (.toString canonical)
+                 :canonical canonical})))))
+      (catch Exception error
+        (path-refusal :invalid-target-path (.getMessage error) relative)))))
