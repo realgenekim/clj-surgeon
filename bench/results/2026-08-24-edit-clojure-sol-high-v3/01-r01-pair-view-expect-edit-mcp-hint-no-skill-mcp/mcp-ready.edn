@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-benchmark-setup.iFmER2/workspaces/01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp", :server :clj-surgeon, :port 57424, :host "127.0.0.1", :pid 28046, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:57424/mcp"}
