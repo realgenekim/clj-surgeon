@@ -208,8 +208,10 @@ mcp_first_mutation() {
                      or .tool == "edit_clojure"))
                or .type == "file_change"
                or (.type == "command_execution"
-                   and (((.command // "") | contains("clj-surgeon"))
-                        or ((.command // "") | test("(^|[ /])apply_patch( |$)")))))]
+                   and (((.command // "") | test("(^|[ /])apply_patch( |$)"))
+                        or (((.command // "") | contains("clj-surgeon"))
+                            and ((.command // "")
+                                 | test(":op[[:space:]]+(:)?(change!|replace-subform!|mv|mv-with-deps|extract!|rename-ns!|fix-declares!|edit)([^a-zA-Z!-]|$)"))))))]
      | first // {}) as $first
     | ($first.type == "mcp_tool_call"
        and $first.server == "clj-surgeon"
@@ -379,6 +381,7 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_root/events.jsonl" > "$self_test_root/started-items.json"
   test "$(mcp_first_mutation "$self_test_root/started-items.json")" = false
   printf '%s\n' \
+    '{"type":"item.started","item":{"type":"command_execution","command":"cat /tmp/skills/clj-surgeon/SKILL.md"}}' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"inspect_clojure"}}' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"edit_clojure"}}' \
     '{"type":"item.started","item":{"type":"file_change"}}' \
@@ -935,10 +938,24 @@ run_one() {
   if [ "$version" = mcp ]; then
     local ready_file="$run_dir/mcp-ready.edn"
     local server_started_ms server_ready_ms
+    local mcp_java_opts=()
+    if [ -n "${BENCH_MCP_JAVA_OPTS:-}" ]; then
+      read -r -a mcp_java_opts <<< "$BENCH_MCP_JAVA_OPTS"
+      local java_opt
+      for java_opt in "${mcp_java_opts[@]}"; do
+        case "$java_opt" in
+          -J*) ;;
+          *)
+            echo "BENCH_MCP_JAVA_OPTS accepts only whitespace-separated -J options: $java_opt" >&2
+            exit 2
+            ;;
+        esac
+      done
+    fi
     server_started_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
     (
       cd "$repo_root"
-      exec clojure -X:clj-surgeon/mcp \
+      exec clojure "${mcp_java_opts[@]}" -X:clj-surgeon/mcp \
         :project-dir "$(bb -e '(prn (first *command-line-args*))' "$workspace")" \
         :telemetry :full \
         :telemetry-dir "$(bb -e '(prn (first *command-line-args*))' "$run_dir/mcp-telemetry")" \
