@@ -1,0 +1,11 @@
+--- /Users/genekim/src.local/clj-surgeon/bench/fixtures/edit_portfolio/pair-view-expect-edit/before/src/bench/pair_view.clj	2026-08-06 21:55:06
++++ /private/tmp/clj-surgeon-benchmark-setup.hNZ57g/workspaces/08-r08-pair-view-expect-edit-matched-skill-mcp/src/bench/pair_view.clj	2026-08-23 23:02:51
+@@ -15,7 +15,7 @@
+ 
+       :finish
+       ;; Completion intentionally keeps the audit payload beside the status.
+-      (assoc state :status :done :audit (:audit payload))
++      (assoc state :status :complete :audit (:audit payload))
+ 
+       :cancel
+       (assoc state :status :cancelled :reason (:reason payload))

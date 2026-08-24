@@ -46,7 +46,7 @@ help:
 	@echo ""
 	@echo "  make test                      Run all tests"
 	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
-	@echo "  make mcp-smoke                 Verify initialize, two-tool discovery, and refusal over stdio"
+	@echo "  make mcp-smoke                 Verify initialize, three-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Test, reload live Clojure, and publish changed tool schemas"

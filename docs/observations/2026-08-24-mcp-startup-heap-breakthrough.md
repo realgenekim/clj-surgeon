@@ -26,6 +26,13 @@ The launch default changed from `-J-Xms64m -J-Xmx2g` to
 `-J-Xms64m -J-Xmx512m`. The currently running development MCP was not restarted;
 the new limit applies on its next controlled start.
 
+The complete repository gate is also green with its MCP phase under that cap:
+604 core tests / 5,221 assertions, 182 MCP tests / 1,482 assertions, stdio
+three-tool discovery, benchmark harness self-tests, and retained-evidence
+verification. `make mcp-reload` then synchronized the live server at CWD
+`/Users/genekim/src.local/clj-surgeon`, changed the contract hash from
+`8c84890a` to `4dbb3317`, and upserted `edit_clojure` without restarting it.
+
 ## Matched measurements
 
 Every row used `bench/profile_mcp_startup.sh`, an ephemeral port, production

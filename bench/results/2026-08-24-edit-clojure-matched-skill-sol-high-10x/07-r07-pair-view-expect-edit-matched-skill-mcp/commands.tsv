@@ -1,0 +1,1 @@
+item_1	/bin/zsh -lc "wc -l /private/tmp/clj-surgeon-benchmark-setup.IWnxKr/homes/07-r07-pair-view-expect-edit-matched-skill-mcp/skills/clj-surgeon/SKILL.md && sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.IWnxKr/homes/07-r07-pair-view-expect-edit-matched-skill-mcp/skills/clj-surgeon/SKILL.md"	0	5332

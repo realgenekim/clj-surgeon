@@ -4,9 +4,9 @@
 call, without source reads, quoting repair, formatter drift, or a second apply?
 
 **Answer:** Yes. Three of three directly routed fresh Sol/high callers finished
-with one MCP call and no other tool action. Three of three callers in the more
-realistic MCP-plus-installed-skill condition also selected `edit_clojure`, made
-one successful mutation, and produced the exact byte hash.
+with one MCP call and no other tool action. More importantly, ten of ten callers
+in the realistic MCP-plus-installed-skill condition selected `edit_clojure`,
+made one successful guarded mutation, and produced the exact byte hash.
 
 ## The path was diagnostic, not cosmetic
 
@@ -71,6 +71,20 @@ variation is redundant structural reading, not mutation repair.
 Structured evidence is retained in
 `bench/results/2026-08-24-edit-clojure-matched-skill-sol-high-v2`.
 
+## Final 10/10 admission cohort
+
+The final cohort repeated the realistic condition with the synchronized,
+66-line installed skill, fresh `gpt-5.6-sol`/high callers, and MCP JVMs capped
+at `-Xmx512m`. It achieved 10/10 exact presentation, 10/10 `edit_clojure` as
+the first mutation, ten successful guarded mutation transactions, zero failed
+mutations, and zero MCP failures. Median wall time was 52.275 seconds. The
+median run used two MCP calls: optional structural discovery plus the edit.
+
+The first seven ran with concurrency two; the final three ran sequentially
+after local load rose. Structured evidence and the immutable raw-evidence
+receipt are retained in
+`bench/results/2026-08-24-edit-clojure-matched-skill-sol-high-10x`.
+
 An exploratory no-skill/no-hint cohort selected MCP zero of three times. Native
 editing was exact in two of three runs and took a 68.112-second median across
 the correct runs. This is useful negative evidence: publishing a perfect
@@ -80,7 +94,7 @@ instruction or skill remains part of the product.
 ## What this proves—and does not
 
 This proves the named interface can make the supplied exact nested edit as a
-single guarded gesture both when directly routed and when discovered through
+single guarded mutation both when directly routed and when discovered through
 the installed skill. It also proves why the route was previously fickle: the
 surface was hidden, then over-capable, and the packaged skill lagged its
 development copies.

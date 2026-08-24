@@ -1,7 +1,7 @@
 # One-shot editor gesture
 
-**Status:** Thin named `edit_clojure` adapter locally green, live, and
-self-hosted; fresh local caller selection experiment pending
+**Status:** Implemented, self-hosted, hot-loaded without a server restart, and
+admitted by a 10/10 fresh Sol/high installed-skill cohort
 **Motivating evidence:** The Sol/high exact-nested trial needed a locator
 fallback and then misplaced `expect` inside a prepared edit. The eventual
 semantic edit succeeded, but whole-file formatting changed an unrelated EOF
@@ -10,7 +10,7 @@ keystrokes therefore needed multiple protocol rounds.
 
 ## Outcome
 
-`apply_clojure_changes` accepts a small `edits` entrance for the common case:
+`edit_clojure` is a small named entrance for the common case:
 replace one exact Clojure subtree inside one named top-level form. The caller
 states point, old value, and new value. Surgeon resolves the point, binds an
 implicit source anchor, checks the old value, and commits through the existing
@@ -25,24 +25,24 @@ verified transaction kernel in one call.
     "from": ":done",
     "to": ":complete",
     "matches": 1
-  }],
-  "verify": "fast"
+  }]
 }
 ```
 
 ## Bitter-Lesson Boundary
 
 This entrance compiles explicit mechanical intent. It does not infer which
-symbol, form, file, or architectural change the caller meant. It adds no MCP
-tool and no mutation kernel. Semantic discovery, extraction, owner deletion,
+symbol, form, file, or architectural change the caller meant. It adds one thin
+named MCP entrance but no mutation kernel. Semantic discovery, extraction, owner deletion,
 binding-aware rename, and multi-site transforms remain on their existing
-specialized surfaces.
+specialized surfaces. The named entrance adds no second executor or mutation
+kernel; it compiles into the existing guarded transaction machinery.
 
 ## Public Contract
 
-- `edits` is a non-empty array and is mutually exclusive with `basis`,
-  `decisions`, `changes`, and `extraction`. A redundant top-level `expect` is
-  discarded before compilation and reported in `input_normalization`; exact
+- The named tool exposes only optional `workspace_root` plus a non-empty
+  `edits` array. The broader `apply_clojure_changes` entrance also accepts the
+  same edits compiler and normalizes a redundant aggregate `expect`; exact
   per-edit guards remain authoritative.
 - Each edit is a closed object containing `file`, `within`, `from`, `to`, and
   optional positive integer `matches`. `within` initially contains exactly one
@@ -53,7 +53,9 @@ specialized surfaces.
   `matches: N` requests exactly N replacements inside that owner; zero, fewer,
   or more refuse before write. Aggregate change, edit, and distinct-file counts
   are derived by Surgeon.
-- `verify` remains optional and accepts `fast` or `full`.
+- `edit_clojure` does not expose `verify`. Parse, compare-and-swap, atomic
+  write, read-back hash, receipt, and undo are mandatory. Formatter, linter,
+  tests, and other verification actions belong to `apply_clojure_changes`.
 - Success returns the ordinary verified transaction receipt and inverse.
 - Missing, duplicate, ambiguous, stale, unparsable, or out-of-root targets
   refuse before write with `source_unchanged=true`.
@@ -125,14 +127,14 @@ Boundary matrix:
 2. [done] Pass focused pure and boundary tests through the local persistent
    nREPL: 48 tests, 498 assertions, zero failures or errors.
 3. [done] Pass the repository MCP suite in a disposable bounded JVM:
-   `-Xms32m -Xmx512m` completed 181 tests and 1,476 assertions with zero
+   `-Xms64m -Xmx512m` completed 182 tests and 1,482 assertions with zero
    failures or errors. Focused lint also passed through live transactions.
 4. [done] Record the live MCP PID and CWD, hot-reload in place, and prove the PID did
    not change.
 5. [done] Use the reloaded `edits` entrance to change clj-surgeon itself, then prove
    exact bytes, stale-target refusal, tests, receipt, and undo.
-6. [pending] Achieve 10/10 fresh local clean-agent one-call exact successes and bind the
-   evidence to the implementation hash.
+6. [done] Achieve 10/10 fresh local clean-agent exact successes with one
+   successful guarded mutation each and bind retained evidence to the branch.
 7. [done by explicit authorization] Run one three-seat Anvil canary before the
    formal 10/10 local gate to learn whether fresh Sol/high agents discover and
    one-shot the interface.
@@ -242,21 +244,35 @@ invisible. Once admitted, Sol/high selected it immediately, but optional
 `verify` invited two formatter-gated refusals on an intentionally byte-exact
 fixture before a third call without verification succeeded. Permanent harness
 and schema tests now require all three tools and forbid `verify` on the narrow
-editor entrance. A fresh cohort must establish the repair-free rate.
+editor entrance. The final cohort below establishes the repair-free rate.
+
+## Final admission cohort
+
+Ten fresh `gpt-5.6-sol`/high callers received the ordinary installed skill and
+the three MCP tools, with no task-specific routing hint. All ten selected
+`edit_clojure`, produced the exact target bytes, completed exactly one
+successful guarded mutation, and had zero failed mutations or MCP failures.
+The median wall time was 52.275 seconds including skill loading and optional
+structural reads. Each benchmark MCP was capped at `-Xmx512m`; concurrency was
+two for the first seven and one for the final three to bound laptop load.
+
+Structured evidence and its immutable archive receipt are retained in
+`bench/results/2026-08-24-edit-clojure-matched-skill-sol-high-10x`.
 
 ## Documentation and Release Checklist
 
-Update the MCP description, README example, installed skill copies, and
-interface study with the final admitted syntax and receipt. Decide the thin
-`edit_clojure` adapter through the local comparison above. Document reusable
-location handles only after their lifecycle and stale-source behavior are
-implemented.
+- [done] Update the MCP description and README example.
+- [done] Synchronize the repository, Codex, and Claude installed skill copies.
+- [done] Retain routed, matched-skill, 512 MiB, and 10/10 admission evidence.
+- [done] Hot-load the three-tool contract without restarting the server.
+- [future] Document reusable location handles only after their lifecycle and
+  stale-source behavior are implemented.
 
 ## Definition of Done
 
-A fresh local agent performs the exact nested edit in one `edit_clojure` call,
-Surgeon changes only the intended subtree,
-returns a verified undoable receipt, refuses the stale replay without writing,
-and repeats this 10/10 times. The same live MCP process self-hosts at least one
-follow-up implementation edit after hot reload. The three-seat Anvil learning
-canary is evidence, not admission; the formal 10/10 local gate remains open.
+A fresh local agent performs the exact nested edit through one successful
+`edit_clojure` mutation, Surgeon changes only the intended subtree, returns an
+undoable receipt, and refuses stale replay without writing. This now repeats
+10/10 with the installed skill. The same live MCP process self-hosted follow-up
+implementation edits after hot reload. The three-seat Anvil learning canary
+remains useful evidence; the formal local gate is closed.

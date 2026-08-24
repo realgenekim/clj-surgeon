@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-benchmark-setup.IWnxKr/workspaces/05-r05-pair-view-expect-edit-matched-skill-mcp", :server :clj-surgeon, :port 50077, :host "127.0.0.1", :pid 16663, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:50077/mcp"}
