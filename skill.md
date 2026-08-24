@@ -15,10 +15,7 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - If tools are absent or use the wrong repository, run `clj-surgeon up [WORKSPACE]` once. It joins the shared hot processes. Do not add a server.
 - On typed `semantic-provider-warming`, preserve session, PID, anchor, and `next_call`; never restart. Wait, then retry once.
-- Otherwise inspect one stall with cclsp `inspect_runtime`; for invalid sessions,
-  missing tools, or false-green health, run `clj-surgeon recover [WORKSPACE]`
-  once. Continue only on `:recovered`; otherwise execute its `:report-command`
-  and workspace-scoped `:fallback-command`. Never loop.
+- Otherwise inspect one stall with cclsp `inspect_runtime`; for invalid sessions, missing tools, or false-green health, run `clj-surgeon recover [WORKSPACE]` once. Continue only on `:recovered`; otherwise execute its `:report-command` and workspace-scoped `:fallback-command`. Never loop.
 - Set canonical caller `workspace_root` on non-default requests and preserve prepared roots.
   For sibling Vars, never guess `../`; cclsp returns the owner root and route evidence.
 - After a tool schema change, run `make mcp-reload` in the source checkout.
@@ -30,10 +27,7 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
   call. One `read_complete=true` result is terminal evidence.
 - Named forms include `source_anchor`; copy it into cclsp `resolve_var_surface`
   or send up to four related ordered anchors once with `resolve_var_surfaces`.
-- When exact sites are unknown, call `inspect_clojure` with
-  `mode=prepare-change`, one concise `intent`, and either `subject` or an
-  ordered `subjects` array. Its authority-labeled surface already unions
-  resolved references with exact `#'name` and `(var name)` callers.
+- When exact sites are unknown, call `inspect_clojure` with `mode=prepare-change`, one concise `intent`, and either `subject` or an ordered `subjects` array. Its authority-labeled surface already unions resolved references with exact `#'name` and `(var name)` callers.
 - For an unindexed known owner, prepare with project-relative `file` plus exact
   top-level `form`; this proves source, not a reference surface.
 - Preparation returns complete owners, owner authority, one basis, and one
@@ -45,13 +39,8 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - For a prepared basis, copy `next_call`, fill every `null` with one keep,
   complete replacement, or whole-owner delete, and apply once.
-- For exact nested replacements, call `edit_clojure` with only `workspace_root` and
-  `edits`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional
-  positive `matches` (default 1). Do not send `changes`, top-level `expect`,
-  `verify`, `basis`, or `decisions`; Surgeon derives IDs and counts. Compact edits
-  preserve all bytes outside the replaced subforms and do not run a whole-file
-  formatter. Use `apply_clojure_changes` when formatter, linter, or test gates are
-  part of the requested transaction.
+- For exact nested replacements, call `edit_clojure` with only `workspace_root` and `edits`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional positive `matches` (default 1).
+  Do not send `changes`, top-level `expect`, `verify`, `basis`, or `decisions`; Surgeon derives IDs and counts. Compact edits preserve unrelated bytes and do not format the whole file. Use `apply_clojure_changes` for formatter, linter, or test gates.
 - For known exact changes, send one direct `changes` request with `id`, `files`,
   `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
   `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.
@@ -68,7 +57,7 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 - Sibling insertion preserves the existing whitespace separator. A gap with a
   comment or detached source refuses; replace a larger exact span when comment
   placement is part of the decision.
-- Applicable formatting and hot laws run inside `verify=fast|full`; hot failure rolls back.
+- Formatting and hot laws run inside `verify=fast|full`; hot failure rolls back.
   `verification_complete=true` is terminal. On cold pending, copy `next_call` once; its status keeps the same undo receipt. Never replay or poll.
 
 ## Fall back deliberately
