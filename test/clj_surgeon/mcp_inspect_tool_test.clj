@@ -188,9 +188,9 @@
         _source (write-source! project "src/demo.clj"
                                "(ns demo)\n(def alpha {:answer 42})\n")
         request {"requests" [{"id" "alpha" "operation" "forms"
-                               "file" "src/demo.clj" "forms" ["alpha"]
-                               "include_source" false
-                               "expect" {"forms" 1}}]
+                              "file" "src/demo.clj" "forms" ["alpha"]
+                              "include_source" false
+                              "expect" {"forms" 1}}]
                  "expect" {"requests" 1 "files" 1}}]
     (try
       (let [result (inspect-tool/execute-inspect!
