@@ -1,0 +1,12 @@
+item_1	/bin/zsh -lc "sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/02-r02-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/SKILL.md"	0	5194
+item_2	/bin/zsh -lc 'clj-surgeon up /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/workspaces/02-r02-pair-view-expect-edit-matched-skill-post'	1	169
+item_4	/bin/zsh -lc "sed -n '1,260p' /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/02-r02-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/references/cli-fallback.md"	1	180
+item_5	/bin/zsh -lc 'find /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/02-r02-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon -maxdepth 2 -type f -print'	0	130
+item_6	/bin/zsh -lc 'clj-surgeon --help'	0	4523
+item_7	/bin/zsh -lc 'clj-surgeon :op :change! --help'	0	2128
+item_8	/bin/zsh -lc 'clj-surgeon :op :change --help'	0	1953
+item_9	/bin/zsh -lc 'mktemp -d /private/tmp/pair-view-change.XXXXXX'	0	37
+item_10	/bin/zsh -lc 'clj-surgeon :op :change! :spec '"'{:changes [{:id :finish-status :in [\\"src/bench/pair_view.clj\\"] :forms [route-event] :find \\":done\\" :do [:replace \\":complete\\"] :expect {:matches 1 :each-form 1}}] :expect {:changes 1 :edits 1 :files 1}}' :receipt-out /private/tmp/pair-view-change.EewOWA/receipt.edn"	0	643
+item_11	/bin/zsh -lc 'clj-surgeon :op :cat --help'	0	3505
+item_13	/bin/zsh -lc 'clj-surgeon :op :cat :file src/bench/pair_view.clj :form route-event'	0	1124
+item_14	/bin/zsh -lc 'git diff --unified=0 -- src/bench/pair_view.clj'	0	289

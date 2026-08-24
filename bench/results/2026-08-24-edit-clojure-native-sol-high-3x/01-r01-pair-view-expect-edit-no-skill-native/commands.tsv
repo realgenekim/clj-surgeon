@@ -1,0 +1,9 @@
+item_1	/bin/zsh -lc "rg -n -C 4 ':finish|mutation' src/bench/pair_view.clj"	0	268
+item_4	/bin/zsh -lc 'git diff --check -- src/bench/pair_view.clj && git diff --numstat -- src/bench/pair_view.clj && git diff --unified=2 -- src/bench/pair_view.clj'	0	480
+item_5	/bin/zsh -lc 'tail -n 6 src/bench/pair_view.clj | sed -n l'	0	101
+item_7	/bin/zsh -lc 'git diff --check -- src/bench/pair_view.clj && git diff --numstat -- src/bench/pair_view.clj && git diff --unified=2 -- src/bench/pair_view.clj'	0	480
+item_9	/bin/zsh -lc 'git diff --numstat -- src/bench/pair_view.clj && git diff --unified=1 -- src/bench/pair_view.clj && tail -c 12 src/bench/pair_view.clj | od -An -t x1'	0	476
+item_10	/bin/zsh -lc "rg --files -uu | rg '("'^|/)(AGENTS'"\\\\.md|.*mutat.*|.*expect.*|.*bench.*)"'$'"' | head -80"	0	24
+item_11	/bin/zsh -lc "rg -n '"'^'"\\\\(def|declaration|:before|:after|:match|:expected|:expect' src/bench/pair_view.clj"	0	188
+item_12	/bin/zsh -lc 'ls -la'	0	214
+item_13	/bin/zsh -lc 'baseline_count=$(git show HEAD:src/bench/pair_view.clj | rg -c '"'"'^      '"\\\\(assoc state :status :done :audit \\\\(:audit payload\\\\)\\\\)"'$'"'); result_count="'$(rg -c '"'"'^      '"\\\\(assoc state :status :complete :audit \\\\(:audit payload\\\\)\\\\)"'$'"' src/bench/pair_view.clj); if cmp -s <(git show HEAD:src/bench/pair_view.clj | perl -pe 's/"'^(      '"\\\\(assoc state :status ):done( :audit \\\\(:audit payload\\\\)\\\\))"'$/${1}:complete${2}/'"') src/bench/pair_view.clj; then exact_match=yes; else exact_match=no; fi; printf 'baseline_target_count=%s\\\\nresult_target_count=%s\\\\nexact_expected_bytes=%s\\\\n' \\""'$baseline_count" "$result_count" "$exact_match"'	0	71

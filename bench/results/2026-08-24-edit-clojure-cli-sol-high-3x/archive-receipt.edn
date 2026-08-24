@@ -1,0 +1,4 @@
+{:retention-version 1
+ :archive "2026-08-24/2026-08-24-edit-clojure-cli-sol-high-3x.tar.gz"
+ :archive-sha256 "7b8d4a106981f5c116573e4ceb41ce63143149852051ec8533d12a13d1958431"
+ :git-content :structured-only}

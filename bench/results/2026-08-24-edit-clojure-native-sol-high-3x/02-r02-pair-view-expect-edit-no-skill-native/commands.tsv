@@ -1,0 +1,5 @@
+item_1	/bin/zsh -lc "rg -n -C 4 ':finish|route-event|mutation' src/bench/pair_view.clj"	0	440
+item_3	/bin/zsh -lc "git diff --check -- src/bench/pair_view.clj && git diff --unified=1 -- src/bench/pair_view.clj && rg -n -C 1 '"'^      '"\\\\(assoc state :status :(complete|done) :audit \\\\(:audit payload\\\\)\\\\)"'$'"' src/bench/pair_view.clj"	0	557
+item_5	/bin/zsh -lc 'tail -n 6 src/bench/pair_view.clj | nl -ba'	0	137
+item_7	/bin/zsh -lc "git diff --check -- src/bench/pair_view.clj && git diff --unified=1 -- src/bench/pair_view.clj && rg -n -C 1 '"'^      '"\\\\(assoc state :status :(complete|done) :audit \\\\(:audit payload\\\\)\\\\)"'$'"' src/bench/pair_view.clj"	0	557
+item_9	/bin/zsh -lc 'git diff --unified=1 -- src/bench/pair_view.clj'	0	373

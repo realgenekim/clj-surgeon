@@ -1,0 +1,9 @@
+item_1	/bin/zsh -lc "wc -l /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/01-r01-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/SKILL.md && sed -n '1,240p' /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/01-r01-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/SKILL.md"	0	5333
+item_2	/bin/zsh -lc 'clj-surgeon up /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/workspaces/01-r01-pair-view-expect-edit-matched-skill-post'	1	169
+item_4	/bin/zsh -lc "wc -l /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/01-r01-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/references/cli-fallback.md && sed -n '1,260p' /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/01-r01-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon/references/cli-fallback.md"	1	185
+item_5	/bin/zsh -lc 'find /private/tmp/clj-surgeon-benchmark-setup.cGpvHi/homes/01-r01-pair-view-expect-edit-matched-skill-post/skills/clj-surgeon -maxdepth 3 -type f -print'	0	130
+item_6	/bin/zsh -lc 'command -v clj-surgeon && clj-surgeon --help'	0	4523
+item_7	/bin/zsh -lc 'clj-surgeon :op :edit --help'	0	4955
+item_8	/bin/zsh -lc "clj-surgeon :op :edit :file src/bench/pair_view.clj :expr \\"(-> (form 'route-event) (match :finish) right (match :status) right (replace :complete))\\" :expect :done"	0	2025
+item_9	/bin/zsh -lc 'clj-surgeon :op :xray --help'	0	2988
+item_10	/bin/zsh -lc "clj-surgeon :op :xray :file src/bench/pair_view.clj :expr \\"(-> (form 'route-event) (match :finish) right (expect-count 1))\\" :evidence :full"	0	705
