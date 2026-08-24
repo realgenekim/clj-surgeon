@@ -25,13 +25,20 @@
     (doseq [child (reverse (file-seq (io/file file)))]
       (Files/deleteIfExists (.toPath child)))))
 
-(deftest exposes-exactly-two-typed-tools
+(deftest exposes-exactly-three-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 2 (count tools)))
-    (is (= ["inspect_clojure" "apply_clojure_changes"]
+    (is (= 3 (count tools)))
+    (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"]
            (mapv :name tools)))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
+    (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))
+    (is (= false (get-in tools [2 :schema :additionalProperties])))
+    (is (= #{"workspace_root" "edits" "verify"}
+          (set (keys (get-in tools [2 :schema :properties])))))
+    (is (= ["edits"] (get-in tools [2 :schema :required])))
+    (is (str/includes? (:description (nth tools 2))
+          "exact old subtree"))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits" "extraction"

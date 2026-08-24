@@ -72,10 +72,10 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Key conventions
 
-- Use the hottest capable entrance. Prefer `inspect_clojure` and
-  `apply_clojure_changes` over the process-starting CLI. Use the CLI only when
-  MCP is unavailable, the operation is not exposed there, or the CLI itself is
-  under test.
+- Use the hottest capable entrance. Prefer `inspect_clojure`, `edit_clojure`,
+  and `apply_clojure_changes` over the process-starting CLI. Use the CLI only
+  when MCP is unavailable, the operation is not exposed there, or the CLI
+  itself is under test.
 - For cross-file definitions, references, implementations, incoming calls,
   and outgoing calls, search the deferred MCP catalog for `mcp__cclsp__*` before
   falling back to source. Use the published tool schema; do not guess
@@ -99,6 +99,10 @@ updates, and verification gates. It is not a chronological coding diary.
   `keep=true` or one replacement form. Call
   `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
   selectors, counts, hashes, basis IDs, or site IDs.
+- When the file, named top-level form, exact old subtree, and replacement are
+  already known, call `edit_clojure` directly with only `workspace_root`,
+  `edits`, and optional `verify`. Its per-edit old subtree and match count are
+  the stale-source guards; do not preflight-read or add aggregate counts.
 - If cclsp does not index a known owner, prepare it with project-relative
   `file` plus exact top-level `form`. This exact-source route does not claim a
   reference surface.

@@ -350,11 +350,13 @@ What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 Keep this branch-local while the MCP contract is under evaluation. The
 development installer points the CLI and both skills at the current checkout,
 starts the hot clj-surgeon and cclsp services on loopback, and registers exactly
-two clj-surgeon tools with Codex:
+three clj-surgeon tools with Codex:
 
 - `inspect_clojure` for read-only structural batches and proof-carrying change
   preparation;
-- `apply_clojure_changes` for guarded direct or basis-backed mutation.
+- `apply_clojure_changes` for guarded direct or basis-backed mutation;
+- `edit_clojure` for byte-exact, compare-and-swap subtree replacement inside a
+  named top-level form.
 
 ```bash
 make install-mcp-codex-dev

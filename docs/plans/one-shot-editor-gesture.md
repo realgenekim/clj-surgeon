@@ -1,7 +1,7 @@
 # One-shot editor gesture
 
-**Status:** Round-two candidate locally green and self-hosted; second Anvil
-canary mechanically exact but compact-route adoption failed 0/3
+**Status:** Thin named `edit_clojure` adapter locally green, live, and
+self-hosted; fresh local caller selection experiment pending
 **Motivating evidence:** The Sol/high exact-nested trial needed a locator
 fallback and then misplaced `expect` inside a prepared edit. The eventual
 semantic edit succeeded, but whole-file formatting changed an unrelated EOF
@@ -204,6 +204,37 @@ kernel. Compare that name against the current `apply_clojure_changes` entrance
 and a native control on the same task before another Anvil run. Full evidence
 and startup-memory synthesis are in
 `docs/observations/2026-08-24-anvil-round-two-and-startup-memory-synthesis.md`.
+
+## Thin named adapter local proof
+
+The adapter adds one MCP contract and no executor. `edit_clojure` publishes
+only `workspace_root`, `edits`, and `verify`, points at the same
+`handle-clj-change` Var, reuses `editor-gesture-schema`, and returns the same
+structured output and receipts as `apply_clojure_changes {edits: ...}`.
+
+Outside-in development produced the intended red gate: 181 tests ran, with
+five failures and two errors confined to the new three-tool registry
+expectations. After adding the adapter, the first green attempt exposed four
+HTTP live-registry expectations that still assumed two tools. Updating those
+addition/removal laws produced 181 tests, 1,481 assertions, zero failures, and
+zero errors in a disposable `-Xmx512m` JVM.
+
+`make mcp-reload` kept live MCP PID 75495 with CWD
+`/Users/genekim/src.local/clj-surgeon`, advanced the contract hash from
+`48f1a369` to `8c84890a`, and upserted only `edit_clojure`. A fresh raw MCP
+session then proved the new three-tool list and the adapter's closed schema.
+
+The new tool immediately self-hosted. One `edit_clojure` call changed the
+adapter's own `:id` subtree, verified the write, and returned receipt hash
+`2e296422`. Replaying the identical call refused with
+`expect-count-mismatch` and `source_unchanged=true`. A reverse
+`edit_clojure` call restored the source and returned receipt hash `e927e11b`.
+A subsequent two-file `edit_clojure` batch renamed the two stale “exactly two
+tools” test Vars with one verified transaction and receipt hash `fbf0ecad`.
+
+This completes capability implementation, mechanism verification, and
+self-hosting. It does not yet prove fresh-caller selection or efficiency. The
+next gate remains a fresh local no-skill caller on the exact Anvil task.
 
 ## Documentation and Release Checklist
 

@@ -8,7 +8,7 @@ description: >-
 
 ## Discover the hot entrance first
 
-Before a shell process reads Clojure, inspect the deferred/all-tools catalog for `inspect_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; initial absence proves nothing.
+Before a shell process reads Clojure, inspect the deferred/all-tools catalog for `inspect_clojure`, `edit_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; initial absence proves nothing.
 Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. cclsp reads cross-file semantics; clj-surgeon owns exact source and writes.
 
 ## Join one shared workspace stack
@@ -45,7 +45,7 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - For a prepared basis, copy `next_call`, fill every `null` with one keep,
   complete replacement, or whole-owner delete, and apply once.
-- For exact nested replacements, send only `workspace_root`, `edits`, and optional
+- For exact nested replacements, call `edit_clojure` with only `workspace_root`, `edits`, and optional
   `verify`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional
   positive `matches` (default 1). Do not send `changes`, top-level `expect`,
   `basis`, or `decisions`; Surgeon derives IDs and counts. If a caller redundantly

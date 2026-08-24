@@ -18,10 +18,11 @@ Two claims now have direct evidence:
    the exact target bytes, but every route needed an EOF repair after its first
    mutation.
 
-The next product experiment should therefore change affordance, not mutation
-semantics: expose the same compiler and transaction kernel through one small,
-unmistakably named `edit_clojure` MCP tool, then compare it locally with the
-current `apply_clojure_changes` entrance. Do not add another executor.
+The immediate product experiment therefore changed affordance, not mutation
+semantics: the same compiler and transaction kernel are now exposed through
+one small, unmistakably named `edit_clojure` MCP tool. Local contract tests,
+live hot reload, and self-hosted edit/stale-refusal/restore all pass. Fresh
+caller selection remains to be measured. No executor was added.
 
 ## Round-two scoreboard
 
@@ -88,10 +89,10 @@ the right key. The two variants should be measured rather than debated.
 
 Before another Anvil run:
 
-1. Add a thin `edit_clojure` MCP adapter backed by the existing compact compiler.
-2. Prove schema parity, error parity, receipt parity, stale refusal, and exact
+1. [done] Add a thin `edit_clojure` MCP adapter backed by the existing compact compiler.
+2. [done] Prove schema parity, error parity, receipt parity, stale refusal, and exact
    byte parity against `apply_clojure_changes {edits: ...}`.
-3. Hot-reload the live server without changing its PID.
+3. [done] Hot-reload the live server without changing its PID.
 4. Run three fresh local callers on the exact same no-skill task:
    current overloaded tool, thin named tool, and ordinary native control.
 5. Admit the new name only if the named-tool caller chooses it in its first

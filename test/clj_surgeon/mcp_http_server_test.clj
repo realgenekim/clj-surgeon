@@ -193,7 +193,7 @@
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
 
-(deftest http-protocol-exposes-two-tools-and-structured-read-evidence
+(deftest http-protocol-exposes-three-tools-and-structured-read-evidence
   (let [project (temp-dir)
         source-file (io/file project "src/demo.clj")
         _created (.mkdirs (.getParentFile source-file))
@@ -239,7 +239,7 @@
         (is (= true
                (get-in (sse-json initialized)
                        [:result :capabilities :tools :listChanged])))
-        (is (= ["inspect_clojure" "apply_clojure_changes"]
+        (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"]
                (mapv :name tools)))
         (is (= true (get-in tools [0 :annotations :readOnlyHint])))
         (is (= false (get-in tools [0 :annotations :destructiveHint])))
@@ -304,6 +304,7 @@
             (with-redefs [tool/all-tools
                           (fn [] [changed-inspect
                                   (second original-tools)
+                                  (nth original-tools 2)
                                   temporary-tool])]
               (mcp-server/sync-tools!))
             listed-with-addition
@@ -329,7 +330,7 @@
                 :status :synchronized
                 :removed []
                 :upserted ["inspect_clojure" "temporary_probe"]
-                :tool-count 3
+                :tool-count 4
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -342,6 +343,7 @@
                   (:after-contract-hash added)))
         (is (= #{"inspect_clojure"
                  "apply_clojure_changes"
+                 "edit_clojure"
                  "temporary_probe"}
                (set (map :name added-tools))))
         (is (= "HOT_SCHEMA_DESCRIPTION"
@@ -350,7 +352,7 @@
                 :status :synchronized
                 :removed ["temporary_probe"]
                 :upserted ["inspect_clojure"]
-                :tool-count 2
+                :tool-count 3
                 :server-restart-required false
                 :agent-session-restart :client-dependent}
                (select-keys
@@ -361,7 +363,7 @@
                (:before-contract-hash restored)))
         (is (= (:before-contract-hash added)
                (:after-contract-hash restored)))
-        (is (= #{"inspect_clojure" "apply_clojure_changes"}
+        (is (= #{"inspect_clojure" "apply_clojure_changes" "edit_clojure"}
                (set (map :name restored-tools))))
         (is (= inspect-tool/tool-description
                (get-in restored-by-name ["inspect_clojure" :description]))))
