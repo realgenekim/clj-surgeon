@@ -269,6 +269,7 @@ validate_run_matrix() {
     fi
     if [ "$version" = mcp ] \
       && [ "$context" != no-skill ] \
+      && [ "$context" != matched-skill ] \
       && [ "$context" != mcp-hint-no-skill ] \
       && [ "$context" != mcp-rule-no-skill ] \
       && [ "$context" != mcp-exploratory-rule-no-skill ]; then
@@ -292,6 +293,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   test "$(counterbalanced_versions 3 'post')" = "post"
   validate_run_matrix 'pre:matched-skill post:matched-skill native:no-skill'
   validate_run_matrix 'mcp:no-skill'
+  validate_run_matrix 'mcp:matched-skill'
   validate_run_matrix 'mcp:mcp-rule-no-skill'
   validate_run_matrix 'mcp:mcp-exploratory-rule-no-skill'
   if validate_run_matrix 'native:matched-skill' 2>/dev/null; then
@@ -832,8 +834,12 @@ install_treatment_skill() {
   local codex_home=$3
   case "$context" in
     matched-skill)
+      local skill_version=$version
+      if [ "$version" = mcp ]; then
+        skill_version=post
+      fi
       mkdir -p "$codex_home/skills/clj-surgeon"
-      cp "$setup_root/tools/$version/skills/clj-surgeon/SKILL.md" \
+      cp "$setup_root/tools/$skill_version/skills/clj-surgeon/SKILL.md" \
         "$codex_home/skills/clj-surgeon/SKILL.md"
       ;;
     compact-skill)
@@ -879,6 +885,7 @@ run_one() {
   fi
   if [ "$version" = mcp ] \
     && [ "$context" != no-skill ] \
+    && [ "$context" != matched-skill ] \
     && [ "$context" != mcp-hint-no-skill ] \
     && [ "$context" != mcp-rule-no-skill ] \
     && [ "$context" != mcp-exploratory-rule-no-skill ]; then
@@ -981,7 +988,9 @@ run_one() {
     echo "Version isolation failed for $run_id: $resolved_cli" >&2
     exit 2
   fi
-  if { [ "$version" = native ] || [ "$version" = mcp ]; } && [ -d "$codex_home/skills" ] \
+  if { [ "$version" = native ] \
+       || { [ "$version" = mcp ] && [ "$context" != matched-skill ]; }; } \
+    && [ -d "$codex_home/skills" ] \
     && [ -n "$(find "$codex_home/skills" -iname '*clj-surgeon*' -print -quit)" ]; then
     echo "$version isolation exposed a clj-surgeon skill for $run_id" >&2
     exit 2
