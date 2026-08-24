@@ -302,7 +302,7 @@
        "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]\n\n"
        "[mcp_servers.cclsp]\n"
        "url = \"" cclsp-url "\"\n"
-       "required = true\n"
+       "required = false\n"
        "enabled_tools = [\"resolve_var_surface\", \"find_references\", "
        "\"get_incoming_calls\", \"get_outgoing_calls\"]\n"
        managed-end))
