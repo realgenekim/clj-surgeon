@@ -2,6 +2,7 @@ variant	commit	xmx_mib	cwd	ready_ms	peak_rss_kib	heap_ready_used_kib	heap_after_
 cider	0dede86	2048	/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y	7326	1027664	132711	61839	true
 cider	0dede86	1024	/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y	8524	719040	140092	105505	true
 cider	0dede86	512	/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y	8077	521808	139962	61927	true
+plain-no-cider	98bd87f+	2048	/Users/genekim/src.local/clj-surgeon	5785	771920	94808	42096	true
 plain-no-cider	0c587bb+	512	/Users/genekim/src.local/clj-surgeon	6987	477152	84762	42087	true
 plain-no-cider	0c587bb+	384	/Users/genekim/src.local/clj-surgeon	7069	433104	105727	42115	true
 plain-no-cider	0c587bb+	256	/Users/genekim/src.local/clj-surgeon	10452	392720	114118	41946	true

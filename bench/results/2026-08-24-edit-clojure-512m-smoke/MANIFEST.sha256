@@ -1,0 +1,14 @@
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/commands.tsv
+66912a6c18040d8a807aa6f8bbd194d10193fff5935379757494d4fed8d91229  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/final.sha256
+b32ef09b32dee5cd90cf5afd019b2a12d3d2ee4d8d94e6113e7e5873561515fc  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/mcp-bootstrap-ms.txt
+26ba43744c6994b7a4498044ee7a6eda5ef3dc19fa4f584fcc64811196d6f3af  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/mcp-ready.edn
+94e8c75dbca8a67b64fd699ba79b74143075d5137324bd9a036feefa681752a7  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/mcp-server.stderr
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/mcp-server.stdout
+d333a73175f3dca1ac4279f797ed2e6d2ebd7947356e0a27cacf779a5343337b  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/mcp-telemetry/31dbca05-b57f-4ea2-b664-1f2a2fac0a8e.jsonl
+b38b1c0272fc11b709899fb981402e9f97e4542d6074970f1dd07c9f342aef64  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/start.sha256
+f099828bcbcb4d32f7db52548d886d7e69e88a0dc0e9f7ccc9122ae45919031f  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/target.diff
+d6d4c77aff5135dc0976b021596a5643b757dd3d05aebe6421ce8e79f36dc068  ./01-r01-pair-view-expect-edit-mcp-hint-no-skill-mcp/terminal.tsv
+2a6fc4221573f8b4edb58470165db612ad078983a12814a565743cfa111529f9  ./archive-receipt.edn
+bae1ac5ec69bcea25867d166813f6a2dac34b5d4d8b5c28e6bf7aeb3cf4790be  ./mcp-java-opts.txt
+ebf041da73731a552e4a6be41be8825a3c9a13c5737b0c97edc2367741a4fb74  ./runs.tsv
+f26cf8d5be707a1b4688ee718bbade9b1137e4aacb6db7f1f082635f3f1b9e82  ./summary.md

@@ -1,0 +1,7 @@
+# Clean Codex benchmark summary
+
+Correctness is a gate. Efficiency medians include only correct runs. Token counts are the final cumulative usage reported by each Codex session. A user-visible turn is one completed Codex turn. An internal tool round trip is one started command execution, file change, or MCP tool call. The first mutation starts the post-decision phase; earlier internal round trips are discovery. Interaction rates are computed per correct run before taking each median.
+
+| Task | Context | Version | n | Efficiency n | Correct | Exact presentation | Median wall | Turns/task | Turns/min | Seconds/turn | Tool actions/turn | Discovery tool turns | Post-decision tool turns | Median input | Median uncached | Median output | Shell calls | MCP calls | File changes | Source output | MCP output | Post-decision reads | Failed mutations | MCP failures | Skill read | change | change! | Single change transaction | MCP first mutation | Temp manifest patch | q | xray | partition-all | edit | expr | First source edit | Text reader | show-form | Separate plan/apply |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| pair-view-expect-edit | mcp-hint-no-skill | mcp | 1 | 1 | 100% | 100% | 26,967ms | 1.00 | 2.22 | 26.97 | 1.00 | 0.00 | 1.00 | 45,246 | 6,078 | 656 | 0 | 1 | 0 | 0B | 183B | 0 | 0 | 0 | 0% | 100% | 100% | 100% | 100% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% |

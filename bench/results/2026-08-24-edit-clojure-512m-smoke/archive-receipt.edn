@@ -1,0 +1,4 @@
+{:retention-version 1
+ :archive "2026-08-24/2026-08-24-edit-clojure-512m-smoke.tar.gz"
+ :archive-sha256 "75b6fe8d3ce8727efbc3822f95ac40e66998b44a002566ac047af20e9db93e73"
+ :git-content :structured-only}

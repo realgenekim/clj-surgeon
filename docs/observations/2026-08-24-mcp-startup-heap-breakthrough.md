@@ -37,14 +37,17 @@ forced GC, and an exact process teardown. Runs were sequential.
 | CIDER control (`0dede86`) | 2,048 MiB | `/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y` | 7.33 s | 1,003.6 MiB | 129.6 MiB | 60.4 MiB | yes |
 | CIDER control (`0dede86`) | 1,024 MiB | `/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y` | 8.52 s | 702.2 MiB | 136.8 MiB | 103.0 MiB | yes |
 | CIDER control (`0dede86`) | 512 MiB | `/private/tmp/clj-surgeon-cider-baseline.Wr8k9Y` | 8.08 s | 509.6 MiB | 136.7 MiB | 60.5 MiB | yes |
+| Plain nREPL, no CIDER | 2,048 MiB | `/Users/genekim/src.local/clj-surgeon` | 5.79 s | 753.8 MiB | 92.6 MiB | 41.1 MiB | yes |
 | Plain nREPL, no CIDER | 512 MiB | `/Users/genekim/src.local/clj-surgeon` | 6.99 s | 465.9 MiB | 82.8 MiB | 41.1 MiB | yes |
 | Plain nREPL, no CIDER | 384 MiB | `/Users/genekim/src.local/clj-surgeon` | 7.07 s | 422.9 MiB | 103.2 MiB | 41.1 MiB | yes |
 | Plain nREPL, no CIDER | 256 MiB | `/Users/genekim/src.local/clj-surgeon` | 10.45 s | 383.5 MiB | 111.4 MiB | 41.0 MiB | yes |
 
-At the same 512 MiB cap, removing eager CIDER cuts measured peak RSS by 8.6%,
-heap used at readiness by 39.4%, and post-GC heap used by 32.0%. The complete
-old-default-to-new-default move cuts measured peak RSS by 53.6%: 1,003.6 MiB to
-465.9 MiB.
+At the same 2,048 MiB cap, removing eager CIDER cuts measured peak RSS by 24.9%
+and reaches readiness 1.54 seconds sooner. At the same 512 MiB cap, it cuts peak
+RSS by 8.6%, heap used at readiness by 39.4%, and post-GC heap used by 32.0%.
+With CIDER already removed, changing the cap from 2,048 MiB to 512 MiB cuts peak
+RSS another 38.2%. The complete old-default-to-new-default move cuts measured
+peak RSS by 53.6%: 1,003.6 MiB to 465.9 MiB.
 
 The heap cap itself explains most of the peak reduction. CIDER removal explains
 the smaller retained live set and faster readiness. This is why the two changes

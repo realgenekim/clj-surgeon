@@ -1,0 +1,1 @@
+-J-Xms32m -J-Xmx512m

@@ -3,9 +3,10 @@
 **Question:** Can a fresh coding agent make the exact nested edit in one MCP
 call, without source reads, quoting repair, formatter drift, or a second apply?
 
-**Answer:** Yes in the routed local cohort: three of three fresh Sol/high callers
-selected `edit_clojure`, produced the exact byte hash, and finished with one MCP
-call and no other tool action.
+**Answer:** Yes. Three of three directly routed fresh Sol/high callers finished
+with one MCP call and no other tool action. Three of three callers in the more
+realistic MCP-plus-installed-skill condition also selected `edit_clojure`, made
+one successful mutation, and produced the exact byte hash.
 
 ## The path was diagnostic, not cosmetic
 
@@ -51,14 +52,40 @@ Structured evidence is retained in
 `bench/results/2026-08-24-edit-clojure-sol-high-v3`. Full raw evidence is
 archived outside Git with the SHA-256 receipt in that directory.
 
+## Installed-skill cohort
+
+This cohort received no task-specific tool hint. It had the three MCP tools and
+the packaged clj-surgeon skill that real repositories install.
+
+| Replicate | Workspace CWD | Exact | Successful mutation | MCP calls | Reads before/after edit | Wall |
+|---|---|---|---|---:|---|---:|
+| 1 | `/private/tmp/clj-surgeon-benchmark-setup.VmgY8m/workspaces/01-r01-pair-view-expect-edit-matched-skill-mcp` | yes | one `edit_clojure` | 2 | 0 / 1 | 48.719 s |
+| 2 | `/private/tmp/clj-surgeon-benchmark-setup.VmgY8m/workspaces/02-r02-pair-view-expect-edit-matched-skill-mcp` | yes | one `edit_clojure` | 3 | 2 / 0 | 44.316 s |
+| 3 | `/private/tmp/clj-surgeon-benchmark-setup.VmgY8m/workspaces/03-r03-pair-view-expect-edit-matched-skill-mcp` | yes | one `edit_clojure` | 1 | 0 / 0 | 41.593 s |
+
+All three loaded the skill, selected the intended editor tool, had zero failed
+mutations, and produced the exact final hash. Median wall time was 44.316
+seconds, including the shell call that loaded the full skill. The remaining
+variation is redundant structural reading, not mutation repair.
+
+Structured evidence is retained in
+`bench/results/2026-08-24-edit-clojure-matched-skill-sol-high-v2`.
+
+An exploratory no-skill/no-hint cohort selected MCP zero of three times. Native
+editing was exact in two of three runs and took a 68.112-second median across
+the correct runs. This is useful negative evidence: publishing a perfect
+primitive does not by itself overcome a model's native-edit prior. A routing
+instruction or skill remains part of the product.
+
 ## What this proves—and does not
 
 This proves the named interface can make the supplied exact nested edit as a
-single guarded gesture when the caller is routed to it. It also proves why the
-route was previously fickle: the surface was hidden, then over-capable.
+single guarded gesture both when directly routed and when discovered through
+the installed skill. It also proves why the route was previously fickle: the
+surface was hidden, then over-capable, and the packaged skill lagged its
+development copies.
 
-It does not yet prove unaided selection. A separate no-hint cohort must answer
-whether the tool name and description alone cause fresh agents to choose it.
-Nor does one fixture prove every editing shape; multi-edit batching, stale-source
-refusal, comment-bearing larger subtrees, and location-handle workflows remain
-separate strata.
+It disproves reliable unaided selection in this small sample. Nor does one
+fixture prove every editing shape; multi-edit batching, stale-source refusal,
+comment-bearing larger subtrees, and location-handle workflows remain separate
+strata.
