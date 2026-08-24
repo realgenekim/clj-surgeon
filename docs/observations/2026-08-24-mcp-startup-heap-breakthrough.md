@@ -91,11 +91,12 @@ NEW — 512 MiB reservation, plain control channel
   after forced GC: 41.1 MiB live heap
 ```
 
-This is a startup and immediate-reload acceptance, not yet a long-running
-workload soak. The 512 MiB default needs representative inspect/edit traffic and
-an overnight idle/active soak before claiming that every workload fits. The 256
-MiB result proves margin exists; it is not a recommendation to make 256 MiB the
-default.
+This is not yet a long-running workload soak. Ten isolated fresh-agent workloads
+did start the MCP under the 512 MiB cap and complete an exact guarded edit, so
+the cap now has representative edit traffic in addition to health and reload
+proof. It still needs a broader inspect/edit portfolio and an overnight
+idle/active soak before claiming that every workload fits. The 256 MiB result
+proves margin exists; it is not a recommendation to make 256 MiB the default.
 
 Machine-readable results are in
 `docs/observations/evidence/startup-memory/local-20260824-summary.tsv`. Raw local
