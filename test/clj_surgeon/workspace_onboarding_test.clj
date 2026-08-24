@@ -117,7 +117,7 @@
     (is (str/includes? block "[mcp_servers.clj-surgeon]"))
     (is (str/includes? block "required = true"))
     (is (str/includes? block
-                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\"]"))
+                       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]"))
     (is (str/includes? block "[mcp_servers.cclsp]"))
     (is (str/includes? block "\"resolve_var_surface\""))
     (is (not (str/includes? block "rename")))))

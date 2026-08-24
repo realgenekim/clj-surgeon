@@ -283,7 +283,7 @@
          (re-matches #"http://127\.0\.0\.1:[0-9]+/mcp" url))))
 
 (defn workspace-mcp-block
-  "Return the complete managed Codex TOML block for two bounded tools."
+  "Return the complete managed Codex TOML block for three bounded tools."
   [{:keys [surgeon-url cclsp-url]}]
   (when-not (loopback-mcp-url? surgeon-url)
     (throw (ex-info "surgeon-url must be an explicit loopback MCP URL"
@@ -299,7 +299,7 @@
        "[mcp_servers.clj-surgeon]\n"
        "url = \"" surgeon-url "\"\n"
        "required = true\n"
-       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\"]\n\n"
+       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]\n\n"
        "[mcp_servers.cclsp]\n"
        "url = \"" cclsp-url "\"\n"
        "required = true\n"
