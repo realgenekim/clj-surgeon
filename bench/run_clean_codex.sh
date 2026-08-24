@@ -151,7 +151,8 @@ interaction_counts() {
        | map(.type == "file_change"
              or (.type == "mcp_tool_call"
                  and .server == "clj-surgeon"
-                 and .tool == "apply_clojure_changes")
+                 and (.tool == "apply_clojure_changes"
+                      or .tool == "edit_clojure"))
              or (.type == "command_execution"
                  and (((.command // "") | test("(^|[ /])apply_patch( |$)"))
                       or (((.command // "") | contains("clj-surgeon"))
@@ -175,7 +176,8 @@ mcp_apply_success_count() {
     | select(.type == "item.completed"
              and .item.type == "mcp_tool_call"
              and .item.server == "clj-surgeon"
-             and .item.tool == "apply_clojure_changes"
+             and (.item.tool == "apply_clojure_changes"
+                  or .item.tool == "edit_clojure")
              and .item.status == "completed")
     | (.item.result.structured_content // .item.result.structuredContent // {}) as $receipt
     | select($receipt.verification_complete == true and $receipt.committed == true)]
@@ -187,7 +189,8 @@ mcp_apply_verified() {
     | select(.type == "item.completed"
              and .item.type == "mcp_tool_call"
              and .item.server == "clj-surgeon"
-             and .item.tool == "apply_clojure_changes"
+             and (.item.tool == "apply_clojure_changes"
+                  or .item.tool == "edit_clojure")
              and .item.status == "completed")
     | (.item.result.structured_content // .item.result.structuredContent // {}) as $receipt
     | select($receipt.verification_complete == true
@@ -201,7 +204,8 @@ mcp_first_mutation() {
     ([.[]
       | select((.type == "mcp_tool_call"
                 and .server == "clj-surgeon"
-                and .tool == "apply_clojure_changes")
+                and (.tool == "apply_clojure_changes"
+                     or .tool == "edit_clojure"))
                or .type == "file_change"
                or (.type == "command_execution"
                    and (((.command // "") | contains("clj-surgeon"))
@@ -209,7 +213,8 @@ mcp_first_mutation() {
      | first // {}) as $first
     | ($first.type == "mcp_tool_call"
        and $first.server == "clj-surgeon"
-       and $first.tool == "apply_clojure_changes")' "$1"
+       and ($first.tool == "apply_clojure_changes"
+            or $first.tool == "edit_clojure"))' "$1"
 }
 
 make_native_bin() {
@@ -357,6 +362,7 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     '{"type":"item.started","item":{"type":"mcp_tool_call"}}' \
     '{"type":"item.completed","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","status":"failed","result":{"structured_content":{"ok":false,"source_unchanged":true}}}}' \
     '{"type":"item.completed","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","status":"completed","result":{"structured_content":{"ok":true,"committed":true,"verification_complete":true,"next_action":"none"}}}}' \
+    '{"type":"item.completed","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"edit_clojure","status":"completed","result":{"structured_content":{"ok":true,"committed":true,"verification_complete":true,"next_action":"none"}}}}' \
     '{"type":"turn.completed"}' > "$self_test_root/events.jsonl"
   IFS=$'\t' read -r self_test_user_turns self_test_tool_round_trips \
     self_test_discovery_round_trips self_test_post_decision_round_trips \
@@ -365,14 +371,14 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   test "$self_test_tool_round_trips" -eq 3
   test "$self_test_discovery_round_trips" -eq 1
   test "$self_test_post_decision_round_trips" -eq 2
-  test "$(mcp_apply_success_count "$self_test_root/events.jsonl")" -eq 1
+  test "$(mcp_apply_success_count "$self_test_root/events.jsonl")" -eq 2
   test "$(mcp_apply_verified "$self_test_root/events.jsonl")" = true
   jq -s '[.[] | select(.type == "item.started") | .item]' \
     "$self_test_root/events.jsonl" > "$self_test_root/started-items.json"
   test "$(mcp_first_mutation "$self_test_root/started-items.json")" = false
   printf '%s\n' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"inspect_clojure"}}' \
-    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes"}}' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"edit_clojure"}}' \
     '{"type":"item.started","item":{"type":"file_change"}}' \
     > "$self_test_root/mcp-first-mutation.jsonl"
   jq -s '[.[] | .item]' "$self_test_root/mcp-first-mutation.jsonl" \
@@ -999,7 +1005,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use the available apply_clojure_changes tool for this complete supplied structural decision. For a direct changes request, send only changes and expect; do not send verify. Do not read source or use apply_patch before it. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+    printf '%s\n' '' 'Use the available edit_clojure tool for this exact edit. Send one edit with file, old, and new; do not add a redundant top-level expect. Do not read source or use apply_patch before it. The per-edit old value is the guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
       >> "$run_dir/prompt.txt"
   fi
 
@@ -1209,6 +1215,12 @@ run_one() {
     and (.command | test(":op[[:space:]]+(:)?edit([^a-zA-Z!-]|$)"))
     and (.command | contains(":expect"))
     and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
+  if [ "$expect_used" = false ]; then
+    expect_used=$(jq -s '[.[] | select(.type == "item.started"
+      and .item.type == "mcp_tool_call"
+      and .item.server == "clj-surgeon"
+      and .item.tool == "edit_clojure")] | length > 0' "$run_dir/events.jsonl")
+  fi
   separate_apply_seen=$(jq '[.[] | select((.command | contains("clj-surgeon"))
     and (.command | contains("replace-subform!"))
     and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
