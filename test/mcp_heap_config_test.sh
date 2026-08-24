@@ -16,9 +16,9 @@ else
   expected_java=$(command -v java)
 fi
 
-assert_heap_flags mcp-serve '-J-Xms64m -J-Xmx2g'
-assert_heap_flags mcp-serve-benchmark '-J-Xms64m -J-Xmx2g'
-assert_heap_flags mcp-start '-J-Xms64m -J-Xmx2g'
+assert_heap_flags mcp-serve '-J-Xms64m -J-Xmx512m'
+assert_heap_flags mcp-serve-benchmark '-J-Xms64m -J-Xmx512m'
+assert_heap_flags mcp-start '-J-Xms64m -J-Xmx512m'
 
 for target in mcp-serve mcp-serve-benchmark mcp-start; do
   output=$(make --no-print-directory -n "$target")
