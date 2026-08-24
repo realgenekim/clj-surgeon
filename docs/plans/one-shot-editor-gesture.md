@@ -1,6 +1,7 @@
 # One-shot editor gesture
 
-**Status:** Round-two candidate locally green and self-hosted; second Anvil canary pending
+**Status:** Round-two candidate locally green and self-hosted; second Anvil
+canary mechanically exact but compact-route adoption failed 0/3
 **Motivating evidence:** The Sol/high exact-nested trial needed a locator
 fallback and then misplaced `expect` inside a prepared edit. The eventual
 semantic edit succeeded, but whole-file formatting changed an unrelated EOF
@@ -180,10 +181,35 @@ unrelated byte by skipping whole-file formatting for compact edits. The next
 three-seat canary must use the same task and no skill hint so its result is
 comparable.
 
+## Second Anvil canary
+
+At implementation SHA `5c118e1`, three fresh Sol/high agents ran the identical
+no-skill task. All three ended at the exact target hash and preserved every
+unrelated byte, but none chose compact `edits`. Two used native reads and native
+file changes. One used `inspect_clojure` followed by the older direct `changes`
+route. Its guarded mutation verified, but direct-route formatting removed the
+EOF blank line. The two native routes also removed that blank line. Every agent
+detected and repaired it before completion.
+
+The resulting gates are 3/3 exact final bytes, 0/3 compact discovery, 0/3
+compact one-shot success, and 0/3 repair-free first mutation. This falsifies
+the hypothesis that normalizing redundant `expect`, improving the description,
+and fixing compact byte preservation are sufficient to make the overloaded
+tool self-revealing. It does not falsify compact-edit mechanics, because no
+canary invoked them.
+
+The next local-first candidate is a thin `edit_clojure` MCP discoverability
+adapter backed entirely by the existing compact compiler and transaction
+kernel. Compare that name against the current `apply_clojure_changes` entrance
+and a native control on the same task before another Anvil run. Full evidence
+and startup-memory synthesis are in
+`docs/observations/2026-08-24-anvil-round-two-and-startup-memory-synthesis.md`.
+
 ## Documentation and Release Checklist
 
 Update the MCP description, README example, installed skill copies, and
-interface study with the final admitted syntax and receipt. Document reusable
+interface study with the final admitted syntax and receipt. Decide the thin
+`edit_clojure` adapter through the local comparison above. Document reusable
 location handles only after their lifecycle and stale-source behavior are
 implemented.
 
