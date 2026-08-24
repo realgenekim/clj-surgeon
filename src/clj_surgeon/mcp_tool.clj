@@ -513,20 +513,21 @@
 (def edit-tool-description
   (str
     "Make exact Clojure subtree replacements inside named top-level forms. "
-    "Send workspace_root, edits, and optional verify; no preflight read is needed "
-    "when file, form, exact old subtree, and replacement are already known. "
-    "Each edit contains file, within {form}, from, to, and optional positive "
-    "matches (default 1). The exact old subtree and match count are compare-and-swap "
-    "guards: stale, missing, or ambiguous source refuses before write. The whole "
-    "batch is failure-atomic, preserves every unrelated byte, verifies read-back, "
+    "Send workspace_root and edits only; no preflight read is needed when file, "
+    "form, exact old subtree, and replacement are already known. Each edit contains "
+    "file, within {form}, from, to, and optional positive matches (default 1). "
+    "The exact old subtree and match count are compare-and-swap guards: stale, "
+    "missing, or ambiguous source refuses before write. The whole batch is "
+    "failure-atomic, preserves every unrelated byte, parses and verifies read-back, "
     "and returns a receipt plus undo. verification_complete=true is terminal. "
-    "Use inspect_clojure for discovery and apply_clojure_changes for other actions."))
+    "Use inspect_clojure for discovery and apply_clojure_changes when formatter, "
+    "linter, test, or other change actions are required."))
 
 (def edit-clojure-tool
   {:id :edit-clojure
    :name "edit_clojure"
    :description edit-tool-description
-   :schema mcp-schema/editor-gesture-schema
+   :schema mcp-schema/editor-tool-schema
    :output-schema clj-change-output-schema
    :structured? true
    :tool-fn #'handle-clj-change})

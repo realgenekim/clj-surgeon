@@ -34,7 +34,7 @@
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))
     (is (= false (get-in tools [2 :schema :additionalProperties])))
-    (is (= #{"workspace_root" "edits" "verify"}
+    (is (= #{"workspace_root" "edits"}
           (set (keys (get-in tools [2 :schema :properties])))))
     (is (= ["edits"] (get-in tools [2 :schema :required])))
     (is (str/includes? (:description (nth tools 2))

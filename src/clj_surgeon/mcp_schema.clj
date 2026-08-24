@@ -232,6 +232,9 @@
     "verify" verification-schema}
    :required ["edits"]})
 
+(def editor-tool-schema
+  (update editor-gesture-schema :properties dissoc "verify"))
+
 (def extraction-schema
   {:type "object"
    :additionalProperties false
