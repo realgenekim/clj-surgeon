@@ -150,6 +150,24 @@
                registered
                [inspect (assoc apply-tool :name "third")]))))))
 
+(deftest embedded-nrepl-starts-without-resolving-cider
+  (let [directory (temp-dir)
+        port-file (io/file directory ".nrepl-port")
+        resolve-var clojure.core/requiring-resolve
+        embedded
+        (with-redefs [clojure.core/requiring-resolve
+                      (fn [symbol]
+                        (if (= 'cider.nrepl/cider-nrepl-handler symbol)
+                          (throw (ex-info "CIDER must not load on startup"
+                                          {:symbol symbol}))
+                          (resolve-var symbol)))]
+          (server/start-embedded-nrepl! 0 (.getPath port-file)))]
+    (try
+      (is (some? embedded))
+      (finally
+        (when embedded (nrepl-server/stop-server embedded))
+        (delete-tree! directory)))))
+
 (deftest embedded-nrepl-redefines-the-live-handler-var
   (let [directory (temp-dir)
         port-file (io/file directory ".nrepl-port")

@@ -221,9 +221,7 @@
   "Start an nREPL inside the live MCP JVM. Failure never blocks the MCP server."
   [port port-file]
   (try
-    (let [handler @(requiring-resolve 'cider.nrepl/cider-nrepl-handler)
-          server (nrepl-server/start-server :port (or port 0)
-                                            :handler handler)]
+    (let [server (nrepl-server/start-server :port (or port 0))]
       (spit port-file (:port server))
       (warn "clj-surgeon MCP: embedded nREPL on" (:port server)
             "(" port-file ")")
