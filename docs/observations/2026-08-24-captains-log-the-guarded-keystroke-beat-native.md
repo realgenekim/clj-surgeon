@@ -160,6 +160,64 @@ callers paid an onboarding and fallback tax. A future CLI adapter that accepts
 the same compact edit object over stdin could remove most quoting ceremony
 while retaining zero idle memory.
 
+### What the current evidence does not prove
+
+The skeptical reading is stricter than the scoreboard:
+
+- the MCP and native routing instructions were not symmetric;
+- the MCP service was already hot, so its startup cost was outside task wall;
+- the cohorts ran sequentially rather than as paired, randomized trials;
+- the native sample was only three runs, and its failed run encountered a
+  deliberate byte-preservation trap;
+- the specialized MCP received file, owner, old form, new form, and count in a
+  contract designed for this task, while `apply_patch` remained a generic text
+  primitive;
+- there were no native-positive controls such as prose editing or creating a
+  new file.
+
+Therefore the result proves that the observed production MCP route beat the
+observed native route. It does not yet prove that `edit_clojure` beats an
+equally coached, perfectly composed `apply_patch` across Clojure edits. The
+historical neutral result—4/4 exact at 21.595 seconds for MCP versus 4/4 at
+26.749 seconds for native—is the cleanest existing evidence for that narrower
+claim, and it is promising rather than decisive.
+
+### The Anvil experiment that can settle it
+
+Freeze one commit and pre-register four arms before launching callers:
+
+1. **Native routed:** only native read and patch tools are visible, with one
+   neutral native routing sentence.
+2. **MCP routed:** only `edit_clojure` is visible, with an equivalent-length
+   neutral MCP routing sentence.
+3. **Production choice:** both routes and the normal installed skill are
+   visible. This measures adoption and total product behavior.
+4. **Guarded text CAS, if available:** a non-structural compare-and-swap tool
+   receives the same old/new/count information. This separates the value of
+   stale-source guards from the value of Clojure ownership.
+
+Pair callers by model, reasoning, account, fixture, and time block; randomize
+arm order across dev-a, dev-b, and dev-c. Score hidden target bytes, never agent
+claims. Infrastructure failures may be rerun; model and tool failures count.
+Measure exact first mutation, exact final bytes, complete-turn wall among exact
+runs, action count, reads, repairs, tokens, refusals, and CPU/RSS.
+
+Run both hot steady-state and cold/amortized views. A hot shared service is the
+real production architecture, but its startup cost must also be reported and
+amortized over one, two, and several edits. Start with 12 replicas per arm,
+then confirm a passing result with at least 30 per arm.
+
+Use a balanced portfolio: exact nested replacement, duplicate lookalikes,
+comment/EOF preservation, stale concurrent modification, six edits across two
+files, semantic multi-owner change, prose editing, and new-file creation. The
+last two are native-positive controls.
+
+Predeclare the win gate: MCP must be at least 95% exact-final and 90% exact on
+the first mutation, no less exact than native, and at least 20% or five seconds
+faster in paired median wall with a bootstrap interval excluding zero. Its
+advantage must survive amortized startup by a realistic second or third edit,
+without a material regression on native-positive controls.
+
 ## Direct tool wall versus complete-turn wall
 
 The structured `edit_clojure` cohort retains complete-turn wall but not a
@@ -210,7 +268,7 @@ for the four-row scoreboard.
 | Self-hosted | the tool edited and restored its own implementation |
 | Fresh caller succeeds | directly routed callers finished 3/3 in one action |
 | Realistic activation succeeds | installed-skill callers finished 10/10 exact |
-| Controlled efficiency gate | faster and fewer-action than CLI; more exact than native |
+| Controlled efficiency gate | faster and fewer-action than CLI; more exact than the observed native cohort; symmetric Anvil confirmation pending |
 
 The feature has crossed from “promising primitive” to “admitted product route.”
 
