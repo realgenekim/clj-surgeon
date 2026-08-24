@@ -100,9 +100,10 @@ updates, and verification gates. It is not a chronological coding diary.
   `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
   selectors, counts, hashes, basis IDs, or site IDs.
 - When the file, named top-level form, exact old subtree, and replacement are
-  already known, call `edit_clojure` directly with only `workspace_root`,
-  `edits`, and optional `verify`. Its per-edit old subtree and match count are
-  the stale-source guards; do not preflight-read or add aggregate counts.
+  already known, call `edit_clojure` directly with only `workspace_root` and
+  `edits`. Its per-edit old subtree and match count are the stale-source guards;
+  do not preflight-read or add `verify` or aggregate counts. Use
+  `apply_clojure_changes` when formatter, linter, or test gates are required.
 - If cclsp does not index a known owner, prepare it with project-relative
   `file` plus exact top-level `form`. This exact-source route does not claim a
   reference surface.

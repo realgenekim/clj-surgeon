@@ -207,10 +207,14 @@ and startup-memory synthesis are in
 
 ## Thin named adapter local proof
 
-The adapter adds one MCP contract and no executor. `edit_clojure` publishes
-only `workspace_root`, `edits`, and `verify`, points at the same
-`handle-clj-change` Var, reuses `editor-gesture-schema`, and returns the same
-structured output and receipts as `apply_clojure_changes {edits: ...}`.
+The adapter adds one MCP contract and no executor. `edit_clojure` now publishes
+only `workspace_root` and `edits`, points at the same `handle-clj-change` Var,
+and returns the same structured output and receipts as
+`apply_clojure_changes {edits: ...}`. The internal editor compiler still accepts
+`verify` for the general apply entrance, but the named keystroke-like tool does
+not expose it: parse, compare-and-swap, atomic write, read-back hash, receipt,
+and undo are mandatory; formatter, linter, and test gates belong to the general
+transaction tool.
 
 Outside-in development produced the intended red gate: 181 tests ran, with
 five failures and two errors confined to the new three-tool registry
@@ -232,9 +236,13 @@ adapter's own `:id` subtree, verified the write, and returned receipt hash
 A subsequent two-file `edit_clojure` batch renamed the two stale “exactly two
 tools” test Vars with one verified transaction and receipt hash `fbf0ecad`.
 
-This completes capability implementation, mechanism verification, and
-self-hosting. It does not yet prove fresh-caller selection or efficiency. The
-next gate remains a fresh local no-skill caller on the exact Anvil task.
+The first newly wired local caller exposed two benchmark/interface defects. The
+clean harness had hard-coded a two-tool allowlist, so `edit_clojure` was
+invisible. Once admitted, Sol/high selected it immediately, but optional
+`verify` invited two formatter-gated refusals on an intentionally byte-exact
+fixture before a third call without verification succeeded. Permanent harness
+and schema tests now require all three tools and forbid `verify` on the narrow
+editor entrance. A fresh cohort must establish the repair-free rate.
 
 ## Documentation and Release Checklist
 
@@ -246,8 +254,8 @@ implemented.
 
 ## Definition of Done
 
-A fresh local agent performs the exact nested edit in one
-`apply_clojure_changes` call, Surgeon changes only the intended subtree,
+A fresh local agent performs the exact nested edit in one `edit_clojure` call,
+Surgeon changes only the intended subtree,
 returns a verified undoable receipt, refuses the stale replay without writing,
 and repeats this 10/10 times. The same live MCP process self-hosts at least one
 follow-up implementation edit after hot reload. The three-seat Anvil learning

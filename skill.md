@@ -45,13 +45,13 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - For a prepared basis, copy `next_call`, fill every `null` with one keep,
   complete replacement, or whole-owner delete, and apply once.
-- For exact nested replacements, call `edit_clojure` with only `workspace_root`, `edits`, and optional
-  `verify`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional
+- For exact nested replacements, call `edit_clojure` with only `workspace_root` and
+  `edits`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional
   positive `matches` (default 1). Do not send `changes`, top-level `expect`,
-  `basis`, or `decisions`; Surgeon derives IDs and counts. If a caller redundantly
-  sends top-level `expect`, Surgeon ignores and reports that normalization while
-  retaining every exact per-edit guard. Compact edits preserve all bytes outside
-  the replaced subforms and do not run a whole-file formatter.
+  `verify`, `basis`, or `decisions`; Surgeon derives IDs and counts. Compact edits
+  preserve all bytes outside the replaced subforms and do not run a whole-file
+  formatter. Use `apply_clojure_changes` when formatter, linter, or test gates are
+  part of the requested transaction.
 - For known exact changes, send one direct `changes` request with `id`, `files`,
   `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
   `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.
