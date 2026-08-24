@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+script_root=$(cd "$(dirname "$0")/.." && pwd -P)
+repo_root=${MCP_PROFILE_REPO_ROOT:-$script_root}
+repo_root=$(cd "$repo_root" && pwd -P)
 
 if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
   echo "usage: $0 NAME XMX_MIB [RESULT_ROOT]" >&2
@@ -81,7 +83,8 @@ for _attempt in $(seq 1 100); do
   for candidate in $candidates; do
     grandchildren=$(pgrep -P "$candidate" 2>/dev/null || true)
     for process_pid in $candidate $grandchildren; do
-      if ps -p "$process_pid" -o comm= 2>/dev/null | rg -q '(^|/)java$'; then
+      if ps -p "$process_pid" -o command= 2>/dev/null \
+        | rg -q 'clojure\.main -m clojure\.run\.exec'; then
         jvm_pid=$process_pid
         break 3
       fi
@@ -124,6 +127,11 @@ if [ "$ready" != true ]; then
 fi
 
 ready_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+ready_pid=$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :pid println)' "$ready_file")
+if [ "$ready_pid" != "$jvm_pid" ]; then
+  echo "startup JVM changed from $jvm_pid to ready PID $ready_pid; refusing ambiguous profile" >&2
+  exit 1
+fi
 mcp_url=$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :url println)' "$ready_file")
 curl --fail --silent --show-error "${mcp_url%/mcp}/healthz" > "$out/health.txt"
 jcmd "$jvm_pid" GC.heap_info > "$out/heap-ready.txt"
