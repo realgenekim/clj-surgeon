@@ -65,6 +65,18 @@
             :expect {:changes 1 :edits 1 :files 1}}
            (contract/tool-params->transaction (:params validated))))))
 
+(deftest editor-gesture-tolerates-redundant-aggregate-expect
+  (let [validated
+        (contract/validate-tool-params
+          (assoc gesture-request "expect"
+                 {"changes" 0 "edits" 1 "files" 1}))]
+    (is (:ok validated) (pr-str validated))
+    (is (= {:ignored ["expect"]
+            :reason "editor counts are derived"}
+           (:input-normalization validated)))
+    (is (= {:changes 1 :edits 1 :files 1}
+           (get-in validated [:params :expect])))))
+
 (deftest editor-gesture-derives-aggregate-counts
   (let [request
         {"edits"

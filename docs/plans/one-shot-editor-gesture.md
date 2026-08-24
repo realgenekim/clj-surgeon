@@ -1,6 +1,6 @@
 # One-shot editor gesture
 
-**Status:** Local candidate implemented and self-hosted; admission gates in progress
+**Status:** Round-two candidate locally green and self-hosted; second Anvil canary pending
 **Motivating evidence:** The Sol/high exact-nested trial needed a locator
 fallback and then misplaced `expect` inside a prepared edit. The eventual
 semantic edit succeeded, but whole-file formatting changed an unrelated EOF
@@ -40,7 +40,9 @@ specialized surfaces.
 ## Public Contract
 
 - `edits` is a non-empty array and is mutually exclusive with `basis`,
-  `decisions`, `changes`, `expect`, and `extraction`.
+  `decisions`, `changes`, and `extraction`. A redundant top-level `expect` is
+  discarded before compilation and reported in `input_normalization`; exact
+  per-edit guards remain authoritative.
 - Each edit is a closed object containing `file`, `within`, `from`, `to`, and
   optional positive integer `matches`. `within` initially contains exactly one
   `form` string.
@@ -77,9 +79,9 @@ or expected subtree is stale.
 - The exact old subtree is the compare-and-swap guard.
 - All target files are confined before source mutation.
 - No partial write, receipt, or claimed verification survives a refusal.
-- Unrelated bytes remain unchanged. Formatter baseline drift must not leak
-  into a surgical-edit commit; until that proof exists, such a candidate
-  refuses rather than widening the diff.
+- Unrelated bytes remain unchanged. Compact surgical edits do not invoke the
+  whole-file formatter, so formatter baseline drift cannot widen their diff;
+  configured verification checks still run.
 - Existing `changes`, retained-basis, and extraction requests remain behaviorally
   compatible.
 
@@ -122,7 +124,7 @@ Boundary matrix:
 2. [done] Pass focused pure and boundary tests through the local persistent
    nREPL: 48 tests, 498 assertions, zero failures or errors.
 3. [done] Pass the repository MCP suite in a disposable bounded JVM:
-   `-Xms32m -Xmx512m` completed 179 tests and 1,467 assertions with zero
+   `-Xms32m -Xmx512m` completed 181 tests and 1,476 assertions with zero
    failures or errors. Focused lint also passed through live transactions.
 4. [done] Record the live MCP PID and CWD, hot-reload in place, and prove the PID did
    not change.
@@ -130,7 +132,9 @@ Boundary matrix:
    exact bytes, stale-target refusal, tests, receipt, and undo.
 6. [pending] Achieve 10/10 fresh local clean-agent one-call exact successes and bind the
    evidence to the implementation hash.
-7. [pending] Only then expose that admitted hash to Anvil experiments.
+7. [done by explicit authorization] Run one three-seat Anvil canary before the
+   formal 10/10 local gate to learn whether fresh Sol/high agents discover and
+   one-shot the interface.
 
 ## Local self-host evidence
 
@@ -148,6 +152,34 @@ Replaying the same call refused stale source without writing. The repaired
 single-match and new exact-two-match boundary tests both prove commit, stale
 replay, inverse receipt, and undo.
 
+The round-two repair was also dogfooded on live MCP PID 75495 with CWD
+`/Users/genekim/src.local/clj-surgeon`. A fresh raw MCP session submitted a
+compact edit with a deliberately contradictory aggregate `expect`. Surgeon
+reported that normalization, changed one exact symbol inside
+`tool-description`, verified and receipted it, refused the stale replay, and
+then used the same route to restore the idiomatic spelling. The live transaction
+did not restart the server. Its fast profile currently has no hot nREPL entry,
+so automatic namespace refresh remains a separate paved-road gap; the
+sanctioned `make mcp-reload` path resynchronizes handlers and `tools/list`
+without a process restart.
+
+## First Anvil canary
+
+At implementation SHA `14beaf5`, three fresh Sol/high agents ran the same exact
+nested-edit task without a skill hint. One of three independently discovered
+the compact `edits` route, but its first two attempts added redundant top-level
+`expect`, which the then-strict contract rejected. Its eventual successful edit
+and one direct-transaction run both allowed whole-file formatting to remove an
+unrelated EOF blank line; one agent repaired that drift manually. The native
+control was exact. The resulting gates were therefore 1/3 discovery, 0/3
+compact one-shot success, and 0/3 byte-exact compact success without repair.
+
+Round two directly targets those observations: tolerate and report redundant
+aggregate `expect`, front-load the minimal request shape, and preserve every
+unrelated byte by skipping whole-file formatting for compact edits. The next
+three-seat canary must use the same task and no skill hint so its result is
+comparable.
+
 ## Documentation and Release Checklist
 
 Update the MCP description, README example, installed skill copies, and
@@ -161,5 +193,5 @@ A fresh local agent performs the exact nested edit in one
 `apply_clojure_changes` call, Surgeon changes only the intended subtree,
 returns a verified undoable receipt, refuses the stale replay without writing,
 and repeats this 10/10 times. The same live MCP process self-hosts at least one
-follow-up implementation edit after hot reload. No new-interface Anvil trial
-runs before a hash-bound local admission receipt exists.
+follow-up implementation edit after hot reload. The three-seat Anvil learning
+canary is evidence, not admission; the formal 10/10 local gate remains open.

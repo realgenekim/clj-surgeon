@@ -45,6 +45,13 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - For a prepared basis, copy `next_call`, fill every `null` with one keep,
   complete replacement, or whole-owner delete, and apply once.
+- For exact nested replacements, send only `workspace_root`, `edits`, and optional
+  `verify`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional
+  positive `matches` (default 1). Do not send `changes`, top-level `expect`,
+  `basis`, or `decisions`; Surgeon derives IDs and counts. If a caller redundantly
+  sends top-level `expect`, Surgeon ignores and reports that normalization while
+  retaining every exact per-edit guard. Compact edits preserve all bytes outside
+  the replaced subforms and do not run a whole-file formatter.
 - For known exact changes, send one direct `changes` request with `id`, `files`,
   `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
   `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.
@@ -61,7 +68,7 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 - Sibling insertion preserves the existing whitespace separator. A gap with a
   comment or detached source refuses; replace a larger exact span when comment
   placement is part of the decision.
-- Formatting and hot laws run inside `verify=fast|full`; hot failure rolls back.
+- Applicable formatting and hot laws run inside `verify=fast|full`; hot failure rolls back.
   `verification_complete=true` is terminal. On cold pending, copy `next_call` once; its status keeps the same undo receipt. Never replay or poll.
 
 ## Fall back deliberately

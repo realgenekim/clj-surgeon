@@ -97,6 +97,13 @@
   [m key]
   (or (contains? m key) (contains? m (keyword key))))
 
+(defn- without-field
+  [m key]
+  (into (empty m)
+        (remove (fn [[candidate _]]
+                  (= key (field-name candidate))))
+        m))
+
 (defn- refuse!
   [reason path message & [data]]
   (throw
@@ -456,46 +463,52 @@
 (defn- editor-gestures->direct-params
   [params]
   (try
-    (validate-fields! params editor-top-fields required-editor-top-fields [])
-    (let [edits (nonempty-array! (field params "edits") ["edits"])
-          changes
-          (mapv
-            (fn [edit index]
-              (let [path ["edits" index]
-                    _ (validate-fields! edit editor-fields
-                                        required-editor-fields path)
-                    within (field edit "within")
-                    _ (validate-fields! within editor-within-fields
-                                        required-editor-within-fields
-                                        (conj path "within"))
-                    matches (if (present? edit "matches")
-                              (positive-integer! (field edit "matches")
-                                                 (conj path "matches"))
-                              1)]
-                {"id" (str "edit-" (inc index))
-                 "files" [(source-path! (field edit "file")
-                                        (conj path "file"))]
-                 "forms" [(nonblank-string! (field within "form")
-                                            (conj path "within" "form"))]
-                 "find" (nonblank-string! (field edit "from")
-                                          (conj path "from"))
-                 "replace" (nonblank-string! (field edit "to")
-                                             (conj path "to"))
-                 "expect" {"matches" matches
-                           "each_form" matches
-                           "each_file" matches}}))
-            edits (range))
-          direct
-          (cond->
-            {"changes" changes
-             "expect" {"changes" (count changes)
-                       "edits" (reduce + (map #(get-in % ["expect" "matches"])
-                                              changes))
-                       "files" (count (set (mapcat #(field % "files")
-                                                   changes)))}}
-            (present? params "verify")
-            (assoc "verify" (field params "verify")))]
-      {:ok true :params direct})
+    (let [redundant-expect? (present? params "expect")
+          params (without-field params "expect")]
+      (validate-fields! params editor-top-fields required-editor-top-fields [])
+      (let [edits (nonempty-array! (field params "edits") ["edits"])
+            changes
+            (mapv
+              (fn [edit index]
+                (let [path ["edits" index]
+                      _ (validate-fields! edit editor-fields
+                                          required-editor-fields path)
+                      within (field edit "within")
+                      _ (validate-fields! within editor-within-fields
+                                          required-editor-within-fields
+                                          (conj path "within"))
+                      matches (if (present? edit "matches")
+                                (positive-integer! (field edit "matches")
+                                                   (conj path "matches"))
+                                1)]
+                  {"id" (str "edit-" (inc index))
+                   "files" [(source-path! (field edit "file")
+                                          (conj path "file"))]
+                   "forms" [(nonblank-string! (field within "form")
+                                              (conj path "within" "form"))]
+                   "find" (nonblank-string! (field edit "from")
+                                            (conj path "from"))
+                   "replace" (nonblank-string! (field edit "to")
+                                               (conj path "to"))
+                   "expect" {"matches" matches
+                             "each_form" matches
+                             "each_file" matches}}))
+              edits (range))
+            direct
+            (cond->
+              {"changes" changes
+               "expect" {"changes" (count changes)
+                         "edits" (reduce + (map #(get-in % ["expect" "matches"])
+                                                changes))
+                         "files" (count (set (mapcat #(field % "files")
+                                                     changes)))}}
+              (present? params "verify")
+              (assoc "verify" (field params "verify")))]
+        (cond-> {:ok true :params direct}
+          redundant-expect?
+          (assoc :input-normalization
+                 {:ignored ["expect"]
+                  :reason "editor counts are derived"}))))
     (catch clojure.lang.ExceptionInfo error
       (ex-data error))))
 
@@ -512,7 +525,9 @@
       (present? params "edits")
       (let [compiled (editor-gestures->direct-params params)]
         (if (:ok compiled)
-          (validate-direct-tool-params (:params compiled))
+          (cond-> (validate-direct-tool-params (:params compiled))
+            (:input-normalization compiled)
+            (assoc :input-normalization (:input-normalization compiled)))
           compiled))
 
       :else

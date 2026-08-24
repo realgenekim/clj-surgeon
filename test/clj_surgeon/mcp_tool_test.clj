@@ -134,6 +134,7 @@
            "within" {"form" "route-event"}
            "from" ":done"
            "to" ":complete"}]
+         "expect" {"changes" 0 "edits" 1 "files" 1}
          "verify" "fast"}]
     (try
       (.mkdirs (.getParentFile source-file))
@@ -150,6 +151,9 @@
         (is (= 1 (:changes result)))
         (is (= 1 (:edits result)))
         (is (= 1 (:files result)))
+        (is (= {:ignored ["expect"]
+                :reason "editor counts are derived"}
+               (:input_normalization result)))
         (is (= after (slurp source-file))
             "every unrelated byte, including the extra EOF newline, survives")
         (let [stale (mcp-tool/execute-request!
@@ -167,6 +171,51 @@
                      {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (is (= before (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest editor-gesture-skips-whole-file-formatting
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        formatter-calls (atom 0)
+        before (str "(ns demo)\n\n"
+                    "(defn status [] :old)\n\n")
+        after (str "(ns demo)\n\n"
+                   "(defn status [] :new)\n\n")
+        request
+        {"edits"
+         [{"file" "src/demo.clj"
+           "within" {"form" "status"}
+           "from" ":old"
+           "to" ":new"}]}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 (swap! formatter-calls inc)
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 1
+                  :elapsed_ms 0.1
+                  :future-sources
+                  (update-vals future-sources
+                               #(str/replace % #"\n\n$" "\n"))})}
+              request)]
+        (is (:ok result) (pr-str result))
+        (is (zero? @formatter-calls)
+            "a surgical gesture must not normalize unrelated file bytes")
+        (is (= after (slurp source-file)))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
 

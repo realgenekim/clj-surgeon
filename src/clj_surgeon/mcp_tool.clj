@@ -23,14 +23,18 @@
 
 (def tool-description
   (str
-    "Apply one failure-atomic Clojure transaction. If inspect_clojure returned "
+    "Apply one failure-atomic Clojure transaction. For exact nested replacements, "
+    "send only workspace_root, edits, and optional verify. Each edits item contains "
+    "file, within {form}, from, to, and optional positive matches (default 1). "
+    "Do not send changes, expect, basis, or decisions with edits; Surgeon derives "
+    "IDs and counts. A redundant top-level expect is ignored and reported, while "
+    "every exact per-edit guard remains authoritative. If inspect_clojure returned "
     "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
     "fill every decision and submit once. To move named owners into one new "
     "namespace, use extraction once; include exact caller_changes or explicitly "
     "ignored_caller_files, and exact forms, caller_edits, and files counts. "
     "Direct extraction reports structural caller candidates, not semantic completeness. "
-    "For exact nested replacement, use edits with file, within {form}, from, and to. Omit matches for one occurrence, or set matches to the exact known count; Surgeon derives all transaction counts. Otherwise, use changes for different edits or several files. "
-    "exact changes or several files. Each changes item contains id, files, "
+    "Otherwise, use changes for different actions or owner-level edits. Each changes item contains id, files, "
     "expect, exactly one of forms or owner, and exactly one action: replace, delete, "
     "insert_before, insert_after, rename_binding, or assoc_entry. Exact replacement, "
     "insertion, and assoc_entry "
@@ -300,7 +304,9 @@
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params]
-  (let [config (if-let [profiles-fn (:verification-profiles-fn config)]
+  (let [normalized-params (json/parse-string (json/generate-string params) true)
+        editor-gesture? (contains? normalized-params :edits)
+        config (if-let [profiles-fn (:verification-profiles-fn config)]
                  (assoc config :verification-profiles (profiles-fn))
                  config)
         config (cond
@@ -313,29 +319,29 @@
                  (assoc config :formatter formatter/default-command)
 
                  :else config)
-        config (if-let [command (:formatter config)]
-                 (assoc config
-                        :verification-profiles
-                        (formatter/verification-profiles-after-format
-                          (:verification-profiles config) command)
-                        :prepare-compiled!
-                        (fn [project-root compiled]
-                          (let [format! (or (:format-candidates! config)
-                                            formatter/format-candidates!)
-                                formatted (format! project-root command
-                                                   (:future-sources compiled))]
-                            (if (:ok formatted)
-                              (let [prepared (transaction/with-future-sources
-                                               compiled
-                                               (:future-sources formatted))]
-                                (if (:ok prepared)
-                                  (assoc prepared :format
-                                         (dissoc formatted
-                                                 :future-sources :ok))
-                                  prepared))
-                              formatted))))
+        config (if (and (:formatter config) (not editor-gesture?))
+                 (let [command (:formatter config)]
+                   (assoc config
+                          :verification-profiles
+                          (formatter/verification-profiles-after-format
+                            (:verification-profiles config) command)
+                          :prepare-compiled!
+                          (fn [project-root compiled]
+                            (let [format! (or (:format-candidates! config)
+                                              formatter/format-candidates!)
+                                  formatted (format! project-root command
+                                                     (:future-sources compiled))]
+                              (if (:ok formatted)
+                                (let [prepared (transaction/with-future-sources
+                                                 compiled
+                                                 (:future-sources formatted))]
+                                  (if (:ok prepared)
+                                    (assoc prepared :format
+                                           (dissoc formatted
+                                                   :future-sources :ok))
+                                    prepared))
+                                formatted)))))
                  config)
-        normalized-params (json/parse-string (json/generate-string params) true)
         basis? (string? (:basis normalized-params))
         extraction? (map? (:extraction normalized-params))
         total-start (System/nanoTime)
@@ -385,8 +391,12 @@
                               (execute-explicit-change!
                                 config root resolved receipt
                                 (get-in validated [:params :verify]))))
-                    classified (contract/classify-kernel-result
-                                 (.toString root) result)]
+                    classified (cond->
+                                 (contract/classify-kernel-result
+                                   (.toString root) result)
+                                 (:input-normalization validated)
+                                 (assoc :input_normalization
+                                        (:input-normalization validated)))]
                 (when-not (:ok classified)
                   (delete-empty-dir! directory (not existed?)))
                 (record-result! telemetry params classified total-start
