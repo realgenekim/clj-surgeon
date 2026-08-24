@@ -97,7 +97,7 @@ help:
 install: install-cli install-codex-skill install-claude-skill
 
 mcp-test:
-	clojure -M:clj-surgeon/mcp-test
+	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test
 	@$(MAKE) --no-print-directory cclsp-start-self-test
 
