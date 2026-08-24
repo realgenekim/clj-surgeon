@@ -1,0 +1,13 @@
+cwd=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823
+mem_available_before_mib=24722
+started_utc=2026-08-24T01:35:40Z
+command=clojure -J-Xms64m -J-Xmx2048m -J-XX:NativeMemoryTracking=summary -J-XX:+HeapDumpOnOutOfMemoryError -J-XX:HeapDumpPath=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m -J-XX:StartFlightRecording=filename=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m/startup.jfr\,settings=profile\,dumponexit=true\,maxsize=256m -J-Xlog:gc\*\,safepoint=debug:file=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m/gc-safepoint.log:time\,uptime\,level\,tags:filecount=1 -X:clj-surgeon/mcp :project-dir \"/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823\" :port 17888 :telemetry :full :telemetry-dir \"/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m/telemetry\" :run-id \"startup-memory-xmx-2048m\" :nrepl-port :none :ready-file \"/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m/ready.edn\" :log-file \"/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-2048m/application.log\"
+runner_pid=3776505
+jvm_pid=3776508
+ready_elapsed_seconds=7
+finished_utc=2026-08-24T01:35:52Z
+wall_seconds=12
+exit_code=143
+terminal_reason=ready_then_sampled
+ready=true
+heap_dump=false

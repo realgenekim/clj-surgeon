@@ -1,0 +1,33 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+                                                                              Native Memory Committed
+
+Memory Type                                                                                                                        First Observed   Average Last Observed   Maximum
+---------------------------------------------------------------------------------------------------------------------------------- -------------- --------- ------------- ---------
+Java Heap                                                                                                                                 80.0 MB  172.6 MB      208.0 MB  208.0 MB
+Arena Chunk                                                                                                                               14.9 MB   47.9 MB        2.3 kB   81.4 MB
+Compiler                                                                                                                                  72.3 MB   14.8 MB      323.7 kB   72.3 MB
+Metaspace                                                                                                                                 15.9 MB   50.4 MB       68.1 MB   68.1 MB
+GC                                                                                                                                        61.3 MB   63.5 MB       64.3 MB   64.3 MB
+Class                                                                                                                                      4.6 MB   25.3 MB       34.7 MB   34.7 MB
+Tracing                                                                                                                                   16.7 MB   26.7 MB       30.8 MB   30.8 MB
+Code                                                                                                                                      17.3 MB   25.5 MB       27.7 MB   27.7 MB
+Shared class space                                                                                                                        12.6 MB   12.6 MB       12.6 MB   12.6 MB
+Symbol                                                                                                                                     3.3 MB    8.1 MB       11.4 MB   11.4 MB
+Native Memory Tracking                                                                                                                     1.1 MB    4.6 MB        6.2 MB    6.2 MB
+Module                                                                                                                                   436.7 kB    4.3 MB        5.9 MB    5.9 MB
+Thread Stack                                                                                                                             336.0 kB    1.3 MB        2.6 MB    2.6 MB
+Synchronization                                                                                                                           86.4 kB  898.0 kB        1.2 MB    1.2 MB
+Internal                                                                                                                                 530.3 kB  831.0 kB      963.2 kB  963.2 kB
+Thread                                                                                                                                   106.4 kB  124.9 kB      142.3 kB  142.3 kB
+Other                                                                                                                                     34.0 kB   77.6 kB      130.0 kB  130.0 kB
+GCCardSet                                                                                                                                 18.4 kB   59.6 kB       71.1 kB   73.1 kB
+Serviceability                                                                                                                            17.5 kB   17.5 kB       17.5 kB   17.5 kB
+Safepoint                                                                                                                                  8.0 kB    8.0 kB        8.0 kB    8.0 kB
+Object Monitors                                                                                                                            1.8 kB    2.5 kB        2.6 kB    2.6 kB
+String Deduplication                                                                                                                    680 bytes 680 bytes     680 bytes 680 bytes
+Arguments                                                                                                                               152 bytes 152 bytes     152 bytes 152 bytes
+Statistics                                                                                                                              128 bytes 128 bytes     128 bytes 128 bytes
+Logging                                                                                                                                  32 bytes  32 bytes      32 bytes  32 bytes
+Test                                                                                                                                      0 bytes   0 bytes       0 bytes   0 bytes
+JVMCI                                                                                                                                     0 bytes   0 bytes       0 bytes   0 bytes

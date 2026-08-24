@@ -1,0 +1,14 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+Heap Configuration
+------------------
+
+Initial Heap Size: 64.0 MB
+
+Minimum Heap Size: 64.0 MB
+
+Maximum Heap Size: 2.0 GB
+
+If Compressed Oops Are Used: true
+
+Compressed Oops Mode: 32-bit

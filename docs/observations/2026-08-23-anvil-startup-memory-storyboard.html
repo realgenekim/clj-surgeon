@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anvil startup-memory storyboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f4f1e8;
+      --muted: #a7b0b4;
+      --panel: rgba(18, 25, 29, .93);
+      --line: #34434a;
+      --cyan: #67e8f9;
+      --green: #86efac;
+      --amber: #fbbf24;
+      --red: #fb7185;
+      --violet: #c4b5fd;
+      --live-width: 4%;
+      --garbage-width: 4%;
+      --headroom-width: 92%;
+      --native-width: 60%;
+      --rss-width: 70%;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(103, 232, 249, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(103, 232, 249, .035) 1px, transparent 1px),
+        radial-gradient(circle at 12% 0%, #16343c 0, #0b1115 35%, #070a0d 100%);
+      background-size: 28px 28px, 28px 28px, auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 80px; }
+    header { display: grid; grid-template-columns: 1.4fr .8fr; gap: 28px; align-items: end; margin-bottom: 28px; }
+    .eyebrow { color: var(--cyan); letter-spacing: .12em; text-transform: uppercase; font-size: .78rem; }
+    h1 { font: 700 clamp(2.2rem, 6vw, 5.4rem)/.95 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.06em; margin: 10px 0 20px; max-width: 850px; }
+    h2, h3 { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: -.025em; }
+    h2 { font-size: clamp(1.35rem, 3vw, 2rem); margin: 0 0 16px; }
+    h3 { font-size: 1rem; margin: 0 0 8px; }
+    p { margin: 0 0 12px; }
+    .lede { color: #d6dde0; max-width: 72ch; font-size: 1.04rem; }
+    .truth-key { border-left: 2px solid var(--line); padding-left: 20px; color: var(--muted); font-size: .85rem; }
+    .chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; margin: 3px 4px 3px 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+    .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .measured { color: var(--green); }
+    .hypothesis { color: var(--amber); }
+    .reported { color: var(--violet); }
+    .panel { background: var(--panel); border: 1px solid var(--line); box-shadow: 0 18px 60px rgba(0,0,0,.25); }
+    .selector { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; margin-bottom: 16px; }
+    button { font: inherit; color: var(--muted); background: #0b1115; border: 1px solid var(--line); border-radius: 3px; padding: 10px 14px; cursor: pointer; }
+    button:hover, button:focus-visible { color: var(--ink); border-color: var(--cyan); outline: none; }
+    button[aria-pressed="true"] { color: #031014; background: var(--cyan); border-color: var(--cyan); font-weight: 700; }
+    .dashboard { padding: clamp(18px, 4vw, 34px); }
+    .tier-head { display: flex; justify-content: space-between; gap: 20px; align-items: start; border-bottom: 1px solid var(--line); padding-bottom: 20px; }
+    .tier-head .result { text-align: right; max-width: 420px; }
+    .tier-head .result strong { display: block; font: 700 1.25rem ui-sans-serif, system-ui, sans-serif; }
+    .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); margin: 22px 0; border: 1px solid var(--line); }
+    .metric { background: #0e1519; padding: 14px; min-height: 96px; }
+    .metric .label { color: var(--muted); text-transform: uppercase; font-size: .67rem; letter-spacing: .08em; }
+    .metric .value { display: block; font: 700 1.32rem ui-sans-serif, system-ui, sans-serif; margin-top: 9px; }
+    .metric .unit { color: var(--muted); font-size: .72rem; }
+    .heap-stage { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .6fr); gap: 28px; }
+    .memory-map { padding: 20px; background: #0a1013; border: 1px solid var(--line); }
+    .bar-label { display: flex; justify-content: space-between; color: var(--muted); font-size: .78rem; margin: 16px 0 7px; }
+    .heap-bar { height: 58px; display: flex; border: 1px solid #68808a; overflow: hidden; position: relative; }
+    .heap-bar::after { content: "Xmx"; position: absolute; right: 8px; top: 5px; color: #dce4e6; font-size: .7rem; }
+    .segment { min-width: 2px; transition: width .55s cubic-bezier(.2,.75,.2,1); display: grid; place-items: center; overflow: hidden; white-space: nowrap; font-size: .7rem; }
+    .live { width: var(--live-width); background: repeating-linear-gradient(135deg, #22c55e, #22c55e 8px, #179447 8px, #179447 16px); color: #041108; }
+    .garbage { width: var(--garbage-width); background: repeating-linear-gradient(135deg, #fbbf24, #fbbf24 8px, #d69211 8px, #d69211 16px); color: #171003; }
+    .headroom { width: var(--headroom-width); background: #111b20; color: #6f7d83; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .72rem; color: var(--muted); margin-top: 10px; }
+    .legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; }
+    .outside-bar { height: 18px; background: #111b20; border: 1px solid var(--line); overflow: hidden; }
+    .outside-fill { height: 100%; transition: width .55s ease; }
+    .native-fill { width: var(--native-width); background: var(--violet); }
+    .rss-fill { width: var(--rss-width); background: var(--cyan); }
+    .callout { padding: 20px; border-left: 3px solid var(--amber); background: rgba(251, 191, 36, .06); }
+    .equation { font-size: clamp(.85rem, 2vw, 1rem); padding: 14px 0; color: var(--amber); }
+    .timeline-panel { margin-top: 22px; padding: 22px; }
+    .timeline-controls { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 18px; }
+    .timeline { display: grid; grid-template-columns: repeat(6, 1fr); position: relative; border-top: 1px solid var(--line); }
+    .phase { min-height: 118px; padding: 20px 10px 10px; border-right: 1px solid var(--line); color: #718087; transition: background .25s, color .25s; }
+    .phase:last-child { border-right: 0; }
+    .phase.active { color: var(--ink); background: rgba(103,232,249,.07); }
+    .phase .tick { display: block; color: var(--cyan); font-size: .7rem; margin-bottom: 7px; }
+    .phase strong { display: block; font: 700 .85rem ui-sans-serif, system-ui, sans-serif; }
+    .pulse { position: absolute; top: -5px; left: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 6px rgba(103,232,249,.15), 0 0 22px var(--cyan); transform: translateX(-50%); transition: left .45s ease; }
+    .tracks { margin-top: 18px; display: grid; gap: 8px; }
+    .track { display: grid; grid-template-columns: 150px 1fr 74px; gap: 10px; align-items: center; font-size: .75rem; color: var(--muted); }
+    .spark { height: 10px; background: #111b20; overflow: hidden; }
+    .spark > i { display: block; height: 100%; width: 0; transition: width .45s ease; }
+    .track-value { text-align: right; color: var(--ink); }
+    .allocation i { background: var(--red); }
+    .used i { background: var(--green); }
+    .awaiting i { background: var(--amber); }
+    .native i { background: var(--violet); }
+    .resident i { background: var(--cyan); }
+    .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+    .note { padding: 20px; }
+    .note .number { color: var(--cyan); font-size: .75rem; }
+    .note p { color: var(--muted); font-size: .85rem; }
+    .comparison { margin-top: 16px; padding: 20px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .79rem; }
+    th, td { padding: 11px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 400; text-transform: uppercase; letter-spacing: .07em; font-size: .68rem; }
+    footer { color: var(--muted); font-size: .78rem; margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
+    code { color: var(--cyan); }
+    @media (max-width: 900px) {
+      header, .heap-stage { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(3, 1fr); }
+      .notes-grid { grid-template-columns: 1fr; }
+      .timeline { overflow-x: auto; grid-template-columns: repeat(6, minmax(150px, 1fr)); }
+      .track { grid-template-columns: 105px 1fr 65px; }
+    }
+    @media (max-width: 560px) {
+      main { width: min(100% - 18px, 1180px); padding-top: 24px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .tier-head { display: block; }
+      .tier-head .result { text-align: left; margin-top: 12px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+    @media print { body { background: white; color: #111; } .panel, .metric, .memory-map { background: white; box-shadow: none; } button { display: none; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">Anvil / clj-surgeon / startup memory</div>
+      <h1>The quiet server can survive a violent birth.</h1>
+      <p class="lede">Startup creates objects faster than the settled service needs them. The live set, garbage waiting for collection, collector reserve, and native memory overlap. A later low RSS snapshot cannot prove the earlier peak was safe.</p>
+    </div>
+    <div class="truth-key">
+      <p><span class="chip measured">Measured locally</span> Linux, OpenJDK 21.0.11, nREPL off.</p>
+      <p><span class="chip reported">Gene reported</span> A separate host/profile observation.</p>
+      <p><span class="chip hypothesis">Hypothesis</span> A scenario to test, never a measured value.</p>
+    </div>
+  </header>
+
+  <nav class="selector panel" aria-label="Heap tier comparison">
+    <button data-tier="two" aria-pressed="true">2 GiB</button>
+    <button data-tier="onefive" aria-pressed="false">1.5 GiB</button>
+    <button data-tier="one" aria-pressed="false">1 GiB</button>
+    <button data-tier="half" aria-pressed="false">optimized 512 MiB</button>
+  </nav>
+
+  <section class="dashboard panel" aria-live="polite">
+    <div class="tier-head">
+      <div>
+        <span id="truth-chip" class="chip measured">Measured locally</span>
+        <h2 id="tier-title">2 GiB cap</h2>
+        <p id="tier-subtitle" class="lede">Real minimal HTTP startup; embedded nREPL disabled.</p>
+      </div>
+      <div class="result">
+        <strong id="result-title">Reached readiness in 7 seconds</strong>
+        <span id="result-note" class="lede">Intentional TERM five seconds later; no OOM and no heap dump.</span>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><span class="label">Xmx</span><span id="m-cap" class="value">2,048</span><span class="unit">MiB heap ceiling</span></div>
+      <div class="metric"><span class="label">Peak RSS</span><span id="m-rss" class="value">581</span><span class="unit">MiB, measured</span></div>
+      <div class="metric"><span class="label">Heap peak</span><span id="m-peak" class="value">154.6</span><span class="unit">MiB before GC</span></div>
+      <div class="metric"><span class="label">After GC</span><span id="m-after" class="value">39–48</span><span class="unit">MiB during late startup</span></div>
+      <div class="metric"><span class="label">NMT committed</span><span id="m-native" class="value">476</span><span class="unit">MiB total</span></div>
+      <div class="metric"><span class="label">Collections</span><span id="m-gc" class="value">42</span><span class="unit">39 young + 3 old</span></div>
+    </div>
+
+    <div class="heap-stage">
+      <div class="memory-map">
+        <h3>Heap at the most informative late-startup collection</h3>
+        <p id="bar-caption" class="lede">154.6 MiB before GC; 39.4 MiB afterward. Roughly 115 MiB was reclaimable backlog.</p>
+        <div class="bar-label"><span>0</span><span id="cap-label">2,048 MiB maximum Java heap</span></div>
+        <div class="heap-bar" role="img" aria-label="Heap split into after-GC occupancy, garbage awaiting collection, and headroom">
+          <div class="segment live"><span>after GC</span></div>
+          <div class="segment garbage"><span>garbage</span></div>
+          <div class="segment headroom"><span>headroom</span></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--green)"></i>after-GC occupancy</span>
+          <span><i style="background:var(--amber)"></i>garbage awaiting GC</span>
+          <span><i style="background:#1a272d"></i>heap headroom</span>
+        </div>
+        <div class="bar-label"><span>Committed native + heap (NMT)</span><span id="native-label">476 MiB</span></div>
+        <div class="outside-bar"><div class="outside-fill native-fill"></div></div>
+        <div class="bar-label"><span>Resident set</span><span id="rss-label">581 MiB peak</span></div>
+        <div class="outside-bar"><div class="outside-fill rss-fill"></div></div>
+        <p style="margin-top:12px;color:var(--muted);font-size:.76rem">Native memory and RSS are deliberately drawn outside the Xmx bar. Xmx is not a process-memory cap.</p>
+      </div>
+      <aside class="callout">
+        <h3>OOM boundary</h3>
+        <div class="equation">live + waiting garbage + collector room &gt; usable heap</div>
+        <p id="oom-story">This local profile stayed far below 2 GiB. Gene's failure needs a profile-matched reproduction before the cap can be blamed.</p>
+        <p style="color:var(--muted);font-size:.78rem">A successful larger heap gives GC time to remove the yellow backlog. The later green live set can be small even though the earlier sum crossed a smaller boundary.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="timeline-panel panel">
+    <div class="timeline-controls">
+      <div>
+        <h2>Process-birth storyboard</h2>
+        <p class="lede">Phase positions are hypotheses until code markers exist. Birth, GC events, and readiness are measured.</p>
+      </div>
+      <button id="play" aria-pressed="false">▶ play startup</button>
+    </div>
+    <div class="timeline">
+      <div class="pulse" aria-hidden="true"></div>
+      <div class="phase active"><span class="tick">0</span><strong>VM birth</strong><small>JFR + NMT start</small></div>
+      <div class="phase"><span class="tick">1</span><strong>Config</strong><small>project + profiles</small></div>
+      <div class="phase"><span class="tick">2</span><strong>Requires</strong><small>classes + compiler</small></div>
+      <div class="phase"><span class="tick">3</span><strong>Tools</strong><small>registries + schemas</small></div>
+      <div class="phase"><span class="tick">4</span><strong>Transport</strong><small>MCP + Jetty</small></div>
+      <div class="phase"><span class="tick">5</span><strong>Ready</strong><small>bind + ready file</small></div>
+    </div>
+    <div class="tracks">
+      <div class="track allocation"><span>allocation rate</span><div class="spark"><i></i></div><span class="track-value">low</span></div>
+      <div class="track used"><span>after-GC heap</span><div class="spark"><i></i></div><span class="track-value">5 MiB</span></div>
+      <div class="track awaiting"><span>waiting garbage</span><div class="spark"><i></i></div><span class="track-value">0 MiB</span></div>
+      <div class="track native"><span>NMT committed</span><div class="spark"><i></i></div><span class="track-value">80 MiB</span></div>
+      <div class="track resident"><span>RSS</span><div class="spark"><i></i></div><span class="track-value">42 MiB</span></div>
+    </div>
+    <p style="margin-top:12px;color:var(--muted);font-size:.72rem"><strong>H</strong> = hypothesis. <strong>*</strong> = illustrative interpolation between measured events; exact phase attribution awaits code markers.</p>
+  </section>
+
+  <section class="notes-grid">
+    <article class="note panel"><span class="number">01 / BURST</span><h3>Forty-plus collections before readiness</h3><p>The 2 GiB canary recorded 42 collections; the 1 GiB canary recorded 44. Reflection, arrays, Clojure maps/sequences, compiler analysis, ASM structures, exceptions, and locks led sampled allocation sites.</p></article>
+    <article class="note panel"><span class="number">02 / BACKLOG</span><h3>A histogram is a moment, not “the live set”</h3><p>The probe uses <code>GC.class_histogram -all</code> to avoid requesting a full GC. The 2 GiB snapshot happened before another needed collection and therefore includes much more not-yet-collected material than the 1 GiB snapshot.</p></article>
+    <article class="note panel"><span class="number">03 / OUTSIDE</span><h3>RSS barely changed when Xmx halved</h3><p>Peak RSS stayed near 580 MiB. Metaspace, class space, code cache, compiler arenas, GC structures, JFR, symbols, modules, stacks, and mapped files sit outside the used-heap number.</p></article>
+  </section>
+
+  <section class="comparison panel">
+    <h2>Truth table</h2>
+    <table>
+      <thead><tr><th>Tier</th><th>Evidence status</th><th>Outcome</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>2 GiB</td><td><span class="chip measured">Measured locally</span></td><td>Ready 7 s; 581 MiB peak RSS</td><td>Successful control for the minimal Linux profile.</td></tr>
+        <tr><td>1.5 GiB</td><td><span class="chip reported">Gene reported</span> <span class="chip hypothesis">Likely OOM</span></td><td>Not run on this seat</td><td>The next measurement; must match Gene's production profile and host.</td></tr>
+        <tr><td>1 GiB</td><td><span class="chip measured">Measured locally</span> <span class="chip reported">Gene reported OOM elsewhere</span></td><td>Local: ready 7 s; 579 MiB peak RSS</td><td>The disagreement proves that heap cap alone is not the complete experiment identity.</td></tr>
+        <tr><td>optimized 512 MiB</td><td><span class="chip hypothesis">Target</span></td><td>Not measured</td><td>Test only after a phase-attributed optimization makes 1 GiB repeatably green.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p><strong>Decisive next measurement:</strong> on Gene's host, run a 2 GiB control and then 1.5 GiB with identical JDK, args, embedded-nREPL setting, project config, cache state, and birth-time instrumentation. Stop below 4 GiB available memory.</p>
+    <p>Source evidence: <code>docs/observations/evidence/startup-memory/</code>. Companion plan: <code>2026-08-23-anvil-startup-memory-measurement-plan.md</code>.</p>
+  </footer>
+</main>
+
+<script>
+  const tiers = {
+    two: {
+      title: "2 GiB cap", truth: "Measured locally", truthClass: "measured",
+      subtitle: "Real minimal HTTP startup; embedded nREPL disabled.",
+      result: "Reached readiness in 7 seconds", note: "Intentional TERM five seconds later; no OOM and no heap dump.",
+      cap: 2048, rss: 581, peak: 154.6, after: 39.4, afterText: "39–48", committed: 476, gc: 42, gcText: "39 young + 3 old",
+      oom: "This local profile stayed far below 2 GiB. Gene's failure needs a profile-matched reproduction before the cap can be blamed.",
+      allocation: [8, 55, 88, 100, 76, 8], live: [5, 10, 18, 30, 39, 48], garbage: [0, 28, 63, 115, 108, 106], native: [80, 150, 270, 390, 460, 476], resident: [42, 200, 360, 520, 570, 581]
+    },
+    onefive: {
+      title: "1.5 GiB cap", truth: "Gene-reported hypothesis", truthClass: "reported",
+      subtitle: "Not measured on this seat. The filled heap is a failure scenario, not data.",
+      result: "Likely OOM according to Gene", note: "Needs an exact profile-matched run; no local value is substituted.",
+      cap: 1536, rss: null, peak: 1536, after: 620, afterText: "620 H", committed: null, gc: null, gcText: "unknown",
+      oom: "Hypothesis: a larger production live set and allocation backlog consume usable heap before GC creates evacuation room. Heap dump + final GC evidence must prove this.",
+      allocation: [8, 58, 92, 100, 100, 0], live: [5, 30, 120, 360, 620, 620], garbage: [0, 70, 260, 620, 916, 916], native: [80, 170, 320, 470, 560, 560], resident: [42, 220, 480, 850, 1000, 1000]
+    },
+    one: {
+      title: "1 GiB cap", truth: "Measured locally", truthClass: "measured",
+      subtitle: "Local success conflicts with Gene's OOM on another host/profile.",
+      result: "Reached readiness in 7 seconds locally", note: "This is a non-reproduction, not a claim that Gene's production path is safe.",
+      cap: 1024, rss: 579, peak: 141.0, after: 47.4, afterText: "47", committed: 446, gc: 44, gcText: "41 young + 3 old",
+      oom: "The local 1 GiB heap had ample room. Match nREPL, JDK, config, classpath, OS, and cache state before interpreting the host disagreement.",
+      allocation: [8, 58, 92, 100, 82, 8], live: [5, 10, 19, 32, 42, 47], garbage: [0, 26, 58, 94, 97, 94], native: [80, 145, 260, 360, 430, 446], resident: [45, 200, 350, 490, 570, 579]
+    },
+    half: {
+      title: "optimized 512 MiB cap", truth: "Hypothetical target", truthClass: "hypothesis",
+      subtitle: "Illustrative post-optimization budget; every value is a hypothesis.",
+      result: "Not measured", note: "Earn this run by naming and reducing the causal startup phase first.",
+      cap: 512, rss: 350, peak: 230, after: 110, afterText: "110 H", committed: 300, gc: 50, gcText: "50 H",
+      oom: "Target story: phase markers expose one avoidable loader/tool-construction burst; removing it keeps live + backlog + collector room below 512 MiB.",
+      allocation: [6, 35, 58, 64, 42, 5], live: [4, 14, 32, 70, 95, 110], garbage: [0, 15, 45, 90, 120, 100], native: [60, 100, 160, 230, 285, 300], resident: [35, 100, 190, 270, 330, 350]
+    }
+  };
+
+  let selected = "two";
+  let phaseIndex = 0;
+  let timer = null;
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
+
+  function setWidths(d) {
+    const live = Math.min(100, d.after / d.cap * 100);
+    const garbage = Math.min(100 - live, Math.max(0, d.peak - d.after) / d.cap * 100);
+    document.documentElement.style.setProperty("--live-width", `${live}%`);
+    document.documentElement.style.setProperty("--garbage-width", `${garbage}%`);
+    document.documentElement.style.setProperty("--headroom-width", `${Math.max(0, 100 - live - garbage)}%`);
+    document.documentElement.style.setProperty("--native-width", `${d.committed == null ? 70 : Math.min(100, d.committed / 700 * 100)}%`);
+    document.documentElement.style.setProperty("--rss-width", `${d.rss == null ? 75 : Math.min(100, d.rss / 700 * 100)}%`);
+  }
+
+  function renderTier(key) {
+    selected = key;
+    const d = tiers[key];
+    $$("[data-tier]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.tier === key)));
+    $("#truth-chip").className = `chip ${d.truthClass}`;
+    $("#truth-chip").textContent = d.truth;
+    $("#tier-title").textContent = d.title;
+    $("#tier-subtitle").textContent = d.subtitle;
+    $("#result-title").textContent = d.result;
+    $("#result-note").textContent = d.note;
+    $("#m-cap").textContent = d.cap.toLocaleString();
+    $("#m-rss").textContent = fmt(d.rss);
+    $("#m-peak").textContent = fmt(d.peak, d.truthClass === "measured" ? "" : " H");
+    $("#m-after").textContent = d.afterText;
+    $("#m-native").textContent = fmt(d.committed, d.truthClass === "measured" ? "" : " H");
+    $("#m-gc").textContent = fmt(d.gc, d.truthClass === "measured" ? "" : " H");
+    $("#cap-label").textContent = `${d.cap.toLocaleString()} MiB maximum Java heap`;
+    $("#native-label").textContent = d.committed == null ? "unknown" : `${d.committed} MiB${d.truthClass === "measured" ? "" : " hypothesis"}`;
+    $("#rss-label").textContent = d.rss == null ? "unknown" : `${d.rss} MiB${d.truthClass === "measured" ? " peak" : " hypothesis"}`;
+    $("#bar-caption").textContent = d.truthClass === "measured"
+      ? `${d.peak} MiB before GC; ${d.after} MiB afterward. Roughly ${(d.peak - d.after).toFixed(1)} MiB was reclaimable backlog.`
+      : `${d.peak} MiB peak and ${d.after} MiB after-GC are storyboard hypotheses, not measurements.`;
+    $("#oom-story").textContent = d.oom;
+    setWidths(d);
+    phaseIndex = 0;
+    renderPhase();
+  }
+
+  function renderPhase() {
+    const d = tiers[selected];
+    const maxNative = Math.max(...d.native, 1);
+    const maxRss = Math.max(...d.resident, 1);
+    const maxHeap = Math.max(d.cap, ...d.live, ...d.garbage);
+    $$(".phase").forEach((p, i) => p.classList.toggle("active", i === phaseIndex));
+    $(".pulse").style.left = `${phaseIndex * 20}%`;
+    const tracks = [
+      ["allocation", d.allocation[phaseIndex], 100, `${d.allocation[phaseIndex]}% H`],
+      ["used", d.live[phaseIndex], maxHeap, `${d.live[phaseIndex]} MiB${d.truthClass === "measured" ? "*" : " H"}`],
+      ["awaiting", d.garbage[phaseIndex], maxHeap, `${d.garbage[phaseIndex]} MiB H`],
+      ["native", d.native[phaseIndex], maxNative, `${d.native[phaseIndex]} MiB${d.truthClass === "measured" && phaseIndex === 5 ? "" : " H"}`],
+      ["resident", d.resident[phaseIndex], maxRss, `${d.resident[phaseIndex]} MiB${d.truthClass === "measured" && phaseIndex === 5 ? "" : " H"}`]
+    ];
+    tracks.forEach(([cls, value, max, label]) => {
+      $(`.track.${cls} i`).style.width = `${Math.min(100, value / max * 100)}%`;
+      $(`.track.${cls} .track-value`).textContent = label;
+    });
+  }
+
+  $$('[data-tier]').forEach(button => button.addEventListener('click', () => renderTier(button.dataset.tier)));
+  $("#play").addEventListener("click", () => {
+    if (timer) {
+      clearInterval(timer); timer = null;
+      $("#play").textContent = "▶ play startup";
+      $("#play").setAttribute("aria-pressed", "false");
+      return;
+    }
+    phaseIndex = 0; renderPhase();
+    $("#play").textContent = "Ⅱ pause";
+    $("#play").setAttribute("aria-pressed", "true");
+    timer = setInterval(() => {
+      phaseIndex += 1;
+      if (phaseIndex > 5) {
+        clearInterval(timer); timer = null; phaseIndex = 5;
+        $("#play").textContent = "↻ replay startup";
+        $("#play").setAttribute("aria-pressed", "false");
+      }
+      renderPhase();
+    }, 850);
+  });
+
+  renderTier("two");
+</script>
+</body>
+</html>

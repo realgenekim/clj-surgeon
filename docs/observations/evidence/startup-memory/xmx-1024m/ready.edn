@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823", :server :clj-surgeon, :port 17889, :host "127.0.0.1", :pid 3797098, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:17889/mcp"}

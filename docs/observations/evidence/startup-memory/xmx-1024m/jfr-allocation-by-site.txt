@@ -1,0 +1,31 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+                                                                                 Allocation by Site
+
+Method                                                                                                                                                          Allocation Pressure
+--------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+java.lang.reflect.Method.copy()                                                                                                                                              12.88%
+java.util.Arrays.copyOfRangeByte(byte[], int, int)                                                                                                                            5.27%
+java.util.Arrays.copyOf(byte[], int)                                                                                                                                          4.75%
+clojure.lang.PersistentHashMap.cloneAndSet(PersistentHashMap$INode[], int, PersistentHashMap$INode)                                                                           4.67%
+clojure.asm.Frame.push(int)                                                                                                                                                   4.16%
+clojure.spec.alpha$deriv.invokeStatic(Object, Object)                                                                                                                         3.75%
+clojure.lang.LazilyPersistentVector.createOwning(Object[])                                                                                                                    3.26%
+clojure.spec.alpha$add_ret.invokeStatic(Object, Object, Object)                                                                                                               3.15%
+clojure.lang.Var.pushThreadBindings(Associative)                                                                                                                              3.11%
+clojure.lang.PersistentHashMap$BitmapIndexedNode.assoc(int, int, Object, Object, Box)                                                                                         2.90%
+java.lang.AbstractStringBuilder.<init>(int)                                                                                                                                   2.86%
+clojure.lang.PersistentHashMap.cloneAndSet(Object[], int, Object)                                                                                                             2.78%
+clojure.lang.Compiler.analyzeSymbol(Symbol)                                                                                                                                   2.37%
+clojure.lang.Tuple.create(Object, Object, Object)                                                                                                                             2.36%
+java.lang.StringBuilder.toString()                                                                                                                                            2.35%
+clojure.lang.MapEntry.create(Object, Object)                                                                                                                                  2.33%
+clojure.core$map.invokeStatic(Object, Object, Object, Object)                                                                                                                 2.28%
+clojure.lang.RT.cons(Object, Object)                                                                                                                                          2.16%
+java.lang.reflect.Method.getParameterTypes()                                                                                                                                  1.85%
+clojure.asm.MethodWriter.visitLineNumber(int, Label)                                                                                                                          1.77%
+clojure.lang.PersistentVector.cons(Object)                                                                                                                                    1.73%
+clojure.lang.PersistentHashMap$NodeSeq.create(Object[], int, ISeq)                                                                                                            1.58%
+clojure.asm.SymbolTable.addConstantUtf8Reference(int, String)                                                                                                                 1.38%
+java.util.concurrent.locks.ReentrantLock.<init>()                                                                                                                             1.35%
+clojure.lang.PersistentHashMap.assoc(Object, Object)                                                                                                                          1.11%

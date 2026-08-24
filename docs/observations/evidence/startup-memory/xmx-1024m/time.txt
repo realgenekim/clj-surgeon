@@ -1,0 +1,24 @@
+Command exited with non-zero status 143
+	Command being timed: "clojure -J-Xms64m -J-Xmx1024m -J-XX:NativeMemoryTracking=summary -J-XX:+HeapDumpOnOutOfMemoryError -J-XX:HeapDumpPath=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m -J-XX:StartFlightRecording=filename=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/startup.jfr,settings=profile,dumponexit=true,maxsize=256m -J-Xlog:gc*,safepoint=debug:file=/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/gc-safepoint.log:time,uptime,level,tags:filecount=1 -X:clj-surgeon/mcp :project-dir "/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823" :port 17889 :telemetry :full :telemetry-dir "/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/telemetry" :run-id "startup-memory-xmx-1024m" :nrepl-port :none :ready-file "/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/ready.edn" :log-file "/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/application.log""
+	User time (seconds): 26.75
+	System time (seconds): 1.27
+	Percent of CPU this job got: 233%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.99
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 593316
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 212066
+	Voluntary context switches: 73865
+	Involuntary context switches: 1299
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 5632
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 143

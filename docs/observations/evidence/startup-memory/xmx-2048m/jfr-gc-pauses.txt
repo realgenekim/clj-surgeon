@@ -1,0 +1,24 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+GC Pauses
+---------
+
+Total Pause Time: 213 ms
+
+Number of Pauses: 45
+
+Minimum Pause Time: 0.0677 ms
+
+Median Pause Time: 4.74 ms
+
+Average Pause Time: 4.73 ms
+
+P90 Pause Time: 7.21 ms
+
+P95 Pause Time: 8.51 ms
+
+P99 Pause Time: 8.69 ms
+
+P99.9% Pause Time: 8.69 ms
+
+Maximum Pause Time: 8.69 ms

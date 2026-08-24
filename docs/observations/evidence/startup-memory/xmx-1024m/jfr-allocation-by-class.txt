@@ -1,0 +1,31 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+                                                                                Allocation by Class
+
+Object Type                                                                                                                                                     Allocation Pressure
+--------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+byte[]                                                                                                                                                                       14.98%
+java.lang.reflect.Method                                                                                                                                                     12.88%
+java.lang.Object[]                                                                                                                                                           12.08%
+int[]                                                                                                                                                                         5.84%
+clojure.lang.PersistentHashMap$INode[]                                                                                                                                        4.72%
+clojure.lang.PersistentVector                                                                                                                                                 4.66%
+clojure.spec.alpha$add_ret$prop__2399                                                                                                                                         3.15%
+clojure.lang.Var$TBox                                                                                                                                                         3.01%
+java.lang.String                                                                                                                                                              3.00%
+clojure.lang.LazySeq                                                                                                                                                          2.94%
+clojure.lang.Compiler$LocalBindingExpr                                                                                                                                        2.39%
+clojure.lang.MapEntry                                                                                                                                                         2.39%
+clojure.lang.PersistentHashMap$BitmapIndexedNode                                                                                                                              2.29%
+clojure.asm.SymbolTable$Entry                                                                                                                                                 2.18%
+java.lang.Class[]                                                                                                                                                             1.89%
+clojure.asm.ByteVector                                                                                                                                                        1.79%
+clojure.lang.Cons                                                                                                                                                             1.72%
+clojure.lang.PersistentHashMap$NodeSeq                                                                                                                                        1.58%
+clojure.lang.PersistentVector$ChunkedSeq                                                                                                                                      1.50%
+java.util.concurrent.locks.ReentrantLock$NonfairSync                                                                                                                          1.35%
+clojure.lang.PersistentArrayMap                                                                                                                                               1.22%
+clojure.lang.PersistentHashMap                                                                                                                                                0.96%
+java.util.concurrent.ConcurrentHashMap$Node[]                                                                                                                                 0.89%
+clojure.lang.PersistentList                                                                                                                                                   0.80%
+java.util.concurrent.locks.ReentrantLock                                                                                                                                      0.74%

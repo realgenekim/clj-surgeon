@@ -1,0 +1,31 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+
+                                                                                 Allocation by Site
+
+Method                                                                                                                                                          Allocation Pressure
+--------------------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+java.lang.reflect.Method.copy()                                                                                                                                               7.65%
+java.util.concurrent.locks.ReentrantLock.<init>()                                                                                                                             6.90%
+java.lang.Throwable.fillInStackTrace(int)                                                                                                                                     5.44%
+clojure.lang.RT.cons(Object, Object)                                                                                                                                          5.08%
+clojure.lang.MapEntry.create(Object, Object)                                                                                                                                  4.48%
+clojure.core$map.invokeStatic(Object, Object, Object, Object)                                                                                                                 4.45%
+java.lang.StringBuilder.toString()                                                                                                                                            3.87%
+java.util.Arrays.copyOfRangeByte(byte[], int, int)                                                                                                                            3.83%
+clojure.lang.PersistentHashMap.cloneAndSet(Object[], int, Object, int, Object)                                                                                                3.82%
+clojure.lang.PersistentVector$ChunkedSeq.next()                                                                                                                               3.65%
+java.util.regex.Pattern.matcher(CharSequence)                                                                                                                                 3.46%
+java.lang.AbstractStringBuilder.<init>(int)                                                                                                                                   3.31%
+java.lang.StringLatin1.newString(byte[], int, int)                                                                                                                            2.84%
+clojure.lang.LazySeq.<init>(IFn)                                                                                                                                              2.79%
+java.util.Arrays.copyOf(byte[], int)                                                                                                                                          2.75%
+clojure.lang.Compiler$FnExpr.parse(Compiler$C, ISeq, String)                                                                                                                  2.38%
+clojure.asm.SymbolTable.addConstantUtf8Reference(int, String)                                                                                                                 2.18%
+clojure.lang.PersistentHashMap.cloneAndSet(PersistentHashMap$INode[], int, PersistentHashMap$INode)                                                                           2.13%
+clojure.lang.ArraySeq.create(Object[])                                                                                                                                        1.63%
+java.lang.Object.clone()                                                                                                                                                      1.59%
+clojure.core$map.invokeStatic(Object, Object)                                                                                                                                 1.17%
+clojure.lang.PersistentVector.chunkedSeq()                                                                                                                                    1.11%
+clojure.lang.PersistentHashMap.assoc(Object, Object)                                                                                                                          1.07%
+java.util.concurrent.ConcurrentHashMap.initTable()                                                                                                                            0.87%
+clojure.lang.PersistentHashMap$BitmapIndexedNode.assoc(int, int, Object, Object, Box)                                                                                         0.84%

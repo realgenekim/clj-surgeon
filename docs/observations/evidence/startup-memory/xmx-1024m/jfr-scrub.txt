@@ -1,0 +1,3 @@
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+Scrubbed recording file written to:
+/srv/fleet/dev-c/clj-surgeon-one-shot-canary-20260823/docs/observations/evidence/startup-memory/xmx-1024m/startup-sanitized.jfr
