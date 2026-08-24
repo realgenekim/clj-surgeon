@@ -262,13 +262,14 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
       && [ "$context" != no-skill ] \
-      && [ "$context" != native-hint-no-skill ]; then
-      echo "Native matrix cells require no-skill or native-hint-no-skill context: $cell" >&2
+      && [ "$context" != native-hint-no-skill ] \
+      && [ "$context" != native-read-hint-no-skill ]; then
+      echo "Native matrix cells require a native no-skill context: $cell" >&2
       return 2
     fi
     if [ "$version" = mcp ] \
@@ -301,6 +302,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-rule-no-skill'
   validate_run_matrix 'mcp:mcp-exploratory-rule-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
+  validate_run_matrix 'native:native-read-hint-no-skill'
   if validate_run_matrix 'native:matched-skill' 2>/dev/null; then
     echo "benchmark matrix self-test accepted an invalid native context" >&2
     exit 1
@@ -863,7 +865,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -887,8 +889,9 @@ run_one() {
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
   if [ "$version" = native ] \
     && [ "$context" != no-skill ] \
-    && [ "$context" != native-hint-no-skill ]; then
-    echo "The native version requires no-skill or native-hint-no-skill: $run_id" >&2
+    && [ "$context" != native-hint-no-skill ] \
+    && [ "$context" != native-read-hint-no-skill ]; then
+    echo "The native version requires a native no-skill context: $run_id" >&2
     exit 2
   fi
   if [ "$version" = mcp ] \
@@ -1041,6 +1044,10 @@ run_one() {
   fi
   if [ "$context" = 'native-hint-no-skill' ]; then
     printf '%s\n' '' 'Use the available apply_patch tool for this exact edit. Send one patch that replaces only the supplied old form with the supplied new form; do not read source first. The patch old lines are the stale-source guard. A successful apply_patch result is terminal proof; do not reread or diff afterward.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'native-read-hint-no-skill' ]; then
+    printf '%s\n' '' 'Use native source inspection and apply_patch for this exact edit. Read only enough of the named owner to construct one precise patch, then apply it once. A successful apply_patch result is terminal mutation proof; do not reread or diff afterward.' \
       >> "$run_dir/prompt.txt"
   fi
 

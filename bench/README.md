@@ -111,6 +111,19 @@ mutation tool directly, treat its declared old bytes as the stale-source
 guard, and stop after terminal mutation evidence. Use `native:no-skill` only
 when an unrouted production-style native control is intentional.
 
+The strict one-shot native arm deliberately tests whether line-oriented patching
+can act from semantic old/new values without seeing physical source context. To
+compare the best natural workflows instead, allow native one bounded source read
+before its patch:
+
+```bash
+BENCH_TASKS=exact-nested-edit \
+BENCH_RUN_MATRIX='mcp:mcp-hint-no-skill native:native-read-hint-no-skill' \
+BENCH_REPLICATES=4 \
+BENCH_PARALLELISM=1 \
+make benchmark-edit-portfolio
+```
+
 Run the exploratory reader-plus-transaction comparison with:
 
 ```bash
