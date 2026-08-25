@@ -171,31 +171,33 @@ A rollback-armed Anvil promotion then proved the exact new behavior twice. An
 isolated port-17888 canary performed one namespace rewrite, one named-form
 rewrite, and one owner deletion in a single `edit_clojure` request and matched
 the expected bytes. Production port 7888 repeated the same acceptance before
-the promotion was declared successful.
+the promotion was declared successful. The follow-up `e7f72e2` promotion also
+proved `include_source=false` on both ports: proof metadata and source anchor
+were present, while the selected form's source body was absent.
 
 The live Anvil process is:
 
 ```text
-PID:  156622
+PID:  739989
 User: surgeon
-CWD:  /srv/fleet/shared-tools/clj-surgeon-5e85987
+CWD:  /srv/fleet/shared-tools/clj-surgeon-e7f72e2
 Heap: -Xms64m -Xmx512m
 ```
 
 The rollback receipt is
-`/home/surgeon/.local/state/clj-surgeon/deployments/2026-08-25-5e85987/ROLLBACK.txt`.
+`/home/surgeon/.local/state/clj-surgeon/deployments/2026-08-25-e7f72e2/ROLLBACK.txt`.
 The existing clojure-lsp process was not restarted: PID 2400995, CWD
 `/home/surgeon/clj-surgeon`.
 
 The matching CLI and advanced-only Codex/Claude skill package was installed for
-dev-a, dev-b, and dev-c. Their study workspaces advertise all four tools on the
-shared production URL. The previous hand-managed Claude skill directories were
-preserved, not deleted, at each seat's
+dev-a, dev-b, and dev-c from `e7f72e2`. Their study workspaces advertise all
+four tools on the shared production URL. The previous hand-managed Claude skill
+directories were preserved, not deleted, at each seat's
 `~/.claude/skills/clj-surgeon.pre-5e85987-20260825`. Fresh sessions see the new
 package; already-running clients whose cached schema rejects `delete_owners` or
 `within.namespace` need one new agent session, not a service restart.
 
-The laptop installation also points CLI, Codex, and Claude at `5e85987`. Its
+The laptop installation also points CLI, Codex, and Claude at `e7f72e2`. Its
 live MCP remained PID 75495, CWD `/Users/genekim/src.local/clj-surgeon`, and a
 direct production `tools/list` confirmed compact top-level fields
 `delete_owners`, `edits`, `programs`, and `workspace_root`, plus both
