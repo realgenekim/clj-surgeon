@@ -250,11 +250,12 @@
   :telemetry      off, metrics, or full (default metrics)
   :telemetry-dir  local JSONL directory outside repositories
   :run-id         optional benchmark correlation ID
+  :tool-profile   :full (default) or :edit
   :nrepl-port     0 for ephemeral development nREPL; :none disables it
   :port-file      embedded nREPL discovery file (default .nrepl-port)
   :log-file       clojure-mcp diagnostic log"
-  [{:keys [project-dir receipt-dir telemetry-dir run-id nrepl-port port-file
-           log-file]
+  [{:keys [project-dir receipt-dir telemetry-dir run-id tool-profile nrepl-port
+           port-file log-file]
     telemetry-mode :telemetry}]
   (let [project-dir (str (normalize-option project-dir
                                            (System/getProperty "user.dir")))
@@ -273,6 +274,7 @@
        :log-level :info})
     (mcp-tool/init! {:project-root project-dir
                      :receipt-dir receipt-dir
+                     :tool-profile (normalize-option tool-profile :full)
                      :telemetry telemetry-state})
     (build-stdio-server)
     (armor-stdout!)

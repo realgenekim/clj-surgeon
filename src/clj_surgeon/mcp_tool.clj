@@ -617,9 +617,19 @@
    :structured? true
    :tool-fn #'handle-clj-change})
 
+(defn tools-for-profile
+  "Return the exact public tool catalog for one startup profile."
+  [profile]
+  (case (or profile :full)
+    :full [inspect-tool/inspect-tool
+           clj-change-tool
+           edit-clojure-tool
+           program-tool/transform-clojure-tool]
+    :edit [edit-clojure-tool]
+    (throw (ex-info "Unsupported MCP tool profile"
+                    {:profile profile
+                     :supported [:full :edit]}))))
+
 (defn all-tools
   []
-  [inspect-tool/inspect-tool
-   clj-change-tool
-   edit-clojure-tool
-   program-tool/transform-clojure-tool])
+  (tools-for-profile (:tool-profile @runtime-config)))

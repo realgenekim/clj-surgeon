@@ -1049,6 +1049,7 @@ run_one() {
     local ready_file="$run_dir/mcp-ready.edn"
     local server_started_ms server_ready_ms
     local mcp_java_opts=()
+    local mcp_profile_args=()
     if [ -n "${BENCH_MCP_JAVA_OPTS:-}" ]; then
       read -r -a mcp_java_opts <<< "$BENCH_MCP_JAVA_OPTS"
       local java_opt
@@ -1062,10 +1063,19 @@ run_one() {
         esac
       done
     fi
+    case "${BENCH_MCP_TOOL_PROFILE:-full}" in
+      full) ;;
+      edit) mcp_profile_args=(:tool-profile :edit) ;;
+      *)
+        echo "BENCH_MCP_TOOL_PROFILE must be full or edit: ${BENCH_MCP_TOOL_PROFILE}" >&2
+        exit 2
+        ;;
+    esac
     server_started_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
     (
       cd "$repo_root"
       exec clojure "${mcp_java_opts[@]}" -X:clj-surgeon/mcp \
+        "${mcp_profile_args[@]}" \
         :project-dir "$(bb -e '(prn (first *command-line-args*))' "$workspace")" \
         :telemetry :full \
         :telemetry-dir "$(bb -e '(prn (first *command-line-args*))' "$run_dir/mcp-telemetry")" \

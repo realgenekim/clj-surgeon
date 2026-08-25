@@ -26,6 +26,16 @@
     (doseq [child (reverse (file-seq (io/file file)))]
       (Files/deleteIfExists (.toPath child)))))
 
+(deftest tool-profiles-preserve-full-default-and-isolate-the-editor
+  (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
+          "transform_clojure"]
+         (mapv :name (tool/tools-for-profile :full))))
+  (is (= ["edit_clojure"]
+         (mapv :name (tool/tools-for-profile :edit))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Unsupported MCP tool profile"
+                        (tool/tools-for-profile :unknown))))
+
 (deftest exposes-exactly-four-typed-tools
   (let [tools (server/make-tools nil ".")]
     (is (= 4 (count tools)))
