@@ -247,6 +247,30 @@ This calibration completes only the first two arms on one task. Production
 choice, guarded text CAS, stale-source, multi-file, semantic, prose, and
 new-file strata remain open.
 
+### First historical counterfactual: native wins the small real commit
+
+The first blinded replay started from the real parent of `6948f0eb` and asked
+three fresh Sol/high callers to make cclsp optional while preserving the
+required clj-surgeon service. The child commit remained a hidden oracle.
+
+| Route | Semantic result | Complete-turn wall | Tool actions | MCP actions |
+|---|---:|---:|---:|---:|
+| Native | passed | **148.252 s** | 20 | 0 |
+| Structural MCP | passed | 306.631 s | 16 | 8 |
+| Production choice | passed | 280.199 s | 18 | 8 |
+
+All three changed exactly the two permitted files and passed the focused
+17-test/94-assertion namespace. None copied the historical child bytes: all
+made the same production change, while each expressed the regression assertion
+differently. Semantic scoring admitted all three.
+
+This small real commit is native-positive. MCP saved at most four actions but
+paid for five or six inspections, one irrelevant semantic-provider failure,
+and an outside-in full-suite cycle both before and after production. Native was
+1.89× faster than production choice and 2.07× faster than forced structural.
+The next replay deliberately moves to the other side of the hypothesized
+crossover: a 340-line multi-owner failure-atomic transaction change.
+
 ## Direct tool wall versus complete-turn wall
 
 The structured `edit_clojure` cohort retains complete-turn wall but not a

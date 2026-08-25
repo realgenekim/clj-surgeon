@@ -28,7 +28,7 @@
           "test/clj_surgeon/intent_transaction_test.clj"
           {:before "91e314434d8db192d9f56245b5b8bd1c6cfc2404c8fbe5517cbe3a1291781efe"
            :after "f2b6c55564711835f62c6df898953233c296d362790a653f775e837c14d19a86"}}
- :verification {:commands ["bb test/run_all.clj"]
+ :verification {:commands ["bb -cp src:test -e \"(require '[clojure.test :as t] '[clj-surgeon.intent-transaction-test]) (let [r (t/run-tests 'clj-surgeon.intent-transaction-test)] (System/exit (+ (:fail r) (:error r))))\""]
                 :exact-changed-paths true
                 :exact-target-bytes-secondary true
                 :parse-clojure true}

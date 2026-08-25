@@ -212,3 +212,25 @@ historical full suite has an unrelated `case*` incompatibility on the Anvil Baba
 the changed `workspace-onboarding-test` namespace passes. The capsule now runs that focused
 namespace and declares `.cpcache/` as generated output. Earlier receipts remain retained and
 invalid; no score was overwritten.
+
+### First admitted case
+
+`cclsp-optional` produced three semantically correct, non-byte-identical implementations:
+
+| Route | Complete-turn wall | Tool actions | MCP actions |
+| --- | ---: | ---: | ---: |
+| Native | **148.252 s** | 20 | 0 |
+| Structural MCP | 306.631 s | 16 | 8 |
+| Production choice | 280.199 s | 18 | 8 |
+
+All arms changed exactly the two allowed files and passed the focused 17-test/94-assertion
+verifier. Each changed the same production string; their regression assertions differed only in
+expression style. Native won this native-positive shape decisively. MCP saved four actions at best
+but performed five or six structural inspections, one semantic-provider failure in the production
+arm, two structural mutations, and two foreground full-suite cycles.
+
+This is evidence for route selection and a faster verification ladder, not evidence against the
+structural editor. The next case is `failure-atomic-commit`: a 340-line source/test/docs change
+where multi-owner transaction and proof density should have a fair chance to cross over. Its
+authoritative verifier is the affected intent-transaction namespace; the task explicitly keeps the
+unrelated historical full suite out of the foreground timing.

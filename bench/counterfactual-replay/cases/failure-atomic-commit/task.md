@@ -24,5 +24,6 @@ Only modify:
 - `src/clj_surgeon/intent_transaction.clj`
 - `test/clj_surgeon/intent_transaction_test.clj`
 
-Run the repository's Babashka test suite and stop when the requested behavior is verified.
-
+Run the focused `clj-surgeon.intent-transaction-test` namespace. Do not run the unrelated full
+repository suite in the foreground; the harness owns broader verification. Stop when the requested
+behavior is verified.
