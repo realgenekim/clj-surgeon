@@ -1,0 +1,11 @@
+{:id :dev-handler-extraction-cleanup
+ :decision-boundary :complete-owner-deletion-supplied
+ :provenance {:kind :real-task-derived
+              :source "sessionize-sched-killer commit 7c71c9f7, Extract dev handlers without behavior changes"
+              :minimized "anonymized source bodies; retained namespace require rewrite, four exact route rewrites, four noncontiguous owner deletions, and attached comments from the source-namespace cleanup phase"}
+ :targets ["src/sample/server.clj"]
+ :hashes {"src/sample/server.clj"
+          {:before "9c964a070834bc30c02397be51a2781f998645b8ae4bc3765bda74a07de26f67"
+           :after "598c478c7e9da2e9bc21e9ce504ee186f0b0106eca9881cc68a8fefa317cadd1"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 1 :edits 9}}
