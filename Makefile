@@ -5,8 +5,11 @@ CLAUDE_HOME ?= $(HOME)/.claude
 INSTALL_ROOT ?= $(HOME)/.local/share/clj-surgeon
 CONTROL_PLANE_ROOT_FILE ?= $(INSTALL_ROOT)/control-plane-root
 SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
+AGENT_ROUTING_SOURCE := $(CLJ_SURGEON_HOME)resources/clj-surgeon-agent-routing.md
 CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
 CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
+CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
+CLAUDE_GLOBAL_INSTRUCTIONS ?= $(CLAUDE_HOME)/CLAUDE.md
 SOURCE_COMMIT := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse HEAD 2>/dev/null || printf unknown)
 CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
 SKILL_SOURCE_HASH := $(shell cd "$(SKILL_SOURCE)" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
@@ -39,7 +42,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -56,10 +59,12 @@ help:
 	@echo "  make workspace-mcp-onboard WORKSPACE=/repo  Compatibility alias for clj-surgeon up"
 	@echo "  make workspace-mcp-status WORKSPACE=/repo   Verify the shared stack and local config"
 	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
-	@echo "  make install                   Stable copied CLI, Codex skill, and Claude skill"
+	@echo "  make install                   Stable copied CLI, both skills, and global routing instructions"
 	@echo "  make install-cli               Install only the stable copied CLI"
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
+	@echo "  make install-agent-routing     Install compact routing into Codex and Claude globals"
+	@echo "  make check-agent-routing       Verify both global routing blocks without writing"
 	@echo "  make sync-clj-surgeon-skill    Regenerate Claude/root mirrors from the canonical skill"
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
@@ -87,6 +92,8 @@ help:
 	@echo "  CLI_DEST=/path/to/clj-surgeon  CLI path (default: $(CLI_DEST))"
 	@echo "  CODEX_HOME=/path/to/.codex     Codex home (default: $(CODEX_HOME))"
 	@echo "  CLAUDE_HOME=/path/to/.claude   Claude home (default: $(CLAUDE_HOME))"
+	@echo "  CODEX_GLOBAL_INSTRUCTIONS=/path Override Codex global instruction file"
+	@echo "  CLAUDE_GLOBAL_INSTRUCTIONS=/path Override Claude global instruction file"
 	@echo "  INSTALL_ROOT=/path/to/packages Stable copied package root (default: $(INSTALL_ROOT))"
 	@echo "  CONTROL_PLANE_ROOT_FILE=/path  Local pointer used only by experimental 'clj-surgeon up'"
 	@echo "  MCP_JAVA_HOME=/path/to/jdk     Java home for the shared MCP (default: inherited JAVA_HOME)"
@@ -99,7 +106,13 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
-install: install-cli install-codex-skill install-claude-skill
+install: install-cli install-codex-skill install-claude-skill install-agent-routing
+
+install-agent-routing:
+	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
+
+check-agent-routing:
+	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing check "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
 
 sync-clj-surgeon-skill:
 	bash bench/sync_clj_surgeon_skill.sh --write
@@ -416,7 +429,7 @@ install-claude-skill: prepare-skill-package
 	@echo "Installed stable Claude skill $(CLAUDE_SKILL_DEST) from commit $(SOURCE_COMMIT), source hash $(SKILL_SOURCE_HASH)"
 	@echo "Receipt: $(CLAUDE_SKILL_DEST).receipt.edn"
 
-install-dev: install-dev-cli install-dev-codex-skill install-dev-claude-skill
+install-dev: install-dev-cli install-dev-codex-skill install-dev-claude-skill install-agent-routing
 	@echo "DEVELOPMENT INSTALL: all entrances are branch-coupled to $(CLJ_SURGEON_HOME)"
 
 install-dev-cli:
