@@ -760,12 +760,13 @@ fi
 portfolio_fixture_root="$repo_root/bench/fixtures/edit_portfolio"
 
 portfolio_dir_for_task() {
-  case "$1" in
-    decision-batch-edit|exploratory-shell-edit|exact-nested-edit|three-site-delete-edit-delete|pair-view-expect-edit|dependency-move-edit|literal-source-edit|native-text-edit)
-      printf '%s' "$1"
-      ;;
-    *) return 1 ;;
-  esac
+  local task_dir="$portfolio_fixture_root/$1"
+  [ -f "$task_dir/capsule.edn" ] \
+    && [ -f "$task_dir/task.txt" ] \
+    && [ -d "$task_dir/before" ] \
+    && [ -d "$task_dir/after" ] \
+    || return 1
+  printf '%s' "$1"
 }
 
 is_portfolio_task() {
@@ -838,12 +839,12 @@ task_prompt() {
 }
 
 target_for_task() {
+  if is_portfolio_task "$1"; then
+    bb "$repo_root/bench/verify_edit_portfolio.clj" --targets \
+      "$portfolio_fixture_root/$(portfolio_dir_for_task "$1")" | head -n 1
+    return
+  fi
   case "$1" in
-    decision-batch-edit|exploratory-shell-edit) printf '%s' 'src/bench/app_shell.clj' ;;
-    three-site-delete-edit-delete) printf '%s' 'src/bench/legacy_adapter.clj' ;;
-    dependency-move-edit) printf '%s' 'src/bench/move_order.clj' ;;
-    literal-source-edit) printf '%s' 'src/bench/assets.clj' ;;
-    native-text-edit) printf '%s' 'src/bench/descriptions.clj' ;;
     named-form|semantic-form) printf '%s' 'src/clj_surgeon/core.clj' ;;
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
@@ -857,28 +858,31 @@ target_for_task() {
 }
 
 target_scope_for_task() {
+  if is_portfolio_task "$1"; then
+    local first count shared_dir
+    first=$(target_for_task "$1")
+    count=$(targets_for_task "$1" | awk 'NF {n++} END {print n+0}')
+    if [ "$count" -eq 1 ]; then
+      printf '%s' "$first"
+    else
+      shared_dir=$(basename "$(dirname "$first")")
+      printf '%s/' "$shared_dir"
+    fi
+    return
+  fi
   case "$1" in
-    decision-batch-edit|exploratory-shell-edit|three-site-delete-edit-delete) printf '%s' 'bench/' ;;
     *) target_for_task "$1" ;;
   esac
 }
 
 targets_for_task() {
-  case "$1" in
-    decision-batch-edit|exploratory-shell-edit)
-      printf '%s\n' 'src/bench/app_shell.clj' 'src/bench/source_reader.clj'
-      ;;
-    three-site-delete-edit-delete)
-      printf '%s\n' \
-        'src/bench/legacy_adapter.clj' \
-        'src/bench/consumer.clj' \
-        'test/bench/legacy_adapter_test.clj'
-      ;;
-    *)
-      target_for_task "$1"
-      printf '\n'
-      ;;
-  esac
+  if is_portfolio_task "$1"; then
+    bb "$repo_root/bench/verify_edit_portfolio.clj" --targets \
+      "$portfolio_fixture_root/$(portfolio_dir_for_task "$1")"
+    return
+  fi
+  target_for_task "$1"
+  printf '\n'
 }
 
 hash_task_targets() {
@@ -1334,16 +1338,19 @@ run_one() {
   failed_mutation_actions=$((failed_clj_mutations + failed_native_mutations + mcp_failures))
   temp_manifest_patch=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "file_change")
     | .item.changes[]? | (.path // "") | select(endswith(".edn"))] | length > 0' "$run_dir/events.jsonl")
-  case "$task" in
-    decision-batch-edit|literal-source-edit|native-text-edit|computed-supplied-edit)
-      decision_supplied=true
-      post_decision_source_commands=$source_commands
-      ;;
-    *)
-      decision_supplied=false
-      post_decision_source_commands=0
-      ;;
-  esac
+  if is_portfolio_task "$task"; then
+    decision_supplied=$(bb "$repo_root/bench/verify_edit_portfolio.clj" \
+      --decision-supplied "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")")
+  elif [ "$task" = computed-supplied-edit ]; then
+    decision_supplied=true
+  else
+    decision_supplied=false
+  fi
+  if [ "$decision_supplied" = true ]; then
+    post_decision_source_commands=$source_commands
+  else
+    post_decision_source_commands=0
+  fi
   if [ "$change_apply_successes" -eq 1 ] \
     && [ "$failed_mutation_actions" -eq 0 ] \
     && [ "$file_changes" -eq 0 ]; then
@@ -1444,8 +1451,12 @@ run_one() {
   printf '%s\n' "$final_sha" > "$run_dir/final.sha256"
   exact_correct=false
   correct=false
-  case "$task" in
-    decision-batch-edit|exploratory-shell-edit|exact-nested-edit|three-site-delete-edit-delete|pair-view-expect-edit|dependency-move-edit|literal-source-edit|native-text-edit)
+  local score_task=$task
+  if is_portfolio_task "$task"; then
+    score_task=__portfolio_task__
+  fi
+  case "$score_task" in
+    __portfolio_task__)
       portfolio_task_dir=$(portfolio_dir_for_task "$task")
       portfolio_correct=true
       : > "$run_dir/target.diff"

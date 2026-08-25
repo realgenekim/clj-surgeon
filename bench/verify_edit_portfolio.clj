@@ -198,6 +198,22 @@
   [sources]
   (into {} (map (fn [[target source]] [target (sha256 source)]) sources)))
 
+(def supplied-decision-boundaries
+  #{:complete-decision-supplied
+    :complete-literal-decision-supplied
+    :complete-owner-deletion-supplied
+    :unique-prose-change-supplied})
+
+(defn capsule-run-metadata
+  [capsule]
+  {:targets (:targets capsule)
+   :decision-supplied
+   (contains? supplied-decision-boundaries (:decision-boundary capsule))})
+
+(defn- read-run-metadata
+  [task-dir]
+  (-> task-dir fs/path read-capsule :capsule capsule-run-metadata))
+
 (defn self-test
   []
   (let [before {"src/x.clj" "(ns x)\n(defn f [] :before)\n"}
@@ -314,15 +330,28 @@
       (assert (:ok (validate-capsule multi task-text before-two after-two))))
     (assert (= {"src/x.clj" (sha256 (get before "src/x.clj"))}
                (hashes-for before)))
+    (assert (= {:targets ["src/x.clj"]
+                :decision-supplied false}
+               (capsule-run-metadata valid)))
+    (assert (:decision-supplied
+              (capsule-run-metadata
+                (assoc valid :decision-boundary :complete-owner-deletion-supplied))))
     (println "edit portfolio verifier self-test passed")))
 
-(let [[argument] *command-line-args*]
+(let [[command argument] *command-line-args*]
   (cond
-    (= "--self-test" argument)
+    (= "--self-test" command)
     (self-test)
 
-    argument
-    (let [result (validate-portfolio (load-portfolio argument))]
+    (= "--targets" command)
+    (doseq [target (:targets (read-run-metadata argument))]
+      (println target))
+
+    (= "--decision-supplied" command)
+    (println (:decision-supplied (read-run-metadata argument)))
+
+    (and command (nil? argument))
+    (let [result (validate-portfolio (load-portfolio command))]
       (prn result)
       (when-not (:ok result)
         (System/exit 1)))
@@ -330,5 +359,5 @@
     :else
     (do
       (binding [*out* *err*]
-        (println "Usage: bb bench/verify_edit_portfolio.clj ROOT | --self-test"))
+        (println "Usage: bb bench/verify_edit_portfolio.clj ROOT | --self-test | --targets TASK_DIR | --decision-supplied TASK_DIR"))
       (System/exit 2))))
