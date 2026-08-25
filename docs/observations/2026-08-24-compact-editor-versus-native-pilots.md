@@ -287,3 +287,32 @@ The next safe-refactoring targets are now evidence-ranked:
    simple callers do not pay choice/schema costs they do not need; and
 3. replay real historical changes with repeated or heterogeneous decisions to
    find where one compiled relation eliminates more than one native round trip.
+
+## Safe-refactored skill experiment
+
+Commits `0e2878d`, `2e641fe`, and `c735e67` added a permanent skill contract,
+moved conditional MCP operations to a deferred reference, and reduced the live
+entrypoint from 86 lines to 39 with a 45-line build ratchet.
+
+Result directory:
+`/tmp/clj-surgeon-short-skill-pilot-c735e67`
+
+| Route | Exact | Wall | Shell commands | Input tokens |
+|---|---:|---:|---:|---:|
+| Short matched skill + MCP | yes | 35.367 s | 1 skill read | 66,726 |
+| Direct compact MCP hint | yes | 26.790 s | 0 | 45,279 |
+| Native bounded read + patch | yes | 33.263 s | 1 source read | 46,008 |
+
+Relative to the original 48.465-second matched-skill pilot, the shortened skill
+recovered 13.098 seconds (27.0%) and removed the redundant post-mutation diff.
+The refactor therefore changed behavior materially, not just wording.
+
+It did not make the common route cheap enough. Reading the short skill still
+added 8.577 seconds relative to the direct MCP lane and turned a 6.473-second
+direct MCP win over native into a 2.104-second matched-skill loss. The common
+exact-edit route should therefore live in always-loaded agent instructions and
+the compact tool description. The invoked skill should be reserved for advanced
+semantic preparation, CLI fallback, recovery, and uncommon operations.
+
+This is a routing-boundary finding: progressive disclosure makes an invoked
+skill cheaper, but the cheapest common skill invocation is no invocation.
