@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-result_dir=${1:?usage: run_anvil_public_cfp_cleanup.sh RESULT_DIR ORDER [REPLICATES]}
-order=${2:?usage: run_anvil_public_cfp_cleanup.sh RESULT_DIR ORDER [REPLICATES]}
+result_dir=${1:?usage: run_anvil_public_cfp_cleanup.sh RESULT_DIR ORDER [REPLICATES] [TASK]}
+order=${2:?usage: run_anvil_public_cfp_cleanup.sh RESULT_DIR ORDER [REPLICATES] [TASK]}
 replicates=${3:-1}
+task=${4:-public-cfp-extraction-cleanup}
 
 if ! [[ "$replicates" =~ ^[1-9][0-9]*$ ]]; then
   echo "REPLICATES must be a positive integer: $replicates" >&2
@@ -23,20 +24,32 @@ case "$order" in
     ;;
 esac
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
+if ! [[ "$task" =~ ^[a-z0-9][a-z0-9-]*$ ]] \
+  || [ ! -f "bench/fixtures/edit_portfolio/$task/capsule.edn" ]; then
+  echo "TASK must name a frozen edit-portfolio capsule: $task" >&2
+  exit 2
+fi
+
+if [ "${ANVIL_PAIR_CONFIG_SELF_TEST:-false}" != true ] \
+  && { ! git diff --quiet || ! git diff --cached --quiet; }; then
   echo "Public-CFP benchmark requires a clean worktree" >&2
   exit 2
 fi
 
 benchmark_commit=$(git rev-parse --verify HEAD)
-printf 'benchmark_commit\t%s\norder\t%s\nreplicates\t%s\n' \
-  "$benchmark_commit" "$order" "$replicates"
+printf 'benchmark_commit\t%s\ntask\t%s\norder\t%s\nreplicates\t%s\n' \
+  "$benchmark_commit" "$task" "$order" "$replicates"
+
+if [ "${ANVIL_PAIR_CONFIG_SELF_TEST:-false}" = true ]; then
+  echo "Anvil portfolio-pair configuration self-test passed"
+  exit 0
+fi
 
 export BENCH_MODEL=gpt-5.6-sol
 export BENCH_REASONING=high
 export BENCH_POST_COMMIT="$benchmark_commit"
 export BENCH_RUN_MATRIX="$run_matrix"
-export BENCH_TASKS=public-cfp-extraction-cleanup
+export BENCH_TASKS="$task"
 export BENCH_INCLUDE_COMPACT=false
 export BENCH_REPLICATES="$replicates"
 export BENCH_PARALLELISM=1
