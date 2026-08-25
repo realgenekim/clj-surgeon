@@ -974,6 +974,12 @@
                                       :payload structured
                                       :error? error?}))]
     (try
+      (is (= "edit_clojure"
+             (mcp-tool/request-operation {"delete_owners" []})))
+      (is (= "edit_clojure"
+             (mcp-tool/request-operation {:programs []})))
+      (is (= "apply_clojure_changes"
+             (mcp-tool/request-operation {"changes" []})))
       (copy-tree! (str fixture-root "/before") workspace)
       (mcp-tool/init! {:project-root (.getPath workspace)
                        :receipt-dir (.getPath receipt-dir)

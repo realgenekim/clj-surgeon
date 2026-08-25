@@ -587,15 +587,20 @@
     (callback [summary] (not (:ok result)) result)
     body))
 
-(defn handle-clj-change
-  "Heavy transaction callback. Kept as a Var for live nREPL redefinition."
-  [_exchange params callback]
-  (handle-operation "apply_clojure_changes" params callback))
+(defn request-operation
+  "Name the public operation from one JSON- or Clojure-shaped request."
+  [params]
+  (if (some (fn [field]
+              (or (contains? params field)
+                  (contains? params (name field))))
+            [:edits :programs :delete_owners])
+    "edit_clojure"
+    "apply_clojure_changes"))
 
-(defn handle-edit-clojure
-  "Compact editor callback. Kept as a Var for live nREPL redefinition."
+(defn handle-clj-change
+  "Shared callback whose stable Var keeps both public routes hot-reloadable."
   [_exchange params callback]
-  (handle-operation "edit_clojure" params callback))
+  (handle-operation (request-operation params) params callback))
 
 (def edit-tool-description
   (str
@@ -620,7 +625,7 @@
    :schema mcp-schema/editor-tool-schema
    :output-schema clj-change-output-schema
    :structured? true
-   :tool-fn #'handle-edit-clojure})
+   :tool-fn #'handle-clj-change})
 
 (def clj-change-tool
   {:id :clj-change
