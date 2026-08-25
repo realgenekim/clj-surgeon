@@ -130,7 +130,7 @@ if [ "$arm" != native ]; then
                  (str "[mcp_servers.clj-surgeon]\n"
                       "url = \"" url "\"\n"
                       "required = true\n"
-                      "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]\n")))' \
+                      "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n")))' \
     "$codex_home/config.toml" "$mcp_url"
 fi
 if [ "$arm" = production ]; then
@@ -147,7 +147,7 @@ case "$arm" in
     route_prompt='Use native bounded source inspection and apply_patch for all mutations. Do not use clj-surgeon, MCP tools, Git history, reflogs, remotes, or files outside this workspace.'
     ;;
   structural)
-    route_prompt='Use inspect_clojure for Clojure inspection and edit_clojure or apply_clojure_changes for every Clojure mutation. Do not use native patching for Clojure, Git history, reflogs, remotes, or files outside this workspace.'
+    route_prompt='Use inspect_clojure for Clojure inspection and edit_clojure, transform_clojure, or apply_clojure_changes for every Clojure mutation. Prefer transform_clojure when one bounded pure relation computes repeated replacements. Do not use native patching for Clojure, Git history, reflogs, remotes, or files outside this workspace.'
     ;;
   production)
     route_prompt='Use the installed clj-surgeon skill and choose the fastest safe route for each change. Do not use Git history, reflogs, remotes, prior benchmark results, or files outside this workspace.'

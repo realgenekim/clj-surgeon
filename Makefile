@@ -39,7 +39,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -68,6 +68,7 @@ help:
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
 	@echo "  make benchmark-edit-portfolio  Compare representative edits across microscope/current/native"
 	@echo "  make benchmark-edit-portfolio-self-test Verify edit capsules and harness without model calls"
+	@echo "  make benchmark-anvil-compiled-edit-canary RESULT_DIR=/abs/path [REPLICATES=1] Compare transform/edit/native on one computed edit"
 	@echo "  make benchmark-inspect-mcp     Compare persistent inspect, CLI, and native reads"
 	@echo "  make benchmark-inspect-mcp-self-test Verify the inspect harness without model calls"
 	@echo "  make benchmark-codex-skill     Run the bounded 2-session Codex skill battery"
@@ -496,6 +497,10 @@ benchmark-edit-portfolio-self-test:
 	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
+
+benchmark-anvil-compiled-edit-canary:
+	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
+	bash bench/run_anvil_compiled_edit_canary.sh "$(RESULT_DIR)" "$(or $(REPLICATES),1)"
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh

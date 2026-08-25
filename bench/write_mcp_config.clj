@@ -34,7 +34,7 @@
                         ":nrepl-port" ":none"]))
         "]\n"))
     "required = true\n"
-    "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]\n"
+    "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n"
     "default_tools_approval_mode = \"approve\"\n"
     "startup_timeout_sec = 5\n"
     "tool_timeout_sec = 45\n"))
@@ -64,7 +64,7 @@
     (assert (not (str/includes? http-source "command =")))
     (assert (str/includes? http-source "required = true"))
     (assert (str/includes? http-source
-                           "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]"))
+                           "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]"))
     (assert (str/includes? http-source
                            "default_tools_approval_mode = \"approve\""))
     (assert (str/includes? http-source "startup_timeout_sec = 5"))
