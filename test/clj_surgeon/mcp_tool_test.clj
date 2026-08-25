@@ -1014,6 +1014,14 @@
         (is (= true (get-in @calls [2 :payload :verification_complete])))
         (is (= "fast" (get-in @calls [2 :payload :verification :profile]))))
       (testing "refusal summaries preserve the actionable diagnostic"
+        (is (str/starts-with?
+              (mcp-tool/concise-summary
+                {:ok true
+                 :operation "edit_clojure"
+                 :edits 2
+                 :files 1
+                 :verification_complete true})
+              "edit_clojure\n"))
         (testing "keyword refusal types and rollback state remain truthful"
           (is (re-find #"refused · verification-failed"
                        (mcp-tool/concise-summary

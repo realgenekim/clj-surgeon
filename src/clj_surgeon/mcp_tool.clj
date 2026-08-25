@@ -510,7 +510,8 @@
   "Render compact visible content; the full receipt remains structuredContent."
   [result]
   (if (:ok result)
-    (let [caller-proof (get-in result [:caller_proof :level])
+    (let [operation (or (:operation result) "apply_clojure_changes")
+          caller-proof (get-in result [:caller_proof :level])
           caller-proof-line
           (case caller-proof
             "semantic-complete"
@@ -524,7 +525,7 @@
 
             "")]
       (if (:verification_complete result)
-        (format (str "apply_clojure_changes\n"
+        (format (str operation "\n"
                      "  %s edits · %s files\n\n"
                      "✓ atomic commit complete\n"
                      "✓ written bytes read back and verified"
@@ -532,7 +533,7 @@
                      "✓ terminal evidence · verification_complete=true · next action none")
                 (or (:edits result) (:match-count result) 0)
                 (or (:files result) (:changed-file-count result) 0))
-        (format (str "apply_clojure_changes\n"
+        (format (str operation "\n"
                      "  %s edits · %s files\n\n"
                      "✓ atomic commit complete\n"
                      "✓ written bytes read back and hot proof complete"
@@ -541,7 +542,8 @@
                      "→ copy next_call to inspect_clojure after doing other useful work")
                 (or (:edits result) (:match-count result) 0)
                 (or (:files result) (:changed-file-count result) 0))))
-    (let [reason (or (:reason result) (:error-type result)
+    (let [operation (or (:operation result) "apply_clojure_changes")
+          reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
           reason (if (keyword? reason) (name reason) reason)
           path (or (:path result) (:error-path result) (:error_path result))
@@ -556,7 +558,7 @@
           source-safe? (or (:source-unchanged result)
                            (:source_unchanged result)
                            (:rolled-back result))]
-      (format (str "apply_clojure_changes\n"
+      (format (str operation "\n"
                    "  refused · %s%s\n"
                    "%s\n"
                    "%s\n"
@@ -570,20 +572,30 @@
               (or (:remedy result) (:next_action result)
                   "Correct the request and retry once.")))))
 
-(defn handle-clj-change
-  "clojure-mcp callback handler. Kept as a Var for live nREPL redefinition."
-  [_exchange params callback]
+(defn- handle-operation
+  [operation params callback]
   (let [result (if-let [config @runtime-config]
                  (execute-request! config params)
                  {:ok false
                   :error_type "server-not-initialized"
-                  :error "apply_clojure_changes server is not initialized"
+                  :error (str operation " server is not initialized")
                   :source_unchanged true
                   :remedy "Restart the configured clj-surgeon MCP server."})
+        result (assoc result :operation operation)
         body (json/generate-string result)
         summary (concise-summary result)]
     (callback [summary] (not (:ok result)) result)
     body))
+
+(defn handle-clj-change
+  "Heavy transaction callback. Kept as a Var for live nREPL redefinition."
+  [_exchange params callback]
+  (handle-operation "apply_clojure_changes" params callback))
+
+(defn handle-edit-clojure
+  "Compact editor callback. Kept as a Var for live nREPL redefinition."
+  [_exchange params callback]
+  (handle-operation "edit_clojure" params callback))
 
 (def edit-tool-description
   (str
@@ -608,7 +620,7 @@
    :schema mcp-schema/editor-tool-schema
    :output-schema clj-change-output-schema
    :structured? true
-   :tool-fn #'handle-clj-change})
+   :tool-fn #'handle-edit-clojure})
 
 (def clj-change-tool
   {:id :clj-change

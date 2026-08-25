@@ -44,7 +44,7 @@
            (mapv :name tools)))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
-    (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))
+    (is (= #'tool/handle-edit-clojure (:tool-fn (nth tools 2))))
     (is (= #'program-tool/handle-transform-clojure
            (:tool-fn (nth tools 3))))
     (is (= false (get-in tools [3 :schema :additionalProperties])))
