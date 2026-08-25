@@ -263,3 +263,18 @@ decision packet from the historical child without exposing its patch, start the 
 architectural discovery, and permit one foreground verification cycle. Its acceptance gate is
 >=5x complete materialization wall, exact semantic verification, zero failed mutations, and no
 source reacquisition for already-addressed owners.
+
+### Selective-v1 routing intervention
+
+The first prompt-only route card produced two correct `cclsp-optional`
+replicas at 164.197 and 166.273 seconds. Both used zero MCP calls. Their 165.235
+second median was 41.0% below the old production route and 11.5% above the
+single native baseline roll.
+
+On `failure-atomic-commit`, the route card produced one correct 506.167-second
+run with 17 actions and one successful inspection. It removed six MCP calls and
+five actions from the earlier production route, but wall time increased 22.4%
+and finished 3.7% behind native. This passes the route-abstention hypothesis
+and does not establish a complex-task speed gain. Do not tune more route prose
+against one high-variance whole-task roll. Move the next clock to the point
+where the complete decision exists.

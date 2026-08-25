@@ -253,3 +253,33 @@ The next implementation should be the prompt-only routing experiment followed
 by the decision-boundary benchmark. If those cannot produce a replicated
 5x-class materialization win, the transaction surface is still asking the
 model to carry too much mechanics.
+
+## Follow-up: selective-v1 removed waste, not thought
+
+Three fresh Sol/high callers received only the versioned `selective-v1` route
+card in addition to the normal blinded production prompt.
+
+| Case | Result | Wall | Actions | MCP calls |
+|---|---:|---:|---:|---:|
+| native-positive replica 1 | pass | 164.197 s | 16 | 0 |
+| native-positive replica 2 | pass | 166.273 s | 12 | 0 |
+| multi-owner replica 1 | pass | 506.167 s | 17 | 1 |
+
+Both native-positive replicas routed correctly without MCP. Their 165.235
+second median was 41.0% below the former 280.199-second production route, a
+1.70x speedup from instruction alone. It remained 11.5% above the single
+148.252-second native baseline roll, so more paired samples are required before
+claiming parity with native.
+
+The multi-owner caller used one successful structural inspection, then native
+materialization. It reduced the earlier production route from seven MCP calls
+and 22 actions to one MCP call and 17 actions. Complete wall nevertheless rose
+from 413.540 to 506.167 seconds and landed 3.7% behind the native roll. Model
+deliberation variance dominated the saved tool boundaries in this sample.
+
+The prompt intervention therefore passes the abstention gate and fails the
+speed gate on the complex case. The global Codex and Claude instructions now
+carry the abstention, terminal-read, exact-owner, one-transaction, and focused
+verification rules because those rules remove known waste without weakening
+safety. The >=5x claim now belongs exclusively to the decision-boundary
+materialization experiment.
