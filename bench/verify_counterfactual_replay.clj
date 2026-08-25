@@ -273,7 +273,7 @@
 
 (defn -main
   [& arguments]
-  (let [repo-root (str (fs/absolutize "."))]
+  (let [repo-root (str (fs/parent (fs/parent (fs/absolutize *file*))))]
     (if (= ["--self-test"] arguments)
       (self-test)
       (let [result (verify-all repo-root)]
