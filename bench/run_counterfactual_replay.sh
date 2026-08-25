@@ -15,11 +15,19 @@ mcp_url=${REPLAY_MCP_URL:-}
 dry_run=${REPLAY_DRY_RUN:-false}
 skip_verification=${REPLAY_SKIP_VERIFICATION:-false}
 codex_command=${REPLAY_CODEX_CMD:-codex}
+sandbox=${BENCH_SANDBOX_MODE:-workspace-write}
 
 case "$arm" in
   native|structural|production) ;;
   *)
     echo "arm must be native, structural, or production: $arm" >&2
+    exit 2
+    ;;
+esac
+case "$sandbox" in
+  read-only|workspace-write|danger-full-access) ;;
+  *)
+    echo "BENCH_SANDBOX_MODE must be read-only, workspace-write, or danger-full-access: $sandbox" >&2
     exit 2
     ;;
 esac
@@ -153,7 +161,7 @@ if [ "$dry_run" = true ]; then
   exit 0
 fi
 
-codex_args=(exec --json --ephemeral --skip-git-repo-check --sandbox workspace-write --color never)
+codex_args=(exec --json --ephemeral --skip-git-repo-check --sandbox "$sandbox" --color never)
 if [ "$arm" != production ]; then
   codex_args+=(--ignore-rules)
 fi
@@ -263,6 +271,7 @@ jq -n \
   --arg arm "$arm" \
   --arg model "$model" \
   --arg reasoning "$reasoning" \
+  --arg sandbox "$sandbox" \
   --argjson wall_ms "$wall_ms" \
   --argjson codex_exit "$codex_exit" \
   --argjson verification_exit "$verification_exit" \
@@ -273,7 +282,7 @@ jq -n \
   --argjson tool_actions "$tool_actions" \
   --argjson mcp_actions "$mcp_actions" \
   --argjson usage "$usage" \
-  '{schema:"clj-surgeon.counterfactual-replay-result/v1",case_id:$case_id,arm:$arm,model:$model,reasoning:$reasoning,wall_ms:$wall_ms,codex_exit:$codex_exit,verification_exit:$verification_exit,exact_paths:$exact_paths,exact_targets:$exact_targets,semantic_pass:$semantic_pass,exact_oracle:$exact_oracle,tool_actions:$tool_actions,mcp_actions:$mcp_actions,usage:$usage}' \
+  '{schema:"clj-surgeon.counterfactual-replay-result/v1",case_id:$case_id,arm:$arm,model:$model,reasoning:$reasoning,sandbox:$sandbox,wall_ms:$wall_ms,codex_exit:$codex_exit,verification_exit:$verification_exit,exact_paths:$exact_paths,exact_targets:$exact_targets,semantic_pass:$semantic_pass,exact_oracle:$exact_oracle,tool_actions:$tool_actions,mcp_actions:$mcp_actions,usage:$usage}' \
   >"$result_dir/result.json"
 
 cat "$result_dir/result.json"
