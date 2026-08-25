@@ -93,6 +93,33 @@ native wall is extremely noisy, and site count alone does not establish an SCI
 speed advantage because one `apply_patch` call can carry many homogeneous
 hunks.
 
+The 60-site SCI program remained constant-sized:
+
+```clojure
+(-> []
+    (match :retry-delays)
+    right
+    (transform
+      (fn [delays]
+        (mapv (partial + 100) delays))))
+```
+
+The MCP envelope used `expect.matches=60` and
+`expect.max_changed_characters=1920`. Surgeon compiled that one relation into
+60 separately addressed, hash-fenced edits and committed them atomically. The
+specific hypothesis for Anvil is:
+
+```text
+SCI model actions/expression payload           O(1)
+SCI deterministic compile/apply work           O(n)
+native apply_patch actions                      potentially O(1)
+native model-generated patch payload            O(n)
+```
+
+The experiment must therefore measure mutation argument bytes as well as tool
+action count and complete wall. Counting calls alone would conceal native's
+growing patch-rendering burden.
+
 ### Caller context and output
 
 The one-site Sol/high transform turn used:

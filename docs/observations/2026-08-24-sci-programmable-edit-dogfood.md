@@ -442,6 +442,48 @@ the native one-replicate wall varied wildly. Every native scale cell deleted
 an unrelated final blank line. That drift is recorded but is not treated as a
 consequential correctness failure in the revised interpretation.
 
+The complete 60-site editor program was still only:
+
+```clojure
+(-> []
+    (match :retry-delays)
+    right
+    (transform
+      (fn [delays]
+        (mapv (partial + 100) delays))))
+```
+
+Its MCP envelope supplied the safety and commit policy separately:
+
+```json
+{
+  "file": "src/bench/repeated_policy.clj",
+  "expression": "(-> [] (match :retry-delays) right (transform (fn [delays] (mapv (partial + 100) delays))))",
+  "commit": true,
+  "expect": {
+    "matches": 60,
+    "max_changed_characters": 1920
+  }
+}
+```
+
+The expression was identical at 10, 30, and 60 sites; only the cardinality and
+churn guards changed. Surgeon expanded it into 60 separately addressed,
+source-hash-fenced edits and committed them atomically. The scaling hypothesis
+is therefore more precise than “Surgeon uses one tool call”:
+
+```text
+SCI model actions and expression payload       O(1)
+SCI deterministic compilation and application O(n)
+
+native apply_patch actions                     potentially O(1)
+native model-generated patch payload           O(n)
+```
+
+Both routes can batch into one action. The potential advantage is that SCI
+moves the growing work out of model token generation and into a subsecond
+deterministic compiler.
+
 The important ergonomic speedup happened at the refusal boundary. Teaching
 the correct root changed the ten-site route from a 38.227-second safe refusal
 to a 25.815-second exact commit, a 1.48x wall improvement and one eliminated
