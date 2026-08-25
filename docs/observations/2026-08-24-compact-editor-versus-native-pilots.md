@@ -316,3 +316,31 @@ semantic preparation, CLI fallback, recovery, and uncommon operations.
 
 This is a routing-boundary finding: progressive disclosure makes an invoked
 skill cheaper, but the cheapest common skill invocation is no invocation.
+
+## Tool-catalog subtraction did not buy latency
+
+Commit `431749e` extracted a pure, tested catalog-profile seam without changing
+the production default. The live contracts measured:
+
+| Tool contract | Characters |
+|---|---:|
+| `inspect_clojure` | 7,177 |
+| `apply_clojure_changes` | 17,751 |
+| `edit_clojure` | 2,720 |
+| `transform_clojure` | 1,529 |
+| Full catalog | 29,177 |
+
+An edit-only profile removes 90.7% of the full contract text. Three fresh
+Sol/high trials nevertheless completed in 28.365, 29.115, and 27.870 seconds:
+28.365 seconds median, all exact. The prior full-catalog direct-route median was
+24.547 seconds. In this small sample the much smaller catalog was 15.6% slower,
+while total model input remained approximately 45k tokens.
+
+Result directory: `/tmp/clj-surgeon-edit-only-profile-431749e`
+
+This falsifies catalog size as the missing 2--5x lever. The profile seam remains
+useful for controlled experiments, but production should retain the full
+catalog until representative evidence shows a routing or latency benefit. The
+next search moves to historical task shapes where one compiled decision can
+remove several model/tool boundaries, especially multi-owner deletion and
+extraction after architecture is already decided.
