@@ -407,3 +407,54 @@ rather than extra editor work. The result is encouraging because the route and
 correctness are extremely stable, but it reinforces the correct claim boundary:
 one lucky 2.06x canary is not a replicated 2x result. Production-derived task
 shapes remain the decisive next test.
+
+## A real extraction cleanup exposed and paid for a missing address
+
+The next capsule derives from `sessionize-sched-killer` commit `7c71c9f7`,
+which extracted development handlers without behavior changes. The public
+fixture anonymizes function bodies but preserves the source-namespace cleanup
+topology: one require rewrite, four route rewrites, four noncontiguous owner
+deletions, and attached comments. The target namespace already exists, so this
+capsule measures the post-move cleanup decision rather than file creation.
+
+The first compact caller tried the two obvious namespace selectors,
+`within.form=sample.server` and `within.form=ns`. Both refused before mutation
+with `change-owner-mismatch`. Native completed exactly in 32.622 seconds. This
+was useful failure: the compact address algebra exposed named Vars but not the
+equally fundamental namespace form.
+
+Commit `e10786d` added the obvious address:
+
+```json
+{"within":{"namespace":"sample.server"}}
+```
+
+Missing or mixed `form`/`namespace` locations refuse before compilation. A
+behavior-level regression proves a namespace require edit, named-form edit, and
+owner deletion commit and undo together. The complete 512 MiB MCP gate passed
+195 tests and 1,615 assertions.
+
+The next caller used the new address correctly on its first attempt and
+committed all nine edits in 30.436 seconds. Its only mismatch was presentation:
+the task supplied the replacement require as a one-line semantic form, so the
+editor faithfully emitted it on one line while native learned the existing
+multiline style from its required read. The harness had claimed exact
+before/after source was supplied when only semantic form identity was supplied.
+
+After the capsule supplied the exact multiline replacement source to both
+arms, the exact-byte canary was:
+
+Result directory:
+`/tmp/clj-surgeon-dev-extraction-cleanup-canary3-20260825`
+
+| Same Sol/high task boundary | Exact | Wall | Tool round trips |
+|---|---:|---:|---:|
+| Compact `edit_clojure` | yes | 26.261 s | 1 |
+| Native full-file read + `apply_patch` | yes | 33.475 s | 2 |
+
+Compact saved 7.214 seconds, or 21.5% wall, for a **1.27x** end-to-end win.
+This is representative evidence that the mixed compact transaction helps on a
+real extraction-cleanup shape. It is not a 2x result. A larger real extraction
+is the next honest test of the hypothesized crossover: native patch generation
+grows with moved/deleted source, while a supplied exact owner list remains
+constant-size at the caller/tool boundary.
