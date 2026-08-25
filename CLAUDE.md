@@ -72,10 +72,13 @@ updates, and verification gates. It is not a chronological coding diary.
 
 ## Key conventions
 
-- Use the hottest capable entrance. Prefer `inspect_clojure`, `edit_clojure`,
-  and `apply_clojure_changes` over the process-starting CLI. Use the CLI only
-  when MCP is unavailable, the operation is not exposed there, or the CLI
-  itself is under test.
+- Use the hottest capable entrance. Prefer `inspect_clojure` for bounded
+  structural reads. For writes, prefer compact `edit_clojure`, then native
+  `apply_patch` when it is smaller or clearer. Use heavyweight
+  `apply_clojure_changes` only for a prepared semantic basis, an operation
+  absent from the compact editor, or gates that must participate in rollback.
+  Use the process-starting CLI only when MCP is unavailable, the operation is
+  not exposed there, or the CLI itself is under test.
 - For cross-file definitions, references, implementations, incoming calls,
   and outgoing calls, search the deferred MCP catalog for `mcp__cclsp__*` before
   falling back to source. Use the published tool schema; do not guess
@@ -92,15 +95,15 @@ updates, and verification gates. It is not a chronological coding diary.
   turn; never repeat an equivalent inspection merely to make hidden source
   visible. The server read may take only milliseconds while each unnecessary
   model/tool boundary costs many seconds of complete wall time.
-- **Bootstrap editing discipline during this editor study:** do not use the
+- **Compact editing discipline during this editor study:** do not use the
   heavyweight `apply_clojure_changes` API to implement its compact successor
   merely for dogfooding theater. Use `edit_clojure` when one exact guarded
   subtree batch fits its current contract. Otherwise use native `apply_patch`,
   then format and test the changed Clojure files. Dogfood the new interface at
   its public end-to-end boundary; do not pay legacy schema ceremony while
   constructing that boundary. Once the successor is live, prefer it for real
-  eligible edits and record any fallback as interface evidence; this bootstrap
-  exception must not dissuade use of the new API being built.
+  eligible edits and record any fallback as interface evidence; this
+  construction exception must not dissuade use of the new API being built.
 - A named-form result includes the exact `source_anchor` required by cclsp.
   Copy it into `resolve_var_surface`. For up to four related known Vars, use
   one ordered `resolve_var_surfaces` call. Do not discard exact evidence and
@@ -116,11 +119,15 @@ updates, and verification gates. It is not a chronological coding diary.
   `keep=true` or one replacement form. Call
   `apply_clojure_changes` once. Do not repeat semantic resolution, source reads,
   selectors, counts, hashes, basis IDs, or site IDs.
-- When the file, named top-level form, exact old subtree, and replacement are
-  already known, call `edit_clojure` directly with only `workspace_root` and
-  `edits`. Its per-edit old subtree and match count are the stale-source guards;
-  do not preflight-read or add `verify` or aggregate counts. Use
-  `apply_clojure_changes` when formatter, linter, or test gates are required.
+- When the files, named top-level forms, and desired changes are already known,
+  call `edit_clojure` directly with `workspace_root`, required literal `edits`,
+  and optional computed `programs`. Per-edit old subtrees and exact program
+  expectations are the stale-source guards; all items compile against one
+  frozen snapshot and commit atomically. Do not preflight-read or add `verify`
+  or aggregate counts. Apply the same proportional formatter/linter/test policy
+  as the native route; never add a tool call merely because Surgeon performed
+  the edit. Escalate to `apply_clojure_changes` only when required gates must
+  roll back the transaction or its unique semantic operations are required.
 - If cclsp does not index a known owner, prepare it with project-relative
   `file` plus exact top-level `form`. This exact-source route does not claim a
   reference surface.

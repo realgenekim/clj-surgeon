@@ -39,11 +39,23 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 - For a prepared basis, copy `next_call`, fill every `null` with one keep,
   complete replacement, or whole-owner delete, and apply once.
-- For exact nested replacements, call `edit_clojure` with only `workspace_root` and `edits`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional positive `matches` (default 1).
-  Do not send `changes`, top-level `expect`, `verify`, `basis`, or `decisions`; Surgeon derives IDs and counts. Compact edits preserve unrelated bytes and do not format the whole file. Use `apply_clojure_changes` for formatter, linter, or test gates.
+- For an already-decided batch, prefer one compact `edit_clojure` call with
+  `workspace_root`, required `edits`, and optional `programs`. Each literal edit
+  contains `file`, `within: {form}`, `from`, `to`, and optional positive
+  `matches` (default 1). Each computed program contains `file`, `expression`,
+  and exact `expect.matches` plus `expect.max_changed_characters`. Use programs
+  only for bounded repeated or derived relations; keep supplied literals as
+  direct edits. All items compile against one frozen snapshot and commit as one
+  atomic transaction; they are not sequential.
+  Do not send `changes`, top-level `expect`, `verify`, `basis`, or `decisions`.
+  Compact edits preserve unrelated bytes and do not format the whole file.
 - Use `transform_clojure` when one bounded pure relation derives replacements for one or more known leaves. Supply one SCI path ending in `transform`, exact `expect.matches`, and `expect.max_changed_characters`; preview is the default.
   Set `commit=true` only for an already-decided relation over narrow nodes; commit parses, hash-fences, reads back, and receipts. Narrow around comments. Use semantic preparation or a tested refactor operation for caller completeness or namespace mechanics.
-- For known exact changes, send one direct `changes` request with `id`, `files`,
+- Use heavyweight `apply_clojure_changes` only for a prepared semantic basis,
+  an operation absent from the compact editor, or when formatter/linter/test
+  gates must participate in rollback. Do not pay its schema and verification
+  ceremony for an ordinary already-decided edit batch. For a necessary direct
+  heavyweight change, send one `changes` request with `id`, `files`,
   `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
   `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.
   When the file and complete owner list are supplied, call this route directly:
@@ -64,5 +76,11 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
 
 ## Fall back deliberately
 
-Native Write is right for new files; native patching for JavaScript, prose, comments, top-level insertion, or one unsupported text edit. Use the CLI only when MCP is unavailable or unsupported.
+Native Write is right for new files; native patching is right for a smaller or
+clearer literal edit, JavaScript, prose, comments, top-level insertion, or an
+unsupported edit. Verification policy must not depend on editor choice. When
+the task warrants formatting, linting, or testing, run it once after the whole
+mutation for compact and native routes alike; do not add a call merely because
+Surgeon performed the edit. Use the CLI only when MCP is unavailable or
+unsupported.
 Read [CLI fallback](skills/clj-surgeon/references/cli-fallback.md) or [advanced operations](skills/clj-surgeon/references/advanced-operations.md).
