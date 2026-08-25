@@ -335,17 +335,21 @@ left source unchanged with `next_action=commit`.
 
 A fresh same-model local control then exercised the complete caller route:
 
-| Route | Exact | Wall | Tool sequence | Failed mutations |
-|---|---:|---:|---|---:|
-| `transform_clojure` | yes | 25.712 s | one committed MCP transform | 0 |
-| native | no | 21.347 s | one bounded `rg`, then one file change | 0 |
+| Route | Semantically correct | Byte-exact | Wall | Tool sequence |
+|---|---:|---:|---:|---|
+| `transform_clojure` | yes | yes | 25.712 s | one committed MCP transform |
+| native | yes | no | 21.347 s | one bounded `rg`, then one file change |
 
 The transform caller immediately used the repaired public expression and
 preserved every unrelated byte. The native caller made the intended semantic
-change but also deleted an unrelated final blank line. Therefore native is not
-admitted to the efficiency comparison. The 4.365-second raw wall advantage for
-native is useful pressure on the structural interface, but it is not a win
-under the exactness gate. Raw evidence is retained at:
+change but also deleted an unrelated final blank line. The initial scorer
+excluded native on byte exactness. Gene correctly challenged that product
+value: trailing EOF whitespace is inconsequential for this task and should not
+turn a semantically correct edit into a failure. Retain byte exactness as a
+diagnostic, but admit native to the wall comparison unless unrelated drift can
+affect meaning, comments, formatting conventions, or review cost. Native's
+4.365-second advantage is therefore real in this sample. Raw evidence is
+retained at:
 
 ```text
 /tmp/clj-surgeon-local-computed-pair-dogfood-20260824T203306/
@@ -420,22 +424,23 @@ the redundant inline count guard:
 The next fresh Sol/high caller chose the file-wide root on its first call. The
 same relation was then tested at 10, 30, and 60 sites:
 
-| Sites | Route | Exact | Wall | Mutation actions |
-|---:|---|---:|---:|---:|
-| 1 | SCI transform | yes | 25.712 s | 1 |
-| 10 | SCI transform | yes | 25.815 s | 1 |
-| 30 | SCI transform | yes | 25.033 s | 1 |
-| 60 | SCI transform | yes | 26.339 s | 1 |
-| 10 | native | no | 28.783 s | 1 |
-| 30 | native | no | 45.551 s | 1 |
-| 60 | native | no | 22.400 s | 1 |
+| Sites | Route | Semantic | Byte-exact | Wall | Mutation actions |
+|---:|---|---:|---:|---:|---:|
+| 1 | SCI transform | yes | yes | 25.712 s | 1 |
+| 10 | SCI transform | yes | yes | 25.815 s | 1 |
+| 30 | SCI transform | yes | yes | 25.033 s | 1 |
+| 60 | SCI transform | yes | yes | 26.339 s | 1 |
+| 10 | native | yes | no | 28.783 s | 1 |
+| 30 | native | yes | no | 45.551 s | 1 |
+| 60 | native | yes | no | 22.400 s | 1 |
 
 SCI caller wall remained within a 1.306-second band while the exact edit count
 grew sixtyfold. This proves the desired constant-effort editor-macro property
 for one homogeneous relation. It does not prove a monotonic wall advantage:
 native `apply_patch` can also carry many homogeneous hunks in one action, and
 the native one-replicate wall varied wildly. Every native scale cell deleted
-an unrelated final blank line and therefore failed exact admission.
+an unrelated final blank line. That drift is recorded but is not treated as a
+consequential correctness failure in the revised interpretation.
 
 The important ergonomic speedup happened at the refusal boundary. Teaching
 the correct root changed the ten-site route from a 38.227-second safe refusal
