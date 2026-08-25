@@ -13,6 +13,12 @@ one-line edit?”:
 > Given the changes we actually needed in production, which editing route most reliably reaches
 > the known-good result with the least agent effort, latency, and machine cost?
 
+This whole-task replay must be paired with a second clock boundary for the editor-golf claim.
+Once the model can state the complete mechanical decision, compare one compiled Surgeon
+transaction with native materialization. The whole-task replay locates the crossover; the
+decision-boundary replay tests the >=5x `think -> compile -> bang -> verify` goal. Do not dilute
+one question with the other.
+
 ## Experimental worlds
 
 Each case begins at the same parent commit in an isolated worktree.
@@ -234,3 +240,26 @@ structural editor. The next case is `failure-atomic-commit`: a 340-line source/t
 where multi-owner transaction and proof density should have a fair chance to cross over. Its
 authoritative verifier is the affected intent-transaction namespace; the task explicitly keeps the
 unrelated historical full suite out of the foreground timing.
+
+### Second admitted case
+
+`failure-atomic-commit` established a crossover without approaching the final speed goal:
+
+| Route | Complete-turn wall | Tool actions | MCP route |
+| --- | ---: | ---: | --- |
+| Production choice | **413.540 s** | 22 | seven inspections; native writes |
+| Native | 487.903 s | 24 | none |
+| Forced structural | 660.644 s | 24 | six inspections; four applies |
+
+All three routes changed only allowed paths and passed the focused 19-test/145-assertion
+verifier. Production was 15.2% faster than native and 37.4% faster than forced structural use.
+The production caller selected a hybrid route: structural perception plus native
+materialization. The forced structural caller paid two inspection refusals and two apply
+refusals before succeeding.
+
+This result proves that selective routing can cross over on a real multi-owner change. It does
+not satisfy the editor-golf goal. The follow-on decision-boundary experiment will derive an exact
+decision packet from the historical child without exposing its patch, start the clock after
+architectural discovery, and permit one foreground verification cycle. Its acceptance gate is
+>=5x complete materialization wall, exact semantic verification, zero failed mutations, and no
+source reacquisition for already-addressed owners.

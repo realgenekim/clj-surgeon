@@ -16,6 +16,7 @@ dry_run=${REPLAY_DRY_RUN:-false}
 skip_verification=${REPLAY_SKIP_VERIFICATION:-false}
 codex_command=${REPLAY_CODEX_CMD:-codex}
 sandbox=${BENCH_SANDBOX_MODE:-workspace-write}
+route_card_file=${REPLAY_ROUTE_CARD_FILE:-}
 
 case "$arm" in
   native|structural|production) ;;
@@ -46,6 +47,16 @@ test ! -e "$result_dir" || {
 if [ "$arm" != native ] && [ -z "$mcp_url" ]; then
   echo "REPLAY_MCP_URL is required for $arm" >&2
   exit 2
+fi
+if [ -n "$route_card_file" ]; then
+  [ "$arm" = production ] || {
+    echo "REPLAY_ROUTE_CARD_FILE is supported only for the production arm" >&2
+    exit 2
+  }
+  test -f "$route_card_file" || {
+    echo "route card not found: $route_card_file" >&2
+    exit 2
+  }
 fi
 
 for command_name in bb git jq perl shasum; do
@@ -142,6 +153,12 @@ case "$arm" in
     route_prompt='Use the installed clj-surgeon skill and choose the fastest safe route for each change. Do not use Git history, reflogs, remotes, prior benchmark results, or files outside this workspace.'
     ;;
 esac
+if [ -n "$route_card_file" ]; then
+  cp "$route_card_file" "$result_dir/route-card.md"
+  route_prompt="$route_prompt
+
+$(cat "$route_card_file")"
+fi
 {
   cat "$case_dir/task.md"
   printf '\n%s\n' "$route_prompt"

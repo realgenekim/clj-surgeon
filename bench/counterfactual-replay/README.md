@@ -36,6 +36,11 @@ that shared service access only to the disposable workspace. `REPLAY_DRY_RUN=tru
 materialization, auth/config isolation, prompt construction, and refusal gates without a model
 call.
 
+For a production-arm prompt intervention, set `REPLAY_ROUTE_CARD_FILE` to a versioned Markdown
+file. The runner appends it to the normal production route, copies it into the result directory,
+and refuses the override for forced native or structural arms. This preserves the standard
+safety/blinding prompt while making routing experiments attributable.
+
 The initial cases were selected by change shape before their diffs were reviewed:
 
 | Case | Stratum | Historical change |
