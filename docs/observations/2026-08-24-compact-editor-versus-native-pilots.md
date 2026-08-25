@@ -383,3 +383,27 @@ decision, structural addressing removes the read needed to manufacture patch
 context. It does not yet prove a representative 2x product advantage because
 the source is synthetic and the deleted block is contiguous. The next gates
 are replicated pairs and a production-derived extraction-shaped replay.
+
+### Three-pair replication: stable advantage, not stable 2x
+
+Result directory:
+`/tmp/clj-surgeon-historical-delete-replicated-20260824`
+
+| Pair | Compact | Native | Paired result |
+|---:|---:|---:|---:|
+| 1 | 60.758 s | 38.462 s | native 1.58x faster |
+| 2 | 23.127 s | 30.155 s | compact 1.30x faster |
+| 3 | 19.673 s | 39.622 s | compact 2.01x faster |
+
+All six runs were exact and first-attempt successful. Compact used one tool
+round trip with zero discovery reads in every trial. Native used one bounded
+read and one patch in every trial. Compact median wall was 23.127 seconds;
+native median wall was 38.462 seconds. The median result is therefore a
+15.335-second saving, or **1.66x end-to-end**, not 2x.
+
+The 60.758-second compact outlier completed with the same one-call route and
+only 457 output tokens, which implicates model/service deliberation variance
+rather than extra editor work. The result is encouraging because the route and
+correctness are extremely stable, but it reinforces the correct claim boundary:
+one lucky 2.06x canary is not a replicated 2x result. Production-derived task
+shapes remain the decisive next test.
