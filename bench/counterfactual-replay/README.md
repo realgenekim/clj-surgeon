@@ -23,6 +23,19 @@ The destination must not exist. The materializer exports the parent tree, initia
 one-commit Git repository with no remote, verifies every declared starting hash, and leaves the
 task/capsule/oracle outside the caller workspace.
 
+Run one scored arm with:
+
+```bash
+REPLAY_MCP_URL=http://127.0.0.1:7888/mcp \
+bench/run_counterfactual_replay.sh cclsp-optional structural /absolute/fresh/result-dir
+```
+
+Valid arms are `native`, `structural`, and `production`. Set `REPLAY_EXEC_USER` when a root-owned
+Anvil harness should execute Codex as a named seat. Set `REPLAY_MCP_WRITE_USER=surgeon` to grant
+that shared service access only to the disposable workspace. `REPLAY_DRY_RUN=true` exercises
+materialization, auth/config isolation, prompt construction, and refusal gates without a model
+call.
+
 The initial cases were selected by change shape before their diffs were reviewed:
 
 | Case | Stratum | Historical change |
