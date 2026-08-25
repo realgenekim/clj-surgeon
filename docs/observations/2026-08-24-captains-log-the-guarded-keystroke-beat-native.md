@@ -10,8 +10,16 @@ for the supplied exact nested Clojure change?
 
 ## Bottom line
 
-Yes. This is the first result that feels decisive at the complete-agent-turn
-boundary.
+The first result was decisive against the observed production native route.
+Two subsequent symmetric Anvil controls narrowed the claim—and made it more
+credible.
+
+When callers had semantic owner/old/new information but no physical line
+context, direct `edit_clojure` finished 6/6 exactly and native `apply_patch`
+finished 0/6: every native caller safely guessed the wrong old line. When
+native callers were allowed one bounded read before patching, both routes were
+6/6 exact and native was about 2.22 seconds faster in the median paired run.
+Surgeon still used one action instead of two.
 
 The task named one owner, one exact semantic replacement, one preservation
 trap, and every unrelated byte as part of the result. Fresh Sol/high callers
@@ -218,6 +226,27 @@ faster in paired median wall with a bootstrap interval excluding zero. Its
 advantage must survive amortized startup by a realistic second or third edit,
 without a material regression on native-positive controls.
 
+### First symmetric Anvil calibration
+
+Two twelve-call calibrations at `gpt-5.6-sol` high now answer the narrow exact
+nested-edit question.
+
+| Treatment | MCP | Native | Interpretation |
+|---|---:|---:|---|
+| Strict no-read mutation | 6/6 exact, 18.870–21.683 s per-seat medians | 0/6 exact | Structural addressing can act from owner plus semantic subtree where line patching lacks physical context. |
+| Natural best route | 6/6 exact, 20.665 s pooled median, 1 action | 6/6 exact, **18.510 s**, 2 actions | Native remains faster for one tiny edit when one bounded read is allowed; MCP is smaller and proof-carrying. |
+
+Native won five of six natural-route pairs; its median paired advantage was
+approximately 2.22 seconds. One MCP call took 57.815 seconds, but the pooled
+median direction does not depend on that outlier. The fresh MCP bootstrap
+median was 6.415 seconds and is excluded from task wall because the production
+architecture is persistent. It is still decisive evidence against moving back
+to a cold per-edit MCP process.
+
+This calibration completes only the first two arms on one task. Production
+choice, guarded text CAS, stale-source, multi-file, semantic, prose, and
+new-file strata remain open.
+
 ## Direct tool wall versus complete-turn wall
 
 The structured `edit_clojure` cohort retains complete-turn wall but not a
@@ -274,24 +303,23 @@ The feature has crossed from “promising primitive” to “admitted product ro
 
 ## Smallest next falsifiable improvement
 
-Remove the optional pre-edit read from the realistic route without adding a
-task-specific prompt. Ten fresh installed-skill callers should remain 10/10
-exact, select `edit_clojure` as their first and only MCP action in at least nine
-runs, and finish below a 30-second median.
-
-Then run a ten-replica neutral native control with symmetrical route wording.
-If native returns to 10/10 exact and within five seconds of MCP, narrow the
-claim to lower ceremony and stronger proof. If the exactness or double-digit
-wall advantage persists, the decisive product-route conclusion strengthens.
+Run the production-choice arm with both routes and the normal installed skill.
+Then add a duplicate-lookalike and stale-concurrent-modification pair. The
+claim survives only if callers naturally select the right route, MCP keeps its
+one-action proof advantage, stale source refuses, and native-positive controls
+remain native.
 
 ## Captain's verdict
 
-Native editing remained a valuable control because it nearly worked. That is
-exactly why this result matters. The failure was not an exotic parse error or a
-crash. It was a tiny unrelated byte change that a capable agent could easily
-miss after making the right semantic decision.
+Native editing remained a fearsome control. Once it received the physical
+context it naturally needs, it became both exact and slightly faster on the
+smallest edit. That correction is part of the breakthrough, not a retreat from
+it.
 
-`edit_clojure` made the same decision smaller, faster, and harder to get subtly
-wrong.
+`edit_clojure` made the zero-read semantic decision possible, reduced the
+natural route from two actions to one, and carried its stale-source/ownership
+proof in the mutation itself. Native won tiny-edit wall time. Surgeon won
+structural addressability and proof density. The next portfolio will tell us
+where those advantages outweigh two seconds.
 
-Bang. One guarded chord. Exact source.
+Bang. One guarded chord. Exact source—and now an honest metronome beside it.
