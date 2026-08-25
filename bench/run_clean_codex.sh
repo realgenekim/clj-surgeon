@@ -1549,7 +1549,9 @@ run_one() {
       ;;
   esac
 
-  if [[ "$task" != *-edit ]] && [ "$final_sha" != "$start_sha" ]; then
+  if ! is_portfolio_task "$task" \
+    && [[ "$task" != *-edit ]] \
+    && [ "$final_sha" != "$start_sha" ]; then
     exact_correct=false
     correct=false
   fi
