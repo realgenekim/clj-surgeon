@@ -127,6 +127,43 @@ It does prove a valuable routing rule:
 That is the church-organ interaction we wanted: visualize the change, play one
 guarded chord, and receive terminal proof.
 
+## A second Anvil stratum kept the claim honest
+
+After the 4.61x result, the generic Anvil pair runner replayed the frozen
+`decision-batch-edit` capsule at commit `34de9b5`. This is a real-task-derived,
+two-file decision with six small, heterogeneous replacements. It is not a mass
+owner deletion. Fresh Sol/high callers again used counterbalanced order and
+exact-byte scoring.
+
+| Seat and CWD | Order | Compact | Native | Compact advantage |
+|---|---|---:|---:|---:|
+| `dev-a` — `/srv/fleet/dev-a/clj-surgeon-benchmark-34de9b5` | compact first | 30.717 s | 32.760 s | 6.2% lower wall |
+| `dev-b` — `/srv/fleet/dev-b/clj-surgeon-benchmark-34de9b5` | native first | 29.893 s | 31.378 s | 4.7% lower wall |
+| `dev-c` — `/srv/fleet/dev-c/clj-surgeon-benchmark-34de9b5` | compact first | 28.047 s | 30.060 s | 6.7% lower wall |
+
+All six trials were exact. Compact won every pair, with median wall 29.893
+seconds versus 31.378 seconds for native: 1.485 seconds and 4.7% lower wall,
+about 1.05x throughput. Compact used one MCP action, no source read, and a
+174-byte receipt in every run. Native used one source read plus one patch and
+returned 1,804--2,013 source bytes.
+
+This falsifies “batching alone produces 2--5x.” Both routes already fit in one
+model turn and six small replacements do not make native reproduce much text,
+so the common model floor dominates. The 4.61x mechanism is narrower and more
+valuable: owner-level intent avoids reading and rendering hundreds of lines
+during extraction cleanup. The product should route both strata through
+compact editing because it remained exact, first-attempt safe, and slightly
+faster, but it should claim a decisive speedup only for source-volume-eliding
+transactions.
+
+Durable results:
+
+```text
+/srv/fleet/dev-a/clj-surgeon-study-results/20260825T082845Z-decision-batch-dev-a
+/srv/fleet/dev-b/clj-surgeon-study-results/20260825T082845Z-decision-batch-dev-b
+/srv/fleet/dev-c/clj-surgeon-study-results/20260825T082845Z-decision-batch-dev-c
+```
+
 ## Kent Beck's contribution
 
 Every cumbersome step paid rent:
