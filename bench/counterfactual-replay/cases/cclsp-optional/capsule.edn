@@ -1,0 +1,29 @@
+{:schema 1
+ :id :cclsp-optional
+ :stratum :small-owner-edit
+ :repository {:name "clj-surgeon"
+              :parent "cde6fc5ba7d0e22e0e7d9fcd9b894ad662ad661c"
+              :child "6948f0eb6802bdc38082a1d6dc7ac586e5e93263"
+              :parent-tree "36802ff7bbb7aba514cf6991dec66b8fe475cf41"
+              :child-tree "ccb6500a278942c8a5d269027f2119507c968445"}
+ :provenance {:kind :historical-commit
+              :commit-subject "fix: make cclsp optional for coding agents"
+              :intent-sources [{:kind :commit-message
+                                :locator "6948f0eb6802bdc38082a1d6dc7ac586e5e93263"}
+                               {:kind :changed-owner-review
+                                :locator "workspace-mcp-block and managed-block-is-bounded-and-mcp-first"}]}
+ :task-file "task.md"
+ :targets ["src/clj_surgeon/workspace_onboarding.clj"
+           "test/clj_surgeon/workspace_onboarding_test.clj"]
+ :hashes {"src/clj_surgeon/workspace_onboarding.clj"
+          {:before "f809b5199af66057fdfb4170fa488a219d903bcae241af7e05f2cceae0546c4c"
+           :after "919e94c7324e0dc4c133fa06099921a73e02859746bb3e1cd240da546c4e4144"}
+          "test/clj_surgeon/workspace_onboarding_test.clj"
+          {:before "57f9c55784a1fc1b93f9364303e0121963252b0cfce4850a5f976b0937b9ab6a"
+           :after "8a320ca2e50321a9d03ab9afe160732ce1ad23b4b9fd289434a27de35437ba4c"}}
+ :verification {:commands ["bb test/run_all.clj"]
+                :exact-changed-paths true
+                :exact-target-bytes-secondary true
+                :parse-clojure true}
+ :expected {:changed-files 2 :insertions 3 :deletions 1}}
+

@@ -1,0 +1,29 @@
+{:schema 1
+ :id :plain-nrepl
+ :stratum :native-positive-source-and-test
+ :repository {:name "clj-surgeon"
+              :parent "0dede8683dbe223bcfdbdedf7e8c2d275df5cf7f"
+              :child "28aad1cb0ae9eb6e46f5f8dccf846c8e9f11773e"
+              :parent-tree "22760ca73c323b32fad8be204fb8c48467ac5542"
+              :child-tree "16b0fe745c62d04a259f481619931542bd188181"}
+ :provenance {:kind :historical-commit
+              :commit-subject "perf: keep hot reload on plain nREPL"
+              :intent-sources [{:kind :commit-message
+                                :locator "28aad1cb0ae9eb6e46f5f8dccf846c8e9f11773e"}
+                               {:kind :changed-owner-review
+                                :locator "start-embedded-nrepl! and embedded-nrepl-starts-without-resolving-cider"}]}
+ :task-file "task.md"
+ :targets ["src/clj_surgeon/mcp_server.clj"
+           "test/clj_surgeon/mcp_server_test.clj"]
+ :hashes {"src/clj_surgeon/mcp_server.clj"
+          {:before "5d2503370ac1b880c4e02055f0663ac38bd2c8ae12312b2a415f88026ff27fea"
+           :after "7e45a3443b30c0e95bb36175273272f44d7aae787f26026f8fb95199f1c5dc6f"}
+          "test/clj_surgeon/mcp_server_test.clj"
+          {:before "9c06f5ff126374a22d3a2c93f8f2a559c581f8dd6d5fdec37bfb0997d5ba3b48"
+           :after "50f76cac1fa1f704c5d2a1f22060ebe32b4bc6931717d2a98b822d4d18ff8dbc"}}
+ :verification {:commands ["clojure -J-Xmx512m -M:clj-surgeon/mcp-test"]
+                :exact-changed-paths true
+                :exact-target-bytes-secondary true
+                :parse-clojure true}
+ :expected {:changed-files 2 :insertions 19 :deletions 3}}
+

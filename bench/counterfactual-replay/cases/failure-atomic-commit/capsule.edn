@@ -1,0 +1,35 @@
+{:schema 1
+ :id :failure-atomic-commit
+ :stratum :multi-form-source-test-docs-transaction
+ :repository {:name "clj-surgeon"
+              :parent "5d30900e0f33699d3e62297698f2ec841f6f2d43"
+              :child "7af69092bb373588141391abe67fe4864d6b3579"
+              :parent-tree "85ac9da8280f20a540c375e97ee0d145a5302184"
+              :child-tree "956a120cc6728dd491e68dd30259df37bcace380"}
+ :provenance {:kind :historical-commit
+              :commit-subject "feat: add failure-atomic transaction commits"
+              :intent-sources [{:kind :commit-message
+                                :locator "7af69092bb373588141391abe67fe4864d6b3579"}
+                               {:kind :captains-log
+                                :locator "docs/observations/2026-08-06-captains-log-from-microscope-to-intent-transaction.md#frontier-update-the-failure-atomic-commit-substrate"}
+                               {:kind :changed-owner-review
+                                :locator "commit-compiled! and commit-protocol-* tests"}]}
+ :task-file "task.md"
+ :targets ["docs/observations/2026-08-06-captains-log-from-microscope-to-intent-transaction.md"
+           "src/clj_surgeon/intent_transaction.clj"
+           "test/clj_surgeon/intent_transaction_test.clj"]
+ :hashes {"docs/observations/2026-08-06-captains-log-from-microscope-to-intent-transaction.md"
+          {:before "36dc60d0d457e8889509d301291343846968bd061f9241a28ccd159fc12a76b2"
+           :after "3f743c7e99765fb7f6d2848606dab162fd86af6c70a3ca511263b62ff80c28a2"}
+          "src/clj_surgeon/intent_transaction.clj"
+          {:before "c4e460e659376ac0f84bc4f55159a5c5d990e4504bce0b6f35d6551937b65a6f"
+           :after "03813a23db08d5b484123514decc9001715f937ffd62be08820a8ace2ad30314"}
+          "test/clj_surgeon/intent_transaction_test.clj"
+          {:before "91e314434d8db192d9f56245b5b8bd1c6cfc2404c8fbe5517cbe3a1291781efe"
+           :after "f2b6c55564711835f62c6df898953233c296d362790a653f775e837c14d19a86"}}
+ :verification {:commands ["bb test/run_all.clj"]
+                :exact-changed-paths true
+                :exact-target-bytes-secondary true
+                :parse-clojure true}
+ :expected {:changed-files 3 :insertions 340 :deletions 1}}
+

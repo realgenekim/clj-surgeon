@@ -174,3 +174,35 @@ The first 12-case experiment is credible when:
    to callers.
 5. Run the three-case Sol/high pilot on Anvil, review traces, then decide whether the 12-case batch
    is ready.
+
+## Pilot cohort frozen on 2026-08-24
+
+The first three cases were selected by change shape before their diffs were reviewed:
+
+| Case | Parent → child | Stratum | Targets |
+| --- | --- | --- | ---: |
+| `cclsp-optional` | `cde6fc5b` → `6948f0eb` | small owner edit | 2 |
+| `plain-nrepl` | `0dede868` → `28aad1cb` | native-positive source and test | 2 |
+| `failure-atomic-commit` | `5d30900e` → `7af69092` | multi-form source/test/docs transaction | 3 |
+
+The frozen alternates are `d0afc776`, `e93faa7b`, and `44bf0cb7`. Treatment results must not cause
+case substitution.
+
+Versioned capsules and blinded task prompts live under
+`bench/counterfactual-replay/cases/`. The zero-model verifier proves commit ancestry, parent/child
+tree identity, exact changed paths, line counts, target hashes, and Clojure parsing. The
+materializer exports only a parent tree into an unrelated one-commit repository with no remote,
+then writes the provenance receipt outside the caller workspace.
+
+Local gates passed before Anvil dispatch:
+
+- capsule verifier: three cases, seven targets;
+- materializer: clean one-commit workspace, no remote, no task/capsule/oracle inside;
+- existing-destination refusal: passed without altering the first workspace;
+- `cclsp-optional` child: 604 tests, 5,222 assertions, zero failures/errors; and
+- `failure-atomic-commit` child: 505 tests, 4,050 assertions, zero failures/errors.
+
+The `plain-nrepl` child deliberately remains an Anvil gate: its historical verifier starts a JVM.
+The local flight recorder was already yellow after the two parallel Babashka suites, so launching
+another 512 MiB JVM locally would violate the load-safe test policy rather than strengthen the
+experiment.
