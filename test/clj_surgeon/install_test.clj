@@ -52,36 +52,35 @@
 (def ^:private canonical-reference-paths
   {:advanced
    (fs/path project-root "skills" "clj-surgeon" "references" "advanced-operations.md")
+   :mcp-advanced
+   (fs/path project-root "skills" "clj-surgeon" "references" "mcp-advanced.md")
    :cli-fallback
    (fs/path project-root "skills" "clj-surgeon" "references" "cli-fallback.md")})
 
 (defn- assert-skill-contracts
-  [label skill cli-fallback]
-  (doseq [contract ["Invoke before using Read, Edit, grep, sed, or cat"
-                    "Discover the hot entrance first"
-                    "deferred/all-tools catalog"
-                    "`inspect_clojure`"
-                    "`apply_clojure_changes`"
-                    "`mcp__cclsp__*`"
-                    "inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback"
-                    "`read_complete=true`"
-                    "`mode=prepare-change`"
-                    "`subject`"
-                    "`subjects`"
-                    "owner authority"
-                    "`next_call`"
-                    "`forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`"
-                    "Formatting and hot laws run inside `verify=fast|full`; hot failure rolls back"
-                    "`verification_complete=true` is terminal"
-                    "On cold pending, copy `next_call` once"
-                    "its status keeps the same undo receipt"
-                    "Never replay or poll"
-                    "Native Write is right for new files"
+  [label skill mcp-advanced cli-fallback]
+  (doseq [contract ["Use for advanced clj-surgeon workflows"
+                    "Do not invoke for ordinary inspect_clojure or edit_clojure calls"
+                    "Optimize complete verified task time"
+                    "[advanced MCP routes](references/mcp-advanced.md)"
                     "[CLI fallback](references/cli-fallback.md)"
-                    "CLI only when MCP is unavailable"]]
+                    "[advanced CLI operations](references/advanced-operations.md)"
+                    "Do not reopen a reference already consumed"]]
     (is (str/includes? (str/replace skill #"\s+" " ")
                        (str/replace contract #"\s+" " "))
-        (str label " must retain the MCP-first " contract " contract")))
+        (str label " must retain the advanced router " contract " contract")))
+  (doseq [contract ["Ordinary already-decided edits belong in compact `edit_clojure`"
+                    "`mode=prepare-change`"
+                    "`basis`"
+                    "`next_call`"
+                    "`apply_clojure_changes`"
+                    "`transform_clojure`"
+                    "capabilities absent from compact editing"
+                    "Hot process recovery"
+                    "never replay or poll"]]
+    (is (str/includes? (str/replace mcp-advanced #"\s+" " ")
+                       (str/replace contract #"\s+" " "))
+        (str label " advanced MCP reference must retain " contract)))
   (doseq [contract [":op :xray"
                     "End a literal path with `expect-count`"
                     "capability-limited, not termination-proof"
@@ -117,29 +116,38 @@
 
 (deftest repository-agent-skill-entrances-do-not-drift
   (let [canonical (slurp-path canonical-skill-path)
+        canonical-mcp (slurp-path (:mcp-advanced canonical-reference-paths))
         canonical-cli (slurp-path (:cli-fallback canonical-reference-paths))
         claude-native (slurp ".claude/skills/clj-surgeon/SKILL.md")
+        claude-mcp (slurp ".claude/skills/clj-surgeon/references/mcp-advanced.md")
         claude-cli (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md")
         legacy (-> (slurp "skill.md")
                    (str/replace
-                     "[advanced operations](skills/clj-surgeon/references/advanced-operations.md)"
-                     "[advanced operations](references/advanced-operations.md)")
+                     "[advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md)"
+                     "[advanced MCP routes](references/mcp-advanced.md)")
+                   (str/replace
+                     "[advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md)"
+                     "[advanced CLI operations](references/advanced-operations.md)")
                    (str/replace
                      "[CLI fallback](skills/clj-surgeon/references/cli-fallback.md)"
                      "[CLI fallback](references/cli-fallback.md)"))]
     (testing "the native Claude package is byte-identical to the canonical package"
       (is (= canonical claude-native))
+      (is (= canonical-mcp claude-mcp))
       (is (= (slurp-path (:advanced canonical-reference-paths))
              (slurp ".claude/skills/clj-surgeon/references/advanced-operations.md")))
       (is (= canonical-cli claude-cli)))
     (testing "the root legacy entrance differs only by its valid relative references"
       (is (= canonical legacy))
       (is (<= (count (str/split-lines (slurp "skill.md"))) 70)))
-    (testing "the default entrance is compact and MCP-first while the fallback stays complete"
+    (testing "the optional entrance stays advanced-only while its references stay complete"
       (is (not (str/includes? canonical ":op :xray")))
-      (assert-skill-contracts "canonical Codex skill" canonical canonical-cli)
-      (assert-skill-contracts "native Claude skill" claude-native claude-cli)
-      (assert-skill-contracts "legacy Claude entrance" legacy canonical-cli))))
+      (assert-skill-contracts
+        "canonical Codex skill" canonical canonical-mcp canonical-cli)
+      (assert-skill-contracts
+        "native Claude skill" claude-native claude-mcp claude-cli)
+      (assert-skill-contracts
+        "legacy Claude entrance" legacy canonical-mcp canonical-cli))))
 
 (deftest install-help-makes-both-destinations-explicit
   (let [{:keys [exit out err]} (run-make "help")]
@@ -337,12 +345,17 @@
         (testing "installed agent surfaces retain identical contracts"
           (let [codex (slurp-path (fs/path codex-skill "SKILL.md"))
                 claude (slurp-path (fs/path claude-skill "SKILL.md"))
+                codex-mcp (slurp-path (fs/path codex-skill "references" "mcp-advanced.md"))
+                claude-mcp (slurp-path (fs/path claude-skill "references" "mcp-advanced.md"))
                 codex-cli (slurp-path (fs/path codex-skill "references" "cli-fallback.md"))
                 claude-cli (slurp-path (fs/path claude-skill "references" "cli-fallback.md"))]
             (is (= codex claude))
+            (is (= codex-mcp claude-mcp))
             (is (= codex-cli claude-cli))
-            (assert-skill-contracts "installed Codex skill" codex codex-cli)
-            (assert-skill-contracts "installed Claude skill" claude claude-cli))))
+            (assert-skill-contracts
+              "installed Codex skill" codex codex-mcp codex-cli)
+            (assert-skill-contracts
+              "installed Claude skill" claude claude-mcp claude-cli))))
       (finally
         (delete-temp-tree tmp-dir)))))
 

@@ -121,8 +121,11 @@ updates, and verification gates. It is not a chronological coding diary.
   selectors, counts, hashes, basis IDs, or site IDs.
 - When the files, named top-level forms, and desired changes are already known,
   call `edit_clojure` directly with `workspace_root`, required literal `edits`,
-  and optional computed `programs`. Per-edit old subtrees and exact program
-  expectations are the stale-source guards; all items compile against one
+  optional computed `programs`, and optional `delete_owners` groups. Address a
+  literal inside a named Var with `within.form`; address the `ns` form with
+  `within.namespace`. Each delete group names one file and the exact top-level
+  owners to remove. Per-edit old subtrees, resolved owner names, and exact
+  program expectations are stale-source guards; all items compile against one
   frozen snapshot and commit atomically. Do not preflight-read or add `verify`
   or aggregate counts. Apply the same proportional formatter/linter/test policy
   as the native route; never add a tool call merely because Surgeon performed

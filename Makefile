@@ -39,7 +39,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test mcp-test mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status mcp-start mcp-stop mcp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-harness-self-test benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -60,6 +60,7 @@ help:
 	@echo "  make install-cli               Install only the stable copied CLI"
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
+	@echo "  make sync-clj-surgeon-skill    Regenerate Claude/root mirrors from the canonical skill"
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
 	@echo "  make study-agent-usage         Join agent routes with Surgeon, cclsp, and LSP telemetry"
@@ -98,6 +99,12 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
 install: install-cli install-codex-skill install-claude-skill
+
+sync-clj-surgeon-skill:
+	bash bench/sync_clj_surgeon_skill.sh --write
+
+check-clj-surgeon-skill-mirrors:
+	bash bench/sync_clj_surgeon_skill.sh --check
 
 mcp-test:
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
@@ -561,6 +568,7 @@ verify-benchmark-evidence:
 	bb bench/verify_evidence_manifest.clj
 
 test:
+	$(MAKE) --no-print-directory check-clj-surgeon-skill-mirrors
 	bb test/run_all.clj
 	$(MAKE) --no-print-directory mcp-test
 	$(MAKE) --no-print-directory mcp-smoke
