@@ -1030,9 +1030,9 @@ run_one() {
     # Markdown backticks are literal project-rule text.
     # shellcheck disable=SC2016
     printf '%s\n' \
-      '# MCP routing experiment' \
+      '# Clojure edit routing' \
       '' \
-      'For two or more exact Clojure replacements or edits spanning files, call `apply_clojure_changes` once before reading source or using `apply_patch`. Treat `verification_complete=true` as terminal mutation proof.' \
+      'Optimize complete task time, not tool adoption. Use native tools for broad discovery and when one literal edit is smaller or clearer. When an already-decided Clojure change spans forms or files, prefer one compact `edit_clojure` transaction with all supplied edits and optional bounded computed programs. Do not preflight-read a supplied decision. Reserve heavyweight `apply_clojure_changes` for prepared semantic decisions, operations absent from compact editing, or gates that must participate in rollback. A successful compact commit with `verification_complete=true` is terminal mutation evidence; do not add a reread merely because Surgeon performed the edit.' \
       > "$workspace/AGENTS.md"
   fi
   if [ "$context" = mcp-exploratory-rule-no-skill ]; then
