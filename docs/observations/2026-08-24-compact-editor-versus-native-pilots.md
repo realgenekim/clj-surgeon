@@ -71,3 +71,38 @@ the current long skill. If MCP approaches or beats native here, skill/context
 design is the primary optimization target. If it remains materially slower,
 measure the fixed MCP catalog and model tool-call tax next.
 
+## Pilot 2: direct route, no skill, one mutation allowed
+
+Result directory:
+`/tmp/clj-surgeon-direct-route-pilot-4aac2d1`
+
+| Route | Exact | Wall | Tool round trips | Engine time |
+|---|---:|---:|---:|---:|
+| MCP, compact hint, no skill | yes | 24.968 s | 1 | 166.150 ms |
+| Native, one-patch hint, no skill | no | 16.292 s | 0 successful | not applicable |
+
+The MCP caller used one public `edit_clojure` call, made all six changes on its
+first mutation, and stopped on terminal evidence. Removing the installed skill
+reduced MCP wall by 23.497 seconds (48.5%) relative to pilot 1. The trials are
+independent single samples, so some of that difference can be run noise, but
+the instruction/context effect is too large to ignore.
+
+The native caller generated one coherent patch, but its guessed surrounding
+whitespace did not match `app_shell.clj`. The patch refused without mutation.
+The route hint prohibited the source read needed to recover, so the final state
+was incorrect. Its 16.292-second wall is time to safe failure and is excluded
+from the efficiency comparison.
+
+This reveals a non-contrived structural advantage. The task supplied complete
+Clojure forms, named owners, replacements, and counts, but did not supply the
+files' indentation or patch context. Native `apply_patch` needs those exact
+bytes and therefore must either read or guess. `edit_clojure` can consume the
+supplied forms directly, ignore irrelevant formatting, scope duplicate forms
+to their owners, and use exact counts as stale-source guards.
+
+## Pilot 3 design
+
+Keep the direct no-skill MCP route from pilot 2. Give native one bounded source
+read followed by one patch, with successful mutation terminal for both lanes.
+This makes both routes viable and measures the actual cost of native's required
+context acquisition against structural no-read editing.
