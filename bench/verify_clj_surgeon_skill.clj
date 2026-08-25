@@ -19,7 +19,7 @@
    "references/cli-fallback.md"
    "references/advanced-operations.md"])
 
-(def max-entrypoint-lines 45)
+(def max-entrypoint-lines 30)
 
 (defn fail! [message data]
   (binding [*out* *err*]
