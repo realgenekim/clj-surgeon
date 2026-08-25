@@ -142,3 +142,47 @@ The next experiment should preserve this standard: choose another historical
 counterfactual whose decision is fully reconstructable, prefer a genuinely
 multi-file and noncontiguous cleanup, and add only the smallest missing
 primitive that real friction justifies.
+
+## Production rollout
+
+The complete `make test` gate passed at commit `5e85987`:
+
+- 605 Babashka tests and 5,197 assertions;
+- 195 MCP tests and 1,615 assertions at `-Xmx512m`;
+- four-tool stdio discovery and smoke;
+- portfolio, schedule, harness, retention, and evidence self-tests; and
+- zero failures or errors.
+
+A rollback-armed Anvil promotion then proved the exact new behavior twice. An
+isolated port-17888 canary performed one namespace rewrite, one named-form
+rewrite, and one owner deletion in a single `edit_clojure` request and matched
+the expected bytes. Production port 7888 repeated the same acceptance before
+the promotion was declared successful.
+
+The live Anvil process is:
+
+```text
+PID:  156622
+User: surgeon
+CWD:  /srv/fleet/shared-tools/clj-surgeon-5e85987
+Heap: -Xms64m -Xmx512m
+```
+
+The rollback receipt is
+`/home/surgeon/.local/state/clj-surgeon/deployments/2026-08-25-5e85987/ROLLBACK.txt`.
+The existing clojure-lsp process was not restarted: PID 2400995, CWD
+`/home/surgeon/clj-surgeon`.
+
+The matching CLI and advanced-only Codex/Claude skill package was installed for
+dev-a, dev-b, and dev-c. Their study workspaces advertise all four tools on the
+shared production URL. The previous hand-managed Claude skill directories were
+preserved, not deleted, at each seat's
+`~/.claude/skills/clj-surgeon.pre-5e85987-20260825`. Fresh sessions see the new
+package; already-running clients whose cached schema rejects `delete_owners` or
+`within.namespace` need one new agent session, not a service restart.
+
+The laptop installation also points CLI, Codex, and Claude at `5e85987`. Its
+live MCP remained PID 75495, CWD `/Users/genekim/src.local/clj-surgeon`, and a
+direct production `tools/list` confirmed compact top-level fields
+`delete_owners`, `edits`, `programs`, and `workspace_root`, plus both
+`within.form` and `within.namespace`.
