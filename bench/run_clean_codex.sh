@@ -1155,7 +1155,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use the available edit_clojure tool once for the complete supplied decision. Send workspace_root and one edits array; each edit has file, within.form, from, to, and matches. Do not add a redundant top-level expect or verify. Do not read source or use apply_patch. Each from value plus matches is the stale-source guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+    printf '%s\n' '' 'Use the available edit_clojure tool once for the complete supplied decision. For supplied exact owner deletion, send workspace_root and one delete_owners array; each group has file and forms. For literal edits, send workspace_root and one edits array; each edit has file, within.form, from, to, and matches. Do not add a redundant top-level expect or verify. Do not read source or use apply_patch. Named-owner resolution or each from value plus matches is the stale-source guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
