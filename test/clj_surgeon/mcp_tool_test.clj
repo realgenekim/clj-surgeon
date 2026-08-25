@@ -325,6 +325,53 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest compact-namespace-edit-and-owner-deletion-share-one-transaction
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        before (str "(ns demo\n"
+                    "  (:require\n"
+                    "   [sample.old :as old]))\n\n"
+                    ";; moved to sample.new\n"
+                    "(defn obsolete-handler [] :old)\n\n"
+                    "(def routes [old/handle])\n")
+        after (str "(ns demo\n"
+                   "  (:require\n"
+                   "   [sample.new :as new]\n"
+                   "   [sample.old :as old]))\n\n"
+                   "(def routes [new/handle])\n")
+        request
+        {"edits"
+         [{"file" "src/demo.clj"
+           "within" {"namespace" "demo"}
+           "from" "(:require [sample.old :as old])"
+           "to" "(:require\n   [sample.new :as new]\n   [sample.old :as old])"}
+          {"file" "src/demo.clj"
+           "within" {"form" "routes"}
+           "from" "old/handle"
+           "to" "new/handle"}]
+         "delete_owners"
+         [{"file" "src/demo.clj"
+           "forms" ["obsolete-handler"]}]}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              request)]
+        (is (:ok result) (pr-str result))
+        (is (= 3 (:changes result)))
+        (is (= 3 (:edits result)))
+        (is (= 1 (:files result)))
+        (is (= after (slurp source-file)))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= before (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest editor-gesture-replaces-exact-known-multiplicity
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

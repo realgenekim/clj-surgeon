@@ -218,11 +218,14 @@
                :description "One project-relative .clj, .cljs, or .cljc source path."}
        "within" {:type "object"
                  :additionalProperties false
-                 :description "The exact named top-level form that acts as the edit location."
+                 :description "Exactly one named top-level form or namespace form that acts as the edit location."
                  :properties
                  {"form" {:type "string" :minLength 1
-                          :description "One exact named top-level form."}}
-                 :required ["form"]}
+                          :description "One exact named top-level form."}
+                  "namespace" {:type "string" :minLength 1
+                               :description "One exact namespace name for editing its ns form."}}
+                 :oneOf [{:required ["form"]}
+                         {:required ["namespace"]}]}
        "from" {:type "string" :minLength 1
                :description "The exact old Clojure subtree. Its count must equal matches, which defaults to one."}
        "to" {:type "string" :minLength 1

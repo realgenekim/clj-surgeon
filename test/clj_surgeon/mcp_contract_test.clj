@@ -65,6 +65,17 @@
             :expect {:changes 1 :edits 1 :files 1}}
            (contract/tool-params->transaction (:params validated))))))
 
+(deftest editor-gesture-compiles-a-namespace-location
+  (let [request (assoc-in gesture-request ["edits" 0 "within"]
+                          {"namespace" "sample.server"})
+        validated (contract/validate-tool-params request)]
+    (is (:ok validated))
+    (is (= {:kind :namespace :name 'sample.server}
+           (get-in validated [:params :changes 0 :owner])))
+    (is (= {:kind :namespace :name 'sample.server}
+           (get-in (contract/tool-params->transaction (:params validated))
+                   [:changes 0 :owner])))))
+
 (deftest editor-gesture-tolerates-redundant-aggregate-expect
   (let [validated
         (contract/validate-tool-params
@@ -158,6 +169,13 @@
            [:blank-form (assoc-in gesture-request ["edits" 0 "within" "form"]
                                   " ")
             :non-blank-string ["edits" 0 "within" "form"]]
+           [:missing-location (update-in gesture-request ["edits" 0 "within"]
+                                         dissoc "form")
+            :ambiguous-editor-location ["edits" 0 "within"]]
+           [:mixed-location (assoc-in gesture-request
+                                      ["edits" 0 "within" "namespace"]
+                                      "sample.server")
+            :ambiguous-editor-location ["edits" 0 "within"]]
            [:unknown-location (assoc-in gesture-request ["edits" 0 "within" "line"]
                                         12)
             :unknown-fields ["edits" 0 "within"]]

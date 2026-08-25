@@ -491,22 +491,40 @@
                       _ (validate-fields! within editor-within-fields
                                           required-editor-within-fields
                                           (conj path "within"))
+                      form? (present? within "form")
+                      namespace? (present? within "namespace")
+                      _ (when (= form? namespace?)
+                          (refuse! :ambiguous-editor-location
+                                   (conj path "within")
+                                   "Provide exactly one of form or namespace"))
                       matches (if (present? edit "matches")
                                 (positive-integer! (field edit "matches")
                                                    (conj path "matches"))
                                 1)]
-                  {"id" (str "edit-" (inc index))
-                   "files" [(source-path! (field edit "file")
-                                          (conj path "file"))]
-                   "forms" [(nonblank-string! (field within "form")
+                  (cond->
+                    {"id" (str "edit-" (inc index))
+                     "files" [(source-path! (field edit "file")
+                                            (conj path "file"))]
+                     "find" (nonblank-string! (field edit "from")
+                                              (conj path "from"))
+                     "replace" (nonblank-string! (field edit "to")
+                                                 (conj path "to"))
+                     "expect" {"matches" matches
+                               "each_file" matches}}
+                    form?
+                    (assoc "forms"
+                           [(nonblank-string! (field within "form")
                                               (conj path "within" "form"))]
-                   "find" (nonblank-string! (field edit "from")
-                                            (conj path "from"))
-                   "replace" (nonblank-string! (field edit "to")
-                                               (conj path "to"))
-                   "expect" {"matches" matches
-                             "each_form" matches
-                             "each_file" matches}}))
+                           "expect" {"matches" matches
+                                     "each_form" matches
+                                     "each_file" matches})
+
+                    namespace?
+                    (assoc "owner"
+                           {"kind" "namespace"
+                            "name" (nonblank-string!
+                                     (field within "namespace")
+                                     (conj path "within" "namespace"))}))))
               edits (range))
             deletion-groups
             (when (present? params "delete_owners")

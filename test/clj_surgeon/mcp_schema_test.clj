@@ -72,8 +72,10 @@
     (is (= ["file" "within" "from" "to"]
            (:required gesture)))
     (is (false? (:additionalProperties gesture)))
-    (is (= ["form"]
-           (get-in gesture [:properties "within" :required])))
+    (is (= #{"form" "namespace"}
+           (set (keys (get-in gesture [:properties "within" :properties])))))
+    (is (= [{:required ["form"]} {:required ["namespace"]}]
+           (get-in gesture [:properties "within" :oneOf])))
     (is (= #{"file" "expression" "expect"}
            (set (keys (:properties program)))))
     (is (= ["file" "expression" "expect"] (:required program)))
