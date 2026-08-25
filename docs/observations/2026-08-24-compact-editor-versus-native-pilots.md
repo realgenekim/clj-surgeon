@@ -534,3 +534,18 @@ fully supplied, bodies were anonymized, and the capsule measures source cleanup
 after extraction rather than discovery, new-file creation, or semantic design.
 It does show a genuine product boundary where native patching pays O(source +
 rendered deletion) model cost and compact structural intent avoids it.
+
+### Anvil replication reached 4.61x
+
+The same frozen commit and exact-byte gate then ran once on each of three
+independent Anvil seats. Compact times were 34.078, 31.658, and 32.546 seconds;
+native times were 144.729, 167.228, and 150.138 seconds. All six outputs were
+exact, compact won every pair, and the medians were 32.546 versus 150.138
+seconds: **4.61x end-to-end** and 78.3% lower wall time.
+
+Each compact caller used one mutation call, no source commands, and a 175-byte
+receipt. Native required two to five tool round trips and returned 19,379 to
+77,516 source/tool-output bytes. None of the Anvil arms recorded a failed
+mutation. See
+[Captain's Log: the compiled cleanup hit 4.61x](2026-08-25-captains-log-the-compiled-cleanup-hit-four-point-six-x.md)
+for the complete evidence paths, mechanism, and claim boundary.
