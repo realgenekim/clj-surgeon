@@ -523,11 +523,13 @@ benchmark-anvil-portfolio-pair:
 	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
 	@test -n "$(TASK)" || { echo "TASK must name a frozen edit-portfolio capsule"; exit 2; }
 	@test -n "$(ORDER)" || { echo "ORDER=compact-first or native-first is required"; exit 2; }
-	bash bench/run_anvil_public_cfp_cleanup.sh "$(RESULT_DIR)" "$(ORDER)" "$(or $(REPLICATES),1)" "$(TASK)"
+	bash bench/run_anvil_portfolio_pair.sh "$(RESULT_DIR)" "$(TASK)" "$(ORDER)" "$(or $(REPLICATES),1)"
 
 benchmark-anvil-portfolio-pair-self-test:
+	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_portfolio_pair.sh \
+		/tmp/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_public_cfp_cleanup.sh \
-		/tmp/clj-surgeon-anvil-pair-self-test compact-first 2 decision-batch-edit
+		/tmp/clj-surgeon-public-cfp-self-test native-first 1
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh
