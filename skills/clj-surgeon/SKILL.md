@@ -83,4 +83,4 @@ the task warrants formatting, linting, or testing, run it once after the whole
 mutation for compact and native routes alike; do not add a call merely because
 Surgeon performed the edit. Use the CLI only when MCP is unavailable or
 unsupported.
-Read [CLI fallback](references/cli-fallback.md) or [advanced operations](references/advanced-operations.md).
+Read [advanced MCP routes](references/mcp-advanced.md), [CLI fallback](references/cli-fallback.md), or [advanced CLI operations](references/advanced-operations.md) only when the current task requires one.

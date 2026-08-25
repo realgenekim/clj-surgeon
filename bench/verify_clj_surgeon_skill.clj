@@ -16,6 +16,7 @@
    "native patching"
    "heavyweight `apply_clojure_changes`"
    "Verification policy must not depend on editor choice"
+   "references/mcp-advanced.md"
    "references/cli-fallback.md"
    "references/advanced-operations.md"])
 
@@ -47,7 +48,8 @@
     (when-not (= canonical (normalized-root-mirror root-mirror))
       (fail! "Root skill mirror drifted from the canonical skill"
              {:canonical canonical-path :mirror root-path}))
-    (doseq [reference ["skills/clj-surgeon/references/cli-fallback.md"
+    (doseq [reference ["skills/clj-surgeon/references/mcp-advanced.md"
+                       "skills/clj-surgeon/references/cli-fallback.md"
                        "skills/clj-surgeon/references/advanced-operations.md"]]
       (when-not (.isFile (java.io.File. reference))
         (fail! "Skill reference is missing" {:reference reference})))

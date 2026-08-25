@@ -83,4 +83,4 @@ the task warrants formatting, linting, or testing, run it once after the whole
 mutation for compact and native routes alike; do not add a call merely because
 Surgeon performed the edit. Use the CLI only when MCP is unavailable or
 unsupported.
-Read [CLI fallback](skills/clj-surgeon/references/cli-fallback.md) or [advanced operations](skills/clj-surgeon/references/advanced-operations.md).
+Read [advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md), [CLI fallback](skills/clj-surgeon/references/cli-fallback.md), or [advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md) only when the current task requires one.
