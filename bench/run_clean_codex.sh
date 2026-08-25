@@ -5,9 +5,16 @@ script_path=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 result_dir=${BENCH_RESULT_DIR:-/tmp/clj-surgeon-clean-codex-$timestamp}
+computed_site_count=${BENCH_COMPUTED_SITE_COUNT:-10}
 owner_dir="$result_dir/.benchmark-owner"
 owner_metadata="$owner_dir/owner.tsv"
 owner_token=""
+
+if ! [[ "$computed_site_count" =~ ^[1-9][0-9]*$ ]] \
+  || [ "$computed_site_count" -gt 128 ]; then
+  echo "BENCH_COMPUTED_SITE_COUNT must be an integer from 1 through 128: $computed_site_count" >&2
+  exit 2
+fi
 
 owner_field() {
   local key=$1
@@ -226,17 +233,18 @@ mcp_first_mutation() {
 
 computed_route_adherent() {
   local context=$1 inspect_calls=$2 edit_calls=$3 transform_calls=$4
-  local apply_calls=$5 file_changes=$6 source_commands=$7
+  local apply_calls=$5 file_changes=$6 source_commands=$7 text_reader=$8
   case "$context" in
     native-computed-hint-no-skill)
       [ "$file_changes" -eq 1 ] && [ "$edit_calls" -eq 0 ] \
         && [ "$transform_calls" -eq 0 ] && [ "$apply_calls" -eq 0 ] \
-        && [ "$inspect_calls" -eq 0 ] && [ "$source_commands" -ge 1 ]
+        && [ "$inspect_calls" -eq 0 ] && [ "$source_commands" -eq 1 ] \
+        && [ "$text_reader" = true ]
       ;;
     edit-computed-hint-no-skill)
       [ "$edit_calls" -eq 1 ] && [ "$transform_calls" -eq 0 ] \
         && [ "$apply_calls" -eq 0 ] && [ "$file_changes" -eq 0 ] \
-        && [ "$inspect_calls" -eq 1 ]
+        && [ "$inspect_calls" -eq 1 ] && [ "$source_commands" -eq 0 ]
       ;;
     mcp-transform-hint-no-skill)
       [ "$transform_calls" -eq 1 ] && [ "$edit_calls" -eq 0 ] \
@@ -337,12 +345,21 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
-  computed_route_adherent native-computed-hint-no-skill 0 0 0 0 1 1
-  ! computed_route_adherent native-computed-hint-no-skill 1 0 0 0 1 1
-  computed_route_adherent edit-computed-hint-no-skill 1 1 0 0 0 0
-  ! computed_route_adherent edit-computed-hint-no-skill 1 1 1 0 0 0
-  computed_route_adherent mcp-transform-hint-no-skill 0 0 1 0 0 0
-  ! computed_route_adherent mcp-transform-hint-no-skill 1 0 1 0 0 0
+  computed_route_adherent native-computed-hint-no-skill 0 0 0 0 1 1 true
+  if computed_route_adherent native-computed-hint-no-skill 1 0 0 0 1 1 true; then
+    echo "native route self-test accepted an MCP read" >&2
+    exit 1
+  fi
+  computed_route_adherent edit-computed-hint-no-skill 1 1 0 0 0 0 false
+  if computed_route_adherent edit-computed-hint-no-skill 1 1 1 0 0 0 false; then
+    echo "edit route self-test accepted transform fallback" >&2
+    exit 1
+  fi
+  computed_route_adherent mcp-transform-hint-no-skill 0 0 1 0 0 0 false
+  if computed_route_adherent mcp-transform-hint-no-skill 1 0 1 0 0 0 false; then
+    echo "transform route self-test accepted a pre-read" >&2
+    exit 1
+  fi
   if validate_run_matrix 'native:matched-skill' 2>/dev/null; then
     echo "benchmark matrix self-test accepted an invalid native context" >&2
     exit 1
@@ -612,6 +629,22 @@ make_computed_edit_fixture() {
   } > "$destination"
 }
 
+make_computed_repeated_edit_fixture() {
+  local destination=$1
+  {
+    printf '%s\n\n' '(ns bench.repeated-policy)'
+    local i
+    for i in $(seq 1 "$computed_site_count"); do
+      printf '(def retry-policy-%03d\n  {:retry-delays [100 250 500 1000]\n   :max-attempts 4})\n\n' "$i"
+    done
+    printf '%s\n' \
+      '(def unrelated-policy' \
+      '  {:backoff-delays [100 250 500 1000]' \
+      '   :max-attempts 4})' \
+      ''
+  } > "$destination"
+}
+
 make_peer_edit_fixture() {
   local destination=$1
   cp "$setup_root/templates/pair_view.clj" "$destination"
@@ -668,6 +701,7 @@ make_xray_fixture() {
 make_structural_fixture "$setup_root/templates/structural.clj"
 make_edit_fixture "$setup_root/templates/state.clj"
 make_computed_edit_fixture "$setup_root/templates/policy.clj"
+make_computed_repeated_edit_fixture "$setup_root/templates/repeated_policy.clj"
 make_peer_edit_fixture "$setup_root/templates/peer_edit.clj"
 make_xray_fixture "$setup_root/templates/xray.clj"
 PATH="$setup_root/bin/post:$PATH" clj-surgeon :op :find-subform \
@@ -699,6 +733,10 @@ perl -0pi -e 's/\(assoc state :status :done :audit/\(assoc state :status :comple
 cp "$setup_root/templates/policy.clj" "$setup_root/expected/computed-edit.clj"
 perl -0pi -e 's/\[100 250 500 1000\]/[200 350 600 1100]/' \
   "$setup_root/expected/computed-edit.clj"
+cp "$setup_root/templates/repeated_policy.clj" \
+  "$setup_root/expected/computed-repeated-edit.clj"
+perl -0pi -e 's/(:retry-delays )\[100 250 500 1000\]/${1}[200 350 600 1100]/g' \
+  "$setup_root/expected/computed-repeated-edit.clj"
 cp "$setup_root/templates/peer_edit.clj" "$setup_root/expected/cond-edit.clj"
 perl -0pi -e 's/\{:decision :allow :reason :public\}/\{:decision :allow :reason :public-resource\}/' \
   "$setup_root/expected/cond-edit.clj"
@@ -765,6 +803,9 @@ task_prompt() {
     computed-supplied-edit)
       printf '%s' 'In src/bench/policy.clj, change only the :retry-delays vector inside retry-policy from [100 250 500 1000] to the value computed by adding 100 to every number: [200 350 600 1100]. Preserve every unrelated byte, including the identical vector in unrelated-policy. The owner, before-state, relationship, and expected one match are supplied; do not read source first. Complete the mutation once and treat its successful guarded result as terminal proof.'
       ;;
+    computed-repeated-edit)
+      printf 'In src/bench/repeated_policy.clj, add 100 to every number in all %s values paired with :retry-delays. Preserve every unrelated byte, including the identical vector paired with :backoff-delays. The relationship and exact match count are supplied; complete the mutation once and treat its successful guarded result as terminal proof.' "$computed_site_count"
+      ;;
     cond-edit)
       printf '%s' 'In src/bench/peer_edit.clj, change only the outer cond result paired with (:public? resource) inside classify-request from {:decision :allow :reason :public} to {:decision :allow :reason :public-resource}. Preserve every unrelated byte, including the identical map in unrelated-public and the nested cond. A temporary plan artifact is allowed. Verify the exact change, do not read the whole file, and briefly name the commands used.'
       ;;
@@ -807,6 +848,7 @@ target_for_task() {
     structural-find) printf '%s' 'src/bench/structural.clj' ;;
     case-edit) printf '%s' 'src/bench/state.clj' ;;
     computed-edit|computed-supplied-edit) printf '%s' 'src/bench/policy.clj' ;;
+    computed-repeated-edit) printf '%s' 'src/bench/repeated_policy.clj' ;;
     cond-edit|binding-edit) printf '%s' 'src/bench/peer_edit.clj' ;;
     case-inventory|cond-inventory|binding-inventory|pair-view-edit|pair-view-expect-edit|exact-nested-edit) printf '%s' 'src/bench/pair_view.clj' ;;
     xray-summary|xray-checksum) printf '%s' 'src/bench/xray.clj' ;;
@@ -873,6 +915,10 @@ prepare_workspace() {
       ;;
     computed-edit|computed-supplied-edit)
       cp "$setup_root/templates/policy.clj" "$workspace/src/bench/policy.clj"
+      ;;
+    computed-repeated-edit)
+      cp "$setup_root/templates/repeated_policy.clj" \
+        "$workspace/src/bench/repeated_policy.clj"
       ;;
     cond-edit|binding-edit)
       cp "$setup_root/templates/peer_edit.clj" "$workspace/src/bench/peer_edit.clj"
@@ -1107,7 +1153,13 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-transform-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use exactly one transform_clojure call with commit=true, expect.matches=1, and expect.max_changed_characters=64. Write the bounded SCI expression yourself from the supplied owner and relationship. Do not read source first, call another mutation tool, or use apply_patch. A committed response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+    expected_transform_matches=1
+    changed_character_budget=64
+    if [ "$task" = computed-repeated-edit ]; then
+      expected_transform_matches=$computed_site_count
+      changed_character_budget=$((computed_site_count * 32))
+    fi
+    printf '%s\n' '' "Use exactly one transform_clojure call with commit=true, expect.matches=$expected_transform_matches, and expect.max_changed_characters=$changed_character_budget. Write the bounded SCI expression yourself from the supplied owner and relationship. Do not read source first, call another mutation tool, or use apply_patch. A committed response with verification_complete=true is terminal proof; do not reread or diff afterward." \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-hint-no-skill' ]; then
@@ -1243,7 +1295,7 @@ run_one() {
   ls_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":ls([^a-zA-Z]|$)")))] | length > 0' "$run_dir/commands.json")
   help_used=$(jq '[.[] | select(.command | contains("--help"))] | length > 0' "$run_dir/commands.json")
   text_reader=$(jq --arg target "$target_scope" \
-    '[.[] | select((.command | contains($target)) and (.command | test("(^|[ /])(rg|sed|awk|head|tail|cat)( |$)")))] | length > 0' \
+    '[.[] | select((.command | contains($target)) and (.command | test("(^|[^A-Za-z0-9_.-])(rg|sed|awk|head|tail|cat)([^A-Za-z0-9_.-]|$)")))] | length > 0' \
     "$run_dir/commands.json")
   q_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?(q|lens)([^a-zA-Z-]|$)")))] | length > 0' "$run_dir/commands.json")
   xray_used=$(jq '[.[] | select((.command | contains("clj-surgeon")) and (.command | test(":op[[:space:]]+(:)?xray([^a-zA-Z-]|$)")))] | length > 0' "$run_dir/commands.json")
@@ -1460,6 +1512,13 @@ run_one() {
       fi
       diff -u "$setup_root/templates/policy.clj" "$target" > "$run_dir/target.diff" || true
       ;;
+    computed-repeated-edit)
+      if cmp -s "$target" "$setup_root/expected/computed-repeated-edit.clj"; then
+        exact_correct=true
+        correct=true
+      fi
+      diff -u "$setup_root/templates/repeated_policy.clj" "$target" > "$run_dir/target.diff" || true
+      ;;
     cond-edit|binding-edit)
       if cmp -s "$target" "$setup_root/expected/$task.clj"; then
         exact_correct=true
@@ -1492,9 +1551,24 @@ run_one() {
     and .item.server == "clj-surgeon"
     and .item.tool == "apply_clojure_changes")] | length' "$run_dir/events.jsonl")
   if ! computed_route_adherent "$context" "$inspect_calls" "$edit_calls" \
-    "$transform_calls" "$apply_calls" "$file_changes" "$source_commands"; then
+    "$transform_calls" "$apply_calls" "$file_changes" "$source_commands" \
+    "$text_reader"; then
     route_adherent=false
   fi
+  case "$context" in
+    edit-computed-hint-no-skill|mcp-transform-hint-no-skill)
+      if [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ] \
+        || [ "$failed_mutation_actions" -ne 0 ]; then
+        route_adherent=false
+      fi
+      ;;
+    native-computed-hint-no-skill)
+      if [ "$failed_mutation_actions" -ne 0 ]; then
+        route_adherent=false
+      fi
+      ;;
+  esac
   printf '%s\n' "$route_adherent" > "$run_dir/route-adherent.txt"
   if [ "$route_adherent" != true ]; then
     exact_correct=false

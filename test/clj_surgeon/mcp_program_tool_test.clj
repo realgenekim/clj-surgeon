@@ -36,6 +36,16 @@
    :expect {:matches 2
             :max_changed_characters 6}})
 
+(deftest description-distinguishes-owner-and-file-wide-roots
+  (is (str/includes? program/transform-tool-description
+                     "Start with (form 'owner)"))
+  (is (str/includes? program/transform-tool-description
+                     "Start with []"))
+  (is (str/includes? program/transform-tool-description
+                     "expect.matches is the authoritative exact cardinality guard"))
+  (is (not (str/includes? program/transform-tool-description
+                          "(expect-count 1)"))))
+
 (deftest previews-one-program-as-several-lossless-addressed-edits
   (let [root (temp-dir)
         source-file (io/file root "src/dogfood/fidelity.clj")]
@@ -49,6 +59,8 @@
         (is (= :transform-preview (:operation result)))
         (is (= 2 (:match-count result)))
         (is (= 2 (:edit-count result)))
+        (is (= false (:verification_complete result)))
+        (is (= "commit" (:next_action result)))
         (is (= fidelity-source (slurp source-file)))
         (is (= 2 (count (re-seq #"-100\n\+150" (:diff result)))))
         (is (not (contains? result :future-source))))
@@ -67,6 +79,8 @@
         (is (:ok result))
         (is (= :transform! (:operation result)))
         (is (:committed result))
+        (is (= true (:verification_complete result)))
+        (is (= "none" (:next_action result)))
         (is (= 2 (:match-count result)))
         (is (= (str/replace fidelity-source "100" "150")
                (slurp source-file)))

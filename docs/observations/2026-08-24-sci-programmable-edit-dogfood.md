@@ -1,8 +1,8 @@
 # Captain's Log: Clojure Became the Editor Language
 
 **Date:** 2026-08-24  
-**Status:** local implementation and self-hosting proof complete; clean-agent
-comparative benchmarks pending
+**Status:** local self-hosting and fresh Sol/high Anvil dogfood complete;
+three-arm comparative benchmark in progress
 
 ## The question
 
@@ -173,6 +173,62 @@ failure could have inherited `source_unchanged=true` from a generic refusal.
 The tool now claims unchanged source only for a pre-write hash mismatch or a
 confirmed rollback. A dedicated adverse-path test protects that distinction.
 
+## Anvil production and fresh-caller dogfood
+
+The local proof was promoted to an isolated Anvil candidate before production
+changed. Commit `e6bb84d` was integrated as deploy commit `5082d9c`. The MCP
+suite passed at `-Xmx512m` with **189 tests and 1,525 assertions**. The isolated
+server advertised exactly four tools, including `transform_clojure`, and was
+then stopped without disturbing production or clojure-lsp.
+
+The rollback-armed production replacement ultimately passed the same catalog
+gate. Its process runs as user `surgeon` from:
+
+```text
+/srv/fleet/shared-tools/clj-surgeon-5082d9c
+```
+
+It uses `-Xmx512m`. A direct canary against a `surgeon`-owned disposable
+fixture performed one `inspect_clojure` read followed by one committed,
+guarded `transform_clojure` write. The resulting bytes were exact.
+
+A fresh `gpt-5.6-sol` / high caller then completed the computed repeated-edit
+task exactly on its first mutation attempt:
+
+| Result | Observation |
+|---|---:|
+| exact final bytes | true |
+| complete caller wall | 51.23 s |
+| overall actions | 5 |
+| MCP mutation calls | 1 |
+| mutation tool | `transform_clojure` |
+| failed mutation attempts | 0 |
+
+Raw evidence is retained on Anvil at:
+
+```text
+/srv/fleet/dev-a/clj-surgeon-study-results/20260825T024835Z-transform-clojure-sol-high-canary/
+```
+
+This advances the capability ladder through **fresh caller succeeds**. It does
+not yet pass the controlled efficiency gate. The 51.23-second wall belongs to
+the complete model turn, not the editor call alone, and has no matched native
+or `edit_clojure` control yet.
+
+### Benchmark admission and one useful refusal
+
+Benchmark head `20fffb8` adds the four-tool catalog to clean callers, counts a
+committed transform as a mutation, rejects preview-only transforms as commits,
+scores route violations as incorrect, and exposes one repeatable Anvil canary
+command. Its schedule, route, portfolio, and harness self-tests are green.
+
+The first three-seat dispatch stopped before any model launch because the
+shared benchmark checkout was owned by root and Git correctly reported dubious
+ownership to dev-a, dev-b, and dev-c. No global `safe.directory` exception was
+added. The failed preflight directories are retained; the retry uses exact
+`20fffb8` seat-owned checkouts. This is an orchestration refusal, not a model,
+MCP, or structural-edit result.
+
 ## What feels genuinely better
 
 - Computed intent is stated once instead of materialized at every site.
@@ -223,11 +279,185 @@ The open question is frequency, not feasibility. Sol/high ranked the
 programmable transaction first; Fable ranked it second behind direct guarded
 edits. Both independently converged on the same substrate: F compiles to A.
 
+## Ethnographic finding: subsecond scalpels can still create four-minute work
+
+The first local repair of the published `transform_clojure` example exposed a
+caller-side performance failure. The exact field failure was small:
+`expect-count` returned a guarded selection map, while terminal `transform`
+accepted only a vector path. A native broad read could have exposed the
+relevant builders and compiler in one perception round. Instead, the primary
+Codex seat serialized several narrow structural reads and deliberated between
+them. Individual `inspect_clojure` calls took 39--792 milliseconds, but the
+human-visible repair loop took roughly four minutes.
+
+The bounded usage receipt for 2026-08-25T00:49:16Z through
+2026-08-25T03:30:20Z confirms the pattern:
+
+| Measure | Observed |
+|---|---:|
+| `inspect_clojure` calls | 39 |
+| request bundles across those calls | 59 |
+| median requests per call | 1 |
+| median inspect wall | 118 ms |
+| total inspect tool wall | 10.020 s |
+| source characters returned | 106,954 |
+
+The tool was not the dominant clock. The caller forfeited batching and paid a
+model reasoning boundary after nearly every cheap read. This is the structural
+equivalent of pressing one organ key, stopping to rethink the score, then
+pressing the next.
+
+The corrected default loop is:
+
+```text
+one batched perception snapshot
+  -> one compiled guarded transaction
+  -> one warm semantic proof
+```
+
+Follow-up source reads are admitted only when the first receipt exposes a new
+uncertainty that could not have been named in the initial batch. The server
+need not parallelize tiny filesystem reads for this gain; batching them into
+one model-facing call removes the expensive serialization.
+
+The same dogfood pass found a second feedback defect: `make mcp-reload`
+depended on `mcp-test`, so invoking reload immediately after a green suite
+reran all 187 tests and 1,518 assertions before performing an immediate nREPL
+reload. The documented workflow already says `make mcp-test` followed by
+`make mcp-reload`. Reload is now the hot publication gesture; verification
+remains an explicit preceding gate.
+
+After the composition repair, the exact public example compiled through the
+warm JVM in 0.9 seconds. A direct live `transform_clojure` preview against the
+real `max-transform-matches` form completed in 0.5 seconds, selected exactly
+one leaf, proposed `128` to `129`, reported the source and result hashes, and
+left source unchanged with `next_action=commit`.
+
+A fresh same-model local control then exercised the complete caller route:
+
+| Route | Exact | Wall | Tool sequence | Failed mutations |
+|---|---:|---:|---|---:|
+| `transform_clojure` | yes | 25.712 s | one committed MCP transform | 0 |
+| native | no | 21.347 s | one bounded `rg`, then one file change | 0 |
+
+The transform caller immediately used the repaired public expression and
+preserved every unrelated byte. The native caller made the intended semantic
+change but also deleted an unrelated final blank line. Therefore native is not
+admitted to the efficiency comparison. The 4.365-second raw wall advantage for
+native is useful pressure on the structural interface, but it is not a win
+under the exactness gate. Raw evidence is retained at:
+
+```text
+/tmp/clj-surgeon-local-computed-pair-dogfood-20260824T203306/
+```
+
+### First model-routing probe
+
+Four additional one-replicate local cells used the same fixture, prompt,
+correctness gate, and one-call transform route:
+
+| Caller | Exact | Wall | Total input | Reasoning output |
+|---|---:|---:|---:|---:|
+| Sol/high | yes | 25.712 s | 44,100 | 360 |
+| Sol/medium | yes | 22.936 s | 44,181 | 269 |
+| Terra/high | yes | 20.435 s | 43,998 | 360 |
+| Terra/medium | yes | 20.552 s | 43,935 | 250 |
+| Terra/low | yes | 20.262 s | 44,532 | 311 |
+
+Every caller emitted the same 395-character successful MCP receipt, used one
+committed transform, performed zero source reads, and had zero failed
+mutations. Terra's three effort levels are separated by only 290 milliseconds,
+which is noise at one replicate. Sol/high versus Terra's approximately
+20.4-second cluster is a larger hypothesis, not yet a claim.
+
+This suggests a two-stage model-routing architecture:
+
+```text
+strong judgment model: discover and decide the change
+                         |
+                         v
+fast materializer model: render one bounded SCI program
+                         |
+                         v
+deterministic compiler: locate, count, hash-fence, commit, prove, undo
+```
+
+Once the complete decision is explicit, higher reasoning effort did not buy
+observable correctness in these five cells. The next admitted experiment is
+three or more rotated replicas per tier on historical computed/repeated edits.
+Do not generalize this result to discovery, extraction, semantic caller
+completeness, or architectural judgment.
+
+Raw model-routing evidence:
+
+```text
+/tmp/clj-surgeon-local-transform-terra-high-20260824T204021/
+/tmp/clj-surgeon-local-transform-sol-medium-20260824T204146/
+/tmp/clj-surgeon-local-transform-terra-medium-20260824T204310/
+/tmp/clj-surgeon-local-transform-terra-low-20260824T204505/
+```
+
+### Scale probe: constant gesture, noisy wall
+
+The first ten-site caller exposed a tool-description failure rather than an
+SCI mechanism failure. The prompt asked for all ten `:retry-delays` values,
+but the caller copied the one-owner example `(form 'retry-policy)`. The actual
+owners were numbered, so the exact count guard refused ten expected versus
+zero found and left source unchanged. Native changed all ten intended values
+but again deleted an unrelated final blank line.
+
+The public contract was repaired to distinguish two editor roots and to omit
+the redundant inline count guard:
+
+```clojure
+;; one known owner
+(-> (form 'owner) ... (transform f))
+
+;; every structural match in this file
+(-> [] (match :retry-delays) right (transform f))
+```
+
+The next fresh Sol/high caller chose the file-wide root on its first call. The
+same relation was then tested at 10, 30, and 60 sites:
+
+| Sites | Route | Exact | Wall | Mutation actions |
+|---:|---|---:|---:|---:|
+| 1 | SCI transform | yes | 25.712 s | 1 |
+| 10 | SCI transform | yes | 25.815 s | 1 |
+| 30 | SCI transform | yes | 25.033 s | 1 |
+| 60 | SCI transform | yes | 26.339 s | 1 |
+| 10 | native | no | 28.783 s | 1 |
+| 30 | native | no | 45.551 s | 1 |
+| 60 | native | no | 22.400 s | 1 |
+
+SCI caller wall remained within a 1.306-second band while the exact edit count
+grew sixtyfold. This proves the desired constant-effort editor-macro property
+for one homogeneous relation. It does not prove a monotonic wall advantage:
+native `apply_patch` can also carry many homogeneous hunks in one action, and
+the native one-replicate wall varied wildly. Every native scale cell deleted
+an unrelated final blank line and therefore failed exact admission.
+
+The important ergonomic speedup happened at the refusal boundary. Teaching
+the correct root changed the ten-site route from a 38.227-second safe refusal
+to a 25.815-second exact commit, a 1.48x wall improvement and one eliminated
+recovery round. The route to 2--5x is therefore not site count by itself. It is
+removing repeated model boundaries: reacquisition reads, malformed first
+programs, recovery calls, patch fragmentation, and redundant verification.
+
+Raw scale evidence:
+
+```text
+/tmp/clj-surgeon-local-computed-10site-sol-high-20260824T205252/
+/tmp/clj-surgeon-local-computed-10site-rootfix-sol-high-20260824T205646/
+/tmp/clj-surgeon-local-computed-30site-sol-high-20260824T205822/
+/tmp/clj-surgeon-local-computed-60site-sol-high-20260824T210122/
+```
+
 ## Verification receipt
 
 - focused programmable-edit tests: **5 tests, 28 assertions, all green**;
-- core/CLI suite: **604 tests, 5,222 assertions, all green**;
-- MCP suite at `-Xmx512m`: **187 tests, 1,514 assertions, all green**;
+- core/CLI suite: **605 tests, 5,225 assertions, all green**;
+- MCP suite at `-Xmx512m`: **187 tests, 1,518 assertions, all green**;
 - four-tool stdio discovery smoke: green;
 - benchmark, onboarding, retention, and evidence self-tests: green;
 - live MCP contract synchronized without a JVM restart;

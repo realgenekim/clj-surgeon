@@ -16,13 +16,20 @@
 (def transform-tool-description
   (str
     "Compile one capability-limited Clojure transform into exact guarded edits. "
-    "expression uses the existing structural path DSL and must end in transform. "
-    "expect.matches is authoritative: the transform runs once per selected node "
-    "only when the exact count matches. expect.max_changed_characters bounds the "
-    "sum of replaced source spans. Preview is the default and never writes. Set "
-    "commit=true for one atomic compare-and-swap write; comment-bearing selected "
-    "subtrees refuse one-shot commit. SCI cannot perform I/O, start processes, "
-    "load namespaces, mutate host state, or use Java interop."))
+    "expression uses the structural path DSL and must end in transform. "
+    "Start with (form 'owner) when one top-level owner bounds the change; for example, "
+    "(-> (form 'retry-policy) initializer (match :retry-delays) right "
+    "(transform (fn [delays] (mapv (partial + 100) delays)))). "
+    "Start with [] when the relation spans every matching owner in the file; for example, "
+    "(-> [] (match :retry-delays) right "
+    "(transform (fn [delays] (mapv (partial + 100) delays)))). "
+    "expect.matches is the authoritative exact cardinality guard; omit redundant "
+    "expect-count from the expression. expect.max_changed_characters bounds the sum "
+    "of replaced source spans. Preview is the default and never writes. Set commit=true "
+    "for one atomic compare-and-swap write; a successful commit returns "
+    "verification_complete=true and next_action=none, which are terminal evidence. "
+    "Comment-bearing selected subtrees refuse one-shot commit. SCI cannot perform "
+    "I/O, start processes, load namespaces, mutate host state, or use Java interop."))
 
 (def transform-tool-schema
   {:type "object"
@@ -181,7 +188,9 @@
      :source-hash (:source-hash file-plan)
      :result-hash (:result-hash file-plan)
      :diff (:diff compiled)
-     :source-unchanged true}))
+     :source-unchanged true
+     :verification_complete false
+     :next_action "commit"}))
 
 (defn- execute-in-context!
   [{:keys [project-root]} {:keys [file expression expect commit]}]
@@ -245,7 +254,9 @@
                        :edit-count (:edit-count planned)
                        :changed-characters (:changed-characters planned)
                        :diff (:diff compiled)
-                       :receipt (transaction/build-receipt compiled)})))))))))
+                       :receipt (transaction/build-receipt compiled)
+                       :verification_complete true
+                       :next_action "none"})))))))))
     (catch Exception error
       (merge
         (refusal :transform-tool-failure (.getMessage error))

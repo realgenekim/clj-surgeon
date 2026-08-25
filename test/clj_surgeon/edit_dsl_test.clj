@@ -129,6 +129,20 @@
       (is (= :invalid-edit-transform (:error-type error)))
       (is (= value (:transform error))))))
 
+(deftest expect-count-composes-with-terminal-transform
+  ;; Field failure: the public MCP example guarded a transform with expect-count,
+  ;; but expect-count returned a selection map that transform rejected as a path.
+  (let [query (dsl/compile-query
+                "(-> (form 'retry-policy) initializer (match :retry-delays) right (expect-count 1) (transform (fn [delays] (mapv (partial + 100) delays))))")]
+    (is (= [[:form 'retry-policy]
+            :initializer
+            [:find :retry-delays]
+            :right]
+           (pop query)))
+    (is (= :transform (first (peek query))))
+    (is (= [101 102 103]
+           ((second (peek query)) [1 2 3])))))
+
 (deftest counted-builders-require-positive-integers
   (doseq [[builder step] [[dsl/span :span]
                           [dsl/partition-all :partition-all]]

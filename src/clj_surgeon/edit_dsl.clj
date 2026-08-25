@@ -229,7 +229,12 @@
     (throw (ex-info "Edit transform must be a function"
                     {:error-type :invalid-edit-transform
                      :transform transformer})))
-  (append-step path [:transform transformer]))
+  (append-step (if (and (map? path)
+                        (= :selection (:kind path))
+                        (vector? (:query path)))
+                 (:query path)
+                 path)
+               [:transform transformer]))
 
 (defn xray
   "Compute a read-only EDN value from the selected Clojure values."

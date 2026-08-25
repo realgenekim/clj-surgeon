@@ -49,7 +49,7 @@ help:
 	@echo "  make mcp-smoke                 Verify initialize, four-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
-	@echo "  make mcp-reload                Test, reload live Clojure, and publish changed tool schemas"
+	@echo "  make mcp-reload                Reload live Clojure and publish changed tool schemas"
 	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
 	@echo "  make mcp-status                Check both hot MCPs, nREPL, and Codex registration"
@@ -68,7 +68,7 @@ help:
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
 	@echo "  make benchmark-edit-portfolio  Compare representative edits across microscope/current/native"
 	@echo "  make benchmark-edit-portfolio-self-test Verify edit capsules and harness without model calls"
-	@echo "  make benchmark-anvil-compiled-edit-canary RESULT_DIR=/abs/path [REPLICATES=1] Compare transform/edit/native on one computed edit"
+	@echo "  make benchmark-anvil-compiled-edit-canary RESULT_DIR=/abs/path LATIN_ROW=1 [REPLICATES=1] Compare transform/edit/native"
 	@echo "  make benchmark-inspect-mcp     Compare persistent inspect, CLI, and native reads"
 	@echo "  make benchmark-inspect-mcp-self-test Verify the inspect harness without model calls"
 	@echo "  make benchmark-codex-skill     Run the bounded 2-session Codex skill battery"
@@ -114,7 +114,7 @@ mcp-serve-benchmark:
 mcp-heap-config-self-test:
 	@sh test/mcp_heap_config_test.sh
 
-mcp-reload: mcp-test
+mcp-reload:
 	@set -eu; \
 	  port_file="$(MCP_STATE_DIR)/nrepl-port"; \
 	  test -f "$$port_file" || { echo "No live MCP nREPL port at $$port_file; run make mcp-start" >&2; exit 1; }; \
@@ -500,7 +500,8 @@ benchmark-edit-portfolio-self-test:
 
 benchmark-anvil-compiled-edit-canary:
 	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
-	bash bench/run_anvil_compiled_edit_canary.sh "$(RESULT_DIR)" "$(or $(REPLICATES),1)"
+	@test -n "$(LATIN_ROW)" || { echo "LATIN_ROW=1, 2, or 3 is required"; exit 2; }
+	bash bench/run_anvil_compiled_edit_canary.sh "$(RESULT_DIR)" "$(LATIN_ROW)" "$(or $(REPLICATES),1)"
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh
