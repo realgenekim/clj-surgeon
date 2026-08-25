@@ -344,3 +344,42 @@ catalog until representative evidence shows a routing or latency benefit. The
 next search moves to historical task shapes where one compiled decision can
 remove several model/tool boundaries, especially multi-owner deletion and
 extraction after architecture is already decided.
+
+## Exact-owner deletion crossed 2x in its historical calibration canary
+
+Commits `f104c0b` through `bfcca4d` added a compact `delete_owners` gesture to
+`edit_clojure`. One request names a file and an ordered set of exact top-level
+owners. The adapter lowers that gesture into the existing failure-atomic
+transaction kernel, so owner uniqueness, parse-before-write, read-back hashes,
+and the inverse receipt remain authoritative without a source preflight read.
+
+The first replay deliberately reconstructs the exact clean-caller experiment
+from Codex session `019fecdc-fd65-7940-8345-61af94cced8b`: 17 contiguous
+synthetic owners with attached comments between two keep sentinels. This is a
+historical calibration replay, not production-code evidence. That distinction
+is encoded in the capsule provenance.
+
+Result directory:
+`/tmp/clj-surgeon-historical-delete-canary2-20260824`
+
+| Same Sol/high task boundary | Exact | Wall | Tool round trips | Tool output |
+|---|---:|---:|---:|---:|
+| Compact `edit_clojure` | yes | 23.053 s | 1 | 175 B |
+| Native bounded read + `apply_patch` | yes | 47.416 s | 2 | 1,869 B |
+
+The compact route was 24.363 seconds faster, or **2.06x end-to-end**. It made
+one first-attempt mutation call, performed no source read, and received terminal
+verification. Native correctly read the bounded owner block, then emitted one
+successful patch. Compact also emitted 480 output tokens versus native's 1,533.
+
+The first harness pass mislabeled both exact results as incorrect because a
+legacy scorer inferred mutation tasks from a `*-edit` name suffix. The final
+SHA in both arms already matched the capsule's expected SHA. Commit `d35081c`
+removed that coupling: membership in the validated edit portfolio now defines
+the scoring semantics. The corrected rerun is the table above.
+
+This canary proves the proposed mechanism: when the complete owner set is the
+decision, structural addressing removes the read needed to manufacture patch
+context. It does not yet prove a representative 2x product advantage because
+the source is synthetic and the deleted block is contiguous. The next gates
+are replicated pairs and a production-derived extraction-shaped replay.
