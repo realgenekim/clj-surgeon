@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-server-test
   (:require
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clojure.java.io :as io]
@@ -25,20 +26,26 @@
     (doseq [child (reverse (file-seq (io/file file)))]
       (Files/deleteIfExists (.toPath child)))))
 
-(deftest exposes-exactly-three-typed-tools
+(deftest exposes-exactly-four-typed-tools
   (let [tools (server/make-tools nil ".")]
-    (is (= 3 (count tools)))
-    (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"]
+    (is (= 4 (count tools)))
+    (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
+            "transform_clojure"]
            (mapv :name tools)))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))
+    (is (= #'program-tool/handle-transform-clojure
+           (:tool-fn (nth tools 3))))
+    (is (= false (get-in tools [3 :schema :additionalProperties])))
+    (is (= ["file" "expression" "expect"]
+           (get-in tools [3 :schema :required])))
     (is (= false (get-in tools [2 :schema :additionalProperties])))
     (is (= #{"workspace_root" "edits"}
-          (set (keys (get-in tools [2 :schema :properties])))))
+           (set (keys (get-in tools [2 :schema :properties])))))
     (is (= ["edits"] (get-in tools [2 :schema :required])))
     (is (str/includes? (:description (nth tools 2))
-          "exact old subtree"))
+                       "exact old subtree"))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits" "extraction"

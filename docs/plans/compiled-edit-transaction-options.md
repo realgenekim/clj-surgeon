@@ -169,6 +169,47 @@ than the extra round trips and lifecycle complexity cost.
 decision twice, commits an incomplete buffer, or leaves durable garbage after
 the coding session dies.
 
+## F — Programmable structural transaction
+
+```clojure
+(transaction
+  (-> (form 'route-event)
+      (match :finish)
+      right
+      (expect-count 1)
+      (transform #(assoc % :status :complete)))
+  (-> (forms 'legacy-a 'legacy-b)
+      delete))
+```
+
+The existing capability-limited Clojure interpreter evaluates a pure path and
+transform program against one frozen `.clj`, `.cljs`, or `.cljc` snapshot. It
+cannot perform I/O, start processes, mutate host state, or commit source. The
+planner discards the executable function after evaluation, retains only
+concrete A-style guarded edits, validates cardinality and every future file,
+then uses the ordinary atomic transaction and receipt machinery.
+
+**Why it might be right:** This is the literal Emacs model. The LLM writes a
+small, one-use editor program in the same homoiconic language as the code. A
+general path algebra plus ordinary pure Clojure can express computed changes
+without a growing catalog of refactor opinions. Better models make this surface
+more capable rather than obsolete.
+
+**Cost:** The model must write and debug a second program before changing the
+first. SCI syntax, quoting, structural-node/data conversion, cardinality, and
+concrete-source preservation can create refusal rounds. A pure sandbox limits
+capabilities but does not prove termination. Cross-file namespace mechanics and
+semantic caller completeness still need explicit inputs or libraries.
+
+**Assumption underneath:** Fresh models write short pure Clojure transforms
+more reliably than they fill a large nested transaction schema or enumerate
+many literal replacements.
+
+**Likely LLM failure:** The transform selects the wrong structural level,
+canonicalizes spelling or comments unintentionally, returns the wrong shape,
+performs unbounded work, or expresses an architectural inference that the
+mechanical compiler cannot verify.
+
 ## Same-data comparison
 
 | Option | Model expression burden | Calls after decision | Server state | Bitter-lesson risk | Plausible >=5x stratum |
@@ -178,6 +219,7 @@ the coding session dies.
 | C — handles | low after `see` | 1 | snapshot cache | low-medium | read-then-edit work with costly reacquisition |
 | D — refactor compiler | lowest | 1 | none or snapshot cache | highest | dense moves, extraction, deletion |
 | E — change buffer | medium | 3+ | mutable buffer | medium | long decisions assembled incrementally |
+| F — programmable transaction | low for relational edits | 1 | none or snapshot cache | lowest if kept mechanical | computed and repeated structural changes |
 
 ## Discriminating experiments
 
@@ -185,11 +227,12 @@ Use exact correctness as an admission gate. Measure complete caller wall from
 the decision boundary, first mutation success, tool actions, payload bytes,
 failed mutations, foreground verification cycles, and stale-source behavior.
 
-1. **Six exact heterogeneous edits:** A versus B versus C. This isolates schema
-   and handle burden without rewarding a high-level refactor operation.
-2. **Seventeen owner deletions:** B versus C versus D. The model receives all
+1. **Six exact heterogeneous edits:** A versus B versus C versus F. This
+   isolates schema, handle, and transform-program burden without rewarding a
+   high-level refactor operation.
+2. **Seventeen owner deletions:** B versus C versus D versus F. The model receives all
    owner names. No discovery is allowed.
-3. **Real namespace extraction:** A versus B versus C+D versus E. The model
+3. **Real namespace extraction:** A versus B versus C+D versus E versus F. The model
    receives the chosen owners, destination, caller decisions, and hot law. The
    tool must not infer architecture.
 4. **Concurrent edit:** Change one addressed form after decision capture. Every
@@ -203,7 +246,7 @@ and a median >=5x advantage over the matched native materialization control.
 
 ## Decision pending independent review
 
-Codex Sol/high and Fable will rank the five options against the same scenario
+Codex Sol/high and Fable first ranked five options against the same scenario
 and gates. Their reasoning will be recorded here before implementation chooses
 a primary architecture and fallback.
 
@@ -260,7 +303,198 @@ Forcing C to manufacture a handle is ceremony. Discarding a handle that a
 necessary read already produced is reacquisition. The public architecture must
 support both without making either the universal preflight.
 
-## Recommendation
+## Revote after adding F
+
+The first ballot omitted machinery that already exists. `:edit :expr` runs a
+capability-limited Clojure program in SCI, selects exact source through the
+structural lens, computes a replacement, and then discards the function. Its
+output is an ordinary concrete, hash-bound replacement plan. F therefore is
+not a speculative language implementation; it is an incomplete model-facing
+frontend over working components.
+
+### Codex Sol/high revote
+
+Sol reranked the set **F > C > D > B > A > E**. It chose F as the primary
+model-facing language for computed structural work, C-style snapshot handles
+as its preferred inputs, and A as its sole commit IR and direct fallback.
+
+Its strongest argument is asymptotic: A requires the model to materialize each
+changed byte and repeat each site, while F expresses one relation whose cost is
+independent of site count. D can become a library of audited helpers over F
+rather than the ceiling of what the editor can express. Sol's strongest warning
+is lossless syntax: ordinary Clojure values do not retain comments, spelling,
+reader conditionals, metadata placement, or whitespace. Whole-form read/print
+churn is a go/no-go failure. It proposed lossless round-trip, first-run success,
+computed-edit crossover, semantic-extraction, and containment experiments.
+
+### Fable revote
+
+Fable reranked the set **A > F > B > D > C > E**. It kept A as the default and
+chose F as the computed/bulk escape hatch that compiles to A.
+
+Its strongest argument is modal cost: for one already-known literal change,
+`from`/`to` has less vocabulary and a smaller failure surface than a generated
+program. A wrong F program can produce a confidently wrong edit at scale, and
+the author has not independently materialized the bytes. Fable would require
+explicit cardinality and churn budgets for one-shot commit; otherwise F must
+return its compiled A edits for one confirmation. It would keep D only for
+semantic operations whose laws and namespace/caller mechanics should not be
+reimplemented ad hoc.
+
+### Shared conclusion
+
+The reviewers disagree about routing frequency, not the stack:
+
+```text
+optional C handles -> F program -----------+
+                                             v
+optional D helpers --------------------> A guarded concrete edits -> atomic commit
+                                             ^
+direct literal edit ------------------------+
+```
+
+F does not replace A. It is a compiler frontend whose executable code must
+vanish before commit. A remains the auditable, replayable, compare-and-swap IR.
+
+## Local dogfood of the existing F machinery
+
+The first probes ran inside the existing clj-surgeon MCP JVM through its
+embedded nREPL. No second JVM was started and no source file was written. The
+live namespace was reloaded before evaluation.
+
+### Computed leaf edit: excellent
+
+This expression selected one vector and computed its new value:
+
+```clojure
+(-> (form 'retry-policy)
+    (match :delays)
+    right
+    (transform #(mapv (partial + 100) %)))
+```
+
+Given a map containing `[100 250 500] ; preserve me`, it compiled to a concrete
+single-node plan whose diff changed only that vector to `[200 350 600]`. The
+adjacent inline comment and every unrelated byte survived. The resulting plan
+contained the path, preorder address, before source, after source, source hash,
+result hash, and concrete `[:replace [200 350 600]]`; the SCI function was gone.
+
+This felt like the intended editor: state the relation once, receive the exact
+mechanical diff, then bang the guarded plan.
+
+### Whole-map sexpr transform: unacceptable without a lossless guard
+
+Transforming the enclosing map with `(assoc % :max-attempts 4)` produced this
+proposal:
+
+```diff
+-{:delays [100 250 500] ; preserve me
+-   :jitter? true}
++{:delays [100 250 500], :max-attempts 4, :jitter? true}
+```
+
+The proposal correctly remained plan-only, so nothing was damaged. But plain
+sexpr transformation lost the comment and canonicalized layout. F cannot be
+defined as arbitrary data-in/printed-data-out over broad forms. It must either
+operate on a lossless CST, emit smaller structural edit instructions such as
+`assoc_entry`, or refuse when trivia/churn exceeds an explicit budget.
+
+### Repeated matches: the prototype stops too early
+
+A path selecting three `:timeout` values safely refused with
+`ambiguous-match`; current `transform` requires exactly one selected node.
+Transforming their enclosing vector worked computationally but collapsed three
+formatted map lines into one canonical line. The missing high-leverage primitive
+is therefore not an interpreter. It is **bounded transform-each lowering**:
+
+```clojure
+(-> (form 'configs)
+    (match :timeout)
+    right
+    (expect-count 3)
+    (transform-each #(+ % 50)))
+```
+
+That program should compile to three disjoint A edits against the frozen
+snapshot, preserving every byte between the three selected values. It must
+refuse without an exact count, on overlap, or when any generated value is not
+readable Clojure.
+
+### The retained-address seam works
+
+A live nREPL prototype connected the existing query result to
+`compile-addressed-transaction`. The first attempt incorrectly retained the
+semantic path as well as the exact preorder address. Three maps contained the
+same `:timeout` path, so that non-unique path could not identify the later
+sites. Removing it and using the frozen preorder addresses produced one valid
+three-edit transaction:
+
+```diff
+-100
++150
+-250
++300
+-500
++550
+```
+
+A second fixture used duplicate values, metadata, commas, multiline maps, and
+inline comments. Two `100` leaves became two `150` leaves, and the complete
+future source was byte-identical to a replacement of only those six numeral
+characters. An incorrect expected count refused before compilation. A virtual
+commit succeeded with whole-file read-back hashes; adding a concurrent comment
+to the source before commit produced `source-hash-mismatch` and no write.
+
+This proves the important seam already exists:
+
+```text
+SCI relation
+  -> exact N-node frozen selection
+  -> N distinct retained addresses
+  -> N concrete A edits
+  -> whole-file parse
+  -> compare-and-swap commit
+```
+
+### First MCP surface and self-edit
+
+`transform_clojure` now exposes that seam locally. Its input is one project-
+relative file, one existing SCI path ending in `transform`, an exact match
+count, an explicit maximum changed-character budget, and optional
+`commit=true`. Preview is the default. One-shot commit refuses when the selected
+subtree itself contains a comment; the caller must narrow the selection or use
+the reviewed route. The current implementation bounds a request to 128 matches
+and 262,144 generated characters.
+
+The new route passed 5 focused tests with 28 assertions, then the complete MCP
+gate with 187 tests and 1,514 assertions under a 512 MiB heap. Hot reload added
+the fourth tool without restarting the server.
+
+It then edited its own implementation through the live MCP callback:
+
+```clojure
+(-> (form 'max-transform-matches)
+    initializer
+    (transform #(quot % 2)))
+```
+
+With `matches=1`, a three-character budget, and `commit=true`, the result was:
+
+```diff
+-(def max-transform-matches 256)
++(def max-transform-matches 128)
+```
+
+The call returned one compiled edit, atomic commit success, a complete-file
+read-back hash, and a concrete inverse receipt. The SCI function was absent
+from that receipt. This is the requested reflexive proof: the programmable edit
+tool successfully and safely edited itself.
+
+Dogfood found one payload defect: preview initially returned the entire future
+file in structured output. That was removed; the compact response retains only
+the file, counts, budget use, safety flag, source/result hashes, and diff.
+
+## Recommendation before the F experiments
 
 Choose **A as the universal edit instruction and default public gesture**.
 
@@ -285,14 +519,45 @@ drift experiment puts A first-call acceptance below 85% or if C reduces median
 materialization wall by at least 30% without adding a source read. Keep A for
 no-read supplied decisions in either outcome.
 
+## Revised recommendation
+
+Build the **F -> A** seam now, but do not declare F the universal default yet.
+
+- Keep A as the sole commit IR and the shortest interface for one literal edit.
+- Expose the already-working single-node SCI transform through MCP without
+  shell quoting. It must return a concrete diff first; applying it must consume
+  that exact hash-bound plan rather than rerun the program.
+- Add bounded `transform-each` as the first true F transaction primitive. It
+  should lower one exact-count selection to several lossless, non-overlapping A
+  edits.
+- Reuse lossless operations (`assoc_entry`, rename, sibling insertion) as F
+  plan builders. Do not ask an sexpr transform to reproduce CST details it
+  never received.
+- Keep semantic D operations for extraction, namespace mechanics, and complete
+  caller rewrites. They may be callable from F, but their tested laws remain
+  authoritative.
+- Promote F to the default for computed/repeated edits only after fresh callers
+  prove first-program success and zero unrelated-byte edits. A remains default
+  for literal one-site work regardless.
+
+This is one architecture with two gestures, not an indecisive pair: direct A
+for literal materialization; F compiling to A when computation compresses the
+decision.
+
 ## Build and test order
 
 1. Run the historical A drift corpus. Measure exact first-call acceptance;
    classify spelling, count, ambiguity, and wrong-owner failures.
-2. Race B, C, and D on the 17-owner deletion. C may reuse a supplied handle
+2. Implement and locally dogfood an MCP preview/apply surface over the existing
+   single-node SCI compiler. The second call must apply the reviewed concrete
+   plan without reevaluating SCI.
+3. Add bounded `transform-each` and run lossless fixtures containing comments,
+   metadata, discard forms, reader conditionals, commas, and odd formatting.
+4. Race B, C, D, and F on the 17-owner deletion. C may reuse a supplied handle
    snapshot but may not add a read inside the clock.
-3. Race A, B, C+D, and native on one real namespace extraction decision packet.
-4. Add C only if step 2 or 3 clears its 30% keep gate. Add no general stateful
+5. Race A, B, C+D, F, and native on one real namespace extraction decision
+   packet.
+6. Add C only if a race clears its 30% keep gate. Add no general stateful
    buffer.
-5. Claim >=5x only for a stratum with all fresh callers correct, zero failed
+7. Claim >=5x only for a stratum with all fresh callers correct, zero failed
    mutations, and a replicated median >=5x over matched native materialization.

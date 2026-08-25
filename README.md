@@ -350,13 +350,15 @@ What changed since you installed? See [CHANGELOG.md](CHANGELOG.md).
 Keep this branch-local while the MCP contract is under evaluation. The
 development installer points the CLI and both skills at the current checkout,
 starts the hot clj-surgeon and cclsp services on loopback, and registers exactly
-three clj-surgeon tools with Codex:
+four clj-surgeon tools with Codex:
 
 - `inspect_clojure` for read-only structural batches and proof-carrying change
   preparation;
 - `apply_clojure_changes` for guarded direct or basis-backed mutation;
 - `edit_clojure` for byte-exact, compare-and-swap subtree replacement inside a
-  named top-level form.
+  named top-level form;
+- `transform_clojure` for a bounded SCI relation compiled into one or more
+  exact, guarded structural edits.
 
 ```bash
 make install-mcp-codex-dev
@@ -438,6 +440,28 @@ the transaction bookkeeping:
 The old subtree is the compare-and-swap guard. One match is the default. When
 the same exact subtree must change a known number of times inside the owner,
 add `"matches": 2`; any other count refuses the whole request before write.
+
+When the replacement is derived from the selected value or the same relation
+applies to several sites, use `transform_clojure` instead of materializing each
+replacement. The expression uses the same capability-limited Clojure path DSL
+as CLI `:edit :expr` and must end in `transform`:
+
+```json
+{
+  "workspace_root": "/absolute/workspace",
+  "file": "src/policy.clj",
+  "expression": "(-> (form 'retry-policy) (match :delays) right (transform #(mapv (partial + 100) %)))",
+  "expect": {"matches": 1, "max_changed_characters": 64}
+}
+```
+
+Preview is the default and never writes. Add `"commit": true` only when the
+relation and bounds are already decided. The tool compiles every selected node
+to a distinct retained address, parses the complete future file, hash-fences
+the original source, commits atomically, reads the file back, and returns an
+inverse receipt. One-shot commit refuses a selected subtree that contains a
+comment; narrow the selection or review the preview. Use a semantic or tested
+refactor operation when caller completeness or namespace mechanics matter.
 Surgeon never offers an unbounded replace-all through this entrance.
 
 For different edits or more explicit transaction control, send all known

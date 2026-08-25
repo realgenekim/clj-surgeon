@@ -299,7 +299,7 @@
        "[mcp_servers.clj-surgeon]\n"
        "url = \"" surgeon-url "\"\n"
        "required = true\n"
-       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\"]\n\n"
+       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n\n"
        "[mcp_servers.cclsp]\n"
        "url = \"" cclsp-url "\"\n"
        "required = false\n"

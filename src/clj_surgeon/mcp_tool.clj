@@ -11,6 +11,7 @@
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -76,7 +77,8 @@
                      (assoc config :workspace-router
                             (workspace/router config)))]
     (reset! runtime-config configured)
-    (inspect-tool/init! configured)))
+    (inspect-tool/init! configured)
+    (program-tool/init! configured)))
 
 (defn- real-root
   ^Path [root]
@@ -543,4 +545,7 @@
 
 (defn all-tools
   []
-  [inspect-tool/inspect-tool clj-change-tool edit-clojure-tool])
+  [inspect-tool/inspect-tool
+   clj-change-tool
+   edit-clojure-tool
+   program-tool/transform-clojure-tool])

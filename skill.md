@@ -8,7 +8,7 @@ description: >-
 
 ## Discover the hot entrance first
 
-Before a shell process reads Clojure, inspect the deferred/all-tools catalog for `inspect_clojure`, `edit_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; initial absence proves nothing.
+Before a shell process reads Clojure, inspect the deferred/all-tools catalog for `inspect_clojure`, `edit_clojure`, `transform_clojure`, `apply_clojure_changes`, and `mcp__cclsp__*`; initial absence proves nothing.
 Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. cclsp reads cross-file semantics; clj-surgeon owns exact source and writes.
 
 ## Join one shared workspace stack
@@ -41,6 +41,8 @@ Route: inspect_clojure -> cclsp graph query -> CLI fallback -> native fallback. 
   complete replacement, or whole-owner delete, and apply once.
 - For exact nested replacements, call `edit_clojure` with only `workspace_root` and `edits`. Each edit contains `file`, `within: {form}`, `from`, `to`, and optional positive `matches` (default 1).
   Do not send `changes`, top-level `expect`, `verify`, `basis`, or `decisions`; Surgeon derives IDs and counts. Compact edits preserve unrelated bytes and do not format the whole file. Use `apply_clojure_changes` for formatter, linter, or test gates.
+- Use `transform_clojure` when one bounded pure relation derives replacements for one or more known leaves. Supply one SCI path ending in `transform`, exact `expect.matches`, and `expect.max_changed_characters`; preview is the default.
+  Set `commit=true` only for an already-decided relation over narrow nodes; commit parses, hash-fences, reads back, and receipts. Narrow around comments. Use semantic preparation or a tested refactor operation for caller completeness or namespace mechanics.
 - For known exact changes, send one direct `changes` request with `id`, `files`,
   `forms` or `owner`, `expect`, one action, and aggregate counts. Optional
   `forms` may name one method as `{kind: defmethod, name: render, dispatch: :card}`.

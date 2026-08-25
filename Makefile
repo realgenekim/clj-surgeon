@@ -46,7 +46,7 @@ help:
 	@echo ""
 	@echo "  make test                      Run all tests"
 	@echo "  make mcp-test                  Run focused JVM MCP contract and hot-reload tests"
-	@echo "  make mcp-smoke                 Verify initialize, three-tool discovery, and refusal over stdio"
+	@echo "  make mcp-smoke                 Verify initialize, four-tool discovery, and refusal over stdio"
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Test, reload live Clojure, and publish changed tool schemas"
@@ -119,7 +119,7 @@ mcp-reload: mcp-test
 	  test -f "$$port_file" || { echo "No live MCP nREPL port at $$port_file; run make mcp-start" >&2; exit 1; }; \
 	  port=$$(cat "$$port_file"); \
 	  result=$$(clj-nrepl-eval --port "$$port" \
-	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.binding-rename clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-schema clj-surgeon.mcp-contract clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-process clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-extraction clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
+	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.binding-rename clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-schema clj-surgeon.mcp-contract clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-process clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-extraction clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-program-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
 	  case "$$result" in *":ok true"*) ;; *) echo "$$result" >&2; exit 1 ;; esac; \
 	  echo "$$result"; \
 	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \

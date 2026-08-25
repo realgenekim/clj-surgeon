@@ -171,9 +171,15 @@ updates, and verification gates. It is not a chronological coding diary.
   capabilities but does not prove termination, so analyzers must perform
   bounded work. For CLJC, pass `:clj` or `:cljs` to `form`.
 - When a replacement is computed or its before-state is not declared, generate
-  a replacement plan in a standalone shell command. Observe and review it
-  before running a separate apply command; never chain planning and
-  application. When the intended relationship, literal replacement, and exact
+  a replacement plan in a standalone shell command, or use
+  `transform_clojure` to avoid shell quoting. The MCP route accepts one SCI path
+  ending in `transform`, an exact match count, and an explicit changed-character
+  budget. It lowers every selected leaf to a separate frozen structural address;
+  preview is the default. Use `commit=true` only for an already-decided bounded
+  relation over narrow selections. One-shot commit refuses a selected subtree
+  that contains a comment. For the CLI route, observe and review the plan before
+  running a separate apply command; never chain planning and application. When
+  the intended relationship, literal replacement, and exact
   before-state are known, one `:edit` call with `:expect` may be the first
   source-bearing action. Omit `:plan-out` unless an audit artifact must be
   retained. Read first only when the choice requires a separate judgment. A
