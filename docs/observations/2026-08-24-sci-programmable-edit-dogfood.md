@@ -500,6 +500,69 @@ Raw scale evidence:
 /tmp/clj-surgeon-local-computed-60site-sol-high-20260824T210122/
 ```
 
+## The heterogeneous multi-file batch worked
+
+The first batched-SCI architecture probe used the existing
+`decision-batch-edit` historical fixture rather than another repeated-site
+microbenchmark. The supplied decision contained six different exact changes
+across two files:
+
+- two changes inside `ide-shell`;
+- four changes inside `source-reader-shell`;
+- keyword, string, argument-vector, title expression, and Hiccup-vector
+  replacements;
+- duplicate syntax outside the named owners that had to remain unchanged.
+
+The live project nREPL compiled six independent SCI expressions against one
+original two-file snapshot. The probe extracted their frozen structural
+addresses, assigned transaction-unique intent IDs, and passed all six edits to
+the existing multi-file transaction compiler once. It then committed once and
+compared both resulting files byte-for-byte with the accepted historical
+outcome.
+
+```text
+programs                         6/6 compiled
+addressed edits                  6
+changed files                    2
+combined transaction             accepted
+atomic commit                     accepted
+whole-file parse/read-back        2/2
+exact accepted bytes              2/2
+warm compile + commit wall        78.399 ms
+```
+
+The read-back hashes were exactly the capsule's declared after hashes:
+
+```text
+src/bench/app_shell.clj
+03fc2c425a56294695811366e3da00793054aa3038802215e12cbf58e16b5aad
+
+src/bench/source_reader.clj
+f2e9c6efc4c3885debe12f46a18fc47ef276c03e8ff8b38943329e4a2828f061
+```
+
+This proves the missing architecture seam is small. The SCI compiler already
+produces ordinary guarded addressed edits, and the transaction engine already
+accepts edits spanning several files. A future `programs` request can therefore
+compile each expression against the same frozen source map and perform one
+overlap check, one compare-and-swap commit, and one receipt. It does not need a
+new write engine.
+
+This probe does **not** yet prove an LLM wall-time win. It invoked private pure
+compiler functions through the warm nREPL and therefore bypassed the current
+one-file MCP schema, model program generation, tool serialization, and receipt
+interpretation. Native `apply_patch` can express the same six changes in one
+action. The next decision-grade comparison must expose this exact batch through
+one public request, then give fresh callers the same complete decision and
+compare first-attempt validity, complete wall, payload size, refusals, and
+consequential drift.
+
+Raw successful workspace:
+
+```text
+/tmp/clj-surgeon-sci-batch.zjxWLP
+```
+
 ## Verification receipt
 
 - focused programmable-edit tests: **5 tests, 28 assertions, all green**;

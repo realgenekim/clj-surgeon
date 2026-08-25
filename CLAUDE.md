@@ -84,6 +84,23 @@ updates, and verification gates. It is not a chronological coding diary.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
+- **Latency discipline during this editor study:** an `inspect_clojure` result's
+  compact human summary can omit requested source even though the same call's
+  `structuredContent.results` already contains it. Preserve and consume that
+  structured result from the first call. When invoking MCP through an
+  orchestration wrapper, emit the needed `structuredContent` in that same tool
+  turn; never repeat an equivalent inspection merely to make hidden source
+  visible. The server read may take only milliseconds while each unnecessary
+  model/tool boundary costs many seconds of complete wall time.
+- **Bootstrap editing discipline during this editor study:** do not use the
+  heavyweight `apply_clojure_changes` API to implement its compact successor
+  merely for dogfooding theater. Use `edit_clojure` when one exact guarded
+  subtree batch fits its current contract. Otherwise use native `apply_patch`,
+  then format and test the changed Clojure files. Dogfood the new interface at
+  its public end-to-end boundary; do not pay legacy schema ceremony while
+  constructing that boundary. Once the successor is live, prefer it for real
+  eligible edits and record any fallback as interface evidence; this bootstrap
+  exception must not dissuade use of the new API being built.
 - A named-form result includes the exact `source_anchor` required by cclsp.
   Copy it into `resolve_var_surface`. For up to four related known Vars, use
   one ordered `resolve_var_surfaces` call. Do not discard exact evidence and

@@ -43,6 +43,14 @@
   (get-in editor-gesture-contract [:within :allowed]))
 (def ^:private required-editor-within-fields
   (get-in editor-gesture-contract [:within :required]))
+(def ^:private editor-program-fields
+  (get-in editor-gesture-contract [:program :allowed]))
+(def ^:private required-editor-program-fields
+  (get-in editor-gesture-contract [:program :required]))
+(def ^:private editor-program-expect-fields
+  (get-in editor-gesture-contract [:program-expect :allowed]))
+(def ^:private required-editor-program-expect-fields
+  (get-in editor-gesture-contract [:program-expect :required]))
 (def ^:private supported-source-extensions #{"clj" "cljs" "cljc"})
 
 (def ^:private prewrite-error-types
@@ -494,6 +502,33 @@
                              "each_form" matches
                              "each_file" matches}}))
               edits (range))
+            programs
+            (when (present? params "programs")
+              (mapv
+                (fn [program index]
+                  (let [path ["programs" index]
+                        _ (validate-fields! program editor-program-fields
+                                            required-editor-program-fields path)
+                        expect (field program "expect")
+                        _ (validate-fields!
+                            expect editor-program-expect-fields
+                            required-editor-program-expect-fields
+                            (conj path "expect"))]
+                    {:file (source-path! (field program "file")
+                                         (conj path "file"))
+                     :expression
+                     (nonblank-string! (field program "expression")
+                                       (conj path "expression"))
+                     :expect
+                     {:matches
+                      (positive-integer! (field expect "matches")
+                                         (conj path "expect" "matches"))
+                      :max_changed_characters
+                      (positive-integer!
+                        (field expect "max_changed_characters")
+                        (conj path "expect" "max_changed_characters"))}}))
+                (nonempty-array! (field params "programs") ["programs"])
+                (range)))
             direct
             (cond->
               {"changes" changes
@@ -505,6 +540,9 @@
               (present? params "verify")
               (assoc "verify" (field params "verify")))]
         (cond-> {:ok true :params direct}
+          (seq programs)
+          (assoc :programs programs)
+
           redundant-expect?
           (assoc :input-normalization
                  {:ignored ["expect"]
@@ -525,9 +563,13 @@
       (present? params "edits")
       (let [compiled (editor-gestures->direct-params params)]
         (if (:ok compiled)
-          (cond-> (validate-direct-tool-params (:params compiled))
-            (:input-normalization compiled)
-            (assoc :input-normalization (:input-normalization compiled)))
+          (let [validated (validate-direct-tool-params (:params compiled))]
+            (cond-> validated
+              (and (:ok validated) (seq (:programs compiled)))
+              (assoc-in [:params :programs] (:programs compiled))
+
+              (:input-normalization compiled)
+              (assoc :input-normalization (:input-normalization compiled))))
           compiled))
 
       :else

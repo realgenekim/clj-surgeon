@@ -245,6 +245,56 @@
       (assoc timings :total_ms (elapsed-ms total-start))))
   response)
 
+(defn- resolve-program-paths
+  [root programs]
+  (loop [remaining programs
+         resolved-programs []]
+    (if-let [program (first remaining)]
+      (let [resolved (mcp-paths/resolve-source-path root (:file program))]
+        (if-not (:ok resolved)
+          (assoc resolved :ok false :source-unchanged true)
+          (recur (next remaining)
+                 (conj resolved-programs
+                       (assoc program
+                              :relative-file (:file program)
+                              :file (.toString (:path resolved)))))))
+      {:ok true :programs resolved-programs})))
+
+(defn- compiled-addressed-edits
+  [compiled]
+  (mapcat :edits (:files compiled)))
+
+(defn- merge-programs-into-compiled
+  [compiled programs]
+  (let [sources
+        (reduce
+          (fn [current {:keys [file]}]
+            (if (contains? current file)
+              current
+              (assoc current file (slurp file))))
+          (:original-sources compiled)
+          programs)
+        program-result (program-tool/compile-programs sources programs)]
+    (if-not (:ok program-result)
+      program-result
+      (let [raw-edits (concat (compiled-addressed-edits compiled)
+                              (compiled-addressed-edits
+                                (:compiled program-result)))
+            edits (mapv (fn [index edit]
+                          (-> edit
+                              (assoc :id (str "hybrid/" (inc index)))
+                              (dissoc :intent-index)))
+                        (range) raw-edits)
+            combined (transaction/compile-addressed-transaction
+                       sources edits)]
+        (if-not (:ok combined)
+          (assoc combined :ok false :source-unchanged true)
+          (assoc combined
+                 :program-count (:program-count program-result)
+                 :program-edit-count (:edit-count program-result)
+                 :program-changed-characters
+                 (:changed-characters program-result)))))))
+
 (defn- execute-explicit-change!
   [config root resolved receipt verify]
   (let [files (->> (get-in resolved [:spec :changes])
@@ -267,7 +317,19 @@
        :error-type :verification-baseline-failed
        :verification baseline
        :source-unchanged true}
-      (let [prepare-compiled! (:prepare-compiled! config)
+      (let [base-prepare! (:prepare-compiled! config)
+            programs (:programs resolved)
+            prepare-compiled!
+            (cond
+              (seq programs)
+              (fn [project-root compiled]
+                (let [with-programs
+                      (merge-programs-into-compiled compiled programs)]
+                  (if (and (:ok with-programs) base-prepare!)
+                    (base-prepare! project-root with-programs)
+                    with-programs)))
+
+              :else base-prepare!)
             result (transaction/execute-change!
                      (cond-> {:spec (:spec resolved) :receipt-out receipt}
                        prepare-compiled!
@@ -365,15 +427,25 @@
           (let [[prepared confinement-ms]
                 (timed
                   #(let [root (real-root project-root)]
-                     {:root root
-                      :resolved
-                      (if extraction?
-                        (resolve-extraction-paths
-                          root (get-in validated [:params :extraction]))
-                        (resolve-transaction-paths
-                          root
-                          (contract/tool-params->transaction
-                            (:params validated))))}))
+                     (let [resolved
+                           (if extraction?
+                             (resolve-extraction-paths
+                               root (get-in validated [:params :extraction]))
+                             (resolve-transaction-paths
+                               root
+                               (contract/tool-params->transaction
+                                 (:params validated))))
+                           programs (get-in validated [:params :programs])]
+                       {:root root
+                        :resolved
+                        (if (and (:ok resolved) (seq programs))
+                          (let [program-paths
+                                (resolve-program-paths root programs)]
+                            (if (:ok program-paths)
+                              (assoc resolved :programs
+                                     (:programs program-paths))
+                              program-paths))
+                          resolved)})))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
               (record-result! telemetry params resolved total-start
@@ -514,16 +586,18 @@
 
 (def edit-tool-description
   (str
-    "Make exact Clojure subtree replacements inside named top-level forms. "
-    "Send workspace_root and edits only; no preflight read is needed when file, "
-    "form, exact old subtree, and replacement are already known. Each edit contains "
-    "file, within {form}, from, to, and optional positive matches (default 1). "
-    "The exact old subtree and match count are compare-and-swap guards: stale, "
-    "missing, or ambiguous source refuses before write. The whole batch is "
-    "failure-atomic, preserves every unrelated byte, parses and verifies read-back, "
-    "and returns a receipt plus undo. verification_complete=true is terminal. "
-    "Use inspect_clojure for discovery and apply_clojure_changes when formatter, "
-    "linter, test, or other change actions are required."))
+    "Commit one atomic Clojure edit transaction with no preflight read when the "
+    "decision is complete. edits are exact literal replacements guarded by the "
+    "exact old subtree: file, within "
+    "{form}, from, to, and optional matches (default 1). Optional programs are "
+    "independent computed relations: file, an expression ending in transform, "
+    "and expect {matches, max_changed_characters}. Start a program with "
+    "(form 'owner) for one owner or [] for the whole file. All edits and programs "
+    "compile against the same original snapshot; none observes another's output. "
+    "Any stale count, overlap, budget, comment-bearing computed selection, parse, "
+    "or write failure refuses or rolls back the whole batch. Exact spelling and "
+    "comments belong in edits; computed values belong in programs. Success returns "
+    "terminal read-back and undo evidence."))
 
 (def edit-clojure-tool
   {:id :edit-clojure

@@ -684,10 +684,10 @@
                            "The exact named owner has no stable structural address"
                            {:file file :owner (:name owner-record)}))
                 (cond-> (assoc addressed
-                          :intent-index intent-index
-                          :change-id id
-                          :owner (owner-identity owner-record)
-                          :file file)
+                               :intent-index intent-index
+                               :change-id id
+                               :owner (owner-identity owner-record)
+                               :file file)
                   (= :delete operator) (assoc :delete true)
                   target-owner (assoc :insert-side insert-side
                                       :insert-sources insert-sources))))
@@ -1151,7 +1151,9 @@
 (defn- compile-file
   [file source edits]
   (let [ordered-edits (assert-disjoint-edits! file edits)
-        effective-edits (if (some #(or (:delete %) (:insert-side %))
+        effective-edits (if (some #(or (:delete %)
+                                       (:insert-side %)
+                                       (and (:address %) (not (:path %))))
                                   ordered-edits)
                           (mapv #(prepare-raw-addressed-edit source %)
                                 ordered-edits)

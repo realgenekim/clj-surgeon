@@ -173,6 +173,116 @@
                  (str "Transform program failed: " (.getMessage error)))
         (select-keys (ex-data error) [:error-type :expression :symbol])))))
 
+(defn- compiled-edits
+  [compiled]
+  (mapcat :edits (:files compiled)))
+
+(defn compile-programs
+  "Compile several independent transform programs against one frozen source map."
+  [sources programs]
+  (cond
+    (not (vector? programs))
+    (refusal :invalid-transform-programs
+             "programs must be a non-empty array")
+
+    (not (<= 1 (count programs) 16))
+    (refusal :invalid-transform-programs
+             "programs must contain between 1 and 16 items"
+             {:program-count (count programs)})
+
+    :else
+    (let [plans
+          (mapv
+            (fn [index {:keys [file expression expect]}]
+              (let [expected-matches (:matches expect)
+                    budget (:max_changed_characters expect)
+                    source (get sources file)
+                    invalid
+                    (cond
+                      (not (and (string? file) (seq file)))
+                      (refusal :invalid-transform-program
+                               "program.file must be a non-empty string")
+
+                      (not (string? source))
+                      (refusal :transform-source-missing
+                               "program.file is not present in the frozen source map")
+
+                      (not (and (string? expression) (seq expression)))
+                      (refusal :invalid-transform-program
+                               "program.expression must be a non-empty string")
+
+                      (not (and (integer? expected-matches)
+                                (<= 1 expected-matches max-transform-matches)))
+                      (refusal :invalid-transform-expectation
+                               "program.expect.matches must be a bounded positive integer")
+
+                      (not (and (integer? budget)
+                                (<= 1 budget max-generated-characters)))
+                      (refusal :invalid-transform-expectation
+                               "program.expect.max_changed_characters must be a bounded positive integer"))]
+                (if invalid
+                  (assoc invalid :program-index index :program-file file)
+                  (let [planned (compile-expression source file expression
+                                                    expected-matches)]
+                    (cond
+                      (not (:ok planned))
+                      (assoc planned :program-index index :program-file file)
+
+                      (> (:changed-characters planned) budget)
+                      (refusal :change-budget-exceeded
+                               "Compiled program exceeds expect.max_changed_characters"
+                               {:program-index index
+                                :program-file file
+                                :changed-characters (:changed-characters planned)
+                                :max-changed-characters budget
+                                :match-count (:match-count planned)})
+
+                      (:comment-bearing-selection? planned)
+                      (refusal :lossless-commit-refused
+                               (str "Committed programs refuse selected subtrees containing "
+                                    "comments; use a narrower selection or a literal edit")
+                               {:program-index index
+                                :program-file file
+                                :match-count (:match-count planned)})
+
+                      :else
+                      (assoc planned :program-index index
+                             :program-file file))))))
+            (range) programs)
+          failed (first (remove :ok plans))]
+      (if failed
+        failed
+        (let [raw-edits (mapcat #(compiled-edits (:compiled %)) plans)
+              edits (mapv (fn [index edit]
+                            (-> edit
+                                (assoc :id (str "program/" (inc index)))
+                                (dissoc :intent-index)))
+                          (range) raw-edits)
+              changed-characters (reduce + 0 (map :changed-characters plans))]
+          (cond
+            (> (count edits) 256)
+            (refusal :transform-batch-too-large
+                     "Compiled programs exceed the concrete edit limit"
+                     {:edit-count (count edits) :limit 256})
+
+            (> changed-characters max-generated-characters)
+            (refusal :change-budget-exceeded
+                     "Compiled programs exceed the aggregate changed-character limit"
+                     {:changed-characters changed-characters
+                      :max-changed-characters max-generated-characters})
+
+            :else
+            (let [compiled (transaction/compile-addressed-transaction
+                             sources edits)]
+              (if-not (:ok compiled)
+                (assoc compiled :ok false :source-unchanged true)
+                {:ok true
+                 :compiled compiled
+                 :program-count (count programs)
+                 :edit-count (count edits)
+                 :match-count (reduce + 0 (map :match-count plans))
+                 :changed-characters changed-characters}))))))))
+
 (defn- public-preview
   [{:keys [compiled match-count edit-count changed-characters
            comment-bearing-selection?]} relative-file]

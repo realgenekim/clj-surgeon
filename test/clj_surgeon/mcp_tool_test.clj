@@ -174,6 +174,70 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest hybrid-editor-batch-commits-one-historical-two-file-decision
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        request
+        {"edits"
+         [{"file" "src/bench/app_shell.clj"
+           "within" {"form" "ide-shell"}
+           "from" ":body"
+           "to" ":body.ide-shell-page"}
+          {"file" "src/bench/source_reader.clj"
+           "within" {"form" "source-reader-shell"}
+           "from" "[project-id projects artifact current-location reader-region show-all?]"
+           "to" "[project-id projects artifact document-title current-location reader-region show-all?]"}
+          {"file" "src/bench/source_reader.clj"
+           "within" {"form" "source-reader-shell"}
+           "from" ":body"
+           "to" ":body.ide-shell-page"}
+          {"file" "src/bench/source_reader.clj"
+           "within" {"form" "source-reader-shell"}
+           "from" "[:span.tab-label artifact]"
+           "to" "[:span.tab-label {:title artifact} document-title]"}]
+         "programs"
+         [{"file" "src/bench/app_shell.clj"
+           "expression" "(-> (form 'ide-shell) (match \"/app.css\") (transform (constantly \"/command-center.css\")))"
+           "expect" {"matches" 1 "max_changed_characters" 21}}
+          {"file" "src/bench/source_reader.clj"
+           "expression" "(-> (form 'source-reader-shell) (match '[:title \"Workbench\"]) (transform (constantly '[:title (str document-title \" — Workbench\")])))"
+           "expect" {"matches" 1 "max_changed_characters" 48}}]}]
+    (try
+      (copy-tree! (str fixture-root "/before") workspace)
+      (let [refused
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              (assoc-in request ["programs" 0 "expect" "matches"] 2))]
+        (is (false? (:ok refused)))
+        (is (= "expected-count-mismatch" (:error_type refused)))
+        (is (:source_unchanged refused))
+        (doseq [relative ["src/bench/app_shell.clj"
+                          "src/bench/source_reader.clj"]]
+          (is (= (slurp (io/file fixture-root "before" relative))
+                 (slurp (io/file workspace relative))))))
+      (let [result (mcp-tool/execute-request!
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     request)]
+        (is (:ok result) (pr-str result))
+        (is (:verification_complete result))
+        (is (= 6 (:edits result)))
+        (is (= 2 (:files result)))
+        (doseq [relative ["src/bench/app_shell.clj"
+                          "src/bench/source_reader.clj"]]
+          (is (= (slurp (io/file fixture-root "after" relative))
+                 (slurp (io/file workspace relative)))))
+        (let [undo (transaction/execute-undo!
+                     {:receipt (:undo_receipt result)})]
+          (is (:ok undo))
+          (doseq [relative ["src/bench/app_shell.clj"
+                            "src/bench/source_reader.clj"]]
+            (is (= (slurp (io/file fixture-root "before" relative))
+                   (slurp (io/file workspace relative)))))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest editor-gesture-skips-whole-file-formatting
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

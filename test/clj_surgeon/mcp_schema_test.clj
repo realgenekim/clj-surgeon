@@ -57,7 +57,9 @@
 (deftest public-schema-exposes-one-mutually-exclusive-editor-gesture
   (let [routes (:oneOf schema/clj-change-schema)
         gesture (get-in schema/clj-change-schema
-                        [:properties "edits" :items])]
+                        [:properties "edits" :items])
+        program (get-in schema/editor-tool-schema
+                        [:properties "programs" :items])]
     (is (some #(= ["edits"] (:required %)) routes))
     (is (= #{"file" "within" "from" "to" "matches"}
            (set (keys (:properties gesture)))))
@@ -65,4 +67,11 @@
            (:required gesture)))
     (is (false? (:additionalProperties gesture)))
     (is (= ["form"]
-           (get-in gesture [:properties "within" :required])))))
+           (get-in gesture [:properties "within" :required])))
+    (is (= #{"file" "expression" "expect"}
+           (set (keys (:properties program)))))
+    (is (= ["file" "expression" "expect"] (:required program)))
+    (is (= ["matches" "max_changed_characters"]
+           (get-in program [:properties "expect" :required])))
+    (is (= 16 (get-in schema/editor-tool-schema
+                      [:properties "programs" :maxItems])))))

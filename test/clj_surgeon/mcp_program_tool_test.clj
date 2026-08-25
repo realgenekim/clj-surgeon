@@ -115,6 +115,32 @@
       (finally
         (delete-tree! root)))))
 
+(deftest compiles-several-programs-against-one-frozen-snapshot
+  (let [sources {"src/a.clj" "(ns a)\n(def cfg {:timeout 100})\n"
+                 "src/b.clj" "(ns b)\n(def label \"old\")\n"}
+        programs [{:file "src/a.clj"
+                   :expression "(-> (form 'cfg) initializer (match :timeout) right (transform #(+ % 50)))"
+                   :expect {:matches 1 :max_changed_characters 3}}
+                  {:file "src/b.clj"
+                   :expression "(-> (form 'label) initializer (transform (constantly \"new\")))"
+                   :expect {:matches 1 :max_changed_characters 5}}]
+        result (program/compile-programs sources programs)]
+    (is (:ok result) (pr-str result))
+    (is (= 2 (:program-count result)))
+    (is (= 2 (:edit-count result)))
+    (is (= 2 (get-in result [:compiled :changed-file-count])))
+    (is (= "(ns a)\n(def cfg {:timeout 150})\n"
+           (get-in result [:compiled :future-sources "src/a.clj"])))
+    (is (= "(ns b)\n(def label \"new\")\n"
+           (get-in result [:compiled :future-sources "src/b.clj"])))
+    (let [refused (program/compile-programs
+                    sources (assoc-in programs [1 :expect :matches] 2))]
+      (is (false? (:ok refused)))
+      (is (= :expected-count-mismatch (:error-type refused)))
+      (is (= 1 (:program-index refused)))
+      (is (= "src/b.clj" (:program-file refused)))
+      (is (:source-unchanged refused)))))
+
 (deftest one-shot-commit-refuses-comment-bearing-selected-subtrees
   (let [root (temp-dir)
         source "(ns dogfood.map)\n(def settings {:timeout 100 ; keep\n :ready? true})\n"

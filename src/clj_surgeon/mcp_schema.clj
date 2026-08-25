@@ -209,7 +209,7 @@
     "edits"
     {:type "array"
      :minItems 1
-     :description "Guarded one-match editor gestures. Surgeon derives transaction counts and binds each replacement to its named owner and old subtree."
+     :description "Exact owner-scoped literal replacements compiled into the same atomic transaction."
      :items
      {:type "object"
       :additionalProperties false
@@ -232,8 +232,34 @@
     "verify" verification-schema}
    :required ["edits"]})
 
+(def editor-programs-schema
+  {:type "array"
+   :minItems 1
+   :maxItems 16
+   :description "Optional independent computed relations compiled against the same original snapshot as edits."
+   :items
+   {:type "object"
+    :additionalProperties false
+    :properties
+    {"file" {:type "string" :minLength 1
+             :description "One project-relative .clj, .cljs, or .cljc source path."}
+     "expression" {:type "string" :minLength 1
+                   :description "A structural path ending in (transform pure-function)."}
+     "expect" {:type "object"
+               :additionalProperties false
+               :properties
+               {"matches" {:type "integer" :minimum 1 :maximum 128}
+                "max_changed_characters" {:type "integer" :minimum 1 :maximum 262144}}
+               :required ["matches" "max_changed_characters"]}}
+    :required ["file" "expression" "expect"]}})
+
+(def editor-hybrid-schema
+  (assoc-in editor-gesture-schema [:properties "programs"]
+            editor-programs-schema))
+
 (def editor-tool-schema
-  (update editor-gesture-schema :properties dissoc "verify"))
+  (-> editor-hybrid-schema
+      (update :properties dissoc "verify")))
 
 (def extraction-schema
   {:type "object"
@@ -332,11 +358,15 @@
 (defn editor-gesture-contract-shape
   "Project the closed one-shot editor gesture objects from public JSON Schema."
   [schema]
-  (let [edit (get-in schema [:properties "edits" :items])]
+  (let [edit (get-in schema [:properties "edits" :items])
+        program (get-in schema [:properties "programs" :items])]
     {:request (update (closed-object-shape schema)
                       :allowed disj "workspace_root")
      :edit (closed-object-shape edit)
-     :within (closed-object-shape (get-in edit [:properties "within"]))}))
+     :within (closed-object-shape (get-in edit [:properties "within"]))
+     :program (closed-object-shape program)
+     :program-expect
+     (closed-object-shape (get-in program [:properties "expect"]))}))
 
 (def editor-gesture-contract
-  (editor-gesture-contract-shape editor-gesture-schema))
+  (editor-gesture-contract-shape editor-hybrid-schema))

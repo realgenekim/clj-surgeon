@@ -41,7 +41,7 @@
     (is (= ["file" "expression" "expect"]
            (get-in tools [3 :schema :required])))
     (is (= false (get-in tools [2 :schema :additionalProperties])))
-    (is (= #{"workspace_root" "edits"}
+    (is (= #{"workspace_root" "edits" "programs"}
            (set (keys (get-in tools [2 :schema :properties])))))
     (is (= ["edits"] (get-in tools [2 :schema :required])))
     (is (str/includes? (:description (nth tools 2))
