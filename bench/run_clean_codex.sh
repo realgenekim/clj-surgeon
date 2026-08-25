@@ -1141,7 +1141,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use the available edit_clojure tool for this exact edit. Send one edit with file, old, and new; do not add a redundant top-level expect. Do not read source or use apply_patch before it. The per-edit old value is the guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+    printf '%s\n' '' 'Use the available edit_clojure tool once for the complete supplied decision. Send workspace_root and one edits array; each edit has file, within.form, from, to, and matches. Do not add a redundant top-level expect or verify. Do not read source or use apply_patch. Each from value plus matches is the stale-source guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
@@ -1163,7 +1163,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use the available apply_patch tool for this exact edit. Send one patch that replaces only the supplied old form with the supplied new form; do not read source first. The patch old lines are the stale-source guard. A successful apply_patch result is terminal proof; do not reread or diff afterward.' \
+    printf '%s\n' '' 'Use the available apply_patch tool once for the complete supplied decision. Send one patch containing all supplied replacements; do not read source first. The patch old lines are the stale-source guards. A successful apply_patch result is terminal proof; do not reread or diff afterward.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-read-hint-no-skill' ]; then
