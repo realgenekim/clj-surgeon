@@ -437,6 +437,13 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   jq -s '[.[] | .item]' "$self_test_root/mcp-first-mutation.jsonl" \
     > "$self_test_root/mcp-first-mutation-items.json"
   test "$(mcp_first_mutation "$self_test_root/mcp-first-mutation-items.json")" = true
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"transform_clojure"}}' \
+    '{"type":"item.started","item":{"type":"file_change"}}' \
+    > "$self_test_root/transform-first-mutation.jsonl"
+  jq -s '[.[] | .item]' "$self_test_root/transform-first-mutation.jsonl" \
+    > "$self_test_root/transform-first-mutation-items.json"
+  test "$(mcp_first_mutation "$self_test_root/transform-first-mutation-items.json")" = true
 
   make_native_bin "$self_test_root/native-bin" "$PATH"
   if PATH="$self_test_root/native-bin" command -v clj-surgeon >/dev/null 2>&1; then
