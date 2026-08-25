@@ -458,3 +458,39 @@ real extraction-cleanup shape. It is not a 2x result. A larger real extraction
 is the next honest test of the hypothesized crossover: native patch generation
 grows with moved/deleted source, while a supplied exact owner list remains
 constant-size at the caller/tool boundary.
+
+## The real extraction-scale canary crossed 2x
+
+The higher-scale capsule derives from `sessionize-sched-killer` commit
+`557684689060ec87ee16b4faaa6558fe9081e7c6`, which extracted public CFP handlers
+and removed 441 lines from `server.clj`. The frozen public replay retains a
+485-line source, 22 exact obsolete owners with attached comments, one namespace
+require rewrite, seven route rewrites, and 30 total edits. Bodies are anonymized
+to avoid publishing private product source, but owner count, cleanup scale, and
+decision topology come from the real commit.
+
+Result directory:
+`/tmp/clj-surgeon-public-cfp-cleanup-canary-20260825`
+
+| Same Sol/high task boundary | Exact | Wall | Tool round trips | Source/tool output | Input tokens | Output tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Compact `edit_clojure` | yes | 37.903 s | 1 | 175 B | 47,496 | 1,144 |
+| Native read + `apply_patch` | yes | 83.794 s | 2 | 19,379 B | 131,950 | 3,157 |
+
+Compact saved 45.891 seconds and completed **2.21x faster end-to-end**. Both
+routes were exact and first-attempt successful. Compact made no discovery read;
+it stated the 30-edit decision once and received one terminal atomic receipt.
+Native read the 485-line file and then generated one large deletion patch.
+
+This is the first production-derived task scale where the complete-wall result
+crosses 2x. It supports the predicted complexity boundary:
+
+```text
+compact caller payload  ~= O(owner names + small literal rewrites)
+native model work       ~= O(source read + changed source rendered as patch)
+```
+
+The server kernel is not the source of the speedup. The interface prevents
+hundreds of lines from entering and leaving the autoregressive loop. The result
+is still one canary; three alternating, exact-byte-gated pairs are required
+before calling the 2x advantage replicated.
