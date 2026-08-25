@@ -209,6 +209,19 @@ mcp_apply_verified() {
     | length > 0' "$1"
 }
 
+native_mutation_failure_count() {
+  local events_file=$1
+  local stderr_file=$2
+  local event_failures stderr_failures
+  event_failures=$(jq -s '[.[] | select(.type == "item.completed"
+    and .item.type == "file_change"
+    and ((.item.status // "completed") != "completed"))] | length' "$events_file")
+  # Codex currently omits refused apply_patch attempts from the JSON event stream.
+  # Preserve their recovery cost from the router's stderr evidence instead.
+  stderr_failures=$(grep -c 'error=apply_patch verification failed:' "$stderr_file" || true)
+  printf '%s\n' $((event_failures + stderr_failures))
+}
+
 mcp_first_mutation() {
   jq '
     ([.[]
@@ -442,6 +455,15 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   test "$self_test_post_decision_round_trips" -eq 2
   test "$(mcp_apply_success_count "$self_test_root/events.jsonl")" -eq 3
   test "$(mcp_apply_verified "$self_test_root/events.jsonl")" = true
+  printf '%s\n' \
+    '{"type":"item.completed","item":{"type":"file_change","status":"failed"}}' \
+    '{"type":"item.completed","item":{"type":"file_change","status":"completed"}}' \
+    > "$self_test_root/native-mutations.jsonl"
+  printf '%s\n' \
+    '2026-08-25 ERROR error=apply_patch verification failed: missing boundary' \
+    > "$self_test_root/native-mutations.stderr"
+  test "$(native_mutation_failure_count \
+    "$self_test_root/native-mutations.jsonl" "$self_test_root/native-mutations.stderr")" -eq 2
   jq -s '[.[] | select(.type == "item.started") | .item]' \
     "$self_test_root/events.jsonl" > "$self_test_root/started-items.json"
   test "$(mcp_first_mutation "$self_test_root/started-items.json")" = false
@@ -1332,9 +1354,8 @@ run_one() {
   failed_clj_mutations=$(jq '[.[] | select((.command | contains("clj-surgeon"))
     and (.command | test(":op[[:space:]]+(:)?(change!|edit|replace-subform!|mv|mv-with-deps|extract!|rename-ns!|fix-declares!)([^a-zA-Z!-]|$)"))
     and ((.exit_code // 0) != 0))] | length' "$run_dir/commands.json")
-  failed_native_mutations=$(jq -s '[.[] | select(.type == "item.completed"
-    and .item.type == "file_change"
-    and ((.item.status // "completed") != "completed"))] | length' "$run_dir/events.jsonl")
+  failed_native_mutations=$(native_mutation_failure_count \
+    "$run_dir/events.jsonl" "$run_dir/stderr.txt")
   failed_mutation_actions=$((failed_clj_mutations + failed_native_mutations + mcp_failures))
   temp_manifest_patch=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "file_change")
     | .item.changes[]? | (.path // "") | select(endswith(".edn"))] | length > 0' "$run_dir/events.jsonl")

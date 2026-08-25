@@ -494,3 +494,43 @@ The server kernel is not the source of the speedup. The interface prevents
 hundreds of lines from entering and leaving the autoregressive loop. The result
 is still one canary; three alternating, exact-byte-gated pairs are required
 before calling the 2x advantage replicated.
+
+### Three-pair replication crossed 3x
+
+Result directory:
+`/tmp/clj-surgeon-public-cfp-cleanup-replicated-20260825`
+
+| Pair | Compact | Native | Paired result |
+|---:|---:|---:|---:|
+| 1 | 36.995 s | 61.088 s | compact 1.65x faster |
+| 2 | 37.687 s | 117.103 s | compact 3.11x faster |
+| 3 | 35.139 s | 135.883 s | compact 3.87x faster |
+
+All six final files matched the exact expected bytes. Compact won every pair
+and was remarkably stable: its three runs spanned only 2.548 seconds. Compact
+median wall was 36.995 seconds versus native's 117.103 seconds. The median
+result is an 80.108-second saving, **68.4% lower wall time**, or **3.16x
+end-to-end**.
+
+The route difference remained the predicted one. Each compact caller sent the
+complete 30-edit decision in one `edit_clojure` call, performed no source read,
+and received a 175-byte terminal receipt. Native read the 485-line source and
+then constructed a large patch. Median compact usage was 48,061 input tokens
+and 1,149 output tokens; median native usage was 74,738 input tokens and 4,912
+output tokens.
+
+One native caller needed two guarded patch attempts after its first attempt
+refused without mutation on a blank-line boundary mismatch. Codex did not emit
+that refusal as a JSON `file_change` event; it appeared only in router stderr.
+The original row therefore undercounted native failed mutation actions as zero.
+The harness now counts this durable stderr evidence, and its self-test locks in
+that behavior. The timing itself always included the failed attempt, so this
+audit does not change the 3.16x wall-time result.
+
+This is the first replicated evidence that the compact transaction can exceed
+the 2--5x target's lower bound on a production-derived change shape. It is not
+a claim that structural editing is universally 3x faster: the decision was
+fully supplied, bodies were anonymized, and the capsule measures source cleanup
+after extraction rather than discovery, new-file creation, or semantic design.
+It does show a genuine product boundary where native patching pays O(source +
+rendered deletion) model cost and compact structural intent avoids it.
