@@ -594,6 +594,7 @@ test:
 	bb bench/score_ops_registry.clj --self-test
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
+	$(MAKE) --no-print-directory benchmark-anvil-portfolio-pair-self-test
 	$(MAKE) --no-print-directory benchmark-inspect-mcp-self-test
 	CLAUDE_BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_claude.sh
 	bash bench/retain_benchmark_result.sh --self-test
