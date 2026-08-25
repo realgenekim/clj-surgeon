@@ -229,8 +229,24 @@
              :description "The replacement Clojure subtree."}
        "matches" positive-integer-schema}
       :required ["file" "within" "from" "to"]}}
-    "verify" verification-schema}
-   :required ["edits"]})
+    "delete_owners"
+    {:type "array"
+     :minItems 1
+     :maxItems 32
+     :description "Grouped exact named top-level owners to delete in the same frozen transaction."
+     :items
+     {:type "object"
+      :additionalProperties false
+      :properties
+      {"file" {:type "string" :minLength 1
+               :description "One project-relative .clj, .cljs, or .cljc source path."}
+       "forms" {:type "array"
+                :minItems 1
+                :maxItems 128
+                :items {:type "string" :minLength 1}
+                :description "Exact unique named top-level owners in this file."}}
+      :required ["file" "forms"]}}
+    "verify" verification-schema}})
 
 (def editor-programs-schema
   {:type "array"
@@ -254,8 +270,11 @@
     :required ["file" "expression" "expect"]}})
 
 (def editor-hybrid-schema
-  (assoc-in editor-gesture-schema [:properties "programs"]
-            editor-programs-schema))
+  (-> editor-gesture-schema
+      (assoc-in [:properties "programs"] editor-programs-schema)
+      (assoc :anyOf [{:required ["edits"]}
+                     {:required ["programs"]}
+                     {:required ["delete_owners"]}])))
 
 (def editor-tool-schema
   (-> editor-hybrid-schema
@@ -302,18 +321,23 @@
    :additionalProperties false
    :properties (merge (:properties basis-change-schema)
                       (:properties explicit-change-schema)
-                      (:properties editor-gesture-schema)
+                      (:properties editor-hybrid-schema)
                       (:properties extraction-schema))
    :oneOf
    [{:required ["basis" "decisions"]
      :not {:anyOf [{:required ["changes"]} {:required ["expect"]}
-                   {:required ["edits"]} {:required ["extraction"]}]}}
+                   {:required ["edits"]} {:required ["programs"]}
+                   {:required ["delete_owners"]} {:required ["extraction"]}]}}
     {:required ["changes" "expect"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["edits"]}
+                   {:required ["programs"]}
+                   {:required ["delete_owners"]}
                    {:required ["extraction"]}]}}
-    {:required ["edits"]
+    {:anyOf [{:required ["edits"]}
+             {:required ["programs"]}
+             {:required ["delete_owners"]}]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["changes"]}
@@ -324,6 +348,8 @@
                    {:required ["decisions"]}
                    {:required ["changes"]}
                    {:required ["edits"]}
+                   {:required ["programs"]}
+                   {:required ["delete_owners"]}
                    {:required ["expect"]}]}}]})
 
 (defn closed-object-shape
@@ -359,11 +385,13 @@
   "Project the closed one-shot editor gesture objects from public JSON Schema."
   [schema]
   (let [edit (get-in schema [:properties "edits" :items])
+        deletion (get-in schema [:properties "delete_owners" :items])
         program (get-in schema [:properties "programs" :items])]
     {:request (update (closed-object-shape schema)
                       :allowed disj "workspace_root")
      :edit (closed-object-shape edit)
      :within (closed-object-shape (get-in edit [:properties "within"]))
+     :deletion (closed-object-shape deletion)
      :program (closed-object-shape program)
      :program-expect
      (closed-object-shape (get-in program [:properties "expect"]))}))

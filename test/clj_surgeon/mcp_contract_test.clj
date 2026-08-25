@@ -95,6 +95,52 @@
     (is (= ["edit-1" "edit-2" "edit-3"]
            (mapv :id (get-in validated [:params :changes]))))))
 
+(deftest editor-gesture-compiles-grouped-exact-owner-deletion
+  (let [request
+        {"delete_owners"
+         [{"file" "src/a.clj" "forms" ["alpha" "beta"]}
+          {"file" "src/b.clj" "forms" ["gamma"]}]}
+        validated (contract/validate-tool-params request)
+        transaction (contract/tool-params->transaction (:params validated))]
+    (is (:ok validated))
+    (is (= {:changes 2 :edits 3 :files 2}
+           (get-in validated [:params :expect])))
+    (is (= [{:id :delete-owners-1
+             :in ["src/a.clj"]
+             :forms ['alpha 'beta]
+             :do [:delete true]
+             :expect {:matches 2 :each-form 1}}
+            {:id :delete-owners-2
+             :in ["src/b.clj"]
+             :forms ['gamma]
+             :do [:delete true]
+             :expect {:matches 1 :each-form 1}}]
+           (:changes transaction)))
+    (doseq [[label bad-request reason path]
+            [[:empty-request {} :missing-fields []]
+             [:empty-groups {"delete_owners" []}
+              :non-empty-array ["delete_owners"]]
+             [:empty-forms {"delete_owners"
+                            [{"file" "src/a.clj" "forms" []}]}
+              :non-empty-array ["delete_owners" 0 "forms"]]
+             [:duplicate-form {"delete_owners"
+                               [{"file" "src/a.clj"
+                                 "forms" ["alpha" "alpha"]}]}
+              :duplicate-form ["delete_owners" 0 "forms"]]
+             [:blank-form {"delete_owners"
+                           [{"file" "src/a.clj" "forms" [" "]}]}
+              :non-blank-string ["delete_owners" 0 "forms" 0]]
+             [:unknown-field {"delete_owners"
+                              [{"file" "src/a.clj" "forms" ["alpha"]
+                                "force" true}]}
+              :unknown-fields ["delete_owners" 0]]]]
+      (testing (name label)
+        (let [result (contract/validate-tool-params bad-request)]
+          (is (false? (:ok result)))
+          (is (= reason (:reason result)))
+          (is (= path (:path result)))
+          (is (:source-unchanged result)))))))
+
 (deftest editor-gesture-refuses-invalid-or-mixed-locations
   (doseq [[label request reason path]
           [[:empty-edits (assoc gesture-request "edits" [])

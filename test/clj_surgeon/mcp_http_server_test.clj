@@ -248,8 +248,8 @@
         (is (= false (get-in tools [0 :annotations :openWorldHint])))
         (is (= false (get-in tools [0 :inputSchema :additionalProperties])))
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
-        (is (= #{:basis :decisions :verify :changes :expect :edits :extraction
-                 :workspace_root}
+        (is (= #{:basis :decisions :verify :changes :expect :edits :programs
+                 :delete_owners :extraction :workspace_root}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?
               (get-in tools [1 :inputSchema :properties :verify :description])

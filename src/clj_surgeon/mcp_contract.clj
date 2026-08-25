@@ -51,6 +51,10 @@
   (get-in editor-gesture-contract [:program-expect :allowed]))
 (def ^:private required-editor-program-expect-fields
   (get-in editor-gesture-contract [:program-expect :required]))
+(def ^:private editor-deletion-fields
+  (get-in editor-gesture-contract [:deletion :allowed]))
+(def ^:private required-editor-deletion-fields
+  (get-in editor-gesture-contract [:deletion :required]))
 (def ^:private supported-source-extensions #{"clj" "cljs" "cljc"})
 
 (def ^:private prewrite-error-types
@@ -474,8 +478,10 @@
     (let [redundant-expect? (present? params "expect")
           params (without-field params "expect")]
       (validate-fields! params editor-top-fields required-editor-top-fields [])
-      (let [edits (nonempty-array! (field params "edits") ["edits"])
-            changes
+      (let [edits
+            (when (present? params "edits")
+              (nonempty-array! (field params "edits") ["edits"]))
+            edit-changes
             (mapv
               (fn [edit index]
                 (let [path ["edits" index]
@@ -502,6 +508,50 @@
                              "each_form" matches
                              "each_file" matches}}))
               edits (range))
+            deletion-groups
+            (when (present? params "delete_owners")
+              (nonempty-array! (field params "delete_owners")
+                               ["delete_owners"]))
+            deletion-changes
+            (mapv
+              (fn [deletion index]
+                (let [path ["delete_owners" index]
+                      _ (validate-fields!
+                          deletion editor-deletion-fields
+                          required-editor-deletion-fields path)
+                      file (source-path! (field deletion "file")
+                                         (conj path "file"))
+                      forms (mapv
+                              (fn [form form-index]
+                                (nonblank-string!
+                                  form (conj path "forms" form-index)))
+                              (nonempty-array! (field deletion "forms")
+                                               (conj path "forms"))
+                              (range))
+                      _ (when-not (= (count forms) (count (distinct forms)))
+                          (refuse! :duplicate-form (conj path "forms")
+                                   "Deletion form names must be unique"))]
+                  {"id" (str "delete-owners-" (inc index))
+                   "files" [file]
+                   "forms" forms
+                   "delete" true
+                   "expect" {"matches" (count forms)
+                             "each_form" 1}}))
+              deletion-groups (range))
+            duplicate-owner
+            (->> deletion-changes
+                 (mapcat
+                   (fn [change]
+                     (map (fn [form] [(first (field change "files")) form])
+                          (field change "forms"))))
+                 frequencies
+                 (some (fn [[owner count]] (when (< 1 count) owner))))
+            _ (when duplicate-owner
+                (refuse! :duplicate-form ["delete_owners"]
+                         "A deletion owner may appear only once in the request"
+                         {:file (first duplicate-owner)
+                          :form (second duplicate-owner)}))
+            changes (into edit-changes deletion-changes)
             programs
             (when (present? params "programs")
               (mapv
@@ -560,7 +610,8 @@
       (present? params "extraction")
       (validate-extraction-tool-params params)
 
-      (present? params "edits")
+      (some #(present? params %)
+            ["edits" "programs" "delete_owners"])
       (let [compiled (editor-gestures->direct-params params)]
         (if (:ok compiled)
           (let [validated (validate-direct-tool-params (:params compiled))]

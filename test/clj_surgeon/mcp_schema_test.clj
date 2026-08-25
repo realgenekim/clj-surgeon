@@ -58,9 +58,15 @@
   (let [routes (:oneOf schema/clj-change-schema)
         gesture (get-in schema/clj-change-schema
                         [:properties "edits" :items])
+        deletion (get-in schema/editor-tool-schema
+                         [:properties "delete_owners" :items])
         program (get-in schema/editor-tool-schema
                         [:properties "programs" :items])]
-    (is (some #(= ["edits"] (:required %)) routes))
+    (is (some #(= [{:required ["edits"]}
+                   {:required ["programs"]}
+                   {:required ["delete_owners"]}]
+                  (:anyOf %))
+              routes))
     (is (= #{"file" "within" "from" "to" "matches"}
            (set (keys (:properties gesture)))))
     (is (= ["file" "within" "from" "to"]
@@ -71,6 +77,10 @@
     (is (= #{"file" "expression" "expect"}
            (set (keys (:properties program)))))
     (is (= ["file" "expression" "expect"] (:required program)))
+    (is (= #{"file" "forms"}
+           (set (keys (:properties deletion)))))
+    (is (= ["file" "forms"] (:required deletion)))
+    (is (= 128 (get-in deletion [:properties "forms" :maxItems])))
     (is (= ["matches" "max_changed_characters"]
            (get-in program [:properties "expect" :required])))
     (is (= 16 (get-in schema/editor-tool-schema

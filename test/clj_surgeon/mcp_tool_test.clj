@@ -283,6 +283,48 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest compact-owner-deletion-is-exact-atomic-and-undoable
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        formatter-calls (atom 0)
+        before (str "(ns demo)\n\n"
+                    ";; attached obsolete explanation\n"
+                    "(defn obsolete-a [] :a)\n\n"
+                    "(defn keep-me [] :kept)\n\n"
+                    "(defn obsolete-b [] :b)\n")
+        after (str "(ns demo)\n\n"
+                   "(defn keep-me [] :kept)\n")
+        request
+        {"delete_owners"
+         [{"file" "src/demo.clj"
+           "forms" ["obsolete-a" "obsolete-b"]}]}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 (swap! formatter-calls inc)
+                 {:ok true :future-sources future-sources})}
+              request)]
+        (is (:ok result) (pr-str result))
+        (is (= 1 (:changes result)))
+        (is (= 2 (:edits result)))
+        (is (= 1 (:files result)))
+        (is (zero? @formatter-calls)
+            "compact deletion preserves unrelated source spelling")
+        (is (= after (slurp source-file)))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= before (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest editor-gesture-replaces-exact-known-multiplicity
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

@@ -51,22 +51,26 @@
     (is (= ["file" "expression" "expect"]
            (get-in tools [3 :schema :required])))
     (is (= false (get-in tools [2 :schema :additionalProperties])))
-    (is (= #{"workspace_root" "edits" "programs"}
+    (is (= #{"workspace_root" "edits" "programs" "delete_owners"}
            (set (keys (get-in tools [2 :schema :properties])))))
-    (is (= ["edits"] (get-in tools [2 :schema :required])))
+    (is (= [{:required ["edits"]}
+            {:required ["programs"]}
+            {:required ["delete_owners"]}]
+           (get-in tools [2 :schema :anyOf])))
     (is (str/includes? (:description (nth tools 2))
                        "exact old subtree"))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
-    (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits" "extraction"
-             "workspace_root"}
+    (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits"
+             "programs" "delete_owners" "extraction" "workspace_root"}
            (set (keys (get-in tools [1 :schema :properties])))))
     (is (= 4 (count (get-in tools [1 :schema :oneOf]))))
     (testing "the direct route accepts the same verify field it publishes"
       (let [direct-route (second (get-in tools [1 :schema :oneOf]))
             excluded (set (map (comp set :required)
                                (get-in direct-route [:not :anyOf])))]
-        (is (= #{#{"basis"} #{"decisions"} #{"edits"} #{"extraction"}}
+        (is (= #{#{"basis"} #{"decisions"} #{"edits"} #{"programs"}
+                 #{"delete_owners"} #{"extraction"}}
                excluded))))
     (is (str/includes?
           (get-in tools [1 :schema :properties "verify" :description])

@@ -369,7 +369,8 @@
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params]
   (let [normalized-params (json/parse-string (json/generate-string params) true)
-        editor-gesture? (contains? normalized-params :edits)
+        editor-gesture? (some #(contains? normalized-params %)
+                              [:edits :programs :delete_owners])
         config (if-let [profiles-fn (:verification-profiles-fn config)]
                  (assoc config :verification-profiles (profiles-fn))
                  config)
@@ -591,8 +592,9 @@
     "exact old subtree: file, within "
     "{form}, from, to, and optional matches (default 1). Optional programs are "
     "independent computed relations: file, an expression ending in transform, "
-    "and expect {matches, max_changed_characters}. Start a program with "
-    "(form 'owner) for one owner or [] for the whole file. All edits and programs "
+    "and expect {matches, max_changed_characters}. delete_owners groups exact "
+    "named top-level forms by file and removes them without source bodies. Start a program with "
+    "(form 'owner) for one owner or [] for the whole file. All edits, programs, and deletions "
     "compile against the same original snapshot; none observes another's output. "
     "Any stale count, overlap, budget, comment-bearing computed selection, parse, "
     "or write failure refuses or rolls back the whole batch. Exact spelling and "
