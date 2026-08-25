@@ -12,6 +12,9 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Global compact-editor routing](global-compact-editor-routing.md) —
+  implemented canonical, fail-closed installation of the proven compact route
+  into every managed Codex and Claude seat.
 - [Anvil as a durable development surface](anvil-development-surface.md) —
   hybrid local/remote routing, durable detached work, and a measured Tailscale
   pilot before latency-sensitive tweezer work moves off the laptop.

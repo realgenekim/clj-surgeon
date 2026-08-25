@@ -1,6 +1,6 @@
 # Global compact-editor routing
 
-**Status:** Accepted implementation plan
+**Status:** Implemented at `6ff11c9`; accepted on laptop and Anvil
 
 ## Outcome
 
@@ -87,3 +87,29 @@ tool schemas.
 - complete `make test` at the 512 MiB MCP envelope;
 - live laptop and three-seat Anvil acceptance; and
 - updated explanatory documentation and Captain's Log.
+
+## Acceptance record
+
+The installer passed 4 focused tests with 38 assertions, including malformed
+marker refusal, preflight-before-write, exact unmanaged-byte preservation, and
+byte-idempotence. A clean temporary-home `make install` created both global
+files; `make check-agent-routing` then passed with one block per file.
+
+Laptop Codex and Claude passed the same check. Anvil dev-a, dev-b, and dev-c
+each received the block plus CLI, Codex skill, and Claude skill receipts for
+`6ff11c9`. Codex was already registered for the shared port-7888 MCP. The
+acceptance audit found that Claude had no MCP registration, so the rollout also
+added the shared HTTP server at user scope. `claude mcp list` reported
+`Connected` on all three seats.
+
+Fresh sessions now receive the compact route. Existing sessions can retain
+cached instructions or tool schemas and require a new session.
+
+The final constituent gate passed 609 Babashka tests with 5,235 assertions and
+197 JVM MCP tests with 1,626 assertions at `-Xmx512m`. The laptop's first stdio
+smoke attempt received no responses before its 120-second timeout while system
+load was about 277. The unchanged smoke then passed on Anvil in 7.52 seconds
+and locally in 55.53 seconds after load fell. The remaining usage, benchmark,
+retention, and evidence self-tests passed. Anvil's Babashka 1.13 runner also
+exposed an unrelated existing SCI compatibility error for `case*`; laptop
+Babashka 1.12 passed that suite.

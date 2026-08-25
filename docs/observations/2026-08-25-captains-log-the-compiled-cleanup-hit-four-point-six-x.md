@@ -239,3 +239,64 @@ live MCP remained PID 75495, CWD `/Users/genekim/src.local/clj-surgeon`, and a
 direct production `tools/list` confirmed compact top-level fields
 `delete_owners`, `edits`, `programs`, and `workspace_root`, plus both
 `within.form` and `within.namespace`.
+
+## The capability became a fleet default
+
+The benchmark win did not automatically change agent behavior. The installed
+advanced skill deliberately excludes ordinary `inspect_clojure` and
+`edit_clojure` calls because their tool schemas and always-loaded routing are
+supposed to cover the common path. An acceptance audit found that this
+assumption was true on the laptop but false on Anvil: dev-a, dev-b, and dev-c
+had the tools and skill package, but no Codex global `AGENTS.md` rule that told
+fresh callers when to use the compact route.
+
+Commit `6ff11c9` made that contract installable. One canonical, versioned block
+now teaches both Codex and Claude to:
+
+- batch known structural reads and omit source only for metadata questions;
+- use one `edit_clojure` transaction for a complete mechanical decision;
+- use `within.form`, `within.namespace`, and `delete_owners` instead of prompt
+  workarounds;
+- trust frozen-snapshot guards and terminal mutation evidence; and
+- keep native patching for small visible edits, prose, new files, and
+  unsupported operations.
+
+The installer preserves every unmanaged byte, preflights all targets before it
+writes, refuses malformed or duplicate markers, writes atomically, and makes a
+second run byte-identical. `make install` includes the block;
+`make check-agent-routing` is its non-writing acceptance gate.
+
+The rollout found one more gap that a receipt-only audit would have missed.
+Anvil Codex was registered for the shared MCP, but `claude mcp list` reported no
+servers on all three seats. We added `http://127.0.0.1:7888/mcp` at Claude user
+scope and required a live health check. The resulting fleet state is:
+
+| Surface | Exact routing block | Codex shared MCP | Claude shared MCP | CLI and skills |
+|---|---|---|---|---|
+| Skiff laptop | checked | registered | connected | `6ff11c9` |
+| Anvil dev-a | checked | registered | connected | `6ff11c9` |
+| Anvil dev-b | checked | registered | connected | `6ff11c9` |
+| Anvil dev-c | checked | registered | connected | `6ff11c9` |
+
+The Anvil service remained PID 739989, CWD
+`/srv/fleet/shared-tools/clj-surgeon-e7f72e2`, at `-Xmx512m`. This rollout did
+not restart it or the existing clojure-lsp PID 2400995, CWD
+`/home/surgeon/clj-surgeon`.
+
+The guarantee has one honest time boundary. Every **new** managed Codex and
+Claude session now loads the routing block and can reach the tool. An existing
+model context can retain old instructions or a cached MCP schema. If such a
+session rejects `delete_owners` or `within.namespace`, start a new agent
+session; do not restart the shared JVM.
+
+The rollout's constituent gate passed 609 Babashka tests with 5,235 assertions
+and 197 JVM MCP tests with 1,626 assertions at `-Xmx512m`. The unchanged stdio
+smoke advertised all four tools and returned all three expected responses on
+Anvil in 7.52 seconds and on the laptop in 55.53 seconds. Its first laptop run
+had timed out with zero responses while system load was about 277. This was a
+scheduler failure after both main suites had passed; the unchanged retry passed
+as load fell. All post-smoke usage, benchmark, retention, and evidence gates
+also passed.
+
+The complete mechanism and routing boundary are summarized in
+[Compiled editing: the route that can beat native patching](../compiled-editing-playbook.md).
