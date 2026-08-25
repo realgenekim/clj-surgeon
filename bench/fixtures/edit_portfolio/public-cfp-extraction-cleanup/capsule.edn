@@ -1,0 +1,11 @@
+{:id :public-cfp-extraction-cleanup
+ :decision-boundary :complete-owner-deletion-supplied
+ :provenance {:kind :real-task-derived
+              :source "sessionize-sched-killer commit 557684689060ec87ee16b4faaa6558fe9081e7c6, Extract public CFP handlers without behavior changes"
+              :minimized "anonymized bodies; retained 22-owner and roughly 400-line source cleanup scale, namespace require rewrite, seven exact route rewrites, and attached comments"}
+ :targets ["src/sample/server.clj"]
+ :hashes {"src/sample/server.clj"
+          {:before "4acfd45c334f78c30b4bd0eedd96998ea549c141b93dbd430362b00188ceaaa4"
+           :after "8b0b9994b5ec5c84894092677ada041547ed12352a79059504b9976e01391196"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 1 :edits 30}}
