@@ -87,6 +87,9 @@ updates, and verification gates. It is not a chronological coding diary.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
+- When only names, ranges, counts, hashes, or source anchors are needed, set
+  `include_source=false`. Omit it when source is needed for judgment or an edit;
+  a metadata-only read must not cause a second call for source.
 - **Latency discipline during this editor study:** an `inspect_clojure` result's
   compact human summary can omit requested source even though the same call's
   `structuredContent.results` already contains it. Preserve and consume that

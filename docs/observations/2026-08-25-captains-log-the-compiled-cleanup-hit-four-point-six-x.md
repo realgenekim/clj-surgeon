@@ -138,6 +138,15 @@ Every cumbersome step paid rent:
 - manually drifting Codex, Claude, and root skill copies became one canonical
   package with `make sync-clj-surgeon-skill` and a mandatory mirror check.
 
+Branch reconciliation found one more useful change stranded in the Anvil
+deployment worktree. `inspect_clojure` now accepts `include_source=false` for
+questions that need only form identity, line range, hash, count, or source
+anchor. A live laptop probe against the 2,676-character
+`validate-inspect-params` form returned its complete proof metadata and no
+source body. This makes the common “I need the address, not the code” read
+cheaper without weakening the hash-backed evidence. The default remains source
+included so edit decisions do not pay a second read.
+
 The next experiment should preserve this standard: choose another historical
 counterfactual whose decision is fully reconstructable, prefer a genuinely
 multi-file and noncontiguous cleanup, and add only the smallest missing
@@ -152,6 +161,11 @@ The complete `make test` gate passed at commit `5e85987`:
 - four-tool stdio discovery and smoke;
 - portfolio, schedule, harness, retention, and evidence self-tests; and
 - zero failures or errors.
+
+After rescuing metadata-only inspection from the deployment branch, the full
+gate passed again at `716e7ac`: 605 Babashka tests with 5,197 assertions and
+197 MCP tests with 1,626 assertions, plus the same heap, lifecycle, smoke,
+benchmark, retention, and evidence gates.
 
 A rollback-armed Anvil promotion then proved the exact new behavior twice. An
 isolated port-17888 canary performed one namespace rewrite, one named-form
