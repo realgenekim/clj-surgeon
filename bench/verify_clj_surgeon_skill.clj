@@ -2,20 +2,19 @@
   (:require
    [clojure.string :as str]))
 
-(def required-fragments
+(def common-route-fragments
   ["inspect_clojure"
    "edit_clojure"
    "workspace_root"
    "`edits`"
    "`programs`"
-   "within"
-   "from"
-   "to"
-   "matches"
    "frozen snapshot"
-   "native patching"
+   "`apply_patch`"
    "heavyweight `apply_clojure_changes`"
-   "Verification policy must not depend on editor choice"
+   "never add a tool call merely because Surgeon performed"])
+
+(def skill-route-fragments
+  ["Optimize complete verified task time"
    "references/mcp-advanced.md"
    "references/cli-fallback.md"
    "references/advanced-operations.md"])
@@ -27,10 +26,14 @@
     (prn (merge {:ok false :error message} data)))
   (System/exit 1))
 
+(defn assert-fragments! [label text fragments]
+  (doseq [fragment fragments]
+    (when-not (str/includes? text fragment)
+      (fail! "Routing contract fragment is missing"
+             {:surface label :fragment fragment}))))
+
 (defn assert-contract! [skill-text]
-  (doseq [fragment required-fragments]
-    (when-not (str/includes? skill-text fragment)
-      (fail! "Skill contract fragment is missing" {:fragment fragment})))
+  (assert-fragments! :skill skill-text skill-route-fragments)
   (let [line-count (count (str/split-lines skill-text))]
     (when (> line-count max-entrypoint-lines)
       (fail! "Skill entrypoint exceeds its line budget"
@@ -43,8 +46,12 @@
   (let [canonical-path "skills/clj-surgeon/SKILL.md"
         root-path "skill.md"
         canonical (slurp canonical-path)
-        root-mirror (slurp root-path)]
+        root-mirror (slurp root-path)
+        always-loaded (slurp "CLAUDE.md")]
     (assert-contract! canonical)
+    (assert-fragments! :always-loaded-instructions
+                       always-loaded
+                       common-route-fragments)
     (when-not (= canonical (normalized-root-mirror root-mirror))
       (fail! "Root skill mirror drifted from the canonical skill"
              {:canonical canonical-path :mirror root-path}))
