@@ -106,3 +106,31 @@ Keep the direct no-skill MCP route from pilot 2. Give native one bounded source
 read followed by one patch, with successful mutation terminal for both lanes.
 This makes both routes viable and measures the actual cost of native's required
 context acquisition against structural no-read editing.
+
+## Pilot 3: both routes viable, no skill
+
+Result directory:
+`/tmp/clj-surgeon-viable-routes-pilot-d41ca36`
+
+| Route | Exact | Wall | Tool round trips | Input tokens |
+|---|---:|---:|---:|---:|
+| MCP, no read, one compact transaction | yes | 24.547 s | 1 | 45,234 |
+| Native, one bounded read plus one patch | yes | 27.918 s | 2 | 45,466 |
+
+MCP won the first both-correct pair by 3.371 seconds: 12.1% lower wall time
+than native. Both callers stopped after successful mutation. MCP's direct route
+was also stable across pilots 2 and 3: 24.968 and 24.547 seconds, a 421 ms
+spread.
+
+The input totals are essentially equal, which removes the large skill-context
+confound from pilot 1. The observable route difference is one native `rg` call
+returning 2,060 bytes before its patch versus one structural MCP call with no
+source acquisition. This is the hypothesized crossover: when the decision
+contains forms and owner scope but not formatting bytes, Surgeon can turn the
+decision directly into a guarded mutation while native must first materialize
+patch context.
+
+This remains one both-correct pair. Run two more fresh pairs in alternating
+AB/BA order before treating the 12.1% advantage as repeatable. The small-batch
+gate is 3/3 exact per route, zero failed MCP mutations, and a lower paired
+median for MCP. A 2--5x claim is explicitly not supported by these data.
