@@ -253,3 +253,37 @@ to a larger speedup is therefore subtraction rather than a faster kernel:
 The current result supports a repeatable-action hypothesis, not a 5x claim.
 The editor kernel is already fast enough; model context, route selection, and
 avoidable tool boundaries are now the principal optimization surface.
+
+## Three-pair small-batch result
+
+The two planned replications completed in alternating order. Result directories:
+
+- `/tmp/clj-surgeon-viable-routes-pilot-d41ca36`
+- `/tmp/clj-surgeon-viable-routes-rep2-04a7042`
+- `/tmp/clj-surgeon-viable-routes-rep3-04a7042`
+
+| Pair | First lane | MCP | Native with bounded read | Winner |
+|---:|---|---:|---:|---|
+| 1 | MCP | 24.547 s | 27.918 s | MCP by 3.371 s |
+| 2 | Native | 23.142 s | 30.989 s | MCP by 7.847 s |
+| 3 | MCP | 24.907 s | 28.812 s | MCP by 3.905 s |
+
+Both routes were exact in 3/3 trials. MCP made one guarded transaction per
+trial, with zero failed mutations and zero MCP failures. Native made one bounded
+read and one successful patch per trial. MCP won all three paired walls despite
+the AB/BA order change.
+
+MCP median wall was 24.547 seconds. Native median wall was 28.812 seconds. The
+independent-median difference was 4.265 seconds, or 14.8% lower wall for MCP.
+The median paired saving was 3.905 seconds. This is a repeatable small-batch win
+on one representative capsule, not evidence of a 2--5x speedup across a task
+population.
+
+The next safe-refactoring targets are now evidence-ranked:
+
+1. shorten the 81-line automatically loaded skill while preserving route and
+   refusal contracts through focused skill tests;
+2. separate the compact editor catalog from the heavyweight semantic editor so
+   simple callers do not pay choice/schema costs they do not need; and
+3. replay real historical changes with repeated or heterogeneous decisions to
+   find where one compiled relation eliminates more than one native round trip.
