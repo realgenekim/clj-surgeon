@@ -134,3 +134,122 @@ This remains one both-correct pair. Run two more fresh pairs in alternating
 AB/BA order before treating the 12.1% advantage as repeatable. The small-batch
 gate is 3/3 exact per route, zero failed MCP mutations, and a lower paired
 median for MCP. A 2--5x claim is explicitly not supported by these data.
+
+## Storyboard: how compiled editing can beat native
+
+The winning claim is not that Clojure parsing is faster than patch application.
+Both engines are effectively instantaneous relative to model wall time. The
+advantage is that Surgeon lets the caller transmit the decision it already has
+without translating that decision into fragile file-layout bytes.
+
+```text
+                    NATIVE APPLY_PATCH
+
+  decision already known
+           |
+           v
+  need exact indentation and context
+           |
+           v
+      read source                 model/tool boundary
+           |
+           v
+   manufacture diff hunk          model reasoning
+           |
+           v
+      apply_patch                 model/tool boundary
+           |
+      +----+-----+
+      | mismatch |--------------> read -> rebuild -> retry
+      +----+-----+
+           v
+          done
+
+
+                   COMPILED EDIT_CLOJURE
+
+  decision already known
+           |
+           v
+  emit one structural transaction
+  {owner, from, to, matches} x N
+  + optional computed programs
+           |
+           v
+  locate -> guard -> compile -> atomic commit
+  -> parse -> read back -> receipt          166--219 ms
+           |
+           v
+          done
+```
+
+Native `apply_patch` speaks in file layout. The model must know indentation and
+enough surrounding bytes to anchor every hunk. Compact `edit_clojure` speaks in
+the decision's vocabulary: named owner, old form, new form, and expected count.
+The owner chooses the scope; the old form and count provide compare-and-swap
+protection against stale source.
+
+The editor-maestro mental model is one score and one chord:
+
+```text
+  app_shell / ide-shell
+    :body       -> :body.ide-shell-page
+    "/app.css"  -> "/command-center.css"
+
+  source_reader / source-reader-shell
+    argument vector -> add document-title
+    title           -> computed title
+    :body           -> :body.ide-shell-page
+    tab label       -> title attribute + document-title
+
+  ================= compiled as =================
+  6 gestures | 2 owners | 2 files | 1 snapshot | 1 commit | 1 receipt
+```
+
+For computed work, a bounded SCI `program` is the keyboard macro: state one
+relation once, declare its exact cardinality and changed-character budget, and
+let Surgeon materialize every concrete guarded edit in the same transaction.
+
+### Scenarios with a plausible decisive advantage
+
+1. **Supplied forms, unknown formatting.** This is the demonstrated crossover.
+   Surgeon can act immediately; native must read first or guess patch context.
+2. **Several edits across forms or files.** One transaction replaces several
+   reads, patches, and recovery decisions while adding atomicity.
+3. **Duplicate syntax in different owners.** `within.form` selects the intended
+   occurrence without requiring a large textual context hunk.
+4. **Repeated computed changes.** One program can replace many generated patch
+   hunks while preserving exact counts and a total churn budget.
+5. **Concurrent or stale source.** Owner scope, old forms, counts, and a frozen
+   snapshot refuse the complete transaction before mutation.
+6. **Exact preservation outside the decision.** The compact editor changes only
+   selected subtrees and leaves unrelated spelling, comments, and layout alone.
+
+### Native-positive boundary
+
+Native remains the strong default for one obvious line whose bytes are already
+visible, prose and comments, new files, unsupported operations, and tasks where
+source inspection is required for the decision anyway. The product should not
+maximize Surgeon adoption. It should recognize when the model already possesses
+a compiled structural decision and provide the shortest safe route to execute
+it.
+
+### Interface work required for a 2--5x result
+
+The long installed skill erased the mechanical advantage in pilot 1. The path
+to a larger speedup is therefore subtraction rather than a faster kernel:
+
+- place the route choice in short always-loaded instructions instead of making
+  every caller read a long skill;
+- keep the compact public schema small and hide the heavyweight editor unless
+  one of its unique semantic or rollback-gated operations is required;
+- combine literal edits and computed programs in one transaction;
+- treat commit/readback as terminal mutation evidence and apply the same
+  proportional verification policy to native and Surgeon routes;
+- return a compact receipt rather than expanded edit evidence; and
+- teach one memorable rule: when the decision is already expressed as forms,
+  compile it instead of rediscovering bytes.
+
+The current result supports a repeatable-action hypothesis, not a 5x claim.
+The editor kernel is already fast enough; model context, route selection, and
+avoidable tool boundaries are now the principal optimization surface.
