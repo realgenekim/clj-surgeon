@@ -13,6 +13,7 @@
                                {:kind :changed-owner-review
                                 :locator "workspace-mcp-block and managed-block-is-bounded-and-mcp-first"}]}
  :task-file "task.md"
+ :ignored-paths [".cpcache/"]
  :targets ["src/clj_surgeon/workspace_onboarding.clj"
            "test/clj_surgeon/workspace_onboarding_test.clj"]
  :hashes {"src/clj_surgeon/workspace_onboarding.clj"
@@ -21,9 +22,8 @@
           "test/clj_surgeon/workspace_onboarding_test.clj"
           {:before "57f9c55784a1fc1b93f9364303e0121963252b0cfce4850a5f976b0937b9ab6a"
            :after "8a320ca2e50321a9d03ab9afe160732ce1ad23b4b9fd289434a27de35437ba4c"}}
- :verification {:commands ["bb test/run_all.clj"]
+ :verification {:commands ["bb -cp src:test -e \"(require '[clojure.test :as t] '[clj-surgeon.workspace-onboarding-test]) (let [r (t/run-tests 'clj-surgeon.workspace-onboarding-test)] (System/exit (+ (:fail r) (:error r))))\""]
                 :exact-changed-paths true
                 :exact-target-bytes-secondary true
                 :parse-clojure true}
  :expected {:changed-files 2 :insertions 3 :deletions 1}}
-

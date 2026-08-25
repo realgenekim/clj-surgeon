@@ -68,6 +68,7 @@
   (let [repository (:repository capsule)
         targets (:targets capsule)
         target-list (if (vector? targets) targets [])
+        ignored-paths (:ignored-paths capsule)
         hashes (:hashes capsule)
         verification (:verification capsule)
         expected (:expected capsule)
@@ -98,6 +99,11 @@
 
       (not= (set target-list) (set (keys hashes)))
       (conj {:error-type :hash-target-mismatch})
+
+      (or (not (vector? ignored-paths))
+          (not-every? safe-target? ignored-paths)
+          (not-every? #(str/ends-with? % "/") ignored-paths))
+      (conj {:error-type :invalid-ignored-paths})
 
       (not-every? full-sha256?
                   (mapcat (juxt :before :after) (vals hashes)))

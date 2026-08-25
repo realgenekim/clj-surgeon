@@ -13,6 +13,7 @@
                                {:kind :changed-owner-review
                                 :locator "start-embedded-nrepl! and embedded-nrepl-starts-without-resolving-cider"}]}
  :task-file "task.md"
+ :ignored-paths [".cpcache/"]
  :targets ["src/clj_surgeon/mcp_server.clj"
            "test/clj_surgeon/mcp_server_test.clj"]
  :hashes {"src/clj_surgeon/mcp_server.clj"
@@ -26,4 +27,3 @@
                 :exact-target-bytes-secondary true
                 :parse-clojure true}
  :expected {:changed-files 2 :insertions 19 :deletions 3}}
-

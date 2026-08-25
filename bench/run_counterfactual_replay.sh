@@ -213,9 +213,30 @@ bb -e '(require (quote [clojure.edn :as edn]))
            (println target))' "$case_dir/capsule.edn" >"$expected_paths"
 sort -o "$expected_paths" "$expected_paths"
 sort -o "$result_dir/changed-paths.txt" "$result_dir/changed-paths.txt"
+ignored_paths="$setup_root/ignored-paths.txt"
+bb -e '(require (quote [clojure.edn :as edn]))
+         (doseq [path (:ignored-paths (edn/read-string (slurp (first *command-line-args*))))]
+           (println path))' "$case_dir/capsule.edn" >"$ignored_paths"
+unexpected_untracked=false
+while IFS= read -r status_line; do
+  case "$status_line" in
+    '?? '*)
+      untracked_path=${status_line#'?? '}
+      ignored=false
+      while IFS= read -r ignored_prefix; do
+        case "$untracked_path" in
+          "$ignored_prefix"*) ignored=true ;;
+        esac
+      done <"$ignored_paths"
+      if [ "$ignored" != true ]; then
+        unexpected_untracked=true
+      fi
+      ;;
+  esac
+done <"$result_dir/status.txt"
 exact_paths=false
 if cmp -s "$expected_paths" "$result_dir/changed-paths.txt" \
-  && ! rg -q '^\?\?' "$result_dir/status.txt"; then
+  && [ "$unexpected_untracked" = false ]; then
   exact_paths=true
 fi
 
@@ -277,12 +298,13 @@ jq -n \
   --argjson verification_exit "$verification_exit" \
   --argjson exact_paths "$exact_paths" \
   --argjson exact_targets "$exact_targets" \
+  --argjson unexpected_untracked "$unexpected_untracked" \
   --argjson semantic_pass "$semantic_pass" \
   --argjson exact_oracle "$exact_oracle" \
   --argjson tool_actions "$tool_actions" \
   --argjson mcp_actions "$mcp_actions" \
   --argjson usage "$usage" \
-  '{schema:"clj-surgeon.counterfactual-replay-result/v1",case_id:$case_id,arm:$arm,model:$model,reasoning:$reasoning,sandbox:$sandbox,wall_ms:$wall_ms,codex_exit:$codex_exit,verification_exit:$verification_exit,exact_paths:$exact_paths,exact_targets:$exact_targets,semantic_pass:$semantic_pass,exact_oracle:$exact_oracle,tool_actions:$tool_actions,mcp_actions:$mcp_actions,usage:$usage}' \
+  '{schema:"clj-surgeon.counterfactual-replay-result/v1",case_id:$case_id,arm:$arm,model:$model,reasoning:$reasoning,sandbox:$sandbox,wall_ms:$wall_ms,codex_exit:$codex_exit,verification_exit:$verification_exit,exact_paths:$exact_paths,exact_targets:$exact_targets,unexpected_untracked:$unexpected_untracked,semantic_pass:$semantic_pass,exact_oracle:$exact_oracle,tool_actions:$tool_actions,mcp_actions:$mcp_actions,usage:$usage}' \
   >"$result_dir/result.json"
 
 cat "$result_dir/result.json"

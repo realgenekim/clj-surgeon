@@ -15,6 +15,7 @@
                                {:kind :changed-owner-review
                                 :locator "commit-compiled! and commit-protocol-* tests"}]}
  :task-file "task.md"
+ :ignored-paths [".cpcache/"]
  :targets ["docs/observations/2026-08-06-captains-log-from-microscope-to-intent-transaction.md"
            "src/clj_surgeon/intent_transaction.clj"
            "test/clj_surgeon/intent_transaction_test.clj"]
@@ -32,4 +33,3 @@
                 :exact-target-bytes-secondary true
                 :parse-clojure true}
  :expected {:changed-files 3 :insertions 340 :deletions 1}}
-

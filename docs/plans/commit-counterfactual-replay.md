@@ -206,3 +206,9 @@ The `plain-nrepl` child deliberately remains an Anvil gate: its historical verif
 The local flight recorder was already yellow after the two parallel Babashka suites, so launching
 another 512 MiB JVM locally would violate the load-safe test policy rather than strengthen the
 experiment.
+
+The first Anvil shakedown amended the `cclsp-optional` verifier before any result was admitted. Its
+historical full suite has an unrelated `case*` incompatibility on the Anvil Babashka version, while
+the changed `workspace-onboarding-test` namespace passes. The capsule now runs that focused
+namespace and declares `.cpcache/` as generated output. Earlier receipts remain retained and
+invalid; no score was overwritten.
