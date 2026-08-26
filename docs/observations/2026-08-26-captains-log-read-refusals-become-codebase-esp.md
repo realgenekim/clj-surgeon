@@ -297,6 +297,40 @@ projects 8 calls and approximately 130 seconds if latency scales linearly: a
 seconds and 0.74 seconds inside an isolated warm JVM; these are mechanism
 measurements, not fleet wall-time claims.
 
+### Native comparison ledger
+
+The read-path experiment did not run a controlled native wall-time arm on the
+same frozen hallucinations. Its defensible performance claim is route
+compression, not an end-to-end speedup ratio.
+
+| Mission | Native or control route | Improved Surgeon route | Defensible comparison |
+|---|---:|---:|---:|
+| Recover one hallucinated selector | Refusal plus 1–3 `rg`, outline, or source-read actions plus retry: 3–5 calls | Evidence-rich refusal plus exact retry: 2 calls | 33–60% fewer calls; native wall time not measured |
+| Four-file clean-context replay | No timed native control | 1.076 s refusal plus 1.272 s retry | 2.35 s mechanism proof only |
+| 31-owner clean-context replay | No timed native control | 0.354 s refusal plus 0.385 s retry | 0.74 s mechanism proof only |
+| Fleet 10-call/163-second route | Observed mixed route | 8 calls/about 130 s if removed calls have average latency | 20% projection, not a measurement |
+
+A separate SURGEON1 write-path experiment does have native controls. Two
+corrected compact-write arms were 3.63 and 4.69 times faster than native. In a
+third cohort, the compact route completed exactly in 111.061 seconds after one
+safe refusal; once corrected, all 51 edits consumed 1.049 seconds of server
+time. The native arm took 400.498 seconds and corrupted all nine files by
+leaking Clojure `def` return values into generated source. These results show
+measured write-path superiority, but they are not evidence for a read-path
+wall-time ratio.
+
+The next gold-standard read experiment freezes the same hallucinated requests,
+model, repository snapshot, and correctness gates for both arms:
+
+```text
+native:  refusal -> rg/read/sed -> corrected structural read
+surgeon: enriched refusal ------> corrected structural read
+```
+
+Record total calls, source bytes, complete task wall, correct-owner recovery,
+model deliberation time, and fallback count. Until that control exists, report
+"33–60% fewer read calls," not "X times faster than native."
+
 In option-value terms, the slice reduces `t` without reducing `N`, `K`, or
 sigma: the model sees more real alternatives, pays fewer discovery turns, and
 still must choose an exact owner. Lower change cost increases the number of
