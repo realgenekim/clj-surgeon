@@ -273,6 +273,47 @@
         (inspect-tool/init! nil)
         (delete-tree! project)))))
 
+(deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(def answer 42)\n(def beta 7)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "before" "operation" "forms"
+                      "file" "src/demo.clj" "forms" ["beta"]
+                      "expect" {"forms" 1}}
+                     {"id" "mistyped" "operation" "forms"
+                      "file" "src/demo.clj" "forms" ["answr"]
+                      "expect" {"forms" 1}}]
+         "expect" {"requests" 2 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)]
+        (is error?)
+        (is (false? (:ok structured)))
+        (is (false? (:read_complete structured)))
+        (is (not (contains? structured :results)))
+        (is (= {:id "mistyped" :operation "forms" :file "src/demo.clj"
+                :requested_forms ["answr"]}
+               (:failed_request structured)))
+        (is (= [{:form "answr" :error_type "form-not-found"
+                 :match_count 0}]
+               (:failures structured)))
+        (is (str/includes? summary "request mistyped · src/demo.clj"))
+        (is (str/includes? summary "missing form answr"))
+        (is (str/includes? summary
+                           "you may have meant answer (hint only)"))
+        (is (not (contains? structured :resolved_requests)))
+        (is (not (str/includes? summary "(def answer"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
 (deftest uninitialized-handler-reports-elapsed-time
   (let [calls (atom [])]
     (inspect-tool/init! nil)

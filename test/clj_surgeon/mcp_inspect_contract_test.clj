@@ -226,13 +226,55 @@
               result (inspect/evaluate-snapshots params base-snapshot)]
           (is (false? (:ok result)))
           (is (= expected (:error_type result)))
-          (do
-            (is (nil? (:results result)))
-            (when (= :missing label)
-              (is (= 1 (:available_form_count result)))
-              (is (= ["duplicate"] (:form_candidates result)))
-              (is (not (contains? result :source)))
-              (is (not (contains? result :results))))))))))
+          (is (nil? (:results result)))
+          (when (= :missing label)
+            (is (= 1 (:available_form_count result)))
+            (is (= ["duplicate"] (:form_candidates result)))
+            (is (not (contains? result :source)))
+            (is (not (contains? result :results)))))))))
+
+(deftest selector-refusal-reports-every-failed-owner-without-choosing
+  (let [source (str "(ns example)\n"
+                    "(def alpha 1)\n"
+                    "(def beta 2)\n"
+                    "(def beta 3)\n")
+        requests [{:id "owners" :operation "forms" :file "src/example.clj"
+                   :forms ["betta" "beta"] :expect {:forms 2}}]
+        result (inspect/evaluate-snapshots
+                 {:requests requests :expect {:requests 1 :files 1}}
+                 {"src/example.clj" (snapshot "src/example.clj" source)})]
+    (is (false? (:ok result)))
+    (is (false? (:read_complete result)))
+    (is (= {:id "owners" :operation "forms" :file "src/example.clj"
+            :requested_forms ["betta" "beta"]}
+           (:failed_request result)))
+    (is (= 2 (:failure_count result)))
+    (is (= [{:form "betta" :error_type "form-not-found" :match_count 0}
+            {:form "beta" :error_type "ambiguous-form" :match_count 2
+             :candidate_limit 10 :matches_truncated? false
+             :matches [{:type "def" :name "beta" :line 3 :end_line 3
+                        :platforms ["clj"]}
+                       {:type "def" :name "beta" :line 4 :end_line 4
+                        :platforms ["clj"]}]}]
+           (:failures result)))
+    (is (not (contains? result :results)))
+    (is (not (contains? result :next_call)))
+    (is (not (contains? result :selected_form)))))
+
+(deftest selector-hypotheses-disclose-the-bounded-candidate-window
+  (let [source (str "(ns example)\n"
+                    (apply str (map #(format "(def owner-%02d %d)\n" % %)
+                                    (range 10))))
+        requests [{:id "missing" :operation "forms" :file "src/example.clj"
+                   :forms ["owner-xx"] :expect {:forms 1}}]
+        result (inspect/evaluate-snapshots
+                 {:requests requests :expect {:requests 1 :files 1}}
+                 {"src/example.clj" (snapshot "src/example.clj" source)})]
+    (is (= 1 (:failure_count result)))
+    (is (= 10 (:available_form_count result)))
+    (is (= 8 (:candidate_limit result)))
+    (is (= 8 (count (:form_candidates result))))
+    (is (true? (:candidates_truncated result)))))
 
 (deftest output-budget-boundaries-are-inclusive-and-fail-closed
   (doseq [[label size limit ok?]
