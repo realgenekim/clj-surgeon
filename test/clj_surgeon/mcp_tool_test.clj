@@ -521,7 +521,8 @@
                (get-in result [:caller_proof :level])))
         (is (false? (get-in result
                             [:caller_proof :zero_callers_authoritative])))
-        (is (str/includes? (mcp-tool/concise-summary result)
+        (is (str/includes? (mcp-tool/concise-summary
+                             (assoc result :elapsed_ms 0.1))
                            "not semantic completeness"))
         (is (= 1 (:changes result)))
         (is (= 2 (:edits result)))

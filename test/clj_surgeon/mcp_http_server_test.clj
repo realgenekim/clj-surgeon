@@ -300,7 +300,8 @@
                                    :description "HOT_SCHEMA_DESCRIPTION")
             temporary-tool (assoc inspect-tool
                                   :name "temporary_probe"
-                                  :description "Temporary live registry probe")
+                                  :description "Temporary live registry probe"
+                                  :outcome-classes #{:read-success})
             added
             (with-redefs [tool/all-tools
                           (fn [] (into [changed-inspect]
@@ -527,13 +528,13 @@
                      "(constantly (fn [_ _ callback] "
                      "(callback [\"HOT_RELOAD_OK\"] false "
                      "{:ok true :operation \"apply_clojure_changes\" "
-                     ":hot true})))) "
+                     ":elapsed_ms 0.0 :hot true})))) "
                      "(alter-var-root "
                      "#'clj-surgeon.mcp-inspect-tool/handle-inspect "
                      "(constantly (fn [_ _ callback] "
                      "(callback [\"HOT_INSPECT_OK\"] false "
                      "{:ok true :operation \"inspect_clojure\" "
-                     ":read_complete true :hot true})))))")
+                     ":elapsed_ms 0.0 :read_complete true :hot true})))))")
                 replies (doall (nrepl/message client {:op "eval" :code code}))]
             (is (some #(contains? (set (:status %)) "done") replies))
             (is (not-any? :err replies))))

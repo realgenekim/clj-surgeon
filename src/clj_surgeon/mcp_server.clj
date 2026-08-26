@@ -52,7 +52,8 @@
   []
   (mapv
     (fn [tool]
-      (let [outcome-classes (get outcome-classes-by-tool (:name tool))]
+      (let [outcome-classes (or (:outcome-classes tool)
+                                (get outcome-classes-by-tool (:name tool)))]
         (when-not outcome-classes
           (throw (ex-info "Public MCP tool lacks declared outcome classes"
                           {:tool (:name tool)})))

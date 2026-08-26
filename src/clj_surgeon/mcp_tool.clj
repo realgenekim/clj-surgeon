@@ -578,6 +578,16 @@
               (or (:remedy result) (:next_action result)
                   "Correct the request and retry once.")))))
 
+(defn request-operation
+  "Name the public operation from one JSON- or Clojure-shaped request."
+  [params]
+  (if (some (fn [field]
+              (or (contains? params field)
+                  (contains? params (name field))))
+            [:edits :programs :delete_owners])
+    "edit_clojure"
+    "apply_clojure_changes"))
+
 (defn- handle-operation
   [params callback]
   (mcp-operation/invoke!
@@ -595,16 +605,6 @@
            :operation operation)))
      :summarize concise-summary
      :callback callback}))
-
-(defn request-operation
-  "Name the public operation from one JSON- or Clojure-shaped request."
-  [params]
-  (if (some (fn [field]
-              (or (contains? params field)
-                  (contains? params (name field))))
-            [:edits :programs :delete_owners])
-    "edit_clojure"
-    "apply_clojure_changes"))
 
 (defn handle-clj-change
   "Shared callback whose stable Var keeps both public routes hot-reloadable."
