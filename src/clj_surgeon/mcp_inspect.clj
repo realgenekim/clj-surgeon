@@ -4,6 +4,7 @@
    [cheshire.core :as json]
    [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.mcp-contract :as mcp-contract]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.outline :as outline]
@@ -598,7 +599,7 @@
                        (plural (:file_count result) "file")]
                 (pos? forms) (conj (plural forms "form"))
                 (pos? matches) (conj (plural matches "match")))
-        elapsed (double (or (:elapsed_ms result) 0.0))]
+        elapsed (:elapsed_ms result)]
     (str "inspect_clojure\n"
          "  " (str/join " · " facts) "\n\n"
          "✓ all requests resolved\n"
@@ -608,4 +609,5 @@
          (when (seq evidence-lines)
            (str "\n" (str/join "\n" evidence-lines) "\n"))
          "  " (format "%,d" (long (:source_character_count result)))
-         " source characters · " (format "%.2f" elapsed) " ms")))
+         " source characters · "
+         (mcp-operation/format-elapsed-ms elapsed))))

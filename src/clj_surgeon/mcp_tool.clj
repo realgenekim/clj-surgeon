@@ -10,6 +10,7 @@
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-formatter :as formatter]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-runtime :as runtime]
@@ -63,10 +64,12 @@
     "verification_complete=true is terminal. Use native "
     "patching for prose or one arbitrary text edit."))
 
+;; @spec MCP-OP-SCHEMA-001
 (def clj-change-output-schema
   {:type "object"
-   :properties {"ok" {:type "boolean"}}
-   :required ["ok"]})
+   :properties {"ok" {:type "boolean"}
+                "elapsed_ms" {:type "number" :minimum 0}}
+   :required ["ok" "elapsed_ms"]})
 
 (def ^:private runtime-config runtime/tool-config)
 
@@ -526,22 +529,24 @@
             "")]
       (if (:verification_complete result)
         (format (str operation "\n"
-                     "  %s edits · %s files\n\n"
+                     "  %s edits · %s files · %s\n\n"
                      "✓ atomic commit complete\n"
                      "✓ written bytes read back and verified"
                      caller-proof-line "\n"
                      "✓ terminal evidence · verification_complete=true · next action none")
                 (or (:edits result) (:match-count result) 0)
-                (or (:files result) (:changed-file-count result) 0))
+                (or (:files result) (:changed-file-count result) 0)
+                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
         (format (str operation "\n"
-                     "  %s edits · %s files\n\n"
+                     "  %s edits · %s files · %s\n\n"
                      "✓ atomic commit complete\n"
                      "✓ written bytes read back and hot proof complete"
                      caller-proof-line "\n"
                      "… cold verification running · edit remains committed\n"
                      "→ copy next_call to inspect_clojure after doing other useful work")
                 (or (:edits result) (:match-count result) 0)
-                (or (:files result) (:changed-file-count result) 0))))
+                (or (:files result) (:changed-file-count result) 0)
+                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))))
     (let [operation (or (:operation result) "apply_clojure_changes")
           reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
@@ -559,12 +564,13 @@
                            (:source_unchanged result)
                            (:rolled-back result))]
       (format (str operation "\n"
-                   "  refused · %s%s\n"
+                   "  refused · %s%s · %s\n"
                    "%s\n"
                    "%s\n"
                    "→ %s")
               reason
               (if path (str " at " (pr-str path)) "")
+              (mcp-operation/format-elapsed-ms (:elapsed_ms result))
               (or change-line "")
               (if source-safe?
                 "✓ source unchanged"
@@ -573,19 +579,22 @@
                   "Correct the request and retry once.")))))
 
 (defn- handle-operation
-  [operation params callback]
-  (let [result (if-let [config @runtime-config]
-                 (execute-request! config params)
-                 {:ok false
-                  :error_type "server-not-initialized"
-                  :error (str operation " server is not initialized")
-                  :source_unchanged true
-                  :remedy "Restart the configured clj-surgeon MCP server."})
-        result (assoc result :operation operation)
-        body (json/generate-string result)
-        summary (concise-summary result)]
-    (callback [summary] (not (:ok result)) result)
-    body))
+  [params callback]
+  (mcp-operation/invoke!
+    {:execute
+     (fn []
+       (let [operation (request-operation params)]
+         (assoc
+           (if-let [config @runtime-config]
+             (execute-request! config params)
+             {:ok false
+              :error_type "server-not-initialized"
+              :error (str operation " server is not initialized")
+              :source_unchanged true
+              :remedy "Restart the configured clj-surgeon MCP server."})
+           :operation operation)))
+     :summarize concise-summary
+     :callback callback}))
 
 (defn request-operation
   "Name the public operation from one JSON- or Clojure-shaped request."
@@ -600,7 +609,7 @@
 (defn handle-clj-change
   "Shared callback whose stable Var keeps both public routes hot-reloadable."
   [_exchange params callback]
-  (handle-operation (request-operation params) params callback))
+  (handle-operation params callback))
 
 (def edit-tool-description
   (str

@@ -3,6 +3,7 @@
    [cheshire.core :as json]
    [clj-surgeon.edit-dsl :as edit-dsl]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-workspace :as workspace]
@@ -48,10 +49,12 @@
     "commit" {:type "boolean"}}
    :required ["file" "expression" "expect"]})
 
+;; @spec MCP-OP-SCHEMA-001
 (def transform-output-schema
   {:type "object"
-   :properties {"ok" {:type "boolean"}}
-   :required ["ok"]})
+   :properties {"ok" {:type "boolean"}
+                "elapsed_ms" {:type "number" :minimum 0}}
+   :required ["ok" "elapsed_ms"]})
 
 (def ^:private runtime-config runtime/tool-config)
 
@@ -387,21 +390,23 @@
   [result]
   (if (:ok result)
     (str "transform_clojure\n  " (name (:operation result))
-         " · " (:match-count result) " guarded edit(s)\n\n"
+         " · " (:match-count result) " guarded edit(s) · "
+         (mcp-operation/format-elapsed-ms (:elapsed_ms result)) "\n\n"
          (:diff result))
     (str "transform_clojure refused · " (name (:error-type result))
+         " · " (mcp-operation/format-elapsed-ms (:elapsed_ms result))
          "\n" (:error result) "\nsource unchanged")))
 
 (defn handle-transform-clojure
   "clojure-mcp callback handler retained as a Var for hot reload."
   [_exchange params callback]
-  (let [result (if-let [config @runtime-config]
+  (mcp-operation/invoke!
+    {:execute #(if-let [config @runtime-config]
                  (execute-request! config params)
                  (refusal :server-not-initialized
                           "transform_clojure server is not initialized"))
-        body (json/generate-string result)]
-    (callback [(summary result)] (not (:ok result)) result)
-    body))
+     :summarize summary
+     :callback callback}))
 
 (def transform-clojure-tool
   {:id :transform-clojure

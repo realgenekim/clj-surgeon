@@ -224,11 +224,9 @@
   (let [canonical-root (.toString (mcp-paths/real-root project-root))]
     (if-let [job (get @job-store id)]
       (if (= canonical-root (:workspace-root job))
-        (let [result (assoc (public-job job)
-                            :job_elapsed_ms
-                            (if (= :running (:status job))
-                              (- (now-ms) (:created-at-ms job))
-                              (:elapsed_ms job)))]
+        (let [result (cond-> (public-job job)
+                       (not= :running (:status job))
+                       (assoc :job_elapsed_ms (:elapsed_ms job)))]
           (if (= :running (:status result))
             (assoc result
                    :ok true

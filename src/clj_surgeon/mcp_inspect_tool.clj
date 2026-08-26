@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-inspect :as inspect]
+   [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
@@ -204,6 +205,7 @@
            {:required ["basis" "view" "open"]}
            {:required ["verification_job" "view"]}]})
 
+;; @spec MCP-OP-SCHEMA-001
 (def inspect-output-schema
   {:type "object"
    :additionalProperties true
@@ -224,8 +226,11 @@
     "buffers" {:type "array"}
     "verification_job" {:type "string"}
     "verification_complete" {:type "boolean"}
+    "elapsed_ms" {:type "number" :minimum 0}
+    "inspection_elapsed_ms" {:type "number" :minimum 0}
+    "job_elapsed_ms" {:type "number" :minimum 0}
     "next_call" {:type "object"}}
-   :required ["ok" "operation"]
+   :required ["ok" "operation" "elapsed_ms"]
    :anyOf [{:required ["read_complete"]}
            {:required ["basis" "surface" "decision-site-ids"
                        "decision-sites" "next_call"]}
@@ -385,7 +390,7 @@
                     (:surface result)))]
     (format
       (str "inspect_clojure · prepare-change\n"
-           "  %s surface sites · %s decisions · %s files · basis %s\n\n"
+           "  %s surface sites · %s decisions · %s files · basis %s · %s\n\n"
            "%s\n"
            "%s\n"
            "✓ source hashes independently verified\n"
@@ -395,6 +400,7 @@
       (:site-count result)
       (:file-count result)
       (:basis result)
+      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
       surface-lines
       (if exact-source?
         "✓ exact named owner · no semantic index required"
@@ -411,13 +417,14 @@
                     (:buffers result)))]
     (format
       (str "inspect_clojure · retained buffers\n"
-           "  %s buffers · %s source characters · 0 file reads\n\n"
+           "  %s buffers · %s source characters · 0 file reads · %s\n\n"
            "%s\n"
            "✓ rendered from the immutable basis snapshot\n"
            "✓ exact named-form source attached once in structured content\n"
            "→ decide, or open another retained site")
       (:buffer-count result)
       (:source-character-count result)
+      (mcp-operation/format-elapsed-ms (:elapsed_ms result))
       buffer-lines)))
 
 (defn verification-job-summary
@@ -425,15 +432,23 @@
   [result]
   (let [status (:status result)
         terminal? (true? (:verification_complete result))
-        passed? (true? (:passed result))]
+        passed? (true? (:passed result))
+        clock-summary
+        (if-let [job-elapsed-ms (:job_elapsed_ms result)]
+          (str "request "
+               (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+               " · job "
+               (mcp-operation/format-elapsed-ms job-elapsed-ms))
+          (str "request "
+               (mcp-operation/format-elapsed-ms (:elapsed_ms result))))]
     (format
       (str "inspect_clojure · cold verification\n"
-           "  %s · %s · %.2f ms\n\n"
+           "  %s · %s · %s\n\n"
            "%s\n"
            "→ %s")
       (:verification_job result)
       (name status)
-      (double (or (:job_elapsed_ms result) 0.0))
+      clock-summary
       (cond
         (not terminal?) "… bounded job still running"
         passed? "✓ cold verification passed"
@@ -570,11 +585,14 @@
         (assoc
           (cond
             verification-job?
-            (assoc
-              (cold-verify/status project-root
-                                  (:verification_job normalized-params))
-              :operation "inspect_clojure"
-              :mode "verification-job")
+            (let [observed
+                  (cold-verify/status project-root
+                                      (:verification_job normalized-params))]
+              (cond-> (assoc observed
+                             :operation "inspect_clojure"
+                             :mode "verification-job")
+                (= :running (:status observed))
+                (dissoc :job_elapsed_ms)))
 
             prepare?
             (change-buffer/prepare-change!
@@ -611,10 +629,10 @@
                     normalized (:snapshots captured)
                     (merge inspect/default-output-limits output-limits))
                   :file_read_count (:file_read_count captured)))))
-          :elapsed_ms (elapsed-ms started))]
+          :inspection_elapsed_ms (elapsed-ms started))]
     (when telemetry
       (telemetry/record-inspect-call!
-        telemetry params result {:total_ms (:elapsed_ms result)}))
+        telemetry params result {:total_ms (:inspection_elapsed_ms result)}))
     result))
 
 (defn execute-inspect!
@@ -635,10 +653,53 @@
           (assoc (execute-inspect-in-context! (:config routed) (:params routed))
                  :workspace_root (:workspace-root routed)))))))
 
+(defn- inspect-summary
+  [result]
+  (cond
+    (and (= "verification-job" (:mode result)) (:status result))
+    (verification-job-summary result)
+
+    (not (:ok result))
+    (let [reason (or (:reason result) (:error-type result)
+                     (:error_type result) "unknown-error")]
+      (format (str "inspect_clojure\n"
+                   "  refused · %s · %s\n\n"
+                   "→ %s")
+              (if (keyword? reason) (name reason) reason)
+              (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+              (or (:remedy result) (:next_action result)
+                  "Correct the request and retry once.")))
+
+    (= "prepare-change" (:mode result))
+    (prepare-change-summary result)
+
+    (= "basis-view" (:mode result))
+    (basis-view-summary result)
+
+    :else
+    (inspect/concise-summary result)))
+
+(defn- enforce-result-budget
+  [raw-result]
+  (if (and (:ok raw-result)
+           (#{"prepare-change" "basis-view"} (:mode raw-result)))
+    (enforce-public-result-budget
+      (inspect-summary (assoc raw-result :elapsed_ms 0.0))
+      raw-result)
+    raw-result))
+
+;; @spec MCP-OP-TIME-004
+;; @spec MCP-OP-ASYNC-001
+;; @spec MCP-OP-ASYNC-002
+;; @spec MCP-OP-ASYNC-003
+;; @spec MCP-OP-ASYNC-004
+;; @spec MCP-OP-ASYNC-005
 (defn handle-inspect
   "Structured clojure-mcp callback handler, retained as a Var for hot reload."
   [_exchange params callback]
-  (let [raw-result
+  (mcp-operation/invoke!
+    {:execute
+     #(enforce-result-budget
         (if-let [config @runtime-config]
           (execute-inspect! config params)
           {:ok false
@@ -647,28 +708,9 @@
            :error "inspect_clojure server is not initialized"
            :read_complete false
            :source_unchanged true
-           :next_action "restart_server"})
-        raw-summary
-        (cond
-          (not (:ok raw-result)) (json/generate-string raw-result)
-          (= "prepare-change" (:mode raw-result))
-          (prepare-change-summary raw-result)
-          (= "basis-view" (:mode raw-result))
-          (basis-view-summary raw-result)
-          (= "verification-job" (:mode raw-result))
-          (verification-job-summary raw-result)
-          :else (inspect/concise-summary raw-result))
-        result
-        (if (and (:ok raw-result)
-                 (#{"prepare-change" "basis-view"} (:mode raw-result)))
-          (enforce-public-result-budget raw-summary raw-result)
-          raw-result)
-        summary
-        (if (:ok result)
-          raw-summary
-          (json/generate-string result))]
-    (callback [summary] (not (:ok result)) result)
-    (json/generate-string result)))
+           :next_action "restart_server"}))
+     :summarize inspect-summary
+     :callback callback}))
 
 (def inspect-tool
   {:id :inspect-clojure
