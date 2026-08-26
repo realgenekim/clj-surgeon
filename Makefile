@@ -26,6 +26,7 @@ MCP_READY_FILE := $(MCP_STATE_DIR)/ready.edn
 MCP_LOG_FILE := $(MCP_STATE_DIR)/server.log
 MCP_LAUNCH_LABEL ?= com.realgenekim.clj-surgeon-mcp
 MCP_START_ATTEMPTS ?= 120
+MCP_STOP_ATTEMPTS ?= 100
 MCP_JAVA_HOME ?= $(JAVA_HOME)
 MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
 MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
@@ -231,13 +232,27 @@ cclsp-status:
 mcp-start: cclsp-start
 	@set -eu; \
 	  mkdir -p "$(MCP_STATE_DIR)"; \
-	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then \
+	  if curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1 \
+	    && test -f "$(MCP_READY_FILE)" \
+	    && launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1; then \
 	    echo "clj-surgeon MCP already ready at $(MCP_URL)"; \
 	    exit 0; \
 	  fi; \
 	  test -n "$(CLOJURE_BIN)" || { echo "clojure is required" >&2; exit 1; }; \
 	  test -x "$(MCP_JAVA_CMD)" || { echo "MCP Java runtime is not executable: $(MCP_JAVA_CMD)" >&2; exit 1; }; \
 	  launchctl remove "$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 || true; \
+	  stopped=false; \
+	  for attempt in $$(seq 1 $(MCP_STOP_ATTEMPTS)); do \
+	    if ! launchctl print "gui/$$(id -u)/$(MCP_LAUNCH_LABEL)" >/dev/null 2>&1 \
+	      && ! curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_URL))" >/dev/null 2>&1; then \
+	      stopped=true; break; \
+	    fi; \
+	    sleep 0.1; \
+	  done; \
+	  test "$$stopped" = true || { \
+	    echo "previous clj-surgeon MCP did not stop cleanly; refusing a competing launch" >&2; \
+	    exit 1; \
+	  }; \
 	  rm -f "$(MCP_READY_FILE)" "$(MCP_PID_FILE)"; \
 	  launchctl submit -l "$(MCP_LAUNCH_LABEL)" \
 	    -o "$(MCP_LOG_FILE)" -e "$(MCP_LOG_FILE)" -- \

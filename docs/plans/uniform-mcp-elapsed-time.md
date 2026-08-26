@@ -61,3 +61,34 @@ contract and changes the live tool-contract hashes, so publication uses
 - timing model planning or client/tool round trips;
 - exposing internal phase spans in this change;
 - changing any request schema or edit semantics.
+
+## Phase 6 verification record
+
+Phase 6 completed the production path on
+`experiment/submission-row-counterfactual`:
+
+- one shared finalizer now measures and publishes every public operation;
+- the canonical registry enumerates every allowed success, pending, failure,
+  preview, commit, and typed-refusal outcome;
+- the Linked-Intent audit found 23 implementation witnesses and 23 test
+  witnesses with no violations;
+- the Prolog shadow model exposed two legacy gaps—pending verification could
+  masquerade as completion, and failed verification lacked an independent
+  clock law—which the native contract now closes;
+- the cold `make mcp-test` gate passed 213 tests and 1,751 assertions with zero
+  failures or errors under `-Xms64m -Xmx512m`;
+- live `inspect_clojure` returned a bounded 450-character form and reported
+  `71.290208` ms, rendered as `71.29 ms`;
+- a malformed live `edit_clojure` request refused before writing and reported
+  `71.336666` ms, rendered as `71.34 ms`;
+- the corrected guarded request committed one edit in one file, read the bytes
+  back, and reported `83.963625` ms, rendered as `83.96 ms`.
+
+Dogfooding also exposed a restart race: launchd could drop ownership before the
+old endpoint finished draining, allowing an immediate `mcp-start` to mistake
+the orphaned health response for a durable service. Startup now requires
+agreement among endpoint health, the readiness file, and launchd ownership,
+then waits for both ownership and health to disappear before relaunching. The
+remove-and-immediate-start reproduction now returns a healthy launchd-owned
+server, and `make mcp-reload` synchronizes the four public contracts without a
+process restart.
