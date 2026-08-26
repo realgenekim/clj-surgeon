@@ -37,8 +37,10 @@
     "bounded cold verification job; do not block or rerun the edit. Copy "
     "next_call, fill every "
     "decision with keep, one complete named-form replacement, whole-site delete, or one compact "
-    "edit, then call apply_clojure_changes once. The whole request refuses on "
-    "ambiguity, count, path, parse, or budget failure. read_complete=true is "
+    "edit, then call apply_clojure_changes once. The whole request remains "
+    "refused on every failure. A forms owner-selection refusal names the failed "
+    "request and every failed owner, and supplies bounded form_candidates as "
+    "hint-only hypotheses, never selection authority. read_complete=true is "
     "terminal. Never writes."))
 
 (def ^:private positive-integer-schema {:type "integer" :minimum 1})
@@ -239,6 +241,15 @@
     "results" {:type "array"}
     "file_hashes" {:type "object"}
     "source_character_count" {:type "integer"}
+    "failed_request" {:type "object"}
+    "failure_count" {:type "integer"}
+    "requested_form_count" {:type "integer"}
+    "resolved_form_count" {:type "integer"}
+    "failures" {:type "array"}
+    "available_form_count" {:type "integer"}
+    "form_candidates" {:type "array"}
+    "candidate_limit" {:type "integer"}
+    "candidates_truncated" {:type "boolean"}
     "next_action" {:type "string"}
     "basis" {:type "string"}
     "surface" {:type "array"}
@@ -700,14 +711,30 @@
 
     (not (:ok result))
     (let [reason (or (:reason result) (:error-type result)
-                     (:error_type result) "unknown-error")]
-      (format (str "inspect_clojure\n"
-                   "  refused · %s · %s\n\n"
-                   "→ %s")
-              (if (keyword? reason) (name reason) reason)
-              (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-              (or (:remedy result) (:next_action result)
-                  "Correct the request and retry once.")))
+                     (:error_type result) "unknown-error")
+          failed-request (:failed_request result)
+          failure (first (:failures result))
+          candidate (first (:form_candidates result))
+          failure-label (if (= "ambiguous-form" (:error_type failure))
+                          "ambiguous form"
+                          "missing form")
+          diagnostic? (and failed-request failure)]
+      (str
+        (format (str "inspect_clojure\n"
+                     "  refused · %s · %s\n")
+                (if (keyword? reason) (name reason) reason)
+                (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
+        (when diagnostic?
+          (str
+            (format "  request %s · %s\n"
+                    (:id failed-request) (:file failed-request))
+            (when failure
+              (format "  %s %s\n" failure-label (:form failure)))
+            (when candidate
+              (format "  you may have meant %s (hint only)\n" candidate))))
+        "\n→ "
+        (or (:remedy result) (:next_action result)
+            "Correct the request and retry once.")))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
