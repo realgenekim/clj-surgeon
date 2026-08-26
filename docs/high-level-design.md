@@ -47,6 +47,9 @@ domain result and its concise summary.
   EDN files without repeating the same guarded intent per file.
 - Give every public MCP result enough uniform evidence for a caller to
   understand outcome, elapsed server work, and next action.
+- Let a caller state one bounded read mission, resolve only exact mechanical
+  clues against one frozen snapshot, and continue an incomplete batch without
+  repeating successful reads.
 - Refuse stale, ambiguous, malformed, over-budget, or unverifiable work before
   unsafe mutation, or roll back the complete transaction.
 
@@ -56,6 +59,10 @@ domain result and its concise summary.
   those are the cheaper authority.
 - Inferring architecture, desired semantics, or a widening edit scope.
 - Claiming server execution time is end-to-end model or transport latency.
+- Treating edit distance, prefix similarity, source proximity, or a sole
+  remaining candidate as authority to select an owner.
+- Reporting incomplete read evidence as a complete batch or granting write
+  authority from a refused read.
 - Turning every cross-cutting field into a new framework or middleware layer.
 - Retaining a second logic model that finds no counterexample beyond native
   tests.
@@ -129,6 +136,42 @@ the kernel owns exact form closure, counts, source guards, and failure-atomic
 execution. Planning grants no write authority, and a stale plan refuses before
 mutation.
 
+### Compress a coherent read mission without guessing
+
+The read path treats a coherent set of known questions as one immutable
+mission. The caller supplies exact selectors and, when needed, explicit
+mechanical fallback clues such as a literal contained by one owner, a
+containing line, a fully qualified owner, or a declared alias. The kernel
+captures each file once, resolves those clues against the complete frozen
+candidate universe, and returns bounded evidence with source hashes and exact
+owner anchors.
+
+Five independently testable modules compose the read-mission surface:
+
+1. A complete selector diagnostic names the failed request, file, requested
+   owner, failure kind, candidate counts, bounded hints, and truncation state in
+   both the concise and structured result.
+2. A snapshot continuation retains successful sibling reads after a
+   selector-local failure. It does not publish ordinary complete `results`.
+3. A bounded resolve-and-read entrance accepts only declared exact clue types.
+   Zero or multiple owners refuse. Similarity ranking remains hint-only.
+4. A retry compiler emits one schema-valid, snapshot-bound next call only when
+   a declared exact relation proves one correction.
+5. A declarative read-mission graph schedules caller-supplied questions,
+   reuses snapshot-bound selections, enforces an evidence budget, and returns
+   guard-ready anchors for a later explicit write decision.
+
+Schema, path, parse, snapshot, and output-budget failures remain fail-empty.
+Only selector-local failures can create a continuation. A continuation remains
+`ok=false` and `read_complete=false` until every ordered request resolves.
+Partial evidence is not write authority. Complete reads can return stale-source
+guards, but they do not invent replacement text or claim semantic correctness.
+
+This design applies the same compiler boundary to perception that transactions
+already apply to mutation. The model chooses the questions and meaning. The
+kernel owns ordering, snapshot reuse, exact resolution, bounded presentation,
+and executable recovery.
+
 ## Key Design Decisions
 
 ### Finalize results through one explicit operation envelope
@@ -148,6 +191,20 @@ Elapsed measurement may enrich structured results and summaries but must not
 change selection, mutation, rollback, verification, or refusal semantics. It
 measures owned server work and excludes model reasoning, client scheduling,
 network transport, and background job duration.
+
+### Keep resolution relations explicit
+
+An executable read correction requires proof from one declared mechanical
+relation over the complete frozen candidate universe. Supported relation
+families can include exact transport normalization, exact fully qualified
+ownership, a namespace alias declared in the snapshot, and an explicitly
+supplied literal or line contained by exactly one top-level owner. Each
+relation reports its trace.
+
+Edit distance, common prefixes, pluralization, case folding, inferred
+abbreviations, lexical order, and source proximity can rank bounded hints. They
+cannot select an owner, emit an executable retry, or satisfy a read request.
+This keeps helpful discovery separate from authority.
 
 ### Gate durable intent in the ordinary suite
 
@@ -172,11 +229,28 @@ counterexample that the native contract tests missed.
   behavior change.
 - Representative structural tasks remain correctness-gated and are compared
   against native routes by complete wall time, not server timing alone.
+- Selector-local refusals expose the exact missing owner and preserve completed
+  sibling work through a snapshot-bound continuation without exposing partial
+  evidence as complete results.
+- Every executable retry is schema-valid, applies only to its retained
+  snapshot, and succeeds on that snapshot. Ambiguous cases never emit one.
+- The two motivating wrong-owner missions complete without `sed` fallback, and
+  clean-context replay reports calls, complete wall, direct tool wall, returned
+  characters, correction turns, and false automatic selections.
+- A 10x complete-wall claim requires 100% correct owner selection, zero guessed
+  selections, and a per-caller median at or below 10% of the frozen current
+  control. Mechanically ambiguous missions have a separate gate and are not
+  pooled into that claim.
 
-The design is falsified if callers need operation-specific recovery to discover
-basic outcome evidence, if a refusal omits timing, if background job time is
-reported as request latency, or if the contract gate can be bypassed by adding
-a new public tool.
+Any of these conditions falsifies the design:
+
+- Callers need operation-specific recovery to discover basic outcome evidence.
+- A refusal omits timing.
+- An automatic resolution uses a heuristic instead of a declared exact
+  relation.
+- A caller mistakes partial evidence for a complete read.
+- The server reports background job time as request latency.
+- A new public tool bypasses the contract gate.
 
 ## References
 
