@@ -1,8 +1,8 @@
 # Captain's Log: Read refusals become codebase ESP
 
-Date: 2026-08-26  
-Workstream: SURGEON2  
-Parent issue: `clj-surgeon-wjz`  
+Date: 2026-08-26
+Workstream: SURGEON2
+Parent issue: `clj-surgeon-wjz`
 First vertical slice: `clj-surgeon-p24`
 
 ## Mission
