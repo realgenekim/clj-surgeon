@@ -36,12 +36,17 @@
                         #"Unsupported MCP tool profile"
                         (tool/tools-for-profile :unknown))))
 
+;; @spec MCP-OP-SCHEMA-001
 (deftest exposes-exactly-four-typed-tools
   (let [tools (server/make-tools nil ".")]
     (is (= 4 (count tools)))
     (is (= ["inspect_clojure" "apply_clojure_changes" "edit_clojure"
             "transform_clojure"]
            (mapv :name tools)))
+    (doseq [{:keys [output-schema]} tools]
+      (is (= {:type "number" :minimum 0}
+             (get-in output-schema [:properties "elapsed_ms"])))
+      (is (some #{"elapsed_ms"} (:required output-schema))))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
     (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))

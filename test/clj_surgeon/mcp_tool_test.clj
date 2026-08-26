@@ -1041,18 +1041,27 @@
                      mcp-tool/tool-description)))
       (is (= false (:error? (first @calls))))
       (is (= true (get-in @calls [0 :payload :verification_complete])))
-      (is (= (str "apply_clojure_changes\n"
-                  "  6 edits · 2 files\n\n"
-                  "✓ atomic commit complete\n"
-                  "✓ written bytes read back and verified\n"
-                  "✓ terminal evidence · verification_complete=true · next action none")
-             (get-in @calls [0 :content])))
+      (let [elapsed (get-in @calls [0 :payload :elapsed_ms])]
+        (is (number? elapsed))
+        (when (number? elapsed)
+          (is (<= 0 elapsed))
+          (is (= (str "apply_clojure_changes\n"
+                      (format "  6 edits · 2 files · %.2f ms\n\n" elapsed)
+                      "✓ atomic commit complete\n"
+                      "✓ written bytes read back and verified\n"
+                      "✓ terminal evidence · verification_complete=true · next action none")
+                 (get-in @calls [0 :content])))))
       (mcp-tool/handle-clj-change nil
                                   (assoc decision-request "unexpected" true)
                                   callback)
       (is (= true (:error? (second @calls))))
       (is (= "invalid-mcp-request"
              (get-in @calls [1 :payload :error_type])))
+      (is (number? (get-in @calls [1 :payload :elapsed_ms])))
+      (when-let [elapsed (get-in @calls [1 :payload :elapsed_ms])]
+        (is (str/includes?
+              (get-in @calls [1 :content])
+              (format "%.2f ms" elapsed))))
       (is (re-find #"refused · unknown-fields at \[\]"
                    (get-in @calls [1 :content])))
       (is (not (re-find #"\{\"ok\""
@@ -1073,6 +1082,7 @@
                  :operation "edit_clojure"
                  :edits 2
                  :files 1
+                 :elapsed_ms 1.25
                  :verification_complete true})
               "edit_clojure\n"))
         (testing "keyword refusal types and rollback state remain truthful"
@@ -1080,15 +1090,17 @@
                        (mcp-tool/concise-summary
                          {:ok false
                           :error-type :verification-failed
+                          :elapsed_ms 1.25
                           :rolled-back true})))
           (is (re-find #"source state requires structured receipt review"
                        (mcp-tool/concise-summary
                          {:ok false
                           :error-type :verification-failed
+                          :elapsed_ms 1.25
                           :rolled-back false}))))
         (testing "the exact failed change and field stay visible"
           (is (= (str "apply_clojure_changes\n"
-                      "  refused · invalid-intent-form\n"
+                      "  refused · invalid-intent-form · 2.50 ms\n"
                       "  change 0 · gallery-resolver · field :find\n\n"
                       "✓ source unchanged\n"
                       "→ Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver).")
@@ -1100,6 +1112,7 @@
                     :change_index 0
                     :change_id "gallery-resolver"
                     :field ":find"
+                    :elapsed_ms 2.5
                     :source_unchanged true
                     :remedy "Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver)."})))))
       (finally

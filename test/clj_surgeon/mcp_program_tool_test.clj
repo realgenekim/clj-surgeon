@@ -185,3 +185,37 @@
         (is (false? (:source-unchanged result))))
       (finally
         (delete-tree! root)))))
+
+(deftest callback-reports-elapsed-time-on-success-and-refusal
+  (let [root (temp-dir)
+        source-file (io/file root "src/dogfood/fidelity.clj")
+        calls (atom [])
+        callback (fn [content error? structured]
+                   (swap! calls conj {:content (first content)
+                                      :error? error?
+                                      :structured structured}))]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file fidelity-source)
+      (program/init! {:project-root (.getPath root)})
+      (program/handle-transform-clojure nil transform-request callback)
+      (let [{:keys [content error? structured]} (first @calls)
+            elapsed (:elapsed_ms structured)]
+        (is (false? error?))
+        (is (number? elapsed))
+        (when (number? elapsed)
+          (is (<= 0 elapsed))
+          (is (str/includes?
+                content (format "%.2f ms" elapsed)))))
+      (program/init! nil)
+      (program/handle-transform-clojure nil transform-request callback)
+      (let [{:keys [content error? structured]} (second @calls)
+            elapsed (:elapsed_ms structured)]
+        (is (true? error?))
+        (is (number? elapsed))
+        (when (number? elapsed)
+          (is (str/includes?
+                content (format "%.2f ms" elapsed)))))
+      (finally
+        (program/init! nil)
+        (delete-tree! root)))))

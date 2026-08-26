@@ -239,6 +239,7 @@
       (finally
         (delete-tree! project)))))
 
+;; @spec MCP-OP-TIME-004
 (deftest callback-separates-concise-content-from-full-structured-evidence
   (let [project (temp-dir)
         _source (write-source! project "src/demo.clj"
@@ -258,6 +259,12 @@
       (is (= false (:error? (first @calls))))
       (is (str/starts-with? (first (:content (first @calls)))
                             "inspect_clojure\n"))
+      (is (number? (get-in @calls [0 :structured :elapsed_ms])))
+      (is (number? (get-in @calls [0 :structured
+                                   :inspection_elapsed_ms])))
+      (is (str/includes?
+            (first (:content (first @calls)))
+            (format "%.2f ms" (get-in @calls [0 :structured :elapsed_ms]))))
       (is (not (str/includes? (first (:content (first @calls)))
                               "(def answer")))
       (is (= "(def answer 42)"
@@ -265,6 +272,25 @@
       (finally
         (inspect-tool/init! nil)
         (delete-tree! project)))))
+
+(deftest uninitialized-handler-reports-elapsed-time
+  (let [calls (atom [])]
+    (inspect-tool/init! nil)
+    (inspect-tool/handle-inspect
+      nil
+      {"requests" [] "expect" {"requests" 0 "files" 0}}
+      (fn [content error? structured]
+        (swap! calls conj {:content (first content)
+                           :error? error?
+                           :structured structured})))
+    (let [{:keys [content error? structured]} (first @calls)
+          elapsed (:elapsed_ms structured)]
+      (is (true? error?))
+      (is (number? elapsed))
+      (when (number? elapsed)
+        (is (<= 0 elapsed))
+        (is (str/includes?
+              content (format "%.2f ms" elapsed)))))))
 
 (deftest callback-queries-a-cold-job-without-rereading-source
   (let [project (temp-dir)
@@ -294,6 +320,11 @@
         (is (= false (:error? (first @calls))))
         (is (str/starts-with? (first (:content (first @calls)))
                               "inspect_clojure · cold verification\n"))
+        (is (number? (get-in @calls [0 :structured :elapsed_ms])))
+        (is (str/includes?
+              (first (:content (first @calls)))
+              (format "request %.2f ms"
+                      (get-in @calls [0 :structured :elapsed_ms]))))
         (is (= :passed (get-in @calls [0 :structured :status])))
         (is (true? (get-in @calls [0 :structured :verification_complete])))
         (is (= 0 (get-in @calls [0 :structured :file_read_count] 0))))
@@ -471,6 +502,10 @@
       (is (false? (:error? (first @calls))))
       (is (.startsWith ^String (:content (first @calls))
                        "inspect_clojure · prepare-change"))
+      (is (str/includes?
+            (:content (first @calls))
+            (format "%.2f ms"
+                    (get-in @calls [0 :structured :elapsed_ms]))))
       (is (not (.contains ^String (:content (first @calls)) "(defn target")))
       (is (= "definition" (get-in @calls [0 :structured :scope])))
       (is (= "(defn target [] :ok)"
@@ -796,6 +831,9 @@
       (let [{:keys [content error? structured]} (first @calls)]
         (is (false? error?))
         (is (.startsWith ^String content "inspect_clojure · retained buffers"))
+        (is (str/includes?
+              content
+              (format "%.2f ms" (:elapsed_ms structured))))
         (is (not (.contains ^String content "(defn target"))
             "the text summary does not duplicate source")
         (is (= "basis-view" (:mode structured)))

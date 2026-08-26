@@ -6,6 +6,7 @@ Babashka CLI tool for structural operations on Clojure namespaces.
 
 Before non-trivial feature or refactoring work, read:
 
+- [AGENTS.md](AGENTS.md) for the scoped Linked-Intent Development contract.
 - [docs/vision.md](docs/vision.md) for the bookkeeping-versus-judgment boundary,
   plan contracts, and fail-closed design principles.
 - [docs/testing-guidelines.md](docs/testing-guidelines.md) for the one-shot
