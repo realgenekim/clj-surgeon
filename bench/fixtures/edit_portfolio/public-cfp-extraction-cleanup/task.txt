@@ -1,24 +1,25 @@
 The architecture and move are complete: the public CFP implementation already exists in sample.handlers.public-cfp. Finish the exact source-namespace cleanup in src/sample/server.clj and preserve every unrelated byte.
 
-- In the sample.server namespace form, replace this exact complete form once:
+- In the sample.server namespace form, replace this exact complete form once.
 
-  ```clojure
-  (:require
-   [sample.http :as http]
-   [sample.store :as store])
-  ```
+Before:
 
-  with:
+```clojure
+(:require
+ [sample.http :as http]
+ [sample.store :as store])
+```
 
-  ```clojure
-  (:require
-   [sample.handlers.public-cfp :as public-cfp]
-   [sample.http :as http]
-   [sample.store :as store])
-  ```
+After:
+
+```clojure
+(:require
+ [sample.handlers.public-cfp :as public-cfp]
+ [sample.http :as http]
+ [sample.store :as store])
+```
 
 - Only in routes, prefix each of these seven handler references with public-cfp/: handle-public-cfp, handle-cfp-submitted, handle-cfp-submit, handle-cfp-import, handle-cfp-import-live, handle-cfp-draft, handle-cfp-stream. Each reference occurs once.
 - Delete these 22 top-level owners, including their attached comments: cfp-not-found, cfp-drafts, cfp-live-note-state, cfp-channel, mint-viewer-id, with-viewer-session, cfp-viewer, draft-param?, cfp-draft-for, stash-cfp-draft!, clear-cfp-draft!, cfp-live-notes, cfp-progress, render-cfp, handle-public-cfp, handle-cfp-stream, handle-cfp-draft, handle-cfp-import, handle-cfp-import-live, cfp-refusal-message, handle-cfp-submit, handle-cfp-submitted.
 
 The complete file, owner set, literal before/after forms, and counts are supplied. Do not inspect source or search for callers. Apply the 30 edits as one coherent mutation action if your available editor supports it. Treat a successful guarded mutation receipt as terminal proof. Report the route and whether it succeeded on the first attempt.
-

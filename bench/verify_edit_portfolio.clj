@@ -79,6 +79,9 @@
           (str/blank? task-text)
           (conj {:error-type :missing-task-prompt})
 
+          (re-find #"(?m)^[ \t]+```(?:clojure|clj)[ \t]*$" task-text)
+          (conj {:error-type :ambiguous-indented-clojure-fence})
+
           (not (valid-provenance? (:provenance capsule)))
           (conj {:error-type :invalid-provenance})
 
@@ -242,6 +245,11 @@
          {:label :missing-task
           :capsule valid :task-text "" :before before :after after
           :error :missing-task-prompt}
+         {:label :ambiguous-indented-clojure-fence
+          :capsule valid
+          :task-text "Change exactly:\n  ```clojure\n  (:before)\n  ```"
+          :before before :after after
+          :error :ambiguous-indented-clojure-fence}
          {:label :missing-provenance
           :capsule (dissoc valid :provenance) :before before :after after
           :error :invalid-provenance}

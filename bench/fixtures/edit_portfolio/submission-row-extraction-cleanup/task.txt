@@ -8,157 +8,157 @@ In each file, replace the complete `(:require ...)` form exactly once.
 
 1. `src/sample/review_updates.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.reviews :as reviews]
-      [sample.views.review :as view-review])
-   ```
+```clojure
+(:require
+   [sample.reviews :as reviews]
+   [sample.views.review :as view-review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.reviews :as reviews]
-      [sample.views.review :as view-review]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.reviews :as reviews]
+   [sample.views.review :as view-review]
+   [sample.views.submission-row :as submission-row])
+```
 
 2. `src/sample/views/log.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.submission-row :as submission-row])
+```
 
 3. `src/sample/views/people.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.submission-row :as submission-row])
+```
 
 4. `src/sample/views/review.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.events :as events]
-      [sample.store :as store])
-   ```
+```clojure
+(:require
+   [sample.events :as events]
+   [sample.store :as store])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.events :as events]
-      [sample.store :as store]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.events :as events]
+   [sample.store :as store]
+   [sample.views.submission-row :as submission-row])
+```
 
 5. `test/sample/board_test.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as view-review])
-   ```
+```clojure
+(:require
+   [sample.views.review :as view-review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.review :as view-review]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.review :as view-review]
+   [sample.views.submission-row :as submission-row])
+```
 
 6. `test/sample/reviews_test.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review-view])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review-view])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review-view]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review-view]
+   [sample.views.submission-row :as submission-row])
+```
 
 7. `test/sample/status_workflow_test.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review-view])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review-view])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review-view]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review-view]
+   [sample.views.submission-row :as submission-row])
+```
 
 8. `test/sample/views_test.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.submission-row :as submission-row])
+```
 
 9. `test/sample/voting_policy_test.clj`
 
-   Before:
+Before:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review])
+```
 
-   After:
+After:
 
-   ```clojure
-   (:require
-      [sample.views.review :as review]
-      [sample.views.submission-row :as submission-row])
-   ```
+```clojure
+(:require
+   [sample.views.review :as review]
+   [sample.views.submission-row :as submission-row])
+```
 
 ## Delete the moved owners
 

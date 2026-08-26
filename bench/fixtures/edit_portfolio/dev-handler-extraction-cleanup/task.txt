@@ -1,21 +1,23 @@
 The architecture and move are complete: the four development handlers already exist in sample.handlers.dev. Finish the exact source-namespace cleanup in src/sample/server.clj and preserve every unrelated byte.
 
-- In the sample.server namespace form, replace this exact complete form once:
+- In the sample.server namespace form, replace this exact complete form once.
 
-  ```clojure
-  (:require
-   [sample.http :as http]
-   [sample.store :as store])
-  ```
+Before:
 
-  with:
+```clojure
+(:require
+ [sample.http :as http]
+ [sample.store :as store])
+```
 
-  ```clojure
-  (:require
-   [sample.handlers.dev :as dev]
-   [sample.http :as http]
-   [sample.store :as store])
-  ```
+After:
+
+```clojure
+(:require
+ [sample.handlers.dev :as dev]
+ [sample.http :as http]
+ [sample.store :as store])
+```
 - In routes, replace handle-reload-check with dev/handle-reload-check once, handle-telemetry-beacon with dev/handle-telemetry-beacon once, handle-sse-state with dev/handle-sse-state once, and visible-sse-registrations with dev/visible-sse-registrations once.
 - Delete the top-level owners visible-sse-registrations, handle-sse-state, handle-reload-check, and handle-telemetry-beacon, including their attached comments.
 
