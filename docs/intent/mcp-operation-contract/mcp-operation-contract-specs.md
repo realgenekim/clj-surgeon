@@ -50,6 +50,7 @@ tests witness the requirement.
 - [x] **MCP-OP-EDIT-002**: When a compact literal edit targets an `.edn` file, clj-surgeon shall require root scope and refuse namespace ownership, named-form ownership, and owner deletion before writing.
 - [x] **MCP-OP-EDIT-003**: If a grouped compact edit repeats a file, combines `file` with `files`, omits both, uses grouped files outside root scope, or fails its per-file cardinality, clj-surgeon shall refuse the complete request without changing any source.
 - [x] **MCP-OP-EDIT-004**: When a root-scoped EDN edit succeeds, clj-surgeon shall parse and read back every future file and preserve all bytes outside the exact replaced subtrees, including comments and metadata.
+- [x] **MCP-OP-EDIT-005**: When a compact Clojure edit uses `within.namespace=true`, clj-surgeon shall resolve the file's unique namespace form without requiring the caller to repeat its name, and shall refuse before writing if that owner is not unique.
 
 ## Misreadings and Boundaries
 

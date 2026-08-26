@@ -391,11 +391,12 @@
                  {:change-index change-index :change-id change-id}))
       (when owner
         (when-not (and (map? owner)
-                       (= #{:kind :name} (set (keys owner)))
+                       (#{#{:kind} #{:kind :name}} (set (keys owner)))
                        (= :namespace (:kind owner))
-                       (symbol? (:name owner)))
+                       (or (not (contains? owner :name))
+                           (symbol? (:name owner))))
           (refuse! :invalid-change-owner
-                   "Change :owner must be {:kind :namespace :name <symbol>}"
+                   "Change :owner must be {:kind :namespace} with an optional symbolic :name"
                    {:change-index change-index
                     :change-id change-id
                     :owner owner})))
@@ -639,12 +640,16 @@
                                                z/down
                                                z/right
                                                z/sexpr)]
-                                   (when (= owner-name namespace-name)
+                                   (when (or (nil? owner-name)
+                                             (= owner-name namespace-name))
                                      (assoc record :name namespace-name)))))
                          vec)]
         (when-not (= 1 (count matches))
           (refuse! :change-owner-mismatch
-                   (str "Namespace owner " owner-name " in " file
+                   (str (if owner-name
+                          (str "Namespace owner " owner-name)
+                          "Unique namespace owner")
+                        " in " file
                         " must resolve exactly once, found " (count matches))
                    {:change-index intent-index
                     :change-id id

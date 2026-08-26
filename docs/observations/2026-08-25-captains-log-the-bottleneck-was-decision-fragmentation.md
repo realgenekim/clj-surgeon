@@ -153,3 +153,27 @@ small and reusable, however; a few comparable EDN/config migrations amortize
 it, and every future use reduces both mechanics and partial-write risk. That is
 the low-cost-of-change ratchet we wanted, not evidence that every repeated text
 edit needs a new API.
+
+## Captain's log: one redundant name cost an entire model turn
+
+The corrected dev-b replay isolated a different kind of waste. Its compact arm
+guessed the natural shape `within.namespace=true`. The schema required the
+namespace's string name, so Surgeon safely refused in 7.33 ms. Without reading
+source, the caller repeated nine namespace names and the second call committed
+all 51 edits exactly in 1.049 seconds. Complete turn time was 111.061 seconds.
+
+The native arm took 400.498 seconds and ended incorrect. To manufacture one
+large patch, the caller built a Clojure transformation program. Top-level `def`
+return values from that helper escaped onto stdout and were prepended to every
+target file as `#'user/...` forms. The patch engine applied what it was given;
+the model-managed compiler pipeline corrupted the result.
+
+This is evidence for two narrow conclusions, not a blanket victory claim:
+
+1. Requiring a caller to restate a namespace name already uniquely present in
+   one file is redundant ceremony. `within.namespace=true` now resolves exactly
+   one `ns` owner and refuses zero or multiple owners before writing.
+2. Surgeon's advantage on this case is hiding a dangerous compiler pipeline,
+   not making replacement intrinsically faster. A stronger native cohort must
+   remain free to find a safer batched patch route; the observed failure stays
+   in the denominator.

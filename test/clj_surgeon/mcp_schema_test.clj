@@ -14,7 +14,7 @@
            :required #{"id" "files" "expect"}}
           :owner
           {:allowed #{"kind" "name"}
-           :required #{"kind" "name"}}
+           :required #{"kind"}}
           :form-owner
           {:allowed #{"kind" "name" "dispatch"}
            :required #{"kind" "name" "dispatch"}}
@@ -78,6 +78,10 @@
             {:required ["namespace"]}
             {:required ["root"]}]
            (get-in gesture [:properties "within" :oneOf])))
+    (is (= [{:type "string" :minLength 1}
+            {:type "boolean" :enum [true]}]
+           (get-in gesture
+                   [:properties "within" :properties "namespace" :oneOf])))
     (is (= #{"file" "expression" "expect"}
            (set (keys (:properties program)))))
     (is (= ["file" "expression" "expect"] (:required program)))

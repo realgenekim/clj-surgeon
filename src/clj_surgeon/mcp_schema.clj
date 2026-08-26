@@ -85,11 +85,11 @@
                                 defmethod-owner-schema]}}
        "owner" {:type "object"
                 :additionalProperties false
-                :description "Exact non-Var owner scope."
+                :description "Exact non-Var owner scope. Omit a namespace name only to resolve the file's unique ns form."
                 :properties
                 {"kind" {:type "string" :enum ["namespace"]}
                  "name" {:type "string" :minLength 1}}
-                :required ["kind" "name"]}
+                :required ["kind"]}
        "find" {:type "string" :minLength 1
                :description "Exactly one Clojure form in its required source spelling."}
        "inside" {:type "string" :minLength 1
@@ -225,8 +225,9 @@
                  :properties
                  {"form" {:type "string" :minLength 1
                           :description "One exact named top-level form."}
-                  "namespace" {:type "string" :minLength 1
-                               :description "One exact namespace name for editing its ns form."}
+                  "namespace" {:oneOf [{:type "string" :minLength 1}
+                                       {:type "boolean" :enum [true]}]
+                               :description "An exact namespace name, or true to resolve the file's unique ns form."}
                   "root" {:type "boolean" :enum [true]
                           :description "Search the complete concrete syntax tree while preserving all bytes outside exact replacements."}}
                  :oneOf [{:required ["form"]}

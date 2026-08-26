@@ -64,8 +64,8 @@
 (defn- temp-dir
   []
   (.toFile (Files/createTempDirectory
-            "clj-surgeon-mcp-tool-test-"
-            (make-array FileAttribute 0))))
+             "clj-surgeon-mcp-tool-test-"
+             (make-array FileAttribute 0))))
 
 (defn- delete-tree!
   [file]
@@ -90,9 +90,9 @@
     (try
       (copy-tree! (str fixture-root "/before") workspace)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)}
-                    decision-request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     decision-request)]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (= 6 (:changes result)))
@@ -105,7 +105,7 @@
           (is (= (slurp (io/file fixture-root "after" relative))
                  (slurp (io/file workspace relative)))))
         (let [undo (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})]
+                     {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (doseq [relative ["src/bench/app_shell.clj"
                             "src/bench/source_reader.clj"]]
@@ -140,12 +140,12 @@
       (.mkdirs (.getParentFile source-file))
       (spit source-file before)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)
-                     :verification-profiles {"fast" {:commands []}}
-                     :verify! (fn [_root profile _profiles _files]
-                                {:ok true :profile profile :checks []})}
-                    request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands []}}
+                      :verify! (fn [_root profile _profiles _files]
+                                 {:ok true :profile profile :checks []})}
+                     request)]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (= 1 (:changes result)))
@@ -157,18 +157,18 @@
         (is (= after (slurp source-file))
             "every unrelated byte, including the extra EOF newline, survives")
         (let [stale (mcp-tool/execute-request!
-                     {:project-root (.getPath workspace)
-                      :receipt-dir (.getPath receipt-dir)
-                      :verification-profiles {"fast" {:commands []}}
-                      :verify! (fn [_root profile _profiles _files]
-                                 {:ok true :profile profile :checks []})}
-                     request)]
+                      {:project-root (.getPath workspace)
+                       :receipt-dir (.getPath receipt-dir)
+                       :verification-profiles {"fast" {:commands []}}
+                       :verify! (fn [_root profile _profiles _files]
+                                  {:ok true :profile profile :checks []})}
+                      request)]
           (is (false? (:ok stale)))
           (is (= "expect-count-mismatch" (:error_type stale)))
           (is (:source_unchanged stale))
           (is (= after (slurp source-file))))
         (let [undo (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})]
+                     {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (is (= before (slurp source-file)))))
       (finally
@@ -219,7 +219,7 @@
         (is (= first-after (slurp first-file)))
         (is (= second-after (slurp second-file)))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= first-before (slurp first-file)))
         (is (= second-before (slurp second-file))))
       (let [second-mismatch (str/replace second-before
@@ -267,9 +267,9 @@
       (copy-tree! (str fixture-root "/before") workspace)
       (let [refused
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)}
-             (assoc-in request ["programs" 0 "expect" "matches"] 2))]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              (assoc-in request ["programs" 0 "expect" "matches"] 2))]
         (is (false? (:ok refused)))
         (is (= "expected-count-mismatch" (:error_type refused)))
         (is (:source_unchanged refused))
@@ -278,9 +278,9 @@
           (is (= (slurp (io/file fixture-root "before" relative))
                  (slurp (io/file workspace relative))))))
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)}
-                    request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     request)]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (= 6 (:edits result)))
@@ -290,7 +290,7 @@
           (is (= (slurp (io/file fixture-root "after" relative))
                  (slurp (io/file workspace relative)))))
         (let [undo (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})]
+                     {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (doseq [relative ["src/bench/app_shell.clj"
                             "src/bench/source_reader.clj"]]
@@ -319,27 +319,27 @@
       (spit source-file before)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)
-              :formatter ["fixture-formatter" "{files}"]
-              :format-candidates!
-              (fn [_project-root _command future-sources]
-                (swap! formatter-calls inc)
-                {:ok true
-                 :status :complete
-                 :file-count 1
-                 :changed-file-count 1
-                 :elapsed_ms 0.1
-                 :future-sources
-                 (update-vals future-sources
-                              #(str/replace % #"\n\n$" "\n"))})}
-             request)]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 (swap! formatter-calls inc)
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 1
+                  :elapsed_ms 0.1
+                  :future-sources
+                  (update-vals future-sources
+                               #(str/replace % #"\n\n$" "\n"))})}
+              request)]
         (is (:ok result) (pr-str result))
         (is (zero? @formatter-calls)
             "a surgical gesture must not normalize unrelated file bytes")
         (is (= after (slurp source-file)))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
@@ -365,14 +365,14 @@
       (spit source-file before)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)
-              :formatter ["fixture-formatter" "{files}"]
-              :format-candidates!
-              (fn [_project-root _command future-sources]
-                (swap! formatter-calls inc)
-                {:ok true :future-sources future-sources})}
-             request)]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 (swap! formatter-calls inc)
+                 {:ok true :future-sources future-sources})}
+              request)]
         (is (:ok result) (pr-str result))
         (is (= 1 (:changes result)))
         (is (= 2 (:edits result)))
@@ -381,12 +381,13 @@
             "compact deletion preserves unrelated source spelling")
         (is (= after (slurp source-file)))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
 
 (deftest compact-namespace-edit-and-owner-deletion-share-one-transaction
+  ;; @spec MCP-OP-EDIT-005
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")
         source-file (io/file workspace "src/demo.clj")
@@ -404,7 +405,7 @@
         request
         {"edits"
          [{"file" "src/demo.clj"
-           "within" {"namespace" "demo"}
+           "within" {"namespace" true}
            "from" "(:require [sample.old :as old])"
            "to" "(:require\n   [sample.new :as new]\n   [sample.old :as old])"}
           {"file" "src/demo.clj"
@@ -419,16 +420,16 @@
       (spit source-file before)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)}
-             request)]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              request)]
         (is (:ok result) (pr-str result))
         (is (= 3 (:changes result)))
         (is (= 3 (:edits result)))
         (is (= 1 (:files result)))
         (is (= after (slurp source-file)))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
@@ -452,23 +453,23 @@
       (.mkdirs (.getParentFile source-file))
       (spit source-file before)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)}
-                    request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     request)]
         (is (:ok result) (pr-str result))
         (is (= 1 (:changes result)))
         (is (= 2 (:edits result)))
         (is (= after (slurp source-file)))
         (let [stale (mcp-tool/execute-request!
-                     {:project-root (.getPath workspace)
-                      :receipt-dir (.getPath receipt-dir)}
-                     request)]
+                      {:project-root (.getPath workspace)
+                       :receipt-dir (.getPath receipt-dir)}
+                      request)]
           (is (false? (:ok stale)))
           (is (= "expect-count-mismatch" (:error_type stale)))
           (is (:source_unchanged stale))
           (is (= after (slurp source-file))))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
@@ -509,20 +510,20 @@
       (spit source-file original)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)
-              :formatter ["fixture-formatter" "{files}"]
-              :format-candidates!
-              (fn [_project-root _command future-sources]
-                {:ok true
-                 :status :complete
-                 :file-count 1
-                 :changed-file-count 1
-                 :elapsed_ms 0.1
-                 :future-sources
-                 (into {} (map (fn [[file _]] [file formatted]))
-                       future-sources)})}
-             request)]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates!
+               (fn [_project-root _command future-sources]
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 1
+                  :elapsed_ms 0.1
+                  :future-sources
+                  (into {} (map (fn [[file _]] [file formatted]))
+                        future-sources)})}
+              request)]
         (is (:ok result) (pr-str result))
         (is (= 3 (:changes result)))
         (is (= 3 (:edits result)))
@@ -535,7 +536,7 @@
             (is (= 1 (:inverse-edit-count receipt)))
             (is (= 1 (count (get-in receipt [:files 0 :inverse-edits])))))
           (is (:ok (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})))
+                     {:receipt (:undo_receipt result)})))
           (is (= original (slurp source-file)))))
       (finally
         (delete-tree! workspace)))))
@@ -559,22 +560,22 @@
       (spit caller-file caller-original)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)}
-             {:extraction
-              {:file "src/sample/core.clj"
-               :to "src/sample/moved.clj"
-               :forms ["helper"]
-               :require_policy "copy-all"
-               :caller_changes
-               [{:id "redirect-helper"
-                 :files ["src/sample/user.clj"]
-                 :forms ["use-helper"]
-                 :find "sample.core/helper"
-                 :replace "sample.moved/helper"
-                 :expect {:matches 1 :each_form 1 :each_file 1}}]
-               :ignored_caller_files []
-               :expect {:forms 1 :caller_edits 1 :files 3}}})]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {:extraction
+               {:file "src/sample/core.clj"
+                :to "src/sample/moved.clj"
+                :forms ["helper"]
+                :require_policy "copy-all"
+                :caller_changes
+                [{:id "redirect-helper"
+                  :files ["src/sample/user.clj"]
+                  :forms ["use-helper"]
+                  :find "sample.core/helper"
+                  :replace "sample.moved/helper"
+                  :expect {:matches 1 :each_form 1 :each_file 1}}]
+                :ignored_caller_files []
+                :expect {:forms 1 :caller_edits 1 :files 3}}})]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (string? (:receipt_hash result)))
@@ -583,7 +584,7 @@
         (is (false? (get-in result
                             [:caller_proof :zero_callers_authoritative])))
         (is (str/includes? (mcp-tool/concise-summary
-                            (assoc result :elapsed_ms 0.1))
+                             (assoc result :elapsed_ms 0.1))
                            "not semantic completeness"))
         (is (= 1 (:changes result)))
         (is (= 2 (:edits result)))
@@ -611,22 +612,22 @@
     (try
       (copy-tree! (str fixture-root "/before") workspace)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)
-                     :verification-profiles {"fast" {:commands ["ignored"]}}
-                     :verify! (fn [root profile profiles files]
-                                (swap! calls conj
-                                       {:root root :profile profile
-                                        :profiles profiles :files files})
-                                {:ok true :profile profile :checks []})}
-                    (assoc decision-request "verify" "fast"))]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :verify! (fn [root profile profiles files]
+                                 (swap! calls conj
+                                        {:root root :profile profile
+                                         :profiles profiles :files files})
+                                 {:ok true :profile profile :checks []})}
+                     (assoc decision-request "verify" "fast"))]
         (is (:ok result))
         (is (= "fast" (get-in result [:verification :profile])))
         (is (= 1 (count @calls)))
         (is (= "fast" (:profile (first @calls))))
         (is (= 2 (count (:files (first @calls)))))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)}))))
+                   {:receipt (:undo_receipt result)}))))
       (finally
         (delete-tree! workspace)))))
 
@@ -637,13 +638,13 @@
       (cold-verify/clear-jobs!)
       (copy-tree! (str fixture-root "/before") workspace)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)
-                     :verification-profiles
-                     {"full" {:cold {:command ["/bin/sh" "-c"
-                                               "sleep 0.05; printf cold-proof"]
-                                     :timeout-ms 1000}}}}
-                    (assoc decision-request "verify" "full"))
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles
+                      {"full" {:cold {:command ["/bin/sh" "-c"
+                                                "sleep 0.05; printf cold-proof"]
+                                      :timeout-ms 1000}}}}
+                     (assoc decision-request "verify" "full"))
             job (get-in result [:next_call :verification_job])
             cold-result
             (loop [attempt 0]
@@ -662,7 +663,7 @@
         (is (= (:undo_receipt result) (:undo_receipt cold-result)))
         (is (= (:receipt_hash result) (:receipt_hash cold-result)))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)}))))
+                   {:receipt (:undo_receipt result)}))))
       (finally
         (cold-verify/clear-jobs!)
         (delete-tree! workspace)))))
@@ -681,34 +682,34 @@
       (spit source-file before)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)
-              :format-candidates!
-              (fn [root command future-sources]
-                (swap! formatter-calls conj
-                       {:root root :command command
-                        :files (vec (keys future-sources))})
-                {:ok true
-                 :status :complete
-                 :file-count 1
-                 :changed-file-count 0
-                 :elapsed_ms 0.5
-                 :future-sources future-sources})
-              :verification-profiles-fn
-              (fn [] {"fast" {:commands ["ignored"]}})
-              :verify! (fn [_ _ _ _]
-                         {:ok true :profile "fast" :checks []})}
-             {"changes"
-              [{"id" "card-method"
-                "files" ["src/app/render.clj"]
-                "forms" [{"kind" "defmethod"
-                          "name" "render"
-                          "dispatch" ":card"}]
-                "find" ":old"
-                "replace" ":new"
-                "expect" {"matches" 1 "each_form" 1}}]
-              "expect" {"changes" 1 "edits" 1 "files" 1}
-              "verify" "fast"})]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :format-candidates!
+               (fn [root command future-sources]
+                 (swap! formatter-calls conj
+                        {:root root :command command
+                         :files (vec (keys future-sources))})
+                 {:ok true
+                  :status :complete
+                  :file-count 1
+                  :changed-file-count 0
+                  :elapsed_ms 0.5
+                  :future-sources future-sources})
+               :verification-profiles-fn
+               (fn [] {"fast" {:commands ["ignored"]}})
+               :verify! (fn [_ _ _ _]
+                          {:ok true :profile "fast" :checks []})}
+              {"changes"
+               [{"id" "card-method"
+                 "files" ["src/app/render.clj"]
+                 "forms" [{"kind" "defmethod"
+                           "name" "render"
+                           "dispatch" ":card"}]
+                 "find" ":old"
+                 "replace" ":new"
+                 "expect" {"matches" 1 "each_form" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}
+               "verify" "fast"})]
         (is (:ok result))
         (is (= (str "(ns app.render)\n"
                     "(defmulti render :kind)\n"
@@ -722,7 +723,7 @@
         (is (= :complete (get-in result [:format :status])))
         (is (= 0 (get-in result [:format :changed-file-count])))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)})))
+                   {:receipt (:undo_receipt result)})))
         (is (= before (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
@@ -743,30 +744,30 @@
       (spit port-file (:port server))
       (let [result
             (mcp-tool/execute-request!
-             {:project-root project-root
-              :receipt-dir (.getPath receipt-dir)
-              :formatter ["format" "{files}"]
-              :format-candidates!
-              (fn [_ _ future-sources]
-                {:ok true :status :complete :file-count 1
-                 :changed-file-count 0 :elapsed_ms 0.1
-                 :future-sources future-sources})
-              :verification-profiles
-              {"fast"
-               {:commands [["/usr/bin/true"]]
-                :hot {:port-file (str relative-root "/.app-nrepl-port")
-                      :reload []
-                      :tests ["clj-surgeon.mcp-tool-test/hot-transaction-law"]
-                      :timeout-ms 5000}}}}
-             {"changes"
-              [{"id" "render"
-                "files" [(str relative-root "/src/app/render.clj")]
-                "forms" ["render"]
-                "find" ":old"
-                "replace" ":new"
-                "expect" {"matches" 1 "each_form" 1}}]
-              "expect" {"changes" 1 "edits" 1 "files" 1}
-              "verify" "fast"})]
+              {:project-root project-root
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["format" "{files}"]
+               :format-candidates!
+               (fn [_ _ future-sources]
+                 {:ok true :status :complete :file-count 1
+                  :changed-file-count 0 :elapsed_ms 0.1
+                  :future-sources future-sources})
+               :verification-profiles
+               {"fast"
+                {:commands [["/usr/bin/true"]]
+                 :hot {:port-file (str relative-root "/.app-nrepl-port")
+                       :reload []
+                       :tests ["clj-surgeon.mcp-tool-test/hot-transaction-law"]
+                       :timeout-ms 5000}}}}
+              {"changes"
+               [{"id" "render"
+                 "files" [(str relative-root "/src/app/render.clj")]
+                 "forms" ["render"]
+                 "find" ":old"
+                 "replace" ":new"
+                 "expect" {"matches" 1 "each_form" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}
+               "verify" "fast"})]
         (is (:ok result))
         (is (= :complete
                (get-in result [:verification :hot-verification :status])))
@@ -775,7 +776,7 @@
         (is (= "application"
                (get-in result [:verification :hot-verification :jvm])))
         (is (:ok (transaction/execute-undo!
-                  {:receipt (:undo_receipt result)}))))
+                   {:receipt (:undo_receipt result)}))))
       (finally
         (nrepl-server/stop-server server)
         (delete-tree! workspace)))))
@@ -791,17 +792,17 @@
                                          "src/bench/source_reader.clj"]]
                            [relative (slurp (io/file workspace relative))]))
             result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)
-                     :verification-profiles {"fast" {:commands ["ignored"]}}
-                     :capture-verification-baseline!
-                     (fn [_ _ _ _]
-                       {:ok false
-                        :error-type :invalid-diagnostic-output})
-                     :verify! (fn [_ _ _ _]
-                                (reset! verification-called? true)
-                                {:ok true})}
-                    (assoc decision-request "verify" "fast"))]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :capture-verification-baseline!
+                      (fn [_ _ _ _]
+                        {:ok false
+                         :error-type :invalid-diagnostic-output})
+                      :verify! (fn [_ _ _ _]
+                                 (reset! verification-called? true)
+                                 {:ok true})}
+                     (assoc decision-request "verify" "fast"))]
         (is (false? (:ok result)))
         (is (= "verification-baseline-failed" (:error_type result)))
         (is (true? (:source_unchanged result)))
@@ -819,13 +820,13 @@
     (try
       (copy-tree! (str fixture-root "/before") workspace)
       (let [result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)
-                     :verification-profiles {"fast" {:commands ["ignored"]}}
-                     :verify! (fn [_ _ _ _]
-                                {:ok false :profile "fast"
-                                 :checks [{:ok false :exit 1}]})}
-                    (assoc decision-request "verify" "fast"))]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)
+                      :verification-profiles {"fast" {:commands ["ignored"]}}
+                      :verify! (fn [_ _ _ _]
+                                 {:ok false :profile "fast"
+                                  :checks [{:ok false :exit 1}]})}
+                     (assoc decision-request "verify" "fast"))]
         (is (false? (:ok result)))
         (is (= "verification-failed" (:error_type result)))
         (is (true? (:rolled_back result)))
@@ -858,10 +859,10 @@
       (spit source original)
       (testing "a retained pre-existing diagnostic does not block the change"
         (let [result (mcp-tool/execute-request!
-                      {:project-root (.getPath workspace)
-                       :receipt-dir (.getPath receipt-dir)
-                       :verification-profiles profiles}
-                      (request ":new"))]
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath receipt-dir)
+                        :verification-profiles profiles}
+                       (request ":new"))]
           (is (:ok result))
           (is (= 1 (get-in result
                            [:verification :checks 0 :diagnostic-delta
@@ -870,15 +871,15 @@
                              [:verification :checks 0 :diagnostic-delta
                               :blocking-introduced-count])))
           (is (:ok (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})))
+                     {:receipt (:undo_receipt result)})))
           (is (= original (slurp source)))))
 
       (testing "one new diagnostic rolls the complete change back"
         (let [result (mcp-tool/execute-request!
-                      {:project-root (.getPath workspace)
-                       :receipt-dir (.getPath receipt-dir)
-                       :verification-profiles profiles}
-                      (request "another-missing"))]
+                       {:project-root (.getPath workspace)
+                        :receipt-dir (.getPath receipt-dir)
+                        :verification-profiles profiles}
+                       (request "another-missing"))]
           (is (false? (:ok result)))
           (is (= "verification-failed" (:error_type result)))
           (is (true? (:rolled_back result)))
@@ -897,9 +898,9 @@
       (let [before (slurp (io/file workspace "src/bench/app_shell.clj"))
             request (assoc-in decision-request ["changes" 0 "expect" "matches"] 2)
             result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath receipt-dir)}
-                    request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath receipt-dir)}
+                     request)]
         (is (false? (:ok result)))
         (is (= true (:source_unchanged result)))
         (is (= before (slurp (io/file workspace "src/bench/app_shell.clj"))))
@@ -920,16 +921,16 @@
       (spit source-file source)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)}
-             {"changes"
-              [{"id" "ambiguous-gap"
-                "files" ["src/demo.clj"]
-                "forms" ["metrics"]
-                "find" ":input-tokens"
-                "insert_before" [":cached-input-tokens"]
-                "expect" {"matches" 1 "each_file" 1 "each_form" 1}}]
-              "expect" {"changes" 1 "edits" 1 "files" 1}})]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {"changes"
+               [{"id" "ambiguous-gap"
+                 "files" ["src/demo.clj"]
+                 "forms" ["metrics"]
+                 "find" ":input-tokens"
+                 "insert_before" [":cached-input-tokens"]
+                 "expect" {"matches" 1 "each_file" 1 "each_form" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}})]
         (is (= false (:ok result)))
         (is (= "ambiguous-insertion-gap" (:error_type result)))
         (is (= "compile" (:kernel_phase result)))
@@ -947,19 +948,19 @@
                   (swap! loads inc)
                   {"fast" ["true"]})}
         result (mcp-tool/execute-request!
-                config
-                {"basis" "cb-does-not-exist"
-                 "decisions" []
-                 "changes" []})]
+                 config
+                 {"basis" "cb-does-not-exist"
+                  "decisions" []
+                  "changes" []})]
     (is (false? (:ok result)))
     (is (= :invalid-mcp-request (:error-type result)))
     (is (= ["changes"] (:unknown-fields result)))
     (is (:source-unchanged result))
     (is (= :unknown-or-expired-basis
            (:error-type
-            (mcp-tool/execute-request!
-             config
-             {"basis" "cb-does-not-exist" "decisions" []}))))
+             (mcp-tool/execute-request!
+               config
+               {"basis" "cb-does-not-exist" "decisions" []}))))
     (is (= 2 @loads) "the workspace verification profile is read for every basis request")))
 
 (deftest basis-schema-exposes-whole-site-delete-as-a-decision
@@ -979,9 +980,9 @@
     (try
       (spit (io/file outside "outside.clj") "(ns outside)\n(def x :old)\n")
       (Files/createSymbolicLink
-       (.toPath link)
-       (.toPath (io/file outside "outside.clj"))
-       (make-array FileAttribute 0))
+        (.toPath link)
+        (.toPath (io/file outside "outside.clj"))
+        (make-array FileAttribute 0))
       (let [request
             {"changes"
              [{"id" "escape" "files" ["linked.clj"] "forms" ["x"]
@@ -989,9 +990,9 @@
                "expect" {"matches" 1 "each_form" 1}}]
              "expect" {"changes" 1 "edits" 1 "files" 1}}
             result (mcp-tool/execute-request!
-                    {:project-root (.getPath workspace)
-                     :receipt-dir (.getPath (io/file workspace "receipts"))}
-                    request)]
+                     {:project-root (.getPath workspace)
+                      :receipt-dir (.getPath (io/file workspace "receipts"))}
+                     request)]
         (is (false? (:ok result)))
         (is (= "path-outside-project" (:error_type result)))
         (is (= true (:source_unchanged result)))
@@ -1024,11 +1025,11 @@
                           (fn [workspace-root]
                             (is (= (.getCanonicalPath requested-root)
                                    (.toString
-                                    (mcp-paths/real-root workspace-root))))
+                                     (mcp-paths/real-root workspace-root))))
                             (.getPath routed-receipts))]
               (mcp-tool/execute-request!
-               {:project-root (.getPath default-root)}
-               request))]
+                {:project-root (.getPath default-root)}
+                request))]
         (is (:ok result))
         (is (= (.getPath (.getCanonicalFile requested-root))
                (:workspace_root result)))
@@ -1052,17 +1053,17 @@
       (spit source-file original)
       (let [result
             (mcp-tool/execute-request!
-             {:project-root (.getPath workspace)
-              :receipt-dir (.getPath receipt-dir)}
-             {"workspace_root" (.getPath workspace)
-              "changes"
-              [{"id" "namespace-require"
-                "files" ["src/demo.clj"]
-                "owner" {"kind" "namespace" "name" "demo"}
-                "find" "[legacy.api :as legacy]"
-                "replace" "[current.api :as current]"
-                "expect" {"matches" 1 "each_file" 1}}]
-              "expect" {"changes" 1 "edits" 1 "files" 1}})]
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {"workspace_root" (.getPath workspace)
+               "changes"
+               [{"id" "namespace-require"
+                 "files" ["src/demo.clj"]
+                 "owner" {"kind" "namespace" "name" "demo"}
+                 "find" "[legacy.api :as legacy]"
+                 "replace" "[current.api :as current]"
+                 "expect" {"matches" 1 "each_file" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}})]
         (is (:ok result))
         (is (= (.getPath (.getCanonicalFile workspace))
                (:workspace_root result)))
@@ -1122,15 +1123,15 @@
       (is (number? (get-in @calls [1 :payload :elapsed_ms])))
       (when-let [elapsed (get-in @calls [1 :payload :elapsed_ms])]
         (is (str/includes?
-             (get-in @calls [1 :content])
-             (format "%.2f ms" elapsed))))
+              (get-in @calls [1 :content])
+              (format "%.2f ms" elapsed))))
       (is (re-find #"refused · unknown-fields at \[\]"
                    (get-in @calls [1 :content])))
       (is (not (re-find #"\{\"ok\""
                         (get-in @calls [1 :content]))))
       (testing "the handler accepts and executes the same verify field it advertises"
         (is (:ok (transaction/execute-undo!
-                  {:receipt (get-in @calls [0 :payload :undo_receipt])})))
+                   {:receipt (get-in @calls [0 :payload :undo_receipt])})))
         (mcp-tool/handle-clj-change nil
                                     (assoc decision-request "verify" "fast")
                                     callback)
@@ -1139,27 +1140,27 @@
         (is (= "fast" (get-in @calls [2 :payload :verification :profile]))))
       (testing "refusal summaries preserve the actionable diagnostic"
         (is (str/starts-with?
-             (mcp-tool/concise-summary
-              {:ok true
-               :operation "edit_clojure"
-               :edits 2
-               :files 1
-               :elapsed_ms 1.25
-               :verification_complete true})
-             "edit_clojure\n"))
+              (mcp-tool/concise-summary
+                {:ok true
+                 :operation "edit_clojure"
+                 :edits 2
+                 :files 1
+                 :elapsed_ms 1.25
+                 :verification_complete true})
+              "edit_clojure\n"))
         (testing "keyword refusal types and rollback state remain truthful"
           (is (re-find #"refused · verification-failed"
                        (mcp-tool/concise-summary
-                        {:ok false
-                         :error-type :verification-failed
-                         :elapsed_ms 1.25
-                         :rolled-back true})))
+                         {:ok false
+                          :error-type :verification-failed
+                          :elapsed_ms 1.25
+                          :rolled-back true})))
           (is (re-find #"source state requires structured receipt review"
                        (mcp-tool/concise-summary
-                        {:ok false
-                         :error-type :verification-failed
-                         :elapsed_ms 1.25
-                         :rolled-back false}))))
+                         {:ok false
+                          :error-type :verification-failed
+                          :elapsed_ms 1.25
+                          :rolled-back false}))))
         (testing "the exact failed change and field stay visible"
           (is (= (str "apply_clojure_changes\n"
                       "  refused · invalid-intent-form · 2.50 ms\n"
@@ -1167,16 +1168,16 @@
                       "✓ source unchanged\n"
                       "→ Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver).")
                  (mcp-tool/concise-summary
-                  {:ok false
-                   :error_type "invalid-intent-form"
-                   :reason "invalid-intent-form"
-                   :phase "kernel"
-                   :change_index 0
-                   :change_id "gallery-resolver"
-                   :field ":find"
-                   :elapsed_ms 2.5
-                   :source_unchanged true
-                   :remedy "Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver)."})))))
+                   {:ok false
+                    :error_type "invalid-intent-form"
+                    :reason "invalid-intent-form"
+                    :phase "kernel"
+                    :change_index 0
+                    :change_id "gallery-resolver"
+                    :field ":find"
+                    :elapsed_ms 2.5
+                    :source_unchanged true
+                    :remedy "Pass exactly one complete parseable Clojure form in :find for change 0 (gallery-resolver)."})))))
       (finally
         (mcp-tool/init! nil)
         (delete-tree! workspace)))))
@@ -1214,9 +1215,9 @@
       (let [result
             (binding [transaction/*binding-analyzer* (fn [_ _] analysis)]
               (mcp-tool/execute-request!
-               {:project-root (.getPath workspace)
-                :receipt-dir (.getPath receipt-dir)}
-               request))]
+                {:project-root (.getPath workspace)
+                 :receipt-dir (.getPath receipt-dir)}
+                request))]
         (is (:ok result))
         (is (:verification_complete result))
         (is (= 5 (:edits result)))
@@ -1226,7 +1227,7 @@
                     "(defn table [{:keys [] sort-field :sort-by}] (name sort-field))\n")
                (slurp source-file)))
         (let [undo (transaction/execute-undo!
-                    {:receipt (:undo_receipt result)})]
+                     {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (is (= source (slurp source-file)))))
       (finally

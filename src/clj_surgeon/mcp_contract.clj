@@ -280,13 +280,15 @@
                         (validate-fields! value owner-fields required-owner-fields owner-path)
                         (let [kind (nonblank-string! (field value "kind")
                                                      (conj owner-path "kind"))
-                              name (nonblank-string! (field value "name")
-                                                     (conj owner-path "name"))]
+                              name (when (present? value "name")
+                                     (nonblank-string! (field value "name")
+                                                       (conj owner-path "name")))]
                           (when-not (= "namespace" kind)
                             (refuse! :invalid-owner-kind
                                      (conj owner-path "kind")
                                      "Owner kind must be namespace"))
-                          {:kind :namespace :name (symbol name)})))
+                          (cond-> {:kind :namespace}
+                            name (assoc :name (symbol name))))))
               action (first actions)
               action-value
               (cond
@@ -498,6 +500,7 @@
   ;; @spec MCP-OP-EDIT-002
   ;; @spec MCP-OP-EDIT-003
   ;; @spec MCP-OP-EDIT-004
+  ;; @spec MCP-OP-EDIT-005
   (try
     (let [redundant-expect? (present? params "expect")
           params (without-field params "expect")]
@@ -577,11 +580,21 @@
                                      "each_file" matches})
 
                     namespace?
-                    (assoc "owner"
-                           {"kind" "namespace"
-                            "name" (nonblank-string!
-                                     (field within "namespace")
-                                     (conj path "within" "namespace"))}))))
+                    (assoc
+                      "owner"
+                      (let [namespace (field within "namespace")]
+                        (cond
+                          (= true namespace)
+                          {"kind" "namespace"}
+
+                          (and (string? namespace)
+                               (not (str/blank? namespace)))
+                          {"kind" "namespace" "name" namespace}
+
+                          :else
+                          (refuse! :invalid-namespace-scope
+                                   (conj path "within" "namespace")
+                                   "namespace must be true or a non-blank name")))))))
               edits (range))
             deletion-groups
             (when (present? params "delete_owners")

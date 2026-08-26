@@ -76,6 +76,18 @@
            (get-in (contract/tool-params->transaction (:params validated))
                    [:changes 0 :owner])))))
 
+(deftest editor-gesture-infers-the-unique-namespace-location
+  ;; @spec MCP-OP-EDIT-005
+  (let [request (assoc-in gesture-request ["edits" 0 "within"]
+                          {"namespace" true})
+        validated (contract/validate-tool-params request)]
+    (is (:ok validated) (pr-str validated))
+    (is (= {:kind :namespace}
+           (get-in validated [:params :changes 0 :owner])))
+    (is (= {:kind :namespace}
+           (get-in (contract/tool-params->transaction (:params validated))
+                   [:changes 0 :owner])))))
+
 (deftest editor-gesture-tolerates-redundant-aggregate-expect
   (let [validated
         (contract/validate-tool-params

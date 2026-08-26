@@ -115,6 +115,10 @@ an explicit file set, and compiles into the existing frozen multi-file
 transaction. Namespace ownership, named-form ownership, owner deletion, and
 semantic indexing remain source-file capabilities.
 
+A Clojure namespace location may be named explicitly or written as
+`within.namespace=true`. The latter resolves the file's unique `ns` owner so a
+caller need not restate information already present in the target file.
+
 ## Key Design Decisions
 
 ### Finalize results through one explicit operation envelope
