@@ -83,10 +83,12 @@ flowchart TD
     E --> I[Inspect handler]
     E --> X[Exact edit handler]
     E --> P[Prepared change handler]
+    E --> L[Extraction planning handler]
     E --> T[Computed transform handler]
     I --> K[Structural kernel]
     X --> K
     P --> K
+    L --> K
     T --> K
     C --> K
     K --> S[rewrite-clj source snapshot]
@@ -118,6 +120,14 @@ semantic indexing remain source-file capabilities.
 A Clojure namespace location may be named explicitly or written as
 `within.namespace=true`. The latter resolves the file's unique `ns` owner so a
 caller need not restate information already present in the target file.
+
+Extraction planning is a read operation over the same pure compiler and
+workspace snapshot used by extraction execution. It returns a bounded movement
+manifest, complete structural caller evidence, a frozen source identity, and a
+ready-to-fill next call. The model chooses architecture and caller semantics;
+the kernel owns exact form closure, counts, source guards, and failure-atomic
+execution. Planning grants no write authority, and a stale plan refuses before
+mutation.
 
 ## Key Design Decisions
 

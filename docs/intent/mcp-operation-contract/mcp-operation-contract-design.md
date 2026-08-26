@@ -210,6 +210,30 @@ operation receipt, but it does not consume the MCP envelope directly. CLI exit
 status, stdout and stderr, process startup time, and compatibility are separate
 public contracts tracked by `clj-surgeon-9xi`.
 
+## Extraction Planning Boundary
+
+The CLI and MCP share the pure extraction planner, not each other's transport
+contracts. `inspect_clojure` exposes a top-level `plan-extraction` mission that
+captures one deterministic workspace source universe and delegates to
+`extract/compile-plan`. The result contains the public migration manifest,
+complete bounded structural caller evidence, a frozen source hash, and a
+ready-to-fill `apply_clojure_changes` call. Private future-source bytes and
+other executor internals never cross the public boundary.
+
+Structural caller candidates are evidence for model judgment, not proof of
+semantic completeness. The planner does not choose caller changes or ignores.
+The execution request must account for each candidate, and a source hash from a
+prior plan is an exact compare-and-swap guard. A plan never retains mutation
+authority: source changes, missing caller decisions, expectation mismatch, or
+budget overflow refuse before writing.
+
+The existing failure-atomic extraction executor remains the only mutation
+path. Direct one-call extraction may omit a prior source hash because planning
+and commit already share one captured request. Plan-followed extraction binds
+the two requests with the exact hash. Aggregate counts may be derived from the
+authoritative form list, guarded caller changes, and affected file set; legacy
+explicit counts remain accepted and must match.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -242,6 +266,9 @@ existing lossless transaction contract.
 | Intent status gate | `[ ]` needs tests, `[x]` needs code and tests, `[D]` is exempt | Gate only implemented specs; require every non-deferred spec to be fully implemented | Tests preload active intent while genuinely deferred work remains non-blocking. |
 | Prolog retention | Keep only after an independently found native-test gap | Retain unconditionally; never model relational states | A second model earns maintenance cost only by demonstrating additional fault-finding power. |
 | CLI reuse | Defer to a transport-neutral receipt segment | Reuse the MCP envelope directly; duplicate all evidence | Transport semantics differ even when domain evidence overlaps. |
+| Extraction planning entrance | A top-level `inspect_clojure` mission over the shared pure planner | Fifth public tool; typed batch read operation; CLI subprocess | Planning is a coherent workspace-wide read mission, not one file read, and reuses the existing public read envelope. |
+| Plan-to-apply authority | Exact source hash plus explicit caller decisions | Retained in-memory plan; similarity; unguarded replay | The hash is transport-neutral, stale-safe, and grants no implicit write authority. |
+| Workspace source universe | One deterministic shared scanner for planning and execution | Duplicate scans in each handler; semantic index as authority | Both phases must reason over identical eligible paths and exact bytes without another index lifecycle. |
 | EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
 
 ## Open Questions & Future Decisions
