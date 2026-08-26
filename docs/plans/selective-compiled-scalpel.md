@@ -136,6 +136,14 @@ cohort has only one replicate per seat, and native strategy variance remains
 large. The next experiment should test a different representative historical
 shape rather than spend the entire budget estimating this case more precisely.
 
+The single-file public-CFP stratum supplied that generalization. Compact was
+correct in all three fresh Sol/high arms and completed in 30.202, 35.861, and
+30.418 seconds. Native was also correct in every arm and completed in 226.668,
+133.943, and 176.346 seconds. The paired advantages were 7.50x, 3.74x, and
+5.80x; median compact versus native wall was 30.418 versus 176.346 seconds.
+Compact used one MCP call per arm and no discovery. This isolates owner-level
+intent as the scaling mechanism; cross-file atomicity is not required.
+
 ## Future stratum: split the 4,594-line views namespace
 
 Sessionize commit `c4299615dcf6c37b4d929892fb3bb0b6b7a44322` is a valuable

@@ -214,3 +214,30 @@ route. Its native arm was rejected by the route guard after 306.824 seconds
 because it invoked Clojure 14 times. Across all three seats, compact was 3/3
 exact, one call, and refusal-free. Native was 2/3 admissible. No arm was
 repaired, rerun, excluded, or silently promoted into the efficiency denominator.
+
+## Captain's log: one file was enough for a 5.80x median win
+
+The next frozen stratum removed the strongest alternative explanation. Public
+CFP cleanup contained 30 edits in one 484-line file: 22 named owner deletions
+with attached comments, seven route rewrites, and one namespace require edit.
+There was no cross-file atomicity advantage.
+
+| Seat | Order | Compact | Native | Advantage | Correctness |
+|---|---|---:|---:|---:|---|
+| dev-a | compact first | 30.202 s | 226.668 s | 7.50x | both correct |
+| dev-b | native first | 35.861 s | 133.943 s | 3.74x | both correct |
+| dev-c | compact first | 30.418 s | 176.346 s | 5.80x | both correct |
+
+Median complete wall was 30.418 seconds compact versus 176.346 seconds native,
+a 5.80x advantage. Every compact caller used one successful MCP action with no
+source read, refusal, or failed mutation. Native used four or five actions.
+All compact results parsed, were semantically equal, and preserved comments,
+metadata, and unrelated source. Their only oracle difference was presentation:
+the supplied namespace replacement used one-space indentation where the frozen
+expected file used three.
+
+The mechanism therefore generalized beyond batching files. Exact owner names
+let the model avoid reading and reproducing roughly 460 deleted lines. The
+public compact route had no remaining interaction to remove. Further hill
+climbing must move to a harder mission--planning and executing a real namespace
+extraction--rather than adding ceremony to an already one-call path.
