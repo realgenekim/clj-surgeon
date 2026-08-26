@@ -700,7 +700,7 @@
       (finally
         (delete-tree! workspace)))))
 
-(deftest extraction-publicizes-a-required-private-form-in-the-same-transaction
+(deftest direct-extraction-publicizes-a-required-private-form-in-the-same-transaction
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/sample/core.clj")
         target-file (io/file workspace "src/sample/moved.clj")
@@ -711,23 +711,18 @@
     (try
       (.mkdirs (.getParentFile source-file))
       (spit source-file original)
-      (let [plan
-            (extraction-plan/plan!
-              {:project-root (.getPath workspace)}
-              {:mode "plan-extraction"
-               :file "src/sample/core.clj"
-               :to "src/sample/moved.clj"
-               :forms ["helper"]
-               :require_policy "minimal"})
-            result
+      (let [result
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
                :receipt-dir (.getPath receipt-dir)}
-              (:next_call plan))]
-        (is (= ["helper"]
-               (get-in plan [:plan :required-public-forms])))
-        (is (= ["helper"]
-               (get-in plan [:next_call :extraction :public_forms])))
+              {:extraction
+               {:file "src/sample/core.clj"
+                :to "src/sample/moved.clj"
+                :forms ["helper"]
+                :public_forms ["helper"]
+                :require_policy "minimal"
+                :caller_changes []
+                :ignored_caller_files []}})]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (.contains ^String (slurp target-file) "(defn helper "))

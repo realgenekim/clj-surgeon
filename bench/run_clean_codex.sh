@@ -1196,7 +1196,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use exactly one inspect_clojure call with mode=plan-extraction, the supplied file, destination, complete forms list, and require_policy=minimal. Do not read source first. Review the complete manifest and its required public_forms. Copy its hash-bound next_call, then call apply_clojure_changes exactly once after filling only genuinely required caller decisions. Do not use edit_clojure, native source readers, or apply_patch. Treat read_complete=true and verification_complete=true as terminal evidence. After the complete mutation, run the requested clj-kondo command once.' \
+    printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. A successful response with verification_complete=true is terminal mutation evidence. Then run the requested clj-kondo command once.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
@@ -1635,7 +1635,7 @@ run_one() {
   fi
   case "$context" in
     mcp-extraction-hint-no-skill)
-      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
         || [ "$mcp_failures" -ne 0 ] || [ "$verified" != true ] \

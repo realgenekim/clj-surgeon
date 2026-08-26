@@ -312,7 +312,7 @@
                :items {:type "string" :minLength 1}}
       "public_forms"
       {:type "array" :uniqueItems true
-       :description "Moved private defn- forms explicitly authorized to become public. Copy the mechanically required values from plan-extraction."
+       :description "Moved private defn- forms explicitly authorized to become public. Supply task-declared visibility changes directly; otherwise copy the mechanically required values from plan-extraction."
        :items {:type "string" :minLength 1}}
       "require_policy" {:type "string" :enum ["minimal" "copy-all"]}
       "source_hash" {:type "string" :pattern "^[0-9a-f]{64}$"
