@@ -158,3 +158,53 @@ remaining opportunity is to shorten caller deliberation, payload construction,
 and the required foreground verification route while preserving the two-call
 compiled decision. A native-first fresh replay remains necessary before this
 single run becomes a stable performance claim.
+
+## The counterbalance held
+
+The native-first replay used a fresh worktree and fresh arm callers at the same
+commit and on the same Sol/high seat:
+
+| Order | Arm | Complete wall | Correct | Actions | Shell / MCP | Refusals | Route adherent |
+|---|---|---:|---:|---:|---:|---:|---:|
+| MCP first | MCP | 51.322s | true | 3 | 1 / 2 | 0 | true |
+| MCP first | native | 125.971s | false | 6 | 5 / 0 | 0 | true |
+| Native first | native | 121.194s | false | 5 | 4 / 0 | 0 | true |
+| Native first | MCP | 48.559s | true | 3 | 1 / 2 | 0 | true |
+
+Across the two frozen orderings, MCP was correct 2/2 and native was correct
+0/2. Median complete wall was 49.941s for MCP and 123.583s for native, a 2.47x
+complete-task advantage. MCP used three actions in both runs; native used five
+or six. MCP had zero refusals and zero failed mutations in both runs.
+
+The outcome is stable enough to retain the architecture, but the claim remains
+precise: this is a repeated complete-task win against native attempts that did
+not finish correctly. It is stronger than a latency microbenchmark because the
+correct historical refactor was delivered, and weaker than a matched-correctness
+speed ratio because no native arm reached the same result.
+
+The performance decomposition also replicated:
+
+| MCP phase | MCP-first | Native-first |
+|---|---:|---:|
+| Plan inspection | 5.860s | 5.855s |
+| Apply total | 6.963s | 6.852s |
+| Formatter within apply | 1.009s | 0.928s |
+| Complete task | 51.322s | 48.559s |
+
+The compiled server work is remarkably stable. Roughly 36–38.5 seconds per arm
+remain outside plan and apply. That is now the dominant hill: the caller must
+recognize the extraction shape, construct one complete intent, consume the
+receipt, and stop. Further formatter engineering cannot create the desired next
+multiple here; caller-side route compression and a cheaper planning contract
+can.
+
+The retained product decision is therefore:
+
+1. Keep snapshot-bound extraction plan/apply, directory ownership, explicit
+   visibility intent, scoped formatting, and lossless correctness scoring.
+2. Keep the two-call route as the behavioral target; do not add adaptive
+   recovery phases to the successful path.
+3. Hill-climb the 36–38.5 seconds of model-visible deliberation next, using the
+   frozen fixture and both orderings as regression evidence.
+4. Continue reporting exact bytes as secondary evidence, not as the correctness
+   authority when only whitespace or commas differ.
