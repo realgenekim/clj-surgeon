@@ -172,6 +172,14 @@ already apply to mutation. The model chooses the questions and meaning. The
 kernel owns ordering, snapshot reuse, exact resolution, bounded presentation,
 and executable recovery.
 
+The interface must improve as model capability improves. Surgeon exposes the
+complete bounded owner universe, source anchors, typed relation traces, and
+cheap snapshot-bound probes. The model can turn an unsupported owner claim into
+a hypothesis such as "I think you may have meant this owner." The kernel keeps
+that hypothesis separate from authority until an exact relation proves it.
+This separation favors general model reasoning over an expanding catalog of
+tool-owned typo, spelling, or naming heuristics.
+
 ## Key Design Decisions
 
 ### Finalize results through one explicit operation envelope
