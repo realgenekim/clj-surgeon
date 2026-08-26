@@ -311,7 +311,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
@@ -325,6 +325,7 @@ validate_run_matrix() {
       && [ "$context" != no-skill ] \
       && [ "$context" != matched-skill ] \
       && [ "$context" != mcp-hint-no-skill ] \
+      && [ "$context" != mcp-extraction-hint-no-skill ] \
       && [ "$context" != native-computed-hint-no-skill ] \
       && [ "$context" != edit-computed-hint-no-skill ] \
       && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -356,6 +357,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:native-computed-hint-no-skill'
   validate_run_matrix 'mcp:edit-computed-hint-no-skill'
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
   computed_route_adherent native-computed-hint-no-skill 0 0 0 0 1 1 true
@@ -1002,7 +1004,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1035,6 +1037,7 @@ run_one() {
     && [ "$context" != no-skill ] \
     && [ "$context" != matched-skill ] \
     && [ "$context" != mcp-hint-no-skill ] \
+    && [ "$context" != mcp-extraction-hint-no-skill ] \
     && [ "$context" != native-computed-hint-no-skill ] \
     && [ "$context" != edit-computed-hint-no-skill ] \
     && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -1190,6 +1193,10 @@ run_one() {
   fi
   if [ "$context" = 'mcp-hint-no-skill' ]; then
     printf '%s\n' '' 'Use the available edit_clojure tool once for the complete supplied decision. For supplied exact owner deletion, send workspace_root and one delete_owners array; each group has file and forms. For literal edits, send workspace_root and one edits array; each edit has file, exactly one of within.form or within.namespace, from, to, and matches. Use within.namespace=true only for an ns form; the tool resolves the unique namespace owner in that file, so do not repeat namespace names. Do not add a redundant top-level expect or verify. Do not read source or use apply_patch. Named-owner resolution or each from value plus matches is the stale-source guard. A response with verification_complete=true is terminal proof; do not reread or diff afterward.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
+    printf '%s\n' '' 'Use exactly one inspect_clojure call with mode=plan-extraction, the supplied file, destination, complete forms list, and require_policy=minimal. Do not read source first. Review the complete manifest and its required public_forms. Copy its hash-bound next_call, then call apply_clojure_changes exactly once after filling only genuinely required caller decisions. Do not use edit_clojure, native source readers, or apply_patch. Treat read_complete=true and verification_complete=true as terminal evidence. After the complete mutation, run the requested clj-kondo command once.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
@@ -1627,6 +1634,15 @@ run_one() {
     route_adherent=false
   fi
   case "$context" in
+    mcp-extraction-hint-no-skill)
+      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
+        || [ "$mcp_failures" -ne 0 ] || [ "$verified" != true ] \
+        || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
     edit-computed-hint-no-skill|mcp-transform-hint-no-skill)
       if [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
         || [ "$verified" != true ] || [ "$single_change_transaction" != true ] \

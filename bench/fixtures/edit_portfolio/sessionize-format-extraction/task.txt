@@ -1,0 +1,34 @@
+Extract the historical formatting unit from the 4,594-line namespace
+src/cfp_scheduler_killer/views.clj into the new, currently absent namespace
+src/cfp_scheduler_killer/views/format.clj.
+
+Move exactly these 15 named top-level forms:
+
+- date-fmt
+- datetime-fmt
+- ->local-date
+- fmt-date
+- fmt-date-range
+- fmt-instant
+- ->instant
+- when-fmt
+- relative-when
+- fmt-when
+- fmt-cfp-window
+- iso-date-fmt
+- fmt-close-date
+- cfp-public-url
+- not-blank
+
+Use a dependency-minimal destination namespace. Preserve the complete moved
+forms, attached comments, behavior, and every unrelated source form. Update the
+source namespace and its remaining callers so they continue to use the moved
+Vars from the destination. `not-blank` is private in the monolith but is called
+by remaining source forms; make only that moved definition public. Do not make
+any other visibility change.
+
+The result must parse as Clojure and produce no clj-kondo errors. Run:
+
+clj-kondo --lint src/cfp_scheduler_killer/views.clj src/cfp_scheduler_killer/views/format.clj --fail-level error
+
+Complete the extraction and briefly report the route and verification result.

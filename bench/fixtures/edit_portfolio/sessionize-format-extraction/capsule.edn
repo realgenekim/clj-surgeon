@@ -1,0 +1,19 @@
+{:id :sessionize-format-extraction
+ :decision-boundary :exact-extraction-roots-and-destination-supplied
+ :provenance
+ {:kind :real-task-derived
+  :source "sessionize-sched-killer commit c4299615dcf6c37b4d929892fb3bb0b6b7a44322 and its 2026-08-10 views namespace split plan"
+  :minimized "one historical 15-form format extraction from the 4,594-line monolith; retains real comments, dependencies, 24 remaining-source caller owners, private not-blank visibility migration, and absent destination creation"}
+ :targets ["src/cfp_scheduler_killer/views.clj"
+           "src/cfp_scheduler_killer/views/format.clj"]
+ :hashes
+ {"src/cfp_scheduler_killer/views.clj"
+  {:before "1bb5f54fff571b8ca52da124f811b2b1656dc87c0cf05e49868bce5a3bcdca09"
+   :after "ec488c383a8a23934d97ec1f45db70bf19bb05718536643e9ceb56b60a4fd958"}
+  "src/cfp_scheduler_killer/views/format.clj"
+  {:before nil
+   :after "bdaf9cdc5b748b22563c575d8a8278c3634ef8b44d2b187f4e23374ca9e9c0f1"}}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
+ :expected {:changed-files 2 :moved-forms 15}}

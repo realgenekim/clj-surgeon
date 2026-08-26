@@ -43,7 +43,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -77,6 +77,7 @@ help:
 	@echo "  make benchmark-edit-portfolio-self-test Verify edit capsules and harness without model calls"
 	@echo "  make benchmark-anvil-compiled-edit-canary RESULT_DIR=/abs/path LATIN_ROW=1 [REPLICATES=1] Compare transform/edit/native"
 	@echo "  make benchmark-anvil-public-cfp-cleanup RESULT_DIR=/abs/path ORDER=compact-first [REPLICATES=1] Compare compact/native extraction cleanup"
+	@echo "  make benchmark-anvil-format-extraction RESULT_DIR=/abs/path ORDER=mcp-first [REPLICATES=1] Compare two-call MCP/native extraction"
 	@echo "  make benchmark-anvil-portfolio-pair RESULT_DIR=/abs/path TASK=decision-batch-edit ORDER=compact-first [REPLICATES=1] Compare any frozen capsule"
 	@echo "  make benchmark-inspect-mcp     Compare persistent inspect, CLI, and native reads"
 	@echo "  make benchmark-inspect-mcp-self-test Verify the inspect harness without model calls"
@@ -553,6 +554,11 @@ benchmark-anvil-public-cfp-cleanup:
 	@test -n "$(ORDER)" || { echo "ORDER=compact-first or native-first is required"; exit 2; }
 	bash bench/run_anvil_public_cfp_cleanup.sh "$(RESULT_DIR)" "$(ORDER)" "$(or $(REPLICATES),1)"
 
+benchmark-anvil-format-extraction:
+	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
+	@test -n "$(ORDER)" || { echo "ORDER=mcp-first or native-first is required"; exit 2; }
+	bash bench/run_anvil_format_extraction.sh "$(RESULT_DIR)" "$(ORDER)" "$(or $(REPLICATES),1)"
+
 benchmark-anvil-portfolio-pair:
 	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
 	@test -n "$(TASK)" || { echo "TASK must name a frozen edit-portfolio capsule"; exit 2; }
@@ -564,6 +570,8 @@ benchmark-anvil-portfolio-pair-self-test:
 		/tmp/clj-surgeon-anvil-pair-self-test decision-batch-edit compact-first 2
 	ANVIL_PAIR_CONFIG_SELF_TEST=true bash bench/run_anvil_public_cfp_cleanup.sh \
 		/tmp/clj-surgeon-public-cfp-self-test native-first 1
+	ANVIL_FORMAT_CONFIG_SELF_TEST=true bash bench/run_anvil_format_extraction.sh \
+		/tmp/clj-surgeon-format-extraction-self-test mcp-first 1
 
 benchmark-inspect-mcp:
 	bash bench/run_inspect_mcp_benchmark.sh
