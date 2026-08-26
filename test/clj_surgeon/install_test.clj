@@ -171,10 +171,13 @@
         (is (str/includes? out target))))))
 
 (deftest mcp-reload-manifest-covers-the-routed-runtime
+  ;; @spec MCP-OP-READ-PARITY-001
   (let [makefile (slurp (str (fs/path project-root "Makefile")))]
     (doseq [namespace ["clj-surgeon.file-ops"
                        "clj-surgeon.outline"
                        "clj-surgeon.structural-lens"
+                       "clj-surgeon.owner-hypotheses"
+                       "clj-surgeon.show-form"
                        "clj-surgeon.intent-transaction"
                        "clj-surgeon.mcp-paths"
                        "clj-surgeon.mcp-workspace"
