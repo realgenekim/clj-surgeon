@@ -52,6 +52,14 @@ tests witness the requirement.
 - [x] **MCP-OP-EDIT-004**: When a root-scoped EDN edit succeeds, clj-surgeon shall parse and read back every future file and preserve all bytes outside the exact replaced subtrees, including comments and metadata.
 - [x] **MCP-OP-EDIT-005**: When a compact Clojure edit uses `within.namespace=true`, clj-surgeon shall resolve the file's unique namespace form without requiring the caller to repeat its name, and shall refuse before writing if that owner is not unique.
 
+## Extraction Planning
+
+- [x] **MCP-OP-PLAN-001**: When `inspect_clojure` receives a valid `plan-extraction` mission, clj-surgeon shall compile the result through the same pure extraction planner used by execution and shall not write or retain mutation authority.
+- [x] **MCP-OP-PLAN-002**: When extraction planning succeeds, clj-surgeon shall return the complete bounded structural caller and quoted-Var evidence, exact returned and omitted counts, and no private future-source fields.
+- [x] **MCP-OP-PLAN-003**: When extraction planning succeeds, clj-surgeon shall return one ready-to-fill `apply_clojure_changes` call containing the exact planned forms, destination, require policy, workspace root, and frozen source hash while leaving semantic caller decisions to the caller.
+- [x] **MCP-OP-PLAN-004**: If a plan-followed extraction supplies a source hash that differs from the executor's fresh source snapshot, clj-surgeon shall refuse before changing any file.
+- [x] **MCP-OP-PLAN-005**: When extraction omits aggregate expectations, clj-surgeon shall derive them from the exact forms, guarded caller edits, and affected files; when explicit expectations are supplied, they remain authoritative and a mismatch refuses.
+
 ## Misreadings and Boundaries
 
 | Intent | Plausible wrong reading to prevent | Boundary examples |
@@ -79,6 +87,11 @@ tests witness the requirement.
 | `MCP-OP-TRACE-003` | Marking a spec implemented is documentation enough even when code or test linkage disappeared. | Missing code annotation; missing direct test; helper-only annotation. |
 | `MCP-OP-TRACE-004` | Deferred intent must carry placeholder code or a skipped test to satisfy traceability. | No witnesses; accidental witness to deferred ID; transition from deferred to active gap. |
 | `MCP-OP-ORACLE-001` | Keeping a Prolog file in the repository is sufficient even if the normal suite never runs it. | Missing `swipl`; expected-fail case begins succeeding; oracle command exits nonzero. |
+| `MCP-OP-PLAN-001` | MCP should shell out to the CLI planner or retain an opaque write-capable plan. | Pure compiler parity; source unchanged; no retained basis or mutation token. |
+| `MCP-OP-PLAN-002` | A top-ranked caller sample is enough, or private future bytes may be returned because the caller already requested a plan. | Zero, one, and many callers; quoted Vars; result budget overflow; private underscore-prefixed fields. |
+| `MCP-OP-PLAN-003` | The kernel may guess caller rewrites or mark structural candidates as semantically complete. | Empty decision arrays; exact candidate list; explicit ignored files; source hash in next call. |
+| `MCP-OP-PLAN-004` | Named forms are sufficient stale guards across two calls, or a stale plan can be automatically recomputed during apply. | Source changed inside moved owner; source changed elsewhere; destination appears after planning. |
+| `MCP-OP-PLAN-005` | Derived aggregate counts weaken exact per-edit guards, or legacy explicit counts may be silently ignored. | No callers; several caller edits; repeated caller file; explicit count too high or low. |
 
 ## Deferred Surface
 

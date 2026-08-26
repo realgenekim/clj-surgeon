@@ -311,6 +311,8 @@
       "forms" {:type "array" :minItems 1 :uniqueItems true
                :items {:type "string" :minLength 1}}
       "require_policy" {:type "string" :enum ["minimal" "copy-all"]}
+      "source_hash" {:type "string" :pattern "^[0-9a-f]{64}$"
+                     :description "Optional frozen source hash returned by plan-extraction."}
       "caller_changes" (assoc (get-in explicit-change-schema
                                       [:properties "changes"])
                               :minItems 0)
@@ -326,7 +328,7 @@
         "files" positive-integer-schema}
        :required ["forms" "caller_edits" "files"]}}
      :required ["file" "to" "forms" "require_policy" "caller_changes"
-                "ignored_caller_files" "expect"]}
+                "ignored_caller_files"]}
     "verify" verification-schema}
    :required ["extraction"]})
 

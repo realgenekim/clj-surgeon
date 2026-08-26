@@ -165,6 +165,13 @@ and guarded extraction reduce complete verified refactor time versus a strong
 native agent. Preserve one extraction per fixture and commit; do not turn the
 whole historical campaign into one contrived mega-prompt.
 
+The first snapshot-bound MCP extraction manifest is now live. It reuses the
+CLI planner and existing atomic executor, returns a hash-fenced ready-to-fill
+apply call, and succeeded in a local two-call dogfood. The real `format` stratum
+must now test two newly observed costs: structural caller false positives and a
+roughly 12-second formatter startup. Measure both explicitly rather than
+crediting projected call compression as a win.
+
 ## Product decisions
 
 ### 1. Make the selective route explicit

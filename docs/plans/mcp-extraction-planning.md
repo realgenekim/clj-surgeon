@@ -150,3 +150,22 @@ meaning-bearing source preservation, and exact-byte presentation separately.
 The improvement earns default routing only if it reduces complete task time or
 risk on the real extraction stratum. Fast server execution alone is not a win.
 
+## Implementation checkpoint: 2026-08-26
+
+The first vertical slice is live on the experiment branch:
+
+- `inspect_clojure mode=plan-extraction` calls the production pure planner;
+- planning and execution share deterministic workspace source enumeration;
+- public plans strip private future-source fields and carry exact evidence
+  counts;
+- `next_call` carries a frozen source hash and empty semantic decision arrays;
+- apply derives aggregate counts while preserving explicit-count compatibility;
+- stale source refuses before extraction compilation; and
+- `make mcp-reload` publishes the schema without restarting port 7888.
+
+The public two-call dogfood succeeded. Plan took 421.61 ms. Apply took
+12,570.92 ms, of which 12,060.17 ms belonged to formatter startup. A generic
+owner name also produced 29 structural candidates for one real caller. These
+two findings define the immediate hill climb: reduce formatter fixed cost and
+improve caller-candidate precision without truncating evidence or introducing
+heuristic authority.

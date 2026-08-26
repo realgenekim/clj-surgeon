@@ -391,7 +391,7 @@
 
 (def extraction-fields
   #{"file" "to" "forms" "require_policy" "caller_changes"
-    "ignored_caller_files" "expect"})
+    "ignored_caller_files" "expect" "source_hash"})
 
 (def extraction-expect-fields #{"forms" "caller_edits" "files"})
 
@@ -402,6 +402,8 @@
              "Expected a non-negative integer" {:actual value}))
   value)
 
+;; @spec MCP-OP-PLAN-003
+;; @spec MCP-OP-PLAN-005
 (defn validate-extraction-tool-params
   [params]
   (let [params (json-containers->clj params)]
@@ -409,7 +411,9 @@
       (validate-fields! params #{"workspace_root" "extraction" "verify"}
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
-        (validate-fields! raw extraction-fields extraction-fields ["extraction"])
+        (validate-fields! raw extraction-fields
+                          (disj extraction-fields "expect" "source_hash")
+                          ["extraction"])
         (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
               to (clojure-source-path! (field raw "to") ["extraction" "to"])
               forms (mapv #(nonblank-string! % ["extraction" "forms"])
@@ -435,15 +439,32 @@
                   (refuse! :duplicate-path ["extraction" "ignored_caller_files"]
                            "Ignored caller paths must be unique"))
               raw-expect (field raw "expect")
-              _ (validate-fields! raw-expect extraction-expect-fields
-                                  extraction-expect-fields ["extraction" "expect"])
-              expect {:forms (positive-integer! (field raw-expect "forms")
-                                                ["extraction" "expect" "forms"])
-                      :caller-edits
-                      (nonnegative-integer! (field raw-expect "caller_edits")
-                                            ["extraction" "expect" "caller_edits"])
-                      :files (positive-integer! (field raw-expect "files")
-                                                ["extraction" "expect" "files"])}
+              derived-expect
+              {:forms (count forms)
+               :caller-edits (reduce + (map #(get-in % [:expect :matches]) callers))
+               :files (count (distinct (concat [file to]
+                                               (mapcat :files callers))))}
+              expect
+              (if (present? raw "expect")
+                (do
+                  (validate-fields! raw-expect extraction-expect-fields
+                                    extraction-expect-fields ["extraction" "expect"])
+                  {:forms (positive-integer! (field raw-expect "forms")
+                                             ["extraction" "expect" "forms"])
+                   :caller-edits
+                   (nonnegative-integer! (field raw-expect "caller_edits")
+                                         ["extraction" "expect" "caller_edits"])
+                   :files (positive-integer! (field raw-expect "files")
+                                             ["extraction" "expect" "files"])})
+                derived-expect)
+              source-hash
+              (when (present? raw "source_hash")
+                (nonblank-string! (field raw "source_hash")
+                                  ["extraction" "source_hash"]))
+              _ (when (and source-hash
+                           (not (re-matches #"[0-9a-f]{64}" source-hash)))
+                  (refuse! :invalid-source-hash ["extraction" "source_hash"]
+                           "source_hash must be a lowercase SHA-256 hex string"))
               verify (when (present? params "verify")
                        (nonblank-string! (field params "verify") ["verify"]))
               normalized {:file file :to to :forms forms
@@ -451,6 +472,8 @@
                           :caller-changes callers
                           :ignored-caller-files ignored
                           :expect expect}
+              normalized (cond-> normalized
+                           source-hash (assoc :source-hash source-hash))
               validation (mcp-extraction/validate-request normalized)]
           (when-not (:ok validation)
             (refuse! (:error-type validation) ["extraction"]

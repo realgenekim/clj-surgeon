@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-compact-edit-test]
    [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-extraction-plan-test]
    [clj-surgeon.mcp-extraction-test]
    [clj-surgeon.mcp-hot-verify-test]
    [clj-surgeon.mcp-http-server-test]
@@ -33,6 +34,7 @@
         (run-tests
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-extraction-test
+          'clj-surgeon.mcp-extraction-plan-test
           'clj-surgeon.mcp-change-buffer-test
           'clj-surgeon.mcp-cold-verify-test
           'clj-surgeon.mcp-compact-edit-test

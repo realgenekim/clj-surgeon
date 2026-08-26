@@ -5,6 +5,7 @@
    [clj-surgeon.forms :as forms]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-extraction-plan :as extraction-plan]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -21,7 +22,7 @@
     "outlines, exact structural matches, and X-ray requests. Use "
     "include_source=false on forms requests when only names, ranges, counts, "
     "and hashes are needed; omit it when exact form source is needed. Use "
-    "mode=prepare-change when one Var or related Var set names the goal but "
+    "mode=plan-extraction when exact roots and destination are known but caller migration evidence is not; copy its hash-bound next_call and fill only caller decisions. Use mode=prepare-change when one Var or related Var set names the goal but "
     "exact sites are unknown. Its caller proof unions resolved references with "
     "lossless #'x and (var x) references; every surface site names its authority. "
     "Every returned named form includes a ready-to-use source_anchor for resolve_var_surface; copy it instead of making an unanchored workspace-symbol query. For an unindexed file, use file plus form to "
@@ -191,17 +192,37 @@
     "verification_job" {:type "string" :pattern "^verify/.+"}}
    :required ["verification_job" "view"]})
 
+(def extraction-plan-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "mode" {:type "string" :enum ["prepare-change" "plan-extraction"]}
+    "file" source-file-schema
+    "to" source-file-schema
+    "forms" {:type "array" :minItems 1 :uniqueItems true
+             :items {:type "string" :minLength 1}}
+    "require_policy" {:type "string" :enum ["minimal" "copy-all"]}}
+   :required ["mode" "file" "to" "forms" "require_policy"]})
+
 (def inspect-schema
   {:type "object"
    :additionalProperties false
    :properties (merge (:properties typed-inspect-schema)
                       (:properties prepare-change-schema)
                       (:properties basis-view-schema)
-                      (:properties verification-job-schema))
+                      (:properties verification-job-schema)
+                      (:properties extraction-plan-schema))
    :oneOf [{:required ["requests" "expect"]}
-           {:required ["mode" "subject" "intent"]}
-           {:required ["mode" "subjects" "intent"]}
-           {:required ["mode" "file" "form" "intent"]}
+           {:properties {"mode" {:const "prepare-change"}}
+            :required ["mode" "subject" "intent"]}
+           {:properties {"mode" {:const "prepare-change"}}
+            :required ["mode" "subjects" "intent"]}
+           {:properties {"mode" {:const "prepare-change"}}
+            :required ["mode" "file" "form" "intent"]}
+           {:properties {"mode" {:const "plan-extraction"}}
+            :required ["mode" "file" "to" "forms" "require_policy"]}
            {:required ["basis" "view" "open"]}
            {:required ["verification_job" "view"]}]})
 
@@ -427,6 +448,19 @@
       (mcp-operation/format-elapsed-ms (:elapsed_ms result))
       buffer-lines)))
 
+(defn extraction-plan-summary
+  [result]
+  (format
+    (str "inspect_clojure · plan-extraction\n"
+         "  %s forms · %s caller candidates · %s quoted Vars · %s\n\n"
+         "✓ source snapshot frozen\n"
+         "✓ no mutation authority retained\n"
+         "→ fill next_call caller decisions, then call apply_clojure_changes once")
+    (get-in result [:plan :form-count])
+    (get-in result [:evidence_counts :caller_candidates :returned])
+    (get-in result [:evidence_counts :quoted_var_references :returned])
+    (mcp-operation/format-elapsed-ms (:elapsed_ms result))))
+
 (defn verification-job-summary
   "Render one bounded cold-verification job without repeating its full output."
   [result]
@@ -577,9 +611,10 @@
   (let [started (System/nanoTime)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
+        extraction-plan? (= "plan-extraction" (:mode normalized-params))
         basis-view? (= "sites" (:view normalized-params))
         verification-job? (= "verification" (:view normalized-params))
-        validated (when-not (or prepare? basis-view? verification-job?)
+        validated (when-not (or prepare? extraction-plan? basis-view? verification-job?)
                     (inspect/validate-inspect-params params))
         result
         (assoc
@@ -593,6 +628,9 @@
                              :mode "verification-job")
                 (= :running (:status observed))
                 (dissoc :job_elapsed_ms)))
+
+            extraction-plan?
+            (extraction-plan/plan! config normalized-params)
 
             prepare?
             (change-buffer/prepare-change!
@@ -673,6 +711,9 @@
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
 
+    (= "plan-extraction" (:mode result))
+    (extraction-plan-summary result)
+
     (= "basis-view" (:mode result))
     (basis-view-summary result)
 
@@ -682,7 +723,7 @@
 (defn- enforce-result-budget
   [raw-result]
   (if (and (:ok raw-result)
-           (#{"prepare-change" "basis-view"} (:mode raw-result)))
+           (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
     (enforce-public-result-budget
       (inspect-summary (assoc raw-result :elapsed_ms 0.0))
       raw-result)

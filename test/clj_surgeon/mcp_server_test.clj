@@ -91,7 +91,11 @@
     (is (str/includes? inspect-tool/tool-description
                        "read_complete=true is terminal"))
     (testing "prepare-change publishes its exact-source route and label grammar"
-      (is (some #(= {:required ["mode" "file" "form" "intent"]} %)
+      (is (some #(= {:properties {"mode" {:const "prepare-change"}}
+                     :required ["mode" "file" "form" "intent"]} %)
+                (get-in tools [0 :schema :oneOf])))
+      (is (some #(= {:properties {"mode" {:const "plan-extraction"}}
+                     :required ["mode" "file" "to" "forms" "require_policy"]} %)
                 (get-in tools [0 :schema :oneOf])))
       (is (some #(= {:required ["verification_job" "view"]} %)
                 (get-in tools [0 :schema :oneOf])))
@@ -117,7 +121,7 @@
       (is (= false
              (get-in tools [1 :schema :properties "changes" :items :additionalProperties])))
       (is (= #{"file" "to" "forms" "require_policy" "caller_changes"
-               "ignored_caller_files" "expect"}
+               "ignored_caller_files"}
              (set (get-in tools [1 :schema :properties "extraction" :required]))))
       (let [[owner-rule action-rule]
             (get-in tools [1 :schema :properties "changes" :items :allOf])]

@@ -43,12 +43,15 @@
 
 (deftest public-schema-exposes-one-mutually-exclusive-extraction-transaction
   (is (= #{"file" "to" "forms" "require_policy" "caller_changes"
-           "ignored_caller_files" "expect"}
+           "ignored_caller_files"}
          (set (get-in schema/clj-change-schema
                       [:properties "extraction" :required]))))
   (is (= ["minimal" "copy-all"]
          (get-in schema/clj-change-schema
                  [:properties "extraction" :properties "require_policy" :enum])))
+  (is (= "^[0-9a-f]{64}$"
+         (get-in schema/clj-change-schema
+                 [:properties "extraction" :properties "source_hash" :pattern])))
   (is (= 0
          (get-in schema/clj-change-schema
                  [:properties "extraction" :properties "expect" :properties

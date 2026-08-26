@@ -3,6 +3,7 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-extraction-plan :as extraction-plan]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -558,7 +559,15 @@
       (.mkdirs (.getParentFile source-file))
       (spit source-file original)
       (spit caller-file caller-original)
-      (let [result
+      (let [plan
+            (extraction-plan/plan!
+              {:project-root (.getPath workspace)}
+              {:mode "plan-extraction"
+               :file "src/sample/core.clj"
+               :to "src/sample/moved.clj"
+               :forms ["helper"]
+               :require_policy "copy-all"})
+            result
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
                :receipt-dir (.getPath receipt-dir)}
@@ -567,6 +576,7 @@
                 :to "src/sample/moved.clj"
                 :forms ["helper"]
                 :require_policy "copy-all"
+                :source_hash (:source_hash plan)
                 :caller_changes
                 [{:id "redirect-helper"
                   :files ["src/sample/user.clj"]
@@ -574,8 +584,10 @@
                   :find "sample.core/helper"
                   :replace "sample.moved/helper"
                   :expect {:matches 1 :each_form 1 :each_file 1}}]
-                :ignored_caller_files []
-                :expect {:forms 1 :caller_edits 1 :files 3}}})]
+                :ignored_caller_files []}})]
+        (is (:ok plan) (pr-str plan))
+        (is (= ["src/sample/user.clj"]
+               (get-in plan [:plan :callers-to-review])))
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (string? (:receipt_hash result)))

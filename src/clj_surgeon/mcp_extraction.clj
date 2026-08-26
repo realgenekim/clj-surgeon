@@ -44,7 +44,7 @@
 
 (defn validate-request
   [{:keys [file to forms require-policy expect caller-changes
-           ignored-caller-files]
+           ignored-caller-files source-hash]
     :as request}]
   (cond
     (not (map? request))
@@ -79,6 +79,13 @@
     (refusal :invalid-require-policy
              "extraction.require_policy must be minimal or copy-all"
              {:require-policy require-policy})
+
+    (and source-hash
+         (or (not (string? source-hash))
+             (not (re-matches #"[0-9a-f]{64}" source-hash))))
+    (refusal :invalid-source-hash
+             "extraction.source_hash must be a lowercase SHA-256 hex string"
+             {})
 
     (not (map? expect))
     (refusal :invalid-extraction-expect
@@ -133,103 +140,110 @@
                 :edits expected-edits
                 :files (count (caller-files changes))}})))
 
+;; @spec MCP-OP-PLAN-004
 (defn compile-extraction
   "Compile extraction and exact caller changes against one captured snapshot."
   [{:keys [file to forms require-policy expect source target-ns
-           workspace-sources caller-changes ignored-caller-files]
+           workspace-sources caller-changes ignored-caller-files source-hash]
     :or {require-policy :minimal workspace-sources {}
          caller-changes [] ignored-caller-files []}
     :as request}]
   (let [validation (validate-request request)]
     (if-not (:ok validation)
       validation
-      (let [plan (extract/compile-plan
-                   {:file file
-                    :source source
-                    :forms forms
-                    :to to
-                    :target-ns target-ns
-                    :workspace-sources workspace-sources
-                    :require-policy require-policy})]
-        (cond
-          (:error plan)
-          (refusal :extraction-plan-refused (:error plan) {})
+      (if (and source-hash
+               (not= source-hash (structural-lens/source-hash source)))
+        (refusal :source-hash-mismatch
+                 "The extraction source changed after planning"
+                 {:expected source-hash
+                  :actual (structural-lens/source-hash source)})
+        (let [plan (extract/compile-plan
+                     {:file file
+                      :source source
+                      :forms forms
+                      :to to
+                      :target-ns target-ns
+                      :workspace-sources workspace-sources
+                      :require-policy require-policy})]
+          (cond
+            (:error plan)
+            (refusal :extraction-plan-refused (:error plan) {})
 
-          (not= (:forms expect) (:form-count plan))
-          (refusal :extraction-count-mismatch
-                   "The compiled extraction form count did not match expect.forms"
-                   {:expected (:forms expect)
-                    :actual (:form-count plan)})
+            (not= (:forms expect) (:form-count plan))
+            (refusal :extraction-count-mismatch
+                     "The compiled extraction form count did not match expect.forms"
+                     {:expected (:forms expect)
+                      :actual (:form-count plan)})
 
-          :else
-          (try
-            (let [future
-                  (extract/compile-candidates
-                    {:source source
-                     :source-file file
-                     :target-file to
-                     :form-ranges (:_form-texts plan)
-                     :target-source (:_new-file-content plan)
-                     :target-ns target-ns
-                     :target-alias (:target-alias plan)
-                     :source-referred-forms (:_source-referred-forms plan)})
-                  changed-caller-files (caller-files caller-changes)
-                  forbidden (set/intersection #{file to} changed-caller-files)
-                  candidates (set/union
-                               (set (:callers-to-review plan))
-                               (set (map :file (:quoted-var-references plan))))
-                  accounted (set/union changed-caller-files
-                                       (set ignored-caller-files))
-                  omitted (set/difference candidates accounted)
-                  caller-sources (select-keys workspace-sources
-                                              changed-caller-files)
-                  caller-result (compile-callers
-                                  caller-sources caller-changes
-                                  (:caller-edits expect))
-                  originals (merge (sorted-map file source)
-                                   (:original-sources caller-result))
-                  futures (merge (sorted-map file (:source future)
-                                             to (:target future))
-                                 (:future-sources caller-result))
-                  actual-files (count futures)]
-              (cond
-                (seq forbidden)
-                (refusal :caller-change-path-collision
-                         "caller_changes may not target extraction.file or extraction.to"
-                         {:files (vec (sort forbidden))})
+            :else
+            (try
+              (let [future
+                    (extract/compile-candidates
+                      {:source source
+                       :source-file file
+                       :target-file to
+                       :form-ranges (:_form-texts plan)
+                       :target-source (:_new-file-content plan)
+                       :target-ns target-ns
+                       :target-alias (:target-alias plan)
+                       :source-referred-forms (:_source-referred-forms plan)})
+                    changed-caller-files (caller-files caller-changes)
+                    forbidden (set/intersection #{file to} changed-caller-files)
+                    candidates (set/union
+                                 (set (:callers-to-review plan))
+                                 (set (map :file (:quoted-var-references plan))))
+                    accounted (set/union changed-caller-files
+                                         (set ignored-caller-files))
+                    omitted (set/difference candidates accounted)
+                    caller-sources (select-keys workspace-sources
+                                                changed-caller-files)
+                    caller-result (compile-callers
+                                    caller-sources caller-changes
+                                    (:caller-edits expect))
+                    originals (merge (sorted-map file source)
+                                     (:original-sources caller-result))
+                    futures (merge (sorted-map file (:source future)
+                                               to (:target future))
+                                   (:future-sources caller-result))
+                    actual-files (count futures)]
+                (cond
+                  (seq forbidden)
+                  (refusal :caller-change-path-collision
+                           "caller_changes may not target extraction.file or extraction.to"
+                           {:files (vec (sort forbidden))})
 
-                (seq omitted)
-                (refusal :unaccounted-extraction-callers
-                         "Every extraction caller candidate must be changed or explicitly ignored"
-                         {:files (vec (sort omitted))})
+                  (seq omitted)
+                  (refusal :unaccounted-extraction-callers
+                           "Every extraction caller candidate must be changed or explicitly ignored"
+                           {:files (vec (sort omitted))})
 
-                (not (:ok caller-result))
-                caller-result
+                  (not (:ok caller-result))
+                  caller-result
 
-                (not= (:files expect) actual-files)
-                (refusal :extraction-file-count-mismatch
-                         "The compiled file count did not match expect.files"
-                         {:expected (:files expect) :actual actual-files})
+                  (not= (:files expect) actual-files)
+                  (refusal :extraction-file-count-mismatch
+                           "The compiled file count did not match expect.files"
+                           {:expected (:files expect) :actual actual-files})
 
-                :else
-                {:ok true
-                 :operation :compiled-extraction
-                 :caller-proof structural-caller-proof
-                 :file file
-                 :to to
-                 :forms (:forms-to-extract plan)
-                 :form-count (:form-count plan)
-                 :caller-edit-count (:match-count caller-result)
-                 :require-policy (:require-policy plan)
-                 :callers-to-review (:callers-to-review plan)
-                 :quoted-var-references (:quoted-var-references plan)
-                 :original-sources originals
-                 :future-sources futures
-                 :created-files [to]}))
-            (catch Exception error
-              (refusal :invalid-extraction-result
-                       (.getMessage error)
-                       {}))))))))
+                  :else
+                  {:ok true
+                   :operation :compiled-extraction
+                   :caller-proof structural-caller-proof
+                   :file file
+                   :to to
+                   :forms (:forms-to-extract plan)
+                   :form-count (:form-count plan)
+                   :caller-edit-count (:match-count caller-result)
+                   :require-policy (:require-policy plan)
+                   :callers-to-review (:callers-to-review plan)
+                   :quoted-var-references (:quoted-var-references plan)
+                   :original-sources originals
+                   :future-sources futures
+                   :created-files [to]}))
+              (catch Exception error
+                (refusal :invalid-extraction-result
+                         (.getMessage error)
+                         {})))))))))
 
 (defn with-future-sources
   "Replace a compiled extraction's candidates after a staged source
