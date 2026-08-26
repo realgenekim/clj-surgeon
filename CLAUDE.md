@@ -44,6 +44,23 @@ updates, and verification gates. It is not a chronological coding diary.
   successful candidate is reparsed, linted or compiled as appropriate, and
   exercised on a real-program-derived fixture.
 
+## Kent Beck: lower the cost of change first
+
+- Optimize for rapid, safe experimentation. When an intended product or
+  benchmark change is cumbersome, fragile, or expensive to repeat, pause and
+  make that class of change cheaper before making the change itself.
+- Prefer a small reversible ratchet: extract a pure decision, add the missing
+  characterization test, shorten the feedback command, improve the fixture or
+  receipt, or remove one accidental interface choice. Commit that ratchet
+  independently, then run the motivating change through it.
+- Do not turn "make it easier" into a speculative framework. The improvement
+  must immediately reduce the complete verified time or risk of the real next
+  experiment.
+- Keep meaning-preservation non-negotiable while hill climbing. Whitespace-only
+  presentation drift may be scored separately from semantic correctness.
+  Comments, metadata, reader-discard forms, lint directives, and unrelated
+  source remain protected unless the declared change explicitly owns them.
+
 ## Architecture
 
 - `forms.clj` — single source of truth for form classification (what is a defn, what is private, etc.)

@@ -202,6 +202,55 @@ Record these at the task boundary rather than celebrating raw MCP call counts:
 The product goal is not more Surgeon usage. It is fewer mechanics after the
 model knows what should change.
 
+## Correctness scoring law
+
+The benchmark reports three independent layers instead of treating every byte
+as meaning:
+
+1. **Semantic correctness is mandatory.** The complete result must parse, the
+   declared owners and references must have the intended values, deleted owners
+   must be absent, retained owners must remain, and the applicable compile,
+   lint, or test gate must pass.
+2. **Meaning-bearing preservation is mandatory.** Outside explicitly owned
+   deletion or replacement spans, comments, docstrings, metadata, reader-discard
+   forms, lint directives, tagged literals, strings, regexes, and unrelated
+   source must survive. A comment attached to an owner explicitly deleted with
+   its comments is intentionally removed; other comment loss is a failure.
+3. **Presentation fidelity is reported separately.** Changes confined to
+   ordinary whitespace or commas outside strings, regexes, and comments may be
+   presentation-red without making a semantically correct arm incorrect. Exact
+   bytes remain valuable evidence and the preferred result, but they are not a
+   proxy for meaning.
+
+Comment wording is not silently normalized. Even a plausible prose improvement
+can erase operational or design intent. A benchmark may admit a deliberate
+comment alteration only when the task names that comment as an owned change and
+the oracle states the intended new text.
+
+For source transformations, parsed-form equality alone is insufficient because
+the Clojure reader discards comments. The verifier therefore needs both a
+structural oracle and a lossless preservation oracle over the source outside
+declared edit spans.
+
+## Kent Beck hill-climb loop
+
+When a representative experiment exposes friction, make that exact class of
+change cheaper before adding another API feature:
+
+```text
+retain the failure
+  -> characterize it with a pure or fixture-level test
+  -> make one small reversible ratchet
+  -> commit green
+  -> rerun the same real counterfactual
+```
+
+Examples include shortening the paired-run command, deriving repeated request
+fields, making source-preservation scoring automatic, and emitting a terminal
+task receipt that requires no forensic reconstruction. Each ratchet must reduce
+the cost or risk of the next real experiment immediately; speculative editor
+frameworks do not qualify.
+
 ## Falsification conditions
 
 The selective compiler thesis is weakened if the corrected multi-file case

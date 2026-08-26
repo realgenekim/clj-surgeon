@@ -90,5 +90,27 @@ median paired advantage of at least 2x on the same historical case.
 If that passes, we have not built a better text editor. We have found a better
 instruction boundary: decide once, compile once, play the chord, and move on.
 
+## Overnight orders
+
+The hill climb will not confuse pretty bytes with correct programs. Parse and
+intended structural behavior are mandatory. So is lossless preservation of
+meaning-bearing material outside the declared change: comments, docstrings,
+metadata, reader-discard forms, lint directives, strings, regexes, and unrelated
+source. Whitespace-only drift can be recorded as presentation-red without
+discarding an otherwise correct semantic result.
+
+Comments deserve conservatism. They are invisible to parsed-form equality and
+may contain more than prose: build directives, disabled examples, safety
+warnings, provenance, or the reason a strange implementation must remain.
+Deleting a named owner with its attached comments is an explicit operation.
+Losing or casually rewriting any other comment is a correctness failure unless
+the task itself owns that comment and supplies the intended replacement.
+
+The overnight loop follows Kent Beck's economic rule. When the next experiment
+is awkward, first make that change cheap: capture the failure, add the smallest
+guard or pure seam, commit it green, and immediately rerun the motivating case.
+The objective is not a grander editor. It is a lower cost of learning until the
+one-shot route is both faster and harder to get wrong than native patching.
+
 See [Selective Compiled Scalpel](../plans/selective-compiled-scalpel.md) for the
 executable plan and falsification gates.
