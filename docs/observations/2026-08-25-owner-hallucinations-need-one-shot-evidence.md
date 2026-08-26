@@ -1,6 +1,6 @@
 # Owner hallucinations need one-shot evidence
 
-Date: 2026-08-25 Pacific time  
+Date: 2026-08-25 Pacific time
 Issues: `clj-surgeon-p24`, `clj-surgeon-wjz`
 
 ## Finding
