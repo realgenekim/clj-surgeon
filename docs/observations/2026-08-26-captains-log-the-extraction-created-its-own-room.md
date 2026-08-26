@@ -208,3 +208,66 @@ The retained product decision is therefore:
    frozen fixture and both orderings as regression evidence.
 4. Continue reporting exact bytes as secondary evidence, not as the correctness
    authority when only whitespace or commas differ.
+
+## Captain's after-action assessment
+
+### Wins
+
+This is the first retained historical extraction where the compiled Surgeon
+route is both materially faster and more reliable than the native control. It
+is not a toy replacement: fifteen real forms moved out of a 4,594-line
+namespace into a newly created nested namespace while preserving comments and
+meaning, updating dependencies, changing exactly one helper's visibility, and
+returning an atomic verification and rollback receipt.
+
+The stronger architectural result is route compression. Both successful arms
+used one snapshot-bound plan and one atomic apply. No discovery loop, repair
+call, failed mutation, or speculative retry entered the successful path. The
+counterbalance showed that this result did not depend on which arm ran first.
+
+The failed first cohort also paid for permanent improvements rather than being
+discarded as noise:
+
+- missing nested parents became an owned, reversible part of extraction;
+- formatter scope shrank to the newly created namespace;
+- require placement became deterministic without reassigning comments;
+- correctness stopped depending on unstable reader-generated symbol identity.
+
+### Losses and honest limits
+
+The native controls were wrong in both runs. The observed 2.47x ratio is
+therefore a complete-task outcome, not a matched-correctness latency ratio. It
+is stronger evidence than a microbenchmark—the correct result was actually
+delivered—but it does not tell us how long a correct native route would take.
+
+The cohort is still only two counterbalanced runs on one dev-a Sol/high seat.
+Agent Bridge composer defects prevented the intended dev-b/dev-c replication;
+those runs never started and were excluded. The existing source was
+meaning-preserved with presentation-only drift rather than byte-identical,
+while the new destination was byte-identical.
+
+The implementation is also modular rather than small by line count. Safe
+directory ownership requires state-change refusal, receipts, rollback, and
+undo. Those mechanics earned their cost, but they should not become permission
+to grow an adaptive successful-path engine.
+
+Finally, Surgeon has not made the task instantaneous. Plan and apply consume
+about 12.7 seconds; another 36–38.5 seconds remains in caller recognition,
+deliberation, intent construction, and stopping behavior. That is the next
+dominant hill.
+
+### What I am most proud of
+
+We did not grade the ugly first run on a curve or rewrite its history. We kept
+the refusal and false result immutable, separated a real product defect from a
+scorer defect, and repaired both without weakening the safety contract. The
+second cohort then succeeded through exactly the route we had claimed should
+exist.
+
+Surgeon can now *create its own room*. Given the musical phrase—exact roots,
+destination, and intent—the model plays one planning chord and one mutation
+chord. The instrument owns directory creation, namespace construction,
+dependency movement, visibility, formatting, verification, rollback, and the
+receipt. That is the church-organ editing experience this quest was seeking:
+the model decides meaning; the tool makes the complete mechanical change safe,
+fast, and final.
