@@ -147,6 +147,22 @@ observed direct-MCP/native wall ratio is 3.23x, with the important caveat that
 native was 0/2 correct and therefore supplies no matched-correctness latency
 estimate.
 
+### Native comparison, in one view
+
+| Route | Exact outcome | Median complete wall | Median tool actions | Compared with direct MCP |
+|---|---:|---:|---:|---:|
+| Direct extraction MCP | 2/2 correct | 37.871 s | 2 | baseline |
+| Plan + apply MCP | 2/2 correct | 49.941 s | 3 | 12.070 s slower; 1.32x wall |
+| Native control | 0/2 correct | 122.278 s | 5.5 | 84.408 s slower; 3.23x wall |
+
+Against the unchanged native route, direct MCP used 3.5 fewer tool actions at
+the median and 69.0% less wall time. More importantly, MCP preserved meaning in
+both runs while native lost meaning in both. The 3.23x number is therefore an
+observed route ratio, not a same-correctness speedup claim: there is no correct
+native latency in this cohort to compare against. The defensible conclusion is
+stronger but narrower—on this supplied multi-form extraction, direct MCP was
+both substantially faster and reliably correct, while native was neither.
+
 Immutable result directories:
 
 - `/srv/fleet/dev-a/clj-surgeon-study-results/20260826T154529Z-direct-extraction-543798a-dev-a-mcp-first`
