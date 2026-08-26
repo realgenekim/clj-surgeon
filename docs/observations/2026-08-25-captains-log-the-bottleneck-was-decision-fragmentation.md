@@ -177,3 +177,36 @@ This is evidence for two narrow conclusions, not a blanket victory claim:
    not making replacement intrinsically faster. A stronger native cohort must
    remain free to find a safer batched patch route; the observed failure stays
    in the denominator.
+
+## Captain's log: the redundant namespace name disappeared
+
+The next frozen cohort tested the smallest ergonomic repair suggested by the
+dev-b refusal. The compact prompt named the complete 51-edit decision but used
+`within.namespace=true`; the caller no longer had to repeat nine namespace
+names already present uniquely in their files.
+
+The first terminal pair, on dev-c with fresh Sol/high callers, was decisive:
+
+| Route | Correct | Exact presentation | Complete wall | Tool actions | Failed mutations |
+|---|---:|---:|---:|---:|---:|
+| compact `edit_clojure` | yes | yes | 60.243 s | 1 | 0 |
+| native control | yes | yes | 220.772 s | 23 | 0 |
+
+Compact was 3.67x faster. Its one MCP call atomically committed all 51 edits
+across nine files. The retained telemetry proves all nine namespace-scoped
+edits used `within.namespace=true`; the transaction completed without a
+refusal, retry, shell command, source reread, or post-decision inspection.
+Native remained a real competitor: it also reached the exact answer, but used
+22 shell reads followed by one file mutation.
+
+This is stronger evidence than a fast server timer. The product change removed
+one piece of redundant caller ceremony, and a fresh model then played the
+complete church-organ chord on the first attempt. The complete-turn advantage
+came from collapsing mechanics and source reproduction, not from weakening the
+oracle: exact bytes, parse, and meaning-preservation all remained gates.
+
+The other frozen seats remain evidence even if they are ugly. dev-a's compact
+arm was exact in 69.155 seconds, while its native arm was rejected by the route
+guard after 306.824 seconds because it invoked Clojure 14 times. dev-b was still
+running when this checkpoint was written. Neither arm was repaired, rerun,
+excluded, or silently promoted into the efficiency denominator.
