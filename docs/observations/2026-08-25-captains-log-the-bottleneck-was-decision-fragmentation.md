@@ -114,3 +114,42 @@ one-shot route is both faster and harder to get wrong than native patching.
 
 See [Selective Compiled Scalpel](../plans/selective-compiled-scalpel.md) for the
 executable plan and falsification gates.
+
+## Captain's log: the EDN chord played on the first try
+
+The benchmark correctness-policy migration exposed a tooling tax in miniature:
+twelve `capsule.edn` files needed the same guarded root-level replacement, with
+one file retaining an additional `:lint true` key. Native patching could batch
+the work, but the caller still had to reproduce twelve file hunks. This was the
+right Kent Beck side quest because the transaction kernel already knew how to
+apply exact replacements across files; only the compact public contract denied
+access to that capability.
+
+The new route accepts either one `file` with a named Clojure owner or explicit
+`files` with `within.root=true`. Root scope is the only EDN scope. The declared
+match count is enforced in every file; duplicate paths, mixed `file`/`files`,
+named EDN owners, and stale per-file counts refuse before writing. The existing
+transaction supplies frozen-snapshot atomicity, exact source preservation,
+parse/read-back verification, hashes, and undo.
+
+The motivating migration then succeeded on its first live use:
+
+| Evidence | Result |
+|---|---:|
+| Public calls | 1 |
+| Declared source shapes | 2 |
+| Exact edits | 12 |
+| Files | 12 |
+| Refusals or retries | 0 |
+| Server execution | 110.55 ms |
+| Complete local tool round trip | 240 ms |
+| Verification | atomic commit + read-back complete |
+
+The economic verdict needs two clocks. The editing interaction paid back
+immediately: one guarded chord replaced twelve repeated hunks in under a
+quarter second. The implementation took roughly twelve minutes, so this single
+migration alone did not repay the entire feature investment. The primitive is
+small and reusable, however; a few comparable EDN/config migrations amortize
+it, and every future use reduces both mechanics and partial-write risk. That is
+the low-cost-of-change ratchet we wanted, not evidence that every repeated text
+edit needs a new API.

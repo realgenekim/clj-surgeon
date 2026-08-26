@@ -261,3 +261,18 @@ native uses one correct batched patch.
 If that happens, keep the proven large single-file owner-deletion route, narrow
 the routing rule further, and stop expanding the API. Native remains the
 default outside the evidence-backed stratum.
+
+## Completed ratchet: grouped root-scoped EDN edits
+
+The first overnight friction ratchet is complete and deployed to the live local
+MCP without a process restart. One `edit_clojure` transaction can now group
+explicit Clojure or EDN files under `within.root=true`, with exact per-file
+cardinality and failure-atomic commit. EDN remains deliberately narrower than
+Clojure: no named owners, namespace scope, owner deletion, semantic indexing,
+or computed programs.
+
+The motivating twelve-capsule correctness-policy migration succeeded in one
+call with zero retries (110.55 ms server time; 240 ms complete local tool round
+trip). Keep this primitive because it made an observed awkward change cheap.
+Do not use it as a reason to route one visible EDN literal away from native
+patching.
