@@ -14,7 +14,7 @@ The target route is:
 ```text
 inspect_clojure mode=plan-extraction
     -> bounded migration manifest + frozen source hash + ready next_call
-model decides caller_changes and explicit ignores
+model reviews visibility intent, caller_changes, and explicit ignores
     -> apply_clojure_changes once
     -> terminal transaction receipt
 ```
@@ -60,9 +60,13 @@ On success it returns:
 - the frozen source hash used to build the plan;
 - previews needed for human or model judgment, subject to the public result
   budget; and
+- the exact moved private forms that remaining source owners will call through
+  the new namespace boundary;
 - one `next_call` for `apply_clojure_changes` whose extraction payload already
-  contains the mechanical fields and source hash. The caller fills only
-  `caller_changes` and `ignored_caller_files`.
+  contains the mechanical fields, source hash, and mechanically required
+  `public_forms`. The caller reviews that visibility intent and fills only
+  `caller_changes`, optional additional moved private forms that external
+  callers require, and `ignored_caller_files`.
 
 The plan never writes, never retains write authority, and never labels a
 structural caller candidate as semantically complete. Similarity is not
@@ -78,6 +82,16 @@ Aggregate extraction expectations are derived from the exact form list,
 caller-change guards, and affected file set. Existing explicit `expect` remains
 accepted and authoritative for compatibility; a mismatch still refuses.
 
+Visibility is an explicit part of the migration manifest. The planner may
+prove that a moved private form must become public when a remaining source form
+will be rewritten to call it through the destination namespace. It returns
+that exact required set and places it in the guarded `next_call`. Apply refuses
+if a required form is missing, if `public_forms` names a form that is not moved
+and private, or if the private declaration has no supported lossless
+publicization. The first supported projection is exact `defn-` to `defn`;
+metadata-bearing and custom private definitions remain unchanged and refuse
+until they have their own explicit projection.
+
 ## Architecture
 
 1. Extract the existing project-wide Clojure source enumeration into one small
@@ -90,6 +104,9 @@ accepted and authoritative for compatibility; a mismatch still refuses.
    fifth public MCP tool.
 4. Add `source_hash` and derived expectations to the existing extraction
    contract and executor. Do not create a second extraction implementation.
+5. Add one pure visibility relation over the selected form records. Planning
+   publishes required visibility changes; execution authorizes and applies
+   them before the existing complete-source parse and atomic commit.
 
 The shared scanner, pure plan adapter, inspect transport, and execution guard
 remain independently testable and cherry-pickable seams.
@@ -102,6 +119,9 @@ remain independently testable and cherry-pickable seams.
 | Missing or repeated form | Typed refusal with exact failed selector | None |
 | Destination already exists or aliases conflict | Existing planner refusal | None |
 | Caller candidates exist | Return all candidates; require change or explicit ignore at apply | None |
+| Remaining source calls a moved `defn-` | Return it as required and include it in `next_call.public_forms` | None until reviewed apply |
+| Apply omits a required public form | Typed refusal before candidate compilation | None |
+| `public_forms` names an unmoved, already-public, or unsupported private form | Typed refusal preserving all bytes | None |
 | No caller candidate exists | Report zero candidates without claiming semantic completeness | None |
 | Quoted-Var reference exists | Return exact authority and location | None |
 | Evidence exceeds public budget | Typed bounded refusal with counts | None |
@@ -169,3 +189,16 @@ owner name also produced 29 structural candidates for one real caller. These
 two findings define the immediate hill climb: reduce formatter fixed cost and
 improve caller-candidate precision without truncating evidence or introducing
 heuristic authority.
+
+The historical `format` pilot then exposed a sharper correctness boundary:
+`not-blank` was private in the monolith, but 24 remaining source owners require
+it after extraction. The historical commit intentionally changed `defn-` to
+`defn`. The next ratchet therefore makes visibility intent part of the same
+snapshot-bound plan and atomic apply rather than relying on a follow-up patch.
+
+That ratchet now passes the real local fixture. The public two-call replay took
+6.116 seconds to plan and 8.202 seconds to apply (14.319 seconds server-owned
+total), selected only `not-blank` for publicization, and produced all 15 moved
+owner bodies byte-identically to the historical destination. This is local
+feasibility evidence; the frozen native/CLI/MCP cohort remains the acceptance
+gate for complete-task advantage.

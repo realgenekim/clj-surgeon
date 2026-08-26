@@ -52,6 +52,10 @@
   (is (= "^[0-9a-f]{64}$"
          (get-in schema/clj-change-schema
                  [:properties "extraction" :properties "source_hash" :pattern])))
+  (is (= true
+         (get-in schema/clj-change-schema
+                 [:properties "extraction" :properties "public_forms"
+                  :uniqueItems])))
   (is (= 0
          (get-in schema/clj-change-schema
                  [:properties "extraction" :properties "expect" :properties

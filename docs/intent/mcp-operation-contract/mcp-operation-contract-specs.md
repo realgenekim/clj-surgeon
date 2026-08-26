@@ -59,6 +59,8 @@ tests witness the requirement.
 - [x] **MCP-OP-PLAN-003**: When extraction planning succeeds, clj-surgeon shall return one ready-to-fill `apply_clojure_changes` call containing the exact planned forms, destination, require policy, workspace root, and frozen source hash while leaving semantic caller decisions to the caller.
 - [x] **MCP-OP-PLAN-004**: If a plan-followed extraction supplies a source hash that differs from the executor's fresh source snapshot, clj-surgeon shall refuse before changing any file.
 - [x] **MCP-OP-PLAN-005**: When extraction omits aggregate expectations, clj-surgeon shall derive them from the exact forms, guarded caller edits, and affected files; when explicit expectations are supplied, they remain authoritative and a mismatch refuses.
+- [x] **MCP-OP-PLAN-006**: When a remaining source owner will call a moved private form through the destination namespace, extraction planning shall publish that exact form as a required visibility change and shall include it in the snapshot-bound next call without writing source.
+- [x] **MCP-OP-PLAN-007**: When extraction apply receives `public_forms`, clj-surgeon shall require every mechanically necessary moved private form, refuse unmoved, already-public, or unsupported declarations, and apply each supported visibility change inside the same parsed, read-back-verified atomic transaction.
 
 ## Misreadings and Boundaries
 

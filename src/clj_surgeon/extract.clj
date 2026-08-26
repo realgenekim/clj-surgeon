@@ -17,6 +17,7 @@
    [clj-surgeon.cljc.require-ops :as require-ops]
    [clj-surgeon.extract-header :as extract-header]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -26,6 +27,22 @@
    [clojure.string :as str]
    [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z]))
+
+;; @spec MCP-OP-PLAN-007
+(defn publicize-defn-source
+  "Losslessly change one exact defn- source form to defn. Refuse all other
+  declaration shapes so visibility changes cannot silently alter metadata or
+  custom macro semantics."
+  [source]
+  (let [form (z/of-string source)
+        head (z/down form)]
+    (when-not (= "defn-" (z/string head))
+      (throw (ex-info "Only exact defn- forms can be made public"
+                      {:error-type :unsupported-public-form
+                       :form-head (z/string head)})))
+    (-> head
+        (z/replace (parser/parse-string "defn"))
+        z/root-string)))
 
 ;; ============================================================
 ;; Pure helpers
@@ -38,8 +55,8 @@
     (when (.exists f)
       (let [deps (edn/read-string (slurp f))]
         (distinct
-          (concat (:paths deps)
-                  (mapcat :extra-paths (vals (:aliases deps)))))))))
+         (concat (:paths deps)
+                 (mapcat :extra-paths (vals (:aliases deps)))))))))
 
 (defn file-path->ns-name
   "Derive namespace name from a file path.
@@ -91,15 +108,15 @@
   (let [path (-> file io/file .getCanonicalFile .toPath)
         roots (or (seq source-paths) ["src" "test" "dev"])]
     (or
-      (some (fn [ancestor]
-              (when (some #(.startsWith path (.resolve ancestor (str %))) roots)
-                (.toFile ancestor)))
-            (take-while some? (iterate #(.getParent %) (.getParent path))))
-      (some (fn [ancestor]
-              (when (.exists (io/file (.toFile ancestor) "deps.edn"))
-                (.toFile ancestor)))
-            (take-while some? (iterate #(.getParent %) (.getParent path))))
-      (some-> file io/file .getParentFile .getParentFile))))
+     (some (fn [ancestor]
+             (when (some #(.startsWith path (.resolve ancestor (str %))) roots)
+               (.toFile ancestor)))
+           (take-while some? (iterate #(.getParent %) (.getParent path))))
+     (some (fn [ancestor]
+             (when (.exists (io/file (.toFile ancestor) "deps.edn"))
+               (.toFile ancestor)))
+           (take-while some? (iterate #(.getParent %) (.getParent path))))
+     (some-> file io/file .getParentFile .getParentFile))))
 
 (defn- add-require-to-ns
   "Add one optional alias and refer entry while preserving source trivia."
@@ -232,11 +249,13 @@
 ;; Pure: Build extraction plan
 ;; ============================================================
 
+;; @spec MCP-OP-PLAN-006
 (defn compile-plan
   "Purely compile an extraction plan from one source snapshot and a captured
   workspace source map. No file, process, clock, or registry access occurs."
-  [{:keys [file source forms to target-ns workspace-sources require-policy]
-    :or {workspace-sources {} require-policy :minimal}}]
+  [{:keys [file source forms to target-ns workspace-sources require-policy
+           public-forms]
+    :or {workspace-sources {} require-policy :minimal public-forms []}}]
   (let [lines (vec (str/split-lines source))
         ol (outline/outline-source file source)
         all-forms (:forms ol)
@@ -247,8 +266,8 @@
                                    (not= 'declare (:type %))))
                      vec)
         missing (set/difference
-                  form-names
-                  (set (map #(str (:name %)) matched)))]
+                 form-names
+                 (set (map #(str (:name %)) matched)))]
     (cond
       (seq missing)
       {:error (str "Forms not found: " (str/join ", " (sort missing)))}
@@ -276,49 +295,78 @@
             form-texts
             (->> (sort-by :line matched)
                  (mapv
-                   (fn [form]
-                     (let [form-start
-                           (let [index (dec (dec (:line form)))]
-                             (loop [line-index index]
-                               (if (neg? line-index)
-                                 0
-                                 (if (str/starts-with?
-                                       (str/trim (nth lines line-index "")) ";")
-                                   (recur (dec line-index))
-                                   (inc line-index)))))
-                           form-end (:end-line form)]
-                       {:name (str (:name form))
-                        :line (:line form)
-                        :end-line form-end
-                        :comment-start form-start
-                        :text (str/join "\n"
-                                        (subvec lines form-start form-end))}))))
+                  (fn [form]
+                    (let [form-start
+                          (let [index (dec (dec (:line form)))]
+                            (loop [line-index index]
+                              (if (neg? line-index)
+                                0
+                                (if (str/starts-with?
+                                     (str/trim (nth lines line-index "")) ";")
+                                  (recur (dec line-index))
+                                  (inc line-index)))))
+                          form-end (:end-line form)]
+                      {:name (str (:name form))
+                       :type (str (:type form))
+                       :line (:line form)
+                       :end-line form-end
+                       :comment-start form-start
+                       :text (str/join "\n"
+                                       (subvec lines form-start form-end))}))))
             texts-by-name (into {} (map (juxt :name identity) form-texts))
             ordered-texts (mapv #(get texts-by-name %) topo-order)
             header-result
             (extract-header/compile-target-header
-              {:source-ns-form ns-form-text
-               :target-ns target-ns
-               :form-sources (mapv :text ordered-texts)
-               :require-policy require-policy})
+             {:source-ns-form ns-form-text
+              :target-ns target-ns
+              :form-sources (mapv :text ordered-texts)
+              :require-policy require-policy})
             alias-result (if (= :copy-all require-policy)
                            {:ok true :aliases {}}
                            (extract-header/source-aliases ns-form-text))
             target-alias (when (and (:ok alias-result)
                                     (not= :copy-all require-policy))
                            (extract-header/allocate-alias
-                             target-ns (:aliases alias-result)))
+                            target-ns (:aliases alias-result)))
             remaining-callers
             (extract-header/remaining-source-callers source extracted-names)
             source-referred
             (extract-header/source-referred-forms remaining-callers)
+            private-form-names
+            (->> matched
+                 (filter #(forms/private-form? (str (:type %))))
+                 (map #(str (:name %)))
+                 set)
+            supported-public-form-names
+            (->> matched
+                 (filter #(= "defn-" (str (:type %))))
+                 (map #(str (:name %)))
+                 set)
+            requested-public-forms (set (map str public-forms))
+            invalid-public-forms
+            (set/difference requested-public-forms private-form-names)
+            unsupported-public-forms
+            (set/difference requested-public-forms
+                            supported-public-form-names)
+            required-public-forms
+            (set/intersection private-form-names (set source-referred))
+            missing-required-public-forms
+            (set/difference required-public-forms requested-public-forms)
+            publicized-texts
+            (if (seq unsupported-public-forms)
+              ordered-texts
+              (mapv (fn [form]
+                      (if (contains? requested-public-forms (:name form))
+                        (update form :text publicize-defn-source)
+                        form))
+                    ordered-texts))
             new-file-content
             (when (:ok header-result)
               (str
-                (str/join "\n\n"
-                          (concat [(:ns-form header-result)]
-                                  (map :text ordered-texts)))
-                "\n"))
+               (str/join "\n\n"
+                         (concat [(:ns-form header-result)]
+                                 (map :text publicized-texts)))
+               "\n"))
             captured-sources (assoc workspace-sources (str file) source)
             other-files
             (->> captured-sources
@@ -331,8 +379,18 @@
                  vec)
             subjects (mapv #(str source-ns "/" %) (sort extracted-names))
             quoted-proof (quoted-var-refs/scan-sources
-                           captured-sources subjects)]
+                          captured-sources subjects)]
         (cond
+          (seq invalid-public-forms)
+          {:error "public-forms must name selected private forms"
+           :error-type :invalid-public-forms
+           :invalid-public-forms (vec (sort invalid-public-forms))}
+
+          (seq unsupported-public-forms)
+          {:error "One or more selected private forms cannot be publicized losslessly"
+           :error-type :unsupported-public-forms
+           :unsupported-public-forms (vec (sort unsupported-public-forms))}
+
           (not (:ok header-result))
           header-result
 
@@ -355,6 +413,10 @@
            :omitted-target-requires (:omitted-target-requires header-result)
            :remaining-source-callers remaining-callers
            :source-referred-forms source-referred
+           :required-public-forms (vec (sort required-public-forms))
+           :missing-required-public-forms
+           (vec (sort missing-required-public-forms))
+           :public-forms (vec (sort requested-public-forms))
            :source-require-added (boolean (seq source-referred))
            :forms-to-extract (mapv :name form-texts)
            :form-count (count matched)
@@ -398,13 +460,13 @@
                       [(.getPath workspace-file) (slurp workspace-file)]))
                (into (sorted-map)))]
       (compile-plan
-        {:file file
-         :source source
-         :forms forms
-         :to to
-         :target-ns target-ns
-         :workspace-sources workspace-sources
-         :require-policy require-policy}))
+       {:file file
+        :source source
+        :forms forms
+        :to to
+        :target-ns target-ns
+        :workspace-sources workspace-sources
+        :require-policy require-policy}))
     (catch Exception error
       {:ok false
        :error-type :extraction-snapshot-failed
@@ -433,24 +495,24 @@
             target-alias (:target-alias p)
             target-ns (:target-ns p)
             candidates (compile-candidates
-                         {:source original-source
-                          :source-file file
-                          :target-file to
-                          :form-ranges form-texts
-                          :target-source new-content
-                          :target-ns target-ns
-                          :target-alias target-alias
-                          :source-referred-forms source-referred-forms})
+                        {:source original-source
+                         :source-file file
+                         :target-file to
+                         :form-ranges form-texts
+                         :target-source new-content
+                         :target-ns target-ns
+                         :target-alias target-alias
+                         :source-referred-forms source-referred-forms})
             updated-source (:source candidates)
             target-file (io/file to)
             source-file (io/file file)
             receipt-error (receipt-refusal receipt-out source-file target-file)
             receipt (extraction-receipt
-                      {:source-file source-file
-                       :target-file target-file
-                       :original-source original-source
-                       :future-source updated-source
-                       :target-source new-content})]
+                     {:source-file source-file
+                      :target-file target-file
+                      :original-source original-source
+                      :future-source updated-source
+                      :target-source new-content})]
         (cond
           receipt-error
           receipt-error
@@ -482,45 +544,45 @@
                                 {:error-type :extraction-read-back-failed})))
               (let [receipt-file (publish-receipt! receipt-out receipt)]
                 (cond->
-                  {:file file
-                   :to to
-                   :target-requires (:target-requires p)
-                   :omitted-target-requires (:omitted-target-requires p)
-                   :remaining-source-callers (:remaining-source-callers p)
-                   :source-referred-forms source-referred-forms
-                   :log (vec (concat
-                               [{:action :create-file
-                                 :file to
-                                 :forms (count form-texts)
-                                 :lines (count (str/split-lines new-content))}]
-                               (map (fn [form]
-                                      {:action :remove-form
-                                       :form (:name form)
-                                       :from-line (:line form)})
-                                    (sort-by :line > form-texts))
-                               (when (seq source-referred-forms)
-                                 [{:action :add-require
-                                   :ns target-ns
-                                   :alias target-alias
-                                   :refer source-referred-forms}])))
-                   :verified {:source-hash
-                              (structural-lens/source-hash original-source)
-                              :source-result-hash
-                              (structural-lens/source-hash updated-source)
-                              :target-result-hash
-                              (structural-lens/source-hash new-content)
-                              :parsed true
-                              :atomic-write true
-                              :read-back true}
-                   :callers-to-review (:callers-to-review p)
-                   :quoted-var-references (:quoted-var-references p)
-                   :summary {:forms-extracted (count form-texts)
-                             :new-file-lines (count (str/split-lines new-content))
-                             :source-require-added
-                             (boolean (seq source-referred-forms))
-                             :callers-to-review (count (:callers-to-review p))
-                             :quoted-var-references
-                             (count (:quoted-var-references p))}}
+                 {:file file
+                  :to to
+                  :target-requires (:target-requires p)
+                  :omitted-target-requires (:omitted-target-requires p)
+                  :remaining-source-callers (:remaining-source-callers p)
+                  :source-referred-forms source-referred-forms
+                  :log (vec (concat
+                             [{:action :create-file
+                               :file to
+                               :forms (count form-texts)
+                               :lines (count (str/split-lines new-content))}]
+                             (map (fn [form]
+                                    {:action :remove-form
+                                     :form (:name form)
+                                     :from-line (:line form)})
+                                  (sort-by :line > form-texts))
+                             (when (seq source-referred-forms)
+                               [{:action :add-require
+                                 :ns target-ns
+                                 :alias target-alias
+                                 :refer source-referred-forms}])))
+                  :verified {:source-hash
+                             (structural-lens/source-hash original-source)
+                             :source-result-hash
+                             (structural-lens/source-hash updated-source)
+                             :target-result-hash
+                             (structural-lens/source-hash new-content)
+                             :parsed true
+                             :atomic-write true
+                             :read-back true}
+                  :callers-to-review (:callers-to-review p)
+                  :quoted-var-references (:quoted-var-references p)
+                  :summary {:forms-extracted (count form-texts)
+                            :new-file-lines (count (str/split-lines new-content))
+                            :source-require-added
+                            (boolean (seq source-referred-forms))
+                            :callers-to-review (count (:callers-to-review p))
+                            :quoted-var-references
+                            (count (:quoted-var-references p))}}
                   receipt-file (assoc :receipt-file receipt-file)))
               (catch Exception commit-error
                 (let [source-restored?
@@ -595,8 +657,8 @@
 
         :else
         (let [original-source (validate-complete-source!
-                                (:file source)
-                                (:original-source source))
+                               (:file source)
+                               (:original-source source))
               result-source (:result-source source)
               result-target (:result-source target)]
           (if-not (.delete target-file)

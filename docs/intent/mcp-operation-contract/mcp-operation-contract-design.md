@@ -234,6 +234,16 @@ the two requests with the exact hash. Aggregate counts may be derived from the
 authoritative form list, guarded caller changes, and affected file set; legacy
 explicit counts remain accepted and must match.
 
+Visibility changes are part of the reviewed extraction manifest, not a
+post-extraction text patch. The pure planner identifies moved private forms
+that remaining source owners will necessarily call through the destination
+namespace and publishes that exact required set. The ready next call carries
+the set as `public_forms`; invoking apply is the authorization. Apply may also
+accept additional moved private forms for externally proven callers, but it
+refuses names that are not both selected and private. The initial lossless
+projection supports only `defn-` to `defn`. Unsupported private metadata and
+custom macros fail closed until a separate projection is specified and tested.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is

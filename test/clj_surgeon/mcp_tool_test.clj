@@ -617,6 +617,42 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest extraction-publicizes-a-required-private-form-in-the-same-transaction
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")
+        target-file (io/file workspace "src/sample/moved.clj")
+        receipt-dir (io/file workspace "receipts")
+        original (str "(ns sample.core)\n\n"
+                      "(defn- helper [x] (inc x))\n\n"
+                      "(defn retained [] (helper 1))\n")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (let [plan
+            (extraction-plan/plan!
+              {:project-root (.getPath workspace)}
+              {:mode "plan-extraction"
+               :file "src/sample/core.clj"
+               :to "src/sample/moved.clj"
+               :forms ["helper"]
+               :require_policy "minimal"})
+            result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              (:next_call plan))]
+        (is (= ["helper"]
+               (get-in plan [:plan :required-public-forms])))
+        (is (= ["helper"]
+               (get-in plan [:next_call :extraction :public_forms])))
+        (is (:ok result) (pr-str result))
+        (is (:verification_complete result))
+        (is (.contains ^String (slurp target-file) "(defn helper "))
+        (is (.contains ^String (slurp source-file) ":refer [helper]"))
+        (is (not (.contains ^String (slurp target-file) "(defn- helper "))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest direct-change-runs-the-declared-verification-profile
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

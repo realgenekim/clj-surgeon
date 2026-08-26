@@ -391,7 +391,7 @@
 
 (def extraction-fields
   #{"file" "to" "forms" "require_policy" "caller_changes"
-    "ignored_caller_files" "expect" "source_hash"})
+    "ignored_caller_files" "public_forms" "expect" "source_hash"})
 
 (def extraction-expect-fields #{"forms" "caller_edits" "files"})
 
@@ -412,7 +412,8 @@
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
         (validate-fields! raw extraction-fields
-                          (disj extraction-fields "expect" "source_hash")
+                          (disj extraction-fields "expect" "source_hash"
+                                "public_forms")
                           ["extraction"])
         (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
               to (clojure-source-path! (field raw "to") ["extraction" "to"])
@@ -422,6 +423,13 @@
               _ (when-not (= (count forms) (count (distinct forms)))
                   (refuse! :duplicate-form ["extraction" "forms"]
                            "Extraction form names must be unique"))
+              public-forms
+              (mapv #(nonblank-string! % ["extraction" "public_forms"])
+                    (or (field raw "public_forms") []))
+              _ (when-not (= (count public-forms)
+                             (count (distinct public-forms)))
+                  (refuse! :duplicate-form ["extraction" "public_forms"]
+                           "Public form names must be unique"))
               require-policy (nonblank-string!
                                (field raw "require_policy")
                                ["extraction" "require_policy"])
@@ -468,6 +476,7 @@
               verify (when (present? params "verify")
                        (nonblank-string! (field params "verify") ["verify"]))
               normalized {:file file :to to :forms forms
+                          :public-forms public-forms
                           :require-policy (keyword require-policy)
                           :caller-changes callers
                           :ignored-caller-files ignored

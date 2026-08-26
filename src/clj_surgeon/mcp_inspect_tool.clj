@@ -22,7 +22,7 @@
     "outlines, exact structural matches, and X-ray requests. Use "
     "include_source=false on forms requests when only names, ranges, counts, "
     "and hashes are needed; omit it when exact form source is needed. Use "
-    "mode=plan-extraction when exact roots and destination are known but caller migration evidence is not; copy its hash-bound next_call and fill only caller decisions. Use mode=prepare-change when one Var or related Var set names the goal but "
+    "mode=plan-extraction when exact roots and destination are known but caller migration evidence is not; review its required public_forms, copy its hash-bound next_call, and fill caller decisions. Use mode=prepare-change when one Var or related Var set names the goal but "
     "exact sites are unknown. Its caller proof unions resolved references with "
     "lossless #'x and (var x) references; every surface site names its authority. "
     "Every returned named form includes a ready-to-use source_anchor for resolve_var_surface; copy it instead of making an unanchored workspace-symbol query. For an unindexed file, use file plus form to "
@@ -452,13 +452,14 @@
   [result]
   (format
     (str "inspect_clojure · plan-extraction\n"
-         "  %s forms · %s caller candidates · %s quoted Vars · %s\n\n"
+         "  %s forms · %s caller candidates · %s quoted Vars · %s public forms · %s\n\n"
          "✓ source snapshot frozen\n"
          "✓ no mutation authority retained\n"
-         "→ fill next_call caller decisions, then call apply_clojure_changes once")
+         "→ review visibility, fill caller decisions, then call apply_clojure_changes once")
     (get-in result [:plan :form-count])
     (get-in result [:evidence_counts :caller_candidates :returned])
     (get-in result [:evidence_counts :quoted_var_references :returned])
+    (count (get-in result [:plan :required-public-forms]))
     (mcp-operation/format-elapsed-ms (:elapsed_ms result))))
 
 (defn verification-job-summary

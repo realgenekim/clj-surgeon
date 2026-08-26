@@ -310,6 +310,10 @@
             :description "Absent project-relative destination namespace."}
       "forms" {:type "array" :minItems 1 :uniqueItems true
                :items {:type "string" :minLength 1}}
+      "public_forms"
+      {:type "array" :uniqueItems true
+       :description "Moved private defn- forms explicitly authorized to become public. Copy the mechanically required values from plan-extraction."
+       :items {:type "string" :minLength 1}}
       "require_policy" {:type "string" :enum ["minimal" "copy-all"]}
       "source_hash" {:type "string" :pattern "^[0-9a-f]{64}$"
                      :description "Optional frozen source hash returned by plan-extraction."}

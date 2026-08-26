@@ -122,3 +122,42 @@ can remove the observed 12-second fixed cost without weakening rollback. Also
 measure the real candidate precision of the 15 form roots. The product wins
 only if complete verified task time falls; a beautiful manifest that creates a
 large ignore ritual is not a win.
+
+## The historical fixture found the missing visibility decision
+
+The real 4,594-line `views.clj` fixture would not have compiled under the first
+planner. Fourteen moved forms were byte-stable, but `not-blank` was `defn-` in
+the monolith and `defn` in the historical destination. Twenty-four remaining
+source owners call moved Vars; several call `not-blank`. Moving it privately
+while rewriting those callers through the new namespace would create an
+illegal cross-namespace private reference.
+
+That is exactly the kind of decision the transaction must make visible. The
+planner now reports the exact mechanically required public set and places it
+in `next_call.extraction.public_forms`. Apply requires every such form, accepts
+only selected private forms, and initially supports one lossless projection:
+exact `defn-` to `defn`. Unsupported private metadata and custom macro forms
+refuse. The visibility change, form movement, source require, internal caller
+rewrites, formatting, parse, read-back, and receipt all remain one atomic
+transaction.
+
+The live public MCP route succeeded without restarting the server:
+
+| Stage | Server-owned wall | Evidence |
+| --- | ---: | --- |
+| `inspect_clojure plan-extraction` | 6.116s | 15 forms, 24 remaining-source owners, exactly `public_forms=["not-blank"]` |
+| `apply_clojure_changes` | 8.202s | 15 edits, 2 files, one atomic commit, terminal receipt |
+| Total tool execution | 14.319s | two calls, zero refusals, zero failed mutations |
+
+Every one of the 15 generated owner bodies is byte-identical to the actual
+historical `views/format.clj`, including the intentional publicization of
+`not-blank`. `clj-kondo` reported zero errors on the generated source and
+target; warning-level source-header cleanup remains a separately visible
+follow-up rather than being smuggled into this move.
+
+The important claim is still pending the blinded native control. This receipt
+proves feasibility and tool cost, not complete-task advantage. It also shifts
+the measured bottleneck: formatter time fell to 1.141s in the public replay,
+while planning still spent 6.112s scanning and compiling the large snapshot.
+The next cohort must measure agent thinking, route fragmentation, and
+correctness against the same frozen fixture.

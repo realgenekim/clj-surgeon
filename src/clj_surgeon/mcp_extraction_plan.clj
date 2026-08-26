@@ -70,6 +70,7 @@
             {:file source-path
              :source source
              :forms forms
+             :public-forms []
              :to target-path
              :target-ns target-ns
              :workspace-sources workspace-sources
@@ -103,6 +104,7 @@
             {:file file
              :to to
              :forms forms
+             :public_forms (:required-public-forms compiled)
              :require_policy (name require-policy)
              :source_hash source-hash
              :caller_changes []
