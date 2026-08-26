@@ -223,10 +223,11 @@ a 32,768-character presentation budget. It reports exact returned and omitted
 counts when that vector is larger. The rejected 780-line experiment remains
 an option receipt.
 
-Direct red-to-green witnesses passed 38 tests with 336 assertions. The full
-MCP milestone passed 221 tests with 1,848 assertions, zero failures, and zero
-errors. clj-kondo reported zero errors and zero warnings. Heap and cclsp
-regression gates also passed.
+Direct red-to-green witnesses passed 38 tests with 337 assertions. The cold
+core milestone passed 612 tests with 5,272 assertions. The cold MCP milestone
+passed 221 tests with 1,849 assertions, zero failures, and zero errors.
+clj-kondo reported zero errors and zero warnings. Heap and cclsp regression
+gates also passed.
 
 ### Clean-context replay
 
@@ -244,6 +245,29 @@ returned `read_complete=true`.
 Neither refusal contained source bodies, executable authority, ordinary
 success results, or retained continuation state. Both missions completed in
 two calls without `rg`, outline, `sed`, or whole-file reads.
+
+An independent replay found that the first human summary exposed only the
+wrong rank-one hypothesis for the semantic test-name case. The structured
+result contained the correct rank-seven owner, but a text-only caller could
+still waste a retry. The summary now prints the complete bounded owner
+vocabulary. The same evidence compiler moved into the transport-neutral
+exact-form selector, so CLI and MCP refusals cannot drift. A direct CLI handler
+replay returned all six `mcp_paths.clj` owners and ranked
+`resolve-source-path` first without source bodies or authority.
+
+The inner-loop instructions in `CLAUDE.md` now tell agents to start
+`make nrepl` when discovery finds no worktree-local server, verify the JVM
+working directory, reload changed namespaces, and reserve cold processes for
+milestone gates. On the implementation replay, the warm nREPL ran three MCP
+test namespaces (38 tests and 337 assertions) in 2.4 seconds. This does not
+replace cold verification; it lowers experiment latency between gates.
+
+The first cold milestone found two implemented requirements whose second
+`@spec` IDs shared a comment line and were therefore invisible to the intent
+scanner. The warm nREPL exposed the exact two missing implementation witnesses;
+separate annotations made the audit coherent, and the repeated cold MCP gate
+passed. This is the intended division of labor: warm probes make change cheap,
+while cold gates preserve startup, transport, and repository-contract safety.
 
 ### Projected route economics
 
