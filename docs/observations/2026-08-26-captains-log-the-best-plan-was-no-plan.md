@@ -98,14 +98,12 @@ This rule is now encoded in the public MCP description, extraction schema text,
 benchmark route, and a permanent public-boundary test that moves a private form
 and publicizes it without a preflight plan (`85aaa3c`, refined by `543798a`).
 
-The rollout must also remove one stale global instruction. The current Codex
-`AGENTS.md` says every extraction must run CLI dependency and preview commands.
-That remains correct for uncertain CLI work, but it defeats this earned MCP fast
-path when the complete extraction decision is supplied. After the combined RC
-passes Anvil, the global rule should become conditional: direct atomic MCP
-extraction for complete decisions; dependency/manifest planning for unknown
-closure, visibility, or callers. Claude's shared doctrine should receive the
-same routing law so the win is not Codex-only.
+The rollout also removed one stale global instruction. Codex previously said
+every extraction must run CLI dependency and preview commands. That remains
+correct for uncertain work, but it defeated this earned MCP fast path when the
+complete extraction decision was supplied. Codex and Claude now share the
+conditional law: direct atomic MCP extraction for complete decisions;
+dependency/manifest planning for unknown closure, visibility, or callers.
 
 ## Ethnographic window
 
@@ -156,3 +154,27 @@ Immutable result directories:
 
 The candidate is recommended for integration. The earned principle is simple:
 **do not ask a planner to rediscover a complete decision.**
+
+## Stable publication receipt
+
+Stable publication completed at exact head
+`66b8a606e44786bb8a835d7bcd79fc3da3c15afc`:
+
+- the installed CLI, Codex skill, and Claude skill all carry that source
+  commit;
+- the global Codex and Claude routing blocks match committed block
+  `a27adb653893e5c601a268cd11c9f4445d82d632469eeb93f3a8c72dc164b560`;
+- the complete gate passed with 613 core tests / 5,275 assertions and 232 MCP
+  tests / 1,917 assertions, plus every ancillary gate and a clean diff check;
+- the shared MCP hot-reloaded without restarting its process; and
+- a real live refusal returned all 6/6 owners, ranked
+  `resolve-source-path` first, marked the hypothesis `authority=false`, and
+  completed in 24.12 ms. The existing MCP client session remained valid.
+
+The first live proof had remained sparse even though registry synchronization
+reported success. The reload manifest had omitted the newly shared
+`show-form` and `owner-hypotheses` dependencies. Publication stopped; no blind
+retry occurred. Commit `f5cc75c` added both dependencies and a permanent
+`MCP-OP-READ-PARITY-001` witness. The corrected reload then passed the real
+operation proof. A false green became a paved-road regression test before the
+release window closed.
