@@ -66,6 +66,7 @@ tests witness the requirement.
 
 - [D] **MCP-OP-READ-DIAG-001**: When a `forms` request cannot select each requested owner exactly, clj-surgeon shall report the failed stage, request identity, file, and each failed owner. It shall include failure kinds, exact match counts, available-owner count, source hash, and bounded-presentation counts without source bodies.
 - [D] **MCP-OP-READ-DIAG-002**: When clj-surgeon summarizes a selector refusal, it shall name the failed request, file, and owner and disclose hypothesis truncation. It shall label the first suggestion as a hypothesis only and require the caller to choose one exact owner and retry.
+- [D] **MCP-OP-READ-DIAG-003**: When the complete name-only owner vector fits the public result budget, a selector refusal shall return every unique available owner in deterministic order. Otherwise, it shall return a bounded prefix and exact returned and omitted counts.
 - [D] **MCP-OP-READ-HYP-001**: When selector recovery ranks possible owners, clj-surgeon shall rank the complete available-owner universe independently for each failed owner and publish each returned candidate with its rank, evidence basis, and `authority=false`.
 - [D] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 
@@ -116,6 +117,7 @@ tests witness the requirement.
 | `MCP-OP-PLAN-005` | Derived aggregate counts weaken exact per-edit guards, or legacy explicit counts may be silently ignored. | No callers; several caller edits; repeated caller file; explicit count too high or low. |
 | `MCP-OP-READ-DIAG-001` | One aggregate candidate list is enough even when several owners failed, or source bodies should accompany the refusal. | One missing owner; several missing owners; ambiguous duplicate owner; successful siblings before failure. |
 | `MCP-OP-READ-DIAG-002` | Structured evidence is sufficient when the visible summary says only `correct_request`. | Missing owner in a large test file; candidate list truncated; no useful lexical hypothesis. |
+| `MCP-OP-READ-DIAG-003` | A ranked list makes the complete owner vocabulary unnecessary, or returning source is required for useful evidence. | Small namespace; semantic rename outside the top ten; repeated owner names; name-only vector over budget. |
 | `MCP-OP-READ-HYP-001` | The highest-ranked owner can be selected automatically because the list is deterministic. | One-character typo; semantic paraphrase; one candidate; tied candidates; candidate input permutation. |
 | `MCP-OP-READ-HYP-002` | A top-ten presentation is the complete candidate universe, or a score gap proves intent. | Eleven or more owners; intended owner at rank ten; intended owner outside the bound; one displayed candidate from many available owners. |
 

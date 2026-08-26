@@ -146,9 +146,16 @@ Each projected failure contains:
 - the file and failed stage;
 - the requested owner, failure kind, and exact match count;
 - the complete available-owner count;
+- every unique available owner name when the name-only vector fits the public
+  result budget;
 - at most ten ranked owner hypotheses;
 - the returned and omitted hypothesis counts; and
 - the source hash that owned the selection decision.
+
+If the complete name-only owner vector would exceed the public result budget,
+the refusal returns a deterministic bounded prefix and reports its returned and
+omitted counts. It does not include source bodies. This keeps the usual refusal
+equivalent to an outline while preserving the existing output bound.
 
 The concise summary names the failed request, file, and requested owner. It
 shows the first ranked owner as a question labeled `hypothesis only` and tells
@@ -175,13 +182,13 @@ requested names. Owners that already resolved can therefore crowd the useful
 correction out of the bounded result. The recovery compiler instead ranks the
 complete candidate universe independently for each failed owner.
 
-The ranker is a pure deterministic function. Its first evaluation compares
-normalized Levenshtein distance, normalized Damerau-Levenshtein distance,
-kebab-token overlap, character trigrams, and a deterministic character/token
-hybrid against the frozen real-refusal corpus. The implementation keeps the
-simplest ranker whose rank-at-ten is not materially worse than the best tested
-alternative. Candidate input order cannot change the result. The exact owner
-name breaks any remaining score tie.
+The ranker is a pure deterministic function. Its evaluation compares normalized
+Levenshtein distance, normalized Damerau-Levenshtein distance, kebab-token
+overlap, character trigrams, and a deterministic character/token hybrid against
+the frozen real-refusal corpus. The implementation keeps the simplest ranker
+that places every strict corpus correction in the first ten. Candidate input
+order cannot change the result. The exact owner name breaks any remaining score
+tie.
 
 The public hypothesis need not expose a numeric confidence value. It reports
 rank, basis, and `authority=false`. This prevents a caller from mistaking a
