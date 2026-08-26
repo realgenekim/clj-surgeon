@@ -16,7 +16,7 @@
 (def transaction-version 1)
 (def receipt-version 1)
 
-(def ^:private supported-extensions [".clj" ".cljs" ".cljc"])
+(def ^:private supported-extensions [".clj" ".cljs" ".cljc" ".edn"])
 (def ^:private spec-keys #{:intents :changes :expect})
 (def ^:private intent-keys #{:files :from :to :expect-count})
 (def ^:private expectation-keys
@@ -171,7 +171,7 @@
   (doseq [file files]
     (when-not (supported-file? file)
       (refuse! :unsupported-file
-               (str "Unsupported Clojure source file: " (pr-str file))
+               (str "Unsupported Clojure or EDN source file: " (pr-str file))
                {:intent-index intent-index :file file})))
   (let [normalized (mapv normalized-path files)]
     (when-not (= (count normalized) (count (distinct normalized)))

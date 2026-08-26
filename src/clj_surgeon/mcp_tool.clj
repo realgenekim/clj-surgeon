@@ -615,8 +615,9 @@
   (str
     "Commit one atomic Clojure edit transaction with no preflight read when the "
     "decision is complete. edits are exact literal replacements guarded by the "
-    "exact old subtree: file, within "
-    "{form}, from, to, and optional matches (default 1). Optional programs are "
+    "exact old subtree: use file with within {form} or {namespace} for one "
+    "Clojure owner, or explicit files with within {root:true} for one grouped "
+    "Clojure/EDN edit. matches defaults to one and is enforced in every file. Optional programs are "
     "independent computed relations: file, an expression ending in transform, "
     "and expect {matches, max_changed_characters}. delete_owners groups exact "
     "named top-level forms by file and removes them without source bodies. Start a program with "

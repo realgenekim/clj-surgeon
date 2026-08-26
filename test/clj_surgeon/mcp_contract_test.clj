@@ -106,6 +106,69 @@
     (is (= ["edit-1" "edit-2" "edit-3"]
            (mapv :id (get-in validated [:params :changes]))))))
 
+(deftest grouped-root-edn-edit-derives-per-file-guards
+  ;; @spec MCP-OP-EDIT-001
+  ;; @spec MCP-OP-EDIT-002
+  (let [files ["bench/a.edn" "bench/b.edn"]
+        request
+        {"edits"
+         [{"files" files
+           "within" {"root" true}
+           "from" "{:exact-bytes true :parse-clojure true}"
+           "to" "{:exact-bytes-secondary true :meaning-preserved true :parse-clojure true}"}]}
+        validated (contract/validate-tool-params request)
+        change (get-in validated [:params :changes 0])]
+    (is (:ok validated) (pr-str validated))
+    (is (= files (:files change)))
+    (is (= {:matches 2 :each-file 1} (:expect change)))
+    (is (= {:changes 1 :edits 2 :files 2}
+           (get-in validated [:params :expect])))))
+
+(deftest grouped-root-edn-edit-refuses-ambiguous-scope
+  ;; @spec MCP-OP-EDIT-002
+  ;; @spec MCP-OP-EDIT-003
+  (let [root-edit {"files" ["bench/a.edn" "bench/b.edn"]
+                   "within" {"root" true}
+                   "from" ":old"
+                   "to" ":new"}]
+    (doseq [[label edit reason path]
+            [[:both-file-fields
+              (assoc root-edit "file" "bench/a.edn")
+              :ambiguous-editor-files ["edits" 0]]
+             [:missing-file-fields
+              (dissoc root-edit "files")
+              :ambiguous-editor-files ["edits" 0]]
+             [:duplicate-files
+              (assoc root-edit "files" ["bench/a.edn" "bench/a.edn"])
+              :duplicate-file ["edits" 0 "files"]]
+             [:grouped-named-owner
+              (assoc root-edit "within" {"form" "settings"})
+              :invalid-grouped-editor-scope ["edits" 0 "within"]]
+             [:edn-named-owner
+              (-> root-edit
+                  (dissoc "files")
+                  (assoc "file" "bench/a.edn"
+                         "within" {"form" "settings"}))
+              :invalid-edn-editor-scope ["edits" 0 "within"]]
+             [:false-root
+              (assoc root-edit "within" {"root" false})
+              :invalid-root-scope ["edits" 0 "within" "root"]]]]
+      (testing (name label)
+        (let [result (contract/validate-tool-params {"edits" [edit]})]
+          (is (false? (:ok result)))
+          (is (= reason (:reason result)))
+          (is (= path (:path result)))
+          (is (:source-unchanged result)))))
+    (testing "EDN owner deletion"
+      (let [result
+            (contract/validate-tool-params
+              {"delete_owners" [{"file" "bench/a.edn"
+                                 "forms" ["settings"]}]})]
+        (is (false? (:ok result)))
+        (is (= :invalid-edn-editor-scope (:reason result)))
+        (is (= ["delete_owners" 0 "file"] (:path result)))
+        (is (:source-unchanged result))))))
+
 (deftest editor-gesture-compiles-grouped-exact-owner-deletion
   (let [request
         {"delete_owners"

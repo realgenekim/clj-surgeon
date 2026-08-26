@@ -43,6 +43,8 @@ domain result and its concise summary.
 - Preserve source spelling, comments, ownership, and snapshot guards without
   transferring design judgment into the tool.
 - Commit one coherent multi-owner decision as one reversible transaction.
+- Apply one exact root-scoped data change across an explicit set of Clojure or
+  EDN files without repeating the same guarded intent per file.
 - Give every public MCP result enough uniform evidence for a caller to
   understand outcome, elapsed server work, and next action.
 - Refuse stale, ambiguous, malformed, over-budget, or unverifiable work before
@@ -106,6 +108,12 @@ The first leaf design is the MCP operation contract under
 `docs/intent/mcp-operation-contract/`. Other subsystems remain outside the
 initial Linked-Intent Development scope and continue to follow the repository's
 existing plans and testing guidance.
+
+The compact exact editor treats `.edn` as lossless Clojure data, not as a
+namespace. An EDN edit must use root scope, may apply one exact replacement to
+an explicit file set, and compiles into the existing frozen multi-file
+transaction. Namespace ownership, named-form ownership, owner deletion, and
+semantic indexing remain source-file capabilities.
 
 ## Key Design Decisions
 

@@ -210,6 +210,27 @@ operation receipt, but it does not consume the MCP envelope directly. CLI exit
 status, stdout and stderr, process startup time, and compatibility are separate
 public contracts tracked by `clj-surgeon-9xi`.
 
+## Compact Root-Scoped Data Edits
+
+`edit_clojure` admits `.edn` only for an exact literal edit whose location is
+`within.root`. Root scope searches the complete lossless concrete-syntax tree;
+it does not imply replacement of the whole document. The exact `from` subtree
+and cardinality remain the stale-source and ambiguity guards.
+
+One edit may name either one `file` or an explicit non-empty `files` array.
+Grouped `files` are available only with root scope. `matches` defaults to one
+and is authoritative per file. The adapter derives the aggregate match count,
+expands the gesture into the existing direct transaction representation, and
+commits all affected files against one frozen snapshot. Duplicate files,
+unsupported extensions, a count mismatch in any file, malformed future data,
+or any write failure refuses or rolls back the complete transaction.
+
+EDN does not gain namespace, named-owner, owner-deletion, extraction, semantic
+index, or formatter behavior. The kernel parses and rewrites concrete syntax;
+it does not invoke tagged-literal readers or evaluate data. Bytes outside the
+exact replaced subtrees, including comments and metadata, remain under the
+existing lossless transaction contract.
+
 ## Decisions & Alternatives
 
 | Decision | Chosen | Alternatives Considered | Rationale |
@@ -221,6 +242,7 @@ public contracts tracked by `clj-surgeon-9xi`.
 | Intent status gate | `[ ]` needs tests, `[x]` needs code and tests, `[D]` is exempt | Gate only implemented specs; require every non-deferred spec to be fully implemented | Tests preload active intent while genuinely deferred work remains non-blocking. |
 | Prolog retention | Keep only after an independently found native-test gap | Retain unconditionally; never model relational states | A second model earns maintenance cost only by demonstrating additional fault-finding power. |
 | CLI reuse | Defer to a transport-neutral receipt segment | Reuse the MCP envelope directly; duplicate all evidence | Transport semantics differ even when domain evidence overlaps. |
+| EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
 
 ## Open Questions & Future Decisions
 

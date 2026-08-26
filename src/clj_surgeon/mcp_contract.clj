@@ -55,7 +55,7 @@
   (get-in editor-gesture-contract [:deletion :allowed]))
 (def ^:private required-editor-deletion-fields
   (get-in editor-gesture-contract [:deletion :required]))
-(def ^:private supported-source-extensions #{"clj" "cljs" "cljc"})
+(def ^:private supported-source-extensions #{"clj" "cljs" "cljc" "edn"})
 
 (def ^:private prewrite-error-types
   #{:invalid-mcp-request
@@ -66,6 +66,10 @@
     :duplicate-change-id
     :invalid-files
     :duplicate-file
+    :ambiguous-editor-files
+    :invalid-grouped-editor-scope
+    :invalid-edn-editor-scope
+    :invalid-root-scope
     :invalid-forms
     :invalid-change-forms
     :invalid-change-expectation
@@ -183,8 +187,20 @@
   [value path]
   (when-not (relative-source-path? value)
     (refuse! :invalid-relative-source-path path
-             "Expected a project-relative .clj, .cljs, or .cljc path without parent traversal"))
+             "Expected a project-relative .clj, .cljs, .cljc, or .edn path without parent traversal"))
   value)
+
+(defn- edn-path?
+  [value]
+  (str/ends-with? (str/lower-case value) ".edn"))
+
+(defn- clojure-source-path!
+  [value path]
+  (let [value (source-path! value path)]
+    (when (edn-path? value)
+      (refuse! :invalid-edn-editor-scope path
+               "EDN is supported only by root-scoped exact edits"))
+    value))
 
 (defn- validate-count-map!
   [value allowed required path]
@@ -214,9 +230,13 @@
     (validate-fields! change change-fields required path)
     (let [forms? (present? change "forms")
           owner? (present? change "owner")]
-      (when (= forms? owner?)
+      (when (and forms? owner?)
         (refuse! :ambiguous-change-owner path
-                 "Provide exactly one of forms or owner"))
+                 "Provide at most one of forms or owner"))
+      (when (and (or forms? owner?)
+                 (some edn-path? (field change "files")))
+        (refuse! :invalid-edn-editor-scope (conj path "files")
+                 "EDN is supported only by root-scoped exact edits"))
       (let [actions (filterv #(present? change %)
                              ["replace" "delete" "insert_before" "insert_after"
                               "rename_binding" "assoc_entry"])]
@@ -388,8 +408,8 @@
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
         (validate-fields! raw extraction-fields extraction-fields ["extraction"])
-        (let [file (source-path! (field raw "file") ["extraction" "file"])
-              to (source-path! (field raw "to") ["extraction" "to"])
+        (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
+              to (clojure-source-path! (field raw "to") ["extraction" "to"])
               forms (mapv #(nonblank-string! % ["extraction" "forms"])
                           (nonempty-array! (field raw "forms")
                                            ["extraction" "forms"]))
@@ -407,7 +427,7 @@
                   (refuse! :expected-array ["extraction" "caller_changes"]
                            "Expected an array"))
               callers (mapv validate-change! raw-callers (range))
-              ignored (mapv #(source-path! % ["extraction" "ignored_caller_files"])
+              ignored (mapv #(clojure-source-path! % ["extraction" "ignored_caller_files"])
                             (or (field raw "ignored_caller_files") []))
               _ (when-not (= (count ignored) (count (distinct ignored)))
                   (refuse! :duplicate-path ["extraction" "ignored_caller_files"]
@@ -474,6 +494,10 @@
 
 (defn- editor-gestures->direct-params
   [params]
+  ;; @spec MCP-OP-EDIT-001
+  ;; @spec MCP-OP-EDIT-002
+  ;; @spec MCP-OP-EDIT-003
+  ;; @spec MCP-OP-EDIT-004
   (try
     (let [redundant-expect? (present? params "expect")
           params (without-field params "expect")]
@@ -493,23 +517,56 @@
                                           (conj path "within"))
                       form? (present? within "form")
                       namespace? (present? within "namespace")
-                      _ (when (= form? namespace?)
+                      root? (present? within "root")
+                      locations (count (filter true? [form? namespace? root?]))
+                      _ (when-not (= 1 locations)
                           (refuse! :ambiguous-editor-location
                                    (conj path "within")
-                                   "Provide exactly one of form or namespace"))
+                                   "Provide exactly one of form, namespace, or root"))
+                      _ (when (and root?
+                                   (not= true (field within "root")))
+                          (refuse! :invalid-root-scope
+                                   (conj path "within" "root")
+                                   "root must be true"))
+                      file? (present? edit "file")
+                      files? (present? edit "files")
+                      _ (when (= file? files?)
+                          (refuse! :ambiguous-editor-files path
+                                   "Provide exactly one of file or files"))
+                      files (if file?
+                              [(source-path! (field edit "file")
+                                             (conj path "file"))]
+                              (mapv
+                                (fn [file file-index]
+                                  (source-path! file
+                                                (conj path "files" file-index)))
+                                (nonempty-array! (field edit "files")
+                                                 (conj path "files"))
+                                (range)))
+                      _ (when-not (= (count files) (count (distinct files)))
+                          (refuse! :duplicate-file (conj path "files")
+                                   "Grouped edit files must be unique"))
+                      _ (when (and files? (not root?))
+                          (refuse! :invalid-grouped-editor-scope
+                                   (conj path "within")
+                                   "Grouped files require root scope"))
+                      _ (when (and (some edn-path? files) (not root?))
+                          (refuse! :invalid-edn-editor-scope
+                                   (conj path "within")
+                                   "EDN edits require root scope"))
                       matches (if (present? edit "matches")
                                 (positive-integer! (field edit "matches")
                                                    (conj path "matches"))
-                                1)]
+                                1)
+                      total-matches (* matches (count files))]
                   (cond->
                     {"id" (str "edit-" (inc index))
-                     "files" [(source-path! (field edit "file")
-                                            (conj path "file"))]
+                     "files" files
                      "find" (nonblank-string! (field edit "from")
                                               (conj path "from"))
                      "replace" (nonblank-string! (field edit "to")
                                                  (conj path "to"))
-                     "expect" {"matches" matches
+                     "expect" {"matches" total-matches
                                "each_file" matches}}
                     form?
                     (assoc "forms"
@@ -537,8 +594,8 @@
                       _ (validate-fields!
                           deletion editor-deletion-fields
                           required-editor-deletion-fields path)
-                      file (source-path! (field deletion "file")
-                                         (conj path "file"))
+                      file (clojure-source-path! (field deletion "file")
+                                                 (conj path "file"))
                       forms (mapv
                               (fn [form form-index]
                                 (nonblank-string!
@@ -582,8 +639,8 @@
                             expect editor-program-expect-fields
                             required-editor-program-expect-fields
                             (conj path "expect"))]
-                    {:file (source-path! (field program "file")
-                                         (conj path "file"))
+                    {:file (clojure-source-path! (field program "file")
+                                                 (conj path "file"))
                      :expression
                      (nonblank-string! (field program "expression")
                                        (conj path "expression"))

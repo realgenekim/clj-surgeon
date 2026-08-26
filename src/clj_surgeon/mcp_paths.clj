@@ -5,7 +5,7 @@
   (:import
    (java.nio.file Files LinkOption Path Paths)))
 
-(def supported-source-extensions #{"clj" "cljs" "cljc"})
+(def supported-source-extensions #{"clj" "cljs" "cljc" "edn"})
 
 (defn relative-source-path?
   "True for a portable project-relative supported Clojure source path.
@@ -49,7 +49,7 @@
   (if-not (relative-source-path? relative)
     (path-refusal
       :invalid-relative-source-path
-      "Expected a project-relative .clj, .cljs, or .cljc path without parent traversal"
+      "Expected a project-relative .clj, .cljs, .cljc, or .edn path without parent traversal"
       relative)
     (try
       (let [lexical (.normalize (.resolve root relative))]
@@ -88,7 +88,7 @@
   (if-not (relative-source-path? relative)
     (path-refusal
       :invalid-relative-source-path
-      "Expected a project-relative .clj, .cljs, or .cljc path without parent traversal"
+      "Expected a project-relative .clj, .cljs, .cljc, or .edn path without parent traversal"
       relative)
     (try
       (let [lexical (.normalize (.resolve root relative))

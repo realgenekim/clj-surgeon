@@ -44,6 +44,13 @@ tests witness the requirement.
 - [x] **MCP-OP-TRACE-004**: When `make runtests` executes, it shall not require implementation or test witnesses for a deferred `[D]` MCP operation-contract intent.
 - [x] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
 
+## Compact Root-Scoped Data Edits
+
+- [x] **MCP-OP-EDIT-001**: When one compact literal edit names an explicit non-empty `files` array and `within.root` is true, clj-surgeon shall apply the exact `from` to `to` replacement with the declared match count in every file as one frozen failure-atomic transaction.
+- [x] **MCP-OP-EDIT-002**: When a compact literal edit targets an `.edn` file, clj-surgeon shall require root scope and refuse namespace ownership, named-form ownership, and owner deletion before writing.
+- [x] **MCP-OP-EDIT-003**: If a grouped compact edit repeats a file, combines `file` with `files`, omits both, uses grouped files outside root scope, or fails its per-file cardinality, clj-surgeon shall refuse the complete request without changing any source.
+- [x] **MCP-OP-EDIT-004**: When a root-scoped EDN edit succeeds, clj-surgeon shall parse and read back every future file and preserve all bytes outside the exact replaced subtrees, including comments and metadata.
+
 ## Misreadings and Boundaries
 
 | Intent | Plausible wrong reading to prevent | Boundary examples |

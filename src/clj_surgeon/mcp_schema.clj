@@ -209,29 +209,39 @@
     "edits"
     {:type "array"
      :minItems 1
-     :description "Exact owner-scoped literal replacements compiled into the same atomic transaction."
+     :description "Exact literal replacements compiled into the same atomic transaction. Use one file with a named Clojure owner, or explicit files with root scope for a grouped Clojure/EDN edit."
      :items
      {:type "object"
       :additionalProperties false
       :properties
       {"file" {:type "string" :minLength 1
-               :description "One project-relative .clj, .cljs, or .cljc source path."}
+               :description "One project-relative .clj, .cljs, .cljc, or root-scoped .edn path."}
+       "files" {:type "array" :minItems 1 :uniqueItems true
+                :items {:type "string" :minLength 1}
+                :description "Explicit project-relative paths for one grouped root-scoped edit. Every file must match independently."}
        "within" {:type "object"
                  :additionalProperties false
-                 :description "Exactly one named top-level form or namespace form that acts as the edit location."
+                 :description "Exactly one named Clojure owner or the complete syntax-tree root. EDN requires root scope."
                  :properties
                  {"form" {:type "string" :minLength 1
                           :description "One exact named top-level form."}
                   "namespace" {:type "string" :minLength 1
-                               :description "One exact namespace name for editing its ns form."}}
+                               :description "One exact namespace name for editing its ns form."}
+                  "root" {:type "boolean" :enum [true]
+                          :description "Search the complete concrete syntax tree while preserving all bytes outside exact replacements."}}
                  :oneOf [{:required ["form"]}
-                         {:required ["namespace"]}]}
+                         {:required ["namespace"]}
+                         {:required ["root"]}]}
        "from" {:type "string" :minLength 1
                :description "The exact old Clojure subtree. Its count must equal matches, which defaults to one."}
        "to" {:type "string" :minLength 1
              :description "The replacement Clojure subtree."}
        "matches" positive-integer-schema}
-      :required ["file" "within" "from" "to"]}}
+      :required ["within" "from" "to"]
+      :oneOf [{:required ["file"]
+               :not {:required ["files"]}}
+              {:required ["files"]
+               :not {:required ["file"]}}]}}
     "delete_owners"
     {:type "array"
      :minItems 1

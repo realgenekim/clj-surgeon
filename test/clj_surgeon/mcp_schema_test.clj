@@ -67,14 +67,16 @@
                    {:required ["delete_owners"]}]
                   (:anyOf %))
               routes))
-    (is (= #{"file" "within" "from" "to" "matches"}
+    (is (= #{"file" "files" "within" "from" "to" "matches"}
            (set (keys (:properties gesture)))))
-    (is (= ["file" "within" "from" "to"]
+    (is (= ["within" "from" "to"]
            (:required gesture)))
     (is (false? (:additionalProperties gesture)))
-    (is (= #{"form" "namespace"}
+    (is (= #{"form" "namespace" "root"}
            (set (keys (get-in gesture [:properties "within" :properties])))))
-    (is (= [{:required ["form"]} {:required ["namespace"]}]
+    (is (= [{:required ["form"]}
+            {:required ["namespace"]}
+            {:required ["root"]}]
            (get-in gesture [:properties "within" :oneOf])))
     (is (= #{"file" "expression" "expect"}
            (set (keys (:properties program)))))
