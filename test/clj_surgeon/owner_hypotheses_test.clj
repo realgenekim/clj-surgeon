@@ -58,6 +58,8 @@
                 (:did-you-mean first-result)))
     (is (every? #(= ["clj"] (:platforms %))
                 (:did-you-mean first-result)))
+    (is (every? #(not (contains? % :score))
+                (:did-you-mean first-result)))
     (is (every? #(not (contains? % :source))
                 (:did-you-mean first-result)))))
 
@@ -90,48 +92,24 @@
      "direct-contract-shape" "direct-change-contract"
      "editor-gesture-contract-shape" "editor-gesture-contract"]
     {:resolved-names ["editor-hybrid-schema"]}]
-   ["upsert-managed-block" "upsert-workspace-block"
-    ["managed-begin" "managed-end" "managed-placeholder" "shared-surgeon-url"
-     "shared-cclsp-url" "clojure-extensions" "cclsp-health-url"
-     "read-cclsp-health" "await-cclsp-workspace!" "ancestor-directories"
-     "repository-root-file" "effective-kondo-config-dir" "cclsp-server"
-     "cclsp-config-source" "clojure-server?" "managed-clojure-server?"
-     "upsert-cclsp-workspace" "cclsp-config-locks" "cclsp-config-lock"
-     "exact-server-persisted?" "install-cclsp-workspace!" "install-cclsp-config!"
-     "marker-count" "loopback-mcp-url?" "workspace-mcp-block"
-     "managed-tool-header?" "any-table-header?" "remove-existing-tool-tables"
-     "upsert-workspace-block" "install-workspace-config!" "command-path"
-     "source-tool-root" "run-command!" "require-command!" "up!" "-main"]]
-   ["compiles-owner-relative-top-level-insertion"
-    "validates-top-level-insertion-without-repeating-owner-source"
-    ["valid-request" "gesture-request" "java-json-containers"
-     "validates-and-compiles-one-typed-request"
-     "validates-and-compiles-one-editor-gesture"
-     "editor-gesture-compiles-a-namespace-location"
-     "editor-gesture-tolerates-redundant-aggregate-expect"
-     "editor-gesture-derives-aggregate-counts"
-     "grouped-root-edn-edit-derives-per-file-guards"
-     "grouped-root-edn-edit-refuses-ambiguous-scope"
-     "editor-gesture-compiles-grouped-exact-owner-deletion"
-     "editor-gesture-refuses-invalid-or-mixed-locations"
-     "direct-change-accepts-only-closed-verification-profiles"
-     "accepts-java-json-containers-from-the-mcp-sdk"
-     "preserves-source-spelling-and-owner-punctuation"
-     "validates-six-change-multi-file-request"
-     "rejects-invalid-typed-requests-exhaustively"
-     "normalizes-complete-success-to-terminal-evidence"
-     "normalizes-a-running-cold-proof-without-pretending-it-is-terminal"
-     "refuses-incomplete-or-unsafe-success-results"
-     "classifies-kernel-refusal-with-the-exact-actionable-diagnostic"
-     "normalized-refusal-preserves-an-actionable-compiler-diagnostic"
-     "verification-refusal-names-the-failed-check-and-bounds-its-output"
-     "namespace-owner-crosses-the-json-boundary-as-closed-data"
-     "defmethod-owner-crosses-the-json-boundary-as-closed-data"
-     "validates-and-compiles-guarded-sibling-insertion"
-     "validates-top-level-insertion-without-repeating-owner-source"
-     "validates-and-compiles-binding-aware-local-rename"
-     "validates-and-compiles-comment-preserving-map-entry-insertion"
-     "validates-and-compiles-whole-owner-deletion-without-find"]]])
+   ["tools-list-publishes-the-compact-editor-contract"
+    "exposes-exactly-four-typed-tools"
+    ["temp-dir" "delete-tree!"
+     "tool-profiles-preserve-full-default-and-isolate-the-editor"
+     "exposes-exactly-four-typed-tools"
+     "live-tool-sync-plans-contract-changes-without-handler-churn"
+     "embedded-nrepl-starts-without-resolving-cider"
+     "embedded-nrepl-redefines-the-live-handler-var"
+     "nested-live-server-registration-restores-the-outer-server"]]
+   ["tool-profiles-expose-only-the-intended-catalog"
+    "tool-profiles-preserve-full-default-and-isolate-the-editor"
+    ["temp-dir" "delete-tree!"
+     "tool-profiles-preserve-full-default-and-isolate-the-editor"
+     "exposes-exactly-four-typed-tools"
+     "live-tool-sync-plans-contract-changes-without-handler-churn"
+     "embedded-nrepl-starts-without-resolving-cider"
+     "embedded-nrepl-redefines-the-live-handler-var"
+     "nested-live-server-registration-restores-the-outer-server"]]])
 
 (deftest strict-field-corpus-has-complete-top-ten-recall
   (let [ranks
@@ -143,5 +121,5 @@
                     (hypotheses/rank-owner-hypotheses
                       requested (records candidates) opts))))
           strict-corpus)]
-    (is (= [1 5 1 2 1 7] ranks))
+    (is (= [1 5 1 2 3 1] ranks))
     (is (every? #(<= % 10) ranks))))
