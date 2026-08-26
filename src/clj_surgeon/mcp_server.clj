@@ -171,7 +171,13 @@
   "Record one live SDK server and the contracts installed at construction."
   [server]
   (let [registered (tool-contracts (registered-tools))]
-    (reset! live-tool-state {:server server :registered registered})
+    (swap! live-tool-state
+           (fn [state]
+             (if (identical? server (:server state))
+               (assoc state :registered registered)
+               {:server server
+                :registered registered
+                :previous state})))
     {:ok true :status :registered :tool-count (count registered)}))
 
 (defn unregister-live-server!
@@ -179,7 +185,9 @@
   [server]
   (swap! live-tool-state
          (fn [state]
-           (if (identical? server (:server state)) nil state)))
+           (if (identical? server (:server state))
+             (:previous state)
+             state)))
   {:ok true :status :unregistered})
 
 (defn sync-tools!

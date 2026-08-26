@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-program-tool :as program-tool]
+   [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as server]
    [clj-surgeon.mcp-tool :as tool]
    [clojure.java.io :as io]
@@ -220,3 +221,19 @@
         (alter-var-root #'tool/handle-clj-change (constantly original))
         (when embedded (nrepl-server/stop-server embedded))
         (delete-tree! directory)))))
+
+(deftest nested-live-server-registration-restores-the-outer-server
+  (let [original @runtime/live-tool-state
+        outer (Object.)
+        inner (Object.)]
+    (try
+      (reset! runtime/live-tool-state nil)
+      (server/register-live-server! outer)
+      (server/register-live-server! inner)
+      (is (identical? inner (:server @runtime/live-tool-state)))
+      (server/unregister-live-server! inner)
+      (is (identical? outer (:server @runtime/live-tool-state)))
+      (server/unregister-live-server! outer)
+      (is (nil? @runtime/live-tool-state))
+      (finally
+        (reset! runtime/live-tool-state original)))))
