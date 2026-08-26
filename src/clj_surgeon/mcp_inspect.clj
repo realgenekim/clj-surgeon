@@ -304,6 +304,16 @@
        :read_complete false
        :source_unchanged true
        :next_action "correct_request"}
+      (= "forms" (:operation request))
+      (assoc :failed_request
+             {:id (:id request)
+              :operation "forms"
+              :file (:file request)
+              :requested_forms (mapv str (:forms request))})
+      (contains? result :failed-stage)
+      (assoc :failed_stage (name (:failed-stage result)))
+      (contains? result :file-hash)
+      (assoc :file_hash (:file-hash result))
       (contains? result :expected) (assoc :expected (json-data (:expected result)))
       (contains? result :actual) (assoc :actual (json-data (:actual result)))
       (contains? result :expected-match-count)
@@ -314,41 +324,46 @@
       (assoc :match_count (:match-count result))
       (contains? result :failure-count)
       (assoc :failure_count (:failure-count result))
+      (contains? result :requested-form-count)
+      (assoc :requested_form_count (:requested-form-count result))
+      (contains? result :resolved-form-count)
+      (assoc :resolved_form_count (:resolved-form-count result))
+      (contains? result :failures)
+      (assoc :failures (json-data (:failures result)))
       (contains? result :available-form-count)
       (assoc :available_form_count (:available-form-count result))
+      (contains? result :available-owner-count)
+      (assoc :available_owner_count (:available-owner-count result))
+      (contains? result :available-owners)
+      (assoc :available_owners (:available-owners result))
+      (contains? result :available-owners-returned)
+      (assoc :available_owners_returned (:available-owners-returned result))
+      (contains? result :available-owners-omitted)
+      (assoc :available_owners_omitted (:available-owners-omitted result))
+      (contains? result :available-owners-truncated)
+      (assoc :available_owners_truncated (:available-owners-truncated result))
+      (contains? result :selection-failures)
+      (assoc :selection_failures (json-data (:selection-failures result)))
       (contains? result :form-candidates)
-      (assoc :form_candidates (json-data (:form-candidates result))))))
+      (assoc :form_candidates (json-data (:form-candidates result)))
+      (contains? result :candidate-limit)
+      (assoc :candidate_limit (:candidate-limit result))
+      (contains? result :candidates-truncated)
+      (assoc :candidates_truncated (:candidates-truncated result)))))
 
+;; @spec MCP-OP-READ-DIAG-001
+;; @spec MCP-OP-READ-DIAG-003
+;; @spec MCP-OP-READ-HYP-001
+;; @spec MCP-OP-READ-HYP-002
 (defn- forms-result
   [request snapshot]
   (let [found (show-form/select-form
                 (:file request) (:source snapshot)
                 {:forms (mapv symbol (:forms request))})]
     (if (:error found)
-      (let [requested (mapv str (:forms request))
-            available
-            (->> (outline/outline-source (:file request) (:source snapshot))
-                 :forms
-                 (keep :name)
-                 (map str)
-                 distinct
-                 vec)
-            common-prefix-length
-            (fn [left right]
-              (count (take-while true? (map = left right))))
-            candidates
-            (->> available
-                 (sort-by
-                   (fn [candidate]
-                     [(- (apply max 0
-                                (map #(common-prefix-length % candidate)
-                                     requested)))
-                      candidate]))
-                 (take 8)
-                 vec)]
-        (assoc found
-               :available-form-count (count available)
-               :form-candidates candidates))
+      (assoc found
+             :failed-stage :selector
+             :file-hash (:hash snapshot))
       {:id (:id request)
        :operation "forms"
        :file (:file request)

@@ -3,6 +3,7 @@
   (:require
    [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.owner-hypotheses :as owner-hypotheses]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -259,11 +260,14 @@
         base
         :batch-form-selection-failed
         "One or more requested top-level forms could not be selected exactly"
-        {:requested-form-count (count requested-forms)
-         :resolved-form-count (- (count requested-forms) (count failures))
-         :failure-count (count failures)
-         :failures failures
-         :remedies {:list-forms (list-forms-remedy file)}})
+        (merge
+          {:requested-form-count (count requested-forms)
+           :resolved-form-count (- (count requested-forms) (count failures))
+           :failure-count (count failures)
+           :failures failures
+           :remedies {:list-forms (list-forms-remedy file)}}
+          (owner-hypotheses/owner-recovery-evidence
+            requested-forms records failures)))
       (let [selected-forms (mapv (fn [{:keys [matches]}]
                                    (select-keys (first matches)
                                                 selected-record-keys))
@@ -396,22 +400,38 @@
                   base
                   error-type
                   message
-                  {:match-count 0
-                   :remedies {:list-forms (list-forms-remedy file)}}))
+                  (cond-> {:match-count 0
+                           :remedies {:list-forms (list-forms-remedy file)}}
+                    by-name?
+                    (merge
+                      (owner-hypotheses/owner-recovery-evidence
+                        [normalized-form]
+                        platform-records
+                        [{:form normalized-form
+                          :error-type error-type
+                          :match-count 0}])))))
 
               :else
-              (error-result
-                base :ambiguous-form
-                (str "Selector matched " (count matches) " top-level forms")
-                (cond-> {:match-count (count matches)
-                         :candidate-limit max-candidate-locations
-                         :matches-truncated? (> (count matches)
-                                                max-candidate-locations)
-                         :matches (->> matches
-                                       (take max-candidate-locations)
-                                       (mapv candidate-location))}
-                  (platform-remedy matches) (assoc :remedies
-                                                   (platform-remedy matches)))))))
+              (let [details
+                    (cond-> {:match-count (count matches)
+                             :candidate-limit max-candidate-locations
+                             :matches-truncated? (> (count matches)
+                                                    max-candidate-locations)
+                             :matches (->> matches
+                                           (take max-candidate-locations)
+                                           (mapv candidate-location))}
+                      (platform-remedy matches)
+                      (assoc :remedies (platform-remedy matches))
+                      normalized-form
+                      (merge
+                        (owner-hypotheses/owner-recovery-evidence
+                          [normalized-form]
+                          platform-records
+                          [(batch-form-failure normalized-form matches)])))]
+                (error-result
+                  base :ambiguous-form
+                  (str "Selector matched " (count matches) " top-level forms")
+                  details)))))
         (catch Exception e
           (error-result base :invalid-source (.getMessage e) {}))))))
 

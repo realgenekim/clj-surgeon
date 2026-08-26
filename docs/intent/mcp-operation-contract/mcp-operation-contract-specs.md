@@ -62,6 +62,28 @@ tests witness the requirement.
 - [x] **MCP-OP-PLAN-006**: When a remaining source owner will call a moved private form through the destination namespace, extraction planning shall publish that exact form as a required visibility change and shall include it in the snapshot-bound next call without writing source.
 - [x] **MCP-OP-PLAN-007**: When extraction apply receives `public_forms`, clj-surgeon shall require every mechanically necessary moved private form, refuse unmoved, already-public, or unsupported declarations, and apply each supported visibility change inside the same parsed, read-back-verified atomic transaction.
 
+## Read Selector Recovery
+
+- [x] **MCP-OP-READ-DIAG-001**: When a `forms` request cannot select each requested owner exactly, clj-surgeon shall report the failed stage, request identity, file, and each failed owner. It shall include failure kinds, exact match counts, available-owner count, source hash, and bounded-presentation counts without source bodies.
+- [x] **MCP-OP-READ-DIAG-002**: When clj-surgeon summarizes a selector refusal, it shall name the failed request, file, and owner and disclose hypothesis truncation. It shall label the first suggestion as a hypothesis only and require the caller to choose one exact owner and retry.
+- [x] **MCP-OP-READ-DIAG-003**: When the complete name-only owner vector fits the public result budget, a selector refusal shall return every unique available owner in deterministic order. Otherwise, it shall return a bounded prefix and exact returned and omitted counts.
+- [x] **MCP-OP-READ-HYP-001**: When selector recovery ranks possible owners, clj-surgeon shall rank the complete available-owner universe independently for each failed owner and publish each returned candidate with its rank, evidence basis, and `authority=false`.
+- [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
+- [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
+
+## Deferred Read Mission Surface
+
+- [D] **MCP-OP-READ-AUTH-001**: If one declared exact relation over the complete frozen candidate universe proves one correction, clj-surgeon shall publish its inputs, owner, cardinality, and snapshot evidence as authority. Otherwise, it shall publish no authority.
+- [D] **MCP-OP-READ-GUARD-001**: When an inspect request supplies frozen file-hash guards, clj-surgeon shall compare every captured canonical snapshot with its declared hash before request evaluation and shall refuse the complete read on any mismatch.
+- [D] **MCP-OP-READ-RETRY-001**: When one selector failure has exact authority and no other request fails, clj-surgeon shall return one schema-valid next call. It shall change only the proved selector and bind every requested file to its frozen hash.
+- [D] **MCP-OP-READ-RETRY-002**: If correction authority is absent, non-unique, stale, or accompanied by another failure, clj-surgeon shall omit the executable next call. It shall keep `ok=false` and `read_complete=false` and return no ordinary successful results.
+- [D] **MCP-OP-READ-RESOLVE-001**: When one explicit clue resolves exactly one owner in a frozen snapshot, clj-surgeon shall return that owner and its proof trace. Exact clues are literals, containing lines, declared aliases, or fully qualified owners.
+- [D] **MCP-OP-READ-RESOLVE-002**: If an explicit resolution clue matches zero or multiple owners, clj-surgeon shall refuse without choosing an owner.
+- [D] **MCP-OP-READ-CONT-001**: When one selector-local failure interrupts a batch, clj-surgeon shall preserve completed sibling evidence in a snapshot-bound continuation outside ordinary successful results.
+- [D] **MCP-OP-READ-CONT-002**: If schema, path, parse, snapshot, or output-budget validation fails, clj-surgeon shall return no continuation or partial successful evidence.
+- [D] **MCP-OP-READ-MISSION-001**: When a caller supplies a declarative read-question graph, clj-surgeon shall reuse frozen snapshots and owner selections while enforcing the declared evidence budget.
+- [D] **MCP-OP-READ-MISSION-002**: When a declarative read mission completes, clj-surgeon shall return guard-ready source anchors without granting write authority or inventing replacement text.
+
 ## Misreadings and Boundaries
 
 | Intent | Plausible wrong reading to prevent | Boundary examples |
@@ -94,6 +116,11 @@ tests witness the requirement.
 | `MCP-OP-PLAN-003` | The kernel may guess caller rewrites or mark structural candidates as semantically complete. | Empty decision arrays; exact candidate list; explicit ignored files; source hash in next call. |
 | `MCP-OP-PLAN-004` | Named forms are sufficient stale guards across two calls, or a stale plan can be automatically recomputed during apply. | Source changed inside moved owner; source changed elsewhere; destination appears after planning. |
 | `MCP-OP-PLAN-005` | Derived aggregate counts weaken exact per-edit guards, or legacy explicit counts may be silently ignored. | No callers; several caller edits; repeated caller file; explicit count too high or low. |
+| `MCP-OP-READ-DIAG-001` | One aggregate candidate list is enough even when several owners failed, or source bodies should accompany the refusal. | One missing owner; several missing owners; ambiguous duplicate owner; successful siblings before failure. |
+| `MCP-OP-READ-DIAG-002` | Structured evidence is sufficient when the visible summary says only `correct_request`. | Missing owner in a large test file; candidate list truncated; no useful lexical hypothesis. |
+| `MCP-OP-READ-DIAG-003` | A ranked list makes the complete owner vocabulary unnecessary, or returning source is required for useful evidence. | Small namespace; semantic rename outside the top ten; repeated owner names; name-only vector over budget. |
+| `MCP-OP-READ-HYP-001` | The highest-ranked owner can be selected automatically because the list is deterministic. | One-character typo; semantic paraphrase; one candidate; tied candidates; candidate input permutation. |
+| `MCP-OP-READ-HYP-002` | A top-ten presentation is the complete candidate universe, or a score gap proves intent. | Eleven or more owners; intended owner at rank ten; intended owner outside the bound; one displayed candidate from many available owners. |
 
 ## Deferred Surface
 
@@ -101,3 +128,8 @@ Transport-level exception envelopes, cancellation, deadlines, queue time,
 correlation IDs, internal phase telemetry, and CLI/MCP receipt convergence are
 outside these requirements. They require their own reviewed intent before this
 leaf expands to cover them.
+
+Exact read correction authority, hash-guarded retries, successful-sibling
+continuations, explicit clue resolution, and declarative read missions remain
+deferred until the stateless selector-evidence slice has clean-context and field
+evidence.

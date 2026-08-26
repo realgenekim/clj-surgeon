@@ -127,6 +127,86 @@ The contract does not require a universal sentence shape. It requires that the
 duration be present, recognizable, and derived from the finalized structured
 value rather than measured a second time.
 
+## Selector Refusal Recovery
+
+A `forms` selector refusal must give the model enough bounded structural
+evidence to correct its hypothesis without using `rg`, an outline, `sed`, or a
+second discovery call. The refusal remains fail-closed. It does not read a
+different owner, return source from successful sibling requests, or authorize a
+write.
+
+The transport-neutral exact-form selector reports each missing or ambiguous
+requested owner and the complete available owner universe. The CLI and MCP
+projections preserve that evidence per failed owner. They do not combine
+several failures into one aggregate candidate ranking.
+
+Each projected failure contains:
+
+- the failed request ID and index;
+- the file and failed stage;
+- the requested owner, failure kind, and exact match count;
+- the complete available-owner count;
+- every unique available owner name when the name-only vector fits the public
+  result budget;
+- at most ten ranked owner hypotheses;
+- the returned and omitted hypothesis counts; and
+- the source hash that owned the selection decision.
+
+If the complete name-only owner vector would exceed the public result budget,
+the refusal returns a deterministic bounded prefix and reports its returned and
+omitted counts. It does not include source bodies. This keeps the usual refusal
+equivalent to an outline while preserving the existing output bound.
+
+The concise summary names the failed request, file, and requested owner. It
+shows the first ranked owner as a question labeled `hypothesis only`, then
+prints the complete bounded available-owner vocabulary so a text-only caller
+can see lower-ranked semantic corrections. It tells the caller to choose one
+exact owner and retry. The structured result preserves every failed owner,
+including failures that do not receive a useful lexical hypothesis.
+
+### Keep hypotheses separate from authority
+
+Owner ranking is a perception aid for the model. Rank, score, lexical order, a
+unique top result, or a large score gap cannot select an owner. Every published
+hypothesis states `authority=false`. The first vertical slice publishes no
+automatic correction and no executable retry. The next call succeeds only when
+the caller submits an exact real owner through the ordinary public contract.
+
+This boundary follows the Bitter Lesson. Surgeon exposes real structure that a
+more capable model can use better. It does not accumulate rules for particular
+misspellings, plural forms, API migrations, or test names.
+
+### Rank each missing owner independently
+
+The current aggregate candidate list compares available owners with all
+requested names. Owners that already resolved can therefore crowd the useful
+correction out of the bounded result. The recovery compiler instead ranks the
+complete candidate universe independently for each failed owner.
+
+The ranker is a pure deterministic function. Its evaluation compares normalized
+Levenshtein distance, normalized Damerau-Levenshtein distance, kebab-token
+overlap, character trigrams, and a deterministic character/token hybrid against
+the frozen real-refusal corpus. The implementation keeps the simplest ranker
+that places every strict corpus correction in the first ten. Candidate input
+order cannot change the result. The exact owner name breaks any remaining score
+tie.
+
+The public hypothesis need not expose a numeric confidence value. It reports
+rank, basis, and `authority=false`. This prevents a caller from mistaking a
+presentation score for proof.
+
+### Keep the first recovery slice stateless
+
+The first slice changes only selector-refusal evidence. It preserves
+`ok=false`, `read_complete=false`, and `source_unchanged=true`. It returns no
+ordinary successful `results`, retains no server continuation, accepts no new
+input fields, and does not involve a semantic provider.
+
+Exact proof relations, hash-guarded executable retries, successful-sibling
+continuation, explicit clue resolution, and declarative read missions remain
+separate modules. They advance only when the stateless evidence slice cannot
+meet the two-call and no-native-discovery gate.
+
 ## Asynchronous Verification
 
 Cold verification preserves two separate clocks:
@@ -205,9 +285,11 @@ native linked-intent gate remains.
 
 ## CLI Boundary
 
-The CLI is outside this leaf's scope. It may later consume a transport-neutral
-operation receipt, but it does not consume the MCP envelope directly. CLI exit
-status, stdout and stderr, process startup time, and compatibility are separate
+The exact-form selector recovery evidence is transport-neutral. CLI EDN and MCP
+structured output consume the same compiled available-owner vector, per-owner
+hypotheses, counts, truncation state, and `authority=false` law. The CLI does
+not consume the MCP envelope. CLI exit status, stdout and stderr, process
+startup time, compatibility, and broader operation receipts remain separate
 public contracts tracked by `clj-surgeon-9xi`.
 
 ## Extraction Planning Boundary
@@ -275,11 +357,12 @@ existing lossless transaction contract.
 | New-tool enforcement | Registry entries declare outcome classes; an independent witness catalog must match | Fixed list of current tools; finalizer-only proof; documentation review | Registration-derived outcome coverage makes omission fail when either the tool surface or a tool's public modes grow. |
 | Intent status gate | `[ ]` needs tests, `[x]` needs code and tests, `[D]` is exempt | Gate only implemented specs; require every non-deferred spec to be fully implemented | Tests preload active intent while genuinely deferred work remains non-blocking. |
 | Prolog retention | Keep only after an independently found native-test gap | Retain unconditionally; never model relational states | A second model earns maintenance cost only by demonstrating additional fault-finding power. |
-| CLI reuse | Defer to a transport-neutral receipt segment | Reuse the MCP envelope directly; duplicate all evidence | Transport semantics differ even when domain evidence overlaps. |
+| CLI reuse | Share only the transport-neutral exact-selector recovery compiler | Reuse the MCP envelope directly; duplicate all evidence; defer all parity | The owner universe and hypotheses are domain evidence, while transport envelopes and process semantics remain distinct. |
 | Extraction planning entrance | A top-level `inspect_clojure` mission over the shared pure planner | Fifth public tool; typed batch read operation; CLI subprocess | Planning is a coherent workspace-wide read mission, not one file read, and reuses the existing public read envelope. |
 | Plan-to-apply authority | Exact source hash plus explicit caller decisions | Retained in-memory plan; similarity; unguarded replay | The hash is transport-neutral, stale-safe, and grants no implicit write authority. |
 | Workspace source universe | One deterministic shared scanner for planning and execution | Duplicate scans in each handler; semantic index as authority | Both phases must reason over identical eligible paths and exact bytes without another index lifecycle. |
 | EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
+| Selector recovery | Per-failed-owner bounded hypotheses with no automatic selection | Aggregate candidates, automatic fuzzy selection, or immediate retained continuation | One refusal gives the model enough real structure for an exact retry without letting presentation rank become authority. |
 
 ## Open Questions & Future Decisions
 
@@ -290,8 +373,8 @@ existing lossless transaction contract.
 2. Typed refusals carry timing and concise summaries just like successes.
 3. A retained Prolog oracle and the linked-intent coherence gate belong in
    `make runtests`.
-4. CLI/MCP convergence is a sibling segment, not an implicit cascade from this
-   design.
+4. CLI and MCP exact-selector refusals share one transport-neutral recovery
+   compiler. Broader operation-receipt convergence remains a sibling segment.
 
 ### Deferred
 
@@ -299,6 +382,10 @@ existing lossless transaction contract.
    addition to the single public request clock.
 2. Whether transport-level exceptions should eventually become a separately
    specified structured MCP failure envelope.
+3. Whether an exact proof relation should emit a hash-guarded executable read
+   retry after the stateless hypothesis slice has field evidence.
+4. Whether successful sibling reads should use a server-retained continuation
+   instead of remaining fail-empty.
 
 ## References
 

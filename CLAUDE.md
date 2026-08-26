@@ -31,6 +31,11 @@ updates, and verification gates. It is not a chronological coding diary.
   that warm JVM. Reserve fresh `clojure -M` or `make` test processes for
   milestone gates, because cold runs verify classpath, startup, and isolation
   behavior that a warm JVM can hide.
+- If discovery finds no nREPL for the current worktree, start `make nrepl`,
+  retain its printed port, and verify `(System/getProperty "user.dir")` before
+  loading code. Treat this process as a standalone analysis JVM, not as the
+  shared MCP runtime. Use `require` with `:reload` after source changes and
+  prefer several small pure evaluations over one large probe.
 - **Read [docs/testing-guidelines.md](docs/testing-guidelines.md)** before writing tests.
 - Core rule: pure functions take data and return data. Test them with literals, not temp files.
 - If you need a temp file to test a function, the function needs refactoring, not the test.
