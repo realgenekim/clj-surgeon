@@ -136,6 +136,27 @@ cohort has only one replicate per seat, and native strategy variance remains
 large. The next experiment should test a different representative historical
 shape rather than spend the entire budget estimating this case more precisely.
 
+## Future stratum: split the 4,594-line views namespace
+
+Sessionize commit `c4299615dcf6c37b4d929892fb3bb0b6b7a44322` is a valuable
+third stratum, but the complete commit is not a fair single edit benchmark. It
+deleted a 4,594-line `views.clj`, created roughly twenty cohesive namespaces,
+and changed 43 files with 6,497 insertions and 5,722 deletions. The commit also
+contains auth, server, JavaScript, and test behavior changes.
+
+Derive counterfactuals from its historical 442-line namespace-split plan, one
+hash-bound extraction at a time, matching the plan's own safe sequence. The
+first candidate should be the `format` pilot: 15 moved forms with a broad
+internal caller set and simple behavior. A later high-value case is
+`organizer-layout`: 12 forms, including `time-travel-bar`, whose correct move
+closes a 1,187-line forward-reference gap and requires `fix-declares` evidence.
+
+This stratum tests a different claim from compact literal editing. It measures
+whether structural dependency closure, movement manifests, caller migration,
+and guarded extraction reduce complete verified refactor time versus a strong
+native agent. Preserve one extraction per fixture and commit; do not turn the
+whole historical campaign into one contrived mega-prompt.
+
 ## Product decisions
 
 ### 1. Make the selective route explicit
