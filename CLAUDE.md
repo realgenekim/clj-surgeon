@@ -61,6 +61,25 @@ updates, and verification gates. It is not a chronological coding diary.
   Comments, metadata, reader-discard forms, lint directives, and unrelated
   source remain protected unless the declared change explicitly owns them.
 
+### Increase option value while lowering the cost of change
+
+- When uncertainty is high, split a proposed capability into independently
+  testable seams with explicit acceptance gates. Prefer pure relations,
+  transport adapters, scorers, fixtures, and projections that can advance or
+  be rejected without coupling the other options.
+- Make experimental commits small, green, and cherry-pickable. Put one
+  mechanism or decision in each checkpoint so another branch can reuse the
+  earned seam without inheriting the complete experiment.
+- Freeze representative field evidence before optimizing. Run competing
+  options against the same corpus and retain negative results as receipts, but
+  keep losing machinery out of the production path.
+- Judge modularity by the option value it creates: parallel experiments,
+  cheaper reversal, independent verification, or reuse in the next real task.
+  Do not add indirection that merely renames the same coupled decision.
+- Prefer the smallest option that removes complete-task actions or risk. If a
+  general model can reason from bounded facts, expose those facts and keep
+  authority mechanical instead of growing a heuristic policy engine.
+
 ## Architecture
 
 - `forms.clj` — single source of truth for form classification (what is a defn, what is private, etc.)
