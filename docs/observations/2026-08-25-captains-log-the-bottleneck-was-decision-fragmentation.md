@@ -193,9 +193,9 @@ orders, were decisive:
 | dev-c | compact first | 60.243 s | 220.772 s | 3.67x | both yes |
 | dev-b | native first | 57.427 s | 473.051 s | 8.24x | both yes |
 
-Each compact arm made one MCP call that atomically committed all 51 edits
+All three compact arms made one MCP call that atomically committed all 51 edits
 across nine files. The retained telemetry proves all nine namespace-scoped
-edits used `within.namespace=true`; both transactions completed without a
+edits used `within.namespace=true`; every transaction completed without a
 refusal, retry, shell command, source reread, or post-decision inspection.
 Native remained a real competitor: both callers reached the exact answer.
 dev-c used 22 shell reads followed by one file mutation. dev-b used seven shell
@@ -209,7 +209,8 @@ came from collapsing mechanics and source reproduction, not from weakening the
 oracle: exact bytes, parse, and meaning-preservation all remained gates.
 
 The remaining frozen seat stays evidence even though it is ugly. dev-a's
-compact arm was exact in 69.155 seconds, while its native arm was rejected by
-the route guard after 306.824 seconds because it invoked Clojure 14 times. No
-arm was repaired, rerun, excluded, or silently promoted into the efficiency
-denominator.
+compact arm was exact in 69.155 seconds with the same one-call boolean namespace
+route. Its native arm was rejected by the route guard after 306.824 seconds
+because it invoked Clojure 14 times. Across all three seats, compact was 3/3
+exact, one call, and refusal-free. Native was 2/3 admissible. No arm was
+repaired, rerun, excluded, or silently promoted into the efficiency denominator.

@@ -123,11 +123,12 @@ generalized the result across opposite arm orders:
 | dev-c | compact first | 60.243 s | 220.772 s | 3.67x | both exact and correct |
 | dev-b | native first | 57.427 s | 473.051 s | 8.24x | both exact and correct |
 
-Both compact arms performed all 51 edits across nine files in one successful
-MCP call, with zero shell commands, refusals, or failed mutations. Telemetry
-confirmed nine boolean namespace scopes per arm. The dev-a compact arm was also
-exact in 69.155 seconds; its native control is retained as invalid because it
-violated the route gate by invoking Clojure 14 times.
+All three compact arms performed all 51 edits across nine files in one
+successful MCP call, with zero shell commands, refusals, or failed mutations.
+Telemetry confirmed nine boolean namespace scopes per arm. Their complete wall
+times were 57.427, 60.243, and 69.155 seconds. The dev-a native control is
+retained as invalid because it violated the route gate by invoking Clojure 14
+times.
 
 This passes the original per-pair 2x gate on the two admissible pairs and
 survives arm-order reversal. It does not yet prove a universal median: the
