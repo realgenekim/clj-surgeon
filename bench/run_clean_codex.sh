@@ -1196,7 +1196,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
-    printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. A successful response with verification_complete=true is terminal mutation evidence. Then run the requested clj-kondo command once.' \
+    printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then

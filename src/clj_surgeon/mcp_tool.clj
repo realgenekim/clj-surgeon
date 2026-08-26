@@ -37,6 +37,8 @@
     "ignored_caller_files. When the task already supplies the exact file, destination, "
     "forms, visibility changes, and caller accounting, submit extraction directly "
     "without plan-extraction. Otherwise copy required public_forms from plan-extraction; "
+    "When the task supplies an exact external verification command, omit verify and run "
+    "that command once after the transaction; do not substitute the full profile. "
     "apply refuses missing, unmoved, already-public, or unsupported declarations. "
     "Exact forms, caller edits, and files counts may be derived. "
     "Direct extraction reports structural caller candidates, not semantic completeness. "
