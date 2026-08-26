@@ -69,6 +69,7 @@ tests witness the requirement.
 - [x] **MCP-OP-READ-DIAG-003**: When the complete name-only owner vector fits the public result budget, a selector refusal shall return every unique available owner in deterministic order. Otherwise, it shall return a bounded prefix and exact returned and omitted counts.
 - [x] **MCP-OP-READ-HYP-001**: When selector recovery ranks possible owners, clj-surgeon shall rank the complete available-owner universe independently for each failed owner and publish each returned candidate with its rank, evidence basis, and `authority=false`.
 - [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
+- [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
 
 ## Deferred Read Mission Surface
 

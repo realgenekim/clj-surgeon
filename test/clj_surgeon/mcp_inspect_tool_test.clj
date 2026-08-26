@@ -274,7 +274,7 @@
         (delete-tree! project)))))
 
 (deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
-  ;; @spec MCP-OP-READ-DIAG-002
+  ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003
   (let [project (temp-dir)
         _source (write-source! project "src/demo.clj"
                                "(ns demo)\n(def answer 42)\n(def beta 7)\n")
@@ -309,6 +309,8 @@
         (is (str/includes? summary "missing form answr"))
         (is (str/includes? summary
                            "I think you may have meant answer? (hypothesis only)"))
+        (is (str/includes? summary
+                           "available owners (2/2): answer, beta"))
         (is (str/includes? summary "choose one exact owner and retry"))
         (is (not (contains? structured :resolved_requests)))
         (is (not (str/includes? summary "(def answer"))))

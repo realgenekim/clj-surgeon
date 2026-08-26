@@ -137,6 +137,7 @@
              (selector-result basic-source {:forms ['alpha "alpha"]}))))))
 
 (deftest show-forms-refuses-the-complete-read-on-any-missing-or-ambiguous-name
+  ;; @spec MCP-OP-READ-PARITY-001
   (testing "one missing owner suppresses every successful owner's source"
     (let [result (selector-result basic-source {:forms ['alpha 'missing]})]
       (is (= :batch-form-selection-failed (:error-type result)))
@@ -146,6 +147,13 @@
                :error-type :form-not-found
                :match-count 0}]
              (:failures result)))
+      (is (= 2 (:available-owner-count result)))
+      (is (= ["alpha" "omega"] (:available-owners result)))
+      (is (= "missing"
+             (get-in result [:selection-failures 0 :requested-owner])))
+      (is (= "omega" (get-in result [:selection-failures 0 :hypotheses 0 :owner])))
+      (is (false? (get-in result
+                          [:selection-failures 0 :hypotheses 0 :authority])))
       (is (not (contains? result :forms)))
       (is (not-any? #(and (map? %) (contains? % :source))
                     (tree-seq coll? seq result)))))
@@ -884,6 +892,20 @@
           (is (= (:source canonical-result) (:source result)))
           (is (= (:source-hash canonical-result) (:source-hash result)))
           (is (str/blank? err))))
+      (testing "CLI missing-owner refusal carries transport-neutral recovery evidence"
+        (let [{:keys [exit out err]}
+              (run-cli ":op" ":cat" ":file" (str file) ":form" "targt")
+              result (edn/read-string out)]
+          (is (pos? exit))
+          (is (= :form-not-found (:error-type result)))
+          (is (= ["target"] (:available-owners result)))
+          (is (= "target"
+                 (get-in result [:selection-failures 0 :hypotheses 0 :owner])))
+          (is (false? (get-in result
+                              [:selection-failures 0 :hypotheses 0 :authority])))
+          (is (not-any? #(and (map? %) (contains? % :source))
+                        (tree-seq coll? seq result)))
+          (is (str/blank? err))))
       (testing "bare :cat refuses rather than dumping the complete file"
         (let [{:keys [exit out err]}
               (run-cli ":op" ":cat" ":file" (str file))
@@ -1094,11 +1116,11 @@
 (deftest agent-facing-surfaces-do-not-drift
   (let [readme (slurp "README.md")
         skill (str (slurp "skills/clj-surgeon/SKILL.md")
-                "\n"
-                (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+                   "\n"
+                   (slurp "skills/clj-surgeon/references/cli-fallback.md"))
         legacy-skill (str (slurp "skill.md")
-                       "\n"
-                       (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+                          "\n"
+                          (slurp "skills/clj-surgeon/references/cli-fallback.md"))
         changelog (slurp "CHANGELOG.md")
         help (core/format-op-help
                :show-form

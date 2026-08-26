@@ -14,7 +14,8 @@
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
-   [clj-surgeon.structural-lens :as structural-lens]))
+   [clj-surgeon.structural-lens :as structural-lens]
+   [clojure.string :as str]))
 
 (def tool-description
   (str
@@ -729,6 +730,11 @@
           candidate (or (:owner hypothesis) (first (:form_candidates result)))
           hypotheses-truncated (or (:hypotheses_truncated selection-failure)
                                    (:candidates_truncated result))
+          available-owners (:available_owners result)
+          available-returned (or (:available_owners_returned result)
+                                 (count available-owners))
+          available-count (or (:available_owner_count result)
+                              available-returned)
           failure-label (if (= "ambiguous-form" (:error_type failure))
                           "ambiguous form"
                           "missing form")
@@ -750,7 +756,15 @@
             (when hypotheses-truncated
               (format "  hypotheses truncated · showing %d of %d owners\n"
                       (:hypotheses_returned selection-failure)
-                      (:available_owner_count result)))))
+                      available-count))
+            (when (seq available-owners)
+              (format "  available owners (%d/%d%s): %s\n"
+                      available-returned
+                      available-count
+                      (if (:available_owners_truncated result)
+                        "; truncated"
+                        "")
+                      (str/join ", " available-owners)))))
         "\n→ choose one exact owner and retry"))
 
     (= "prepare-change" (:mode result))

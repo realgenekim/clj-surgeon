@@ -177,6 +177,9 @@ complete bounded owner universe, source anchors, typed relation traces, and
 cheap snapshot-bound probes. The model can turn an unsupported owner claim into
 a hypothesis such as "I think you may have meant this owner." The kernel keeps
 that hypothesis separate from authority until an exact relation proves it.
+The transport-neutral exact-form selector compiles the same source-free owner
+vocabulary and non-authoritative hypotheses for CLI and MCP callers. Each
+entrance keeps its own envelope, timing, and rendering contract.
 This separation favors general model reasoning over an expanding catalog of
 tool-owned typo, spelling, or naming heuristics.
 
