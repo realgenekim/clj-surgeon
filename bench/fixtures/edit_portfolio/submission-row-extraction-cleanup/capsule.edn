@@ -1,0 +1,43 @@
+{:id :submission-row-extraction-cleanup
+ :decision-boundary :complete-multi-file-extraction-cleanup-supplied
+ :provenance {:kind :real-task-derived
+              :source "sessionize-sched-killer commit fc014632a5160b0f199387e0ec48982e0d9be975, review-board/structure: extract submission row renderer"
+              :minimized "anonymized moved bodies; retained the real nine-file cleanup boundary after destination creation, 14 attached-comment owner deletions, namespace rewrites, caller dispersion, and roughly 400-line source-removal scale"}
+ :targets ["src/sample/review_updates.clj"
+           "src/sample/views/log.clj"
+           "src/sample/views/people.clj"
+           "src/sample/views/review.clj"
+           "test/sample/board_test.clj"
+           "test/sample/reviews_test.clj"
+           "test/sample/status_workflow_test.clj"
+           "test/sample/views_test.clj"
+           "test/sample/voting_policy_test.clj"]
+ :hashes {"src/sample/review_updates.clj"
+          {:before "600bb6791e248eac0999a231f347fb205a2972a5e7537c423b723107b081d38b"
+           :after "086fc1360d56dff9f0df08f6594337c902b1f1d5851c1c22ea3c3a3c59768675"}
+          "src/sample/views/log.clj"
+          {:before "8b39d713df4ffbbe848dcd17c222080704ab8a18e79a41ad3c3fd55d6be67564"
+           :after "949c957f5518d1ea453615d6051119b3fb13ec8328a71119d429113c4b15fc40"}
+          "src/sample/views/people.clj"
+          {:before "d73bc6e501a8318b291f9ce28259d9b8065dffa150eb4de5e6e9e48d66937e5b"
+           :after "113c5d105c6915af1b4f779b78aa18a174c6a977d4e89a044fb35cddb7dde202"}
+          "src/sample/views/review.clj"
+          {:before "a8f886337b19a2a7620a066fc060026f5dde865973e1d29d2872d12b6249c3a7"
+           :after "a68b7584e704db831d156d6650048f5dea8963cd84363aeb21228896b4ada1e8"}
+          "test/sample/board_test.clj"
+          {:before "37f3420b66bcea67d2c45536d9eee8b9e04cc7f8e22b91c1fac5634bc185b744"
+           :after "a599f0d7c6bd9883401e709878b849b0322ac755d21cfddd9b945c9acb148559"}
+          "test/sample/reviews_test.clj"
+          {:before "07f9b1898d72cf75f2087bc1fc96406890a0bfb997527629c0a7b0fb819e5d23"
+           :after "7a87ba9fded86cde0aea5d9c9bc888408826a440493437875968479531a9da0b"}
+          "test/sample/status_workflow_test.clj"
+          {:before "b02aef7cc46380d142a3b1a7113559506b9f05418e373a220e064476a03c2b15"
+           :after "9e7de3b37c53b5fe421b486a350d176d09e1046ebbf36295f1b1bdddb26e9db8"}
+          "test/sample/views_test.clj"
+          {:before "f605d000d15e281949a53c0c73b48eb249d38128a0ef7efc2be49151df9f8fb3"
+           :after "0e47210a2f3d1d48e684dc32685ce487dd987e1140fd75f5d72a508d883df30f"}
+          "test/sample/voting_policy_test.clj"
+          {:before "32c12b6a8c171c5aadd572433da877057afcb214e654198dbd538bb83b5c5d9f"
+           :after "0bc8b306e00a3f0dfb77952937c0af0024b181dcfe8b934251a932f0b3d174ba"}}
+ :verification {:exact-bytes true :parse-clojure true}
+ :expected {:changed-files 9 :edits 52}}

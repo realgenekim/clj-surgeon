@@ -1,0 +1,199 @@
+The architecture and move are complete: the submission-row implementation already exists in sample.views.submission-row. Finish the exact source cleanup and direct-caller migration across the nine target files while preserving every unrelated byte.
+
+The complete file set, owner set, literal before/after forms, and cardinalities are supplied below. Do not inspect source or search for callers. Apply the 52 exact edits as one coherent mutation action if your available editor supports it. Treat a successful guarded mutation receipt as terminal edit proof. Report the route and whether it succeeded on the first attempt.
+
+## Namespace-form replacements
+
+In each file, replace the complete `(:require ...)` form exactly once.
+
+1. `src/sample/review_updates.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.reviews :as reviews]
+    [sample.views.review :as view-review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.reviews :as reviews]
+    [sample.views.review :as view-review]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+2. `src/sample/views/log.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.submission-row :as submission-row])
+   ```
+
+3. `src/sample/views/people.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.submission-row :as submission-row])
+   ```
+
+4. `src/sample/views/review.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.events :as events]
+    [sample.store :as store])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.events :as events]
+    [sample.store :as store]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+5. `test/sample/board_test.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as view-review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.review :as view-review]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+6. `test/sample/reviews_test.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review-view])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review-view]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+7. `test/sample/status_workflow_test.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review-view])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review-view]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+8. `test/sample/views_test.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.submission-row :as submission-row])
+   ```
+
+9. `test/sample/voting_policy_test.clj`
+
+   Before:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review])
+   ```
+
+   After:
+
+   ```clojure
+   (:require
+    [sample.views.review :as review]
+    [sample.views.submission-row :as submission-row])
+   ```
+
+## Delete the moved owners
+
+From `src/sample/views/review.clj`, delete these 14 top-level owners, including each attached comment:
+
+`chair-on-event?`, `fmt-mean`, `fmt-aggregate`, `fmt-stars`, `private-note-block`, `star-form`, `star-histogram`, `reviewer-input-controls`, `row-controls*`, `opinions-block`, `row-controls`, `reviewed-by?`, `score-for-person`, and `board-row`.
+
+## Exact owner-scoped symbol replacements
+
+Every row below is exact. Replace `from` with `to` only inside the named top-level owner and require the stated match count.
+
+| File | Owner | From | To | Matches |
+|---|---|---|---|---:|
+| `src/sample/review_updates.clj` | `push-person-row` | `view-review/board-row` | `submission-row/board-row` | 1 |
+| `src/sample/review_updates.clj` | `push-active-row` | `view-review/board-row` | `submission-row/board-row` | 1 |
+| `src/sample/views/log.clj` | `describe-rating` | `review/fmt-stars` | `submission-row/fmt-stars` | 3 |
+| `src/sample/views/people.clj` | `reviewer-summary` | `review/fmt-mean` | `submission-row/fmt-mean` | 2 |
+| `src/sample/views/people.clj` | `rating-row` | `review/fmt-stars` | `submission-row/fmt-stars` | 1 |
+| `src/sample/views/review.clj` | `content-status-control` | `chair-on-event?` | `submission-row/chair-on-event?` | 1 |
+| `src/sample/views/review.clj` | `detail-controls` | `row-controls*` | `submission-row/row-controls*` | 1 |
+| `src/sample/views/review.clj` | `detail-controls` | `chair-on-event?` | `submission-row/chair-on-event?` | 1 |
+| `src/sample/views/review.clj` | `submission-detail-page` | `score-for-person` | `submission-row/score-for-person` | 1 |
+| `src/sample/views/review.clj` | `submission-detail-page` | `reviewed-by?` | `submission-row/reviewed-by?` | 1 |
+| `src/sample/views/review.clj` | `review-summary` | `fmt-aggregate` | `submission-row/fmt-aggregate` | 1 |
+| `src/sample/views/review.clj` | `review-summary` | `fmt-mean` | `submission-row/fmt-mean` | 1 |
+| `src/sample/views/review.clj` | `board-page` | `chair-on-event?` | `submission-row/chair-on-event?` | 1 |
+| `src/sample/views/review.clj` | `board-page` | `board-row` | `submission-row/board-row` | 1 |
+| `test/sample/board_test.clj` | `render-unrated` | `view-review/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/board_test.clj` | `render-rated` | `view-review/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/reviews_test.clj` | `render-result` | `review-view/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/reviews_test.clj` | `render-weighted` | `review-view/board-row` | `submission-row/board-row` | 2 |
+| `test/sample/reviews_test.clj` | `render-visible` | `review-view/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/status_workflow_test.clj` | `render-status` | `review-view/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/views_test.clj` | `render-opinions` | `review/opinions-block` | `submission-row/opinions-block` | 1 |
+| `test/sample/views_test.clj` | `render-histogram` | `review/star-histogram` | `submission-row/star-histogram` | 1 |
+| `test/sample/voting_policy_test.clj` | `visible-row` | `review/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/voting_policy_test.clj` | `hidden-row` | `review/board-row` | `submission-row/board-row` | 1 |
+| `test/sample/voting_policy_test.clj` | `revealed-row` | `review/board-row` | `submission-row/board-row` | 1 |
