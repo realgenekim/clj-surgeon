@@ -64,11 +64,11 @@ tests witness the requirement.
 
 ## Read Selector Recovery
 
-- [D] **MCP-OP-READ-DIAG-001**: When a `forms` request cannot select each requested owner exactly, clj-surgeon shall report the failed stage, request identity, file, and each failed owner. It shall include failure kinds, exact match counts, available-owner count, source hash, and bounded-presentation counts without source bodies.
-- [D] **MCP-OP-READ-DIAG-002**: When clj-surgeon summarizes a selector refusal, it shall name the failed request, file, and owner and disclose hypothesis truncation. It shall label the first suggestion as a hypothesis only and require the caller to choose one exact owner and retry.
-- [D] **MCP-OP-READ-DIAG-003**: When the complete name-only owner vector fits the public result budget, a selector refusal shall return every unique available owner in deterministic order. Otherwise, it shall return a bounded prefix and exact returned and omitted counts.
-- [D] **MCP-OP-READ-HYP-001**: When selector recovery ranks possible owners, clj-surgeon shall rank the complete available-owner universe independently for each failed owner and publish each returned candidate with its rank, evidence basis, and `authority=false`.
-- [D] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
+- [x] **MCP-OP-READ-DIAG-001**: When a `forms` request cannot select each requested owner exactly, clj-surgeon shall report the failed stage, request identity, file, and each failed owner. It shall include failure kinds, exact match counts, available-owner count, source hash, and bounded-presentation counts without source bodies.
+- [x] **MCP-OP-READ-DIAG-002**: When clj-surgeon summarizes a selector refusal, it shall name the failed request, file, and owner and disclose hypothesis truncation. It shall label the first suggestion as a hypothesis only and require the caller to choose one exact owner and retry.
+- [x] **MCP-OP-READ-DIAG-003**: When the complete name-only owner vector fits the public result budget, a selector refusal shall return every unique available owner in deterministic order. Otherwise, it shall return a bounded prefix and exact returned and omitted counts.
+- [x] **MCP-OP-READ-HYP-001**: When selector recovery ranks possible owners, clj-surgeon shall rank the complete available-owner universe independently for each failed owner and publish each returned candidate with its rank, evidence basis, and `authority=false`.
+- [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 
 ## Deferred Read Mission Surface
 

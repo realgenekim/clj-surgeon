@@ -214,17 +214,70 @@ The first read slice avoids SURGEON1's production files. Shared runtime
   blind retry.
 - Repeated top-level names require cardinality and content evidence.
 
-## Next gate
+## Completed gate
 
-1. Reduce the ranker probe to the smallest earned production seam.
-2. Add per-missing-owner hypotheses to the diagnostic foundation.
-3. Activate the four stateless EARS requirements with direct red tests.
-4. Format changed Clojure files and run focused and full gates.
-5. Replay the two motivating refusals and the frozen corpus.
-6. Require at most two Surgeon calls, no native discovery, useful hypotheses,
-   and zero automatic selections.
-7. Send SURGEON1 the immutable branch, commit, test, and route receipt.
+The accepted ranker is normalized Levenshtein, limited to ten names per
+missing owner. It exposes rank, basis, and `authority=false`, but no numeric
+score. The refusal also returns every unique source-free owner name that fits
+a 32,768-character presentation budget. It reports exact returned and omitted
+counts when that vector is larger. The rejected 780-line experiment remains
+an option receipt.
+
+Direct red-to-green witnesses passed 38 tests with 336 assertions. The full
+MCP milestone passed 221 tests with 1,848 assertions, zero failures, and zero
+errors. clj-kondo reported zero errors and zero warnings. Heap and cclsp
+regression gates also passed.
+
+### Clean-context replay
+
+The original four-file refusal returned all six owners from `mcp_paths.clj`
+and ranked `resolve-source-path` first for `resolve-source-file`. The refusal
+took 1,076 ms. The corrected four-file, six-form retry took 1,272 ms and
+returned `read_complete=true`.
+
+The original test-owner refusal returned all 31 owners from
+`mcp_contract_test.clj`. The intended
+`validates-top-level-insertion-without-repeating-owner-source` owner ranked
+seventh. The refusal took 354 ms. The corrected exact retry took 385 ms and
+returned `read_complete=true`.
+
+Neither refusal contained source bodies, executable authority, ordinary
+success results, or retained continuation state. Both missions completed in
+two calls without `rg`, outline, `sed`, or whole-file reads.
+
+### Projected route economics
+
+The conservative projection counts only the discovery call that complete
+owner vocabulary makes unnecessary. It does not claim that lexical rank is
+always correct.
+
+```text
+BEFORE
+  T0       T1              T2               T3
+  | refuse | rg/outline    | inspect owner  | exact retry |
+  |--------|---------------|----------------|-------------|
+           +1 to +3 discovery calls; model reconstructs vocabulary
+
+AFTER
+  T0                         T1
+  | evidence-rich refusal   | exact retry |
+  |-------------------------|-------------|
+    all owner names + top 10      terminal read
+```
+
+Projected calls per hallucination incident fall from 3-5 to 2, a 33-60%
+reduction. Native discovery actions fall from 1-3 to zero. Applied to the
+fleet's observed 10-call, 163-second read route, removing two discovery calls
+projects 8 calls and approximately 130 seconds if latency scales linearly: a
+20% route-time reduction. The measured two-call replays completed in 2.35
+seconds and 0.74 seconds inside an isolated warm JVM; these are mechanism
+measurements, not fleet wall-time claims.
+
+In option-value terms, the slice reduces `t` without reducing `N`, `K`, or
+sigma: the model sees more real alternatives, pays fewer discovery turns, and
+still must choose an exact owner. Lower change cost increases the number of
+safe experiments per unit time.
 
 The hill climb deliberately prefers one small evidence-rich refusal over a
-large adaptive recovery engine. If that removes `rg` and `sed`, the simpler
-tool wins.
+large adaptive recovery engine. The simpler tool removed `rg` and `sed`, so it
+wins this round.

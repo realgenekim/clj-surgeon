@@ -39,8 +39,9 @@
     "decision with keep, one complete named-form replacement, whole-site delete, or one compact "
     "edit, then call apply_clojure_changes once. The whole request remains "
     "refused on every failure. A forms owner-selection refusal names the failed "
-    "request and every failed owner, and supplies bounded form_candidates as "
-    "hint-only hypotheses, never selection authority. read_complete=true is "
+    "request and every failed owner, supplies the complete bounded name-only "
+    "owner vocabulary, and ranks up to ten hypotheses per missing owner. "
+    "Hypotheses are never selection authority. read_complete=true is "
     "terminal. Never writes."))
 
 (def ^:private positive-integer-schema {:type "integer" :minimum 1})
@@ -247,6 +248,14 @@
     "resolved_form_count" {:type "integer"}
     "failures" {:type "array"}
     "available_form_count" {:type "integer"}
+    "failed_stage" {:type "string"}
+    "file_hash" {:type "string"}
+    "available_owner_count" {:type "integer"}
+    "available_owners" {:type "array"}
+    "available_owners_returned" {:type "integer"}
+    "available_owners_omitted" {:type "integer"}
+    "available_owners_truncated" {:type "boolean"}
+    "selection_failures" {:type "array"}
     "form_candidates" {:type "array"}
     "candidate_limit" {:type "integer"}
     "candidates_truncated" {:type "boolean"}
@@ -703,6 +712,7 @@
           (assoc (execute-inspect-in-context! (:config routed) (:params routed))
                  :workspace_root (:workspace-root routed)))))))
 
+;; @spec MCP-OP-READ-DIAG-002
 (defn- inspect-summary
   [result]
   (cond
@@ -714,7 +724,11 @@
                      (:error_type result) "unknown-error")
           failed-request (:failed_request result)
           failure (first (:failures result))
-          candidate (first (:form_candidates result))
+          selection-failure (first (:selection_failures result))
+          hypothesis (first (:hypotheses selection-failure))
+          candidate (or (:owner hypothesis) (first (:form_candidates result)))
+          hypotheses-truncated (or (:hypotheses_truncated selection-failure)
+                                   (:candidates_truncated result))
           failure-label (if (= "ambiguous-form" (:error_type failure))
                           "ambiguous form"
                           "missing form")
@@ -731,10 +745,13 @@
             (when failure
               (format "  %s %s\n" failure-label (:form failure)))
             (when candidate
-              (format "  you may have meant %s (hint only)\n" candidate))))
-        "\n→ "
-        (or (:remedy result) (:next_action result)
-            "Correct the request and retry once.")))
+              (format "  I think you may have meant %s? (hypothesis only)\n"
+                      candidate))
+            (when hypotheses-truncated
+              (format "  hypotheses truncated · showing %d of %d owners\n"
+                      (:hypotheses_returned selection-failure)
+                      (:available_owner_count result)))))
+        "\n→ choose one exact owner and retry"))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)

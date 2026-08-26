@@ -43,9 +43,8 @@
       (- 1.0 (/ (double (levenshtein-distance requested candidate)) width)))))
 
 (defn- candidate-evidence
-  [{:keys [type platforms line end-line] :as record} score rank]
+  [{:keys [type platforms line end-line] :as record} rank]
   (cond-> {:owner (str (:name record))
-           :score score
            :rank rank
            :ranking-basis :normalized-levenshtein
            :authority false}
@@ -66,7 +65,15 @@
                        (filter :name)
                        (filter #(or (nil? platform)
                                     (some #{platform} (:platforms %))))
-                       vec)
+                       (reduce (fn [{:keys [seen] :as result} record]
+                                 (let [owner (str (:name record))]
+                                   (if (contains? seen owner)
+                                     result
+                                     (-> result
+                                         (update :seen conj owner)
+                                         (update :records conj record)))))
+                               {:seen #{} :records []})
+                       :records)
         candidates (->> available
                         (remove #(contains? resolved (str (:name %))))
                         vec)
@@ -88,6 +95,6 @@
      :candidates-truncated (> (count candidates) candidate-limit)
      :did-you-mean
      (mapv (fn [rank candidate]
-             (candidate-evidence candidate (::score candidate) rank))
+             (candidate-evidence candidate rank))
            (range 1 (inc (count ranked)))
            ranked)}))

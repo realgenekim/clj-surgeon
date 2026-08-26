@@ -234,6 +234,7 @@
             (is (not (contains? result :results)))))))))
 
 (deftest selector-refusal-reports-every-failed-owner-without-choosing
+  ;; @spec MCP-OP-READ-DIAG-001 MCP-OP-READ-DIAG-003 MCP-OP-READ-HYP-001
   (let [source (str "(ns example)\n"
                     "(def alpha 1)\n"
                     "(def beta 2)\n"
@@ -245,10 +246,17 @@
                  {"src/example.clj" (snapshot "src/example.clj" source)})]
     (is (false? (:ok result)))
     (is (false? (:read_complete result)))
+    (is (= "selector" (:failed_stage result)))
+    (is (string? (:file_hash result)))
     (is (= {:id "owners" :operation "forms" :file "src/example.clj"
             :requested_forms ["betta" "beta"]}
            (:failed_request result)))
     (is (= 2 (:failure_count result)))
+    (is (= 2 (:available_owner_count result)))
+    (is (= ["alpha" "beta"] (:available_owners result)))
+    (is (= 2 (:available_owners_returned result)))
+    (is (= 0 (:available_owners_omitted result)))
+    (is (false? (:available_owners_truncated result)))
     (is (= [{:form "betta" :error_type "form-not-found" :match_count 0}
             {:form "beta" :error_type "ambiguous-form" :match_count 2
              :candidate_limit 10 :matches_truncated? false
@@ -257,11 +265,19 @@
                        {:type "def" :name "beta" :line 4 :end_line 4
                         :platforms ["clj"]}]}]
            (:failures result)))
+    (is (= "betta" (get-in result [:selection_failures 0 :requested_owner])))
+    (is (= "beta" (get-in result [:selection_failures 0 :hypotheses 0 :owner])))
+    (is (= 1 (get-in result [:selection_failures 0 :hypotheses 0 :rank])))
+    (is (= "normalized-levenshtein"
+           (get-in result [:selection_failures 0 :hypotheses 0 :ranking_basis])))
+    (is (false? (get-in result [:selection_failures 0 :hypotheses 0 :authority])))
+    (is (= [] (get-in result [:selection_failures 1 :hypotheses])))
     (is (not (contains? result :results)))
     (is (not (contains? result :next_call)))
     (is (not (contains? result :selected_form)))))
 
 (deftest selector-hypotheses-disclose-the-bounded-candidate-window
+  ;; @spec MCP-OP-READ-HYP-002
   (let [source (str "(ns example)\n"
                     (apply str (map #(format "(def owner-%02d %d)\n" % %)
                                     (range 10))))
@@ -272,9 +288,30 @@
                  {"src/example.clj" (snapshot "src/example.clj" source)})]
     (is (= 1 (:failure_count result)))
     (is (= 10 (:available_form_count result)))
-    (is (= 8 (:candidate_limit result)))
-    (is (= 8 (count (:form_candidates result))))
-    (is (true? (:candidates_truncated result)))))
+    (is (= 10 (:candidate_limit result)))
+    (is (= 10 (count (:form_candidates result))))
+    (is (false? (:candidates_truncated result)))
+    (is (= 10 (get-in result [:selection_failures 0 :hypotheses_returned])))
+    (is (= 0 (get-in result [:selection_failures 0 :hypotheses_omitted])))
+    (is (false? (get-in result [:selection_failures 0 :hypotheses_truncated])))))
+
+(deftest selector-owner-vocabulary-truncates-with-exact-counts
+  ;; @spec MCP-OP-READ-DIAG-003
+  (let [source (apply str
+                      (map #(format "(def owner-%04d-with-a-deliberately-long-name %d)\n" % %)
+                           (range 900)))
+        requests [{:id "missing" :operation "forms" :file "src/example.clj"
+                   :forms ["not-real"] :expect {:forms 1}}]
+        result (inspect/evaluate-snapshots
+                 {:requests requests :expect {:requests 1 :files 1}}
+                 {"src/example.clj" (snapshot "src/example.clj" source)})]
+    (is (= 900 (:available_owner_count result)))
+    (is (< (:available_owners_returned result) 900))
+    (is (= 900 (+ (:available_owners_returned result)
+                  (:available_owners_omitted result))))
+    (is (:available_owners_truncated result))
+    (is (= (:available_owners_returned result)
+           (count (:available_owners result))))))
 
 (deftest output-budget-boundaries-are-inclusive-and-fail-closed
   (doseq [[label size limit ok?]
