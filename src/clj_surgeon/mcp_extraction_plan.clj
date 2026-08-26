@@ -100,6 +100,7 @@
                                     :truncated false}}
            :next_call
            {:workspace_root workspace-root
+            :verify "fast"
             :extraction
             {:file file
              :to to

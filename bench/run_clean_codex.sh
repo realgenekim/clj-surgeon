@@ -1196,7 +1196,7 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
-    printf '%s\n' '' 'Use exactly one inspect_clojure call with mode=plan-extraction, the supplied file, destination, complete forms list, and require_policy=minimal. Do not read source first. Review the complete manifest and its required public_forms. Copy its hash-bound next_call, then call apply_clojure_changes exactly once after filling only genuinely required caller decisions. Do not use edit_clojure, native source readers, or apply_patch. Treat read_complete=true and verification_complete=true as terminal evidence. After the complete mutation, run the requested clj-kondo command once.' \
+    printf '%s\n' '' 'Use exactly one inspect_clojure call with mode=plan-extraction, the supplied file, destination, complete forms list, and require_policy=minimal. Do not read source first. Review the complete manifest and its required public_forms. Copy its hash-bound next_call, which owns fast verification, then call apply_clojure_changes exactly once after filling only genuinely required caller decisions. Do not use edit_clojure, native source readers, apply_patch, or a separate verification command. Treat read_complete=true and verification_complete=true as terminal evidence.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
