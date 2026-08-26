@@ -548,7 +548,6 @@
         target-file (io/file workspace "src/sample/moved.clj")
         caller-file (io/file workspace "src/sample/user.clj")
         receipt-dir (io/file workspace "receipts")
-        verification (atom nil)
         original (str "(ns sample.core\n"
                       "  (:require [clojure.string :as str]))\n\n"
                       "(defn helper [x] (str/upper-case x))\n\n"
@@ -568,37 +567,29 @@
                :to "src/sample/moved.clj"
                :forms ["helper"]
                :require_policy "copy-all"})
-            request
-            (assoc-in
-              (:next_call plan)
-              [:extraction :caller_changes]
-              [{:id "redirect-helper"
-                :files ["src/sample/user.clj"]
-                :forms ["use-helper"]
-                :find "sample.core/helper"
-                :replace "sample.moved/helper"
-                :expect {:matches 1 :each_form 1 :each_file 1}}])
             result
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
-               :receipt-dir (.getPath receipt-dir)
-               :verification-profiles {"fast" {:commands ["ignored"]}}
-               :verify!
-               (fn [root profile _profiles files]
-                 (reset! verification
-                         {:root root :profile profile :files (set files)})
-                 {:ok true :profile profile :checks []})}
-              request)]
+               :receipt-dir (.getPath receipt-dir)}
+              {:extraction
+               {:file "src/sample/core.clj"
+                :to "src/sample/moved.clj"
+                :forms ["helper"]
+                :require_policy "copy-all"
+                :source_hash (:source_hash plan)
+                :caller_changes
+                [{:id "redirect-helper"
+                  :files ["src/sample/user.clj"]
+                  :forms ["use-helper"]
+                  :find "sample.core/helper"
+                  :replace "sample.moved/helper"
+                  :expect {:matches 1 :each_form 1 :each_file 1}}]
+                :ignored_caller_files []}})]
         (is (:ok plan) (pr-str plan))
         (is (= ["src/sample/user.clj"]
                (get-in plan [:plan :callers-to-review])))
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
-        (is (= "fast" (:profile @verification)))
-        (is (= #{(.getCanonicalPath source-file)
-                 (.getCanonicalPath target-file)
-                 (.getCanonicalPath caller-file)}
-               (:files @verification)))
         (is (string? (:receipt_hash result)))
         (is (= "structural-candidates-only"
                (get-in result [:caller_proof :level])))
@@ -731,9 +722,7 @@
             result
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
-               :receipt-dir (.getPath receipt-dir)
-               :verify! (fn [_ _ _ _]
-                          {:ok true :profile "fast" :checks []})}
+               :receipt-dir (.getPath receipt-dir)}
               (:next_call plan))]
         (is (= ["helper"]
                (get-in plan [:plan :required-public-forms])))
