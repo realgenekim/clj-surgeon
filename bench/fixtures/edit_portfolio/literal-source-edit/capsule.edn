@@ -7,5 +7,7 @@
  :hashes {"src/bench/assets.clj"
           {:before "383b37ce987a2e81c283dd8f3cc0e0a67f873148aa1f5c0fbe32f9eaef04ecaa"
            :after "ff3bec17bad05cd1621985ac8ba5271eee20bcdb7a1fd035d922535ec10ab31e"}}
- :verification {:exact-bytes true :parse-clojure true}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
  :expected {:changed-files 1 :edits 1}}

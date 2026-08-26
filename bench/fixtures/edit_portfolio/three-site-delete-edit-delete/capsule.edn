@@ -15,5 +15,7 @@
           "test/bench/legacy_adapter_test.clj"
           {:before "46c39d815499f44f42521af7b21524947a27ef641eda48014f56ab0ae53f20c7"
            :after "97bef6fa36afabb4e139f3f14a77d52b3dcd9becf2b76a03de57699c047bd0e8"}}
- :verification {:exact-bytes true :parse-clojure true}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
  :expected {:changed-files 3 :edits 3}}

@@ -498,6 +498,7 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_workspace" >/dev/null
   test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
   test -z "$(git -C "$self_test_workspace" status --short)"
+  bb "$repo_root/bench/score_source_fidelity.clj" --self-test >/dev/null
 
   result_dir=$original_result_dir
   rm -rf "$self_test_root"
@@ -1480,11 +1481,19 @@ run_one() {
     __portfolio_task__)
       portfolio_task_dir=$(portfolio_dir_for_task "$task")
       portfolio_correct=true
+      portfolio_exact=true
       : > "$run_dir/target.diff"
+      : > "$run_dir/source-fidelity.edn"
       while IFS= read -r portfolio_target; do
         [ -n "$portfolio_target" ] || continue
         if ! cmp -s "$workspace/$portfolio_target" \
           "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target"; then
+          portfolio_exact=false
+        fi
+        if ! bb "$repo_root/bench/score_source_fidelity.clj" \
+          --target "$portfolio_target" \
+          "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target" \
+          "$workspace/$portfolio_target" >> "$run_dir/source-fidelity.edn"; then
           portfolio_correct=false
         fi
         diff -u \
@@ -1496,8 +1505,10 @@ run_one() {
           --fail-level error >/dev/null 2>&1; then
         portfolio_correct=false
       fi
-      if [ "$portfolio_correct" = true ]; then
+      if [ "$portfolio_exact" = true ]; then
         exact_correct=true
+      fi
+      if [ "$portfolio_correct" = true ]; then
         correct=true
       fi
       ;;

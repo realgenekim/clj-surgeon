@@ -7,5 +7,7 @@
  :hashes {"src/sample/core.clj"
           {:before "b7e0bdada065ce785d8344b05f7c94abee11719054da8b37083d190651bbc123"
            :after "5adb303d8ed35075914f5d7b67ee2a028dc4dc873849e89e270632ecca98e106"}}
- :verification {:exact-bytes true :parse-clojure true}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
  :expected {:changed-files 1 :edits 17}}

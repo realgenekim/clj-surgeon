@@ -11,7 +11,8 @@
    (java.security MessageDigest)))
 
 (def required-verification
-  {:exact-bytes true
+  {:exact-bytes-secondary true
+   :meaning-preserved true
    :parse-clojure true})
 
 (defn- positive-int?
@@ -306,7 +307,8 @@
           :capsule (dissoc valid :verification)
           :before before :after after :error :missing-verification-policy}
          {:label :weakened-verification
-          :capsule (assoc valid :verification {:exact-bytes false
+          :capsule (assoc valid :verification {:exact-bytes-secondary false
+                                               :meaning-preserved true
                                                :parse-clojure true})
           :before before :after after :error :missing-verification-policy}]]
     (doseq [{:keys [label capsule before after ok error]

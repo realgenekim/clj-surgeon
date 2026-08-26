@@ -7,5 +7,7 @@
  :hashes {"src/bench/pair_view.clj"
           {:before "56a156f76bad4330ab79d6671462893374749277d1c56422e87ef19748fe81ca"
            :after "ac1d08366599cce00e7c6fe2440e43e83aeb8af647018bfca31f89231faf5d32"}}
- :verification {:exact-bytes true :parse-clojure true}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
  :expected {:changed-files 1 :edits 1}}
