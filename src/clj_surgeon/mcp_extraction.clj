@@ -35,12 +35,12 @@
 (defn refusal
   [error-type message data]
   (merge
-   {:ok false
-    :error-type error-type
-    :error message
-    :source-unchanged true
-    :target-unchanged true}
-   data))
+    {:ok false
+     :error-type error-type
+     :error message
+     :source-unchanged true
+     :target-unchanged true}
+    data))
 
 (defn validate-request
   [{:keys [file to forms public-forms require-policy expect caller-changes
@@ -142,20 +142,21 @@
                "No caller changes were supplied for expect.caller_edits"
                {:expected expected-edits :actual 0}))
     (transaction/compile-transaction
-     sources
-     {:changes changes
-      :expect {:changes (count changes)
-               :edits expected-edits
-               :files (count (caller-files changes))}})))
+      sources
+      {:changes changes
+       :expect {:changes (count changes)
+                :edits expected-edits
+                :files (count (caller-files changes))}})))
 
 ;; @spec MCP-OP-PLAN-004
 ;; @spec MCP-OP-PLAN-007
 (defn compile-extraction
   "Compile extraction and exact caller changes against one captured snapshot."
   [{:keys [file to forms public-forms require-policy expect source target-ns
-           workspace-sources caller-changes ignored-caller-files source-hash]
+           workspace-sources caller-changes ignored-caller-files source-hash
+           created-directories]
     :or {require-policy :minimal workspace-sources {} public-forms []
-         caller-changes [] ignored-caller-files []}
+         caller-changes [] ignored-caller-files [] created-directories []}
     :as request}]
   (let [validation (validate-request request)]
     (if-not (:ok validation)
@@ -167,14 +168,14 @@
                  {:expected source-hash
                   :actual (structural-lens/source-hash source)})
         (let [plan (extract/compile-plan
-                    {:file file
-                     :source source
-                     :forms forms
-                     :public-forms public-forms
-                     :to to
-                     :target-ns target-ns
-                     :workspace-sources workspace-sources
-                     :require-policy require-policy})]
+                     {:file file
+                      :source source
+                      :forms forms
+                      :public-forms public-forms
+                      :to to
+                      :target-ns target-ns
+                      :workspace-sources workspace-sources
+                      :require-policy require-policy})]
           (cond
             (:error plan)
             (refusal (or (:error-type plan) :extraction-plan-refused)
@@ -199,27 +200,27 @@
             (try
               (let [future
                     (extract/compile-candidates
-                     {:source source
-                      :source-file file
-                      :target-file to
-                      :form-ranges (:_form-texts plan)
-                      :target-source (:_new-file-content plan)
-                      :target-ns target-ns
-                      :target-alias (:target-alias plan)
-                      :source-referred-forms (:_source-referred-forms plan)})
+                      {:source source
+                       :source-file file
+                       :target-file to
+                       :form-ranges (:_form-texts plan)
+                       :target-source (:_new-file-content plan)
+                       :target-ns target-ns
+                       :target-alias (:target-alias plan)
+                       :source-referred-forms (:_source-referred-forms plan)})
                     changed-caller-files (caller-files caller-changes)
                     forbidden (set/intersection #{file to} changed-caller-files)
                     candidates (set/union
-                                (set (:callers-to-review plan))
-                                (set (map :file (:quoted-var-references plan))))
+                                 (set (:callers-to-review plan))
+                                 (set (map :file (:quoted-var-references plan))))
                     accounted (set/union changed-caller-files
                                          (set ignored-caller-files))
                     omitted (set/difference candidates accounted)
                     caller-sources (select-keys workspace-sources
                                                 changed-caller-files)
                     caller-result (compile-callers
-                                   caller-sources caller-changes
-                                   (:caller-edits expect))
+                                    caller-sources caller-changes
+                                    (:caller-edits expect))
                     originals (merge (sorted-map file source)
                                      (:original-sources caller-result))
                     futures (merge (sorted-map file (:source future)
@@ -259,6 +260,7 @@
                    :quoted-var-references (:quoted-var-references plan)
                    :original-sources originals
                    :future-sources futures
+                   :created-directories (vec created-directories)
                    :created-files [to]}))
               (catch Exception error
                 (refusal :invalid-extraction-result
@@ -305,20 +307,21 @@
         {:receipt-version receipt-version
          :operation :compiled-extraction
          :caller-proof (:caller-proof compiled)
+         :created-directories (vec (:created-directories compiled))
          :files
          (mapv
-          (fn [[file future]]
-            (if-let [original (get (:original-sources compiled) file)]
-              {:file file
-               :source-hash (source-hash original)
-               :result-hash (source-hash future)
-               :original-source original
-               :result-source future}
-              {:file file
-               :absent-before true
-               :result-hash (source-hash future)
-               :result-source future}))
-          (:future-sources compiled))
+           (fn [[file future]]
+             (if-let [original (get (:original-sources compiled) file)]
+               {:file file
+                :source-hash (source-hash original)
+                :result-hash (source-hash future)
+                :original-source original
+                :result-source future}
+               {:file file
+                :absent-before true
+                :result-hash (source-hash future)
+                :result-source future}))
+           (:future-sources compiled))
          :inverse {:operation :undo-compiled-extraction}}]
     (assoc receipt :receipt-hash (source-hash (pr-str receipt)))))
 
@@ -353,6 +356,24 @@
       :else
       {:file file :recovered false :state :unknown-bytes})))
 
+(defn- rollback-created-directories!
+  [{:keys [exists? delete-file!]} directories]
+  (mapv
+    (fn [directory]
+      (if-not (exists? directory)
+        {:directory directory :recovered true :state :absent}
+        (try
+          (delete-file! directory)
+          {:directory directory
+           :recovered (not (exists? directory))
+           :state :deleted}
+          (catch Exception error
+            {:directory directory
+             :recovered false
+             :state :not-empty-or-changed
+             :cause-error (.getMessage error)}))))
+    (reverse directories)))
+
 (defn commit!
   "Commit one compiled mixed create/update file set through injected I/O."
   ([compiled]
@@ -360,10 +381,16 @@
             {:read-source slurp
              :write-source! file-ops/atomic-write!
              :exists? #(.exists (io/file %))
+             :create-directory!
+             #(java.nio.file.Files/createDirectory
+                (.toPath (io/file %))
+                (make-array java.nio.file.attribute.FileAttribute 0))
              :delete-file! #(java.nio.file.Files/delete (.toPath (io/file %)))}))
-  ([compiled {:keys [read-source write-source! exists?] :as io}]
+  ([compiled {:keys [read-source write-source! exists? create-directory!] :as io}]
    (try
      (let [created-files (set (:created-files compiled))
+           planned-directories (vec (:created-directories compiled))
+           created-directories (atom [])
            originals (:original-sources compiled)
            futures (:future-sources compiled)
            ordered-files (vec (concat (keys originals) created-files))]
@@ -378,7 +405,23 @@
          (when (exists? file)
            (throw (ex-info "Extraction target appeared before commit"
                            {:error-type :target-already-exists :file file}))))
+       (doseq [directory planned-directories]
+         (when (exists? directory)
+           (throw (ex-info "Extraction target parent appeared before commit"
+                           {:error-type :target-parent-state-changed
+                            :directory directory}))))
        (try
+         (doseq [directory planned-directories]
+           (when (exists? directory)
+             (throw (ex-info "Extraction target parent appeared during commit"
+                             {:error-type :target-parent-state-changed
+                              :directory directory})))
+           (create-directory! directory)
+           (swap! created-directories conj directory)
+           (when-not (exists? directory)
+             (throw (ex-info "Extraction target parent creation could not be verified"
+                             {:error-type :target-parent-create-failed
+                              :directory directory}))))
          (doseq [file ordered-files]
            (if (contains? created-files file)
              (when (exists? file)
@@ -391,7 +434,9 @@
            (when-not (= (get futures file) (read-source file))
              (throw (ex-info "Extraction read-back verification failed"
                              {:error-type :read-back-hash-mismatch :file file}))))
-         (let [receipt (build-receipt compiled)]
+         (let [receipt (build-receipt
+                         (assoc compiled
+                                :created-directories @created-directories))]
            {:ok true
             :operation :compiled-extraction
             :committed true
@@ -412,9 +457,12 @@
                                     [file (source-hash source)]))
                              futures)}})
          (catch Exception cause
-           (let [recovery (mapv #(rollback-file! io originals futures
-                                                 created-files %)
-                                (reverse ordered-files))
+           (let [file-recovery (mapv #(rollback-file! io originals futures
+                                                      created-files %)
+                                     (reverse ordered-files))
+                 directory-recovery
+                 (rollback-created-directories! io @created-directories)
+                 recovery (into file-recovery directory-recovery)
                  rolled-back (every? :recovered recovery)]
              {:ok false
               :error-type (if rolled-back
@@ -441,8 +489,13 @@
           {:read-source slurp
            :write-source! file-ops/atomic-write!
            :exists? #(.exists (io/file %))
+           :create-directory!
+           #(java.nio.file.Files/createDirectory
+              (.toPath (io/file %))
+              (make-array java.nio.file.attribute.FileAttribute 0))
            :delete-file! #(java.nio.file.Files/delete (.toPath (io/file %)))}))
-  ([receipt {:keys [read-source write-source! exists? delete-file!] :as io}]
+  ([receipt {:keys [read-source write-source! exists? delete-file!
+                    create-directory!] :as io}]
    (try
      (when-not (and (= receipt-version (:receipt-version receipt))
                     (= :compiled-extraction (:operation receipt))
@@ -458,13 +511,18 @@
          (if absent-before
            (delete-file! file)
            (write-source! file original-source)))
-       (let [verified?
-             (every?
-              (fn [{:keys [file absent-before original-source]}]
-                (if absent-before
-                  (not (exists? file))
-                  (and (exists? file) (= original-source (read-source file)))))
-              (:files receipt))]
+       (let [directory-recovery
+             (rollback-created-directories!
+               io (:created-directories receipt))
+             verified?
+             (and
+               (every?
+                 (fn [{:keys [file absent-before original-source]}]
+                   (if absent-before
+                     (not (exists? file))
+                     (and (exists? file) (= original-source (read-source file)))))
+                 (:files receipt))
+               (every? :recovered directory-recovery))]
          (if verified?
            {:ok true
             :operation :undo-compiled-extraction
@@ -474,26 +532,43 @@
            (throw (ex-info "Extraction undo read-back verification failed"
                            {:error-type :extraction-undo-read-back-failed}))))
        (catch Exception cause
-         (let [recovery
+         (let [directory-recovery
                (mapv
-                (fn [{:keys [file result-source]}]
-                  (let [current (file-state io file)]
-                    (cond
-                      (= current result-source)
-                      {:file file :recovered true :state :result}
+                 (fn [directory]
+                   (if (exists? directory)
+                     {:directory directory :recovered true :state :present}
+                     (try
+                       (create-directory! directory)
+                       {:directory directory
+                        :recovered (exists? directory)
+                        :state :recreated}
+                       (catch Exception error
+                         {:directory directory
+                          :recovered false
+                          :state :recreate-failed
+                          :cause-error (.getMessage error)}))))
+                 (:created-directories receipt))
+               recovery
+               (mapv
+                 (fn [{:keys [file result-source]}]
+                   (let [current (file-state io file)]
+                     (cond
+                       (= current result-source)
+                       {:file file :recovered true :state :result}
 
-                      (or (nil? current)
-                          (= current (:original-source
-                                      (first (filter #(= file (:file %))
-                                                     (:files receipt))))))
-                      (do (write-source! file result-source)
-                          {:file file
-                           :recovered (= result-source (read-source file))
-                           :state :restored-result})
+                       (or (nil? current)
+                           (= current (:original-source
+                                        (first (filter #(= file (:file %))
+                                                       (:files receipt))))))
+                       (do (write-source! file result-source)
+                           {:file file
+                            :recovered (= result-source (read-source file))
+                            :state :restored-result})
 
-                      :else
-                      {:file file :recovered false :state :unknown-bytes})))
-                (reverse (:files receipt)))
+                       :else
+                       {:file file :recovered false :state :unknown-bytes})))
+                 (reverse (:files receipt)))
+               recovery (into directory-recovery recovery)
                recovered (every? :recovered recovery)]
            {:ok false
             :error-type (if recovered

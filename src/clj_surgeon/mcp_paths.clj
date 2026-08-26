@@ -80,10 +80,11 @@
         (path-refusal :invalid-source-path (.getMessage error) relative)))))
 
 (defn resolve-new-source-path
-  "Resolve one absent source path whose existing parent is confined to root.
+  "Resolve one absent source path below a real project-confined ancestor.
 
-  The destination itself must not exist. Requiring an existing real parent
-  makes symlink confinement decidable before a transaction creates bytes."
+  The destination itself must not exist. Missing parent directories are
+  returned shallowest-first without being created, so the write transaction
+  can create and roll them back under the same guards as the new file."
   [^Path root relative]
   (if-not (relative-source-path? relative)
     (path-refusal
@@ -104,30 +105,45 @@
                         "Extraction target already exists"
                         relative)
 
-          (or (nil? parent)
-              (not (Files/exists parent (make-array LinkOption 0))))
-          (path-refusal :target-parent-not-found
-                        "Extraction target parent does not exist"
+          (nil? parent)
+          (path-refusal :invalid-target-path
+                        "Extraction target has no parent"
                         relative)
 
           :else
-          (let [real-parent (.toRealPath parent (make-array LinkOption 0))]
+          (let [[existing-parent missing-parents]
+                (loop [candidate parent
+                       missing ()]
+                  (if (Files/exists candidate (make-array LinkOption 0))
+                    [candidate (vec missing)]
+                    (recur (.getParent candidate) (conj missing candidate))))
+                real-parent (.toRealPath existing-parent
+                                         (make-array LinkOption 0))]
             (cond
               (not (.startsWith real-parent root))
               (path-refusal :path-outside-project
-                            "Target parent symlink resolves outside the configured project root"
+                            "Target ancestor symlink resolves outside the configured project root"
                             relative)
 
               (not (Files/isDirectory real-parent (make-array LinkOption 0)))
               (path-refusal :target-parent-not-directory
-                            "Extraction target parent is not a directory"
+                            "Extraction target ancestor is not a directory"
                             relative)
 
               :else
-              (let [canonical (.resolve real-parent (.getFileName lexical))]
+              (let [[canonical-parent canonical-missing]
+                    (reduce
+                      (fn [[^Path base paths] ^Path missing]
+                        (let [path (.resolve base (.getFileName missing))]
+                          [path (conj paths path)]))
+                      [real-parent []]
+                      missing-parents)
+                    canonical (.resolve canonical-parent
+                                        (.getFileName lexical))]
                 {:ok true
                  :relative relative
                  :path (.toString canonical)
-                 :canonical canonical})))))
+                 :canonical canonical
+                 :missing-parent-directories canonical-missing})))))
       (catch Exception error
         (path-refusal :invalid-target-path (.getMessage error) relative)))))

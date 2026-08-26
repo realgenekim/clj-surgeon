@@ -617,6 +617,89 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest extraction-creates-and-undoes-a-missing-target-parent
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")
+        target-file (io/file workspace "src/sample/nested/moved.clj")
+        target-parent (.getParentFile target-file)
+        receipt-dir (io/file workspace "receipts")
+        formatter-files (atom nil)
+        original (str "(ns sample.core)\n\n"
+                      "(defn helper [] :ok)\n\n"
+                      "(defn retained [] :ok)\n")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (let [plan
+            (extraction-plan/plan!
+              {:project-root (.getPath workspace)}
+              {:mode "plan-extraction"
+               :file "src/sample/core.clj"
+               :to "src/sample/nested/moved.clj"
+               :forms ["helper"]
+               :require_policy "copy-all"})]
+        (is (:ok plan) (pr-str plan))
+        (is (not (.exists target-parent)))
+        (let [result
+              (mcp-tool/execute-request!
+                {:project-root (.getPath workspace)
+                 :receipt-dir (.getPath receipt-dir)
+                 :formatter ["format" "{files}"]
+                 :format-candidates!
+                 (fn [_ _ future-sources]
+                   (reset! formatter-files (vec (keys future-sources)))
+                   {:ok true
+                    :status :complete
+                    :file-count (count future-sources)
+                    :changed-file-count 0
+                    :elapsed_ms 0.1
+                    :future-sources future-sources})}
+                {:extraction
+                 {:file "src/sample/core.clj"
+                  :to "src/sample/nested/moved.clj"
+                  :forms ["helper"]
+                  :require_policy "copy-all"
+                  :source_hash (:source_hash plan)
+                  :caller_changes []
+                  :ignored_caller_files []}})]
+          (is (:ok result) (pr-str result))
+          (is (= [(.getCanonicalPath target-file)]
+                 @formatter-files))
+          (is (.exists target-file))
+          (let [receipt (edn/read-string (slurp (:undo_receipt result)))]
+            (is (= [(.getCanonicalPath target-parent)]
+                   (:created-directories receipt))))
+          (let [undo (extract/undo! {:receipt (:undo_receipt result)})]
+            (is (:ok undo) (pr-str undo))
+            (is (= original (slurp source-file)))
+            (is (not (.exists target-file)))
+            (is (not (.exists target-parent))))
+          (let [failed
+                (mcp-tool/execute-request!
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath receipt-dir)
+                   :verification-profiles {"fast" {:commands ["ignored"]}}
+                   :verify! (fn [_ _ _ _]
+                              {:ok false :profile "fast"
+                               :checks [{:ok false :exit 1}]})}
+                  {:extraction
+                   {:file "src/sample/core.clj"
+                    :to "src/sample/nested/moved.clj"
+                    :forms ["helper"]
+                    :require_policy "copy-all"
+                    :source_hash (:source_hash plan)
+                    :caller_changes []
+                    :ignored_caller_files []}
+                   :verify "fast"})]
+            (is (false? (:ok failed)))
+            (is (= "verification-failed" (:error_type failed)))
+            (is (true? (:rolled_back failed)))
+            (is (= original (slurp source-file)))
+            (is (not (.exists target-file)))
+            (is (not (.exists target-parent))))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest extraction-publicizes-a-required-private-form-in-the-same-transaction
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/sample/core.clj")

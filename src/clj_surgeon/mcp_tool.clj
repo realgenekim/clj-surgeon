@@ -127,6 +127,8 @@
        (assoc request
               :file (:path source)
               :to (:path target)
+              :created-directories
+              (mapv str (:missing-parent-directories target))
               :caller-changes (get-in callers [:spec :changes])
               :ignored-caller-files (mapv :path ignored))})))
 
@@ -143,11 +145,15 @@
         (if (and (:ok compiled) (:formatter config))
           (let [format! (or (:format-candidates! config)
                             formatter/format-candidates!)
+                format-sources (select-keys (:future-sources compiled)
+                                            (:created-files compiled))
                 formatted (format! (.toString root) (:formatter config)
-                                   (:future-sources compiled))]
+                                   format-sources)]
             (if (:ok formatted)
-              (let [prepared (extraction/with-future-sources
-                               compiled (:future-sources formatted))]
+              (let [future-sources (merge (:future-sources compiled)
+                                          (:future-sources formatted))
+                    prepared (extraction/with-future-sources
+                               compiled future-sources)]
                 (if (:ok prepared)
                   (assoc prepared :format
                          (dissoc formatted :future-sources :ok))

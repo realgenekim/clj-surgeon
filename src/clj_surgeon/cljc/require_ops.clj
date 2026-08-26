@@ -122,6 +122,39 @@
                            new-entry]))
            z/root-string)))))
 
+(defn insert-into-require-sorted
+  "Insert one libspec before the first lexically greater namespace.
+   Comment-bearing require clauses keep the append behavior so insertion
+   cannot silently change which entry a comment describes."
+  [src ns-sym alias referred]
+  (let [ns-zl (ns-zloc src)
+        _ (when (nil? ns-zl)
+            (throw (ex-info "Cannot insert require: source has no ns form" {})))
+        req-zl (require-form-zloc ns-zl)
+        entries (when req-zl
+                  (->> (some-> req-zl z/down z/right)
+                       (iterate z/right)
+                       (take-while some?)
+                       (filter z/vector?)
+                       vec))
+        comment-bearing?
+        (boolean
+          (and req-zl
+               (some #(= :comment (n/tag %))
+                     (tree-seq n/inner? n/children (z/node req-zl)))))
+        target (when-not comment-bearing?
+                 (first
+                   (filter
+                     #(pos? (compare (str (first (z/sexpr %))) (str ns-sym)))
+                     entries)))]
+    (if target
+      (let [new-entry (entry-node ns-sym alias referred)
+            insertion (n/forms-node [new-entry (n/newlines 1) (n/spaces 2)])]
+        (-> target
+            (z/insert-left insertion)
+            z/root-string))
+      (insert-into-require src ns-sym alias referred))))
+
 ;; ============================================================
 ;; Public API: CLJC-level require ops
 ;; ============================================================

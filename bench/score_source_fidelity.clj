@@ -47,7 +47,7 @@
           (and parseable
                (= (meaning-shape (:node expected-parse))
                   (meaning-shape (:node candidate-parse)))))
-        correct (boolean (and semantic-equal meaning-preserved))]
+        correct meaning-preserved]
     {:parseable parseable
      :semantic-equal semantic-equal
      :meaning-preserved meaning-preserved
@@ -71,6 +71,15 @@
           :correct true}
          (score-source "(def x [1 2])\n"
                        "(def  x [1,  2])\n")))
+  (is (= {:parseable true
+          :semantic-equal false
+          :meaning-preserved true
+          :exact false
+          :presentation-only true
+          :correct true}
+         (score-source "(def x #(inc %))\n"
+                       "(def  x #(inc %))\n"))
+      "reader-generated symbols must not reject unchanged anonymous-fn source")
   (doseq [[label expected candidate]
           [[:comment-loss "(def x 1) ; keep\n" "(def x 1)\n"]
            [:comment-alteration "(def x 1) ; keep\n" "(def x 1) ; changed\n"]

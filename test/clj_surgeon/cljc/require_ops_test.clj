@@ -134,3 +134,13 @@
           "[clojure.string :as str]\n   [sample.extracted :as extracted"))
     (is (not (str/includes? result "] \n"))
         "insertion is formatter-stable at the existing require boundary")))
+
+(deftest sorted-require-insertion-preserves-existing-source-trivia
+  (let [source
+        "(ns sample.core\n  (:require\n   [sample.alpha :as alpha]\n   [sample.charlie :as charlie]\n   [third.party :as third]))\n"
+        result (ops/insert-into-require-sorted source
+                                               'sample.bravo
+                                               'bravo
+                                               '[moved])]
+    (is (= "(ns sample.core\n  (:require\n   [sample.alpha :as alpha]\n   [sample.bravo :as bravo :refer [moved]]\n   [sample.charlie :as charlie]\n   [third.party :as third]))\n"
+           result))))

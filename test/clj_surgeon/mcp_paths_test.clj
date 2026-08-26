@@ -29,10 +29,16 @@
       (is (= "target-already-exists"
              (:error_type
                (paths/resolve-new-source-path root "src/taken.clj")))))
-    (testing "a missing parent refuses"
-      (is (= "target-parent-not-found"
-             (:error_type
-               (paths/resolve-new-source-path root "missing/moved.clj")))))
+    (testing "an absent nested target resolves without creating its parents"
+      (let [result (paths/resolve-new-source-path root "missing/nested/moved.clj")]
+        (is (:ok result))
+        (is (= (.resolve root "missing/nested/moved.clj")
+               (:canonical result)))
+        (is (= [(.resolve root "missing")
+                (.resolve root "missing/nested")]
+               (:missing-parent-directories result)))
+        (is (not (Files/exists (.resolve root "missing")
+                               (make-array java.nio.file.LinkOption 0))))))
     (testing "lexical traversal refuses"
       (is (= "invalid-relative-source-path"
              (:error_type
