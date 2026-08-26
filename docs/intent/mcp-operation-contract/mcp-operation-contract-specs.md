@@ -11,38 +11,38 @@ tests witness the requirement.
 
 ## Finalized Results
 
-- [ ] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result.
-- [ ] **MCP-OP-RESULT-002**: When a public MCP handler produces a typed refusal, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that refusal.
-- [ ] **MCP-OP-RESULT-003**: When clj-surgeon finalizes a domain result, the finalized domain fields shall equal the produced domain fields except for the authoritative top-level `elapsed_ms`.
-- [ ] **MCP-OP-RESULT-004**: When timing evidence is added to an MCP domain result, clj-surgeon shall preserve the domain outcome's existing MCP success or error classification.
-- [ ] **MCP-OP-RESULT-005**: If MCP result finalization receives a non-map result or an invalid elapsed interval, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a malformed domain result.
-- [ ] **MCP-OP-RESULT-006**: If MCP summary rendering or result serialization fails, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a partial domain result.
+- [x] **MCP-OP-RESULT-001**: When a public MCP handler produces a successful domain result, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that result.
+- [x] **MCP-OP-RESULT-002**: When a public MCP handler produces a typed refusal, clj-surgeon shall publish a finite, non-negative numeric `elapsed_ms` in that refusal.
+- [x] **MCP-OP-RESULT-003**: When clj-surgeon finalizes a domain result, the finalized domain fields shall equal the produced domain fields except for the authoritative top-level `elapsed_ms`.
+- [x] **MCP-OP-RESULT-004**: When timing evidence is added to an MCP domain result, clj-surgeon shall preserve the domain outcome's existing MCP success or error classification.
+- [x] **MCP-OP-RESULT-005**: If MCP result finalization receives a non-map result or an invalid elapsed interval, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a malformed domain result.
+- [x] **MCP-OP-RESULT-006**: If MCP summary rendering or result serialization fails, then clj-surgeon shall fail the MCP invocation as an unexpected MCP error without publishing a partial domain result.
 
 ## Timing Boundary and Presentation
 
-- [ ] **MCP-OP-TIME-001**: When a public MCP handler is invoked, clj-surgeon shall start its request clock before handler validation and domain execution.
-- [ ] **MCP-OP-TIME-002**: When public MCP domain execution returns, clj-surgeon shall stop its request clock before summary rendering, serialization, callback scheduling, and transport.
-- [ ] **MCP-OP-TIME-003**: When a public MCP result is summarized, clj-surgeon shall render its structured `elapsed_ms` with a locale-independent decimal point, exactly two decimal places, and the `ms` suffix.
-- [ ] **MCP-OP-TIME-004**: Where an existing top-level MCP timer measures a narrower internal phase, clj-surgeon shall preserve that value under a phase-specific field instead of using it as public `elapsed_ms`.
-- [ ] **MCP-OP-SCHEMA-001**: For every tool in the canonical public MCP registry, clj-surgeon shall require `elapsed_ms` as a non-negative number in that tool's output schema.
+- [x] **MCP-OP-TIME-001**: When a public MCP handler is invoked, clj-surgeon shall start its request clock before handler validation and domain execution.
+- [x] **MCP-OP-TIME-002**: When public MCP domain execution returns, clj-surgeon shall stop its request clock before summary rendering, serialization, callback scheduling, and transport.
+- [x] **MCP-OP-TIME-003**: When a public MCP result is summarized, clj-surgeon shall render its structured `elapsed_ms` with a locale-independent decimal point, exactly two decimal places, and the `ms` suffix.
+- [x] **MCP-OP-TIME-004**: Where an existing top-level MCP timer measures a narrower internal phase, clj-surgeon shall preserve that value under a phase-specific field instead of using it as public `elapsed_ms`.
+- [x] **MCP-OP-SCHEMA-001**: For every tool in the canonical public MCP registry, clj-surgeon shall require `elapsed_ms` as a non-negative number in that tool's output schema.
 
 ## Asynchronous Verification
 
-- [ ] **MCP-OP-ASYNC-001**: While a cold verification job is pending, an MCP launch or inspection result shall omit `job_elapsed_ms`.
-- [ ] **MCP-OP-ASYNC-002**: When inspection observes a cold verification job that completed after execution began, the MCP result shall contain finite, non-negative `elapsed_ms` and `job_elapsed_ms` values.
-- [ ] **MCP-OP-ASYNC-003**: When a cold verification result contains `elapsed_ms` and `job_elapsed_ms`, its human summary shall label the corresponding formatted values as `request` and `job`.
-- [ ] **MCP-OP-ASYNC-004**: If cold verification inspection cannot identify an owned job that began execution, then the typed refusal shall omit `job_elapsed_ms`.
-- [ ] **MCP-OP-ASYNC-005**: When cold verification inspection reads a job state, clj-surgeon shall publish evidence from exactly that observed state even if the job transitions afterward.
+- [x] **MCP-OP-ASYNC-001**: While a cold verification job is pending, an MCP launch or inspection result shall omit `job_elapsed_ms`.
+- [x] **MCP-OP-ASYNC-002**: When inspection observes a cold verification job that completed after execution began, the MCP result shall contain finite, non-negative `elapsed_ms` and `job_elapsed_ms` values.
+- [x] **MCP-OP-ASYNC-003**: When a cold verification result contains `elapsed_ms` and `job_elapsed_ms`, its human summary shall label the corresponding formatted values as `request` and `job`.
+- [x] **MCP-OP-ASYNC-004**: If cold verification inspection cannot identify an owned job that began execution, then the typed refusal shall omit `job_elapsed_ms`.
+- [x] **MCP-OP-ASYNC-005**: When cold verification inspection reads a job state, clj-surgeon shall publish evidence from exactly that observed state even if the job transitions afterward.
 
 ## Registration and Traceability Gates
 
-- [ ] **MCP-OP-COVERAGE-001**: When the canonical public MCP registry changes, `make runtests` shall fail unless the operation witness catalog has exactly the same tool keyset.
-- [ ] **MCP-OP-COVERAGE-002**: For each canonical public MCP registry entry, `make runtests` shall fail unless the witness catalog exercises exactly the public outcome classes declared by that entry.
-- [ ] **MCP-OP-TRACE-001**: When `make runtests` executes, it shall fail if an active-gap `[ ]` MCP operation-contract intent lacks a direct test witness.
-- [ ] **MCP-OP-TRACE-002**: When `make runtests` executes, it shall fail if an MCP operation-contract implementation or test witness names an unknown intent ID.
-- [ ] **MCP-OP-TRACE-003**: When `make runtests` executes, it shall fail if an implemented `[x]` MCP operation-contract intent lacks an implementation witness or a direct test witness.
-- [ ] **MCP-OP-TRACE-004**: When `make runtests` executes, it shall not require implementation or test witnesses for a deferred `[D]` MCP operation-contract intent.
-- [ ] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
+- [x] **MCP-OP-COVERAGE-001**: When the canonical public MCP registry changes, `make runtests` shall fail unless the operation witness catalog has exactly the same tool keyset.
+- [x] **MCP-OP-COVERAGE-002**: For each canonical public MCP registry entry, `make runtests` shall fail unless the witness catalog exercises exactly the public outcome classes declared by that entry.
+- [x] **MCP-OP-TRACE-001**: When `make runtests` executes, it shall fail if an active-gap `[ ]` MCP operation-contract intent lacks a direct test witness.
+- [x] **MCP-OP-TRACE-002**: When `make runtests` executes, it shall fail if an MCP operation-contract implementation or test witness names an unknown intent ID.
+- [x] **MCP-OP-TRACE-003**: When `make runtests` executes, it shall fail if an implemented `[x]` MCP operation-contract intent lacks an implementation witness or a direct test witness.
+- [x] **MCP-OP-TRACE-004**: When `make runtests` executes, it shall not require implementation or test witnesses for a deferred `[D]` MCP operation-contract intent.
+- [x] **MCP-OP-ORACLE-001**: Where a Prolog shadow oracle is retained after finding an independent counterexample, `make runtests` shall execute that oracle as a blocking gate.
 
 ## Misreadings and Boundaries
 

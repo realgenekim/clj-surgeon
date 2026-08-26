@@ -34,10 +34,39 @@
   (binding [*out* *err*]
     (apply println messages)))
 
+(def ^:private outcome-classes-by-tool
+  {"inspect_clojure"
+   #{:read-success :prepared-basis :verification-pending
+     :verification-complete :verification-failed :typed-refusal}
+   "apply_clojure_changes"
+   #{:committed :verification-pending :typed-refusal}
+   "edit_clojure"
+   #{:committed :typed-refusal}
+   "transform_clojure"
+   #{:preview :committed :typed-refusal}})
+
+;; @spec MCP-OP-COVERAGE-001
+;; @spec MCP-OP-COVERAGE-002
+(defn public-tool-registry
+  "Return the canonical public registration entries for the active profile."
+  []
+  (mapv
+    (fn [tool]
+      (let [outcome-classes (get outcome-classes-by-tool (:name tool))]
+        (when-not outcome-classes
+          (throw (ex-info "Public MCP tool lacks declared outcome classes"
+                          {:tool (:name tool)})))
+        (assoc tool :outcome-classes outcome-classes)))
+    (mcp-tool/all-tools)))
+
+(defn- registered-tools
+  []
+  (mapv #(dissoc % :outcome-classes) (public-tool-registry)))
+
 (defn make-tools
   "clojure-mcp factory. Tool handlers are Vars so nREPL redefinition is live."
   [_nrepl-client-atom _working-dir]
-  (mcp-tool/all-tools))
+  (registered-tools))
 
 (def ^:private live-tool-state runtime/live-tool-state)
 
@@ -140,7 +169,7 @@
 (defn register-live-server!
   "Record one live SDK server and the contracts installed at construction."
   [server]
-  (let [registered (tool-contracts (mcp-tool/all-tools))]
+  (let [registered (tool-contracts (registered-tools))]
     (reset! live-tool-state {:server server :registered registered})
     {:ok true :status :registered :tool-count (count registered)}))
 
@@ -161,7 +190,7 @@
   successfully installed state."
   []
   (if-let [{:keys [server registered]} @live-tool-state]
-    (let [desired-tools (mcp-tool/all-tools)
+    (let [desired-tools (registered-tools)
           desired-by-name (into {} (map (juxt :name identity)) desired-tools)
           desired-contracts (tool-contracts desired-tools)
           {:keys [remove upsert]}
@@ -207,7 +236,7 @@
         (-> (McpSchema$ServerCapabilities/builder)
             (.tools true)
             (.build)))
-      (.tools (mapv create-async-tool (mcp-tool/all-tools)))))
+      (.tools (mapv create-async-tool (registered-tools)))))
 
 (defn build-stdio-server
   "Build the minimal protocol surface: one tool capability and no others."
