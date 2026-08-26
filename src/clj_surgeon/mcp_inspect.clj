@@ -8,7 +8,6 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.outline :as outline]
-   [clj-surgeon.owner-hypotheses :as owner-hypotheses]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]))
@@ -20,8 +19,6 @@
   {:per-request-source 65536
    :per-request-result 65536
    :aggregate-result 262144})
-
-(def ^:private available-owner-character-limit 32768)
 
 (def ^:private top-fields #{"requests" "expect"})
 (def ^:private top-expect-fields #{"requests" "files"})
@@ -354,95 +351,19 @@
       (contains? result :candidates-truncated)
       (assoc :candidates_truncated (:candidates-truncated result)))))
 
-(defn- bounded-owner-names
-  [owner-names]
-  (loop [remaining owner-names
-         returned []
-         encoded-characters 2]
-    (if-let [owner (first remaining)]
-      (let [separator-characters (if (seq returned) 1 0)
-            next-count (+ encoded-characters separator-characters
-                          (count (json/generate-string owner)))]
-        (if (<= next-count available-owner-character-limit)
-          (recur (next remaining) (conj returned owner) next-count)
-          {:owners returned
-           :returned (count returned)
-           :omitted (count remaining)
-           :truncated true}))
-      {:owners returned
-       :returned (count returned)
-       :omitted 0
-       :truncated false})))
-
-(defn- owner-universe
-  [file source]
-  (->> (outline/outline-source file source)
-       :forms
-       (filter :name)
-       (reduce (fn [{:keys [seen] :as result} record]
-                 (let [owner (str (:name record))]
-                   (if (contains? seen owner)
-                     result
-                     (-> result
-                         (update :seen conj owner)
-                         (update :names conj owner)
-                         (update :records conj record)))))
-               {:seen #{} :names [] :records []})))
-
-(defn- selection-failure
-  [failure available-records resolved-names]
-  (let [requested (str (:form failure))
-        missing? (= :form-not-found (:error-type failure))
-        ranking (when missing?
-                  (owner-hypotheses/rank-owner-hypotheses
-                    requested available-records
-                    {:resolved-names resolved-names}))
-        hypotheses (or (:did-you-mean ranking) [])
-        candidate-count (or (:candidate-count ranking) 0)
-        returned (count hypotheses)]
-    (cond-> {:requested-owner requested
-             :failure-kind (:error-type failure)
-             :match-count (:match-count failure)
-             :hypotheses hypotheses
-             :hypotheses-returned returned
-             :hypotheses-omitted (- candidate-count returned)
-             :hypotheses-truncated (boolean (:candidates-truncated ranking))}
-      (:matches failure) (assoc :matches (:matches failure)))))
-
-;; @spec MCP-OP-READ-DIAG-001 MCP-OP-READ-DIAG-003
-;; @spec MCP-OP-READ-HYP-001 MCP-OP-READ-HYP-002
+;; @spec MCP-OP-READ-DIAG-001
+;; @spec MCP-OP-READ-DIAG-003
+;; @spec MCP-OP-READ-HYP-001
+;; @spec MCP-OP-READ-HYP-002
 (defn- forms-result
   [request snapshot]
   (let [found (show-form/select-form
                 (:file request) (:source snapshot)
                 {:forms (mapv symbol (:forms request))})]
     (if (:error found)
-      (let [requested (mapv str (:forms request))
-            {:keys [names records]} (owner-universe
-                                      (:file request) (:source snapshot))
-            bounded-names (bounded-owner-names names)
-            failed-names (set (map (comp str :form) (:failures found)))
-            resolved-names (remove failed-names requested)
-            selection-failures (mapv #(selection-failure % records resolved-names)
-                                     (:failures found))
-            first-hypotheses (or (some #(seq (:hypotheses %))
-                                       selection-failures)
-                                 [])
-            candidates (mapv :owner first-hypotheses)
-            first-ranked (some #(when (seq (:hypotheses %)) %) selection-failures)]
-        (assoc found
-               :failed-stage :selector
-               :file-hash (:hash snapshot)
-               :available-form-count (count names)
-               :available-owner-count (count names)
-               :available-owners (:owners bounded-names)
-               :available-owners-returned (:returned bounded-names)
-               :available-owners-omitted (:omitted bounded-names)
-               :available-owners-truncated (:truncated bounded-names)
-               :selection-failures selection-failures
-               :form-candidates candidates
-               :candidate-limit 10
-               :candidates-truncated (boolean (:hypotheses-truncated first-ranked))))
+      (assoc found
+             :failed-stage :selector
+             :file-hash (:hash snapshot))
       {:id (:id request)
        :operation "forms"
        :file (:file request)
