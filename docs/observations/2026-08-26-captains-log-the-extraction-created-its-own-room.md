@@ -123,3 +123,38 @@ adherence before speed is interpreted. The hypothesis is now sharper: the win
 comes from compiling directory creation, dependency planning, visibility,
 source require placement, target formatting, mutation, and rollback into two
 model-visible calls—not from making any individual file operation faster.
+
+## First clean Anvil replay: correct and 2.45x faster than an incorrect native arm
+
+Commit `bb3253d`, dev-a, Sol/high, MCP-first, one frozen replicate:
+
+| Arm | Complete wall | Correct | Exact | Actions | Shell / MCP | Refusals | Failed mutations | Route adherent |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| MCP plan + apply | 51.322s | true | false | 3 | 1 / 2 | 0 | 0 | true |
+| Native | 125.971s | false | false | 6 | 5 / 0 | 0 | 0 | true |
+
+The MCP result preserved meaning and presentation in the existing source and
+matched the new destination file byte-for-byte. Its non-exact result is only
+presentation-level drift in `views.clj`. Native did not preserve the required
+historical result, so the 2.45x ratio is a complete-task outcome, not a
+matched-correctness speed ratio. Native would need additional diagnosis and
+repair time to become comparable.
+
+The route repair itself is independently visible. Compared with the first
+immutable MCP arm, complete wall fell from 79.679s to 51.322s (35.6%), actions
+fell from five to three, and the refusal plus failed mutation both disappeared.
+The model executed the intended plan/apply transaction once each.
+
+Server-owned work was a minority of complete wall:
+
+- plan inspection: 5.860s;
+- apply total: 6.963s, including 6.958s in the kernel;
+- formatter: one created file, zero formatter changes, 1.009s;
+- complete task: 51.322s.
+
+This narrows the next hill: formatter startup is no longer the dominant cost in
+this case. Approximately 38.5 seconds lie outside the two server calls. The
+remaining opportunity is to shorten caller deliberation, payload construction,
+and the required foreground verification route while preserving the two-call
+compiled decision. A native-first fresh replay remains necessary before this
+single run becomes a stable performance claim.
