@@ -19,23 +19,24 @@ The existing field gate is below 5%.
 
 ## Observed pairs
 
-The following pairs come from subsequent successful reads in the same Codex
-session. They are examples for a ranking corpus, not permission to select the
-right-hand owner automatically.
+The following patterns come from the same Codex session. Six are strict
+one-to-one corrections confirmed by a subsequent exact read. The others are
+useful negative, inferred, path, or vocabulary-migration cases. Only the six
+strict pairs belong in the ranker acceptance corpus.
 
-| Requested owner or location | Subsequent exact recovery | Pattern |
-|---|---|---|
-| `resolve-source-file` | `resolve-source-path` | one changed token |
-| `start-server!` | `start` | shared prefix and shortened name |
-| `editor-program-schema` | `editor-programs-schema` | one inserted character |
-| `editor-edit-schema` | `editor-gesture-schema` | shared frame, semantic middle token |
-| `upsert-managed-block` | `upsert-workspace-block` | shared frame, semantic middle token |
-| `validate-request` | caller dropped the request because existing owners were sufficient | hallucinated extra owner |
-| `validate-request!`, `compile-change`, `compile-request` | `validate-tool-params`, `tool-params->transaction` | older conceptual vocabulary |
-| `tools-list-publishes-the-compact-editor-contract` | `exposes-exactly-four-typed-tools` | semantic test-name paraphrase |
-| `tool-profiles-expose-only-the-intended-catalog` | `tool-profiles-preserve-full-default-and-isolate-the-editor` | semantic test-name paraphrase |
-| `one-http-session-observes-live-tool-add-replace-and-remove` in `mcp_server_test.clj` | the same owner in `mcp_http_server_test.clj` | correct owner, wrong file |
-| `compiles-owner-relative-top-level-insertion` | `validates-top-level-insertion-without-repeating-owner-source` | semantic test-name paraphrase |
+| Requested owner or location | Subsequent route | Evidence class | Pattern |
+|---|---|---|---|
+| `resolve-source-file` | `resolve-source-path` | strict pair | one changed token |
+| `start-server!` | `start` | strict pair | shared prefix and shortened name |
+| `editor-program-schema` | `editor-programs-schema` | strict pair | one inserted character |
+| `editor-edit-schema` | `editor-gesture-schema` | strict pair | shared frame, semantic middle token |
+| `upsert-managed-block` | outline exposed `upsert-workspace-block` | anchor-inferred | shared frame, semantic middle token |
+| `validate-request` | caller dropped the request | negative case | hallucinated extra owner |
+| `validate-request!`, `compile-change`, `compile-request` | two different contract owners replaced three guesses | ambiguous vocabulary migration | older conceptual vocabulary |
+| `tools-list-publishes-the-compact-editor-contract` | `exposes-exactly-four-typed-tools` | strict pair | semantic test-name paraphrase |
+| `tool-profiles-expose-only-the-intended-catalog` | `tool-profiles-preserve-full-default-and-isolate-the-editor` | strict pair | semantic test-name paraphrase |
+| `one-http-session-observes-live-tool-add-replace-and-remove` in `mcp_server_test.clj` | the same owner in `mcp_http_server_test.clj` | wrong-file case | correct owner, wrong file |
+| `compiles-owner-relative-top-level-insertion` | native source exposed `validates-top-level-insertion-without-repeating-owner-source` | source-inferred | semantic test-name paraphrase |
 
 These examples show two distinct jobs:
 
@@ -63,6 +64,7 @@ file
 requested_owner
 failure_kind
 available_owner_count
+available_owners
 did_you_mean[0..9]
   owner
   score
@@ -82,10 +84,11 @@ I think you may have meant `resolve-source-path`? (hint only)
 → retry with one exact owner
 ```
 
-The structured result can return up to ten ranked owners per missing owner. It
-must disclose the complete available-owner count and truncation state. The
-kernel ranks against the complete owner universe even when it returns only a
-bounded prefix.
+The structured result returns every available owner name when the name-only
+vector fits the public result budget. It also returns up to ten ranked owners
+per missing owner for a fast first glance. It must disclose the complete
+available-owner count and truncation state. The kernel ranks against the
+complete owner universe even when presentation must omit names.
 
 ## Matching experiment
 
@@ -97,9 +100,10 @@ Evaluate at least these pure rankers against the observed pairs:
 4. Character trigram similarity.
 5. A deterministic hybrid of the best character and token features.
 
-Measure rank@1, rank@3, rank@10, mean reciprocal rank, and returned characters.
-Use leave-one-out evaluation when the corpus is large enough. Prefer the
-simplest ranker whose rank@10 is not materially worse than the best hybrid.
+Measure rank@1, rank@3, rank@10, mean reciprocal rank, and returned characters
+against the six strict pairs. Use the other patterns as adversarial examples,
+not labeled corrections. Prefer the simplest ranker whose rank@10 is not
+materially worse than the best hybrid.
 
 Ranking is a hypothesis channel. No score threshold, unique top result, or gap
 between scores can create selection authority. Only an exact relation over the
