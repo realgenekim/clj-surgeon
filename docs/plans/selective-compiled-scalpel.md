@@ -112,6 +112,29 @@ invalid for an exact efficiency claim. The task must be corrected with
 column-zero source fences, committed as a new benchmark version, and rerun. No
 old result may be overwritten or reclassified as exact.
 
+## Fresh inferred-namespace cohort
+
+Commit `3b0278a` corrected the prompt and taught compact edits to resolve a
+unique namespace through `within.namespace=true`. The first two complete pairs
+generalized the result across opposite arm orders:
+
+| Seat | Order | Compact | Native | Advantage | Outcome |
+|---|---|---:|---:|---:|---|
+| dev-c | compact first | 60.243 s | 220.772 s | 3.67x | both exact and correct |
+| dev-b | native first | 57.427 s | 473.051 s | 8.24x | both exact and correct |
+
+Both compact arms performed all 51 edits across nine files in one successful
+MCP call, with zero shell commands, refusals, or failed mutations. Telemetry
+confirmed nine boolean namespace scopes per arm. The dev-a compact arm was also
+exact in 69.155 seconds; its native control is retained as invalid because it
+violated the route gate by invoking Clojure 14 times.
+
+This passes the original per-pair 2x gate on the two admissible pairs and
+survives arm-order reversal. It does not yet prove a universal median: the
+cohort has only one replicate per seat, and native strategy variance remains
+large. The next experiment should test a different representative historical
+shape rather than spend the entire budget estimating this case more precisely.
+
 ## Product decisions
 
 ### 1. Make the selective route explicit
