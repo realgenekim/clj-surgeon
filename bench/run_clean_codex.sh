@@ -915,10 +915,21 @@ hash_task_targets() {
     # Hash the ordered per-file manifest so a partial multi-file result cannot
     # share a task hash with any complete result.
     while IFS= read -r target; do
-      [ -n "$target" ] && shasum -a 256 "$workspace/$target"
+      if [ -n "$target" ]; then
+        if [ -f "$workspace/$target" ]; then
+          shasum -a 256 "$workspace/$target"
+        else
+          printf 'ABSENT  %s\n' "$target"
+        fi
+      fi
     done < <(targets_for_task "$task") | shasum -a 256 | awk '{print $1}'
   else
-    shasum -a 256 "$workspace/$(target_for_task "$task")" | awk '{print $1}'
+    target=$(target_for_task "$task")
+    if [ -f "$workspace/$target" ]; then
+      shasum -a 256 "$workspace/$target" | awk '{print $1}'
+    else
+      printf 'ABSENT  %s\n' "$target" | shasum -a 256 | awk '{print $1}'
+    fi
   fi
 }
 
@@ -1496,9 +1507,14 @@ run_one() {
           "$workspace/$portfolio_target" >> "$run_dir/source-fidelity.edn"; then
           portfolio_correct=false
         fi
-        diff -u \
-          "$portfolio_fixture_root/$portfolio_task_dir/before/$portfolio_target" \
-          "$workspace/$portfolio_target" >> "$run_dir/target.diff" || true
+        if [ -f "$portfolio_fixture_root/$portfolio_task_dir/before/$portfolio_target" ]; then
+          diff -u \
+            "$portfolio_fixture_root/$portfolio_task_dir/before/$portfolio_target" \
+            "$workspace/$portfolio_target" >> "$run_dir/target.diff" || true
+        else
+          diff -u /dev/null "$workspace/$portfolio_target" \
+            >> "$run_dir/target.diff" || true
+        fi
       done < <(targets_for_task "$task")
       if [ "$task" = dependency-move-edit ] \
         && ! clj-kondo --lint "$workspace/src/bench/move_order.clj" \

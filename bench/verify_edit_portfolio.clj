@@ -4,6 +4,7 @@
   (:require
    [babashka.fs :as fs]
    [clojure.edn :as edn]
+   [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
@@ -107,9 +108,9 @@
                              (keys required-verification)))
           (conj {:error-type :missing-verification-policy})
 
-          (not= target-set before-set)
+          (not (set/subset? before-set target-set))
           (conj {:error-type :before-target-mismatch
-                 :expected target-set
+                 :expected-subset-of target-set
                  :actual before-set})
 
           (not= target-set after-set)
@@ -142,6 +143,10 @@
                   (and (string? before)
                        (not= (sha256 before) (:before declared)))
                   (conj {:error-type :before-hash-mismatch :target target})
+
+                  (and (nil? before) (some? (:before declared)))
+                  (conj {:error-type :absent-before-hash-must-be-nil
+                         :target target})
 
                   (and (string? after)
                        (not= (sha256 after) (:after declared)))
@@ -233,10 +238,20 @@
                :hashes {"src/x.clj"
                         {:before (sha256 (get before "src/x.clj"))
                          :after (sha256 (get after "src/x.clj"))}}}
+        created-after (assoc after "src/new.clj" "(ns new)\n(def y 2)\n")
+        created (-> valid
+                    (assoc :id :created
+                           :targets ["src/x.clj" "src/new.clj"]
+                           :expected {:changed-files 2 :edits 2})
+                    (assoc-in [:hashes "src/new.clj"]
+                              {:before nil
+                               :after (sha256 (get created-after "src/new.clj"))}))
         task-text "Make the exact change."
         cases
         [{:label :valid
           :capsule valid :before before :after after :ok true}
+         {:label :created-target
+          :capsule created :before before :after created-after :ok true}
          {:label :missing-id
           :capsule (dissoc valid :id) :before before :after after
           :error :invalid-capsule-id}
@@ -270,7 +285,8 @@
           :capsule (assoc-in valid [:expected :changed-files] 2)
           :before before :after after :error :changed-file-count-mismatch}
          {:label :missing-before
-          :capsule valid :before {} :after after :error :before-target-mismatch}
+          :capsule valid :before {} :after after
+          :error :absent-before-hash-must-be-nil}
          {:label :missing-after
           :capsule valid :before before :after {} :error :after-target-mismatch}
          {:label :unexpected-before
