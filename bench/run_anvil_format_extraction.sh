@@ -17,8 +17,11 @@ case "$order" in
   native-first)
     run_matrix='native:native-read-hint-no-skill mcp:mcp-extraction-hint-no-skill'
     ;;
+  champion-native-only)
+    run_matrix='native:native-champion-extraction-no-skill'
+    ;;
   *)
-    echo "ORDER must be mcp-first or native-first: $order" >&2
+    echo "ORDER must be mcp-first, native-first, or champion-native-only: $order" >&2
     exit 2
     ;;
 esac
