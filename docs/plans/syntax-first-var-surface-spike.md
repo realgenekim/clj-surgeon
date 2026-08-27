@@ -70,3 +70,39 @@ exact definition + qualified syntax surface
 Memoization is a later ratchet. A cache key must include the subject, frozen
 source hashes, project configuration, provider version, and platform/session
 identity. Repeated subject text alone is only a cache candidate.
+
+## Candidate-bounded semantic ratchet
+
+The retained replay exposed a smaller escalation than a language server. The
+syntax pass already identifies every source file that contains the exact owner
+name. It shall also return each non-inert bare occurrence that can resolve to
+the subject through the same namespace, explicit `:refer`, or `:use` as a
+bounded, non-authoritative proof gap. A same-named local in an unrelated
+namespace is not a candidate. Definition names and symbols in the namespace
+form are not usages and shall not become gaps.
+
+The gap contract is deliberately conservative:
+
+- exact qualified and alias-qualified locations retain
+  `authority=true`;
+- a live bare symbol receives `authority=false` and
+  `reason=:bare-symbol-needs-resolution`;
+- lexical bindings and their uses may both be gaps because syntax does not
+  guess which one is the Var;
+- quoted, syntax-quoted, discarded, commented, and string content produce
+  neither evidence nor gaps;
+- ordering remains deterministic by file and source position;
+- a parse or candidate-budget failure publishes no partial evidence.
+
+One later adapter may run clj-kondo Var analysis over only the frozen candidate
+files and filter exact `:to` namespace plus `:name`. The exact form reader still
+owns definition proof. The adapter must bind analysis to the captured file
+hashes and refuse if any candidate changes. It must not run whole-repository
+analysis merely because one gap exists.
+
+The guarded cache starts conservatively. A complete surface cache key includes
+the subject, a Merkle root of every relevant source hash, project/source-root
+configuration, clj-kondo/provider version, and platform/reader mode. Updating a
+single file can update the Merkle index incrementally, but any changed relevant
+root invalidates an older complete-surface result. Selective per-Var
+invalidation is deferred until a maintained reverse index can prove it.
