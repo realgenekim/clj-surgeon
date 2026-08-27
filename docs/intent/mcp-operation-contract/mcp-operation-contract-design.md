@@ -161,8 +161,12 @@ The concise summary names the failed request, file, and requested owner. It
 shows the first ranked owner as a question labeled `hypothesis only`, then
 prints the complete bounded available-owner vocabulary so a text-only caller
 can see lower-ranked semantic corrections. It tells the caller to choose one
-exact owner and retry. The structured result preserves every failed owner,
-including failures that do not receive a useful lexical hypothesis.
+exact owner and retry. It also names the decision boundary explicitly: listed
+owners are real evidence from the frozen source snapshot, ranking is
+non-authoritative, semantic selection among those owners is allowed, and the
+ordinary exact retry verifies the selection. The structured result preserves
+every failed owner, including failures that do not receive a useful lexical
+hypothesis.
 
 ### Keep hypotheses separate from authority
 

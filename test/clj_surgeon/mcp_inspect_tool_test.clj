@@ -311,6 +311,11 @@
                            "I think you may have meant answer? (hypothesis only)"))
         (is (str/includes? summary
                            "available owners (2/2): answer, beta"))
+        (is (str/includes? summary
+                           (str "All listed owners are real snapshot evidence; "
+                                "ranking is non-authoritative. Semantic selection "
+                                "among them is allowed; the exact retry verifies "
+                                "the selection.")))
         (is (str/includes? summary "choose one exact owner and retry"))
         (is (not (contains? structured :resolved_requests)))
         (is (not (str/includes? summary "(def answer"))))
