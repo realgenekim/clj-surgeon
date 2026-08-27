@@ -314,6 +314,14 @@ validate_run_matrix() {
       no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
+    case "$context" in
+      mcp-*)
+        if [ "$version" != mcp ]; then
+          echo "MCP contexts require the mcp version: $cell" >&2
+          return 2
+        fi
+        ;;
+    esac
     if [ "$version" = native ] \
       && [ "$context" != no-skill ] \
       && [ "$context" != native-hint-no-skill ] \
@@ -370,6 +378,10 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
   validate_run_matrix 'native:native-champion-extraction-no-skill'
+  if validate_run_matrix 'pre:mcp-extraction-hint-no-skill'; then
+    echo 'benchmark matrix self-test accepted an MCP context without an MCP server' >&2
+    exit 1
+  fi
   computed_route_adherent native-computed-hint-no-skill 0 0 0 0 1 1 true
   if computed_route_adherent native-computed-hint-no-skill 1 0 0 0 1 1 true; then
     echo "native route self-test accepted an MCP read" >&2
