@@ -466,6 +466,14 @@
   (apply proc/shell {:out :string :err :string :continue true}
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
+(defn- run-outline-cli-without-semantic-enrichment [operation]
+  (let [fixture (java.io.File/createTempFile "clj-surgeon-help-outline" ".clj")]
+    (try
+      (spit fixture "(defn dispatch-sentinel [x] x)\n")
+      (run-cli ":op" operation ":file" (.getAbsolutePath fixture))
+      (finally
+        (.delete fixture)))))
+
 ;; --- No args → global help ---
 
 (deftest cli-no-args-shows-help
@@ -567,19 +575,19 @@
 ;; --- Normal dispatch still works ---
 
 (deftest cli-normal-dispatch-works
-  (let [{:keys [exit out]} (run-cli ":op" ":ls" ":file" "src/clj_surgeon/core.clj")]
+  (let [{:keys [exit out]} (run-outline-cli-without-semantic-enrichment ":ls")]
     (testing "normal :ls dispatch returns outline"
       (is (zero? exit))
-      (is (str/includes? out "clj-surgeon.core"))
+      (is (str/includes? out "dispatch-sentinel"))
       (is (str/includes? out ":forms")))))
 
 ;; --- Alias dispatch still works ---
 
 (deftest cli-alias-dispatch-works
-  (let [{:keys [exit out]} (run-cli ":op" ":outline" ":file" "src/clj_surgeon/forms.clj")]
+  (let [{:keys [exit out]} (run-outline-cli-without-semantic-enrichment ":outline")]
     (testing ":outline alias dispatches same as :ls"
       (is (zero? exit))
-      (is (str/includes? out "clj-surgeon.forms")))))
+      (is (str/includes? out "dispatch-sentinel")))))
 
 (deftest cli-documented-string-op-dispatch-works
   (let [{:keys [exit out]} (run-cli ":op" "ls-tree" ":dir" "src")]

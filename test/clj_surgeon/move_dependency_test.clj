@@ -1,7 +1,6 @@
 (ns clj-surgeon.move-dependency-test
   (:require
    [clj-surgeon.analyze :as analyze]
-   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.move :as move]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -22,18 +21,57 @@
 (defn- stranded-names [result]
   (mapv :name (:stranded result)))
 
-(defn- cold-lints? [source filename]
-  (let [command ["clj-kondo" "--lint" "-"
-                 "--filename" filename
-                 "--fail-level" "error"]
-        result (process-env/run-bounded!
-                 {:command command
-                  :cwd (System/getProperty "user.dir")
-                  :timeout-ms 120000
-                  :stdin-text source})]
-    (and (= :admitted (get-in result [:admission :status]))
-         (:finished? result)
-         (zero? (:exit result)))))
+(def eager-def-source
+  "(ns x)\n\n(declare derived)\n\n(defn destination [] derived)\n\n(def base 1)\n\n(def derived (inc base))\n")
+
+(def macro-dependency-source
+  "(ns x)\n\n(declare worker)\n\n(defn destination [] (worker))\n\n(defmacro answer [] 42)\n\n(defn worker [] (answer))\n")
+
+(def real-program-move-cases
+  [{:id :mothership
+    :fixture "test-fixtures/mv/mothership_stranded_dep.clj"
+    :form "walk-files"
+    :before "run-kondo"}
+   {:id :writer
+    :fixture "test-fixtures/mv/writer_state_chain.clj"
+    :form "transition!"
+    :before "dispatch!"}])
+
+(defn move-lint-corpus
+  "Return the six promised baseline/candidate snapshots for one real analyzer contract."
+  []
+  (let [synthetic-cases [{:id :eager-candidate
+                          :source eager-def-source
+                          :form "derived"}
+                         {:id :macro-candidate
+                          :source macro-dependency-source
+                          :form "worker"}]
+        synthetic-candidates
+        (mapv (fn [{:keys [id source form]}]
+                (let [result (move/plan-move source {:form form
+                                                     :before "destination"
+                                                     :with-deps true})]
+                  (when-not (:ok result)
+                    (throw (ex-info "Synthetic move contract did not compile"
+                                    {:id id :result result})))
+                  {:id id :source (:result result)}))
+              synthetic-cases)
+        real-programs
+        (mapcat (fn [{:keys [id fixture form before]}]
+                  (let [source (slurp fixture)
+                        result (move/plan-move source {:file fixture
+                                                       :form form
+                                                       :before before
+                                                       :with-deps true})]
+                    (when-not (:ok result)
+                      (throw (ex-info "Real-program move contract did not compile"
+                                      {:id id :fixture fixture :result result})))
+                    [{:id (keyword (str (name id) "-baseline"))
+                      :source source}
+                     {:id (keyword (str (name id) "-candidate"))
+                      :source (:result result)}]))
+                real-program-move-cases)]
+    (vec (concat synthetic-candidates real-programs))))
 
 (deftest issue-20-plain-move-refuses-and-recommends-mv-with-deps
   (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
@@ -173,17 +211,15 @@
     (is (= #{"default-value"} (:depends-on worker)))))
 
 (deftest eager-def-and-macro-dependencies-are-pulled-before-their-users
-  (let [eager-source "(ns x)\n\n(declare derived)\n\n(defn destination [] derived)\n\n(def base 1)\n\n(def derived (inc base))\n"
-        macro-source "(ns x)\n\n(declare worker)\n\n(defn destination [] (worker))\n\n(defmacro answer [] 42)\n\n(defn worker [] (answer))\n"]
-    (doseq [[source form expected-order]
-            [[eager-source "derived" ["base" "derived"]]
-             [macro-source "worker" ["answer" "worker"]]]]
-      (let [result (move/plan-move source {:form form
-                                           :before "destination"
-                                           :with-deps true})]
-        (is (:ok result))
-        (is (= expected-order (get-in result [:plan :move-order])))
-        (is (cold-lints? (:result result) "x.clj"))))))
+  (doseq [[source form expected-order]
+          [[eager-def-source "derived" ["base" "derived"]]
+           [macro-dependency-source "worker" ["answer" "worker"]]]]
+    (let [result (move/plan-move source {:form form
+                                         :before "destination"
+                                         :with-deps true})]
+      (is (:ok result))
+      (is (= expected-order (get-in result [:plan :move-order])))
+      (is (parseable? (:result result))))))
 
 (deftest missing-source-and-destination-errors-remain-stable
   (let [source "(ns x)\n\n(defn present [] nil)\n"]
@@ -196,22 +232,18 @@
             :form "absent"}
            (move/plan-move source {:form "present" :before "absent"})))))
 
-(deftest real-program-fixtures-and-transformed-candidates-cold-lint
-  (doseq [[fixture form before]
-          [["test-fixtures/mv/mothership_stranded_dep.clj"
-            "walk-files" "run-kondo"]
-           ["test-fixtures/mv/writer_state_chain.clj"
-            "transition!" "dispatch!"]]]
+(deftest real-program-fixtures-produce-parseable-candidates
+  (doseq [{:keys [fixture form before]} real-program-move-cases]
     (let [source (slurp fixture)
           result (move/plan-move source {:file fixture
                                          :form form
                                          :before before
                                          :with-deps true})]
       (testing (str fixture " valid baseline")
-        (is (cold-lints? source fixture)))
+        (is (parseable? source)))
       (testing (str fixture " valid transformed candidate")
         (is (:ok result))
-        (is (cold-lints? (:result result) fixture))))))
+        (is (parseable? (:result result)))))))
 
 (deftest ambiguous-definitions-fail-closed
   (let [source "(ns x)\n\n(defn destination [] nil)\n\n(defn worker [] 1)\n\n(defn worker [] 2)\n"
