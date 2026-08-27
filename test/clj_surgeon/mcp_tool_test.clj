@@ -816,6 +816,56 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest exact-terminal-response-is-a-total-evidence-projection
+  ;; @spec MCP-OP-RELAY-001
+  ;; @spec MCP-OP-RELAY-002
+  ;; @spec MCP-OP-RELAY-003
+  (let [response "Done — changes committed and exact verification completed."
+        eligible {:ok true
+                  :committed true
+                  :verification_complete true
+                  :next_action "none"
+                  :read_back_hashes {"src/sample/core.clj" "source-sha"}
+                  :undo_receipt "/tmp/receipt.edn"
+                  :receipt_hash "receipt-sha"
+                  :verification {:ok true
+                                 :profile "exact"
+                                 :profile-source :project
+                                 :acceptance :exact-exit
+                                 :process-outcome :pass
+                                 :exit 0}}]
+    (is (= response (mcp-tool/exact-terminal-response eligible)))
+    (doseq [[label result]
+            [[:non-map nil]
+             [:refusal {:ok false :error_type "verification-failed"}]
+             [:non-exact (assoc-in eligible [:verification :profile] "fast")]
+             [:pending (assoc eligible :verification_complete false)]
+             [:next-action (assoc eligible :next_action "inspect_verification_job")]
+             [:rolled-back (assoc eligible :rolled_back true)]
+             [:missing-read-back (dissoc eligible :read_back_hashes)]
+             [:missing-receipt (dissoc eligible :undo_receipt)]
+             [:unverified (assoc-in eligible [:verification :process-outcome]
+                                    :launch-failure)]
+             [:nonzero (assoc-in eligible [:verification :exit] 3)]]]
+      (testing (name label)
+        (is (nil? (mcp-tool/exact-terminal-response result)))))
+    (let [summary (mcp-tool/concise-summary
+                    (assoc eligible
+                           :operation "apply_clojure_changes"
+                           :edits 15
+                           :files 2
+                           :elapsed_ms 2.25
+                           :terminal_response response))]
+      (is (= 1 (count (re-seq (re-pattern
+                                (java.util.regex.Pattern/quote response))
+                              summary))))
+      (is (str/includes? summary "2.25 ms")))
+    (is (= {:type "string"}
+           (get-in mcp-tool/clj-change-output-schema
+                   [:properties "terminal_response"])))
+    (is (not (some #{"terminal_response"}
+                   (:required mcp-tool/clj-change-output-schema))))))
+
 (deftest exact-verifier-sees-staged-extraction-and-rolls-back-every-nonpass
   ;; @spec MCP-OP-VERIFY-001
   ;; @spec MCP-OP-VERIFY-005

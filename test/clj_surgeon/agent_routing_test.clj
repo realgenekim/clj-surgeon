@@ -102,3 +102,11 @@
                                          [codex-file claude-file]))))
       (finally
         (fs/delete-tree tmp)))))
+
+(deftest terminal-response-routing-is-conditional-on-complete-user-work
+  ;; @spec MCP-OP-RELAY-004
+  (let [source (slurp "resources/clj-surgeon-agent-routing.md")]
+    (is (str/includes? source "If `terminal_response` is present"))
+    (is (str/includes? source "completes all remaining user-requested work"))
+    (is (str/includes? source "return its value exactly"))
+    (is (str/includes? source "If work remains"))))
