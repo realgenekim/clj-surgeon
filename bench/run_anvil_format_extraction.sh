@@ -20,8 +20,14 @@ case "$order" in
   champion-native-only)
     run_matrix='native:native-champion-extraction-no-skill'
     ;;
+  plan-only)
+    run_matrix='mcp:mcp-extraction-plan-no-skill'
+    ;;
+  discover-only)
+    run_matrix='mcp:mcp-extraction-discover-no-skill'
+    ;;
   *)
-    echo "ORDER must be mcp-first, native-first, or champion-native-only: $order" >&2
+    echo "ORDER must be mcp-first, native-first, champion-native-only, plan-only, or discover-only: $order" >&2
     exit 2
     ;;
 esac

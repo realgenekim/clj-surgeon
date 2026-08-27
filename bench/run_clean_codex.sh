@@ -311,7 +311,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
@@ -327,6 +327,8 @@ validate_run_matrix() {
       && [ "$context" != matched-skill ] \
       && [ "$context" != mcp-hint-no-skill ] \
       && [ "$context" != mcp-extraction-hint-no-skill ] \
+      && [ "$context" != mcp-extraction-plan-no-skill ] \
+      && [ "$context" != mcp-extraction-discover-no-skill ] \
       && [ "$context" != native-computed-hint-no-skill ] \
       && [ "$context" != edit-computed-hint-no-skill ] \
       && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -359,6 +361,8 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:edit-computed-hint-no-skill'
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
   validate_run_matrix 'native:native-champion-extraction-no-skill'
@@ -803,8 +807,14 @@ is_portfolio_task() {
 
 task_prompt() {
   local task=$1
+  local context=${2:-}
   if is_portfolio_task "$task"; then
-    command cat "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/task.txt"
+    local prompt_file=task.txt
+    case "$context" in
+      mcp-extraction-plan-no-skill) prompt_file=task-plan.txt ;;
+      mcp-extraction-discover-no-skill) prompt_file=task-discover.txt ;;
+    esac
+    command cat "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/$prompt_file"
     return
   fi
   case "$task" in
@@ -865,6 +875,29 @@ task_prompt() {
       ;;
   esac
 }
+
+if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
+  task_prompt sessionize-format-extraction mcp-extraction-hint-no-skill \
+    | grep -q 'Move exactly these 15 named top-level forms'
+  task_prompt sessionize-format-extraction mcp-extraction-hint-no-skill \
+    | grep -q 'make only that moved definition public'
+  task_prompt sessionize-format-extraction mcp-extraction-plan-no-skill \
+    | grep -q 'visibility changes and caller accounting are deliberately not supplied'
+  if task_prompt sessionize-format-extraction mcp-extraction-plan-no-skill \
+    | grep -q 'make only that moved definition public'; then
+    echo 'plan prompt leaked the withheld visibility decision' >&2
+    exit 1
+  fi
+  task_prompt sessionize-format-extraction mcp-extraction-discover-no-skill \
+    | grep -q 'private blank-normalization helper'
+  if task_prompt sessionize-format-extraction mcp-extraction-discover-no-skill \
+    | grep -q 'Move exactly these 15 named top-level forms'; then
+    echo 'discover prompt leaked the withheld root set' >&2
+    exit 1
+  fi
+  echo 'benchmark prompt self-test passed'
+  exit 0
+fi
 
 target_for_task() {
   if is_portfolio_task "$1"; then
@@ -1007,7 +1040,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1029,6 +1062,12 @@ run_one() {
   local replicate=${5:-1}
   local run_id
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
+  if { [ "$context" = mcp-extraction-plan-no-skill ] \
+      || [ "$context" = mcp-extraction-discover-no-skill ]; } \
+    && [ "$task" != sessionize-format-extraction ]; then
+    echo "Extraction staircase contexts require sessionize-format-extraction: $run_id" >&2
+    exit 2
+  fi
   if [ "$version" = native ] \
     && [ "$context" != no-skill ] \
     && [ "$context" != native-hint-no-skill ] \
@@ -1042,6 +1081,8 @@ run_one() {
     && [ "$context" != matched-skill ] \
     && [ "$context" != mcp-hint-no-skill ] \
     && [ "$context" != mcp-extraction-hint-no-skill ] \
+    && [ "$context" != mcp-extraction-plan-no-skill ] \
+    && [ "$context" != mcp-extraction-discover-no-skill ] \
     && [ "$context" != native-computed-hint-no-skill ] \
     && [ "$context" != edit-computed-hint-no-skill ] \
     && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -1178,7 +1219,7 @@ run_one() {
     exit 2
   fi
 
-  task_prompt "$task" > "$run_dir/prompt.txt"
+  task_prompt "$task" "$context" > "$run_dir/prompt.txt"
   if [ "$context" = 'explicit-no-skill' ]; then
     printf '%s\n' '' 'Use the installed clj-surgeon as your primary lens for Clojure source. Optimize for the fewest commands and least irrelevant output. Preserve a human review boundary before any write.' \
       >> "$run_dir/prompt.txt"
@@ -1201,6 +1242,14 @@ run_one() {
   fi
   if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
     printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'mcp-extraction-plan-no-skill' ]; then
+    printf '%s\n' '' 'The task supplies exact extraction roots and destination, but it deliberately withholds visibility and caller proof. Call inspect_clojure exactly once with mode=plan-extraction, the supplied file, destination, forms, and require_policy=minimal. Review required_public_forms and caller evidence, then copy the snapshot-bound next_call. Fill caller_changes and ignored_caller_files only from that evidence and call apply_clojure_changes exactly once. Do not read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'mcp-extraction-discover-no-skill' ]; then
+    printf '%s\n' '' 'The task supplies the extraction goal and destination, but deliberately withholds the exact root set, visibility changes, and caller proof. Use at most one bounded native shell read to identify the exact owners in the source formatting-helper section; do not read the whole file. Then call inspect_clojure exactly once with mode=plan-extraction and the discovered roots. Review required_public_forms and caller evidence, copy its snapshot-bound next_call, and call apply_clojure_changes exactly once. Do not use edit_clojure or apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'native-computed-hint-no-skill' ]; then
@@ -1395,6 +1444,10 @@ run_one() {
   if is_portfolio_task "$task"; then
     decision_supplied=$(bb "$repo_root/bench/verify_edit_portfolio.clj" \
       --decision-supplied "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")")
+    if [ "$context" = mcp-extraction-plan-no-skill ] \
+      || [ "$context" = mcp-extraction-discover-no-skill ]; then
+      decision_supplied=false
+    fi
   elif [ "$task" = computed-supplied-edit ]; then
     decision_supplied=true
   else
@@ -1665,6 +1718,24 @@ run_one() {
         || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
         || [ "$mcp_failures" -ne 0 ] || [ "$verified" != true ] \
         || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
+    mcp-extraction-plan-no-skill)
+      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 1 ] \
+        || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
+    mcp-extraction-discover-no-skill)
+      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 2 ] \
+        || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
         route_adherent=false
       fi
       ;;
