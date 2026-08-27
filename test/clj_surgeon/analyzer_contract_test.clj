@@ -1,6 +1,9 @@
 (ns clj-surgeon.analyzer-contract-test
   (:require
    [babashka.fs :as fs]
+   [clj-surgeon.binding-rename :as binding-rename]
+   [clj-surgeon.fix-declares-test :as fix-fixtures]
+   [clj-surgeon.forward-refs :as forward-refs]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.move-dependency-test :as move-fixtures]
@@ -118,5 +121,41 @@
           (is (empty? (get-in verification
                               [:checks 0 :diagnostic-delta
                                :blocking-introduced])))))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest forward-reference-analysis-retains-the-provider-schema
+  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-forward-contract-"})
+        source (fs/path root "src/my/app.clj")]
+    (try
+      (fs/create-dirs (fs/parent source))
+      (spit (str source) fix-fixtures/simple-forward-ref)
+      (is (= [{:name 'helper
+               :used-at 6
+               :defined-at 8
+               :gap 2}]
+             (forward-refs/detect-forward-refs (str source) 'my.app)))
+      (finally
+        (fs/delete-tree root)))))
+
+(deftest binding-analysis-retains-local-identity-and-destructuring-schema
+  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-binding-contract-"})
+        source-file (fs/path root "src/demo.clj")
+        source (str "(ns demo)\n"
+                    "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
+                    "(defn table [{:keys [sort-by]}] (name sort-by))\n")]
+    (try
+      (let [analysis (binding-rename/analyze-source (str source-file) source)
+            locals (:locals analysis)
+            usages (:local-usages analysis)
+            keywords (:keywords analysis)
+            local-ids (set (map :id locals))]
+        (is (= 2 (count locals)))
+        (is (= 3 (count usages)))
+        (is (= 2 (count keywords)))
+        (is (= #{'sort-by} (set (map :name locals))))
+        (is (= local-ids (set (map :id usages))))
+        (is (every? :keys-destructuring keywords))
+        (is (= #{"sort-by"} (set (map :name keywords)))))
       (finally
         (fs/delete-tree root)))))

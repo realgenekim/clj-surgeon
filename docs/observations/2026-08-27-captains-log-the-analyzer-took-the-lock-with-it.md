@@ -198,11 +198,13 @@ and one coherent future snapshot using the project `:lint-as` configuration.
 The affected warm cohort passed 63 tests and 571 assertions with the machine
 event ledger unchanged.
 
-The explicit real-provider lane now contains three launches: one batched move
-corpus plus the diagnostic baseline/future pair. The remaining two target
-launches are the forward-reference and binding-analysis schema contracts. Until
-those land and the five-launch lane passes remotely or under a fresh-green
-lease, MCP-OP-ANALYZER-008 remains open.
+The explicit real-provider lane now contains exactly five launches: one batched
+move corpus, one diagnostic baseline/future pair, one forward-reference schema
+contract, and one binding-analysis schema contract. The four test Vars compile
+in the warm 512 MiB analysis JVM, and the move corpus contains all six promised
+snapshots. The five-launch lane has not run on Skiff because the recorder is
+red; until it passes remotely or under a fresh-green lease,
+MCP-OP-ANALYZER-008 remains open.
 
 SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a

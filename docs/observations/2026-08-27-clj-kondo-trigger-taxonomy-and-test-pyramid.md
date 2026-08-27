@@ -164,6 +164,12 @@ undo, failure, and rollback assertions. The real macro/config boundary moved to
 the analyzer-contract lane as exactly two calls. The focused MCP cohort passed
 63 tests and 571 assertions with the host event ledger unchanged.
 
+The real-provider target now contains the complete five-launch design. Its
+four test Vars cover one batched six-snapshot move corpus, one two-launch
+diagnostic baseline/future contract, one forward-reference schema call, and one
+binding-analysis schema call. It is compiled but intentionally unrun while the
+Skiff pressure snapshot is red.
+
 ## Admission and convoy law
 
 The analyzer-owned `fcntl` lock prevents overlap across agents, JVMs, and
