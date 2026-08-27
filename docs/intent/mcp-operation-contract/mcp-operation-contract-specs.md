@@ -65,6 +65,22 @@ tests witness the requirement.
 - [x] **MCP-OP-PLAN-009**: When extraction apply omits caller decisions and the complete frozen workspace contains any structural or quoted-Var caller candidate, clj-surgeon shall refuse before writing and return the completed snapshot-bound plan plus an exact `genuine_unknowns` vector; omission shall never account for a discovered caller.
 - [x] **MCP-OP-PLAN-010**: When extraction apply explicitly supplies `public_forms` or aggregate expectations, those values shall remain authoritative; an explicit empty visibility decision or mismatched exact count shall refuse rather than be replaced by mechanical derivation.
 
+## Deferred Exact Repository Verification
+
+These requirements are the design checkpoint for verifier fusion. They remain
+deferred until review promotes the complete behavior matrix into red witnesses.
+
+- [D] **MCP-OP-VERIFY-001**: When an apply request selects `verify="exact"`, clj-surgeon shall resolve only a project-owned `"exact"` profile whose acceptance is `:exact-exit`; if that profile is absent, process-owned, malformed, or has another acceptance policy, clj-surgeon shall refuse before changing source.
+- [D] **MCP-OP-VERIFY-002**: When a project exact profile is validated, clj-surgeon shall require exactly one non-empty string argument vector, no `{files}` placeholder, no hot or cold verifier, and a positive bounded timeout.
+- [D] **MCP-OP-VERIFY-003**: When the exact verifier executes, clj-surgeon shall resolve only its executable, preserve every remaining declared argument and its order, use the canonical project root as cwd, inherit the paved process environment, and shall not invoke a shell.
+- [D] **MCP-OP-VERIFY-004**: When a clj-kondo exact-exit profile executes, clj-surgeon shall not capture or compare a diagnostic baseline and shall not add cache, output, file-scope, or fail-level arguments.
+- [D] **MCP-OP-VERIFY-005**: When the exact verifier exits zero after candidate read-back, clj-surgeon shall retain the complete transaction and inverse receipt and return terminal verification evidence containing the project profile identity, cwd, resolved argv, exit, elapsed time, and full-output byte count and hash.
+- [D] **MCP-OP-VERIFY-006**: When the exact verifier completes with an ordinary nonzero exit, clj-surgeon shall undo the complete transaction and return the exit, bounded aggregated diagnostics, rollback evidence, and `source_unchanged=true` only when undo read-back succeeds.
+- [D] **MCP-OP-VERIFY-007**: If the exact verifier times out, cannot launch, or terminates with a signal-style crash, clj-surgeon shall classify the verification as unverified, undo the complete transaction, and return the distinct process outcome plus bounded aggregated diagnostics.
+- [D] **MCP-OP-VERIFY-008**: If rollback after any exact-verifier non-pass cannot prove restoration of every original and created path, clj-surgeon shall report recovery required and shall not claim `source_unchanged=true`.
+- [D] **MCP-OP-VERIFY-009**: When exact verification fails or is unverified, clj-surgeon shall neither auto-fix nor recommend a blind retry; its remedy shall require correction of the deterministic diagnostics or restoration of verifier authority before a new guarded request.
+- [D] **MCP-OP-VERIFY-010**: Before exact-verifier fusion is activated, permanent witnesses shall prove behavioral equivalence with the declared external command for a warning-bearing pass, ordinary lint failure, missing authority, timeout, crash, staged-byte visibility, and complete rollback.
+
 ## Read Selector Recovery
 
 - [x] **MCP-OP-READ-DIAG-001**: When a `forms` request cannot select each requested owner exactly, clj-surgeon shall report the failed stage, request identity, file, and each failed owner. It shall include failure kinds, exact match counts, available-owner count, source hash, and bounded-presentation counts without source bodies.
