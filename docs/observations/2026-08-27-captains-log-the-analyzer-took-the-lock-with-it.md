@@ -260,6 +260,33 @@ SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a
 second production implementation.
 
+## The first remote proof found a hermeticity defect
+
+The installed checkpoint was tagged locally as
+`safer-skiff-analyzer-gate-2026-08-27` at `e52b0eb`. Because that commit was not
+published to origin, the exact history and annotated tag moved to Anvil as a
+5,288,827-byte Git bundle with SHA-256
+`37bd85fc739dce07f9c181d78fef7e24e5207dadfe561611c5368f720ffd60e0`.
+The `dev-b` worker proved the detached HEAD and peeled tag before execution.
+
+The first and only authorized `make analyzer-contract-test` invocation then
+stopped before admission: exit 2 in 1,015.673 ms, zero tests, zero assertions,
+zero analyzer starts. The clean checkout did not have `nrepl.core` on
+Babashka's classpath. Local runs had therefore borrowed undeclared environment
+state. This is a target-hermeticity failure, not evidence against
+serialization.
+
+The repair gives the analyzer contract a dedicated JVM Clojure alias with
+explicit `test`, `babashka/fs`, and `nrepl` dependencies. A cheap static witness
+guards the Make target and declared dependency closure without launching an
+analyzer. The next remote run must start again from a fresh exact bundle and
+must still prove five-or-fewer real starts, maximum concurrency one, and the
+unchanged semantic assertions.
+
+Remote refusal receipt:
+`/srv/fleet/dev-b/clj-surgeon-study-results/20260827T225807Z-analyzer-contract-e52b0eb-dev-b2/receipt.md`
+(SHA-256 `6a86a5d2fedc678966a01f96d443b84fcd31ea2f91f69b68a7491db4158c2f9a`).
+
 ## Remaining gates and next hills
 
 The first shared hot-reload proof stopped safely. The live reload manifest
