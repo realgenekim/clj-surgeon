@@ -75,6 +75,15 @@ then produced a correct one-shot 33.789-second route, 6.239 seconds below the
 adjacent narrate-then-call canary despite a slower kernel. Treat this as an n=1
 mechanism signal; run a small counterbalanced cohort before promotion.
 
+Counterbalanced Anvil replication: **passed the small-cohort mechanism gate**.
+dev-b normal→tool-first was 35.430s→28.230s; dev-c tool-first→normal was
+27.667s→35.444s. All four runs were correct with one extraction and one exact
+lint. Medians were 35.437s and 27.949s, a 7.489-second or 21.1% reduction. The
+candidate is 4.38x faster than the retained 122.278-second native control and
+3.493 seconds above the 5x gate. Encode the chord without weakening the
+genuine-decision refusal route, then combine it only with an independently
+earned verifier-boundary mechanism.
+
 ### E2: Hot or incremental complete extraction proof
 
 Profile workspace enumeration, parse, owner/dependency closure, quoted-Var
