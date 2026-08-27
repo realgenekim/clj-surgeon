@@ -237,6 +237,25 @@ command CWDs, scope digest, launch index, fixed limit, and expiry. A sixth
 launch refuses before process creation. Pressure remains an unconditional
 veto.
 
+Commit `e856881` was installed box-wide. The installed gate and source have
+the same SHA-256,
+`a5d4d1759e7243edb5077e171179ec73573269ff6ead9cc17b78e75446c66855`.
+An installed fake success reported lane `interactive`. An installed forced-red
+probe returned exit 75 and `clj-kondo-pressure-deferred`; its marker command
+did not run. No real analyzer or shared MCP restart participated in publication.
+
+Minutes later, a separate critical incident demonstrated why analyzer control
+is necessary but not sufficient. The flight recorder observed 54 runnable
+processes at 20:27 UTC, then one-minute load 110 at 20:28 and 97.6 at 20:47; a
+bounded live sample briefly read 165. Swap was 35.79GiB of 36GiB with roughly
+57MiB of free pages. Current CPU was distributed across Zoom and its encoder,
+WindowServer, an Edge renderer, Claude, Granola, Chrome, Supacode, and two
+application JVMs. Supacode briefly launched GitHub GraphQL work, but only one
+`gh` process remained when counted. There were zero live clj-kondo processes.
+The gate had deferred later analyzer requests under pressure. This incident is
+therefore `causality=multi-factor`: foreground video/UI work plus severe paging
+and process churn, not a current analyzer convoy.
+
 SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a
 second production implementation.
