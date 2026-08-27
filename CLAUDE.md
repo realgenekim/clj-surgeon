@@ -34,7 +34,9 @@ updates, and verification gates. It is not a chronological coding diary.
 - If discovery finds no nREPL for the current worktree, start `make nrepl`,
   retain its printed port, and verify `(System/getProperty "user.dir")` before
   loading code. Treat this process as a standalone analysis JVM, not as the
-  shared MCP runtime. Use `require` with `:reload` after source changes and
+  shared MCP runtime. Never launch the nREPL alias directly: the Make target
+  applies the repository's bounded 64 MB initial and 512 MB maximum heap. Use
+  `require` with `:reload` after source changes and
   prefer several small pure evaluations over one large probe.
 - **Read [docs/testing-guidelines.md](docs/testing-guidelines.md)** before writing tests.
 - Core rule: pure functions take data and return data. Test them with literals, not temp files.

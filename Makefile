@@ -519,7 +519,7 @@ install-dev-claude-skill:
 	@echo "DEVELOPMENT LINK: $(CLAUDE_SKILL_DEST) -> $(SKILL_SOURCE) (branch-coupled)"
 
 nrepl:
-	cd $(CLJ_SURGEON_HOME) && clojure -M:clj-surgeon/mcp-test:clj-surgeon/nrepl
+	cd $(CLJ_SURGEON_HOME) && clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test:clj-surgeon/nrepl
 
 benchmark-clean-codex:
 	bash bench/run_clean_codex.sh

@@ -32,6 +32,11 @@ test_output=$(make --no-print-directory -n mcp-test)
 printf '%s\n' "$test_output" | grep -Fq -- '-J-Xms64m -J-Xmx512m'
 printf '%s\n' "$test_output" | grep -Fq -- '-M:clj-surgeon/mcp-test'
 
+nrepl_output=$(make --no-print-directory -n nrepl)
+printf '%s\n' "$nrepl_output" | grep -Fq -- '-J-Xms64m -J-Xmx512m'
+printf '%s\n' "$nrepl_output" | grep -Fq -- \
+  '-M:clj-surgeon/mcp-test:clj-surgeon/nrepl'
+
 for target in mcp-serve mcp-serve-benchmark mcp-start; do
   output=$(make --no-print-directory -n "$target")
   printf '%s\n' "$output" | grep -Fq -- "JAVA_CMD=\"$expected_java\""
