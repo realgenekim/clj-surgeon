@@ -183,6 +183,15 @@ second production implementation.
 
 ## Remaining gates and next hills
 
+The first shared hot-reload proof stopped safely. The live reload manifest
+loaded `binding_rename` before the new `mcp_process` dependency, so compilation
+refused at `run-bounded!`. PID 65458, CWD
+`/Users/genekim/src.local/clj-surgeon`, did not restart. No retry occurred.
+The repair moves `mcp_process` ahead of `forward-refs`, `fix-declares`, and
+`binding-rename`, adds the previously omitted analyzer namespaces, and adds a
+dry-run dependency-order regression. The repaired order loaded successfully in
+the isolated 512 MiB analysis nREPL before a second window was considered.
+
 Before shared publication:
 
 1. Complete the static entrance audit and adversarial review.
