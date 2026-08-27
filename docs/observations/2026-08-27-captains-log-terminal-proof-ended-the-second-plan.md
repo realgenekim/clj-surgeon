@@ -272,6 +272,54 @@ The complete cold suite passes 617 core tests / 5,301 assertions and 243 MCP
 tests / 2,060 assertions, plus smoke, heap, cclsp, skill, portfolio, harness,
 retention, and evidence-manifest gates.
 
-Shared `:7888` has not been reloaded and the candidate has not yet been
-installed. Publication claims remain scoped to this frozen historical
-extraction cohort; this is not a universal sub-three-second receipt claim.
+Before the live publication below, shared `:7888` had not been reloaded and the
+candidate had not been installed. Publication claims remain scoped to this
+frozen historical extraction cohort; this is not a universal sub-three-second
+receipt claim.
+
+## Live publication receipt
+
+Immutable head `9ace623d365fe61258b502ac4809d250fbe16cac` was installed as the
+stable CLI, Codex skill, and Claude skill. The managed routing block was updated
+in both global agent instruction files. One hot reload returned
+`status=:synchronized`, `ok=true`, `server-restart-required=false`, with
+contract hash `0d4b26cb` -> `a41ca0f6`.
+
+The shared server process remained PID 65458 with CWD
+`/Users/genekim/src.local/clj-surgeon` before and after the reload. A
+pre-existing Codex MCP session remained valid and completed an
+`inspect_clojure` call with `read_complete=true` in 317.12 ms.
+
+Live `tools/list` through `http://127.0.0.1:7888/mcp` proved that
+`apply_clojure_changes` publishes:
+
+- the terminal-response instruction in its description;
+- `verify` enum values `fast`, `full`, and `exact`; and
+- optional string output field `terminal_response`.
+
+Two live mutation probes exercised both sides of the evidence law:
+
+1. An exact-verified `edits` request normalized to public operation
+   `edit_clojure`. It committed in 389.616 ms and correctly omitted
+   `terminal_response`.
+2. A fresh isolated extraction normalized to `apply_clojure_changes`. It
+   committed and exact-verified in 1,438.363 ms, returned
+   `verification_complete=true` and `next_action=none`, and published the fixed
+   response in structured content. Visible content contained the conditional
+   chord and the constant exactly once.
+
+The true-branch read-back hashes were:
+
+- `src/sample/source.clj`:
+  `844a5485c804fa9c0b0defcaa30eafea8cbc51d2e74781ccdcd50dd8e359eb17`
+- `src/sample/extracted.clj`:
+  `d5c45b6433dd72be96a5f49d53027ca328716ac9347fac9369efea31fcd1dc25`
+- receipt:
+  `266611831031f83e7bfc5c02af110599d3b5340c3ca0e4e581d915343333e0bf`
+
+The publication window ran from `2026-08-27T07:24:51Z` through
+`2026-08-27T07:29:05Z`, 4 minutes 14 seconds. No pre-existing MCP session was
+invalidated, the server did not restart, and `main` was not mutated. The named
+rollback anchor is immutable commit `66b8a60`; restoration would use
+`make install` from a detached worktree at that commit followed by one hot
+reload.
