@@ -140,12 +140,61 @@ In option-value terms, independent modules raised `N`, parallel owners raised
 `K`, event clocks and frozen scorers reduced decision time `t`, and experiments
 targeted the high-uncertainty seams where `sigma` was worth buying down.
 
+## Anvil gate: the result survives both orders
+
+Two Anvil lanes ran the same exact commit, model, task, scorer, and fused
+transaction in opposite orders. The only prompt difference was the fixed
+terminal-success sentence. Removing that last line reproduced the ordinary
+prompt byte-for-byte.
+
+| Lane and order | Ordinary fused | Terminal response | Saving |
+|---|---:|---:|---:|
+| dev-b, ordinary -> terminal | 23.984s | 20.401s | 3.583s |
+| dev-c, terminal -> ordinary | 24.819s | 19.778s | 5.041s |
+| Median | **24.402s** | **20.090s** | **4.312s (17.7%)** |
+
+All four runs were semantically correct and route-adherent. Every run used one
+MCP apply, zero shell calls, zero source commands, exact verification, and no
+failures. All produced normalized diff SHA-256
+`721dfd30e55e10353ee37c76962ca527c73fdad2404d82b7c25dbcfe08e9a14f`.
+Both terminal arms cleared 24.456 seconds. Their median is **6.09x faster** than
+the frozen correct-native control.
+
+The four MCP receipts also read back identical files: source SHA-256
+`6ed498052c8a30531047b1d1c9bd23c609bc32355403e8412b7cfda178a5f822`
+and destination SHA-256
+`bdaf9cdc5b748b22563c575d8a8278c3634ef8b44d2b187f4e23374ca9e9c0f1`.
+The exact profile SHA-256 was
+`c363fb29c8c5bbcbf7d8e8552a5ffd0b060140841aa55c020b7b033ec6a528ed`.
+Normal and terminal prompt SHA-256 values were respectively
+`b1468f14aea7c6bfdc585904ce6e9458ce47e4da6203dcbc75ca6bf179b36c13`
+and `7dbed9caa9b740ad82131cf48e9b025d5ecec12b9207a1ab106ddd009340e16b`;
+deleting the terminal prompt's final line reproduces the normal prompt exactly.
+
+Both `anvil-exec` wrappers returned exit 1 after the completed experiment
+because their final `git status --porcelain` considered an untracked
+`.cpcache/` directory dirty. Every per-arm terminal receipt was complete with
+exit 0, and tracked/index diffs were clean. This is a postflight harness defect,
+not an experimental failure; fix that cleanliness check before reusing the
+wrapper as a release gate.
+
+The phase clocks again locate the mechanism:
+
+| Median phase | Ordinary fused | Terminal response | Delta |
+|---|---:|---:|---:|
+| Initial call materialization | 13.277s | 14.040s | +0.764s |
+| Server-authoritative apply | 2.025s | 1.895s | -0.130s |
+| Receipt interpretation | 7.628s | 2.870s | **-4.758s** |
+
+Initial materialization became slightly slower, and server time was effectively
+flat. The entire useful effect remained at the terminal receipt boundary.
+
 ## Next gate
 
-Run the same-commit fused route on two Anvil lanes in opposite order, changing
-only whether the terminal success response is explicit. Require every promoted
-run to be semantically correct, one-shot, terminally verified, and at or below
-24.456 seconds. Preserve complete phase clocks and exact evidence hashes. Only
-then decide how to project the terminal success summary into the public MCP
-contract and agent routing.
-
+Project the earned mechanism into the public contract without baking one
+benchmark sentence into agent prompts. A successful terminal result should
+contain one deterministic, human-ready `terminal_response` derived from the
+same finalized evidence. Agent routing should relay it immediately. Refusals,
+failures, and unverified outcomes must not receive that shortcut. Test that
+result-time affordance against the same frozen cohort before installing or
+reloading the shared MCP service.
