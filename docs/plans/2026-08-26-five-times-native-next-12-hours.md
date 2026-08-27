@@ -108,6 +108,16 @@ Acceptance:
 Stop if hash validation costs approximately recomputation, no reusable phase
 owns three seconds, or any authority becomes index-dependent.
 
+Result: **one kernel ratchet earned**. Quoted-Var proof reparsed and traversed
+the same 4,594-line source once per moved subject. The batched implementation
+builds context and traverses once per candidate file while preserving ordered
+evidence and typed refusal behavior. Warm compile median fell from 5.555s to
+1.086s. Adversarial permanent witnesses prove candidate-count scaling,
+duplicate-subject equivalence, alias collisions, inert forms, malformed input,
+budget refusal, and failure atomicity. Cold complete-transaction savings were
+smaller because formatting, verification, JVM warming, and transaction work
+remain, but the mechanism is retained.
+
 ### E3: Exact repository verifier in the transaction
 
 Shadow the exact existing command and acceptance semantics before changing the
@@ -122,6 +132,14 @@ Acceptance:
 - complete wall improves by at least 15% or three seconds.
 
 `verify=fast` is not a candidate: it already failed semantic equivalence.
+
+Result: **passed and integrated**. The project-owned `exact` profile is closed
+data with one argv, exact-exit acceptance, and a bounded timeout. It runs after
+staged-byte read-back; exit zero retains the transaction, and every non-pass
+undoes it with distinct failed versus unverified evidence. Independent fused
+canaries were correct with exactly one MCP action at 27.114s and 27.828s. The
+verifier itself cost only 0.4--0.8s. Fusion deleted the second tool action but
+did not independently cross 5x.
 
 ### E4: Cheaper post-decision materializer
 
@@ -149,6 +167,19 @@ After E1 attributes the route, combine only independent winners from E2--E4.
 Run at least two counterbalanced clean-context replicas. The milestone passes
 only if every correct Surgeon replica is at most 24.456 seconds. Report
 non-additive overlap rather than summing projections.
+
+Result: **5x gate passed** after adding one final boundary ratchet. Event clocks
+showed ordinary fused callers spending 6--8 seconds reconsidering how to narrate
+an already-terminal receipt. An explicit success response reduced that phase
+without changing the task, transaction, or scorer.
+
+Local/SURGEON2 independent terminal runs were 22.993s, 20.637s, and 21.902s,
+all correct and below the gate. The decisive Anvil AB/BA cohort was 4/4 correct:
+ordinary fused 23.984s and 24.819s; terminal response 20.401s and 19.778s.
+Terminal median 20.090s is **6.09x faster** than the retained native control.
+Receipt interpretation fell 7.628s -> 2.870s while initial materialization and
+server work did not improve materially. Productize this as a deterministic
+success-only result affordance, not a benchmark-specific sentence.
 
 ### E6: Generalize the win
 
@@ -183,7 +214,9 @@ Do not reopen these during this campaign without new causal evidence:
 - compact `plan_id` (missed byte and decision-time gates);
 - mandatory public planning for mechanically complete decisions (~12.070s);
 - generic `verify=fast` (different semantics);
-- further narration suppression (3.7%, boundary remained);
+- generic narration suppression before the mutation (3.7%, boundary remained);
+- model-written narration after a terminal receipt; the earned replacement is
+  a deterministic success-only response derived from finalized evidence;
 - formatter as the missing 13 seconds;
 - broad fuzzy ranking or Levenshtein as authority;
 - universal SCI/editor catalogs or edit-count-only benchmarks;
