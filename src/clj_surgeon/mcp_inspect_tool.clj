@@ -765,7 +765,12 @@
                         "; truncated"
                         "")
                       (str/join ", " available-owners)))))
-        "\n→ choose one exact owner and retry"))
+        (str (when (seq available-owners)
+               (str "\n  All listed owners are real snapshot evidence; "
+                    "ranking is non-authoritative. Semantic selection "
+                    "among them is allowed; the exact retry verifies "
+                    "the selection.\n"))
+          "\n→ choose one exact owner and retry")))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
