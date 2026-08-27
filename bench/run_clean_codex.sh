@@ -1294,6 +1294,10 @@ run_one() {
   if [ "$context" = 'mcp-extraction-fused-tool-first-no-skill' ]; then
     printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]},"verify":"exact"}. Every extraction field is nested inside extraction; verify is top-level. The project-owned exact profile runs the task-declared clj-kondo command against staged bytes inside the atomic transaction. Do not run clj-kondo or any other shell verifier. Treat verification_complete=true and the exact-exit evidence as terminal mutation and verification proof.' \
       >> "$run_dir/prompt.txt"
+    if [ -n "${BENCH_FUSED_SUCCESS_RESPONSE:-}" ]; then
+      printf '%s\n' "After a successful terminal receipt, reply with exactly this text and no additional analysis: ${BENCH_FUSED_SUCCESS_RESPONSE}" \
+        >> "$run_dir/prompt.txt"
+    fi
   fi
   if [ "$context" = 'mcp-extraction-internal-no-skill' ]; then
     printf '%s\n' '' 'The task supplies the exact source, destination, complete forms list, and require policy. Call apply_clojure_changes exactly once with only those extraction fields; deliberately omit public_forms, caller_changes, ignored_caller_files, and expect so the kernel derives every mechanically provable field from its frozen workspace snapshot. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. If the kernel commits, treat its successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
