@@ -311,7 +311,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
@@ -327,6 +327,7 @@ validate_run_matrix() {
       && [ "$context" != matched-skill ] \
       && [ "$context" != mcp-hint-no-skill ] \
       && [ "$context" != mcp-extraction-hint-no-skill ] \
+      && [ "$context" != mcp-extraction-internal-no-skill ] \
       && [ "$context" != mcp-extraction-plan-no-skill ] \
       && [ "$context" != mcp-extraction-discover-no-skill ] \
       && [ "$context" != native-computed-hint-no-skill ] \
@@ -361,6 +362,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:edit-computed-hint-no-skill'
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-internal-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
@@ -1452,7 +1454,8 @@ run_one() {
   if is_portfolio_task "$task"; then
     decision_supplied=$(bb "$repo_root/bench/verify_edit_portfolio.clj" \
       --decision-supplied "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")")
-    if [ "$context" = mcp-extraction-plan-no-skill ] \
+    if [ "$context" = mcp-extraction-internal-no-skill ] \
+      || [ "$context" = mcp-extraction-plan-no-skill ] \
       || [ "$context" = mcp-extraction-discover-no-skill ]; then
       decision_supplied=false
     fi
@@ -1720,6 +1723,15 @@ run_one() {
     route_adherent=false
   fi
   case "$context" in
+    mcp-extraction-internal-no-skill)
+      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 1 ] \
+        || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
     mcp-extraction-hint-no-skill)
       if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
