@@ -312,16 +312,18 @@
                :items {:type "string" :minLength 1}}
       "public_forms"
       {:type "array" :uniqueItems true
-       :description "Moved private defn- forms explicitly authorized to become public. Supply task-declared visibility changes directly; otherwise copy the mechanically required values from plan-extraction."
+       :description "Moved private defn- forms explicitly authorized to become public. Omit to derive only mechanically required visibility from the same frozen extraction snapshot; an explicit empty array remains authoritative."
        :items {:type "string" :minLength 1}}
       "require_policy" {:type "string" :enum ["minimal" "copy-all"]}
       "source_hash" {:type "string" :pattern "^[0-9a-f]{64}$"
                      :description "Optional frozen source hash returned by plan-extraction."}
       "caller_changes" (assoc (get-in explicit-change-schema
                                       [:properties "changes"])
-                              :minItems 0)
+                              :minItems 0
+                              :description "Exact caller rewrites. Omit when none are known; omission never accounts for a discovered caller candidate.")
       "ignored_caller_files"
       {:type "array" :uniqueItems true
+       :description "Caller candidates explicitly reviewed and intentionally left unchanged. Omit when none have been reviewed."
        :items {:type "string" :minLength 1}}
       "expect"
       {:type "object"
@@ -331,8 +333,7 @@
         "caller_edits" {:type "integer" :minimum 0}
         "files" positive-integer-schema}
        :required ["forms" "caller_edits" "files"]}}
-     :required ["file" "to" "forms" "require_policy" "caller_changes"
-                "ignored_caller_files"]}
+     :required ["file" "to" "forms" "require_policy"]}
     "verify" verification-schema}
    :required ["extraction"]})
 

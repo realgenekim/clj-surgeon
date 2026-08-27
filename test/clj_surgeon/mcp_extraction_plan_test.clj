@@ -102,9 +102,10 @@
          :expect {:forms 1 :caller-edits 0 :files 2}
          :caller-changes []
          :ignored-caller-files []}
-        missing (extraction/compile-extraction base-request)
+        missing (extraction/compile-extraction
+                  (assoc base-request :public-forms []))
         authorized (extraction/compile-extraction
-                    (assoc base-request :public-forms ["moved"]))]
+                     (assoc base-request :public-forms ["moved"]))]
     (is (= :required-public-forms-missing (:error-type missing)))
     (is (= ["moved"] (:required-public-forms missing)))
     (is (:ok authorized) (pr-str authorized))
@@ -116,17 +117,17 @@
 (deftest extraction-apply-refuses-public-forms-without-private-moved-ownership
   (let [result
         (extraction/compile-extraction
-         {:file source-path
-          :to target-path
-          :forms ["moved"]
-          :public-forms ["retained"]
-          :source private-source
-          :target-ns "sample.moved"
-          :workspace-sources {source-path private-source}
-          :require-policy :minimal
-          :expect {:forms 1 :caller-edits 0 :files 2}
-          :caller-changes []
-          :ignored-caller-files []})]
+          {:file source-path
+           :to target-path
+           :forms ["moved"]
+           :public-forms ["retained"]
+           :source private-source
+           :target-ns "sample.moved"
+           :workspace-sources {source-path private-source}
+           :require-policy :minimal
+           :expect {:forms 1 :caller-edits 0 :files 2}
+           :caller-changes []
+           :ignored-caller-files []})]
     (is (= :invalid-public-forms (:error-type result)))
     (is (= ["retained"] (:invalid-public-forms result)))))
 
@@ -134,15 +135,15 @@
 (deftest derives-extraction-expectations-without-duplicated-aggregate-counts
   (let [validated
         (contract/validate-tool-params
-         {"extraction"
-          {"file" "src/sample/core.clj"
-           "to" "src/sample/moved.clj"
-           "forms" ["moved"]
-           "public_forms" ["moved"]
-           "require_policy" "minimal"
-           "source_hash" (apply str (repeat 64 "a"))
-           "caller_changes" []
-           "ignored_caller_files" []}})]
+          {"extraction"
+           {"file" "src/sample/core.clj"
+            "to" "src/sample/moved.clj"
+            "forms" ["moved"]
+            "public_forms" ["moved"]
+            "require_policy" "minimal"
+            "source_hash" (apply str (repeat 64 "a"))
+            "caller_changes" []
+            "ignored_caller_files" []}})]
     (is (:ok validated))
     (is (= {:forms 1 :caller-edits 0 :files 2}
            (get-in validated [:params :extraction :expect])))
@@ -151,21 +152,52 @@
     (is (= (apply str (repeat 64 "a"))
            (get-in validated [:params :extraction :source-hash])))))
 
+;; @spec MCP-OP-PLAN-008
+;; @spec MCP-OP-PLAN-010
+(deftest omitted-extraction-decisions-remain-distinct-from-explicit-values
+  (let [minimal
+        (contract/validate-tool-params
+          {"extraction"
+           {"file" "src/sample/core.clj"
+            "to" "src/sample/moved.clj"
+            "forms" ["moved"]
+            "require_policy" "minimal"}})
+        explicit
+        (contract/validate-tool-params
+          {"extraction"
+           {"file" "src/sample/core.clj"
+            "to" "src/sample/moved.clj"
+            "forms" ["moved"]
+            "public_forms" []
+            "require_policy" "minimal"
+            "caller_changes" []
+            "ignored_caller_files" []}})]
+    (is (:ok minimal) (pr-str minimal))
+    (is (= {:forms 1 :caller-edits 0 :files 2}
+           (get-in minimal [:params :extraction :expect])))
+    (is (= [] (get-in minimal [:params :extraction :caller-changes])))
+    (is (= [] (get-in minimal [:params :extraction :ignored-caller-files])))
+    (is (not (contains? (get-in minimal [:params :extraction])
+                        :public-forms)))
+    (is (:ok explicit) (pr-str explicit))
+    (is (contains? (get-in explicit [:params :extraction]) :public-forms))
+    (is (= [] (get-in explicit [:params :extraction :public-forms])))))
+
 ;; @spec MCP-OP-PLAN-004
 (deftest stale-planned-source-hash-refuses-before-compilation
   (let [result
         (extraction/compile-extraction
-         {:file source-path
-          :to target-path
-          :forms ["moved"]
-          :require-policy :minimal
-          :source-hash (apply str (repeat 64 "0"))
-          :expect {:forms 1 :caller-edits 0 :files 2}
-          :caller-changes []
-          :ignored-caller-files []
-          :source source
-          :target-ns "sample.moved"
-          :workspace-sources {source-path source}})]
+          {:file source-path
+           :to target-path
+           :forms ["moved"]
+           :require-policy :minimal
+           :source-hash (apply str (repeat 64 "0"))
+           :expect {:forms 1 :caller-edits 0 :files 2}
+           :caller-changes []
+           :ignored-caller-files []
+           :source source
+           :target-ns "sample.moved"
+           :workspace-sources {source-path source}})]
     (is (false? (:ok result)))
     (is (= :source-hash-mismatch (:error-type result)))
     (is (true? (:source-unchanged result)))))
@@ -174,14 +206,14 @@
   (testing "compatible callers may still supply exact aggregate counts"
     (let [validated
           (contract/validate-tool-params
-           {"extraction"
-            {"file" "src/sample/core.clj"
-             "to" "src/sample/moved.clj"
-             "forms" ["moved"]
-             "require_policy" "minimal"
-             "caller_changes" []
-             "ignored_caller_files" []
-             "expect" {"forms" 2 "caller_edits" 0 "files" 2}}})]
+            {"extraction"
+             {"file" "src/sample/core.clj"
+              "to" "src/sample/moved.clj"
+              "forms" ["moved"]
+              "require_policy" "minimal"
+              "caller_changes" []
+              "ignored_caller_files" []
+              "expect" {"forms" 2 "caller_edits" 0 "files" 2}}})]
       (is (:ok validated))
       (is (= {:forms 2 :caller-edits 0 :files 2}
              (get-in validated [:params :extraction :expect]))))))
@@ -190,8 +222,8 @@
 ;; @spec MCP-OP-PLAN-002
 (deftest boundary-plan-uses-the-shared-workspace-source-universe-without-writing
   (let [root (.toFile (java.nio.file.Files/createTempDirectory
-                       "clj-surgeon-extraction-plan"
-                       (make-array java.nio.file.attribute.FileAttribute 0)))
+                        "clj-surgeon-extraction-plan"
+                        (make-array java.nio.file.attribute.FileAttribute 0)))
         source-file (io/file root "src/sample/core.clj")
         caller-file (io/file root "src/sample/caller.clj")
         ignored-data (io/file root "src/sample/data.edn")
@@ -203,12 +235,12 @@
       (spit ignored-data "{:moved true}\n")
       (let [sources (workspace-sources/read-all (.toPath root))
             result (extraction-plan/plan!
-                    {:project-root (.getPath root)}
-                    {:mode "plan-extraction"
-                     :file "src/sample/core.clj"
-                     :to "src/sample/moved.clj"
-                     :forms ["moved"]
-                     :require_policy "minimal"})]
+                     {:project-root (.getPath root)}
+                     {:mode "plan-extraction"
+                      :file "src/sample/core.clj"
+                      :to "src/sample/moved.clj"
+                      :forms ["moved"]
+                      :require_policy "minimal"})]
         (is (= 2 (count sources)))
         (is (:ok result))
         (is (= ["src/sample/caller.clj"]
@@ -224,13 +256,13 @@
 (deftest oversized-extraction-plan-refuses-without-partial-evidence
   (let [result
         (inspect-tool/enforce-public-result-budget
-         "large extraction plan"
-         {:ok true
-          :operation "inspect_clojure"
-          :mode "plan-extraction"
-          :plan {:new-file-preview (apply str (repeat 40000 "x"))}
-          :read_complete true
-          :source_unchanged true})]
+          "large extraction plan"
+          {:ok true
+           :operation "inspect_clojure"
+           :mode "plan-extraction"
+           :plan {:new-file-preview (apply str (repeat 40000 "x"))}
+           :read_complete true
+           :source_unchanged true})]
     (is (false? (:ok result)))
     (is (= :structural-buffer-output-budget-exceeded (:error-type result)))
     (is (nil? (:plan result)))

@@ -326,6 +326,25 @@ refuses names that are not both selected and private. The initial lossless
 projection supports only `defn-` to `defn`. Unsupported private metadata and
 custom macros fail closed until a separate projection is specified and tested.
 
+The same pure planner also serves an internal fast path for a mechanically
+complete apply request. `file`, `to`, `forms`, and `require_policy` remain the
+caller's mandatory authority. When `public_forms`, caller-decision arrays, and
+aggregate expectations are absent, the executor preserves that absence until
+it owns the complete frozen workspace source universe. It then derives required
+visibility, dependencies, and counts from `extract/compile-plan`. If the
+complete candidate universe is empty, the existing failure-atomic executor
+commits that compiled result in the same request. This is internal compilation,
+not an inferred architecture decision and not a second plan representation.
+
+Omission never means that a caller was reviewed. Any structural or quoted-Var
+candidate leaves a genuine decision, so the executor refuses before writing and
+returns the completed snapshot-bound plan and exact unknowns. Explicit values
+remain authoritative: `public_forms: []` does not authorize a required private
+form to become public, and a supplied aggregate expectation is never repaired.
+Similarity and ranking evidence cannot close an unknown. This fast path is an
+MCP apply contract only; the CLI `extract!` review policy and its source-hash
+surface remain unchanged.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -358,6 +377,7 @@ existing lossless transaction contract.
 | Intent status gate | `[ ]` needs tests, `[x]` needs code and tests, `[D]` is exempt | Gate only implemented specs; require every non-deferred spec to be fully implemented | Tests preload active intent while genuinely deferred work remains non-blocking. |
 | Prolog retention | Keep only after an independently found native-test gap | Retain unconditionally; never model relational states | A second model earns maintenance cost only by demonstrating additional fault-finding power. |
 | CLI reuse | Share only the transport-neutral exact-selector recovery compiler | Reuse the MCP envelope directly; duplicate all evidence; defer all parity | The owner universe and hypotheses are domain evidence, while transport envelopes and process semantics remain distinct. |
+| Internal extraction completion | Preserve omitted visibility through validation, derive only from the executor's complete frozen workspace, and reuse the existing extraction transaction | Require public `plan-extraction`; add `resolve: mechanical`; route CLI through MCP policy | Omission is the shortest honest caller shape, explicit values stay authoritative, and no second plan algebra or CLI compatibility change is introduced. |
 | Extraction planning entrance | A top-level `inspect_clojure` mission over the shared pure planner | Fifth public tool; typed batch read operation; CLI subprocess | Planning is a coherent workspace-wide read mission, not one file read, and reuses the existing public read envelope. |
 | Plan-to-apply authority | Exact source hash plus explicit caller decisions | Retained in-memory plan; similarity; unguarded replay | The hash is transport-neutral, stale-safe, and grants no implicit write authority. |
 | Workspace source universe | One deterministic shared scanner for planning and execution | Duplicate scans in each handler; semantic index as authority | Both phases must reason over identical eligible paths and exact bytes without another index lifecycle. |

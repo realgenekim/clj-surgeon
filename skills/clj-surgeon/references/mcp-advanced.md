@@ -33,7 +33,7 @@ Use `apply_clojure_changes` only for capabilities absent from compact editing:
 
 - retained semantic-basis decisions;
 - structured insertion or an owner operation absent from compact editing;
-- namespace extraction with explicit caller changes;
+- namespace extraction with exact roots and any known caller decisions;
 - `rename_binding` and comment-preserving `assoc_entry`; or
 - formatter, linter, and test gates that must participate in rollback.
 
@@ -42,6 +42,15 @@ with exact aggregate counts. A count mismatch, stale hash, overlap, parse error,
 owner disagreement, or hot verification failure refuses or rolls back the
 complete transaction. On cold pending verification, copy `next_call` once;
 never replay or poll the original mutation.
+
+For extraction, call `apply_clojure_changes` directly once the exact source,
+destination, ordered owners, and require policy are known. Omit `public_forms`
+to derive only mechanically required visibility from the same frozen snapshot.
+Omitted caller arrays never prove that callers are absent: if the complete
+workspace contains any candidate not explicitly changed or ignored, the call
+refuses before writing and returns a completed snapshot-bound plan plus exact
+caller-disposition unknowns. Fill that returned call and submit once; do not
+restart with `plan-extraction` or source discovery.
 
 ## Hot process recovery
 
