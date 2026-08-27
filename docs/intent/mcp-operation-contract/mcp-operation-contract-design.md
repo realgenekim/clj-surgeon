@@ -373,13 +373,18 @@ The first exact profile shape is deliberately singular and bounded:
 ```
 
 The profile contains exactly one non-empty string argument vector and one
-positive bounded timeout. It cannot contain hot or cold verification, and the
-argument vector cannot contain `{files}`. This preserves the repository's
+timeout from 1 through 120000 milliseconds, inclusive. An absent timeout or a
+value outside that range refuses before source mutation. The profile cannot
+contain hot or cold verification, and the argument vector cannot contain
+`{files}`. This preserves the repository's
 declared file scope and relative spelling instead of replacing them with the
 transaction's absolute changed-file set. The process runner resolves only the
 executable through the paved path. It preserves every remaining argument in
 order, uses the canonical project root as cwd, inherits the server environment
-with the paved PATH adjustment, and does not invoke a shell.
+with the paved PATH adjustment, and does not invoke a shell. Equivalence claims
+cover only canonical cwd, resolved executable, remaining argument order, exit
+acceptance, and captured output evidence. They do not claim identity with an
+external login shell's complete environment.
 
 Exact-exit is separate from the existing diagnostic-delta policy. In
 diagnostic-delta mode, clj-kondo runs before and after a transaction with cache
@@ -400,17 +405,23 @@ compile and format candidate bytes
   -> execute exact project argv against those candidate bytes
        -> exit 0: publish terminal verified receipt
        -> ordinary nonzero: exact verification failure, undo all files
-       -> timeout / launch failure / signal crash: unverified, undo all files
+       -> timeout / launch failure / crash-style exit: unverified, undo all files
 ```
 
 The runner aggregates stdout and stderr in arrival order because the MCP command
-surface already reports aggregated diagnostics. It hashes and counts the full
-output before bounding visible text. A passing check returns the project profile
-identity, canonical cwd, resolved argv, exit zero, elapsed time, output byte
-count, and output hash without forcing warning bodies into model context. A
-failed or unverified check additionally returns bounded aggregated diagnostics.
-Timeout, launch failure, crash, and ordinary nonzero exit remain distinct so a
-caller does not mistake an unavailable authority for a semantic rejection.
+surface already reports aggregated diagnostics. As bytes arrive, it hashes and
+counts the complete captured stream while retaining only a bounded visible
+prefix in memory. It never requires unbounded output retention. A passing check
+returns the project profile name, acceptance policy, stable SHA-256 of the
+normalized project profile definition, canonical cwd, resolved argv, exit zero,
+elapsed time, complete captured-output byte count and hash, and whether visible
+output was truncated. The compiled in-memory profile remains execution
+authority even if `.clj-surgeon.edn` changes after selection. A failed or
+unverified check additionally returns bounded aggregated diagnostics. Timeout,
+launch failure, crash-or-signal-style exit, and ordinary nonzero exit remain
+distinct so a caller does not mistake an unavailable authority for a semantic
+rejection. Java exit status alone does not prove an operating-system signal;
+exit 137 is therefore not reported as proven `SIGKILL`.
 
 Every non-pass attempts the existing receipt-backed whole-transaction undo.
 Only verified undo may publish `source_unchanged=true`. A rollback failure keeps
@@ -427,17 +438,19 @@ or restore the verifier authority before submitting a new guarded request.
 | Project `exact`, ordinary nonzero | Candidate written and read back | `verification-failed` | exit, bounded aggregated diagnostics, verified rollback | original bytes restored; created files removed |
 | Project `exact`, deadline exceeded | Candidate written and read back | `verification-unverified` / timeout | deadline, elapsed, bounded partial output, verified rollback | original bytes restored; created files removed |
 | Project `exact`, executable cannot launch | Candidate written and read back | `verification-unverified` / launch failure | resolved argv, launch diagnostic, verified rollback | original bytes restored; created files removed |
-| Project `exact`, signal-style crash | Candidate written and read back | `verification-unverified` / crash | exit/signal-style status, bounded output, verified rollback | original bytes restored; created files removed |
+| Project `exact`, crash-or-signal-style exit | Candidate written and read back | `verification-unverified` / crash | exit status without a claimed OS signal, bounded output, verified rollback | original bytes restored; created files removed |
 | Project `exact`, verifier non-pass and undo fails | Candidate written and read back | recovery required | verifier evidence plus per-file recovery evidence | unknown; never claim `source_unchanged` |
 | Exact profile absent, process-owned, malformed, or not `:exact-exit` | none | pre-write refusal | failed profile/source validation | source unchanged |
 | `fast` or `full` selected | Existing behavior | existing profile result | existing profile evidence | existing semantics unchanged |
 
 Shadow equivalence must precede activation. At minimum, the external command and
-exact profile route must agree on a warning-bearing pass, a normal lint failure,
-a missing file or executable, and one unverified process outcome. The extraction
-boundary witness must prove the verifier observed staged destination bytes and
-that failure restored every original byte, removed every created path, and did
-not leave a usable receipt.
+exact profile route must agree on canonical cwd, resolved executable, remaining
+argument order, exit acceptance, and captured output byte count and hash for a
+warning-bearing pass, a normal lint failure, a missing file or executable, and
+one unverified process outcome. It does not claim complete environment identity.
+The extraction boundary witness must prove the verifier observed staged
+destination bytes and that failure restored every original byte, removed every
+created path, and did not leave a usable receipt.
 
 ## Compact Root-Scoped Data Edits
 
