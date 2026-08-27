@@ -1,0 +1,95 @@
+{
+  "overall" : [ {
+    "median_wall_ms" : 23923.5,
+    "median_mcp_calls" : 2.0,
+    "total_shell_calls" : 4,
+    "median_input_tokens" : 75763.0,
+    "median_result_bytes" : 8740.0,
+    "median_output_tokens" : 621.0,
+    "lane" : "post",
+    "zero_shell_runs" : 4,
+    "median_decision_ms" : 8695.5,
+    "runs" : 8,
+    "correct" : 8
+  }, {
+    "median_wall_ms" : 24499.0,
+    "median_mcp_calls" : 2.0,
+    "total_shell_calls" : 7,
+    "median_input_tokens" : 82023.0,
+    "median_result_bytes" : 4964.0,
+    "median_output_tokens" : 696.5,
+    "lane" : "pre",
+    "zero_shell_runs" : 2,
+    "median_decision_ms" : 9669.5,
+    "runs" : 8,
+    "correct" : 8
+  } ],
+  "by_task" : [ {
+    "task_id" : "contract-rank7",
+    "lanes" : [ {
+      "median_wall_ms" : 18526.5,
+      "median_mcp_calls" : 2.0,
+      "total_shell_calls" : 0,
+      "median_input_tokens" : 67666.5,
+      "median_result_bytes" : 11186.0,
+      "median_output_tokens" : 487.5,
+      "lane" : "post",
+      "zero_shell_runs" : 4,
+      "median_decision_ms" : 5046.0,
+      "runs" : 4,
+      "correct" : 4
+    }, {
+      "median_wall_ms" : 25293.0,
+      "median_mcp_calls" : 2.0,
+      "total_shell_calls" : 5,
+      "median_input_tokens" : 83670.0,
+      "median_result_bytes" : 5339.0,
+      "median_output_tokens" : 751.0,
+      "lane" : "pre",
+      "zero_shell_runs" : 0,
+      "median_decision_ms" : 10150.5,
+      "runs" : 4,
+      "correct" : 4
+    } ]
+  }, {
+    "task_id" : "paths-rank1",
+    "lanes" : [ {
+      "median_wall_ms" : 26313.5,
+      "median_mcp_calls" : 2.0,
+      "total_shell_calls" : 4,
+      "median_input_tokens" : 83938.5,
+      "median_result_bytes" : 6294.5,
+      "median_output_tokens" : 712.5,
+      "lane" : "post",
+      "zero_shell_runs" : 0,
+      "median_decision_ms" : 11759.0,
+      "runs" : 4,
+      "correct" : 4
+    }, {
+      "median_wall_ms" : 22785.0,
+      "median_mcp_calls" : 2.0,
+      "total_shell_calls" : 2,
+      "median_input_tokens" : 73210.5,
+      "median_result_bytes" : 4592.0,
+      "median_output_tokens" : 595.0,
+      "lane" : "pre",
+      "zero_shell_runs" : 2,
+      "median_decision_ms" : 7240.0,
+      "runs" : 4,
+      "correct" : 4
+    } ]
+  } ],
+  "paired_by_task" : [ {
+    "task_id" : "contract-rank7",
+    "pairs" : 4,
+    "median_post_minus_pre_wall_ms" : -6555.0,
+    "median_post_minus_pre_decision_ms" : -5299.0,
+    "total_post_minus_pre_shell_calls" : -5
+  }, {
+    "task_id" : "paths-rank1",
+    "pairs" : 4,
+    "median_post_minus_pre_wall_ms" : 2598.0,
+    "median_post_minus_pre_decision_ms" : 4217.0,
+    "total_post_minus_pre_shell_calls" : 2
+  } ]
+}

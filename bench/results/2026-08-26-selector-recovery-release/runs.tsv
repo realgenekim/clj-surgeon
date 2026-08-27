@@ -1,0 +1,17 @@
+run_id	task_id	lane	replicate	order	correct	wall_ms	decision_ms	exit_code	input_tokens	cached_input_tokens	output_tokens	shell_calls	mcp_calls	first_owner	second_owner	second_read_complete	request_bytes	result_bytes
+paths-rank1-r1-1-post	paths-rank1	post	1	1	true	25478	12115	0	84388	62464	669	1	2	resolve-source-file	resolve-source-path	true	518	6296
+paths-rank1-r1-2-pre	paths-rank1	pre	1	2	true	22451	4976	0	64516	30208	566	0	2	resolve-source-file	resolve-source-path	true	518	4595
+paths-rank1-r2-1-pre	paths-rank1	pre	2	1	true	23119	9504	0	82141	61440	624	1	2	resolve-source-file	resolve-source-path	true	518	4592
+paths-rank1-r2-2-post	paths-rank1	post	2	2	true	25288	10799	0	83644	62464	689	1	2	resolve-source-file	resolve-source-path	true	518	6295
+paths-rank1-r3-1-post	paths-rank1	post	3	1	true	27149	12551	0	83814	56320	736	1	2	resolve-source-file	resolve-source-path	true	518	6292
+paths-rank1-r3-2-pre	paths-rank1	pre	3	2	true	27108	11685	0	81905	71424	744	1	2	resolve-source-file	resolve-source-path	true	518	4592
+paths-rank1-r4-1-pre	paths-rank1	pre	4	1	true	17974	3869	0	64400	39168	387	0	2	resolve-source-file	resolve-source-path	true	518	4591
+paths-rank1-r4-2-post	paths-rank1	post	4	2	true	27497	11403	0	84063	56320	889	1	2	resolve-source-file	resolve-source-path	true	518	6294
+contract-rank7-r1-1-pre	contract-rank7	pre	1	1	true	25008	9082	0	83803	46336	776	1	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	5340
+contract-rank7-r1-2-post	contract-rank7	post	1	2	true	18017	4012	0	67612	56320	434	0	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	11185
+contract-rank7-r2-1-post	contract-rank7	post	2	1	true	19036	5785	0	49446	30208	573	0	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	11184
+contract-rank7-r2-2-pre	contract-rank7	pre	2	2	true	26151	12547	0	110376	83712	781	2	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	5338
+contract-rank7-r3-1-pre	contract-rank7	pre	3	1	true	25578	10466	0	81316	65280	667	1	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	5340
+contract-rank7-r3-2-post	contract-rank7	post	3	2	true	22559	6592	0	67721	56320	494	0	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	11188
+contract-rank7-r4-1-post	contract-rank7	post	4	1	true	17871	4307	0	67882	56320	481	0	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	11187
+contract-rank7-r4-2-pre	contract-rank7	pre	4	2	true	23990	9835	0	83537	58368	726	1	2	compiles-owner-relative-top-level-insertion	validates-top-level-insertion-without-repeating-owner-source	true	607	5333
