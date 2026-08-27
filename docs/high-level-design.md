@@ -184,6 +184,15 @@ sequential contract target runs the real analyzer for schema and adapter
 integrity. Full local suites shall not pay one real analyzer process for every
 combinatorial policy case.
 
+The mandatory analyzer contract uses one internal test-mission lease over the
+same physical admission gate. The lease binds the repository-owned runner,
+canonical CWD, scope hash, five-launch budget, and five-minute expiry. It does
+not reserve the analyzer across children. Each child releases admission when it
+exits, and the next child must obtain a new pressure observation taken after
+that exit. Interactive analyzer requests use the same physical lock and have
+priority between mission children. A lease cannot override pressure, extend
+its budget, or be minted by an MCP request or analyzer command.
+
 A successful exact-verifier mutation may also publish one deterministic
 terminal response. This response is an apply-owned presentation of normalized
 commit, read-back, receipt, and exact-exit evidence; it is never verification

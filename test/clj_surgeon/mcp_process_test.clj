@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-process-test
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.mcp-process :as process]
    [clojure.java.io :as io]
    [clojure.java.shell :as shell]
@@ -31,6 +32,16 @@
         executable (.resolve directory "clj-kondo")]
     (Files/createSymbolicLink executable
                               (.toPath (io/file "/bin/sleep"))
+                              (make-array java.nio.file.attribute.FileAttribute 0))
+    (str executable)))
+
+(defn- fake-successful-clj-kondo []
+  (let [directory (Files/createTempDirectory
+                    "clj-surgeon-fake-successful-kondo-"
+                    (make-array java.nio.file.attribute.FileAttribute 0))
+        executable (.resolve directory "clj-kondo")]
+    (Files/createSymbolicLink executable
+                              (.toPath (io/file "/usr/bin/true"))
                               (make-array java.nio.file.attribute.FileAttribute 0))
     (str executable)))
 
@@ -357,4 +368,118 @@
                          "--" "/usr/bin/touch" marker-path)]
     (is (= 75 (:exit result)))
     (is (str/includes? (slurp evidence-path) "clj-kondo-pressure-deferred"))
+    (is (false? (.exists (io/file marker-path))))))
+
+(deftest analyzer-contract-mission-admits-exactly-five-fake-children
+  ;; @spec MCP-OP-ANALYZER-009
+  (let [lock-path (temporary-lock-path)
+        priority-path (str lock-path ".priority")
+        analyzer (fake-successful-clj-kondo)
+        scope (apply str (repeat 64 "a"))
+        sixth-error (atom nil)
+        results
+        (binding [process/*clj-kondo-lock-path* lock-path
+                  process/*clj-kondo-priority-lock-path* priority-path
+                  process/*clj-kondo-admission-path* admission-script]
+          (process/call-with-analyzer-contract-mission
+            (System/getProperty "user.dir") scope
+            (fn []
+              (let [first-five (mapv (fn [_]
+                                       (run-admitted [analyzer] "/tmp" 1000))
+                                     (range 5))]
+                (try
+                  (run-admitted [analyzer] "/tmp" 1000)
+                  (catch clojure.lang.ExceptionInfo error
+                    (reset! sixth-error (ex-data error))))
+                first-five))))]
+    (is (every? #(zero? (:exit %)) results))
+    (is (= [1 2 3 4 5]
+           (mapv #(get-in % [:admission :mission_launch_index]) results)))
+    (is (every? #(= "test-mission" (get-in % [:admission :lane])) results))
+    (is (= :analyzer-mission-budget-exhausted
+           (:error-type @sixth-error)))))
+
+(defn- direct-mission-command
+  [lock-path priority-path events-path entrance launch-index command]
+  [admission-script
+   "--lock" lock-path
+   "--priority-lock" priority-path
+   "--timeout-ms" "2000"
+   "--entrance" entrance
+   "--events" events-path
+   "--pressure-status" test-pressure-status
+   "--max-normalized-load" "1000000"
+   "--lane" "test-mission"
+   "--mission-id" process/analyzer-contract-mission-id
+   "--mission-owner-pid" (str (.pid (ProcessHandle/current)))
+   "--mission-cwd" "/tmp"
+   "--mission-command-cwd" "/tmp"
+   "--mission-scope-sha256" (apply str (repeat 64 "b"))
+   "--mission-launch-index" (str launch-index)
+   "--mission-launch-limit" "5"
+   "--mission-expires-epoch-ms" (str (+ (System/currentTimeMillis) 60000))
+   "--" command])
+
+(deftest waiting-interactive-work-runs-between-test-mission-children
+  ;; @spec MCP-OP-ANALYZER-009
+  (let [lock-path (temporary-lock-path)
+        priority-path (str lock-path ".priority")
+        events-path (str lock-path ".events")
+        first-mission (start-process
+                        "/tmp"
+                        (conj (direct-mission-command
+                                lock-path priority-path events-path
+                                "mission-one" 1 "/bin/sleep")
+                              "0.15")
+                        {})]
+    (is (wait-until 1000
+                    #(and (.isFile (io/file events-path))
+                          (str/includes? (slurp events-path) "mission-one"))))
+    (let [interactive (start-process
+                        "/tmp"
+                        [admission-script
+                         "--lock" lock-path
+                         "--priority-lock" priority-path
+                         "--timeout-ms" "2000"
+                         "--entrance" "interactive"
+                         "--events" events-path
+                         "--pressure-status" test-pressure-status
+                         "--max-normalized-load" "1000000"
+                         "--" "/bin/sleep" "0.03"]
+                        {})
+          _ (Thread/sleep 25)
+          second-mission (start-process
+                           "/tmp"
+                           (direct-mission-command
+                             lock-path priority-path events-path
+                             "mission-two" 2 "/usr/bin/true")
+                           {})]
+      (doseq [process [first-mission interactive second-mission]]
+        (is (.waitFor process 3000 java.util.concurrent.TimeUnit/MILLISECONDS))
+        (is (zero? (.exitValue process))))
+      (let [entrances (->> (str/split-lines (slurp events-path))
+                           (map #(json/parse-string % true))
+                           (filter #(= "admitted" (:status %)))
+                           (mapv :entrance))]
+        (is (= ["mission-one" "interactive" "mission-two"] entrances)
+            (pr-str entrances))))))
+
+(deftest test-mission-requires-a-post-exit-pressure-observation
+  ;; @spec MCP-OP-ANALYZER-009
+  (let [lock-path (temporary-lock-path)
+        priority-path (str lock-path ".priority")
+        events-path (str lock-path ".events")
+        marker-path (str lock-path ".must-not-exist")
+        base (direct-mission-command
+               lock-path priority-path events-path
+               "post-exit" 2 "/usr/bin/touch")
+        separator (.indexOf base "--")
+        command (into (subvec base 0 separator)
+                      ["--mission-after-epoch-ms"
+                       (str (+ (System/currentTimeMillis) 60000))
+                       "--" "/usr/bin/touch" marker-path])
+        result (apply shell/sh (concat command [:dir "/tmp"]))]
+    (is (= 75 (:exit result)))
+    (is (str/includes? (:err result)
+                       "clj-kondo-mission-post-exit-sample-required"))
     (is (false? (.exists (io/file marker-path))))))

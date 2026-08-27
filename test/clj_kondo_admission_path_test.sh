@@ -28,12 +28,13 @@ CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD=1000000 \
   "$test_home/bin/clj-kondo"
 
 grep -Fq '"status": "admitted"' "$test_events"
+grep -Fq '"lane": "interactive"' "$test_events"
 
 for file in \
   src/clj_surgeon/forward_refs.clj \
   src/clj_surgeon/binding_rename.clj \
   src/clj_surgeon/mcp_cold_verify.clj \
-  test/clj_surgeon/move_dependency_test.clj; do
+  test/clj_surgeon/analyzer_contract_test.clj; do
   if grep -Fq 'clojure.java.shell' "$file"; then
     echo "Analyzer entrance bypasses the bounded process adapter: $file" >&2
     exit 1
@@ -43,6 +44,6 @@ done
 grep -Fq 'process-env/run-bounded!' src/clj_surgeon/forward_refs.clj
 grep -Fq 'process-env/run-bounded!' src/clj_surgeon/binding_rename.clj
 grep -Fq 'process-env/run-bounded!' src/clj_surgeon/mcp_cold_verify.clj
-grep -Fq 'process-env/run-bounded!' test/clj_surgeon/move_dependency_test.clj
+grep -Fq 'process-env/run-bounded!' test/clj_surgeon/analyzer_contract_test.clj
 
 echo "clj-kondo admission path regression passed"

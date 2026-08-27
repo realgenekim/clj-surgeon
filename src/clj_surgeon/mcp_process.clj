@@ -11,6 +11,15 @@
   "Override only for isolated tests. The default lock is shared across projects."
   nil)
 
+(def ^:dynamic *clj-kondo-priority-lock-path*
+  "Override only for isolated tests. This turnstile gives waiting interactive
+  work a scheduling point between test-mission children."
+  nil)
+
+(def ^:dynamic *analyzer-mission*
+  "Internal repository-owned analyzer mission state. Never bind from request data."
+  nil)
+
 (def ^:dynamic *clj-kondo-admission-path*
   "Override only for isolated tests. The installed gate execs the analyzer."
   nil)
@@ -47,6 +56,67 @@
       (System/getenv "CLJ_SURGEON_CLJ_KONDO_LOCK")
       (str (System/getProperty "user.home")
            "/.local/state/clj-surgeon/clj-kondo.lock")))
+
+(defn- clj-kondo-priority-lock-path []
+  (or *clj-kondo-priority-lock-path*
+      (System/getenv "CLJ_SURGEON_CLJ_KONDO_PRIORITY_LOCK")
+      (str (System/getProperty "user.home")
+           "/.local/state/clj-surgeon/clj-kondo-priority.lock")))
+
+(def analyzer-contract-mission-id "analyzer-contract-v1")
+(def analyzer-contract-launch-limit 5)
+(def analyzer-contract-duration-ms 300000)
+
+(defn call-with-analyzer-contract-mission
+  "Run one repository-owned five-launch analyzer contract mission.
+
+  This is an internal test-runner entrance, not request or shell authority."
+  [cwd scope-sha256 f]
+  ;; @spec MCP-OP-ANALYZER-009
+  (let [canonical-cwd (.getCanonicalPath (io/file cwd))]
+    (when-not (re-matches #"[0-9a-f]{64}" scope-sha256)
+      (throw (ex-info "Analyzer contract scope must be one SHA-256 digest"
+                      {:error-type :invalid-analyzer-mission-scope})))
+    (binding [*analyzer-mission*
+              (atom {:mission-id analyzer-contract-mission-id
+                     :owner-pid (.pid (ProcessHandle/current))
+                     :cwd canonical-cwd
+                     :scope-sha256 scope-sha256
+                     :launch-limit analyzer-contract-launch-limit
+                     :launches-used 0
+                     :expires-epoch-ms (+ (System/currentTimeMillis)
+                                          analyzer-contract-duration-ms)
+                     :last-exit-epoch-ms nil})]
+      (f))))
+
+(defn- claim-analyzer-mission-launch! [command-cwd]
+  (when *analyzer-mission*
+    (locking *analyzer-mission*
+      (let [{:keys [mission-id launches-used launch-limit
+                    expires-epoch-ms] :as mission} @*analyzer-mission*
+            canonical-cwd (.getCanonicalPath (io/file command-cwd))
+            now (System/currentTimeMillis)]
+        (when (>= now expires-epoch-ms)
+          (throw (ex-info "Analyzer mission expired"
+                          {:error-type :analyzer-mission-expired
+                           :mission-id mission-id})))
+        (when (>= launches-used launch-limit)
+          (throw (ex-info "Analyzer mission launch budget exhausted"
+                          {:error-type :analyzer-mission-budget-exhausted
+                           :mission-id mission-id
+                           :launch-limit launch-limit})))
+        (let [claimed (assoc mission :launches-used (inc launches-used))]
+          (reset! *analyzer-mission* claimed)
+          (assoc claimed
+                 :launch-index (inc launches-used)
+                 :command-cwd canonical-cwd))))))
+
+(defn- record-analyzer-mission-exit! [result]
+  (when (and *analyzer-mission*
+             (= :admitted (get-in result [:admission :status]))
+             (:termination-confirmed result))
+    (swap! *analyzer-mission* assoc
+           :last-exit-epoch-ms (System/currentTimeMillis))))
 
 (defn clj-kondo-admission-path
   "Return the installed analyzer-lifetime admission wrapper."
@@ -136,6 +206,7 @@
      :admission {:status :not-required}}
     (let [gate (clj-kondo-admission-path)
           analyzer (resolve-clj-kondo-analyzer (first command) gate)
+          mission (claim-analyzer-mission-launch! cwd)
           evidence-file (java.io.File/createTempFile
                           "clj-surgeon-kondo-admission-" ".json")]
       (.delete evidence-file)
@@ -149,6 +220,7 @@
                          :requested-executable (first command)})))
       {:command (into [gate
                        "--lock" (clj-kondo-lock-path)
+                       "--priority-lock" (clj-kondo-priority-lock-path)
                        "--timeout-ms" (str (max 1
                                                 (- timeout-ms
                                                    (min 100
@@ -158,10 +230,23 @@
                        "--events" (clj-kondo-events-path)
                        "--pressure-status" (pressure-status-path)
                        "--max-normalized-load" (str (maximum-normalized-load))
-                       "--"
-                       analyzer]
-                      (rest command))
+                       "--lane" (if mission "test-mission" "interactive")]
+                      (concat
+                        (when mission
+                          ["--mission-id" (:mission-id mission)
+                           "--mission-owner-pid" (str (:owner-pid mission))
+                           "--mission-cwd" (:cwd mission)
+                           "--mission-command-cwd" (:command-cwd mission)
+                           "--mission-scope-sha256" (:scope-sha256 mission)
+                           "--mission-launch-index" (str (:launch-index mission))
+                           "--mission-launch-limit" (str (:launch-limit mission))
+                           "--mission-expires-epoch-ms" (str (:expires-epoch-ms mission))])
+                        (when-let [last-exit (:last-exit-epoch-ms mission)]
+                          ["--mission-after-epoch-ms" (str last-exit)])
+                        ["--" analyzer]
+                        (rest command)))
        :evidence-file evidence-file
+       :mission mission
        :admission {:status :delegated
                    :gate gate
                    :cwd (.getCanonicalPath (io/file cwd))
@@ -187,7 +272,10 @@
         (let [result (run! timeout-ms (assoc admission :command command))
               terminal-evidence (some-> evidence-file read-admission-evidence)]
           (if (map? result)
-            (assoc result :admission (merge admission terminal-evidence))
+            (let [completed (assoc result :admission
+                                   (merge admission terminal-evidence))]
+              (record-analyzer-mission-exit! completed)
+              completed)
             result))
         (catch Exception error
           (throw (ex-info (or (.getMessage error) "Admitted command failed")

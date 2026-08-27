@@ -206,6 +206,37 @@ snapshots. The five-launch lane has not run on Skiff because the recorder is
 red; until it passes remotely or under a fresh-green lease,
 MCP-OP-ANALYZER-008 remains open.
 
+## One physical gate, two logical lanes
+
+The governing throughput law is Little's Law plus the Universal Scalability
+Law, not Metcalfe's Law. Concurrent CPU- and memory-heavy analyzers increase
+contention and paging; on this laptop they reduce completed-work throughput.
+Serializing the scarce analyzer therefore improves both stability and often
+throughput. The remaining lever is to reduce launch count and useful work per
+launch, not to create a second analyzer slot.
+
+The first mission-lease implementation keeps one physical capacity lock and
+adds two logical lanes. Ordinary MCP and shell requests are interactive. The
+repository-owned analyzer contract is one exact test mission with a five-call,
+five-minute budget and a source-derived scope hash. Every child releases the
+physical lock. The next child resamples pressure after the previous exit.
+Interactive callers publish bounded waiter tickets and take the priority
+turnstile between test children, so a test mission cannot monopolize the box.
+
+The first fake-process implementation failed its priority witness: relying on
+POSIX lock arrival order produced `mission-one, mission-two, interactive`.
+That was useful evidence. The gate now uses an explicit live, deadline-bounded
+interactive ticket and the same replay produces `mission-one, interactive,
+mission-two`. The focused warm cohort is 18 tests and 69 assertions, and the
+temporary-HOME installed-wrapper witness remains green. No real analyzer was
+launched for this loop.
+
+The lease is not exposed through MCP or the shell shim. Its owner is the exact
+repository test runner. The wrapper validates the direct parent PID, owner and
+command CWDs, scope digest, launch index, fixed limit, and expiry. A sixth
+launch refuses before process creation. Pressure remains an unconditional
+veto.
+
 SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a
 second production implementation.
