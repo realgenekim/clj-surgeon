@@ -8,9 +8,7 @@
    [clj-surgeon.mcp-workspace :as workspace]
    [clojure.java.io :as io])
   (:import
-   (java.lang ProcessHandle)
-   (java.util UUID)
-   (java.util.concurrent TimeUnit)))
+   (java.util UUID)))
 
 (def max-retained-jobs 64)
 (def max-running-jobs 4)
@@ -85,73 +83,87 @@
       (publish! finished)
       finished)))
 
-(defn- bounded-output
-  [file]
-  (let [output (slurp file)]
-    (subs output 0 (min max-output-characters (count output)))))
-
-(defn- destroy-process-tree!
-  [^Process process]
-  (with-open [descendants (.descendants (.toHandle process))]
-    (let [handles (vec (iterator-seq (.iterator descendants)))]
-      (doseq [^ProcessHandle descendant handles]
-        (.destroyForcibly descendant))
-      (.destroyForcibly process)
-      (.waitFor process 5 TimeUnit/SECONDS)
-      (doseq [^ProcessHandle descendant handles]
-        (when (.isAlive descendant)
-          (try
-            (.get (.onExit descendant) 5 TimeUnit/SECONDS)
-            (catch Exception _))))
-      (and (not (.isAlive process))
-           (every? #(not (.isAlive ^ProcessHandle %)) handles)))))
+(defn- analyzer-authority-error-type
+  [result]
+  (let [status (get-in result [:admission :status])
+        error-type (or (get-in result [:admission :error-type])
+                       (:error-type result))]
+    (cond
+      (= :admission-timeout status) :clj-kondo-admission-timeout
+      (= :pressure-deferred status) :clj-kondo-pressure-deferred
+      (= :delegated status) :clj-kondo-admission-unverified
+      (#{:clj-kondo-admission-unavailable
+         :clj-kondo-executable-unavailable
+         :clj-kondo-exec-failed
+         :clj-kondo-pressure-deferred
+         :process-interrupted} error-type) error-type
+      :else nil)))
 
 (defn- run-job!
   [id project-root command timeout-ms]
-  (let [started (System/nanoTime)
-        output-file (java.io.File/createTempFile "clj-surgeon-cold-" ".log")]
+  (let [started (System/nanoTime)]
     (try
-      (let [builder (-> (ProcessBuilder. ^java.util.List command)
-                        (.directory (io/file project-root))
-                        (.redirectErrorStream true)
-                        (.redirectOutput output-file))
-            environment (.environment builder)
-            _ (process-env/configure-environment! environment)
-            process (.start builder)
-            _ (swap! job-store update id assoc :pid (.pid process))
-            finished? (.waitFor process timeout-ms TimeUnit/MILLISECONDS)
-            termination-confirmed? (or finished? (destroy-process-tree! process))
-            exit (when finished? (.exitValue process))
-            elapsed (/ (double (- (System/nanoTime) started)) 1000000.0)
-            ok? (and finished? (zero? exit))]
+      (let [process (process-env/run-bounded!
+                      {:command command
+                       :cwd project-root
+                       :timeout-ms timeout-ms
+                       :merge-error? true
+                       :visible-byte-limit max-output-characters
+                       :on-start #(swap! job-store update id assoc :pid %)})
+            authority-error (analyzer-authority-error-type process)
+            ok? (and (not authority-error)
+                     (:finished? process)
+                     (zero? (:exit process)))
+            result {:ok true
+                    :passed ok?
+                    :status (cond
+                              authority-error :unverified
+                              ok? :passed
+                              (:finished? process) :failed
+                              (:termination-confirmed process) :timed-out
+                              :else :termination-failed)
+                    :error-type authority-error
+                    :exit (:exit process)
+                    :termination_confirmed (:termination-confirmed process)
+                    :elapsed_ms (:elapsed_ms process)
+                    :output (:output process)
+                    :output_bytes (:output-bytes process)
+                    :output_sha256 (:output-sha256 process)
+                    :output_truncated (:output-truncated process)
+                    :admission (:admission process)
+                    :verification_complete true
+                    :next_action (cond
+                                   authority-error
+                                   "restore_analyzer_authority_before_retry"
+                                   ok? "none"
+                                   :else "review_failure_and_use_undo_receipt")}]
         (finish-job!
-          id
-          {:ok true
-           :passed ok?
-           :status (cond
-                     ok? :passed
-                     finished? :failed
-                     termination-confirmed? :timed-out
-                     :else :termination-failed)
-           :exit exit
-           :termination_confirmed termination-confirmed?
-           :elapsed_ms elapsed
-           :output (bounded-output output-file)
-           :verification_complete true
-           :next_action (if ok? "none" "review_failure_and_use_undo_receipt")}))
+          id result))
       (catch Exception error
-        (finish-job!
-          id
-          {:ok true
-           :passed false
-           :status :failed
-           :error-type :cold-verification-exception
-           :error (or (.getMessage error) (.getName (class error)))
-           :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-           :verification_complete true
-           :next_action "review_failure_and_use_undo_receipt"}))
-      (finally
-        (.delete output-file)))))
+        (let [data (ex-data error)
+              authority-error (or (:error-type data)
+                                  (get-in data [:admission :error-type]))
+              authority-unverified? (#{:clj-kondo-admission-unavailable
+                                       :clj-kondo-executable-unavailable
+                                       :clj-kondo-exec-failed
+                                       :clj-kondo-pressure-deferred
+                                       :process-interrupted}
+                                     authority-error)]
+          (finish-job!
+            id
+            {:ok true
+             :passed false
+             :status (if authority-unverified? :unverified :failed)
+             :error-type (if authority-unverified?
+                           authority-error
+                           :cold-verification-exception)
+             :error (or (.getMessage error) (.getName (class error)))
+             :admission (:admission data)
+             :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+             :verification_complete true
+             :next_action (if authority-unverified?
+                            "restore_analyzer_authority_before_retry"
+                            "review_failure_and_use_undo_receipt")}))))))
 
 (defn launch!
   "Launch one bounded cold-verification job and return immediately."

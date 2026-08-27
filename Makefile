@@ -6,6 +6,9 @@ INSTALL_ROOT ?= $(HOME)/.local/share/clj-surgeon
 CONTROL_PLANE_ROOT_FILE ?= $(INSTALL_ROOT)/control-plane-root
 SKILL_SOURCE := $(CLJ_SURGEON_HOME)skills/clj-surgeon
 AGENT_ROUTING_SOURCE := $(CLJ_SURGEON_HOME)resources/clj-surgeon-agent-routing.md
+CLJ_KONDO_ADMISSION_SOURCE := $(CLJ_SURGEON_HOME)resources/clj-kondo-admission.py
+CLJ_KONDO_ADMISSION_DEST ?= $(HOME)/bin/clj-kondo-admission
+CLJ_KONDO_SHIM_DEST ?= $(HOME)/bin/clj-kondo
 CODEX_SKILL_DEST := $(CODEX_HOME)/skills/clj-surgeon
 CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
 CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
@@ -43,7 +46,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -62,6 +65,7 @@ help:
 	@echo "  make uninstall-mcp-codex-dev   Remove Codex registration and stop the local MCP"
 	@echo "  make install                   Stable copied CLI, both skills, and global routing instructions"
 	@echo "  make install-cli               Install only the stable copied CLI"
+	@echo "  make install-clj-kondo-admission Install the box-wide analyzer gate"
 	@echo "  make install-codex-skill       Install only the stable copied Codex skill"
 	@echo "  make install-claude-skill      Install only the stable copied Claude skill"
 	@echo "  make install-agent-routing     Install compact routing into Codex and Claude globals"
@@ -108,7 +112,24 @@ help:
 	@echo "  bb -m clj-surgeon.core :op :mv :file f :form foo :before bar"
 	@echo "  bb -m clj-surgeon.core :op :rename-ns :from old :to new :root ."
 
-install: install-cli install-codex-skill install-claude-skill install-agent-routing
+install: install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing
+
+install-clj-kondo-admission:
+	@set -eu; \
+	  source="$(CLJ_KONDO_ADMISSION_SOURCE)"; \
+	  receipt="$(CLJ_KONDO_ADMISSION_DEST).receipt.edn"; \
+	  for dest in "$(CLJ_KONDO_ADMISSION_DEST)" "$(CLJ_KONDO_SHIM_DEST)"; do \
+	    if [ -e "$$dest" ] && ! grep -q 'Serialize one analyzer' "$$dest"; then \
+	      echo "Refusing to replace unrelated file $$dest" >&2; exit 1; \
+	    fi; \
+	    mkdir -p "$$(dirname "$$dest")"; \
+	    stage="$$dest.tmp.$$$$"; \
+	    cp "$$source" "$$stage"; \
+	    chmod +x "$$stage"; \
+	    mv "$$stage" "$$dest"; \
+	  done; \
+	  printf '%s\n' '{:artifact :clj-kondo-admission' ' :source-commit "$(SOURCE_COMMIT)"' ' :gate "$(CLJ_KONDO_ADMISSION_DEST)"' ' :shell-entrance "$(CLJ_KONDO_SHIM_DEST)"}' > "$$receipt"
+	@echo "Installed analyzer gate $(CLJ_KONDO_ADMISSION_DEST) and shell entrance $(CLJ_KONDO_SHIM_DEST)"
 
 install-agent-routing:
 	bb --classpath "$(CLJ_SURGEON_HOME)src" -m clj-surgeon.agent-routing install "$(AGENT_ROUTING_SOURCE)" "$(CODEX_GLOBAL_INSTRUCTIONS)" "$(CLAUDE_GLOBAL_INSTRUCTIONS)"
@@ -131,7 +152,11 @@ runtests: mcp-test
 mcp-test: mcp-operation-oracle
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/mcp-test
 	@$(MAKE) --no-print-directory mcp-heap-config-self-test
+	@$(MAKE) --no-print-directory clj-kondo-admission-path-self-test
 	@$(MAKE) --no-print-directory cclsp-start-self-test
+
+clj-kondo-admission-path-self-test:
+	@sh test/clj_kondo_admission_path_test.sh
 
 mcp-smoke:
 	bb test/mcp_stdio_smoke.clj
@@ -451,7 +476,7 @@ install-claude-skill: prepare-skill-package
 	@echo "Installed stable Claude skill $(CLAUDE_SKILL_DEST) from commit $(SOURCE_COMMIT), source hash $(SKILL_SOURCE_HASH)"
 	@echo "Receipt: $(CLAUDE_SKILL_DEST).receipt.edn"
 
-install-dev: install-dev-cli install-dev-codex-skill install-dev-claude-skill install-agent-routing
+install-dev: install-dev-cli install-clj-kondo-admission install-dev-codex-skill install-dev-claude-skill install-agent-routing
 	@echo "DEVELOPMENT INSTALL: all entrances are branch-coupled to $(CLJ_SURGEON_HOME)"
 
 install-dev-cli:

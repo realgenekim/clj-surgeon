@@ -13,11 +13,12 @@
    5. Return what it did
 
    ALL PLANNING IS PURE. Only execute! writes files."
-  (:require [clj-surgeon.analyze :as analyze]
-            [clj-surgeon.outline :as outline]
-            [clj-surgeon.forward-refs :as fwd]
-            [rewrite-clj.zip :as z]
-            [clojure.string :as str]))
+  (:require
+   [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.forward-refs :as fwd]
+   [clj-surgeon.outline :as outline]
+   [clojure.string :as str]
+   [rewrite-clj.zip :as z]))
 
 ;; ============================================================
 ;; Pure: Build a fix plan
@@ -234,10 +235,11 @@
                                  :for (:name action)
                                  :from (:line dep-form) :to adj-target})))))
         ;; Apply main moves one at a time, re-reading file after each
-        ;; (line numbers shift, so we re-parse)
+        ;; (line numbers shift, so we re-parse). The frozen plan names the
+        ;; exact owner to move before; execution must not launch clj-kondo
+        ;; again after the first write.
         (doseq [action sorted-moves]
-          (let [current-source (slurp file)
-                current-lines (vec (str/split-lines current-source))
+          (let [current-lines (vec (str/split-lines (slurp file)))
                 ;; Re-find the form locations in current file
                 current-outline (outline/outline file)
                 current-forms (:forms current-outline)
@@ -246,18 +248,10 @@
                 defn-form (first (filter #(and (= (str (:name %)) name-str)
                                                (not= 'declare (:type %)))
                                          current-forms))
-                ;; Find current declare location
-                decl-form (first (filter #(and (= (str (:name %)) name-str)
-                                               (= 'declare (:type %)))
-                                         current-forms))
-                ;; Find current first-usage
-                ns-name (:ns current-outline)
-                current-fwd (when ns-name
-                              (fwd/detect-forward-refs file ns-name))
-                usage (first (filter #(= (str (:name %)) name-str) current-fwd))
-                ;; Find form to move before
-                target (when usage
-                         (form-at-or-before current-forms (:used-at usage)))]
+                target-name (:move-before action)
+                target (first (filter #(and (= (str (:name %)) target-name)
+                                            (not= 'declare (:type %)))
+                                      current-forms))]
             (when (and defn-form target
                        (> (:line defn-form) (:line target)))
               ;; Get comment header

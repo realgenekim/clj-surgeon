@@ -11,6 +11,6 @@ supplied; derive them mechanically and never guess.
 
 The result must parse as Clojure and produce no clj-kondo errors. Run:
 
-clj-kondo --lint src/cfp_scheduler_killer/views.clj src/cfp_scheduler_killer/views/format.clj --fail-level error
+~/bin/clj-kondo --lint src/cfp_scheduler_killer/views.clj src/cfp_scheduler_killer/views/format.clj --fail-level error
 
 Complete the extraction and briefly report the route and verification result.

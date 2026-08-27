@@ -1678,7 +1678,7 @@ run_one() {
         fi
       fi
       if [ "$task" = dependency-move-edit ] \
-        && ! clj-kondo --lint "$workspace/src/bench/move_order.clj" \
+        && ! "$HOME/bin/clj-kondo" --lint "$workspace/src/bench/move_order.clj" \
           --fail-level error >/dev/null 2>&1; then
         portfolio_correct=false
       fi
