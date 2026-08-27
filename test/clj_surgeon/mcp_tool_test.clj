@@ -1287,6 +1287,13 @@
                      mcp-tool/tool-description))
         (is (re-find #"never pass owner as a string"
                      mcp-tool/tool-description)))
+      (testing "complete extraction decisions expose one direct transaction chord"
+        (is (str/includes? mcp-tool/tool-description
+                           "host-required progress update, make the apply call"))
+        (is (str/includes? mcp-tool/tool-description
+                           "Keep workspace_root top-level"))
+        (is (str/includes? mcp-tool/tool-description
+                           "do not insert another narration")))
       (is (= false (:error? (first @calls))))
       (is (= true (get-in @calls [0 :payload :verification_complete])))
       (let [elapsed (get-in @calls [0 :payload :elapsed_ms])]
