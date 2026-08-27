@@ -896,6 +896,7 @@
 (deftest exact-terminal-response-is-published-on-both-mcp-surfaces
   ;; @spec MCP-OP-RELAY-001
   ;; @spec MCP-OP-RELAY-003
+  ;; @spec MCP-OP-RELAY-005
   (let [response "Done — changes committed and exact verification completed."
         sha-a (apply str (repeat 64 "a"))
         sha-b (apply str (repeat 64 "b"))
