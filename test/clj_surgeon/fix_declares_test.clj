@@ -14,6 +14,18 @@
       (finally
         (.delete tmp)))))
 
+(defn forward-ref [name used-at defined-at]
+  {:name (symbol name)
+   :used-at used-at
+   :defined-at defined-at
+   :gap (- defined-at used-at)})
+
+(defn plan-with [path forward-refs]
+  (fix/plan path {:forward-refs forward-refs}))
+
+(defn execute-with [path forward-refs]
+  (fix/execute! path {:forward-refs forward-refs}))
+
 ;; ============================================================
 ;; Simple case: one declare, one forward ref
 ;; ============================================================
@@ -33,7 +45,7 @@
 (deftest test-plan-simple
   (with-temp-file simple-forward-ref
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [(forward-ref "helper" 6 8)])]
         (testing "finds one removable declare"
           (is (= 1 (-> p :summary :removable))))
         (testing "action has correct form name"
@@ -46,7 +58,7 @@
 (deftest test-execute-simple
   (with-temp-file simple-forward-ref
     (fn [path]
-      (let [result (fix/execute! path)
+      (let [result (execute-with path [(forward-ref "helper" 6 8)])
             new-source (slurp path)]
         (testing "moves happened"
           (is (pos? (-> result :summary :moves))))
@@ -89,7 +101,8 @@
 (deftest test-execute-multiple
   (with-temp-file multi-declares
     (fn [path]
-      (let [result (fix/execute! path)
+      (let [result (execute-with path [(forward-ref "foo" 7 12)
+                                       (forward-ref "bar" 10 15)])
             new-source (slurp path)]
         (testing "both declares removed"
           (is (not (str/includes? new-source "(declare foo)")))
@@ -158,7 +171,8 @@
 (deftest test-plan-mixed
   (with-temp-file mixed-declares
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [(forward-ref "helper" 7 9)
+                               (forward-ref "ping" 7 12)])]
         (testing "finds helper as removable"
           (is (some #(= "helper" (:name %)) (:actions p))))
         (testing "ping is in a cycle — needed declare"
@@ -185,7 +199,7 @@
 (deftest test-plan-pullable
   (with-temp-file pullable-deps
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [(forward-ref "foo" 6 10)])]
         (testing "foo has pull-deps (config is a leaf)"
           (let [action (first (:actions p))]
             (is (= "foo" (:name action)))
@@ -197,7 +211,7 @@
 (deftest test-execute-pullable
   (with-temp-file pullable-deps
     (fn [path]
-      (let [result (fix/execute! path)
+      (let [result (execute-with path [(forward-ref "foo" 6 10)])
             new-source (slurp path)]
         (testing "config moved above caller (pulled)"
           (is (< (str/index-of new-source "(def config")
@@ -237,7 +251,7 @@
 (deftest test-plan-unsafe
   (with-temp-file unsafe-move
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [(forward-ref "foo" 6 14)])]
         (testing "detects unresolved non-leaf dep"
           (is (= 1 (-> p :summary :unsafe))))
         (testing "flags compute as unresolved"
@@ -247,7 +261,7 @@
 (deftest test-execute-skips-unsafe
   (with-temp-file unsafe-move
     (fn [path]
-      (let [result (fix/execute! path)
+      (let [result (execute-with path [(forward-ref "foo" 6 14)])
             new-source (slurp path)]
         (testing "unsafe move skipped"
           (is (= 1 (-> result :summary :skipped))))
@@ -271,7 +285,7 @@
 (deftest test-no-declares
   (with-temp-file no-declares
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [])]
         (testing "nothing to do"
           (is (= 0 (-> p :summary :removable))))))))
 
@@ -294,14 +308,14 @@
 (deftest test-stale-declare
   (with-temp-file stale-declare
     (fn [path]
-      (let [p (fix/plan path)]
+      (let [p (plan-with path [])]
         (testing "declare is stale"
           (is (= 1 (-> p :summary :stale))))))))
 
 (deftest test-execute-stale-declare
   (with-temp-file stale-declare
     (fn [path]
-      (let [result (fix/execute! path)
+      (let [result (execute-with path [])
             new-source (slurp path)]
         (testing "stale declare deleted"
           (is (not (str/includes? new-source "(declare helper)"))))
