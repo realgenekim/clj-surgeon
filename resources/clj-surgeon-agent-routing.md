@@ -21,8 +21,13 @@
   commits in that call. A genuine caller decision refuses before writing with
   the completed snapshot-bound plan; fill it and apply once without another
   discovery read. Do not pay for a separate planning call as preflight. If the
-  task supplies an exact external verifier, omit transaction `verify` and run
-  that verifier once afterward.
+  workspace declares the matching project-owned exact profile, pass
+  `verify="exact"` so the verifier participates in the transaction. Otherwise,
+  omit transaction `verify` and run the supplied exact verifier once afterward.
+- If `terminal_response` is present and this mutation completes all remaining
+  user-requested work, return its value exactly without rereading, reverifying,
+  or adding a second summary. If work remains, treat it as terminal evidence
+  for this operation and continue.
 - Use native patching for a small visible literal edit, prose, a new file, or
   an unsupported operation. Use heavyweight `apply_clojure_changes` only for
   prepared semantic decisions, unique operations, or gates that must roll back
