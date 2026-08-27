@@ -272,3 +272,22 @@ until each candidate is changed or explicitly ignored. Preserve
 `extract/compile-plan` as the shared pure kernel without claiming executor-policy
 parity or CLI source-hash fencing. Do not optimize native, the JVM, or broad
 correctness machinery on this hill.
+
+## HILL-3 result: route won, duplicate proof exposed
+
+The first fresh caller achieved the intended two-action route but spent 22.079
+seconds in the kernel because omission invoked `extract/compile-plan` twice.
+Warm nREPL isolated the two passes at 10.836 and 12.764 seconds. Commit
+`65e72b7` moved mechanically required visibility promotion into the original
+pure planning pass and added a permanent one-call witness.
+
+Three fresh Sol/high callers at the single-pass candidate were 3/3 correct,
+with exactly one apply plus one lint, zero discovery, and zero refusals. Their
+complete walls were 46.482, 47.240, and 49.582 seconds; median 47.240 seconds.
+Median kernel time was 10.515 seconds. This is 5.4% below public plan/apply but
+24.7% above the fully supplied direct median.
+
+The next bounded hill is no longer plan elimination. It is interval attribution
+inside the same two-action route: measure prompt-to-apply, planner, formatter /
+commit, and apply-to-lint separately, then attack the largest residual. Full
+receipt: `docs/observations/2026-08-26-captains-log-the-kernel-proved-it-twice.md`.
