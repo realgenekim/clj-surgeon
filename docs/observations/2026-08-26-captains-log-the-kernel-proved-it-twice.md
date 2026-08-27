@@ -78,12 +78,46 @@ to 46.482 seconds in the paired first-after comparison. Relative to the prior
 public plan/apply median, the three-run internal median is 2.701 seconds, or
 5.4%, lower and removes one entire model/tool phase.
 
-This is a product win, but not the full hill. The route still trails the fully
-supplied direct median by 9.369 seconds. Because both routes now have two
-actions and one structural compile, that residual belongs to model-side call
-formation, prompt/schema interpretation, run variance, or a remaining
-within-kernel stage—not public planning and not duplicate compilation. The next
-experiment must timestamp those boundaries rather than guess.
+This first local cohort established the route but did not isolate a stable
+residual: it trailed the earlier fully supplied median by 9.369 seconds across
+different runs. Because both routes now have two actions and one structural
+compile, an independent matched acceptance run was required before treating
+that difference as product cost.
+
+## Independent adversarial acceptance
+
+SURGEON2 tested the exact released commit `65e72b7` from a detached, clean
+worktree. No SURGEON2 code was integrated or published.
+
+| Acceptance arm | Correct | Complete wall | Kernel | Route |
+|---|---:|---:|---:|---|
+| Fully supplied decision | yes | 39.150 s | 11.121 s | one apply + one lint |
+| Omitted mechanical facts | yes | 37.500 s | 8.297 s | one apply + one lint |
+
+Both success arms had zero discovery, refusals, failures, or native edits. In
+the matched environment, omission was 1.650 seconds faster, not slower, than
+the supplied route. The earlier 9.369-second cross-cohort gap was therefore not
+evidence of inherent internal-compiler overhead.
+
+The two refusal boundaries also passed:
+
+- an external caller with a destination-alias collision returned
+  `extraction-decisions-required` in 110.219 ms, with a completed plan, exact
+  hashed genuine unknown, no write authority, unchanged source, and no target,
+  receipt, formatter, or verifier effect;
+- a stale `source_hash` returned `source-hash-mismatch` in 3.804 ms, before all
+  effects, with byte-identical source and no target or receipt.
+
+The stale refusal does not yet publish explicit `mutation_attempted=false` and
+`write_authority=false`, although its effects prove both. Bead
+`clj-surgeon-6l9` owns common evidence normalization. This evidence-only defect
+does not weaken the refusal and does not block the release.
+
+Immutable success receipt:
+`/tmp/clj-surgeon-surgeon2-65e72b7-success-arms-r2`; `runs.tsv` SHA-256
+`afa2abcecc7579bf8794620fb2349adcf8af3aa9a7ba98b143b69c7a3e6bd1a8`;
+summary SHA-256
+`f5372b7ed71c1668e209c1713f7d101ccee648ea1e0fc239506ce7a44a9eeb19`.
 
 ## Release receipt
 
@@ -110,6 +144,9 @@ prompt delivered
                 -> final lint begins and ends
 ```
 
-Then optimize the largest measured interval. Do not restore a public plan,
+The matched acceptance closes HILL-3: no residual product regression remains
+to explain before accepting the mechanism. Interval telemetry is still the
+right next optimization instrument, but it should seek an absolute two-action
+speedup rather than defend omission parity. Do not restore a public plan,
 broaden correctness scoring, or optimize native. The product goal remains one
 coherent decision, one guarded mutation, one proportional verifier.

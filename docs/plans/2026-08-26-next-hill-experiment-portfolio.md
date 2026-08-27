@@ -291,3 +291,11 @@ The next bounded hill is no longer plan elimination. It is interval attribution
 inside the same two-action route: measure prompt-to-apply, planner, formatter /
 commit, and apply-to-lint separately, then attack the largest residual. Full
 receipt: `docs/observations/2026-08-26-captains-log-the-kernel-proved-it-twice.md`.
+
+Independent adversarial acceptance subsequently closed the apparent parity
+gap. At exact release `65e72b7`, the fully supplied arm completed in 39.150
+seconds with an 11.121-second kernel; omission completed in 37.500 seconds with
+an 8.297-second kernel. Both were correct two-action routes with zero discovery
+or failures. Alias-collision and stale-hash boundaries refused before effects.
+HILL-3 is accepted; interval attribution now seeks absolute speed rather than
+repairing an omission regression.
