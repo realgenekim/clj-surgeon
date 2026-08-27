@@ -151,3 +151,79 @@ Retain `clj-surgeon-90l` as an option. Reactivate it only for a task where a
 public model decision remains after the internal compiler has exhausted all
 mechanical derivation. The faster product hill is now removing the public phase,
 not compressing its prose.
+
+## Frozen contract after adversarial review
+
+SURGEON1 owns implementation and release. SURGEON2 remains an isolated
+exploratory and adversarial lane. The selected product contract is:
+
+- this change applies to MCP extraction apply only;
+- `file`, `to`, `forms`, and `require_policy` remain mandatory authority;
+- omitted `public_forms` can be derived only from a complete, frozen,
+  zero-unaccounted-candidate proof;
+- omitted caller decision arrays never account for a discovered candidate;
+- omitted aggregate `expect` is derived mechanically;
+- a supplied `expect` remains authoritative and a mismatch refuses; and
+- CLI extraction policy does not change in this merge.
+
+The CLI and MCP should continue to share `extract/compile-plan` as the pure
+planning kernel. They should not yet share the stricter MCP execution policy.
+Current CLI extraction reports external callers for later review. MCP apply
+requires each candidate to be changed or explicitly ignored. Combining those
+policies would be a backward-incompatible change disguised as compiler reuse.
+
+## Honest genuine-decision fixture
+
+Add one external caller to the frozen Sessionize extraction:
+
+```clojure
+(ns cfp-scheduler-killer.report
+  (:require [clojure.string :as format]
+            [cfp-scheduler-killer.views :as views]))
+
+(defn report-date [x]
+  (format/trim (views/fmt-date x)))
+```
+
+The compiler can prove that extracted private owner `not-blank` must become
+public. It cannot choose the external caller migration. The obvious `format`
+alias is already occupied, and valid decisions include another alias, a
+qualified use, or an explicit ignore policy. A unique candidate is evidence,
+not rewrite authority.
+
+```text
+ORIGINAL FIXTURE
+omit public_forms + zero external candidates
+        |
+        `-- prove visibility --> commit in one call
+
+CALLER OVERLAY
+omit public_forms + leave caller disposition empty
+        |
+        +-- prove visibility
+        `-- caller decision unknown --> refuse before write
+                                      + completed frozen plan
+                                      + exact unknown
+                                      + zero rediscovery reads
+```
+
+The refusal must not create a receipt, target file, target directory, formatter
+action, or verifier action. It must freeze the caller file, name the exact
+remaining decision, and withhold executable write authority until that decision
+is supplied. If this fixture commits in one call, the compiler crossed from
+mechanical proof into architectural guessing.
+
+## Permanent parity witnesses
+
+The smallest useful ratchets are:
+
+1. `extract/compile-plan` and the MCP plan projection agree on one frozen
+   snapshot after presentation and path normalization.
+2. Omitted `expect` and the exact explicit `expect` compile to identical source
+   and aggregate counts.
+3. A wrong supplied `expect` refuses, and omitted caller decision vectors never
+   close a discovered candidate.
+
+Do not advertise a CLI `source_hash` guard until the CLI enforces it. A parsed
+but ignored guard is worse than no advertised guard because it creates false
+confidence.
