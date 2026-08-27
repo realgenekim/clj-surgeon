@@ -1,9 +1,9 @@
 # Next-Hill Experiment Portfolio
 
 **Date:** 2026-08-26  
-**Status:** HILL-1 complete; HILL-2 recommended
-**Decision handle:** `HILL-2`
-**Default:** measure the external-caller and decision-completeness boundary
+**Status:** HILL-1 and HILL-2 complete; internal-plan compilation active
+**Decision handle:** `HILL-3`
+**Default:** collapse mechanically resolvable plan work into one apply call
 
 ## Ground truth
 
@@ -238,15 +238,37 @@ Batch 2: test the product, not the anecdote
 
 ## Recommendation
 
-Choose `HILL-2`: freeze and run the external-caller/completeness staircase
-before adding product code.
+Choose `HILL-3`: make planning an internal extraction compiler rather than a
+mandatory model-visible phase.
 
-The deciding argument is information value. HILL-1 established an honest
-matched-correctness result and showed the concrete native tax: discovery plus
-bespoke mutation-program construction and repair. The staircase now turns the
-shipped routing law into a measured boundary and tells us whether the next
-implementation hill is compiled writes or compressed reads.
+The deciding argument is measured phase cost. Direct extraction is correct at
+37.871 seconds and two actions. With exact roots but mechanically derivable
+visibility/caller facts withheld, plan/apply is correct at 49.941 seconds and
+three actions; the fresh local replay was 51.624 seconds with the same exact
+route. The model should not pay that extra interaction when the kernel can
+prove every omitted fact from one frozen snapshot.
 
-Fallback: if experiment capacity is limited, run only one natural
-supplied-caller cell at two completeness levels. Do not optimize the JVM, add a
-routing classifier, or enlarge the API until those results arrive.
+Implement the smallest safe seam:
+
+```text
+apply extraction with mechanically omitted facts
+        |
+        +-- complete proof, zero caller decisions -> compile and commit once
+        |
+        `-- any genuine decision remains -> refuse pre-write with frozen plan
+```
+
+The chosen public shape uses omission rather than a new mode. `file`, `to`,
+`forms`, and `require_policy` remain mandatory. Omitted `public_forms` means the
+kernel may derive only mechanically required visibility; explicit
+`public_forms`, including an empty vector, remains authoritative. Omitted
+caller-decision arrays normalize to no decisions but never account for a
+discovered candidate. Omitted expectations are derived; supplied expectations
+remain exact guards.
+
+Do not route CLI `extract!` through the stricter MCP executor in this hill. The
+CLI currently reports external callers for later review, while MCP refuses
+until each candidate is changed or explicitly ignored. Preserve
+`extract/compile-plan` as the shared pure kernel without claiming executor-policy
+parity or CLI source-hash fencing. Do not optimize native, the JVM, or broad
+correctness machinery on this hill.

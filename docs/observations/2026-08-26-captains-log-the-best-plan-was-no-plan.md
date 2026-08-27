@@ -206,12 +206,52 @@ construction and repair with one guarded transaction. The next experiment must
 test where this advantage ends as decisions become incomplete; it should not
 spend another cohort prompt-golfing the same complete decision.
 
+### Captain's decision: make Surgeon faster
+
+The native line is now closed. It served its purpose: native is a correct,
+fearsome control, and Surgeon still won decisively. Further native prompt
+optimization does not improve the product.
+
+The first completeness-rung dogfood made the next Surgeon hill concrete. When
+the exact 15 roots and destination were supplied but visibility and caller
+proof were deliberately withheld, a fresh local Sol/high caller completed the
+expected route exactly once:
+
+```text
+inspect_clojure(mode=plan-extraction)
+  -> apply_clojure_changes(snapshot-bound next_call)
+  -> exact clj-kondo
+```
+
+It was task-invariant correct and route-adherent in 51.624 seconds, with three
+tool round trips, two successful MCP calls, and zero failures. That reproduces
+the prior 49.941-second plan/apply median. Compared with direct extraction at
+37.871 seconds, the public planning phase costs about 12 seconds and one model
+interaction.
+
+A deeper root-discovery rung took 163.572 seconds and stopped safely before
+mutation after sending an unsupported `intent` field and an incorrect owner
+set to `plan-extraction`. That is useful boundary evidence, not the next
+optimization target: vague architectural intent still requires a real planning
+decision.
+
+The next product hill is narrower and higher leverage: **make planning an
+internal compiler, not a mandatory public phase.** If omitted extraction facts
+are mechanically provable against the frozen snapshot—target dependencies,
+required visibility changes, and complete zero-candidate external caller
+accounting—`apply_clojure_changes` should derive them and commit in the same
+call. If any genuine caller decision remains, it must refuse before writing and
+return the completed snapshot-bound plan. Models should pay another interaction
+only for judgment, never for bookkeeping the kernel can prove.
+
 Immutable result directories:
 
 - `/srv/fleet/dev-a/clj-surgeon-study-results/20260826T154529Z-direct-extraction-543798a-dev-a-mcp-first`
 - `/srv/fleet/dev-a/clj-surgeon-study-results/20260826T154529Z-direct-extraction-543798a-dev-a-native-first`
 - `/srv/fleet/dev-b/clj-surgeon-study-results/20260827T002056Z-champion-native-8ab0c60-dev-b2`
 - `/srv/fleet/dev-c/clj-surgeon-study-results/20260827T002039Z-champion-native-8ab0c60-dev-c2`
+- `/tmp/clj-surgeon-hill2-plan-508dcd0`
+- `/tmp/clj-surgeon-hill2-discover-508dcd0`
 
 The candidate is recommended for integration. The earned principle is simple:
 **do not ask a planner to rediscover a complete decision.**
