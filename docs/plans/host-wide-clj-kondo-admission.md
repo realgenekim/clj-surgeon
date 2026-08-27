@@ -57,10 +57,12 @@ or rich diagnostic.
 
 Serialization alone does not stop a fast convoy from reusing one stale green
 sample. The next independent ratchet is one-sample/one-launch debt for raw
-shell work plus a closed mission lease for paved workflows. A lease names its
-owner start identity, CWD, scope/profile hash, count, and time budget. Every
-subsequent child still requires a fresh green sample taken after the prior
-child exits; pressure never yields to the lease.
+shell work plus a closed mission lease for paved workflows. The first lease is
+owned only by `analyzer-contract-test` and names its owner PID, canonical CWD,
+scope hash, five-launch count, and five-minute budget. Every child releases the
+physical lock. Every subsequent child requires a fresh pressure observation
+taken after the prior child exits. An interactive waiter runs before the next
+mission child, and pressure never yields to the lease.
 
 ## Permanent witnesses
 

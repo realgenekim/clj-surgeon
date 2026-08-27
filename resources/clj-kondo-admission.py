@@ -9,6 +9,7 @@ agent caller dies.
 """
 
 import argparse
+import atexit
 import errno
 import fcntl
 import json
@@ -16,6 +17,7 @@ import os
 import shutil
 import sys
 import time
+import re
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -25,6 +27,8 @@ MAX_TIMEOUT_MS = 30 * 60 * 1000
 MAX_OWNER_BYTES = 4096
 MAX_STATUS_BYTES = 32768
 DEFAULT_MAX_NORMALIZED_LOAD = 4.0
+MISSION_ID = "analyzer-contract-v1"
+MISSION_LAUNCH_LIMIT = 5
 
 
 def parse_args():
@@ -35,6 +39,19 @@ def parse_args():
     parser.add_argument("--evidence")
     parser.add_argument("--events")
     parser.add_argument("--pressure-status")
+    parser.add_argument("--priority-lock")
+    parser.add_argument(
+        "--lane", choices=("interactive", "test-mission"), default="interactive"
+    )
+    parser.add_argument("--mission-id")
+    parser.add_argument("--mission-owner-pid", type=int)
+    parser.add_argument("--mission-cwd")
+    parser.add_argument("--mission-command-cwd")
+    parser.add_argument("--mission-scope-sha256")
+    parser.add_argument("--mission-launch-index", type=int)
+    parser.add_argument("--mission-launch-limit", type=int)
+    parser.add_argument("--mission-expires-epoch-ms", type=int)
+    parser.add_argument("--mission-after-epoch-ms", type=int)
     parser.add_argument(
         "--max-normalized-load", type=float, default=DEFAULT_MAX_NORMALIZED_LOAD
     )
@@ -46,7 +63,39 @@ def parse_args():
         parser.error("command must start with an absolute executable path")
     if not 1 <= args.timeout_ms <= MAX_TIMEOUT_MS:
         parser.error(f"timeout-ms must be in 1..{MAX_TIMEOUT_MS}")
+    validate_lane(args, parser.error)
     return args
+
+
+def validate_lane(args, fail):
+    if args.lane == "interactive":
+        return
+    fields = (
+        args.mission_id,
+        args.mission_owner_pid,
+        args.mission_cwd,
+        args.mission_command_cwd,
+        args.mission_scope_sha256,
+        args.mission_launch_index,
+        args.mission_launch_limit,
+        args.mission_expires_epoch_ms,
+    )
+    if any(value is None for value in fields):
+        fail("test-mission requires complete mission identity and budget")
+    if args.mission_id != MISSION_ID:
+        fail(f"test-mission id must be {MISSION_ID}")
+    if args.mission_owner_pid != os.getppid():
+        fail("test-mission owner must be the direct parent process")
+    if os.path.realpath(args.mission_command_cwd) != os.path.realpath(os.getcwd()):
+        fail("test-mission command CWD must equal the process CWD")
+    if not re.fullmatch(r"[0-9a-f]{64}", args.mission_scope_sha256 or ""):
+        fail("test-mission scope must be one SHA-256 digest")
+    if args.mission_launch_limit != MISSION_LAUNCH_LIMIT:
+        fail(f"test-mission launch limit must be {MISSION_LAUNCH_LIMIT}")
+    if not 1 <= args.mission_launch_index <= args.mission_launch_limit:
+        fail("test-mission launch index exceeds its budget")
+    if int(time.time() * 1000) >= args.mission_expires_epoch_ms:
+        fail("test-mission lease expired")
 
 
 def write_evidence(path, evidence):
@@ -144,6 +193,7 @@ def pressure_defer(args, started_ns, pressure):
         "waited_ms": (time.monotonic_ns() - started_ns) / 1_000_000,
         "cwd": os.path.realpath(os.getcwd()),
         "entrance": args.entrance,
+        "lane": args.lane,
         "pressure": pressure,
         **command_shape(args.command),
     }
@@ -177,6 +227,20 @@ def shell_shim_args():
         evidence=None,
         events=os.environ.get("CLJ_SURGEON_CLJ_KONDO_EVENTS"),
         pressure_status=os.environ.get("CLJ_SURGEON_PRESSURE_STATUS"),
+        priority_lock=os.environ.get(
+            "CLJ_SURGEON_CLJ_KONDO_PRIORITY_LOCK",
+            os.path.expanduser("~/.local/state/clj-surgeon/clj-kondo-priority.lock"),
+        ),
+        lane="interactive",
+        mission_id=None,
+        mission_owner_pid=None,
+        mission_cwd=None,
+        mission_command_cwd=None,
+        mission_scope_sha256=None,
+        mission_launch_index=None,
+        mission_launch_limit=None,
+        mission_expires_epoch_ms=None,
+        mission_after_epoch_ms=None,
         max_normalized_load=float(
             os.environ.get(
                 "CLJ_SURGEON_CLJ_KONDO_MAX_NORMALIZED_LOAD",
@@ -198,15 +262,132 @@ def read_owner(lock_file):
         return {"status": "owner-evidence-unreadable"}
 
 
+def waiter_directory(args):
+    return f"{args.priority_lock}.waiters"
+
+
+def remove_file(path):
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def create_interactive_ticket(args, deadline):
+    directory = waiter_directory(args)
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, f"{os.getpid()}-{time.monotonic_ns()}.json")
+    write_evidence(
+        path,
+        {
+            "pid": os.getpid(),
+            "cwd": os.path.realpath(os.getcwd()),
+            "entrance": args.entrance,
+            "deadline_epoch_ms": int(
+                (time.time() + max(0.0, deadline - time.monotonic())) * 1000
+            ),
+        },
+    )
+    atexit.register(remove_file, path)
+    return path
+
+
+def interactive_waiting(args):
+    directory = waiter_directory(args)
+    try:
+        names = os.listdir(directory)
+    except FileNotFoundError:
+        return False
+    now_ms = int(time.time() * 1000)
+    for name in names:
+        path = os.path.join(directory, name)
+        try:
+            with open(path, "r", encoding="utf-8") as source:
+                ticket = json.loads(source.read(MAX_OWNER_BYTES))
+            pid = int(ticket["pid"])
+            deadline_ms = int(ticket["deadline_epoch_ms"])
+            live = deadline_ms >= now_ms
+            if live:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    live = False
+            if live:
+                return True
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        remove_file(path)
+    return False
+
+
 def main():
     args = shell_shim_args() if os.path.basename(sys.argv[0]) == "clj-kondo" else parse_args()
     os.makedirs(os.path.dirname(os.path.abspath(args.lock)), exist_ok=True)
+    args.priority_lock = args.priority_lock or f"{args.lock}.priority"
+    os.makedirs(os.path.dirname(os.path.abspath(args.priority_lock)), exist_ok=True)
     deadline = time.monotonic() + args.timeout_ms / 1000.0
     started_ns = time.monotonic_ns()
     pressure = read_pressure_status(args)
     if pressure:
         return pressure_defer(args, started_ns, pressure)
-    with open(args.lock, "a+", encoding="utf-8") as lock_file:
+    ticket_path = (
+        create_interactive_ticket(args, deadline)
+        if args.lane == "interactive"
+        else None
+    )
+    with open(args.priority_lock, "a+", encoding="utf-8") as priority_file, open(
+        args.lock, "a+", encoding="utf-8"
+    ) as lock_file:
+        while True:
+            if args.lane == "test-mission" and interactive_waiting(args):
+                pressure = read_pressure_status(args)
+                if pressure:
+                    return pressure_defer(args, started_ns, pressure)
+                if time.monotonic() >= deadline:
+                    evidence = {
+                        "status": "admission-timeout",
+                        "error_type": "clj-kondo-admission-timeout",
+                        "waited_ms": (time.monotonic_ns() - started_ns) / 1_000_000,
+                        "lane": args.lane,
+                        "stage": "interactive-priority",
+                        "owner": read_owner(lock_file),
+                    }
+                    write_evidence(args.evidence, evidence)
+                    append_event(args, {**evidence, **command_shape(args.command)})
+                    print(json.dumps(evidence, sort_keys=True), file=sys.stderr)
+                    return TEMPORARY_FAILURE
+                time.sleep(0.01)
+                continue
+            try:
+                fcntl.lockf(priority_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                if args.lane == "test-mission" and interactive_waiting(args):
+                    fcntl.lockf(priority_file.fileno(), fcntl.LOCK_UN)
+                    time.sleep(0.01)
+                    continue
+                if ticket_path:
+                    remove_file(ticket_path)
+                break
+            except OSError as error:
+                if error.errno not in (errno.EACCES, errno.EAGAIN):
+                    raise
+                pressure = read_pressure_status(args)
+                if pressure:
+                    return pressure_defer(args, started_ns, pressure)
+                if time.monotonic() >= deadline:
+                    evidence = {
+                        "status": "admission-timeout",
+                        "error_type": "clj-kondo-admission-timeout",
+                        "waited_ms": (time.monotonic_ns() - started_ns) / 1_000_000,
+                        "lane": args.lane,
+                        "stage": "priority-turnstile",
+                        "owner": read_owner(lock_file),
+                    }
+                    write_evidence(args.evidence, evidence)
+                    append_event(args, {**evidence, **command_shape(args.command)})
+                    print(json.dumps(evidence, sort_keys=True), file=sys.stderr)
+                    return TEMPORARY_FAILURE
+                time.sleep(0.01)
+
         while True:
             try:
                 fcntl.lockf(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -233,17 +414,54 @@ def main():
         pressure = read_pressure_status(args)
         if pressure:
             return pressure_defer(args, started_ns, pressure)
+        sampled_epoch_ms = int(time.time() * 1000)
+        if (
+            args.lane == "test-mission"
+            and args.mission_after_epoch_ms is not None
+            and sampled_epoch_ms <= args.mission_after_epoch_ms
+        ):
+            evidence = {
+                "status": "mission-deferred",
+                "error_type": "clj-kondo-mission-post-exit-sample-required",
+                "waited_ms": (time.monotonic_ns() - started_ns) / 1_000_000,
+                "cwd": os.path.realpath(os.getcwd()),
+                "entrance": args.entrance,
+                "lane": args.lane,
+                "mission_id": args.mission_id,
+                "mission_launch_index": args.mission_launch_index,
+                "sampled_epoch_ms": sampled_epoch_ms,
+                "required_after_epoch_ms": args.mission_after_epoch_ms,
+            }
+            write_evidence(args.evidence, evidence)
+            append_event(args, {**evidence, **command_shape(args.command)})
+            print(json.dumps(evidence, sort_keys=True), file=sys.stderr)
+            return TEMPORARY_FAILURE
 
         evidence = {
             "status": "admitted",
             "pid": os.getpid(),
             "cwd": os.path.realpath(os.getcwd()),
             "entrance": args.entrance,
+            "lane": args.lane,
             "executable": args.command[0],
             "waited_ms": (time.monotonic_ns() - started_ns) / 1_000_000,
             "acquired_monotonic_ns": time.monotonic_ns(),
             **command_shape(args.command),
         }
+        if args.lane == "test-mission":
+            evidence.update(
+                {
+                    "mission_id": args.mission_id,
+                    "mission_owner_pid": args.mission_owner_pid,
+                    "mission_cwd": os.path.realpath(args.mission_cwd),
+                    "mission_command_cwd": os.path.realpath(args.mission_command_cwd),
+                    "mission_scope_sha256": args.mission_scope_sha256,
+                    "mission_launch_index": args.mission_launch_index,
+                    "mission_launch_limit": args.mission_launch_limit,
+                    "mission_expires_epoch_ms": args.mission_expires_epoch_ms,
+                    "sampled_epoch_ms": sampled_epoch_ms,
+                }
+            )
         lock_file.seek(0)
         lock_file.truncate()
         json.dump(evidence, lock_file, sort_keys=True)
@@ -254,6 +472,7 @@ def main():
         append_event(args, evidence)
 
         os.set_inheritable(lock_file.fileno(), True)
+        os.set_inheritable(priority_file.fileno(), True)
         try:
             os.execve(args.command[0], args.command, os.environ)
         except OSError as error:
