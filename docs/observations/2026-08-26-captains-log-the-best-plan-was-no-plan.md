@@ -129,23 +129,33 @@ No arm was repaired or rerun.
 | Order | Arm | Correct | Wall | Actions | Shell / MCP | Route-adherent |
 |---|---|---:|---:|---:|---:|---:|
 | MCP first | direct MCP | yes | 40.262 s | 2 | 1 / 1 | yes |
-| MCP first | native | no | 124.435 s | 5 | 4 / 0 | yes |
-| native first | native | no | 120.121 s | 6 | 5 / 0 | yes |
+| MCP first | native | yes | 124.435 s | 5 | 4 / 0 | yes |
+| native first | native | yes | 120.121 s | 6 | 5 / 0 | yes |
 | native first | direct MCP | yes | 35.479 s | 2 | 1 / 1 | yes |
 
 Both MCP arms made exactly one successful direct extraction call, zero
 inspections, omitted `verify`, and ran the exact requested verifier once. They
 had zero refusals, MCP failures, or failed mutations. Both preserved meaning;
 the destination was byte-exact, while the source differed only in accepted
-presentation. Both native arms lost meaning and remained incorrect.
+presentation.
+
+A later forensic audit overturned the original `native 0/2` label. Both native
+arms also faithfully materialized the supplied decision: all 15 form bodies and
+comments survived, ownership and visibility were correct, callers resolved
+through the destination, both files parsed, and exact `clj-kondo --fail-level
+error` passed. The old generic scorer mistook harmless differences from one
+historical after-state for meaning loss: focused `:refer` versus alias plus
+refer, removal of unused imports, form order, banner-comment placement,
+namespace wrapping, and omission of an unrelated namespace docstring. Those
+are useful byte/style telemetry, but they are not task correctness.
 
 Median direct MCP wall was 37.8705 seconds versus the prior two-call MCP median
 of 49.9405 seconds: 12.070 seconds and 24.2% lower complete-task time. The new
 native median was 122.278 seconds, only 1.1% different from the prior frozen
 123.583-second median, so arm order did not manufacture the improvement. The
-observed direct-MCP/native wall ratio is 3.23x, with the important caveat that
-native was 0/2 correct and therefore supplies no matched-correctness latency
-estimate.
+observed direct-MCP/native wall ratio is 3.23x. Because the forensic audit found
+both routes 2/2 correct under the supplied-decision invariants, this is a
+matched-correctness route result—not merely a ratio against failed attempts.
 
 ### Native comparison, in one view
 
@@ -153,20 +163,55 @@ estimate.
 |---|---:|---:|---:|---:|
 | Direct extraction MCP | 2/2 correct | 37.871 s | 2 | baseline |
 | Plan + apply MCP | 2/2 correct | 49.941 s | 3 | 12.070 s slower; 1.32x wall |
-| Native control | 0/2 correct | 122.278 s | 5.5 | 84.408 s slower; 3.23x wall |
+| Native control | 2/2 correct | 122.278 s | 5.5 | 84.408 s slower; 3.23x wall |
 
 Against the unchanged native route, direct MCP used 3.5 fewer tool actions at
-the median and 69.0% less wall time. More importantly, MCP preserved meaning in
-both runs while native lost meaning in both. The 3.23x number is therefore an
-observed route ratio, not a same-correctness speedup claim: there is no correct
-native latency in this cohort to compare against. The defensible conclusion is
-stronger but narrower—on this supplied multi-form extraction, direct MCP was
-both substantially faster and reliably correct, while native was neither.
+the median and 69.0% less wall time at equal observed task correctness. The
+defensible conclusion is narrow but now genuinely comparative: on this
+supplied multi-form extraction, Surgeon compiled the already-complete decision
+into one mutation while native spent three to four additional actions on
+discovery and source handling. This does not establish functional correctness
+or general superiority; it establishes a 3.23x complete-route win on one frozen
+historical decision under proportional mechanical invariants.
+
+### Champion native did not close the gap
+
+We then gave fresh Sol/high callers a native prompt designed by an explicit
+native champion. It supplied the ownership and caller decisions, permitted one
+coherent `apply_patch` or bounded generated script, required stale-source
+assertions, prohibited whole-file reads and Surgeon exposure, and kept exact
+historical bytes secondary. Both fresh runs received byte-identical prompt
+`8f133e308ede3626d25a9d45e41e29e68dc2d98218dfde31a61d4981ef22f8a6`.
+
+| Route | Correct | Median complete wall | Median actions | Relative to direct MCP |
+|---|---:|---:|---:|---:|
+| Direct extraction MCP | 2/2 | 37.871 s | 2 | baseline |
+| Original native | 2/2 | 122.278 s | 5.5 | 3.23x slower |
+| Champion native | 2/2 | 142.545 s | 5 | 3.76x slower |
+
+Champion native was 16.6% slower than the original native median. More
+importantly, the traces explain why prompt improvement did not change the
+route. Each caller spent two actions discovering source spans, attempted one
+large hand-compiled mutation that refused before writing, corrected that
+script in a fourth action, and linted in a fifth. dev-b chose unavailable Ruby
+and received exit 127; dev-c composed source transformations in an invalid
+offset order and hit an assertion. Both recovered safely and produced correct
+code, but the model still had to implement and debug a miniature structural
+editor inside its shell command.
+
+That is the moat on this task. Surgeon does not win because native cannot make
+the change. It wins because a complete decision can invoke a tested structural
+mechanism directly, replacing discovery plus bespoke mutation-program
+construction and repair with one guarded transaction. The next experiment must
+test where this advantage ends as decisions become incomplete; it should not
+spend another cohort prompt-golfing the same complete decision.
 
 Immutable result directories:
 
 - `/srv/fleet/dev-a/clj-surgeon-study-results/20260826T154529Z-direct-extraction-543798a-dev-a-mcp-first`
 - `/srv/fleet/dev-a/clj-surgeon-study-results/20260826T154529Z-direct-extraction-543798a-dev-a-native-first`
+- `/srv/fleet/dev-b/clj-surgeon-study-results/20260827T002056Z-champion-native-8ab0c60-dev-b2`
+- `/srv/fleet/dev-c/clj-surgeon-study-results/20260827T002039Z-champion-native-8ab0c60-dev-c2`
 
 The candidate is recommended for integration. The earned principle is simple:
 **do not ask a planner to rediscover a complete decision.**
