@@ -409,3 +409,82 @@ the old name disappear from the public contract and prove the cutover. Preserve
 the repository path and old configuration key as explicit migration inputs and
 rollback anchors. Rename the repository and implementation namespaces later as
 a mechanical, independently green checkpoint.
+
+## Encapsulation cutover receipt
+
+The first cutover was completed after the measurement checkpoint `71a470a`.
+Workspace onboarding now emits only `[mcp_servers.clj-surgeon]`. It continues
+to start, configure, and ready the broker internally. Because
+`mcp-semantic-client` reconnects once after a provider restart, an internal
+broker restart no longer reports that the coding-agent session must restart.
+
+Permanent focused evidence:
+
+```text
+workspace onboarding: 17 tests / 95 assertions / 0 failures
+MCP cold gate:          243 tests / 2,061 assertions / 0 failures
+core cold gate:         621 tests / 5,322 assertions / 0 failures
+```
+
+Before changing live configuration, all 72 direct-registration files were
+archived at:
+
+```text
+/tmp/clj-surgeon-direct-cclsp-configs-before-20260827.tar.gz
+sha256 178c076e10f78c87b7cea660c72941692ce884132e337902469d568f3958bfae
+```
+
+The migration atomically rewrote 62 Codex configs through
+`install-workspace-config!`. Nine project `.mcp.json` files had only their
+exact `cclsp` member removed; four preserved `clojure-mcp`, while five became
+valid empty `mcpServers` maps. The post-migration inventory found zero direct
+cclsp registrations and 62 Surgeon registrations. All nine JSON files parsed.
+
+Seven `.mcp.json` files are tracked changes in their own repositories or
+worktrees and were deliberately not cross-committed from this branch:
+
+- `/Users/genekim/src.local/screenshot-sorter/.mcp.json`
+- `/Users/genekim/src.local/social-media-writer/.mcp.json`
+- `/Users/genekim/src.local/social-media-writer-draft-preview/.mcp.json`
+- `/Users/genekim/src.local/social-media-writer-worktrees/smw-4k6j/.mcp.json`
+- `/Users/genekim/src.local/social-media-writer-worktrees/distillery-outline-zoom/.mcp.json`
+- `/Users/genekim/src.local/social-media-writer-worktrees/distillery-node-binding/.mcp.json`
+- `/Users/genekim/src.local/twitter-stuff/tweet-etl/.mcp.json`
+
+No running coding-agent process was restarted. The existing Surgeon session
+completed an exact form inspection in 523.91ms after the config migration.
+Broker PID 3893, CWD
+`/Users/genekim/src.local/cclsp-structural-results`, remained the internal
+provider. Two legacy direct children remained under live Claude parents and
+were intentionally preserved: PIDs 7020 and 7596, both CWD
+`/Users/genekim/src.local/social-media-writer`. New sessions will not recreate
+them from project configuration.
+
+The decisive internal-path proof was one Surgeon `prepare-change` request for
+`clj-surgeon.workspace-onboarding/workspace-mcp-block`. It returned five exact
+surface sites through Surgeon with no agent-facing cclsp call. Complete wall
+was 24,887.35ms. The broker recorded the inner `resolve_var_surface` at
+5,480ms and created clojure-lsp worker PID 94297, CWD
+`/Users/genekim/src.local/clj-surgeon`. The worker was idle and TTL-eligible.
+
+That result proves both sides of the thesis. Encapsulation works, but cold
+semantic ceremony is still far too expensive. Preloading is now an internal
+policy choice: Surgeon can warm a recently active workspace, persist
+snapshot-bound evidence, and let the worker reap. The preferred sequence is
+still structural evidence first, guarded semantic cache second, and one bounded
+provider escalation only for a named proof gap.
+
+### A separate dead-client failure surfaced under load
+
+The final core gate stalled in `install-test` while machine load average climbed
+above 100. The direct culprit found in this workstream was not the live analysis
+nREPL. PID 7144, CWD `/Users/genekim/src.local/clj-surgeon`, was a
+`clj-nrepl-eval` client for a completed quoted-Var probe against dead port
+53926. It had remained runnable for 10 hours 20 minutes and consumed roughly
+32–39% CPU. Terminating only that orphan allowed the existing core test to
+resume and finish green.
+
+Durable owner `clj-surgeon-tmr.10` requires a client wall timeout, prompt EOF
+cleanup, a disappearing-server regression, and flight-recorder evidence with
+PID, parent, CWD, port, and age. Persistent analysis JVMs are useful; persistent
+clients spinning on dead analysis JVMs are not.

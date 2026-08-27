@@ -283,28 +283,18 @@
          (re-matches #"http://127\.0\.0\.1:[0-9]+/mcp" url))))
 
 (defn workspace-mcp-block
-  "Return the complete managed Codex TOML block for three bounded tools."
-  [{:keys [surgeon-url cclsp-url]}]
+  "Return the managed Codex TOML block for the single public Surgeon boundary."
+  [{:keys [surgeon-url]}]
   (when-not (loopback-mcp-url? surgeon-url)
     (throw (ex-info "surgeon-url must be an explicit loopback MCP URL"
                     {:error-type :invalid-workspace-mcp-url
                      :field :surgeon-url
                      :value surgeon-url})))
-  (when-not (loopback-mcp-url? cclsp-url)
-    (throw (ex-info "cclsp-url must be an explicit loopback MCP URL"
-                    {:error-type :invalid-workspace-mcp-url
-                     :field :cclsp-url
-                     :value cclsp-url})))
   (str managed-begin "\n"
        "[mcp_servers.clj-surgeon]\n"
        "url = \"" surgeon-url "\"\n"
        "required = true\n"
-       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n\n"
-       "[mcp_servers.cclsp]\n"
-       "url = \"" cclsp-url "\"\n"
-       "required = false\n"
-       "enabled_tools = [\"resolve_var_surface\", \"find_references\", "
-       "\"get_incoming_calls\", \"get_outgoing_calls\"]\n"
+       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n"
        managed-end))
 
 (defn- managed-tool-header? [line]
@@ -397,7 +387,6 @@
        :config-file (.getPath target)
        :changed (not= before after)
        :surgeon-url (:surgeon-url options)
-       :cclsp-url (:cclsp-url options)
        :restart-required (not= before after)})))
 
 (defn- command-path
@@ -508,11 +497,11 @@
        :kondo-config-dir (:kondo-config-dir cclsp)
        :cclsp-config-changed (:changed cclsp)
        :cclsp-server-restarted cclsp-restarted?
-       :agent-session-restart-required cclsp-restarted?
+       :agent-session-restart-required false
        :commands (mapv :command command-results)
        :codex-config (:config-file installed)
        :codex-config-changed (:changed installed)
-       :restart-required (or (:changed installed) cclsp-restarted?)
+       :restart-required (:changed installed)
        :readiness readiness})))
 
 (defn -main
@@ -534,16 +523,15 @@
                :lsp-command lsp-command}))
 
           "install"
-          (let [[workspace surgeon-url cclsp-url] arguments]
-            (when-not (and workspace surgeon-url cclsp-url)
+          (let [[workspace surgeon-url] arguments]
+            (when-not (and workspace surgeon-url)
               (throw (ex-info
                        (str "Usage: workspace-onboarding install "
-                            "WORKSPACE SURGEON_URL CCLSP_URL")
+                            "WORKSPACE SURGEON_URL")
                        {:error-type :invalid-arguments})))
             (install-workspace-config!
               {:workspace workspace
-               :surgeon-url surgeon-url
-               :cclsp-url cclsp-url}))
+               :surgeon-url surgeon-url}))
 
           (throw (ex-info "Operation must be cclsp-config or install"
                           {:error-type :invalid-operation :operation operation})))))
