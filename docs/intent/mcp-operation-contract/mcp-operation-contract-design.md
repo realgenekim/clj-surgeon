@@ -500,6 +500,10 @@ the response is terminal evidence for this operation only and the agent
 continues. This preserves model judgment about task completion while deleting
 mechanical post-receipt narration.
 
+`next_action=none` and `terminal_response` describe only the completed
+mutation. They never prove that the complete user request is finished. The
+caller continues when any user-requested work remains.
+
 The shared operation finalizer, MCP server transport, CLI entrance, and other
 tools do not change in this slice. Generalization to compact edit or transform
 requires a separate evidence law because their terminal verification meaning

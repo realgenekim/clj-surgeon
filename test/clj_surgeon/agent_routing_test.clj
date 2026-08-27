@@ -109,4 +109,7 @@
     (is (str/includes? source "If `terminal_response` is present"))
     (is (re-find #"completes all remaining\s+user-requested work" source))
     (is (str/includes? source "return its value exactly"))
-    (is (str/includes? source "If work remains"))))
+    (is (str/includes? source "If work remains"))
+    (is (re-find
+          #"They never prove\s+that the complete user request is finished\."
+          source))))

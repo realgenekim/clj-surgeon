@@ -821,19 +821,30 @@
   ;; @spec MCP-OP-RELAY-002
   ;; @spec MCP-OP-RELAY-003
   (let [response "Done — changes committed and exact verification completed."
+        sha-a (apply str (repeat 64 "a"))
+        sha-b (apply str (repeat 64 "b"))
+        sha-c (apply str (repeat 64 "c"))
         eligible {:ok true
+                  :operation "apply_clojure_changes"
                   :committed true
                   :verification_complete true
                   :next_action "none"
-                  :read_back_hashes {"src/sample/core.clj" "source-sha"}
+                  :read_back_hashes {"src/sample/core.clj" sha-a}
                   :undo_receipt "/tmp/receipt.edn"
-                  :receipt_hash "receipt-sha"
+                  :receipt_hash sha-b
                   :verification {:ok true
                                  :profile "exact"
                                  :profile-source :project
+                                 :profile-sha256 sha-c
                                  :acceptance :exact-exit
                                  :process-outcome :pass
-                                 :exit 0}}]
+                                 :exit 0
+                                 :cwd "/tmp/workspace"
+                                 :argv ["/usr/bin/clj-kondo" "--lint" "src"]
+                                 :elapsed_ms 1.25
+                                 :output-bytes 0
+                                 :output-sha256 sha-a
+                                 :output-truncated false}}]
     (is (= response (mcp-tool/exact-terminal-response eligible)))
     (doseq [[label result]
             [[:non-map nil]
@@ -842,8 +853,20 @@
              [:pending (assoc eligible :verification_complete false)]
              [:next-action (assoc eligible :next_action "inspect_verification_job")]
              [:rolled-back (assoc eligible :rolled_back true)]
+             [:hyphenated-rollback (assoc eligible :rolled-back true)]
+             [:wrong-operation (assoc eligible :operation "edit_clojure")]
+             [:contradictory-error (assoc eligible :error_type "verification-failed")]
+             [:contradictory-remedy (assoc eligible :remedy "Retry the request.")]
+             [:recovery-required (assoc eligible :recovery_required true)]
+             [:next-call (assoc eligible :next_call {:operation "inspect_clojure"})]
              [:missing-read-back (dissoc eligible :read_back_hashes)]
+             [:malformed-read-back
+              (assoc eligible :read_back_hashes {"src/sample/core.clj" "source-sha"})]
              [:missing-receipt (dissoc eligible :undo_receipt)]
+             [:malformed-receipt-hash (assoc eligible :receipt_hash "receipt-sha")]
+             [:missing-profile-hash (update eligible :verification dissoc :profile-sha256)]
+             [:missing-argv (update eligible :verification dissoc :argv)]
+             [:missing-output-hash (update eligible :verification dissoc :output-sha256)]
              [:unverified (assoc-in eligible [:verification :process-outcome]
                                     :launch-failure)]
              [:nonzero (assoc-in eligible [:verification :exit] 3)]]]
@@ -862,7 +885,8 @@
       (is (str/includes? summary "2.25 ms"))
       (is (str/includes?
             summary
-            "If this mutation completes all remaining work, return exactly:")))
+            "If this mutation completes all remaining work, return exactly:"))
+      (is (str/includes? summary "If work remains, continue.")))
     (is (= {:type "string"}
            (get-in mcp-tool/clj-change-output-schema
                    [:properties "terminal_response"])))
@@ -873,6 +897,9 @@
   ;; @spec MCP-OP-RELAY-001
   ;; @spec MCP-OP-RELAY-003
   (let [response "Done — changes committed and exact verification completed."
+        sha-a (apply str (repeat 64 "a"))
+        sha-b (apply str (repeat 64 "b"))
+        sha-c (apply str (repeat 64 "c"))
         calls (atom [])
         callback (fn [content error? structured]
                    (swap! calls conj {:content (first content)
@@ -884,15 +911,22 @@
                     :next_action "none"
                     :edits 1
                     :files 1
-                    :read_back_hashes {"src/sample/core.clj" "source-sha"}
+                    :read_back_hashes {"src/sample/core.clj" sha-a}
                     :undo_receipt "/tmp/receipt.edn"
-                    :receipt_hash "receipt-sha"
+                    :receipt_hash sha-b
                     :verification {:ok true
                                    :profile "exact"
                                    :profile-source :project
+                                   :profile-sha256 sha-c
                                    :acceptance :exact-exit
                                    :process-outcome :pass
-                                   :exit 0}}]
+                                   :exit 0
+                                   :cwd "/tmp/workspace"
+                                   :argv ["/usr/bin/clj-kondo" "--lint" "src"]
+                                   :elapsed_ms 1.25
+                                   :output-bytes 0
+                                   :output-sha256 sha-a
+                                   :output-truncated false}}]
     (try
       (mcp-tool/init! {:project-root "."})
       (with-redefs [mcp-tool/execute-request! (fn [_ _] exact-pass)]
