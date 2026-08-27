@@ -316,6 +316,7 @@ def empty_session(provider: str, path: Path) -> dict:
         "native_apply_patch_action_wall_ms": [],
         "task_turns": [],
         "clj_surgeon_ops": Counter(),
+        "cclsp_methods": Counter(),
         "route_features": Counter(),
         "native_clojure_actions": Counter(),
         "bounded_clojure_reads": 0,
@@ -343,6 +344,11 @@ def record_tool_text(session: dict, text: str, action: str, scan_commands: bool 
         method for method in nested_methods
         if method.startswith(("mcp__clj_surgeon__", "mcp__clj-surgeon__"))
     )
+    cclsp_methods = sorted(
+        method for method in nested_methods if method.startswith("mcp__cclsp__")
+    )
+    for method in cclsp_methods:
+        session["cclsp_methods"][method.rsplit("__", 1)[-1]] += 1
     if matches or surgeon_methods:
         session["clj_surgeon_tool_actions"] += 1
         session["clj_surgeon_calls"] += len(matches) + len(surgeon_methods)
@@ -395,6 +401,7 @@ def finalize_session(session: dict) -> dict:
         "native_apply_patch_action_wall_samples_ms": session["native_apply_patch_action_wall_ms"],
         "task_turns": session["task_turns"],
         "clj_surgeon_ops": dict(sorted(session["clj_surgeon_ops"].items())),
+        "cclsp_methods": dict(sorted(session["cclsp_methods"].items())),
         "route_features": dict(sorted(session["route_features"].items())),
         "native_clojure_actions": dict(sorted(session["native_clojure_actions"].items())),
         "bounded_clojure_reads": session["bounded_clojure_reads"],
@@ -643,12 +650,14 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         for session in sessions
         if session["skill_loads"]
         or session["clj_surgeon_calls"]
+        or sum(session["cclsp_methods"].values())
         or sum(session["native_clojure_actions"].values())
     ]
     ops = Counter()
     native = Counter()
     route_features = Counter()
     route_action_kinds = Counter()
+    cclsp_methods = Counter()
     refusal_types = Counter()
     surgeon_wall = []
     native_patch_wall = []
@@ -656,6 +665,7 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         ops.update(session["clj_surgeon_ops"])
         native.update(session["native_clojure_actions"])
         route_features.update(session["route_features"])
+        cclsp_methods.update(session["cclsp_methods"])
         refusal_types.update(session["clj_surgeon_refusal_types"])
         surgeon_wall.extend(session["clj_surgeon_action_wall_samples_ms"])
         native_patch_wall.extend(session["native_apply_patch_action_wall_samples_ms"])
@@ -680,6 +690,8 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         "clj_surgeon_action_wall": distribution(surgeon_wall),
         "native_apply_patch_action_wall": distribution(native_patch_wall),
         "clj_surgeon_ops": dict(sorted(ops.items())),
+        "cclsp_calls": sum(cclsp_methods.values()),
+        "cclsp_methods": dict(sorted(cclsp_methods.items())),
         "route_features": dict(sorted(route_features.items())),
         "route_action_kinds": dict(sorted(route_action_kinds.items())),
         "native_clojure_actions": dict(sorted(native.items())),
@@ -801,12 +813,22 @@ def collect_cclsp_telemetry(path: Path, since: datetime, until: datetime) -> dic
     mcp_tools = Counter()
     mcp_statuses = Counter()
     mcp_wall = []
+    mcp_wall_by_tool: dict[str, list[int]] = {}
+    subject_request_keys = Counter()
     for event in events:
         event_type = event.get("event")
-        if event_type in {"lsp_request_complete", "lsp_request_timeout"}:
+        if event_type in {
+            "lsp_request_complete",
+            "lsp_request_failed",
+            "lsp_request_timeout",
+        }:
             method = str(event.get("method") or "unknown")
             lsp_methods[method] += 1
-            outcome = "timeout" if event_type == "lsp_request_timeout" else "complete"
+            outcome = {
+                "lsp_request_complete": "complete",
+                "lsp_request_failed": "failed",
+                "lsp_request_timeout": "timeout",
+            }[event_type]
             lsp_outcomes[outcome] += 1
             lsp_outcomes_by_method.setdefault(method, Counter())[outcome] += 1
             elapsed = event.get("elapsed_ms")
@@ -815,11 +837,39 @@ def collect_cclsp_telemetry(path: Path, since: datetime, until: datetime) -> dic
                 lsp_wall.append(rounded)
                 lsp_wall_by_method.setdefault(method, []).append(rounded)
         elif event_type == "mcp_request_complete":
-            mcp_tools[str(event.get("tool") or "unknown")] += 1
+            tool = str(event.get("tool") or "unknown")
+            mcp_tools[tool] += 1
             mcp_statuses[str(event.get("status") or "unknown")] += 1
             elapsed = event.get("elapsed_ms")
             if isinstance(elapsed, (int, float)):
-                mcp_wall.append(round(elapsed))
+                rounded = round(elapsed)
+                mcp_wall.append(rounded)
+                mcp_wall_by_tool.setdefault(tool, []).append(rounded)
+            if event.get("workspace_root") and event.get("subject"):
+                subject_request_keys[
+                    stable_key(
+                        "\u0000".join(
+                            [
+                                tool,
+                                str(event.get("workspace_root")),
+                                str(event.get("subject")),
+                            ]
+                        )
+                    )
+                ] += 1
+
+    initialization_wall = lsp_wall_by_method.get("initialize", [])
+    semantic_wall = [
+        elapsed
+        for method, values in lsp_wall_by_method.items()
+        if method != "initialize"
+        for elapsed in values
+    ]
+    repeated_subject_keys = {
+        key: count for key, count in subject_request_keys.items() if count > 1
+    }
+    total_lsp_wall = sum(lsp_wall)
+    total_mcp_wall = sum(mcp_wall)
 
     return {
         "status": "ok" if events else "no-events",
@@ -839,12 +889,39 @@ def collect_cclsp_telemetry(path: Path, since: datetime, until: datetime) -> dic
         "lsp_wall_by_method": {
             method: distribution(values) for method, values in sorted(lsp_wall_by_method.items())
         },
+        "lsp_initialization_requests": len(initialization_wall),
+        "lsp_initialization_wall": distribution(initialization_wall),
+        "lsp_semantic_requests": len(semantic_wall),
+        "lsp_semantic_wall": distribution(semantic_wall),
+        "initialization_share_of_lsp_wall": (
+            round(sum(initialization_wall) / total_lsp_wall, 4)
+            if total_lsp_wall
+            else None
+        ),
+        "initialization_to_cclsp_mcp_wall_ratio": (
+            round(sum(initialization_wall) / total_mcp_wall, 4)
+            if total_mcp_wall
+            else None
+        ),
         "document_syncs": event_types.get("lsp_document_sync", 0),
         "workspace_recoveries": event_types.get("lsp_workspace_recovered", 0),
         "cclsp_mcp_calls": sum(mcp_tools.values()),
         "cclsp_mcp_tools": dict(sorted(mcp_tools.items())),
         "cclsp_mcp_statuses": dict(sorted(mcp_statuses.items())),
         "cclsp_mcp_wall": distribution(mcp_wall),
+        "cclsp_mcp_wall_by_tool": {
+            tool: distribution(values)
+            for tool, values in sorted(mcp_wall_by_tool.items())
+        },
+        "unfenced_subject_repeat_candidates": {
+            "eligible_requests": sum(subject_request_keys.values()),
+            "unique_request_keys": len(subject_request_keys),
+            "repeated_request_keys": len(repeated_subject_keys),
+            "repeat_requests_after_first": sum(
+                count - 1 for count in repeated_subject_keys.values()
+            ),
+            "safe_cache_hits_claimed": 0,
+        },
     }
 
 
@@ -965,6 +1042,8 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T01:03:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c3", "name": "exec", "input": "await tools.apply_patch(\"*** src/other.clj\\n+ docs say clj-surgeon :op :xray\")"}},
                 {"timestamp": "2026-08-05T01:03:15Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c4", "name": "exec", "input": "await tools.exec_command({cmd:\"bb -cp src -m clj-surgeon.core :op :change! :spec-file - :receipt-out receipt.edn\"})"}},
                 {"timestamp": "2026-08-05T01:03:16Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c4", "output": "{:ok true :operation :change!}"}},
+                {"timestamp": "2026-08-05T01:03:30Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c5", "name": "exec", "input": "await tools.mcp__cclsp__resolve_var_surface({subject:\"private.ns/secret\"})"}},
+                {"timestamp": "2026-08-05T01:03:31Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c5", "output": "{\"ok\":true}"}},
                 {"timestamp": "2026-08-05T01:04:00Z", "type": "event_msg", "payload": {"type": "task_complete", "duration_ms": 300000, "last_agent_message": "complete"}},
             ],
         )
@@ -974,6 +1053,7 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T01:00:00Z", "type": "attachment", "attachment": {"type": "skill_listing", "content": "- clj-surgeon: structural"}},
                 {"timestamp": "2026-08-05T01:01:00Z", "type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "Skill", "input": {"skill": "clj-surgeon"}}]}},
                 {"timestamp": "2026-08-05T01:02:00Z", "type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "clj-surgeon :op :xray :file src/app.clj :expr '(form f)'"}}]}},
+                {"timestamp": "2026-08-05T01:02:30Z", "type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t4", "name": "mcp__cclsp__find_references", "input": {"subject": "private.ns/secret"}}]}},
                 {"timestamp": "2026-08-05T01:03:00Z", "type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t3", "name": "Read", "input": {"file_path": "src/other.clj"}}]}},
             ],
         )
@@ -988,9 +1068,12 @@ def self_test() -> int:
         write_fixture(
             root / "cclsp.log",
             [
+                {"timestamp": "2026-08-05T01:12:30Z", "event": "lsp_request_complete", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "initialize", "elapsed_ms": 50},
                 {"timestamp": "2026-08-05T01:13:00Z", "event": "lsp_request_complete", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "workspace/symbol", "elapsed_ms": 25},
+                {"timestamp": "2026-08-05T01:13:30Z", "event": "lsp_request_failed", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "textDocument/documentSymbol", "elapsed_ms": 12},
                 {"timestamp": "2026-08-05T01:14:00Z", "event": "lsp_request_timeout", "lsp_session": "private-lsp", "workspace_root": "/private/workspace", "method": "textDocument/references", "elapsed_ms": 30000},
-                {"timestamp": "2026-08-05T01:15:00Z", "event": "mcp_request_complete", "workspace_root": "/private/workspace", "tool": "resolve_var_surface", "status": "refused", "elapsed_ms": 30010},
+                {"timestamp": "2026-08-05T01:15:00Z", "event": "mcp_request_complete", "workspace_root": "/private/workspace", "tool": "resolve_var_surface", "subject": "private.ns/secret", "status": "refused", "elapsed_ms": 30010},
+                {"timestamp": "2026-08-05T01:16:00Z", "event": "mcp_request_complete", "workspace_root": "/private/workspace", "tool": "resolve_var_surface", "subject": "private.ns/secret", "status": "completed", "elapsed_ms": 30},
             ],
         )
         args = argparse.Namespace(
@@ -1010,10 +1093,12 @@ def self_test() -> int:
         assert codex["clj_surgeon_ops"] == {":cat": 1, ":change!": 1}
         assert codex["clj_surgeon_tool_actions"] == 2
         assert codex["clj_surgeon_result_actions"] == 1
+        assert codex["cclsp_methods"] == {"resolve_var_surface": 1}
         assert codex["skill_loads"] == 1
         assert codex["native_clojure_actions"] == {"apply_patch": 1}
         assert codex["route_action_kinds"] == {
             "native-patch": 1,
+            "semantic-read": 1,
             "skill-load": 1,
             "surgeon-apply": 1,
             "surgeon-read": 1,
@@ -1021,18 +1106,20 @@ def self_test() -> int:
         codex_phases = codex["sessions"][0]["route_phases"]
         assert [phase["kinds"] for phase in codex_phases] == [
             ["skill-load"], ["surgeon-read"], ["native-patch"],
-            ["surgeon-apply"]
+            ["surgeon-apply"], ["semantic-read"]
         ]
         assert all(phase["actions"] == 1 for phase in codex_phases)
         assert codex["sessions"][0]["task_turns"][0]["route_phases"] == codex_phases
         assert claude["clj_surgeon_ops"] == {":xray": 1}
         assert claude["activation_trigger_visible_sessions"] == 0
         assert claude["skill_loads"] == 1
+        assert claude["cclsp_methods"] == {"find_references": 1}
         assert claude["native_clojure_actions"] == {"read": 1}
         assert claude["unbounded_clojure_reads"] == 1
         assert claude["bounded_clojure_reads"] == 0
         assert claude["route_action_kinds"] == {
             "native-read": 1,
+            "semantic-read": 1,
             "skill-load": 1,
             "surgeon-read": 1,
         }
@@ -1042,12 +1129,28 @@ def self_test() -> int:
             "match-count-mismatch": 1
         }
         assert receipt["services"]["cclsp_and_clojure_lsp"]["lsp_outcomes"] == {
-            "complete": 1,
+            "complete": 2,
+            "failed": 1,
             "timeout": 1,
         }
         assert receipt["services"]["cclsp_and_clojure_lsp"]["lsp_outcomes_by_method"] == {
+            "initialize": {"complete": 1},
+            "textDocument/documentSymbol": {"failed": 1},
             "textDocument/references": {"timeout": 1},
             "workspace/symbol": {"complete": 1},
+        }
+        cclsp = receipt["services"]["cclsp_and_clojure_lsp"]
+        assert cclsp["lsp_initialization_requests"] == 1
+        assert cclsp["lsp_semantic_requests"] == 3
+        assert cclsp["initialization_share_of_lsp_wall"] == 0.0017
+        assert cclsp["initialization_to_cclsp_mcp_wall_ratio"] == 0.0017
+        assert cclsp["cclsp_mcp_wall_by_tool"]["resolve_var_surface"]["count"] == 2
+        assert cclsp["unfenced_subject_repeat_candidates"] == {
+            "eligible_requests": 2,
+            "unique_request_keys": 1,
+            "repeated_request_keys": 1,
+            "repeat_requests_after_first": 1,
+            "safe_cache_hits_claimed": 0,
         }
         assert receipt["services"]["cclsp_and_clojure_lsp"]["workspace_count"] == 1
         assert "/private/workspace" not in json.dumps(receipt)
