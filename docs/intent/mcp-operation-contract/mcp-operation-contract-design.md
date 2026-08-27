@@ -455,6 +455,56 @@ The extraction boundary witness must prove the verifier observed staged
 destination bytes and that failure restored every original byte, removed every
 created path, and did not leave a usable receipt.
 
+## Exact Terminal Response
+
+The exact-verifier success route may compile one terminal response from the
+normalized public mutation receipt. This is an operation-owned projection, not
+a generic transport feature:
+
+```text
+kernel result
+  -> normalize commit, read-back, receipt, and verification evidence
+  -> apply-owned terminal-response projector
+  -> shared finalizer adds elapsed_ms only
+  -> apply summary and structured serialization
+  -> one callback
+```
+
+The projector is total and non-throwing. It returns the constant text
+`Done — changes committed and exact verification completed.` only when the
+normalized result proves all of the following:
+
+- `ok=true`, `committed=true`, `verification_complete=true`, and
+  `next_action=none`;
+- non-empty whole-file read-back hashes, inverse receipt path, and receipt hash;
+- project-owned profile `exact`, acceptance `exact-exit`, process outcome
+  `pass`, and exit zero.
+
+Missing, malformed, or inconsistent evidence omits the field. It does not turn
+an already-classified domain result into an MCP transport error. Non-exact
+success, pending verification, typed refusal, ordinary failure, rollback,
+timeout, launch failure, crash-style exit, and every unverified state retain
+their existing result and summary.
+
+The optional `terminal_response` field is published in structured content. The
+visible apply summary contains the identical string exactly once while
+preserving its existing elapsed time, warnings, and terminal evidence. The
+string does not interpolate request text, paths, source, diagnostics, verifier
+output, receipt identifiers, or project-controlled values. It does not claim
+behavior preservation, semantic caller completeness, tests, or "all checks."
+
+Agent routing is conditional: if `terminal_response` is present and this
+mutation completes all remaining user-requested work, return its value exactly
+without rereading, reverifying, or writing a second summary. If work remains,
+the response is terminal evidence for this operation only and the agent
+continues. This preserves model judgment about task completion while deleting
+mechanical post-receipt narration.
+
+The shared operation finalizer, MCP server transport, CLI entrance, and other
+tools do not change in this slice. Generalization to compact edit or transform
+requires a separate evidence law because their terminal verification meaning
+is weaker than a project-owned exact-exit profile.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
