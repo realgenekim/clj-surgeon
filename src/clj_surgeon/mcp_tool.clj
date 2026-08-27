@@ -18,7 +18,8 @@
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
-   [clojure.java.io :as io])
+   [clojure.java.io :as io]
+   [clojure.string :as str])
   (:import
    (java.nio.file Files Path)
    (java.util UUID)))
@@ -64,20 +65,69 @@
     "To add one key/value to logically equal maps while preserving comments, use "
     "find with assoc_entry: {key: :status, value: :ready}. "
     "Top-level expect contains changes, edits, and files. Any mismatch refuses "
-    "the whole request. Optional verify is fast or full. Staged formatting, "
+    "the whole request. Optional verify is fast, full, or the project-owned "
+    "exact profile. Staged formatting, "
     "commands, and hot laws roll back on failure. A configured cold job returns "
     "verification_complete=false plus one inspect next_call; continue useful "
     "work and copy it once instead of replaying the edit. Success parses and "
     "reads back every file and publishes an inverse receipt. "
-    "verification_complete=true is terminal. Use native "
+    "verification_complete=true is terminal. If terminal_response is present "
+    "and this mutation completes all remaining user-requested work, return its "
+    "value exactly without rereading, reverifying, or adding a second summary. "
+    "If work remains, continue from the terminal evidence. Use native "
     "patching for prose or one arbitrary text edit."))
 
 ;; @spec MCP-OP-SCHEMA-001
+;; @spec MCP-OP-RELAY-003
 (def clj-change-output-schema
   {:type "object"
    :properties {"ok" {:type "boolean"}
-                "elapsed_ms" {:type "number" :minimum 0}}
+                "elapsed_ms" {:type "number" :minimum 0}
+                "terminal_response" {:type "string"}}
    :required ["ok" "elapsed_ms"]})
+
+(def exact-terminal-response-text
+  "Done — changes committed and exact verification completed.")
+
+;; @spec MCP-OP-RELAY-001
+;; @spec MCP-OP-RELAY-002
+(defn exact-terminal-response
+  "Return one constant relay only for a complete project-owned exact pass."
+  [result]
+  (let [verification (when (map? result) (:verification result))
+        read-back-hashes (when (map? result) (:read_back_hashes result))
+        nonblank-string? #(and (string? %) (not (str/blank? %)))
+        complete-read-back?
+        (and (map? read-back-hashes)
+             (seq read-back-hashes)
+             (every? (fn [[path sha]]
+                       (and (nonblank-string? path)
+                            (nonblank-string? sha)))
+                     read-back-hashes))]
+    (when (and (map? result)
+               (true? (:ok result))
+               (true? (:committed result))
+               (true? (:verification_complete result))
+               (= "none" (:next_action result))
+               (not (true? (:rolled_back result)))
+               complete-read-back?
+               (nonblank-string? (:undo_receipt result))
+               (nonblank-string? (:receipt_hash result))
+               (map? verification)
+               (true? (:ok verification))
+               (= "exact" (:profile verification))
+               (= :project (:profile-source verification))
+               (= :exact-exit (:acceptance verification))
+               (= :pass (:process-outcome verification))
+               (number? (:exit verification))
+               (zero? (:exit verification)))
+      exact-terminal-response-text)))
+
+(defn- with-exact-terminal-response
+  [result]
+  (if-let [response (exact-terminal-response result)]
+    (assoc result :terminal_response response)
+    result))
 
 (def ^:private runtime-config runtime/tool-config)
 
@@ -530,26 +580,26 @@
         (try
           (let [[prepared confinement-ms]
                 (timed
-                  #(let [root (real-root project-root)]
-                     (let [resolved
-                           (if extraction?
-                             (resolve-extraction-paths
-                               root (get-in validated [:params :extraction]))
-                             (resolve-transaction-paths
-                               root
-                               (contract/tool-params->transaction
-                                 (:params validated))))
-                           programs (get-in validated [:params :programs])]
-                       {:root root
-                        :resolved
-                        (if (and (:ok resolved) (seq programs))
-                          (let [program-paths
-                                (resolve-program-paths root programs)]
-                            (if (:ok program-paths)
-                              (assoc resolved :programs
-                                     (:programs program-paths))
-                              program-paths))
-                          resolved)})))
+                  #(let [root (real-root project-root)
+                         resolved
+                         (if extraction?
+                           (resolve-extraction-paths
+                             root (get-in validated [:params :extraction]))
+                           (resolve-transaction-paths
+                             root
+                             (contract/tool-params->transaction
+                               (:params validated))))
+                         programs (get-in validated [:params :programs])]
+                     {:root root
+                      :resolved
+                      (if (and (:ok resolved) (seq programs))
+                        (let [program-paths
+                              (resolve-program-paths root programs)]
+                          (if (:ok program-paths)
+                            (assoc resolved :programs
+                                   (:programs program-paths))
+                            program-paths))
+                        resolved)}))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
               (record-result! telemetry params resolved total-start
@@ -626,14 +676,18 @@
             "caller-proof-unavailable"
             "\n⚠ caller proof unavailable · absence cannot authorize deletion"
 
-            "")]
+            "")
+          terminal-response-line
+          (when (string? (:terminal_response result))
+            (str "\n→ final response · " (:terminal_response result)))]
       (if (:verification_complete result)
         (format (str operation "\n"
                      "  %s edits · %s files · %s\n\n"
                      "✓ atomic commit complete\n"
                      "✓ written bytes read back and verified"
                      caller-proof-line "\n"
-                     "✓ terminal evidence · verification_complete=true · next action none")
+                     "✓ terminal evidence · verification_complete=true · next action none"
+                     terminal-response-line)
                 (or (:edits result) (:match-count result) 0)
                 (or (:files result) (:changed-file-count result) 0)
                 (mcp-operation/format-elapsed-ms (:elapsed_ms result)))
@@ -694,15 +748,16 @@
     {:execute
      (fn []
        (let [operation (request-operation params)]
-         (assoc
-           (if-let [config @runtime-config]
-             (execute-request! config params)
-             {:ok false
-              :error_type "server-not-initialized"
-              :error (str operation " server is not initialized")
-              :source_unchanged true
-              :remedy "Restart the configured clj-surgeon MCP server."})
-           :operation operation)))
+         (with-exact-terminal-response
+           (assoc
+             (if-let [config @runtime-config]
+               (execute-request! config params)
+               {:ok false
+                :error_type "server-not-initialized"
+                :error (str operation " server is not initialized")
+                :source_unchanged true
+                :remedy "Restart the configured clj-surgeon MCP server."})
+             :operation operation))))
      :summarize concise-summary
      :callback callback}))
 

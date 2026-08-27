@@ -866,6 +866,46 @@
     (is (not (some #{"terminal_response"}
                    (:required mcp-tool/clj-change-output-schema))))))
 
+(deftest exact-terminal-response-is-published-on-both-mcp-surfaces
+  ;; @spec MCP-OP-RELAY-001
+  ;; @spec MCP-OP-RELAY-003
+  (let [response "Done — changes committed and exact verification completed."
+        calls (atom [])
+        callback (fn [content error? structured]
+                   (swap! calls conj {:content (first content)
+                                      :payload structured
+                                      :error? error?}))
+        exact-pass {:ok true
+                    :committed true
+                    :verification_complete true
+                    :next_action "none"
+                    :edits 1
+                    :files 1
+                    :read_back_hashes {"src/sample/core.clj" "source-sha"}
+                    :undo_receipt "/tmp/receipt.edn"
+                    :receipt_hash "receipt-sha"
+                    :verification {:ok true
+                                   :profile "exact"
+                                   :profile-source :project
+                                   :acceptance :exact-exit
+                                   :process-outcome :pass
+                                   :exit 0}}]
+    (try
+      (mcp-tool/init! {:project-root "."})
+      (with-redefs [mcp-tool/execute-request! (fn [_ _] exact-pass)]
+        (mcp-tool/handle-clj-change nil {"changes" []} callback))
+      (is (= 1 (count @calls)))
+      (is (false? (get-in @calls [0 :error?])))
+      (is (= response (get-in @calls [0 :payload :terminal_response])))
+      (is (= 1 (count (re-seq (re-pattern
+                                (java.util.regex.Pattern/quote response))
+                              (get-in @calls [0 :content])))))
+      (is (number? (get-in @calls [0 :payload :elapsed_ms])))
+      (is (re-find #"If terminal_response is present"
+                   mcp-tool/tool-description))
+      (finally
+        (mcp-tool/init! nil)))))
+
 (deftest exact-verifier-sees-staged-extraction-and-rolls-back-every-nonpass
   ;; @spec MCP-OP-VERIFY-001
   ;; @spec MCP-OP-VERIFY-005

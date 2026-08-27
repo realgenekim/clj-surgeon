@@ -8,6 +8,7 @@
    (java.math BigInteger)
    (java.security MessageDigest)))
 
+;; @spec MCP-OP-RELAY-004
 (def managed-begin "<!-- BEGIN CLJ-SURGEON ROUTING v:1 -->")
 (def managed-end "<!-- END CLJ-SURGEON ROUTING v:1 -->")
 
