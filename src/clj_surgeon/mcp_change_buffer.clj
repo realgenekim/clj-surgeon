@@ -1318,8 +1318,11 @@
 (defn compile-exact-profile
   "Compile one project-owned exact profile into an immutable execution value."
   [profile profiles profile-source]
-  ;; @spec MCP-OP-VERIFY-001 MCP-OP-VERIFY-002 MCP-OP-VERIFY-003
-  ;; @spec MCP-OP-VERIFY-004 MCP-OP-VERIFY-005
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-002
+  ;; @spec MCP-OP-VERIFY-003
+  ;; @spec MCP-OP-VERIFY-004
+  ;; @spec MCP-OP-VERIFY-005
   (let [definition (get profiles profile)
         command (first (:commands definition))
         valid-command? (and (vector? command)
@@ -1367,8 +1370,12 @@
 (defn run-exact-verification!
   "Execute one compiled exact profile and return terminal bounded evidence."
   [project-root compiled-profile]
-  ;; @spec MCP-OP-VERIFY-003 MCP-OP-VERIFY-005 MCP-OP-VERIFY-006
-  ;; @spec MCP-OP-VERIFY-007 MCP-OP-VERIFY-009 MCP-OP-VERIFY-010
+  ;; @spec MCP-OP-VERIFY-003
+  ;; @spec MCP-OP-VERIFY-005
+  ;; @spec MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007
+  ;; @spec MCP-OP-VERIFY-009
+  ;; @spec MCP-OP-VERIFY-010
   (let [cwd (.getCanonicalPath (io/file project-root))
         process (run-process! cwd (:argv compiled-profile)
                               (:timeout-ms compiled-profile))
