@@ -287,6 +287,23 @@ Remote refusal receipt:
 `/srv/fleet/dev-b/clj-surgeon-study-results/20260827T225807Z-analyzer-contract-e52b0eb-dev-b2/receipt.md`
 (SHA-256 `6a86a5d2fedc678966a01f96d443b84fcd31ea2f91f69b68a7491db4158c2f9a`).
 
+The JVM repair was committed as `39904f1` and tagged
+`safer-skiff-analyzer-gate-2026-08-27.1`. Its fresh Anvil run reached the real
+contract: 4 tests and 11 assertions executed; two analyzers were admitted with
+maximum concurrency one. Three portability defects then stopped the remaining
+launches. The generated namespace-to-path helper did not munge hyphens to
+underscores, a binding fixture selected a nonexistent directory as its process
+CWD, and the JVM rejected a `UnixPath` passed directly to `io/file`. The failure
+also showed that the move assertion retained stderr while clj-kondo findings
+were in stdout, and binding error wrapping discarded the original cause.
+
+The next repair is deliberately narrow: canonical namespace paths, an existing
+binding-fixture parent, JVM-safe File coercion, and complete failure evidence.
+It does not relax a semantic assertion or change admission policy. The second
+receipt is
+`/srv/fleet/dev-b/clj-surgeon-study-results/20260827T230741Z-analyzer-contract-39904f1-dev-b2/receipt.md`
+(SHA-256 `a5da1dd536c0dbcbcd4e65687df06828a9dfac599a410a94a51433e37dcebd7b`).
+
 ## Remaining gates and next hills
 
 The first shared hot-reload proof stopped safely. The live reload manifest
