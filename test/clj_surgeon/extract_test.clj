@@ -725,6 +725,23 @@
         (is (not (str/ends-with? (:_new-file-content conservative) "\n\n"))
             "the generated target is formatter-stable at end of file")))))
 
+(deftest pure-compile-plan-can-promote-required-visibility-in-one-pass
+  (let [source (str "(ns sample.core)\n\n"
+                    "(defn- helper [value] (inc value))\n\n"
+                    "(defn keep-me [] (helper 1))\n")
+        plan (extract/compile-plan
+               {:file "src/sample/core.clj"
+                :source source
+                :forms '[helper]
+                :to "src/sample/moved.clj"
+                :target-ns "sample.moved"
+                :workspace-sources {}
+                :derive-required-public-forms true})]
+    (is (= ["helper"] (:required-public-forms plan)))
+    (is (= ["helper"] (:public-forms plan)))
+    (is (empty? (:missing-required-public-forms plan)))
+    (is (str/includes? (:_new-file-content plan) "(defn helper "))))
+
 (deftest test-unsupported-require-minimization-refuses-before-writing
   (let [root (java.io.File/createTempFile "extract-side-effect-require" "")
         _ (.delete root)

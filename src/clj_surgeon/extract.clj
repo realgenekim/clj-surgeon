@@ -254,8 +254,9 @@
   "Purely compile an extraction plan from one source snapshot and a captured
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
-           public-forms]
-    :or {workspace-sources {} require-policy :minimal public-forms []}}]
+           public-forms derive-required-public-forms]
+    :or {workspace-sources {} require-policy :minimal public-forms []
+         derive-required-public-forms false}}]
   (let [lines (vec (str/split-lines source))
         ol (outline/outline-source file source)
         all-forms (:forms ol)
@@ -342,14 +343,17 @@
                  (filter #(= "defn-" (str (:type %))))
                  (map #(str (:name %)))
                  set)
-            requested-public-forms (set (map str public-forms))
+            required-public-forms
+            (set/intersection private-form-names (set source-referred))
+            requested-public-forms
+            (if derive-required-public-forms
+              required-public-forms
+              (set (map str public-forms)))
             invalid-public-forms
             (set/difference requested-public-forms private-form-names)
             unsupported-public-forms
             (set/difference requested-public-forms
                             supported-public-form-names)
-            required-public-forms
-            (set/intersection private-form-names (set source-referred))
             missing-required-public-forms
             (set/difference required-public-forms requested-public-forms)
             publicized-texts

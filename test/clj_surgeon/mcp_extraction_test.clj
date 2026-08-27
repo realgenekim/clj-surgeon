@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-extraction-test
   (:require
+   [clj-surgeon.extract :as extract]
    [clj-surgeon.mcp-extraction :as extraction]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -187,12 +188,18 @@
         (str "(ns sample.core)\n\n"
              "(defn- helper [value] (inc value))\n\n"
              "(defn keep-me [] (helper 1))\n")
+        compile-plan extract/compile-plan
+        automatic-compile-count (atom 0)
         automatic
-        (extraction/compile-extraction
-          (-> request
-              (dissoc :public-forms)
-              (assoc :source private-source
-                     :workspace-sources {})))
+        (with-redefs [extract/compile-plan
+                      (fn [input]
+                        (swap! automatic-compile-count inc)
+                        (compile-plan input))]
+          (extraction/compile-extraction
+            (-> request
+                (dissoc :public-forms)
+                (assoc :source private-source
+                       :workspace-sources {}))))
         explicit
         (extraction/compile-extraction
           (-> request
@@ -206,6 +213,8 @@
                      :source private-source
                      :workspace-sources {})))]
     (is (:ok automatic) (pr-str automatic))
+    (is (= 1 @automatic-compile-count)
+        "mechanical visibility promotion must not recompile the frozen plan")
     (is (:ok explicit) (pr-str explicit))
     (is (= (select-keys automatic
                         [:future-sources :form-count :caller-edit-count])

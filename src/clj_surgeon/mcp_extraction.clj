@@ -195,19 +195,13 @@
                           :source source
                           :forms forms
                           :public-forms (or public-forms [])
+                          :derive-required-public-forms
+                          (not public-forms-supplied?)
                           :to to
                           :target-ns target-ns
                           :workspace-sources workspace-sources
                           :require-policy require-policy}
-              discovery-plan (extract/compile-plan plan-input)
-              derived-public-forms
-              (when-not public-forms-supplied?
-                (:required-public-forms discovery-plan))
-              plan (if (and (not (:error discovery-plan))
-                            (seq derived-public-forms))
-                     (extract/compile-plan
-                       (assoc plan-input :public-forms derived-public-forms))
-                     discovery-plan)]
+              plan (extract/compile-plan plan-input)]
           (cond
             (:error plan)
             (refusal (or (:error-type plan) :extraction-plan-refused)
@@ -290,7 +284,7 @@
                         :forms-to-extract (:forms-to-extract plan)
                         :form-count (:form-count plan)
                         :required-public-forms
-                        (:required-public-forms discovery-plan)
+                        (:required-public-forms plan)
                         :require-policy (:require-policy plan)
                         :source-hash (:_source-hash plan)
                         :callers-to-review (:callers-to-review plan)
