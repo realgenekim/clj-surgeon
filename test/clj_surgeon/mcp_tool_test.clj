@@ -860,7 +860,7 @@
                     :forms ["helper"]
                     :require_policy "copy-all"})
             passed (mcp-tool/execute-request!
-                     (config ["/usr/bin/test" "-s"
+                     (config ["/bin/test" "-s"
                               "src/sample/moved.clj"])
                      (request (:source_hash plan)))]
         (is (:ok passed) (pr-str passed))
@@ -870,6 +870,7 @@
         (is (.exists target-file)
             "the exact verifier passed only if staged target bytes existed")
         (is (:ok (extract/undo! {:receipt (:undo_receipt passed)})))
+        (is (.delete (io/file (:undo_receipt passed))))
         (is (= original (slurp source-file)))
         (is (not (.exists target-file)))
         (let [failed (mcp-tool/execute-request!
@@ -881,7 +882,21 @@
           (is (:rolled_back failed))
           (is (= original (slurp source-file)))
           (is (not (.exists target-file)))
-          (is (not (re-find #"(?i)retry" (:remedy failed))))))
+          (is (not (re-find #"(?i)retry" (:remedy failed)))))
+        (let [unverified (mcp-tool/execute-request!
+                           (config ["/definitely/missing-verifier"])
+                           (request (:source_hash plan)))]
+          (is (false? (:ok unverified)))
+          (is (= "verification-unverified" (:error_type unverified)))
+          (is (= :launch-failure
+                 (get-in unverified [:verification :process-outcome])))
+          (is (:source_unchanged unverified))
+          (is (:rolled_back unverified))
+          (is (= original (slurp source-file)))
+          (is (not (.exists target-file)))
+          (is (not (re-find #"(?i)retry" (:remedy unverified))))
+          (is (empty? (or (seq (.listFiles receipt-dir)) []))
+              "a non-pass cannot leave a usable receipt")))
       (finally
         (delete-tree! workspace)))))
 

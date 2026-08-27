@@ -491,8 +491,9 @@
           (when-not (:ok validation)
             (refuse! (:error-type validation) ["extraction"]
                      (:error validation) validation))
-          (when (and verify (not (#{"fast" "full"} verify)))
-            (refuse! :invalid-enum ["verify"] "verify must be fast or full"))
+          (when (and verify (not (#{"fast" "full" "exact"} verify)))
+            (refuse! :invalid-enum ["verify"]
+                     "verify must be fast, full, or exact"))
           {:ok true
            :params (cond-> {:extraction normalized}
                      verify (assoc :verify verify))}))
@@ -507,9 +508,9 @@
           changes (mapv validate-change! raw-changes (range))
           verify (when (present? params "verify")
                    (nonblank-string! (field params "verify") ["verify"]))]
-      (when (and verify (not (#{"fast" "full"} verify)))
+      (when (and verify (not (#{"fast" "full" "exact"} verify)))
         (refuse! :invalid-enum ["verify"]
-                 "verify must be fast or full"))
+                 "verify must be fast, full, or exact"))
       (loop [seen #{}
              index 0]
         (when (< index (count changes))
@@ -803,23 +804,39 @@
 
 (defn- compact-verification
   [verification]
-  (update verification :checks
-          (fn [checks]
-            (mapv #(cond-> %
-                     (:output %) (update :output bounded-text 2000))
-                  checks))))
+  (cond-> verification
+    (contains? verification :checks)
+    (update :checks
+            (fn [checks]
+              (mapv #(cond-> %
+                       (:output %) (update :output bounded-text 2000))
+                    checks)))
+
+    (:diagnostics verification)
+    (update :diagnostics bounded-text 2000)))
 
 (defn- verification-remedy
   [verification]
-  (let [failed (first (remove :ok (:checks verification)))
-        output (some-> (:output failed)
-                       (str/replace #"\s+" " ")
-                       (bounded-text 240))]
-    (str "Fix the failed " (:profile verification) " verification check"
-         (when-let [command (:command failed)] (str " `" command "`"))
-         (when (some? (:exit failed)) (str " (exit " (:exit failed) ")"))
-         (when-not (str/blank? output) (str ": " output))
-         ". The transaction was rolled back; retry the same request once.")))
+  (if (= :exact-exit (:acceptance verification))
+    (let [output (some-> (:diagnostics verification)
+                         (str/replace #"\s+" " ")
+                         (bounded-text 240))]
+      (str (if (= :verification-failed (:error-type verification))
+             "Correct the deterministic diagnostics from the project exact verifier"
+             "Restore authority for the project exact verifier")
+           (when (some? (:exit verification))
+             (str " (exit " (:exit verification) ")"))
+           (when-not (str/blank? output) (str ": " output))
+           ". Submit a new snapshot-guarded request only after that condition changes."))
+    (let [failed (first (remove :ok (:checks verification)))
+          output (some-> (:output failed)
+                         (str/replace #"\s+" " ")
+                         (bounded-text 240))]
+      (str "Fix the failed " (:profile verification) " verification check"
+           (when-let [command (:command failed)] (str " `" command "`"))
+           (when (some? (:exit failed)) (str " (exit " (:exit failed) ")"))
+           (when-not (str/blank? output) (str ": " output))
+           ". The transaction was rolled back; retry the same request once."))))
 
 (defn- public-extraction-data
   [value]
@@ -861,7 +878,8 @@
                    (str "Make changes "
                         (str/join " and " (map name (:change-ids result)))
                         " disjoint, then call apply_clojure_changes once."))
-                 (when (and (= :verification-failed error-type)
+                 (when (and (#{:verification-failed
+                               :verification-unverified} error-type)
                             (map? (:verification result)))
                    (verification-remedy (:verification result)))
                  (when (= :invalid-intent-form error-type)

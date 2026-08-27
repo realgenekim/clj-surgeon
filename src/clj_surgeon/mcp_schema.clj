@@ -1,9 +1,9 @@
 (ns clj-surgeon.mcp-schema)
 
 (def verification-schema
-  {:type "string" :enum ["fast" "full"]
+  {:type "string" :enum ["fast" "full" "exact"]
    :description
-   "Optional repository-owned verification profile. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
+   "Optional repository-owned verification profile. exact runs one project-declared exact-exit argv against staged bytes. Formatter, commands, and hot laws roll back on failure. A configured cold job returns verification_complete=false plus one inspect next_call."})
 
 (def basis-change-schema
   {:type "object"

@@ -176,7 +176,14 @@
 
 (defn- execute-extraction!
   [config root request receipt verify]
-  (let [sources (workspace-sources/read-all root)
+  ;; @spec MCP-OP-VERIFY-001 MCP-OP-VERIFY-005 MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007 MCP-OP-VERIFY-008 MCP-OP-VERIFY-009
+  ;; @spec MCP-OP-VERIFY-010
+  (let [exact-profile (when (= "exact" verify)
+                        (change-buffer/compile-exact-profile
+                          verify (:verification-profiles config)
+                          (:verification-profile-source config)))
+        sources (workspace-sources/read-all root)
         request (assoc request
                        :source (get sources (:file request))
                        :target-ns (extract/file-path->ns-name
@@ -209,7 +216,7 @@
       (let [project-root (.toString root)
             original-files (vec (keys (:original-sources compiled)))
             future-files (vec (keys (:future-sources compiled)))
-            baseline (when verify
+            baseline (when (and verify (nil? exact-profile))
                        (cond
                          (:capture-verification-baseline! config)
                          ((:capture-verification-baseline! config)
@@ -220,10 +227,14 @@
                          (change-buffer/capture-verification-baseline!
                            project-root verify (:verification-profiles config)
                            original-files)))]
-        (if (and baseline (not (:ok baseline)))
-          {:error "Verification baseline capture failed before extraction"
-           :error-type :verification-baseline-failed
-           :verification baseline
+        (if (or (and exact-profile (not (:ok exact-profile)))
+                (and baseline (not (:ok baseline))))
+          {:error (if exact-profile
+                    "Exact project verification profile is unavailable"
+                    "Verification baseline capture failed before extraction")
+           :error-type (or (:error-type exact-profile)
+                           :verification-baseline-failed)
+           :verification (or exact-profile baseline)
            :source-unchanged true}
           (let [result (extraction/commit! compiled)]
             (if-not (:ok result)
@@ -233,9 +244,16 @@
                 (let [result (assoc result :receipt-file receipt)
                       verification
                       (when verify
-                        (if-let [verify! (:verify! config)]
-                          (verify! project-root verify
-                                   (:verification-profiles config) future-files)
+                        (cond
+                          exact-profile
+                          (change-buffer/run-exact-verification!
+                            project-root exact-profile)
+
+                          (:verify! config)
+                          ((:verify! config) project-root verify
+                                             (:verification-profiles config) future-files)
+
+                          :else
                           (change-buffer/run-verification!
                             project-root verify (:verification-profiles config)
                             future-files baseline)))]
@@ -247,8 +265,12 @@
                     (let [rollback (extraction/undo! (:receipt result))
                           rolled-back (boolean (:ok rollback))]
                       (when rolled-back (.delete (io/file receipt)))
-                      {:error "Verification failed; extraction was rolled back"
-                       :error-type :verification-failed
+                      {:error (if (= :verification-unverified
+                                     (:error-type verification))
+                                "Verification authority was unverified; extraction was rolled back"
+                                "Verification failed; extraction was rolled back")
+                       :error-type (or (:error-type verification)
+                                       :verification-failed)
                        :verification verification
                        :rolled-back rolled-back
                        :recovery rollback
@@ -343,12 +365,16 @@
 
 (defn- execute-explicit-change!
   [config root resolved receipt verify]
-  (let [files (->> (get-in resolved [:spec :changes])
+  (let [exact-profile (when (= "exact" verify)
+                        (change-buffer/compile-exact-profile
+                          verify (:verification-profiles config)
+                          (:verification-profile-source config)))
+        files (->> (get-in resolved [:spec :changes])
                    (mapcat :in)
                    distinct
                    vec)
         project-root (.toString root)
-        baseline (when verify
+        baseline (when (and verify (nil? exact-profile))
                    (cond
                      (:capture-verification-baseline! config)
                      ((:capture-verification-baseline! config)
@@ -357,11 +383,15 @@
                      (nil? (:verify! config))
                      (change-buffer/capture-verification-baseline!
                        project-root verify (:verification-profiles config) files)))
-        baseline-refusal? (and baseline (not (:ok baseline)))]
+        baseline-refusal? (or (and exact-profile (not (:ok exact-profile)))
+                              (and baseline (not (:ok baseline))))]
     (if baseline-refusal?
-      {:error "Verification baseline capture failed before the direct transaction"
-       :error-type :verification-baseline-failed
-       :verification baseline
+      {:error (if exact-profile
+                "Exact project verification profile is unavailable"
+                "Verification baseline capture failed before the direct transaction")
+       :error-type (or (:error-type exact-profile)
+                       :verification-baseline-failed)
+       :verification (or exact-profile baseline)
        :source-unchanged true}
       (let [base-prepare! (:prepare-compiled! config)
             programs (:programs resolved)
@@ -383,9 +413,16 @@
                               #(prepare-compiled! project-root %))))]
         (if (or (:error result) (nil? verify))
           result
-          (let [verification (if-let [verify! (:verify! config)]
-                               (verify! project-root verify
-                                        (:verification-profiles config) files)
+          (let [verification (cond
+                               exact-profile
+                               (change-buffer/run-exact-verification!
+                                 project-root exact-profile)
+
+                               (:verify! config)
+                               ((:verify! config) project-root verify
+                                                  (:verification-profiles config) files)
+
+                               :else
                                (change-buffer/run-verification!
                                  project-root verify
                                  (:verification-profiles config) files baseline))]
@@ -403,8 +440,12 @@
                                      (:verification-profiles config)))]
                 (when rolled-back?
                   (.delete (io/file (:receipt-file result))))
-                {:error "Verification failed; the direct transaction was rolled back"
-                 :error-type :verification-failed
+                {:error (if (= :verification-unverified
+                               (:error-type verification))
+                          "Verification authority was unverified; the direct transaction was rolled back"
+                          "Verification failed; the direct transaction was rolled back")
+                 :error-type (or (:error-type verification)
+                                 :verification-failed)
                  :verification verification
                  :rolled-back rolled-back?
                  :hot-rollback hot-rollback
@@ -417,16 +458,28 @@
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners])
-        config (if-let [profiles-fn (:verification-profiles-fn config)]
-                 (assoc config :verification-profiles (profiles-fn))
-                 config)
+        config (cond
+                 (:verification-profile-selection-fn config)
+                 (let [{:keys [profiles source]}
+                       ((:verification-profile-selection-fn config))]
+                   (assoc config
+                          :verification-profiles profiles
+                          :verification-profile-source source))
+
+                 (:verification-profiles-fn config)
+                 (assoc config
+                        :verification-profiles
+                        ((:verification-profiles-fn config)))
+
+                 :else config)
         config (cond
                  (:formatter-fn config)
                  (assoc config :formatter ((:formatter-fn config)))
 
                  ;; Managed workspace contexts that predate formatter-fn must
                  ;; adopt the hot-loaded default without a server restart.
-                 (:verification-profiles-fn config)
+                 (or (:verification-profile-selection-fn config)
+                     (:verification-profiles-fn config))
                  (assoc config :formatter formatter/default-command)
 
                  :else config)

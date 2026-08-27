@@ -71,6 +71,19 @@
            (or (nil? (:cold profile))
                (cold-verify/valid-profile? (:cold profile))))))
 
+(defn- exact-verification-profile?
+  [profile]
+  (and (map? profile)
+       (= #{:acceptance :timeout-ms :commands} (set (keys profile)))
+       (= :exact-exit (:acceptance profile))
+       (integer? (:timeout-ms profile))
+       (<= 1 (:timeout-ms profile) 120000)
+       (vector? (:commands profile))
+       (= 1 (count (:commands profile)))
+       (let [command (first (:commands profile))]
+         (and (verification-command? command)
+              (not-any? #{"{files}"} command)))))
+
 (defn verification-profiles-from-config
   "Return a validated closed verification-profile map from project data."
   [config]
@@ -78,7 +91,11 @@
     (when-not (and (map? profiles)
                    (seq profiles)
                    (every? string? (keys profiles))
-                   (every? verification-profile? (vals profiles)))
+                   (every? (fn [[profile-name profile]]
+                             (if (= "exact" profile-name)
+                               (exact-verification-profile? profile)
+                               (verification-profile? profile)))
+                           profiles))
       (throw
         (ex-info "Invalid project verification profiles"
                  {:error-type :invalid-project-verification-profiles})))
@@ -122,7 +139,12 @@
    root's configuration and an intentional config change does not require a
    server restart."
   [verification-profiles workspace-root]
-  {:verification-profiles-fn
+  {:verification-profile-selection-fn
+   (fn []
+     (resolve-verification-profiles
+       verification-profiles
+       (read-project-config workspace-root)))
+   :verification-profiles-fn
    (fn []
      (:profiles
        (resolve-verification-profiles
@@ -212,6 +234,8 @@
                            :read-source read-source
                            :write-source! write-source!
                            :verification-profiles (:profiles verification-selection)
+                           :verification-profile-source
+                           (:source verification-selection)
                            :workspace-context-factory
                            (fn [workspace-root]
                              (workspace-context verification-profiles
