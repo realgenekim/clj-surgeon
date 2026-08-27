@@ -11,7 +11,7 @@ is_raw_bulk_path() {
     */workspace/*|*/workspace) return 0 ;;
   esac
   case "$base" in
-    events.jsonl|raw.jsonl|prompt.txt|final.txt|stderr.txt|commands.json|started-items.json|command.txt|result.json|source.start.clj|source.diff|expected.clj|jq-errors.txt|tool-calls.jsonl|SKILL.md)
+    events.jsonl|event-clock.tsv|raw.jsonl|prompt.txt|final.txt|stderr.txt|commands.json|started-items.json|command.txt|result.json|source.start.clj|source.diff|expected.clj|jq-errors.txt|tool-calls.jsonl|SKILL.md)
       return 0
       ;;
     *) return 1 ;;
@@ -123,6 +123,9 @@ self_test() (
   printf '%s\n' 'run_id' > "$result/runs.tsv"
   printf '%s\n' 'correct=true' > "$result/run/score.tsv"
   printf '%s\n' 'secret transcript' > "$result/run/events.jsonl"
+  printf '%s\n' $'1\t1000000\t1000\t18' > "$result/run/event-clock.tsv"
+  printf '%s\n' '{:schema :clj-surgeon.benchmark-event-timing/v1}' \
+    > "$result/run/phase-timing.edn"
   printf '%s\n' 'prompt' > "$result/run/prompt.txt"
   printf '%s\n' 'source' > "$result/run/workspace/src/input.clj"
   git -C "$repo_root" check-ignore -q "${result#"$repo_root/"}/run/events.jsonl"
@@ -134,10 +137,13 @@ self_test() (
   test -f "$result/archive-receipt.edn"
   test -f "$result/MANIFEST.sha256"
   test ! -e "$result/run/events.jsonl"
+  test ! -e "$result/run/event-clock.tsv"
+  test -f "$result/run/phase-timing.edn"
   test ! -e "$result/run/prompt.txt"
   test ! -e "$result/run/workspace"
   tar -tzf "$archive_file" > "$listing"
   grep -q '/run/events.jsonl$' "$listing"
+  grep -q '/run/event-clock.tsv$' "$listing"
   printf '%s\n' 'Benchmark retention self-test passed.'
 )
 
