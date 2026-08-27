@@ -42,10 +42,28 @@
      :target-unchanged true}
     data))
 
+(defn normalize-mechanical-fields
+  "Default omitted bookkeeping without erasing an omitted visibility decision."
+  [{:keys [file to forms caller-changes ignored-caller-files expect]
+    :as request}]
+  (let [caller-changes (or caller-changes [])
+        ignored-caller-files (or ignored-caller-files [])
+        expect (or expect
+                   {:forms (count forms)
+                    :caller-edits
+                    (reduce + (map #(get-in % [:expect :matches])
+                                   caller-changes))
+                    :files (count (distinct (concat [file to]
+                                                    (mapcat :files
+                                                            caller-changes))))})]
+    (assoc request
+           :caller-changes caller-changes
+           :ignored-caller-files ignored-caller-files
+           :expect expect)))
+
 (defn validate-request
   [{:keys [file to forms public-forms require-policy expect caller-changes
            ignored-caller-files source-hash]
-    :or {public-forms []}
     :as request}]
   (cond
     (not (map? request))
@@ -76,9 +94,10 @@
              "extraction.forms must contain distinct form names"
              {})
 
-    (or (not (vector? public-forms))
-        (not-every? string? public-forms)
-        (not= (count public-forms) (count (distinct public-forms))))
+    (and (contains? request :public-forms)
+         (or (not (vector? public-forms))
+             (not-every? string? public-forms)
+             (not= (count public-forms) (count (distinct public-forms)))))
     (refusal :invalid-public-forms
              "extraction.public_forms must contain distinct form names"
              {})
@@ -150,15 +169,20 @@
 
 ;; @spec MCP-OP-PLAN-004
 ;; @spec MCP-OP-PLAN-007
+;; @spec MCP-OP-PLAN-008
+;; @spec MCP-OP-PLAN-009
+;; @spec MCP-OP-PLAN-010
 (defn compile-extraction
   "Compile extraction and exact caller changes against one captured snapshot."
-  [{:keys [file to forms public-forms require-policy expect source target-ns
-           workspace-sources caller-changes ignored-caller-files source-hash
-           created-directories]
-    :or {require-policy :minimal workspace-sources {} public-forms []
-         caller-changes [] ignored-caller-files [] created-directories []}
+  [{:keys [file to forms public-forms require-policy source target-ns
+           workspace-sources source-hash created-directories]
+    :or {require-policy :minimal workspace-sources {}
+         created-directories []}
     :as request}]
-  (let [validation (validate-request request)]
+  (let [public-forms-supplied? (contains? request :public-forms)
+        request (normalize-mechanical-fields request)
+        {:keys [expect caller-changes ignored-caller-files]} request
+        validation (validate-request request)]
     (if-not (:ok validation)
       validation
       (if (and source-hash
@@ -167,15 +191,23 @@
                  "The extraction source changed after planning"
                  {:expected source-hash
                   :actual (structural-lens/source-hash source)})
-        (let [plan (extract/compile-plan
-                     {:file file
-                      :source source
-                      :forms forms
-                      :public-forms public-forms
-                      :to to
-                      :target-ns target-ns
-                      :workspace-sources workspace-sources
-                      :require-policy require-policy})]
+        (let [plan-input {:file file
+                          :source source
+                          :forms forms
+                          :public-forms (or public-forms [])
+                          :to to
+                          :target-ns target-ns
+                          :workspace-sources workspace-sources
+                          :require-policy require-policy}
+              discovery-plan (extract/compile-plan plan-input)
+              derived-public-forms
+              (when-not public-forms-supplied?
+                (:required-public-forms discovery-plan))
+              plan (if (and (not (:error discovery-plan))
+                            (seq derived-public-forms))
+                     (extract/compile-plan
+                       (assoc plan-input :public-forms derived-public-forms))
+                     discovery-plan)]
           (cond
             (:error plan)
             (refusal (or (:error-type plan) :extraction-plan-refused)
@@ -183,7 +215,8 @@
                      (select-keys plan [:invalid-public-forms
                                         :unsupported-public-forms]))
 
-            (seq (:missing-required-public-forms plan))
+            (and public-forms-supplied?
+                 (seq (:missing-required-public-forms plan)))
             (refusal :required-public-forms-missing
                      "Every moved private form called by remaining source must be public"
                      {:required-public-forms (:required-public-forms plan)
@@ -234,9 +267,35 @@
                            {:files (vec (sort forbidden))})
 
                   (seq omitted)
-                  (refusal :unaccounted-extraction-callers
-                           "Every extraction caller candidate must be changed or explicitly ignored"
-                           {:files (vec (sort omitted))})
+                  (let [unknowns
+                        (mapv (fn [caller-file]
+                                {:decision :caller-disposition
+                                 :file caller-file
+                                 :source-hash
+                                 (some-> (get workspace-sources caller-file)
+                                         structural-lens/source-hash)})
+                              (sort omitted))]
+                    (refusal
+                      :extraction-decisions-required
+                      "Caller candidates require an explicit change or ignore decision"
+                      {:files (vec (sort omitted))
+                       :mutation-attempted false
+                       :write-authority false
+                       :remedy
+                       "Fill each caller disposition in next_call and call apply_clojure_changes once."
+                       :genuine-unknowns unknowns
+                       :completed-plan
+                       {:file file
+                        :to to
+                        :forms-to-extract (:forms-to-extract plan)
+                        :form-count (:form-count plan)
+                        :required-public-forms
+                        (:required-public-forms discovery-plan)
+                        :require-policy (:require-policy plan)
+                        :source-hash (:_source-hash plan)
+                        :callers-to-review (:callers-to-review plan)
+                        :quoted-var-references
+                        (:quoted-var-references plan)}}))
 
                   (not (:ok caller-result))
                   caller-result

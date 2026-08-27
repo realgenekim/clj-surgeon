@@ -94,6 +94,7 @@
     :unsupported-file
     :source-read-failed
     :source-hash-mismatch
+    :extraction-decisions-required
     :unknown-arguments})
 
 (defn- field-name
@@ -412,8 +413,7 @@
                         #{"extraction"} [])
       (let [raw (field params "extraction")]
         (validate-fields! raw extraction-fields
-                          (disj extraction-fields "expect" "source_hash"
-                                "public_forms")
+                          #{"file" "to" "forms" "require_policy"}
                           ["extraction"])
         (let [file (clojure-source-path! (field raw "file") ["extraction" "file"])
               to (clojure-source-path! (field raw "to") ["extraction" "to"])
@@ -423,11 +423,14 @@
               _ (when-not (= (count forms) (count (distinct forms)))
                   (refuse! :duplicate-form ["extraction" "forms"]
                            "Extraction form names must be unique"))
+              public-forms-present? (present? raw "public_forms")
               public-forms
-              (mapv #(nonblank-string! % ["extraction" "public_forms"])
-                    (or (field raw "public_forms") []))
-              _ (when-not (= (count public-forms)
-                             (count (distinct public-forms)))
+              (when public-forms-present?
+                (mapv #(nonblank-string! % ["extraction" "public_forms"])
+                      (field raw "public_forms")))
+              _ (when (and public-forms-present?
+                           (not= (count public-forms)
+                                 (count (distinct public-forms))))
                   (refuse! :duplicate-form ["extraction" "public_forms"]
                            "Public form names must be unique"))
               require-policy (nonblank-string!
@@ -436,7 +439,7 @@
               _ (when-not (#{"minimal" "copy-all"} require-policy)
                   (refuse! :invalid-enum ["extraction" "require_policy"]
                            "require_policy must be minimal or copy-all"))
-              raw-callers (field raw "caller_changes")
+              raw-callers (or (field raw "caller_changes") [])
               _ (when-not (vector? raw-callers)
                   (refuse! :expected-array ["extraction" "caller_changes"]
                            "Expected an array"))
@@ -476,12 +479,13 @@
               verify (when (present? params "verify")
                        (nonblank-string! (field params "verify") ["verify"]))
               normalized {:file file :to to :forms forms
-                          :public-forms public-forms
                           :require-policy (keyword require-policy)
                           :caller-changes callers
                           :ignored-caller-files ignored
                           :expect expect}
               normalized (cond-> normalized
+                           public-forms-present?
+                           (assoc :public-forms public-forms)
                            source-hash (assoc :source-hash source-hash))
               validation (mcp-extraction/validate-request normalized)]
           (when-not (:ok validation)
@@ -817,6 +821,29 @@
          (when-not (str/blank? output) (str ": " output))
          ". The transaction was rolled back; retry the same request once.")))
 
+(defn- public-extraction-data
+  [value]
+  (cond
+    (map? value)
+    (into {}
+          (map (fn [[key child]]
+                 [(if (keyword? key)
+                    (keyword (str/replace (name key) "-" "_"))
+                    key)
+                  (public-extraction-data child)]))
+          value)
+
+    (vector? value)
+    (mapv public-extraction-data value)
+
+    (sequential? value)
+    (mapv public-extraction-data value)
+
+    (keyword? value)
+    (name value)
+
+    :else value))
+
 (defn normalize-refusal
   "Return the stable, compact refusal surface used by the MCP callback."
   [result]
@@ -880,6 +907,20 @@
       (contains? result :verification)
       (assoc :verification (compact-verification (:verification result)))
       (contains? result :cause-error) (assoc :cause_error (:cause-error result))
+      (contains? result :mutation-attempted)
+      (assoc :mutation_attempted (:mutation-attempted result))
+      (contains? result :write-authority)
+      (assoc :write_authority (:write-authority result))
+      (contains? result :genuine-unknowns)
+      (assoc :genuine_unknowns
+             (public-extraction-data (:genuine-unknowns result)))
+      (contains? result :completed-plan)
+      (assoc :completed_plan
+             (public-extraction-data (:completed-plan result)))
+      (contains? result :next-call)
+      (assoc :next_call (public-extraction-data (:next-call result)))
+      (contains? result :next-action)
+      (assoc :next_action (:next-action result))
       (contains? result :change-ids)
       (assoc :change_ids (mapv #(if (keyword? %) (name %) (str %))
                                (:change-ids result)))

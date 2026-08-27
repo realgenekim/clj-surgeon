@@ -158,12 +158,62 @@
 
 (deftest refuses-when-a-discovered-caller-is-neither-changed-nor-ignored
   (let [caller-file "src/sample/caller.clj"
+        caller-source
+        "(ns sample.caller)\n(defn call-it [x] (sample.core/helper x))\n"
         result
         (extraction/compile-extraction
-          (assoc request
-                 :workspace-sources
-                 {caller-file
-                  "(ns sample.caller)\n(defn call-it [x] (sample.core/helper x))\n"}))]
-    (is (= :unaccounted-extraction-callers (:error-type result)))
+          (-> request
+              (dissoc :public-forms :caller-changes :ignored-caller-files)
+              (assoc :workspace-sources {caller-file caller-source})))]
+    (is (= :extraction-decisions-required (:error-type result)))
     (is (= [caller-file] (:files result)))
+    (is (= false (:mutation-attempted result)))
+    (is (= false (:write-authority result)))
+    (is (= [{:decision :caller-disposition
+             :file caller-file
+             :source-hash (get-in result [:genuine-unknowns 0 :source-hash])}]
+           (:genuine-unknowns result)))
+    (let [source-hash (get-in result [:genuine-unknowns 0 :source-hash])]
+      (is (and (string? source-hash)
+               (re-matches #"[0-9a-f]{64}" source-hash))))
+    (is (= [caller-file]
+           (get-in result [:completed-plan :callers-to-review])))
     (is (:source-unchanged result))))
+
+;; @spec MCP-OP-PLAN-008
+;; @spec MCP-OP-PLAN-010
+(deftest derives-only-omitted-required-visibility-inside-the-frozen-plan
+  (let [private-source
+        (str "(ns sample.core)\n\n"
+             "(defn- helper [value] (inc value))\n\n"
+             "(defn keep-me [] (helper 1))\n")
+        automatic
+        (extraction/compile-extraction
+          (-> request
+              (dissoc :public-forms)
+              (assoc :source private-source
+                     :workspace-sources {})))
+        explicit
+        (extraction/compile-extraction
+          (-> request
+              (assoc :public-forms ["helper"]
+                     :source private-source
+                     :workspace-sources {})))
+        explicit-empty
+        (extraction/compile-extraction
+          (-> request
+              (assoc :public-forms []
+                     :source private-source
+                     :workspace-sources {})))]
+    (is (:ok automatic) (pr-str automatic))
+    (is (:ok explicit) (pr-str explicit))
+    (is (= (select-keys automatic
+                        [:future-sources :form-count :caller-edit-count])
+           (select-keys explicit
+                        [:future-sources :form-count :caller-edit-count])))
+    (is (.contains ^String (get-in automatic
+                                   [:future-sources "src/sample/moved.clj"])
+                   "(defn helper "))
+    (is (= :required-public-forms-missing
+           (:error-type explicit-empty)))
+    (is (= ["helper"] (:missing-public-forms explicit-empty)))))

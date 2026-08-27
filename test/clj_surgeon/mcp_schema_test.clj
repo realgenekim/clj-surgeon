@@ -42,8 +42,7 @@
                      "trace")))))
 
 (deftest public-schema-exposes-one-mutually-exclusive-extraction-transaction
-  (is (= #{"file" "to" "forms" "require_policy" "caller_changes"
-           "ignored_caller_files"}
+  (is (= #{"file" "to" "forms" "require_policy"}
          (set (get-in schema/clj-change-schema
                       [:properties "extraction" :required]))))
   (is (= ["minimal" "copy-all"]

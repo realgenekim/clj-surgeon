@@ -120,8 +120,7 @@
              (set (keys (get-in tools [1 :schema :properties "changes" :items :properties])))))
       (is (= false
              (get-in tools [1 :schema :properties "changes" :items :additionalProperties])))
-      (is (= #{"file" "to" "forms" "require_policy" "caller_changes"
-               "ignored_caller_files"}
+      (is (= #{"file" "to" "forms" "require_policy"}
              (set (get-in tools [1 :schema :properties "extraction" :required]))))
       (let [[owner-rule action-rule]
             (get-in tools [1 :schema :properties "changes" :items :allOf])]

@@ -719,15 +719,74 @@
                {:file "src/sample/core.clj"
                 :to "src/sample/moved.clj"
                 :forms ["helper"]
-                :public_forms ["helper"]
-                :require_policy "minimal"
-                :caller_changes []
-                :ignored_caller_files []}})]
+                :require_policy "minimal"}})]
         (is (:ok result) (pr-str result))
         (is (:verification_complete result))
         (is (.contains ^String (slurp target-file) "(defn helper "))
         (is (.contains ^String (slurp source-file) ":refer [helper]"))
         (is (not (.contains ^String (slurp target-file) "(defn- helper "))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; This is the smallest genuine-unknown case from the frozen Sessionize
+;; extraction: the natural destination alias is already occupied, so one exact
+;; candidate still does not authorize the kernel to choose the caller rewrite.
+;; @spec MCP-OP-PLAN-009
+(deftest omitted-caller-decisions-refuse-before-any-extraction-side-effect
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/cfp_scheduler_killer/views.clj")
+        target-file (io/file workspace "src/cfp_scheduler_killer/format.clj")
+        caller-file (io/file workspace "src/cfp_scheduler_killer/report.clj")
+        receipt-dir (io/file workspace "receipts")
+        original (str "(ns cfp-scheduler-killer.views)\n\n"
+                      "(defn- not-blank [x] (when (seq x) x))\n\n"
+                      "(defn fmt-date [x] (not-blank x))\n\n"
+                      "(defn retained [] (not-blank \"x\"))\n")
+        caller-original
+        (str "(ns cfp-scheduler-killer.report\n"
+             "  (:require [clojure.string :as format]\n"
+             "            [cfp-scheduler-killer.views :as views]))\n\n"
+             "(defn report-date [x]\n"
+             "  (format/trim (views/fmt-date x)))\n")]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (spit caller-file caller-original)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :formatter ["must-not-run"]
+               :format-candidates!
+               (fn [& _] (throw (ex-info "formatter ran" {})))
+               :verify!
+               (fn [& _] (throw (ex-info "verifier ran" {})))}
+              {:extraction
+               {:file "src/cfp_scheduler_killer/views.clj"
+                :to "src/cfp_scheduler_killer/format.clj"
+                :forms ["not-blank" "fmt-date"]
+                :require_policy "minimal"}})]
+        (is (false? (:ok result)))
+        (is (= "extraction-decisions-required" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result)))
+        (is (false? (:write_authority result)))
+        (is (= ["src/cfp_scheduler_killer/report.clj"]
+               (mapv :file (:genuine_unknowns result))))
+        (let [source-hash
+              (get-in result [:genuine_unknowns 0 :source_hash])]
+          (is (and (string? source-hash)
+                   (re-matches #"[0-9a-f]{64}" source-hash))))
+        (is (= ["not-blank"]
+               (get-in result [:completed_plan :required_public_forms])))
+        (is (= ["not-blank"]
+               (get-in result [:next_call :extraction :public_forms])))
+        (is (= "fill_caller_decisions_then_apply_once"
+               (:next_action result)))
+        (is (= original (slurp source-file)))
+        (is (= caller-original (slurp caller-file)))
+        (is (not (.exists target-file)))
+        (is (not (.exists receipt-dir))))
       (finally
         (delete-tree! workspace)))))
 

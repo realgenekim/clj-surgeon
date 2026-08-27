@@ -33,10 +33,12 @@
     "every exact per-edit guard remains authoritative. If inspect_clojure returned "
     "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
     "fill every decision and submit once. To move named owners into one new "
-    "namespace, use extraction once; include exact caller_changes or explicitly "
-    "ignored_caller_files. When the task already supplies the exact file, destination, "
-    "forms, visibility changes, and caller accounting, submit extraction directly "
-    "without plan-extraction. Otherwise copy required public_forms from plan-extraction; "
+    "namespace, use extraction once. Supply exact caller_changes or explicitly "
+    "ignored_caller_files when the decision is known. Omit public_forms to derive only "
+    "mechanically required visibility from the same frozen snapshot; omission never "
+    "accounts for a discovered caller. When the task already supplies the exact file, "
+    "destination, forms, and any caller decisions, submit extraction directly without "
+    "plan-extraction. A genuine caller decision refuses pre-write with a completed plan. "
     "When the task supplies an exact external verification command, omit verify and run "
     "that command once after the transaction; do not substitute the full profile. "
     "apply refuses missing, unmoved, already-public, or unsupported declarations. "
@@ -131,10 +133,46 @@
        (assoc request
               :file (:path source)
               :to (:path target)
+              :request-file file
+              :request-to to
               :created-directories
               (mapv str (:missing-parent-directories target))
               :caller-changes (get-in callers [:spec :changes])
               :ignored-caller-files (mapv :path ignored))})))
+
+(defn- publicize-extraction-decision-refusal
+  [root sources request result]
+  (if-not (= :extraction-decisions-required (:error-type result))
+    result
+    (let [relative-paths (workspace-sources/relative-paths root sources)
+          public-path #(get relative-paths % %)
+          public-reference (fn [reference]
+                             (cond-> reference
+                               (:file reference) (update :file public-path)))
+          completed-plan
+          (-> (:completed-plan result)
+              (assoc :file (:request-file request)
+                     :to (:request-to request))
+              (update :callers-to-review #(mapv public-path %))
+              (update :quoted-var-references
+                      #(mapv public-reference %)))
+          genuine-unknowns
+          (mapv #(update % :file public-path) (:genuine-unknowns result))]
+      (assoc result
+             :completed-plan completed-plan
+             :genuine-unknowns genuine-unknowns
+             :next-call
+             {:workspace-root (.toString root)
+              :extraction
+              {:file (:request-file request)
+               :to (:request-to request)
+               :forms (:forms request)
+               :public-forms (:required-public-forms completed-plan)
+               :require-policy (name (:require-policy request))
+               :source-hash (:source-hash completed-plan)
+               :caller-changes []
+               :ignored-caller-files []}}
+             :next-action "fill_caller_decisions_then_apply_once"))))
 
 (defn- execute-extraction!
   [config root request receipt verify]
@@ -144,7 +182,9 @@
                        :target-ns (extract/file-path->ns-name
                                     (:to request) ["src" "test" "dev"])
                        :workspace-sources sources)
-        compiled (extraction/compile-extraction request)
+        compiled (->> (extraction/compile-extraction request)
+                      (publicize-extraction-decision-refusal
+                        root sources request))
         compiled
         (if (and (:ok compiled) (:formatter config))
           (let [format! (or (:format-candidates! config)
