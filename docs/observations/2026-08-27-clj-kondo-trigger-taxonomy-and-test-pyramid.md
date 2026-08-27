@@ -46,18 +46,21 @@ so removing a Makefile lint target alone would not close the entrance.
 
 ## Exact test-suite census
 
-A static census found 17 test vars launching 29 real analyzer processes per
-complete `make test`.
+A static census first found 17 test vars launching 29 real analyzer processes
+per complete `make test`. The first zero-launch fast-runner proof found four
+additional namespaced CLI `:ls` integration/help tests. The corrected baseline
+is 33 launches: 23 in the ordinary runner and 10 in the MCP runner.
 
 | Test surface | Real launches | Actual intent |
 |---|---:|---|
 | Two CLI dispatch tests | 2 | String/alias parsing and dispatch |
+| Four CLI integration/help tests | 4 | Config loading and normal/alias dispatch |
 | Eleven `fix-declares` cases | 11 | Planning and filesystem execution policy |
 | Eager def/macro move case | 2 | Movement policy plus candidate validity |
 | Two real-program move fixtures | 4 | Baseline and transformed-candidate validity |
 | Diagnostic-delta scenario matrix | 6 | Three baseline/future policy scenarios |
 | MCP transaction diagnostic test | 4 | Commit on unchanged findings, rollback on introduced finding |
-| **Total** | **29** | Ordinary runner 19; MCP runner 10 |
+| **Total** | **33** | Ordinary runner 23; MCP runner 10 |
 
 Admission, timeout, and process-lifetime tests use fake executables, held locks,
 `sleep`, or `true`. They do not launch the real analyzer and should remain.
@@ -143,10 +146,16 @@ Retain five sequential real launches:
 4. one real diagnostic baseline;
 5. one real future-snapshot diagnostic verification.
 
-The everyday runner goes from 19 real launches to zero. The complete milestone
-suite goes from 29 to five—83% fewer—without dropping provider drift detection.
+The everyday runner goes from 23 real launches to zero. The complete milestone
+suite goes from 33 to five—85% fewer—without dropping provider drift detection.
 The real contract target runs on Anvil or under an explicit fresh-green laptop
 mission lease.
+
+The first green checkpoint proves the ordinary lane: 625 tests and 5,342
+assertions passed while the analyzer event count remained unchanged. The move
+contract materializes six baseline/candidate snapshots under six unique
+namespaces, then submits one no-cache directory lint. Unique namespaces prevent
+one snapshot from satisfying another.
 
 ## Admission and convoy law
 

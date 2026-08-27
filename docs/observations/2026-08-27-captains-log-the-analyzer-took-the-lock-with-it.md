@@ -30,9 +30,11 @@ were not the cause of this spike.
 The seven-day retained census exposed a second route: 11 of 12 observed
 clj-kondo processes were direct children of Kaocha test JVMs. The parent
 commands included `kaocha.runner unit --watch` and
-`kaocha.runner unit --fail-fast`. A static test census then found 17 test vars
+`kaocha.runner unit --fail-fast`. A static test census first found 17 test vars
 that launch 29 real analyzers per complete `make test`: 19 in the ordinary
-runner and 10 in the MCP runner. Removing a Makefile lint target would not
+runner and 10 in the MCP runner. The first zero-launch fast-runner proof found
+four more namespaced CLI `:ls` integration/help tests, correcting the baseline
+to 33 and the ordinary runner to 23. Removing a Makefile lint target would not
 close this route because production functions inside the tests launch the
 analyzer.
 
@@ -128,13 +130,13 @@ authority is therefore acquired before the first write, never mid-mutation.
 
 ## Test integrity becomes cheaper and stronger
 
-The current 29 real launches mostly repeat policy proofs. The replacement
+The corrected 33 real launches mostly repeat policy proofs. The replacement
 pyramid moves combinatorial behavior to normalized provider fixtures, keeps
 fake processes for process-control laws, and retains five mandatory sequential
 real contracts: forward-reference planning, binding analysis, one batched move
 corpus lint, a diagnostic baseline, and a future-snapshot diagnostic check.
 
-That projects an 83% reduction for the milestone suite and zero real analyzer
+That projects an 85% reduction for the milestone suite and zero real analyzer
 launches in the everyday runner. It also adds a real binding-analysis contract
 that the old suite surprisingly lacked. The detailed census and fixture plan
 are in `2026-08-27-clj-kondo-trigger-taxonomy-and-test-pyramid.md`.
@@ -176,6 +178,15 @@ cohort is green: 30 tests and 196 assertions. The process namespace contributes
 The wrapper compiles with Python 3, the temporary-HOME installation witness
 passes, both installed artifacts are executable, changed Clojure files conform
 to Standard Clojure Style, and `git diff --check` is clean.
+
+The first test-pyramid ratchets are now measured rather than projected. The
+ordinary Babashka runner passed 625 tests and 5,342 assertions with its analyzer
+event count unchanged. Eleven fix-declares policy cases consume explicit frozen
+forward-reference facts, two CLI dispatch cases and four CLI integration/help
+cases use namespace-free fixtures, and six move validity scans are represented
+by one uniquely namespaced six-source analyzer contract. The fast lane is
+`make test-fast`; the real-provider lane is `make analyzer-contract-test`; the
+complete `make test` still requires both.
 
 SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a

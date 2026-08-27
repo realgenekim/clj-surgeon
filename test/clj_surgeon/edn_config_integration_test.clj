@@ -29,12 +29,13 @@
    to a babashka SCI update, the subprocess tests will still pass
    (and tell us the tool actually works — the nesting is our test
    infrastructure's problem, not the user's)."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [clojure.java.io :as io]
-            [clj-surgeon.outline :as outline]
-            [clj-surgeon.forms :as forms]
-            [clojure.string :as str]
-            [babashka.process :as proc]))
+  (:require
+   [babashka.process :as proc]
+   [clj-surgeon.forms :as forms]
+   [clj-surgeon.outline :as outline]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================
 ;; Helpers
@@ -42,7 +43,7 @@
 
 (defn- mk-tmp-dir [name]
   (let [d (java.nio.file.Files/createTempDirectory
-           name (into-array java.nio.file.attribute.FileAttribute []))]
+            name (into-array java.nio.file.attribute.FileAttribute []))]
     (.toFile d)))
 
 (defn- spit-at [dir & path-content-pairs]
@@ -467,10 +468,7 @@
                       (-> z z/down z/right z/right z/sexpr)])}}}}")
 
 (def cli-source
-  "(ns myapp.api
-  (:require [clojure.string :as str]))
-
-(defsetting app-name
+  "(defsetting app-name
   (deferred-tru \"The name\")
   :default \"MyApp\")
 
@@ -512,11 +510,8 @@
           (is (str/includes? output "helper"))
           (is (str/includes? output "[x]")))
 
-        (testing "namespace detected"
-          (is (str/includes? output "myapp.api")))
-
-        (testing "requires present"
-          (is (str/includes? output "[clojure.string :as str]"))))
+        (testing "the CLI config is loaded from the subprocess CWD"
+          (is (str/includes? output "defsetting"))))
       (finally (rm-rf dir)))))
 
 (deftest test-cli-subprocess-without-config
@@ -525,7 +520,7 @@
       ;; No .clj-surgeon.edn — defendpoint should NOT be recognized
       (spit-at dir
                "src/app.clj"
-               "(ns app)\n(defendpoint handle [req] req)\n(defn greet [x] (str \"hi \" x))")
+               "(defendpoint handle [req] req)\n(defn greet [x] (str \"hi \" x))")
       (let [src-path (str dir "/src/app.clj")
             result (proc/shell {:out :string :err :string :dir (str dir)}
                                "bb" "-cp" project-src "-m" "clj-surgeon.core"

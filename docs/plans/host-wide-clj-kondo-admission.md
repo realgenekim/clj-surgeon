@@ -83,9 +83,11 @@ child exits; pressure never yields to the lease.
 
 ## Test integrity without analyzer amplification
 
-The current complete suite launches 29 real clj-kondo processes across 17 test
-vars. The target pyramid preserves provider integrity with five sequential real
-contract launches while moving the behavior matrix to normalized fixtures:
+The initial static census found 29 real clj-kondo processes across 17 test
+vars. The first zero-launch fast-runner proof found four additional CLI
+integration/help entrances, correcting the complete-suite baseline to 33. The
+target pyramid preserves provider integrity with five sequential real contract
+launches while moving the behavior matrix to normalized fixtures:
 
 1. one forward-reference/fix-plan end-to-end contract;
 2. one binding-analysis schema contract;
