@@ -1,9 +1,9 @@
 # Next-Hill Experiment Portfolio
 
 **Date:** 2026-08-26  
-**Status:** recommended first batch; no new product mechanism admitted yet  
-**Decision handle:** `HILL-1`  
-**Default:** strengthen native, then measure the decision-completeness boundary
+**Status:** HILL-1 complete; HILL-2 recommended
+**Decision handle:** `HILL-2`
+**Default:** measure the external-caller and decision-completeness boundary
 
 ## Ground truth
 
@@ -13,15 +13,41 @@ The latest frozen historical extraction produced:
 |---|---:|---:|---:|
 | Direct extraction MCP | 2/2 correct | 37.871 s | 2 |
 | Plan + apply MCP | 2/2 correct | 49.941 s | 3 |
-| Native control | 0/2 correct | 122.278 s | 5.5 |
+| Native control | 2/2 correct | 122.278 s | 5.5 |
 
 This proves one narrow law: a complete structural decision should not pay a
 planning tax. It does not yet prove a general 2--5x advantage. The task was a
 4,594-line, 15-owner extraction whose source, destination, owner set,
 visibility change, caller scope, and verifier were all supplied. MCP was tuned
-through several falsification cycles while native remained frozen. Native's
-0/2 result means 3.23x is an observed route ratio, not a matched-correctness
-speedup.
+through several falsification cycles while native remained frozen. A forensic
+audit found that the original generic scorer had confused differences from one
+historical after-state with meaning loss. Both native arms preserved the
+supplied extraction decision and passed exact lint, so 3.23x is a genuine
+matched-correctness route result on this task.
+
+The scoring boundary is deliberately proportional. It checks faithful
+materialization of the supplied decision: moved owners and bodies, comments,
+unrelated forms, ownership, visibility, caller binding, parse, and the exact
+requested lint. It does not claim application behavior correctness, and it
+does not penalize namespace style, form order, unused cleanup, formatting, or
+noncanonical bytes. Exact historical bytes remain secondary telemetry.
+
+The adversarial champion-native follow-up strengthened the result rather than
+closing the gap:
+
+| Route | Correct | Median complete wall | Median actions |
+|---|---:|---:|---:|
+| Direct extraction MCP | 2/2 | 37.871 s | 2 |
+| Original native | 2/2 | 122.278 s | 5.5 |
+| Champion native | 2/2 | 142.545 s | 5 |
+
+Both champion callers made the same five-phase route: two bounded source
+reads, one safe pre-write script failure, one successful corrected script, and
+one exact lint. The failed scripts differed—missing Ruby on one seat and an
+invalid source-offset transformation on the other—but the underlying cost was
+the same: each model built and debugged a one-off structural editor. Surgeon
+already supplied that mechanism. Further prompt golf on this complete-decision
+fixture has a poor expected information return.
 
 ## Independent review
 
@@ -50,13 +76,12 @@ success metric.
   native route allowed one coherent patch or script, one exact verifier, and
   repair after verifier failure may become correct and much faster.
 - **Cost:** Very low; prompt and replay work only.
-- **Assumption:** The previous native failures were strategy failures rather
+- **Assumption:** Native's remaining cost is decision fragmentation rather
   than an inherent inability to preserve the extraction.
 - **Cheapest falsifier:** Have an agent explicitly incentivized to make native
   win design the prompt, then run two fresh Sol/high trials on the frozen task.
-- **Gate:** Either obtain a correct native latency or strengthen the evidence
-  that the correctness moat is structural. Never use incorrect arms in a
-  matched-speed claim.
+- **Gate:** Reduce native wall/actions without weakening the task-invariant
+  scorer. Compare only arms that faithfully materialize the supplied decision.
 
 ### 2. External-caller extraction boundary
 
@@ -189,14 +214,12 @@ success metric.
 ## Recommended attack sequence
 
 ```text
-Batch 0: make native dangerous
-  champion-native on current hero task
+Batch 0: COMPLETE -- make native dangerous
+  champion-native 2/2 correct, 142.545 s median, 5 actions
         |
-        +-- correct -> first matched-correctness ratio
-        |
-        `-- incorrect -> stronger evidence for the safety/correctness moat
+        `-- direct MCP 3.76x faster at matched task correctness
 
-Batch 1: find the routing boundary
+Batch 1: NEXT -- find the routing boundary
   external-caller fixture + completeness staircase
         |
         +-- direct wins with 0--1 gaps -> widen compiled-decision chords
@@ -215,15 +238,15 @@ Batch 2: test the product, not the anecdote
 
 ## Recommendation
 
-Choose `HILL-1`: run the champion-native audit and freeze the
-external-caller/completeness staircase before adding product code.
+Choose `HILL-2`: freeze and run the external-caller/completeness staircase
+before adding product code.
 
-The deciding argument is information value. Strengthening native cannot lose:
-it either produces the first honest matched-correctness speed ratio or proves
-that Surgeon's meaning-preserving transaction is the moat. The staircase then
-turns the shipped routing law into a measured boundary and tells us whether the
-next implementation hill is compiled writes or compressed reads.
+The deciding argument is information value. HILL-1 established an honest
+matched-correctness result and showed the concrete native tax: discovery plus
+bespoke mutation-program construction and repair. The staircase now turns the
+shipped routing law into a measured boundary and tells us whether the next
+implementation hill is compiled writes or compressed reads.
 
-Fallback: if experiment capacity is limited, run only two champion-native
-trials and one natural supplied-caller cell. Do not optimize the JVM, add a
+Fallback: if experiment capacity is limited, run only one natural
+supplied-caller cell at two completeness levels. Do not optimize the JVM, add a
 routing classifier, or enlarge the API until those results arrive.
