@@ -250,15 +250,28 @@ That is not the safety score. The retained events show a completed second
 score in all three runs. The harness now accepts a bounded prompt suffix so this
 compound falsifier is cheap to repeat.
 
-## Current release status
+## Release-gate resolution
 
-The product, safety, and cold MCP gates are green. The cold suite passes 243
-tests and 2,060 assertions plus heap and cclsp launch regressions. Shared `:7888`
-has not been reloaded and the candidate has not been installed.
+The original LID gate asked for median receipt interpretation below 3.000
+seconds. It **failed**: the Anvil product median was 3.154 seconds, a 154 ms or
+5.1% miss. Local readings of 2.955 and 3.083 seconds straddled the line. This
+criterion is not recorded as passed.
 
-One measurement requirement remains deliberately unpromoted: the original LID
-gate asked for median receipt interpretation below 3.000 seconds. The Anvil
-product median was 3.154 seconds, while complete wall was 19.216 seconds and the
-paired receipt phase improved 44.6%. This is a narrow threshold miss inside
-observed run-to-run noise, not a complete-task regression. Amend or retain that
-gate explicitly; do not silently declare it passed.
+Both independent reviewers recommended an explicit intent correction. Receipt
+interpretation includes model and scheduler latency, so its absolute value is
+environmentally confounded. The user-visible absolute law remains complete
+verified task wall. RELAY-005 now requires receipt interpretation to improve
+against its contemporaneous counterbalanced pre-product control, while every
+promoted arm must still finish in at most 24.456 seconds. No post-hoc percentage
+floor was invented.
+
+The amended law passes: receipt interpretation fell 5.693 -> 3.154 seconds
+(44.6%), and the individual product arms completed in 21.428 and 17.004 seconds.
+The product, compound-safety, cold MCP, and full repository gates are green.
+The complete cold suite passes 617 core tests / 5,301 assertions and 243 MCP
+tests / 2,060 assertions, plus smoke, heap, cclsp, skill, portfolio, harness,
+retention, and evidence-manifest gates.
+
+Shared `:7888` has not been reloaded and the candidate has not yet been
+installed. Publication claims remain scoped to this frozen historical
+extraction cohort; this is not a universal sub-three-second receipt claim.

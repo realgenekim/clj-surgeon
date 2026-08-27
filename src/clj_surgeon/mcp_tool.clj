@@ -79,6 +79,7 @@
 
 ;; @spec MCP-OP-SCHEMA-001
 ;; @spec MCP-OP-RELAY-003
+;; @spec MCP-OP-RELAY-005
 (def clj-change-output-schema
   {:type "object"
    :properties {"ok" {:type "boolean"}

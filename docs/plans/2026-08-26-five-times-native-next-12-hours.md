@@ -188,9 +188,11 @@ counterbalanced Anvil product chord completed at 21.428s and 17.004s versus
 The hardened local head remained exact at 22.038s. Three compound sentinel
 callers continued to a second required file change, so the relay did not confuse
 mutation completion with whole-task completion. Cold MCP proof is 243 tests /
-2,060 assertions. Do not install until the LID's absolute three-second receipt
-sub-gate is explicitly retained or amended; measured product median was 3.154s
-despite a 44.6% paired reduction and decisive complete-wall win.
+2,060 assertions. The original absolute three-second receipt sub-gate failed at
+3.154s and was explicitly replaced, with independent reviewer concurrence, by
+a contemporaneous paired-improvement law; it passed at 44.6%. Both product arms
+also cleared the unchanged 24.456-second complete-wall gate. Full repository
+proof is 617 core tests / 5,301 assertions plus all ancillary gates.
 
 ### E6: Generalize the win
 
