@@ -5,7 +5,6 @@
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
-   [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.string :as str]
    [rewrite-clj.zip :as z]))
@@ -72,13 +71,13 @@
        (take-while some?)))
 
 (defn- namespace-context
-  [relative-file source]
+  [_relative-file source]
   (let [root (z/of-string source {:track-position? true})
         ns-zloc (->> (top-level-locations root)
                      (filter #(and (z/list? %)
                                    (= 'ns (some-> % z/sexpr first))))
                      first)
-        ns-name (some-> (outline/outline-source relative-file source) :ns str)]
+        ns-name (some-> ns-zloc z/sexpr second str)]
     {:root root
      :namespace ns-name
      :aliases (or (some-> ns-zloc analyze/parse-ns-aliases) {})}))
@@ -175,6 +174,23 @@
         (references-in-source-for-subjects
           relative-file source [subject])))
 
+(defn- valid-subject?
+  [subject]
+  (and (string? subject)
+       (boolean (re-matches #"[^/]+/[^/]+" subject))))
+
+(defn- invalid-subjects
+  [subjects]
+  (if (sequential? subjects)
+    (->> subjects
+         (map-indexed
+           (fn [index subject]
+             (when-not (valid-subject? subject)
+               {:index index :subject subject})))
+         (keep identity)
+         vec)
+    [{:index nil :subject subjects}]))
+
 (defn scan-sources
   "Purely scan one captured map of relative file names to source strings for
   quoted Var references. The result is deterministic by file and subject.
@@ -187,48 +203,55 @@
   ([sources subjects {:keys [file-paths max-candidate-files]
                       :or {file-paths {}
                            max-candidate-files max-candidate-files}}]
-   (let [names (set (map #(second (str/split % #"/" 2)) subjects))]
-     (try
-       (let [candidates
-             (->> sources
-                  (sort-by key)
-                  (keep (fn [[file source]]
-                          (when (some #(str/includes? source %) names)
-                            {:file (str file)
-                             :file-path (str (get file-paths file file))
-                             :source source})))
-                  vec)]
-         (if (> (count candidates) max-candidate-files)
-           {:ok false
-            :error-type :quoted-var-scan-budget-exceeded
-            :error "Quoted Var proof exceeded its candidate-file budget"
-            :candidate-file-count (count candidates)
-            :limit max-candidate-files
-            :source-unchanged true}
-           (let [locations
-                 (mapcat
-                   (fn [{:keys [file file-path source]}]
-                     (for [reference
-                           (references-in-source-for-subjects
-                             file source subjects)]
-                       (merge reference
-                              {:file_path file-path
-                               :source_sha256
-                               (structural-lens/source-hash source)
-                               :role :reference})))
-                   candidates)]
-             {:ok true
-              :locations (vec locations)
-              :sources (into {}
-                             (map (juxt :file-path :source) candidates))
-              :scanned-file-count (count sources)
+   (let [invalid (invalid-subjects subjects)]
+     (if (seq invalid)
+       {:ok false
+        :error-type :invalid-quoted-var-subjects
+        :error "Quoted Var subjects must be fully qualified namespace/name strings"
+        :invalid-subjects invalid
+        :source-unchanged true}
+       (try
+         (let [names (set (map #(second (str/split % #"/" 2)) subjects))
+               candidates
+               (->> sources
+                    (sort-by key)
+                    (keep (fn [[file source]]
+                            (when (some #(str/includes? source %) names)
+                              {:file (str file)
+                               :file-path (str (get file-paths file file))
+                               :source source})))
+                    vec)]
+           (if (> (count candidates) max-candidate-files)
+             {:ok false
+              :error-type :quoted-var-scan-budget-exceeded
+              :error "Quoted Var proof exceeded its candidate-file budget"
               :candidate-file-count (count candidates)
-              :reference-count (count locations)})))
-       (catch Exception error
-         {:ok false
-          :error-type :quoted-var-scan-failed
-          :error (.getMessage error)
-          :source-unchanged true})))))
+              :limit max-candidate-files
+              :source-unchanged true}
+             (let [locations
+                   (mapcat
+                     (fn [{:keys [file file-path source]}]
+                       (for [reference
+                             (references-in-source-for-subjects
+                               file source subjects)]
+                         (merge reference
+                                {:file_path file-path
+                                 :source_sha256
+                                 (structural-lens/source-hash source)
+                                 :role :reference})))
+                     candidates)]
+               {:ok true
+                :locations (vec locations)
+                :sources (into {}
+                               (map (juxt :file-path :source) candidates))
+                :scanned-file-count (count sources)
+                :candidate-file-count (count candidates)
+                :reference-count (count locations)})))
+         (catch Exception error
+           {:ok false
+            :error-type :quoted-var-scan-failed
+            :error (.getMessage error)
+            :source-unchanged true}))))))
 
 (defn scan-workspace
   "Scan one confined workspace for quoted Var references to subjects.
