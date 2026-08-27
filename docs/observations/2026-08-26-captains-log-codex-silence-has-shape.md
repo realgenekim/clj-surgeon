@@ -175,6 +175,39 @@ Decision: keep the exact skeleton and first-item route. Do not generalize it as
 transaction shape cheaper to emit than a prose checkpoint, while leaving the
 ordinary fail-closed planner available when a genuine decision is missing.
 
+## Productization stop: prose is not the chord
+
+The smallest apparent product change added direct-call and nesting guidance to
+the always-loaded `apply_clojure_changes` description. The ordinary extraction
+prompt remained unchanged. Two Anvil seats compared the description before and
+after in opposite order:
+
+| Seat | PRE description | POST description | Paired delta |
+|---|---:|---:|---:|
+| dev-b | 40.124s | 34.823s | -5.301s |
+| dev-c | 32.918s | 35.406s | +2.488s |
+| Median | **36.521s** | **35.115s** | **-1.407s (-3.9%)** |
+
+All four runs were correct and used one Surgeon mutation plus one exact lint.
+The crossed seat effect and sub-gate median do not earn the description change.
+It was reverted. The stronger skeleton-prompt result remains valid evidence,
+but the product needs an affordance closer to call construction than extra
+sentences inside a large tool description.
+
+The first attempt to run this cohort also exposed a harness hole: matrix cells
+named `pre:mcp-*` and `post:mcp-*` were accepted even though only version `mcp`
+starts a Surgeon server. Two callers received no Surgeon tool, entered shell
+archaeology, and failed after 230--244 seconds. Those failures were not averaged
+into the product cohort. A permanent schedule gate now rejects every MCP-prefixed
+context without the MCP version before model launch.
+
+Valid product-cohort archives:
+
+- dev-b PRE `f1e770e0b40c38475917bc88a617061cd6b01e936da3bd84ef2a0d8b3c367e48`;
+- dev-b POST `9c78f628ce267713acfcb33f16a4afd9afbf92ec095bc7b9e780e23a5b899be7`;
+- dev-c PRE `dd32f41dce618d1bef4298b10afa087ea0ed5176b39681b49b6fee5826a47991`;
+- dev-c POST `fc658d27a90bf7a102c217ed6655fbeedf55d8d068261ec3bded8340b01e03c6`.
+
 If exact verifier fusion independently removes the second model-managed action,
 the observed route geometry becomes capable of crossing 24.456 seconds. The
 two options are now deliberately independent: SURGEON1 owns tool-first chord

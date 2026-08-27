@@ -84,6 +84,12 @@ candidate is 4.38x faster than the retained 122.278-second native control and
 genuine-decision refusal route, then combine it only with an independently
 earned verifier-boundary mechanism.
 
+Tool-description productization: **stopped and reverted**. Under the ordinary
+prompt, PRE was 36.521s median and POST was 35.115s; one paired seat improved
+while the other regressed. Extra prose in the large tool description did not
+reliably reproduce the first-item affordance. Preserve the prompt result, but
+do not claim the transferable mechanism is implemented.
+
 ### E2: Hot or incremental complete extraction proof
 
 Profile workspace enumeration, parse, owner/dependency closure, quoted-Var
