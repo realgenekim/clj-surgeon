@@ -41,6 +41,36 @@
             "(ns consumer.core)\n(defn caller [] #'target)\n"
             "sample.core/target")))))
 
+(deftest captured-source-scan-parses-each-candidate-once-for-many-subjects
+  (let [source (str "(ns consumer.core\n"
+                    "  (:require [sample.core :as sample]))\n"
+                    "(def refs [#'sample/first\n"
+                    "           #'sample/second\n"
+                    "           (var sample.core/first)])\n")
+        subjects ["sample.core/second" "sample.core/first"]
+        batch-calls (atom 0)
+        batch quoted-var-refs/references-in-source-for-subjects
+        result
+        (with-redefs
+          [quoted-var-refs/references-in-source-for-subjects
+           (fn [file captured-source captured-subjects]
+             (swap! batch-calls inc)
+             (batch file captured-source captured-subjects))]
+          (quoted-var-refs/scan-sources
+            {"src/consumer/core.clj" source}
+            subjects))]
+    (is (:ok result))
+    (is (= 1 @batch-calls)
+        "subject count must not multiply candidate-file parsing")
+    (is (= ["sample.core/second"
+            "sample.core/first"
+            "sample.core/first"]
+           (mapv :subject (:locations result))))
+    (is (= ["#'sample/second"
+            "#'sample/first"
+            "(var sample.core/first)"]
+           (mapv :source (:locations result))))))
+
 (deftest captured-source-scan-is-pure-bounded-and-deterministic
   (let [sources
         {"src/z.clj"

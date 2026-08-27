@@ -116,24 +116,35 @@
                (not (inert-ancestor? location)))
       (second form))))
 
-(defn references-in-source
-  "Return exact Var-reference locations for one fully qualified subject.
-  Strings, comments, and quoted data are excluded."
-  [relative-file source subject]
-  (let [[target-namespace target-name] (str/split subject #"/" 2)
-        {:keys [root namespace aliases]} (namespace-context relative-file source)
-        accepted (target-symbols target-namespace target-name namespace aliases)]
-    (loop [location root
-           references []]
-      (if (z/end? location)
-        references
-        (let [reference (var-reference-symbol location)
-              node-meta (meta (z/node location))]
-          (recur
-            (z/next location)
-            (cond-> references
-              (contains? accepted reference)
-              (conj {:file relative-file
+(defn references-in-source-for-subjects
+  "Return exact Var-reference locations for several fully qualified subjects.
+  Parse and traverse the captured source once. Results remain grouped in the
+  supplied subject order. Strings, comments, and quoted data are excluded."
+  [relative-file source subjects]
+  (let [{:keys [root namespace aliases]} (namespace-context relative-file source)
+        distinct-subjects (vec (distinct subjects))
+        subjects-by-symbol
+        (reduce
+          (fn [result subject]
+            (let [[target-namespace target-name] (str/split subject #"/" 2)]
+              (reduce
+                (fn [index accepted]
+                  (update index accepted (fnil conj []) subject))
+                result
+                (target-symbols target-namespace target-name namespace aliases))))
+          {}
+          distinct-subjects)
+        references-by-subject
+        (loop [location root
+               references (zipmap distinct-subjects (repeat []))]
+          (if (z/end? location)
+            references
+            (let [reference (var-reference-symbol location)
+                  matching-subjects (get subjects-by-symbol reference)
+                  node-meta (meta (z/node location))
+                  evidence
+                  (when (seq matching-subjects)
+                    {:file relative-file
                      :line (:row node-meta)
                      :character (:col node-meta)
                      :range {:start {:line (dec (:row node-meta))
@@ -141,7 +152,28 @@
                              :end {:line (dec (:end-row node-meta))
                                    :character (dec (:end-col node-meta))}}
                      :source (z/string location)
-                     :reference-authority :structural-var-quote}))))))))
+                     :reference-authority :structural-var-quote})]
+              (recur
+                (z/next location)
+                (reduce
+                  (fn [result subject]
+                    (update result subject conj evidence))
+                  references
+                  matching-subjects)))))]
+    (mapv
+      (fn [[subject reference]]
+        (assoc reference :subject subject))
+      (for [subject subjects
+            reference (get references-by-subject subject)]
+        [subject reference]))))
+
+(defn references-in-source
+  "Return exact Var-reference locations for one fully qualified subject.
+  Strings, comments, and quoted data are excluded."
+  [relative-file source subject]
+  (mapv #(dissoc % :subject)
+        (references-in-source-for-subjects
+          relative-file source [subject])))
 
 (defn scan-sources
   "Purely scan one captured map of relative file names to source strings for
@@ -176,13 +208,13 @@
            (let [locations
                  (mapcat
                    (fn [{:keys [file file-path source]}]
-                     (for [subject subjects
-                           reference (references-in-source file source subject)]
+                     (for [reference
+                           (references-in-source-for-subjects
+                             file source subjects)]
                        (merge reference
                               {:file_path file-path
                                :source_sha256
                                (structural-lens/source-hash source)
-                               :subject subject
                                :role :reference})))
                    candidates)]
              {:ok true
