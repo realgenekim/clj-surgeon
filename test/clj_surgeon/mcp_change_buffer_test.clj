@@ -658,6 +658,86 @@
     (is (= core-source (slurp (:source project))))
     (is (= test-source (slurp (:test-file project))))))
 
+(deftest exact-profile-compilation-is-project-owned-and-snapshot-bound
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-002
+  ;; @spec MCP-OP-VERIFY-003
+  ;; @spec MCP-OP-VERIFY-004
+  ;; @spec MCP-OP-VERIFY-005
+  (let [profile {:acceptance :exact-exit
+                 :timeout-ms 120000
+                 :commands [["clj-kondo" "--lint" "src/app.clj"
+                             "--fail-level" "error"]]}
+        compiled (change-buffer/compile-exact-profile
+                   "exact" {"exact" profile} :project)
+        reordered (change-buffer/compile-exact-profile
+                    "exact"
+                    {"exact" (array-map
+                               :commands (:commands profile)
+                               :timeout-ms 120000
+                               :acceptance :exact-exit)}
+                    :project)]
+    (is (:ok compiled) (pr-str compiled))
+    (is (= :exact-exit (:acceptance compiled)))
+    (is (= :project (:profile-source compiled)))
+    (is (= 64 (count (:profile-sha256 compiled))))
+    (is (= (:profile-sha256 compiled) (:profile-sha256 reordered)))
+    (is (= ["/opt/homebrew/bin/clj-kondo" "--lint" "src/app.clj"
+            "--fail-level" "error"]
+           (:argv compiled)))
+    (is (= :exact-profile-not-project-owned
+           (:error-type
+             (change-buffer/compile-exact-profile
+               "exact" {"exact" profile} :process))))))
+
+(deftest exact-process-evidence-is-complete-bounded-and-honest
+  ;; @spec MCP-OP-VERIFY-003
+  ;; @spec MCP-OP-VERIFY-005
+  ;; @spec MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007
+  ;; @spec MCP-OP-VERIFY-009
+  ;; @spec MCP-OP-VERIFY-010
+  (let [root (.getCanonicalPath (io/file "."))
+        visible-limit 12000
+        output (apply str (repeat (+ visible-limit 1000) "x"))
+        pass-profile {:profile "exact"
+                      :profile-source :project
+                      :profile-sha256 (apply str (repeat 64 "a"))
+                      :acceptance :exact-exit
+                      :timeout-ms 120000
+                      :argv ["/usr/bin/printf" "%s" output]}
+        pass (change-buffer/run-exact-verification! root pass-profile)
+        failed (change-buffer/run-exact-verification!
+                 root (assoc pass-profile :argv ["/usr/bin/false"]))
+        timeout (change-buffer/run-exact-verification!
+                  root (assoc pass-profile
+                              :timeout-ms 1
+                              :argv ["/bin/sleep" "1"]))
+        launch (change-buffer/run-exact-verification!
+                 root (assoc pass-profile
+                             :argv ["/definitely/missing-verifier"]))]
+    (is (:ok pass) (pr-str pass))
+    (is (= root (:cwd pass)))
+    (is (= (:argv pass-profile) (:argv pass)))
+    (is (= (count output) (:output-bytes pass)))
+    (is (= 64 (count (:output-sha256 pass))))
+    (is (:output-truncated pass))
+    (is (= visible-limit (count (:diagnostics pass))))
+    (is (= :verification-failed (:error-type failed)))
+    (is (= :ordinary-nonzero (:process-outcome failed)))
+    (is (= :verification-unverified (:error-type timeout)))
+    (is (= :timeout (:process-outcome timeout)))
+    (is (= :verification-unverified (:error-type launch)))
+    (is (= :launch-failure (:process-outcome launch)))
+    (is (= :crash-or-signal-style-exit
+           (:process-outcome
+             (change-buffer/classify-exact-process-outcome
+               {:finished? true :exit 137}))))
+    (is (not (contains?
+               (change-buffer/classify-exact-process-outcome
+                 {:finished? true :exit 137})
+               :signal)))))
+
 (deftest basis-coverage-and-provider-ambiguity-refuse-as-data
   (change-buffer/clear-bases!)
   (let [project (temp-project)

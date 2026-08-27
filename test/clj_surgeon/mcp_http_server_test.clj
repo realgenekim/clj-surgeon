@@ -67,6 +67,8 @@
       (is (= expected (http-server/allowed-origin? origin))))))
 
 (deftest project-verification-profiles-are-closed-data
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-002
   (let [profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]
                                      ["npx" "formatter" "{files}"]]
                           :hot {:port-file ".nrepl-port"
@@ -109,6 +111,33 @@
                     (catch clojure.lang.ExceptionInfo error error))]
         (is (= :invalid-project-verification-profiles
                (:error-type (ex-data error))))))))
+
+(deftest exact-verification-profile-is-project-owned-closed-data
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-002
+  (let [profile {:acceptance :exact-exit
+                 :timeout-ms 120000
+                 :commands [["clj-kondo" "--lint" "src/app.clj"
+                             "--fail-level" "error"]]}
+        resolved (http-server/resolve-verification-profiles
+                   nil {:verification-profiles {"exact" profile}})]
+    (is (= :project (:source resolved)))
+    (is (= profile (get-in resolved [:profiles "exact"])))
+    (doseq [invalid [(dissoc profile :timeout-ms)
+                     (assoc profile :timeout-ms 0)
+                     (assoc profile :timeout-ms 120001)
+                     (assoc profile :acceptance :diagnostic-delta)
+                     (assoc profile :commands [["true"] ["true"]])
+                     (assoc profile :commands [["clj-kondo" "{files}"]])
+                     (assoc profile :hot {:port-file ".nrepl-port"})]]
+      (let [error (try
+                    (http-server/resolve-verification-profiles
+                      nil {:verification-profiles {"exact" invalid}})
+                    nil
+                    (catch clojure.lang.ExceptionInfo error error))]
+        (is (= :invalid-project-verification-profiles
+               (:error-type (ex-data error)))
+            (pr-str invalid))))))
 
 (deftest project-formatter-is-closed-data-with-one-safe-default
   (is (= http-server/default-formatter

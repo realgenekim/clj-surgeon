@@ -266,10 +266,15 @@
         (is (:source-unchanged result))))))
 
 (deftest direct-change-accepts-only-closed-verification-profiles
+  ;; @spec MCP-OP-VERIFY-001
   (let [validated (contract/validate-tool-params
-                    (assoc valid-request "verify" "fast"))]
+                    (assoc valid-request "verify" "fast"))
+        exact (contract/validate-tool-params
+                (assoc valid-request "verify" "exact"))]
     (is (:ok validated))
+    (is (:ok exact))
     (is (= "fast" (get-in validated [:params :verify])))
+    (is (= "exact" (get-in exact [:params :verify])))
     (is (= :invalid-enum
            (:reason (contract/validate-tool-params
                       (assoc valid-request "verify" "eventually")))))))
