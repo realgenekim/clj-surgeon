@@ -816,6 +816,75 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest exact-verifier-sees-staged-extraction-and-rolls-back-every-nonpass
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-005
+  ;; @spec MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007
+  ;; @spec MCP-OP-VERIFY-008
+  ;; @spec MCP-OP-VERIFY-009
+  ;; @spec MCP-OP-VERIFY-010
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/core.clj")
+        target-file (io/file workspace "src/sample/moved.clj")
+        receipt-dir (io/file workspace "receipts")
+        original (str "(ns sample.core)\n\n"
+                      "(defn helper [] :ok)\n\n"
+                      "(defn retained [] :ok)\n")
+        request (fn [source-hash]
+                  {:extraction
+                   {:file "src/sample/core.clj"
+                    :to "src/sample/moved.clj"
+                    :forms ["helper"]
+                    :require_policy "copy-all"
+                    :source_hash source-hash
+                    :caller_changes []
+                    :ignored_caller_files []}
+                   :verify "exact"})
+        config (fn [command]
+                 {:project-root (.getPath workspace)
+                  :receipt-dir (.getPath receipt-dir)
+                  :verification-profile-source :project
+                  :verification-profiles
+                  {"exact" {:acceptance :exact-exit
+                            :timeout-ms 120000
+                            :commands [command]}}})]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (let [plan (extraction-plan/plan!
+                   {:project-root (.getPath workspace)}
+                   {:mode "plan-extraction"
+                    :file "src/sample/core.clj"
+                    :to "src/sample/moved.clj"
+                    :forms ["helper"]
+                    :require_policy "copy-all"})
+            passed (mcp-tool/execute-request!
+                     (config ["/usr/bin/test" "-s"
+                              "src/sample/moved.clj"])
+                     (request (:source_hash plan)))]
+        (is (:ok passed) (pr-str passed))
+        (is (= :exact-exit (get-in passed [:verification :acceptance])))
+        (is (= 64 (count (get-in passed
+                                 [:verification :profile-sha256]))))
+        (is (.exists target-file)
+            "the exact verifier passed only if staged target bytes existed")
+        (is (:ok (extract/undo! {:receipt (:undo_receipt passed)})))
+        (is (= original (slurp source-file)))
+        (is (not (.exists target-file)))
+        (let [failed (mcp-tool/execute-request!
+                       (config ["/usr/bin/false"])
+                       (request (:source_hash plan)))]
+          (is (false? (:ok failed)))
+          (is (= "verification-failed" (:error_type failed)))
+          (is (:source_unchanged failed))
+          (is (:rolled_back failed))
+          (is (= original (slurp source-file)))
+          (is (not (.exists target-file)))
+          (is (not (re-find #"(?i)retry" (:remedy failed))))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest direct-change-returns-after-hot-proof-and-publishes-a-cold-job
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")]
