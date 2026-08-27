@@ -87,6 +87,39 @@ updates, and verification gates. It is not a chronological coding diary.
   general model can reason from bounded facts, expose those facts and keep
   authority mechanical instead of growing a heuristic policy engine.
 
+## Active speed mission: five-times-native extraction
+
+- The frozen north star is the 15-owner extraction: Surgeon currently completes
+  it in 37.871 seconds versus the matched-correctness native control at 122.278
+  seconds (3.23x). The next earned gate is at most 24.456 seconds (5x). Optimize
+  complete verified task wall, not tool microbenchmarks or adoption.
+- Keep two independent research lanes. SURGEON1 owns the production branch,
+  integration judgment, publication, and the combined result. SURGEON2 owns
+  bounded uncertainty-reduction experiments and returns immutable receipts;
+  SURGEON1 cherry-picks mechanisms only after reviewing evidence and overlap.
+- Operate as `(N * K * sigma) / t`: create independently testable options,
+  parallelize only non-overlapping experiments, spend runs on high-uncertainty
+  seams, and shorten the verified decision cycle before expanding sample size.
+  Do not wait for user input while a safe, already-authorized experiment or
+  analysis step remains.
+- Freeze the task, scorer, caller/model stratum, and route geometry before a
+  comparison. Start with a small counterbalanced cohort. Retain every negative
+  result, confound, and stop decision; do not quietly tune away an ugly run.
+- Current priority order is: observable event/phase clocks; hot or incremental
+  complete extraction proof; exact repository-declared verification inside the
+  transaction; cheaper post-decision materialization; then combinations of
+  independently earned wins. Treat projected savings as hypotheses until a
+  clean-context complete-wall cohort verifies them.
+- Binding stops from prior experiments: fewer MCP schemas was slower; compact
+  plan handles missed their gate; the broad heuristic ranker was rejected;
+  formatter startup is not the primary extraction bottleneck; generic
+  `verify=fast` is not equivalent verification. Reopen a stopped option only
+  with new causal evidence.
+- Record the method as well as the result in a Captain's Log: option created,
+  reversible ratchet, evidence, counterfactual, surprise, falsifier, decision,
+  and what becomes cheaper next. The interaction between parallel lanes is a
+  product artifact worth preserving, not merely coordination overhead.
+
 ## Architecture
 
 - `forms.clj` — single source of truth for form classification (what is a defn, what is private, etc.)
