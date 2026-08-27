@@ -542,6 +542,7 @@ benchmark-edit-portfolio-self-test:
 	bb bench/verify_edit_portfolio.clj --self-test
 	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh
+	BENCH_PROMPT_SELF_TEST=true bash bench/run_clean_codex.sh
 	BENCH_HARNESS_SELF_TEST=true bash bench/run_clean_codex.sh
 	$(MAKE) --no-print-directory benchmark-anvil-portfolio-pair-self-test
 

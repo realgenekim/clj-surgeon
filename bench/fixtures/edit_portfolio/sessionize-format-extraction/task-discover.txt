@@ -1,0 +1,16 @@
+Extract the source section identified as the formatting helpers, plus the
+private blank-normalization helper that remaining source forms must continue to
+call, from the 4,594-line namespace src/cfp_scheduler_killer/views.clj into the
+new, currently absent namespace src/cfp_scheduler_killer/views/format.clj.
+
+Use a dependency-minimal destination namespace. Preserve the complete moved
+forms, attached comments, behavior, and every unrelated source form. Update
+all callers that the frozen workspace proves are affected. The exact root set,
+required visibility changes, and caller accounting are deliberately not
+supplied; derive them mechanically and never guess.
+
+The result must parse as Clojure and produce no clj-kondo errors. Run:
+
+clj-kondo --lint src/cfp_scheduler_killer/views.clj src/cfp_scheduler_killer/views/format.clj --fail-level error
+
+Complete the extraction and briefly report the route and verification result.
