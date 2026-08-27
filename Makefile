@@ -538,6 +538,7 @@ benchmark-edit-portfolio:
 
 benchmark-edit-portfolio-self-test:
 	bb bench/write_mcp_config.clj --self-test
+	bb bench/score_format_extraction.clj --self-test
 	bb bench/verify_edit_portfolio.clj --self-test
 	bb bench/verify_edit_portfolio.clj bench/fixtures/edit_portfolio
 	BENCH_SCHEDULE_SELF_TEST=true bash bench/run_clean_codex.sh

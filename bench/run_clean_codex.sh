@@ -501,6 +501,7 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
   test -z "$(git -C "$self_test_workspace" status --short)"
   bb "$repo_root/bench/score_source_fidelity.clj" --self-test >/dev/null
+  bb "$repo_root/bench/score_format_extraction.clj" --self-test >/dev/null
 
   result_dir=$original_result_dir
   rm -rf "$self_test_root"
@@ -1508,11 +1509,13 @@ run_one() {
           "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target"; then
           portfolio_exact=false
         fi
-        if ! bb "$repo_root/bench/score_source_fidelity.clj" \
-          --target "$portfolio_target" \
-          "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target" \
-          "$workspace/$portfolio_target" >> "$run_dir/source-fidelity.edn"; then
-          portfolio_correct=false
+        if [ "$task" != sessionize-format-extraction ]; then
+          if ! bb "$repo_root/bench/score_source_fidelity.clj" \
+            --target "$portfolio_target" \
+            "$portfolio_fixture_root/$portfolio_task_dir/after/$portfolio_target" \
+            "$workspace/$portfolio_target" >> "$run_dir/source-fidelity.edn"; then
+            portfolio_correct=false
+          fi
         fi
         if [ -f "$portfolio_fixture_root/$portfolio_task_dir/before/$portfolio_target" ]; then
           diff -u \
@@ -1523,6 +1526,15 @@ run_one() {
             >> "$run_dir/target.diff" || true
         fi
       done < <(targets_for_task "$task")
+      if [ "$task" = sessionize-format-extraction ]; then
+        if ! bb "$repo_root/bench/score_format_extraction.clj" \
+          "$portfolio_fixture_root/$portfolio_task_dir/before/src/cfp_scheduler_killer/views.clj" \
+          "$workspace/src/cfp_scheduler_killer/views.clj" \
+          "$workspace/src/cfp_scheduler_killer/views/format.clj" \
+          >> "$run_dir/source-fidelity.edn"; then
+          portfolio_correct=false
+        fi
+      fi
       if [ "$task" = dependency-move-edit ] \
         && ! clj-kondo --lint "$workspace/src/bench/move_order.clj" \
           --fail-level error >/dev/null 2>&1; then
