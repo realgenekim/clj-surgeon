@@ -121,17 +121,25 @@
   (apply proc/shell {:out :string :err :string :continue true}
          "bb" "-cp" project-src "-m" "clj-surgeon.core" args))
 
+(defn- run-outline-without-semantic-enrichment [operation]
+  (let [fixture (java.io.File/createTempFile "clj-surgeon-cli-dispatch" ".clj")]
+    (try
+      (spit fixture "(defn dispatch-sentinel [] :ok)\n")
+      (run-cli ":op" operation ":file" (.getAbsolutePath fixture))
+      (finally
+        (.delete fixture)))))
+
 (deftest cli-bare-string-op-dispatches
-  (let [{:keys [exit out err]} (run-cli ":op" "ls" ":file" "src/clj_surgeon/forms.clj")]
+  (let [{:keys [exit out err]} (run-outline-without-semantic-enrichment "ls")]
     (testing "documented bare-string usage works end to end"
       (is (zero? exit) (str "stderr: " err))
-      (is (str/includes? out "clj-surgeon.forms")))))
+      (is (str/includes? out "dispatch-sentinel")))))
 
 (deftest cli-bare-string-alias-dispatches
-  (let [{:keys [exit out]} (run-cli ":op" "outline" ":file" "src/clj_surgeon/forms.clj")]
+  (let [{:keys [exit out]} (run-outline-without-semantic-enrichment "outline")]
     (testing "bare-string ALIAS dispatches too"
       (is (zero? exit))
-      (is (str/includes? out "clj-surgeon.forms")))))
+      (is (str/includes? out "dispatch-sentinel")))))
 
 (deftest cli-bare-string-unknown-op-clean-error
   (let [{:keys [exit out err]} (run-cli ":op" "bogus")]
