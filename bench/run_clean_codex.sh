@@ -1150,7 +1150,7 @@ run_one() {
       done
     fi
     case "${BENCH_MCP_TOOL_PROFILE:-full}" in
-      full) ;;
+      full) mcp_profile_args=(:tool-profile :full) ;;
       edit) mcp_profile_args=(:tool-profile :edit) ;;
       *)
         echo "BENCH_MCP_TOOL_PROFILE must be full or edit: ${BENCH_MCP_TOOL_PROFILE}" >&2
