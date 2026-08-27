@@ -37,6 +37,10 @@ printf '%s\n' "$nrepl_output" | grep -Fq -- '-J-Xms64m -J-Xmx512m'
 printf '%s\n' "$nrepl_output" | grep -Fq -- \
   '-M:clj-surgeon/mcp-test:clj-surgeon/nrepl'
 
+reload_output=$(make --no-print-directory -n mcp-reload)
+printf '%s\n' "$reload_output" | grep -Fq -- \
+  'clj-surgeon.mcp-process clj-surgeon.forward-refs clj-surgeon.fix-declares clj-surgeon.binding-rename'
+
 for target in mcp-serve mcp-serve-benchmark mcp-start; do
   output=$(make --no-print-directory -n "$target")
   printf '%s\n' "$output" | grep -Fq -- "JAVA_CMD=\"$expected_java\""
