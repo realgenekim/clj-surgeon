@@ -317,6 +317,19 @@ Third receipt:
 `/srv/fleet/dev-b/clj-surgeon-study-results/20260827T231700Z-analyzer-contract-c3637d4-dev-b2/receipt.md`
 (SHA-256 `2fd2340636eda603d3236aac78b46341a1f0218292e4e253567baeb5f5cc9fe2`).
 
+The fourth exact run at `c05c347` passed the complete gate in 5,923.956 ms:
+4 tests, 20 assertions, zero failures and zero errors; exactly five admitted
+starts with indexes 1 through 5; maximum concurrency one; pressure green with
+no override. The detached HEAD and peeled `.3` tag matched, and the tracked
+checkout remained clean. This closes MCP-OP-ANALYZER-008 without launching a
+real analyzer on Skiff.
+
+Passing receipt:
+`/srv/fleet/dev-b/clj-surgeon-study-results/20260827T232230Z-analyzer-contract-c05c347-dev-b2/receipt.md`
+(SHA-256 `1d1e645e032bb3636253510ad15eaff3590a3d5e581365c98fd9b64bb73a9c58`,
+manifest SHA-256
+`36bc5f857f96eb57dfe6f00df8d116add7d2a959eebf1fb1295c851266994d5c`).
+
 ## Remaining gates and next hills
 
 The first shared hot-reload proof stopped safely. The live reload manifest
