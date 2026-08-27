@@ -41,10 +41,14 @@
              :stdin-text source
              :visible-byte-limit (* 1024 1024)})
           (catch Exception error
-            (refuse! :analyzer-authority-unverified
+            (throw (ex-info
                      "clj-kondo binding-analysis authority is unavailable"
-                     {:file file
-                      :cause-error-type (:error-type (ex-data error))})))
+                     {:error-type :analyzer-authority-unverified
+                      :file file
+                      :cause-error-type (:error-type (ex-data error))
+                      :cause-class (.getName (class error))
+                      :cause-message (.getMessage error)}
+                     error))))
         result (try
                  (edn/read-string out)
                  (catch Exception _ nil))

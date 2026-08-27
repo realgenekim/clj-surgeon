@@ -27,7 +27,10 @@
 
 (defn- source-path [root namespace]
   (fs/path root
-           (str (str/replace (str namespace) "." "/") ".clj")))
+           (str (-> (str namespace)
+                    (str/replace "." "/")
+                    (str/replace "-" "_"))
+                ".clj")))
 
 (defn- materialize-corpus! [root corpus]
   (mapv (fn [{:keys [id source]}]
@@ -71,7 +74,8 @@
                 (pr-str (:admission result)))
             (is (:finished? result) (pr-str result))
             (is (:termination-confirmed result) (pr-str result))
-            (is (zero? (:exit result)) (:err result)))))
+            (is (zero? (:exit result))
+                (pr-str {:out (:out result) :err (:err result)})))))
       (finally
         (fs/delete-tree root)))))
 
@@ -101,7 +105,7 @@
                  "  (:require [sample.core :as core]))\n"
                  "(def before (core/existing))\n"))
       (let [baseline (change-buffer/capture-verification-baseline!
-                       (io/file root) "fast" profiles files)]
+                       (io/file (str root)) "fast" profiles files)]
         (is (:ok baseline) (pr-str baseline))
         (is (= 1 (count (get-in baseline [:checks 0 :diagnostics :findings])))
             "the future transaction may remove a pre-existing warning")
@@ -116,7 +120,7 @@
                    "(def before (core/existing))\n"
                    "(def after (core/added))\n"))
         (let [verification (change-buffer/run-verification!
-                             (io/file root) "fast" profiles files baseline)]
+                             (io/file (str root)) "fast" profiles files baseline)]
           (is (:ok verification) (pr-str verification))
           (is (empty? (get-in verification
                               [:checks 0 :diagnostic-delta
@@ -145,6 +149,7 @@
                     "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
                     "(defn table [{:keys [sort-by]}] (name sort-by))\n")]
     (try
+      (fs/create-dirs (fs/parent source-file))
       (let [analysis (binding-rename/analyze-source (str source-file) source)
             locals (:locals analysis)
             usages (:local-usages analysis)
