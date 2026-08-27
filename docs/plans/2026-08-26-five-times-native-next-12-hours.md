@@ -181,6 +181,17 @@ Receipt interpretation fell 7.628s -> 2.870s while initial materialization and
 server work did not improve materially. Productize this as a deterministic
 success-only result affordance, not a benchmark-specific sentence.
 
+Product result: **replicated without benchmark success prompting**. The
+counterbalanced Anvil product chord completed at 21.428s and 17.004s versus
+27.822s and 22.310s before the executable chord. Product median 19.216s is
+**6.36x native**, with 2/2 exact relays and 4/4 semantically correct mutations.
+The hardened local head remained exact at 22.038s. Three compound sentinel
+callers continued to a second required file change, so the relay did not confuse
+mutation completion with whole-task completion. Cold MCP proof is 243 tests /
+2,060 assertions. Do not install until the LID's absolute three-second receipt
+sub-gate is explicitly retained or amended; measured product median was 3.154s
+despite a 44.6% paired reduction and decisive complete-wall win.
+
 ### E6: Generalize the win
 
 Use remaining capacity on two low-cost studies:

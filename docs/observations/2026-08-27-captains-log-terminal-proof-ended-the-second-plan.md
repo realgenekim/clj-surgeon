@@ -189,12 +189,76 @@ The phase clocks again locate the mechanism:
 Initial materialization became slightly slower, and server time was effectively
 flat. The entire useful effect remained at the terminal receipt boundary.
 
-## Next gate
+## Product gate: the tool now owns the chord
 
-Project the earned mechanism into the public contract without baking one
-benchmark sentence into agent prompts. A successful terminal result should
-contain one deterministic, human-ready `terminal_response` derived from the
-same finalized evidence. Agent routing should relay it immediately. Refusals,
-failures, and unverified outcomes must not receive that shortcut. Test that
-result-time affordance against the same frozen cohort before installing or
-reloading the shared MCP service.
+The public candidate projects one constant `terminal_response` only from a
+complete apply receipt with project-owned exact verification. The visible MCP
+receipt preserves elapsed time and its existing warnings, then says:
+
+```text
+If this mutation completes all remaining work, return exactly: Done — changes committed and exact verification completed.
+If work remains, continue.
+```
+
+The benchmark success-response sentence was absent. A counterbalanced Anvil
+cohort compared the first product field with the executable visible chord:
+
+| Lane and order | Before chord | Executable chord | Saving |
+|---|---:|---:|---:|
+| dev-b, before -> chord | 27.822s | 21.428s | 6.394s |
+| dev-c, chord -> before | 22.310s | 17.004s | 5.306s |
+| Median | **25.066s** | **19.216s** | **5.850s (23.3%)** |
+
+Both chord arms returned assistant text exactly equal to structured
+`terminal_response`; both earlier arms paraphrased. All four mutations remained
+semantically correct, meaning-preserving, and one-shot, with zero shell or
+source commands. The product median is **6.36x faster** than the 122.278-second
+native control. The fixed-prompt experiment had a 20.090-second median, so the
+product affordance reproduced rather than merely approximated that result.
+
+One final hardened local positive control completed in 22.038 seconds, returned
+the field byte-for-byte, and remained 5.55x faster than native. Its visible
+receipt included the explicit false branch without losing the win.
+
+## Adversarial safety gate
+
+The first implementation was fast but not fail-closed enough. Codex Sol found
+that it accepted placeholder hashes, ignored contradictory failure and recovery
+fields, did not require the complete exact-verifier receipt, and could project
+the relay for an operation other than `apply_clojure_changes`. Permanent tests
+now require:
+
+- exact `apply_clojure_changes` operation identity;
+- lowercase 64-character SHA-256 values for every read-back, receipt, profile,
+  and verifier-output hash;
+- complete exact argv, cwd, elapsed, output-byte, and truncation evidence; and
+- absence of error, recovery, next-call, source-unchanged, and rollback
+  contradictions.
+
+`next_action=none` and `terminal_response` describe only the mutation. They do
+not prove that the user's complete request is finished. Three clean compound
+sentinel callers received the same terminal mutation receipt and still
+performed a required second file-change action. Each reported the sentinel
+instead of returning the short terminal sentence; every extraction remained
+semantically correct. A separate report-only caller also continued and reported
+the exact profile and elapsed time.
+
+The original portfolio scorer reports `correct=false` for sentinel runs because
+the deliberate extra file is outside its original two-file accepted result.
+That is not the safety score. The retained events show a completed second
+`file_change`, a non-terminal final answer, and a green extraction semantic
+score in all three runs. The harness now accepts a bounded prompt suffix so this
+compound falsifier is cheap to repeat.
+
+## Current release status
+
+The product, safety, and cold MCP gates are green. The cold suite passes 243
+tests and 2,060 assertions plus heap and cclsp launch regressions. Shared `:7888`
+has not been reloaded and the candidate has not been installed.
+
+One measurement requirement remains deliberately unpromoted: the original LID
+gate asked for median receipt interpretation below 3.000 seconds. The Anvil
+product median was 3.154 seconds, while complete wall was 19.216 seconds and the
+paired receipt phase improved 44.6%. This is a narrow threshold miss inside
+observed run-to-run noise, not a complete-task regression. Amend or retain that
+gate explicitly; do not silently declare it passed.
