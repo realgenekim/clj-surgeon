@@ -140,6 +140,41 @@ Run counterbalanced same-seat replicas before claiming the 6.239-second gain.
 Still, it is the first direct evidence that “think, BANG” can remove a model
 boundary without changing model, task, scorer, API semantics, or safety.
 
+## Anvil replication: the chord survives both orders
+
+Two fresh Sol/high Anvil seats ran the normal and skeleton tool-first prompts
+in opposite order. All four runs were correct. Each used one extraction call,
+one exact lint command, zero inspections, and zero refusals.
+
+| Seat and order | Normal | Skeleton tool-first | Saving |
+|---|---:|---:|---:|
+| dev-b, normal → tool-first | 35.430s | 28.230s | 7.200s |
+| dev-c, tool-first → normal | 35.444s | 27.667s | 7.777s |
+| Median | **35.437s** | **27.949s** | **7.489s (21.1%)** |
+
+The phase clocks locate the saving. Normal callers spent 16.10--16.66 seconds
+producing an initial message and then materializing the mutation call.
+Tool-first callers emitted the mutation as their first item after 10.55--12.55
+seconds. Surgeon server time remained in the same 6.65--7.29-second range.
+This is a route-compression win, not a faster extraction kernel.
+
+Against the retained correct native control of 122.278 seconds, the replicated
+tool-first median is **4.38x faster**. It is 3.493 seconds above the 24.456-second
+5x gate. This is a strong promotion candidate, but not yet a general product
+claim: the cohort contains two paired replicas of one frozen extraction.
+
+Raw evidence is retained locally and on Anvil:
+
+- `clj-surgeon-bench-archive/2026-08-27/tool-first-dev-b-ab.tar.gz`, SHA-256
+  `e6d8c7b8280f2a368b88116f8168ed5dff31d20776d489799bfeca8526e16ae4`;
+- `clj-surgeon-bench-archive/2026-08-27/tool-first-dev-c-ba.tar.gz`, SHA-256
+  `d20d8c7dd2c2bdbc2a0c46d7abd3af7500cc5c5037e20079768f39977d46e123`.
+
+Decision: keep the exact skeleton and first-item route. Do not generalize it as
+“always suppress narration.” The mechanism is to make the complete valid
+transaction shape cheaper to emit than a prose checkpoint, while leaving the
+ordinary fail-closed planner available when a genuine decision is missing.
+
 If exact verifier fusion independently removes the second model-managed action,
 the observed route geometry becomes capable of crossing 24.456 seconds. The
 two options are now deliberately independent: SURGEON1 owns tool-first chord
