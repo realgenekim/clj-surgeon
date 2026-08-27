@@ -154,13 +154,15 @@
             locals (:locals analysis)
             usages (:local-usages analysis)
             keywords (:keywords analysis)
+            destructuring-keywords (filterv :keys-destructuring keywords)
             local-ids (set (map :id locals))]
         (is (= 2 (count locals)))
         (is (= 3 (count usages)))
-        (is (= 2 (count keywords)))
+        (is (= 2 (count destructuring-keywords)))
         (is (= #{'sort-by} (set (map :name locals))))
         (is (= local-ids (set (map :id usages))))
-        (is (every? :keys-destructuring keywords))
-        (is (= #{"sort-by"} (set (map :name keywords)))))
+        (is (= #{2 3} (set (map :row destructuring-keywords))))
+        (is (= #{"sort-by"}
+               (set (map :name destructuring-keywords)))))
       (finally
         (fs/delete-tree root)))))

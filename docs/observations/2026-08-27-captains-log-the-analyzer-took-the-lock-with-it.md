@@ -304,6 +304,19 @@ receipt is
 `/srv/fleet/dev-b/clj-surgeon-study-results/20260827T230741Z-analyzer-contract-39904f1-dev-b2/receipt.md`
 (SHA-256 `a5da1dd536c0dbcbcd4e65687df06828a9dfac599a410a94a51433e37dcebd7b`).
 
+The third exact Anvil run at `c3637d4` proved the mechanism end to end: exactly
+five admitted analyzer starts, mission indexes 1 through 5, and maximum
+concurrency one. Its remaining three assertions exposed a clj-kondo-version
+difference, not a source defect: Anvil returned additional ordinary keyword
+analysis alongside the two `:keys-destructuring` records. The contract now
+selects the authoritative destructuring records and still requires exactly two,
+on source rows 2 and 3, both named `sort-by`. Unrelated keyword evidence is no
+longer mistaken for a contract failure.
+
+Third receipt:
+`/srv/fleet/dev-b/clj-surgeon-study-results/20260827T231700Z-analyzer-contract-c3637d4-dev-b2/receipt.md`
+(SHA-256 `2fd2340636eda603d3236aac78b46341a1f0218292e4e253567baeb5f5cc9fe2`).
+
 ## Remaining gates and next hills
 
 The first shared hot-reload proof stopped safely. The live reload manifest
