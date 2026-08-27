@@ -1,0 +1,40 @@
+{:schema "clj-surgeon.selector-recovery-benchmark.v1"
+ :measured-at "2026-08-26T17:20:00-07:00"
+ :harness {:commit "52407618853a1a882646e803340661e4154a85f4"
+           :entry "bb bench/run_selector_recovery_benchmark.clj"
+           :model "gpt-5.6-sol"
+           :reasoning "high"
+           :replicates 4
+           :parallelism 1}
+ :versions {:pre "d4f1adeeae1064ecde517b07535fa66eee768d1a"
+            :post "c8d0e4c"
+            :stable-publication "66b8a606e44786bb8a835d7bcd79fc3da3c15afc"}
+ :cohort {:tasks ["paths-rank1" "contract-rank7"]
+          :sessions 16
+          :counterbalanced true
+          :same-prompt true
+          :same-source-snapshot true
+          :same-tools true
+          :correct 16}
+ :structured-evidence
+ {:runs {:path "runs.tsv"
+         :sha256 "5ed702014f4e80e17c5e00ee7a146278826d8d26f96ecb98b6a495ca3f56e739"}
+  :summary {:path "summary.json"
+            :sha256 "ecb9dab20555206fd2054f4f6efdde310271284c998ec61b4b73e1ada213902f"}}
+ :raw-evidence
+ {:archive "/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-26/selector-recovery-release-20260826.tar.gz"
+  :sha256 "6621671d6d99a15035c7736d91baa4565638a7e2af2c29e875b21ae512133d51"}
+ :stable-probes
+ [{:task "paths-rank1"
+   :elapsed-ms 215.969833
+   :owners "6/6"
+   :expected-rank 1
+   :authority false}
+  {:task "contract-rank7"
+   :elapsed-ms 290.871
+   :owners "31/31"
+   :expected-rank 7
+   :authority false}]
+ :safety {:shared-port-7888-restarted false
+          :writes 0
+          :fuzzy-authority 0}}
