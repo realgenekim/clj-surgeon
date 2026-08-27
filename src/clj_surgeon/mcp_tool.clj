@@ -97,30 +97,55 @@
   (let [verification (when (map? result) (:verification result))
         read-back-hashes (when (map? result) (:read_back_hashes result))
         nonblank-string? #(and (string? %) (not (str/blank? %)))
+        sha256? #(and (string? %)
+                      (boolean (re-matches #"[0-9a-f]{64}" %)))
+        contradiction-keys [:error :error_type :error-type :reason :remedy
+                            :recovery_required :recovery-required
+                            :next_call :next-call :next-action
+                            :verification_job :verification-job
+                            :source_unchanged :source-unchanged
+                            :rolled_back :rolled-back]
+        no-contradictory-outcome?
+        (and (map? result)
+             (not-any? #(get result %) contradiction-keys))
         complete-read-back?
         (and (map? read-back-hashes)
              (seq read-back-hashes)
              (every? (fn [[path sha]]
                        (and (nonblank-string? path)
-                            (nonblank-string? sha)))
-                     read-back-hashes))]
+                            (sha256? sha)))
+                     read-back-hashes))
+        complete-verification-evidence?
+        (and (map? verification)
+             (true? (:ok verification))
+             (= "exact" (:profile verification))
+             (= :project (:profile-source verification))
+             (sha256? (:profile-sha256 verification))
+             (= :exact-exit (:acceptance verification))
+             (= :pass (:process-outcome verification))
+             (number? (:exit verification))
+             (zero? (:exit verification))
+             (nonblank-string? (:cwd verification))
+             (vector? (:argv verification))
+             (seq (:argv verification))
+             (every? nonblank-string? (:argv verification))
+             (number? (:elapsed_ms verification))
+             (<= 0 (:elapsed_ms verification))
+             (integer? (:output-bytes verification))
+             (<= 0 (:output-bytes verification))
+             (sha256? (:output-sha256 verification))
+             (contains? #{true false} (:output-truncated verification)))]
     (when (and (map? result)
+               (= "apply_clojure_changes" (:operation result))
+               no-contradictory-outcome?
                (true? (:ok result))
                (true? (:committed result))
                (true? (:verification_complete result))
                (= "none" (:next_action result))
-               (not (true? (:rolled_back result)))
                complete-read-back?
                (nonblank-string? (:undo_receipt result))
-               (nonblank-string? (:receipt_hash result))
-               (map? verification)
-               (true? (:ok verification))
-               (= "exact" (:profile verification))
-               (= :project (:profile-source verification))
-               (= :exact-exit (:acceptance verification))
-               (= :pass (:process-outcome verification))
-               (number? (:exit verification))
-               (zero? (:exit verification)))
+               (sha256? (:receipt_hash result))
+               complete-verification-evidence?)
       exact-terminal-response-text)))
 
 (defn- with-exact-terminal-response
@@ -680,7 +705,8 @@
           terminal-response-line
           (when (string? (:terminal_response result))
             (str "\n→ If this mutation completes all remaining work, return exactly: "
-                 (:terminal_response result)))]
+                 (:terminal_response result)
+                 "\n  If work remains, continue."))]
       (if (:verification_complete result)
         (format (str operation "\n"
                      "  %s edits · %s files · %s\n\n"

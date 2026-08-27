@@ -27,7 +27,9 @@
 - If `terminal_response` is present and this mutation completes all remaining
   user-requested work, return its value exactly. Do not add text, reread, or
   reverify. If work remains, do not return `terminal_response`. Treat it as
-  terminal evidence for this operation and continue.
+  terminal evidence for this operation and continue. `next_action=none` and
+  `terminal_response` describe only the completed mutation. They never prove
+  that the complete user request is finished.
 - Use native patching for a small visible literal edit, prose, a new file, or
   an unsupported operation. Use heavyweight `apply_clojure_changes` only for
   prepared semantic decisions, unique operations, or gates that must roll back

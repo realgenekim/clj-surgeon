@@ -1347,6 +1347,9 @@ run_one() {
       'After mutation, run the exact clj-kondo command from the task once. If it succeeds, do not reread, diff, format, or run another verifier. If it fails, use only its diagnostics for one bounded repair, then rerun that same exact command once. If the second verification fails, stop and report failure.' \
       >> "$run_dir/prompt.txt"
   fi
+  if [ -n "${BENCH_PROMPT_SUFFIX:-}" ]; then
+    printf '%s\n' '' "$BENCH_PROMPT_SUFFIX" >> "$run_dir/prompt.txt"
+  fi
 
   local start_sha
   start_sha=$(hash_task_targets "$task" "$workspace")
