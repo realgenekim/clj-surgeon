@@ -313,6 +313,7 @@
                     "Exact project verification profile is unavailable"
                     "Verification baseline capture failed before extraction")
            :error-type (or (:error-type exact-profile)
+                           (:error-type baseline)
                            :verification-baseline-failed)
            :verification (or exact-profile baseline)
            :source-unchanged true}
@@ -470,6 +471,7 @@
                 "Exact project verification profile is unavailable"
                 "Verification baseline capture failed before the direct transaction")
        :error-type (or (:error-type exact-profile)
+                       (:error-type baseline)
                        :verification-baseline-failed)
        :verification (or exact-profile baseline)
        :source-unchanged true}

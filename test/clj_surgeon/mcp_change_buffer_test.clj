@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
@@ -738,6 +739,46 @@
                (change-buffer/classify-exact-process-outcome
                  {:finished? true :exit 137})
                :signal)))))
+
+(deftest exact-verification-admission-timeout-is-unverified
+  ;; @spec MCP-OP-ANALYZER-002
+  ;; @spec MCP-OP-ANALYZER-004
+  (let [root (.getCanonicalPath (io/file "."))
+        lock-path (str (.resolve
+                         (java.nio.file.Files/createTempDirectory
+                           "clj-surgeon-exact-admission-"
+                           (make-array java.nio.file.attribute.FileAttribute 0))
+                         "clj-kondo.lock"))
+        gate (.getCanonicalPath (io/file "resources/clj-kondo-admission.py"))
+        options (into-array
+                  java.nio.file.OpenOption
+                  [java.nio.file.StandardOpenOption/CREATE
+                   java.nio.file.StandardOpenOption/READ
+                   java.nio.file.StandardOpenOption/WRITE])]
+    (with-open [channel (java.nio.channels.FileChannel/open
+                          (java.nio.file.Path/of lock-path (make-array String 0))
+                          options)
+                _lock (.lock channel)]
+      (binding [process-env/*clj-kondo-lock-path* lock-path
+                process-env/*clj-kondo-admission-path* gate
+                process-env/*pressure-status-path* "/definitely/missing/status.json"
+                process-env/*maximum-normalized-load* 1000000.0]
+        (let [result (change-buffer/run-exact-verification!
+                       root
+                       {:profile "exact"
+                        :profile-source :project
+                        :profile-sha256 (apply str (repeat 64 "a"))
+                        :acceptance :exact-exit
+                        :timeout-ms 250
+                        :argv ["clj-kondo" "--lint" "must-not-launch"]})]
+          (is (false? (:ok result)))
+          (is (= :verification-unverified (:error-type result)))
+          (is (= :admission-timeout (:process-outcome result)))
+          (is (= :admission-timeout (get-in result [:admission :status])))
+          (is (= :clj-kondo-admission-timeout
+                 (get-in result [:admission :error-type])))
+          (is (str/includes? (:diagnostics result)
+                             "clj-kondo-admission-timeout")))))))
 
 (deftest basis-coverage-and-provider-ambiguity-refuse-as-data
   (change-buffer/clear-bases!)

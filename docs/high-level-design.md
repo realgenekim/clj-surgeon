@@ -149,6 +149,41 @@ process crash rolls the complete transaction back. An unavailable verifier is
 unverified, never evidence that the change failed safely enough to retry
 blindly.
 
+Every Surgeon-owned clj-kondo process also crosses one host-wide admission
+gate. The gate is shared across repositories and JVMs, admits at most one
+analyzer, and spends lock waiting from the command's existing deadline. The
+gate wrapper makes its lock descriptor inheritable and then replaces itself
+with the resolved analyzer, so the analyzer owns authority for its complete
+lifetime even if the caller JVM dies. It records the admitted owner PID and
+canonical command CWD, but the operating-system lock—not stale owner text—is
+authority. Admission loss launches no analyzer; an MCP verifier treats it as
+unavailable verification authority and retains the existing rollback contract.
+Other commands do not pay this gate. An installed direct-shell entrance shares
+the lock, while an absolute call to an unrelated clj-kondo binary remains an
+explicit advisory-lock bypass.
+
+Admission is also pressure-aware. The gate reads the current one-minute load
+without a subprocess and may consume one fresh bounded flight-recorder sample.
+A fresh red or critical sample, or current normalized load at the red threshold,
+returns typed unavailable analyzer authority before waiting, while waiting, or
+after lock acquisition; no analyzer child starts. Yellow pressure still permits
+the one admitted analyzer. Admission records bounded request, CWD, scope,
+pressure, wait, and owner evidence in an append-only machine-local event stream.
+It does not claim that the analyzer caused observed pressure.
+
+An operation that uses analyzer evidence to plan a mutation must finish that
+analysis before its first write. Execution re-resolves exact owners against the
+frozen plan and current source snapshot; it does not reacquire analyzer
+authority after partial mutation. This keeps an admission refusal from
+stranding half-applied source.
+
+The analyzer test pyramid separates policy coverage from provider drift. Pure
+tests replay provenance-bearing normalized analysis fixtures; fake processes
+prove admission, deadline, cleanup, and rollback boundaries; a small mandatory
+sequential contract target runs the real analyzer for schema and adapter
+integrity. Full local suites shall not pay one real analyzer process for every
+combinatorial policy case.
+
 A successful exact-verifier mutation may also publish one deterministic
 terminal response. This response is an apply-owned presentation of normalized
 commit, read-back, receipt, and exact-exit evidence; it is never verification

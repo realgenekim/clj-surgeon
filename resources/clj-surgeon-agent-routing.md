@@ -14,6 +14,10 @@
 - Treat `verification_complete=true` as terminal mutation evidence. Do not add
   a reread or diff only because Surgeon performed the edit. Run the same
   proportional formatter, linter, and tests that the native route requires.
+- Invoke direct clj-kondo lint through `~/bin/clj-kondo`. This paved entrance
+  serializes analyzers across agents, repositories, and Surgeon JVMs. Do not
+  bypass it with an absolute Homebrew path unless the task is explicitly
+  testing the bypass contract.
 - When an extraction decision supplies the exact source, destination, ordered
   forms, and require policy, submit one `apply_clojure_changes` extraction
   directly. Supply known visibility and caller decisions; omit them when the

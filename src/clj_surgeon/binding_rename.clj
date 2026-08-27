@@ -4,9 +4,9 @@
   This namespace does not write source. It returns exact, lossless replacement
   targets for the transaction kernel."
   (:require
+   [clj-surgeon.mcp-process :as process-env]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
@@ -28,18 +28,35 @@
         config (pr-str {:output {:format :edn
                                  :analysis {:locals true
                                             :keywords true}}})
-        {:keys [exit out err]}
-        (shell/sh "clj-kondo"
-                  "--lint" "-"
-                  "--filename" file
-                  "--lang" (source-language file)
-                  "--config" config
-                  :dir working-directory
-                  :in source)
+        command ["clj-kondo" "--lint" "-"
+                 "--filename" file
+                 "--lang" (source-language file)
+                 "--config" config]
+        {:keys [finished? exit out err admission]}
+        (try
+          (process-env/run-bounded!
+            {:command command
+             :cwd working-directory
+             :timeout-ms 120000
+             :stdin-text source
+             :visible-byte-limit (* 1024 1024)})
+          (catch Exception error
+            (refuse! :analyzer-authority-unverified
+                     "clj-kondo binding-analysis authority is unavailable"
+                     {:file file
+                      :cause-error-type (:error-type (ex-data error))})))
         result (try
                  (edn/read-string out)
                  (catch Exception _ nil))
         analysis (:analysis result)]
+    (when-not (= :admitted (:status admission))
+      (refuse! :analyzer-authority-unverified
+               "clj-kondo binding-analysis authority is unverified"
+               {:file file :admission admission}))
+    (when-not (and finished? (zero? exit))
+      (refuse! :binding-analysis-failed
+               "clj-kondo binding analysis did not complete successfully"
+               {:file file :exit exit :diagnostic (str/trim (or err ""))}))
     (when-not (map? analysis)
       (refuse! :binding-analysis-failed
                "clj-kondo did not return local binding analysis"

@@ -2,27 +2,45 @@
   "Detect forward references using clj-kondo analysis."
   (:require
    [cheshire.core :as json]
-   [clojure.java.shell :as shell]
+   [clj-surgeon.mcp-process :as process-env]
    [clojure.string :as str]))
 
 (defn- run-kondo [file]
-  (let [result (try
-                 (shell/sh "clj-kondo" "--lint" file
-                           "--config"
-                           "{:output {:format :json} :analysis {:var-definitions true :var-usages true}}")
-                 (catch java.io.IOException e
-                   (binding [*out* *err*]
-                     (println "clj-surgeon: 'clj-kondo' not found on PATH (required for forward-ref analysis).")
-                     (println "  Install (no sudo): bash <(curl -s https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo) --dir ~/bin")
-                     (println "  Or see: https://github.com/clj-kondo/clj-kondo/blob/master/doc/install.md"))
-                   (System/exit 2)))]
-    (when (str/blank? (:err result))
-      (json/parse-string (:out result) true))))
+  (let [command ["clj-kondo" "--lint" file
+                 "--config"
+                 "{:output {:format :json} :analysis {:var-definitions true :var-usages true}}"]
+        result (try
+                 (process-env/run-bounded!
+                   {:command command
+                    :cwd (System/getProperty "user.dir")
+                    :timeout-ms 120000
+                    :visible-byte-limit (* 1024 1024)})
+                 (catch Exception error
+                   (throw (ex-info
+                            "Forward-reference analyzer authority is unavailable"
+                            {:error-type :analyzer-authority-unverified
+                             :cause-error-type (:error-type (ex-data error))}
+                            error))))]
+    (when-not (= :admitted (get-in result [:admission :status]))
+      (throw (ex-info "Forward-reference analyzer authority is unverified"
+                      {:error-type :analyzer-authority-unverified
+                       :admission (:admission result)})))
+    (when-not (and (:finished? result) (zero? (:exit result)))
+      (throw (ex-info "Forward-reference analysis failed"
+                      {:error-type :forward-reference-analysis-failed
+                       :exit (:exit result)
+                       :diagnostic (str/trim (or (:err result) ""))})))
+    (try
+      (json/parse-string (:out result) true)
+      (catch Exception error
+        (throw (ex-info "Forward-reference analyzer returned invalid JSON"
+                        {:error-type :forward-reference-analysis-invalid}
+                        error))))))
 
 (defn detect-forward-refs
   "Returns forward references: vars used before they're defined in the same namespace."
   [file ns-name]
-  (when-let [data (run-kondo file)]
+  (let [data (run-kondo file)]
     (let [analysis (:analysis data)
           defs (into {}
                      (for [d (:var-definitions analysis)

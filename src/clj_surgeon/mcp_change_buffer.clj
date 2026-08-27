@@ -17,12 +17,10 @@
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
-   (java.io ByteArrayOutputStream)
    (java.nio.charset StandardCharsets)
    (java.nio.file LinkOption Path Paths)
    (java.security MessageDigest)
-   (java.util UUID)
-   (java.util.concurrent TimeUnit)))
+   (java.util UUID)))
 
 (def max-bases 32)
 (def basis-ttl-ms (* 60 60 1000))
@@ -1259,61 +1257,42 @@
       .digest
       bytes->hex))
 
-(defn- output-evidence
-  [output-file]
-  (with-open [input (io/input-stream output-file)]
-    (let [digest (MessageDigest/getInstance "SHA-256")
-          visible (ByteArrayOutputStream.)
-          buffer (byte-array 8192)]
-      (loop [total 0]
-        (let [read-count (.read input buffer)]
-          (if (neg? read-count)
-            {:output-bytes total
-             :output-sha256 (bytes->hex (.digest digest))
-             :output-truncated (> total exact-verification-visible-bytes)
-             :output (String. (.toByteArray visible) StandardCharsets/UTF_8)}
-            (let [remaining (max 0 (- exact-verification-visible-bytes
-                                      (.size visible)))
-                  visible-count (min remaining read-count)]
-              (.update digest buffer 0 read-count)
-              (when (pos? visible-count)
-                (.write visible buffer 0 visible-count))
-              (recur (+ total read-count)))))))))
-
 (defn run-process!
   ([project-root command]
    (run-process! project-root command 120000))
   ([project-root command timeout-ms]
-   (let [started (System/nanoTime)
-         output-file (java.io.File/createTempFile "clj-surgeon-verify-" ".log")]
+   (let [started (System/nanoTime)]
      (try
-       (let [builder (-> (ProcessBuilder. ^java.util.List command)
-                         (.directory (io/file project-root))
-                         (.redirectErrorStream true)
-                         (.redirectOutput output-file))
-             environment (.environment builder)
-             _ (process-env/configure-environment! environment)
-             process (.start builder)
-             finished? (.waitFor process timeout-ms TimeUnit/MILLISECONDS)
-             _ (when-not finished?
-                 (.destroyForcibly process)
-                 (.waitFor process 5 TimeUnit/SECONDS))]
-         (merge
-           {:finished? finished?
-            :exit (when finished? (.exitValue process))
-            :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)}
-           (output-evidence output-file)))
+       (process-env/run-bounded!
+         {:command command
+          :cwd project-root
+          :timeout-ms timeout-ms
+          :merge-error? true
+          :visible-byte-limit exact-verification-visible-bytes})
        (catch Exception error
-         (merge
-           {:finished? false
-            :launch-error true
-            :exit nil
-            :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-            :output (or (.getMessage error) (.getName (class error)))}
-           (select-keys (output-evidence output-file)
-                        [:output-bytes :output-sha256 :output-truncated])))
-       (finally
-         (.delete output-file))))))
+         {:finished? false
+          :launch-error true
+          :exit nil
+          :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+          :output (or (.getMessage error) (.getName (class error)))
+          :output-bytes 0
+          :output-sha256 (sha256-text "")
+          :output-truncated false
+          :admission-error (ex-data error)})))))
+
+(defn- admission-unverified?
+  [{:keys [admission admission-error]}]
+  (let [status (or (:status admission)
+                   (get-in admission-error [:admission :status]))
+        error-type (or (:error-type admission)
+                       (:error-type admission-error))]
+    (or (#{:delegated :admission-timeout :pressure-deferred} status)
+        (#{:clj-kondo-admission-unavailable
+           :clj-kondo-executable-unavailable
+           :clj-kondo-admission-timeout
+           :clj-kondo-pressure-deferred
+           :process-interrupted}
+         error-type))))
 
 (defn compile-exact-profile
   "Compile one project-owned exact profile into an immutable execution value."
@@ -1359,8 +1338,12 @@
        :argv (expand-command command [])})))
 
 (defn classify-exact-process-outcome
-  [{:keys [finished? launch-error exit]}]
+  [{:keys [finished? launch-error exit admission] :as process}]
   (cond
+    (admission-unverified? process)
+    {:process-outcome (if (= :admission-timeout (:status admission))
+                        :admission-timeout
+                        :admission-unavailable)}
     launch-error {:process-outcome :launch-failure}
     (not finished?) {:process-outcome :timeout}
     (zero? exit) {:process-outcome :pass}
@@ -1376,6 +1359,7 @@
   ;; @spec MCP-OP-VERIFY-007
   ;; @spec MCP-OP-VERIFY-009
   ;; @spec MCP-OP-VERIFY-010
+  ;; @spec MCP-OP-ANALYZER-004
   (let [cwd (.getCanonicalPath (io/file project-root))
         process (run-process! cwd (:argv compiled-profile)
                               (:timeout-ms compiled-profile))
@@ -1390,7 +1374,8 @@
                     :elapsed_ms (:elapsed_ms process)
                     :output-bytes (:output-bytes process)
                     :output-sha256 (:output-sha256 process)
-                    :output-truncated (:output-truncated process)})]
+                    :output-truncated (:output-truncated process)}
+                   (select-keys process [:admission :admission-error]))]
     (case outcome
       :pass (assoc evidence :ok true)
       :ordinary-nonzero
@@ -1403,14 +1388,23 @@
 
 (defn- run-check!
   [project-root command]
-  (let [{:keys [finished? exit elapsed_ms output]}
-        (run-process! project-root command)
-        ok (and finished? (zero? exit))]
-    (cond-> {:ok ok
-             :command (first command)
-             :exit exit
-             :elapsed_ms elapsed_ms}
-      (not ok) (assoc :output output))))
+  (let [{:keys [finished? exit elapsed_ms output] :as process}
+        (run-process! project-root command)]
+    (if (admission-unverified? process)
+      {:ok false
+       :command (first command)
+       :exit exit
+       :elapsed_ms elapsed_ms
+       :error-type :verification-unverified
+       :output output
+       :admission (:admission process)
+       :admission-error (:admission-error process)}
+      (let [ok (and finished? (zero? exit))]
+        (cond-> {:ok ok
+                 :command (first command)
+                 :exit exit
+                 :elapsed_ms elapsed_ms}
+          (not ok) (assoc :output output))))))
 
 (def diagnostic-output-config
   "{:output {:format :edn}}")
@@ -1426,20 +1420,29 @@
 
 (defn- run-diagnostic-check!
   [project-root command files]
-  (let [{:keys [finished? exit elapsed_ms output]}
-        (run-process! project-root (diagnostic-command command files))
-        parsed (when finished?
-                 (try
-                   (edn/read-string output)
-                   (catch Exception _ nil)))
-        ok (and finished? (map? parsed) (vector? (:findings parsed)))]
-    (cond-> {:ok ok
-             :command (first command)
-             :exit exit
-             :elapsed_ms elapsed_ms}
-      ok (assoc :diagnostics parsed)
-      (not ok) (assoc :output output
-                      :error-type :invalid-diagnostic-output))))
+  (let [{:keys [finished? exit elapsed_ms output] :as process}
+        (run-process! project-root (diagnostic-command command files))]
+    (if (admission-unverified? process)
+      {:ok false
+       :command (first command)
+       :exit exit
+       :elapsed_ms elapsed_ms
+       :error-type :verification-unverified
+       :output output
+       :admission (:admission process)
+       :admission-error (:admission-error process)}
+      (let [parsed (when finished?
+                     (try
+                       (edn/read-string output)
+                       (catch Exception _ nil)))
+            ok (and finished? (map? parsed) (vector? (:findings parsed)))]
+        (cond-> {:ok ok
+                 :command (first command)
+                 :exit exit
+                 :elapsed_ms elapsed_ms}
+          ok (assoc :diagnostics parsed)
+          (not ok) (assoc :output output
+                          :error-type :invalid-diagnostic-output))))))
 
 (defn capture-verification-baseline!
   "Capture cache-independent diagnostic snapshots before a transaction writes."
@@ -1454,6 +1457,7 @@
       {:ok (every? :ok checks)
        :profile profile
        :checks checks
+       :error-type (some :error-type (remove :ok checks))
        :elapsed_ms (reduce + 0.0 (map :elapsed_ms checks))})
     {:ok false
      :profile profile
@@ -1527,6 +1531,7 @@
        {:ok (and command-ok? hot-ok? (or (nil? cold) (:ok cold)))
         :profile profile
         :checks checks
+        :error-type (some :error-type (remove :ok checks))
         :hot-verification hot
         :cold-verification cold
         :verification_complete (not= :running (:status cold))

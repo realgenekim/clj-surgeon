@@ -1,8 +1,10 @@
 (ns clj-surgeon.fix-declares-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [clj-surgeon.fix-declares :as fix]
-            [clojure.string :as str]
-            [clojure.java.io :as io]))
+  (:require
+   [clj-surgeon.fix-declares :as fix]
+   [clj-surgeon.forward-refs :as fwd]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]))
 
 (defn with-temp-file [source f]
   (let [tmp (java.io.File/createTempFile "fix-declares" ".clj")]
@@ -98,6 +100,35 @@
         (testing "bar before caller-b"
           (is (< (str/index-of new-source "(defn bar")
                  (str/index-of new-source "(defn caller-b"))))))))
+
+(deftest execute-reuses-the-frozen-owner-plan-after-the-first-analysis
+  (with-temp-file multi-declares
+    (fn [path]
+      (let [calls (atom 0)
+            forward-refs [{:name 'foo :used-at 7 :defined-at 13 :gap 6}
+                          {:name 'bar :used-at 10 :defined-at 16 :gap 6}]]
+        (with-redefs [fwd/detect-forward-refs
+                      (fn [_file _ns]
+                        (swap! calls inc)
+                        forward-refs)]
+          (let [result (fix/execute! path)
+                new-source (slurp path)]
+            (is (= 1 @calls)
+                "execution must not reacquire analyzer authority after writing")
+            (is (= 2 (-> result :summary :moves)))
+            (is (not (str/includes? new-source "(declare foo)")))
+            (is (not (str/includes? new-source "(declare bar)")))))))))
+
+(deftest planning-authority-loss-leaves-source-unchanged
+  (with-temp-file simple-forward-ref
+    (fn [path]
+      (let [before (slurp path)]
+        (with-redefs [fwd/detect-forward-refs
+                      (fn [& _]
+                        (throw (ex-info "deferred"
+                                        {:error-type :analyzer-authority-unverified})))]
+          (is (thrown? clojure.lang.ExceptionInfo (fix/execute! path)))
+          (is (= before (slurp path))))))))
 
 ;; ============================================================
 ;; Mixed: some removable, some needed (mutual recursion)

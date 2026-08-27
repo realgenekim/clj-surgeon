@@ -1,8 +1,8 @@
 (ns clj-surgeon.move-dependency-test
   (:require
    [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.move :as move]
-   [clojure.java.shell :as shell]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [rewrite-clj.zip :as z]))
@@ -23,10 +23,17 @@
   (mapv :name (:stranded result)))
 
 (defn- cold-lints? [source filename]
-  (zero? (:exit (shell/sh "clj-kondo" "--lint" "-"
-                          "--filename" filename
-                          "--fail-level" "error"
-                          :in source))))
+  (let [command ["clj-kondo" "--lint" "-"
+                 "--filename" filename
+                 "--fail-level" "error"]
+        result (process-env/run-bounded!
+                 {:command command
+                  :cwd (System/getProperty "user.dir")
+                  :timeout-ms 120000
+                  :stdin-text source})]
+    (and (= :admitted (get-in result [:admission :status]))
+         (:finished? result)
+         (zero? (:exit result)))))
 
 (deftest issue-20-plain-move-refuses-and-recommends-mv-with-deps
   (let [source (slurp "test-fixtures/mv/mothership_stranded_dep.clj")
