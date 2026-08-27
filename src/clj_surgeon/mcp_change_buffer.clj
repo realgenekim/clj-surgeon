@@ -17,7 +17,10 @@
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
+   (java.io ByteArrayOutputStream)
+   (java.nio.charset StandardCharsets)
    (java.nio.file LinkOption Path Paths)
+   (java.security MessageDigest)
    (java.util UUID)
    (java.util.concurrent TimeUnit)))
 
@@ -25,6 +28,7 @@
 (def basis-ttl-ms (* 60 60 1000))
 (def max-sites 24)
 (def max-visible-characters (* 32 1024))
+(def exact-verification-visible-bytes 12000)
 (def max-snapshot-characters (* 4 1024 1024))
 (defonce basis-store (atom {}))
 
@@ -1244,32 +1248,151 @@
                          search-paths))]
     (assoc expanded 0 (or resolved executable))))
 
+(defn- bytes->hex
+  [bytes]
+  (apply str (map #(format "%02x" (bit-and 0xff %)) bytes)))
+
+(defn- sha256-text
+  [text]
+  (-> (doto (MessageDigest/getInstance "SHA-256")
+        (.update (.getBytes ^String text StandardCharsets/UTF_8)))
+      .digest
+      bytes->hex))
+
+(defn- output-evidence
+  [output-file]
+  (with-open [input (io/input-stream output-file)]
+    (let [digest (MessageDigest/getInstance "SHA-256")
+          visible (ByteArrayOutputStream.)
+          buffer (byte-array 8192)]
+      (loop [total 0]
+        (let [read-count (.read input buffer)]
+          (if (neg? read-count)
+            {:output-bytes total
+             :output-sha256 (bytes->hex (.digest digest))
+             :output-truncated (> total exact-verification-visible-bytes)
+             :output (String. (.toByteArray visible) StandardCharsets/UTF_8)}
+            (let [remaining (max 0 (- exact-verification-visible-bytes
+                                      (.size visible)))
+                  visible-count (min remaining read-count)]
+              (.update digest buffer 0 read-count)
+              (when (pos? visible-count)
+                (.write visible buffer 0 visible-count))
+              (recur (+ total read-count)))))))))
+
 (defn run-process!
-  [project-root command]
-  (let [started (System/nanoTime)
-        output-file (java.io.File/createTempFile "clj-surgeon-verify-" ".log")]
-    (try
-      (let [builder (-> (ProcessBuilder. ^java.util.List command)
-                        (.directory (io/file project-root))
-                        (.redirectErrorStream true)
-                        (.redirectOutput output-file))
-            environment (.environment builder)
-            _ (process-env/configure-environment! environment)
-            process (.start builder)
-            finished? (.waitFor process 120 TimeUnit/SECONDS)
-            _ (when-not finished? (.destroyForcibly process))
-            raw-output (slurp output-file)]
-        {:finished? finished?
-         :exit (when finished? (.exitValue process))
-         :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-         :output (subs raw-output 0 (min 12000 (count raw-output)))})
-      (catch Exception error
-        {:finished? false
-         :exit nil
-         :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-         :output (or (.getMessage error) (.getName (class error)))})
-      (finally
-        (.delete output-file)))))
+  ([project-root command]
+   (run-process! project-root command 120000))
+  ([project-root command timeout-ms]
+   (let [started (System/nanoTime)
+         output-file (java.io.File/createTempFile "clj-surgeon-verify-" ".log")]
+     (try
+       (let [builder (-> (ProcessBuilder. ^java.util.List command)
+                         (.directory (io/file project-root))
+                         (.redirectErrorStream true)
+                         (.redirectOutput output-file))
+             environment (.environment builder)
+             _ (process-env/configure-environment! environment)
+             process (.start builder)
+             finished? (.waitFor process timeout-ms TimeUnit/MILLISECONDS)
+             _ (when-not finished?
+                 (.destroyForcibly process)
+                 (.waitFor process 5 TimeUnit/SECONDS))]
+         (merge
+           {:finished? finished?
+            :exit (when finished? (.exitValue process))
+            :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)}
+           (output-evidence output-file)))
+       (catch Exception error
+         (merge
+           {:finished? false
+            :launch-error true
+            :exit nil
+            :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
+            :output (or (.getMessage error) (.getName (class error)))}
+           (select-keys (output-evidence output-file)
+                        [:output-bytes :output-sha256 :output-truncated])))
+       (finally
+         (.delete output-file))))))
+
+(defn compile-exact-profile
+  "Compile one project-owned exact profile into an immutable execution value."
+  [profile profiles profile-source]
+  ;; @spec MCP-OP-VERIFY-001 MCP-OP-VERIFY-002 MCP-OP-VERIFY-003
+  ;; @spec MCP-OP-VERIFY-004 MCP-OP-VERIFY-005
+  (let [definition (get profiles profile)
+        command (first (:commands definition))
+        valid-command? (and (vector? command)
+                            (seq command)
+                            (every? #(and (string? %) (not (str/blank? %))) command))]
+    (cond
+      (not= "exact" profile)
+      {:ok false :error-type :unknown-verification-profile
+       :source-unchanged true}
+
+      (not= :project profile-source)
+      {:ok false :error-type :exact-profile-not-project-owned
+       :source-unchanged true}
+
+      (not (and (map? definition)
+                (= #{:acceptance :timeout-ms :commands}
+                   (set (keys definition)))
+                (= :exact-exit (:acceptance definition))
+                (integer? (:timeout-ms definition))
+                (<= 1 (:timeout-ms definition) 120000)
+                (= 1 (count (:commands definition)))
+                valid-command?
+                (not-any? #{"{files}"} command)))
+      {:ok false :error-type :invalid-exact-verification-profile
+       :source-unchanged true}
+
+      :else
+      {:ok true
+       :profile profile
+       :profile-source profile-source
+       :profile-sha256 (sha256-text (pr-str (into (sorted-map) definition)))
+       :acceptance :exact-exit
+       :timeout-ms (:timeout-ms definition)
+       :argv (expand-command command [])})))
+
+(defn classify-exact-process-outcome
+  [{:keys [finished? launch-error exit]}]
+  (cond
+    launch-error {:process-outcome :launch-failure}
+    (not finished?) {:process-outcome :timeout}
+    (zero? exit) {:process-outcome :pass}
+    (>= exit 128) {:process-outcome :crash-or-signal-style-exit}
+    :else {:process-outcome :ordinary-nonzero}))
+
+(defn run-exact-verification!
+  "Execute one compiled exact profile and return terminal bounded evidence."
+  [project-root compiled-profile]
+  ;; @spec MCP-OP-VERIFY-003 MCP-OP-VERIFY-005 MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007 MCP-OP-VERIFY-009 MCP-OP-VERIFY-010
+  (let [cwd (.getCanonicalPath (io/file project-root))
+        process (run-process! cwd (:argv compiled-profile)
+                              (:timeout-ms compiled-profile))
+        outcome (:process-outcome (classify-exact-process-outcome process))
+        evidence (merge
+                   (select-keys compiled-profile
+                                [:profile :profile-source :profile-sha256
+                                 :acceptance :timeout-ms :argv])
+                   {:cwd cwd
+                    :process-outcome outcome
+                    :exit (:exit process)
+                    :elapsed_ms (:elapsed_ms process)
+                    :output-bytes (:output-bytes process)
+                    :output-sha256 (:output-sha256 process)
+                    :output-truncated (:output-truncated process)})]
+    (case outcome
+      :pass (assoc evidence :ok true)
+      :ordinary-nonzero
+      (assoc evidence :ok false
+             :error-type :verification-failed
+             :diagnostics (:output process))
+      (assoc evidence :ok false
+             :error-type :verification-unverified
+             :diagnostics (:output process)))))
 
 (defn- run-check!
   [project-root command]

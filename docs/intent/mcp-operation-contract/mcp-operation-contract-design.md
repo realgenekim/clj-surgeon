@@ -445,9 +445,12 @@ or restore the verifier authority before submitting a new guarded request.
 
 Shadow equivalence must precede activation. At minimum, the external command and
 exact profile route must agree on canonical cwd, resolved executable, remaining
-argument order, exit acceptance, and captured output byte count and hash for a
-warning-bearing pass, a normal lint failure, a missing file or executable, and
-one unverified process outcome. It does not claim complete environment identity.
+argument order, exit acceptance, and diagnostic meaning for a warning-bearing
+pass, a normal lint failure, a missing file or executable, and one unverified
+process outcome. Each route must publish its own complete captured-output byte
+count and hash. Separate invocations need not have identical bytes when the
+verifier emits nondeterministic timing text. Equivalence does not claim complete
+environment identity.
 The extraction boundary witness must prove the verifier observed staged
 destination bytes and that failure restored every original byte, removed every
 created path, and did not leave a usable receipt.
