@@ -811,7 +811,7 @@ task_prompt() {
   if is_portfolio_task "$task"; then
     local prompt_file=task.txt
     case "$context" in
-      mcp-extraction-plan-no-skill) prompt_file=task-plan.txt ;;
+      mcp-extraction-plan-no-skill|mcp-extraction-internal-no-skill) prompt_file=task-plan.txt ;;
       mcp-extraction-discover-no-skill) prompt_file=task-discover.txt ;;
     esac
     command cat "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/$prompt_file"
@@ -888,6 +888,8 @@ if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
     echo 'plan prompt leaked the withheld visibility decision' >&2
     exit 1
   fi
+  task_prompt sessionize-format-extraction mcp-extraction-internal-no-skill \
+    | grep -q 'visibility changes and caller accounting are deliberately not supplied'
   task_prompt sessionize-format-extraction mcp-extraction-discover-no-skill \
     | grep -q 'private blank-normalization helper'
   if task_prompt sessionize-format-extraction mcp-extraction-discover-no-skill \
@@ -1040,7 +1042,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1062,7 +1064,8 @@ run_one() {
   local replicate=${5:-1}
   local run_id
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
-  if { [ "$context" = mcp-extraction-plan-no-skill ] \
+  if { [ "$context" = mcp-extraction-internal-no-skill ] \
+      || [ "$context" = mcp-extraction-plan-no-skill ] \
       || [ "$context" = mcp-extraction-discover-no-skill ]; } \
     && [ "$task" != sessionize-format-extraction ]; then
     echo "Extraction staircase contexts require sessionize-format-extraction: $run_id" >&2
@@ -1081,6 +1084,7 @@ run_one() {
     && [ "$context" != matched-skill ] \
     && [ "$context" != mcp-hint-no-skill ] \
     && [ "$context" != mcp-extraction-hint-no-skill ] \
+    && [ "$context" != mcp-extraction-internal-no-skill ] \
     && [ "$context" != mcp-extraction-plan-no-skill ] \
     && [ "$context" != mcp-extraction-discover-no-skill ] \
     && [ "$context" != native-computed-hint-no-skill ] \
@@ -1242,6 +1246,10 @@ run_one() {
   fi
   if [ "$context" = 'mcp-extraction-hint-no-skill' ]; then
     printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'mcp-extraction-internal-no-skill' ]; then
+    printf '%s\n' '' 'The task supplies the exact source, destination, complete forms list, and require policy. Call apply_clojure_changes exactly once with only those extraction fields; deliberately omit public_forms, caller_changes, ignored_caller_files, and expect so the kernel derives every mechanically provable field from its frozen workspace snapshot. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. If the kernel commits, treat its successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-plan-no-skill' ]; then
