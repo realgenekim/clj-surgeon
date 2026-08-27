@@ -176,8 +176,12 @@
 
 (defn- execute-extraction!
   [config root request receipt verify]
-  ;; @spec MCP-OP-VERIFY-001 MCP-OP-VERIFY-005 MCP-OP-VERIFY-006
-  ;; @spec MCP-OP-VERIFY-007 MCP-OP-VERIFY-008 MCP-OP-VERIFY-009
+  ;; @spec MCP-OP-VERIFY-001
+  ;; @spec MCP-OP-VERIFY-005
+  ;; @spec MCP-OP-VERIFY-006
+  ;; @spec MCP-OP-VERIFY-007
+  ;; @spec MCP-OP-VERIFY-008
+  ;; @spec MCP-OP-VERIFY-009
   ;; @spec MCP-OP-VERIFY-010
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
