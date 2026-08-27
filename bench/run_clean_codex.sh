@@ -311,7 +311,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
@@ -327,6 +327,7 @@ validate_run_matrix() {
       && [ "$context" != matched-skill ] \
       && [ "$context" != mcp-hint-no-skill ] \
       && [ "$context" != mcp-extraction-hint-no-skill ] \
+      && [ "$context" != mcp-extraction-tool-first-no-skill ] \
       && [ "$context" != mcp-extraction-internal-no-skill ] \
       && [ "$context" != mcp-extraction-plan-no-skill ] \
       && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -362,6 +363,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:edit-computed-hint-no-skill'
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-internal-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
@@ -510,6 +512,25 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   test -z "$(git -C "$self_test_workspace" status --short)"
   bb "$repo_root/bench/score_source_fidelity.clj" --self-test >/dev/null
   bb "$repo_root/bench/score_format_extraction.clj" --self-test >/dev/null
+  bb "$repo_root/bench/event_timing.clj" --self-test >/dev/null
+
+  set +e
+  /bin/bash -c 'printf "%s\n" "{\"type\":\"turn.completed\"}"; exit 23' \
+    | bb "$repo_root/bench/event_timing.clj" tap \
+        "$self_test_root/producer-exit-clock.tsv" \
+      > "$self_test_root/producer-exit-events.jsonl"
+  event_pipeline_status=("${PIPESTATUS[@]}")
+  set -e
+  test "${event_pipeline_status[0]}" -eq 23
+  test "${event_pipeline_status[1]}" -eq 0
+  test "$(cat "$self_test_root/producer-exit-events.jsonl")" \
+    = '{"type":"turn.completed"}'
+  bb "$repo_root/bench/event_timing.clj" summarize \
+    "$self_test_root/producer-exit-events.jsonl" \
+    "$self_test_root/producer-exit-clock.tsv" 1000 2000 \
+    > "$self_test_root/producer-exit-phase-timing.edn"
+  grep -q ':process-wall-ms 1000' \
+    "$self_test_root/producer-exit-phase-timing.edn"
 
   result_dir=$original_result_dir
   rm -rf "$self_test_root"
@@ -1044,7 +1065,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1086,6 +1107,7 @@ run_one() {
     && [ "$context" != matched-skill ] \
     && [ "$context" != mcp-hint-no-skill ] \
     && [ "$context" != mcp-extraction-hint-no-skill ] \
+    && [ "$context" != mcp-extraction-tool-first-no-skill ] \
     && [ "$context" != mcp-extraction-internal-no-skill ] \
     && [ "$context" != mcp-extraction-plan-no-skill ] \
     && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -1250,6 +1272,10 @@ run_one() {
     printf '%s\n' '' 'The task already supplies the exact source, destination, complete forms list, required public visibility change, and caller scope. Call apply_clojure_changes exactly once with extraction, require_policy=minimal, the task-declared public_forms, and empty caller_changes and ignored_caller_files. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
       >> "$run_dir/prompt.txt"
   fi
+  if [ "$context" = 'mcp-extraction-tool-first-no-skill' ]; then
+    printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]}}. Every field except workspace_root is nested inside extraction; no extraction field is top-level. The task already supplies every value and caller scope. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+      >> "$run_dir/prompt.txt"
+  fi
   if [ "$context" = 'mcp-extraction-internal-no-skill' ]; then
     printf '%s\n' '' 'The task supplies the exact source, destination, complete forms list, and require policy. Call apply_clojure_changes exactly once with only those extraction fields; deliberately omit public_forms, caller_changes, ignored_caller_files, and expect so the kernel derives every mechanically provable field from its frozen workspace snapshot. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. If the kernel commits, treat its successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
       >> "$run_dir/prompt.txt"
@@ -1303,7 +1329,7 @@ run_one() {
   start_sha=$(hash_task_targets "$task" "$workspace")
   printf '%s\n' "$start_sha" > "$run_dir/start.sha256"
 
-  local start_ms end_ms wall_ms exit_code sandbox
+  local start_ms end_ms wall_ms exit_code observer_exit_code sandbox
   start_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
   sandbox=${BENCH_SANDBOX_MODE:-}
   if [ -z "$sandbox" ]; then
@@ -1320,6 +1346,7 @@ run_one() {
       ;;
   esac
 
+  local event_pipeline_status
   set +e
   local codex_args=(exec --json --ephemeral)
   if [ "$version" != mcp ]; then
@@ -1334,12 +1361,23 @@ run_one() {
     --skip-git-repo-check --sandbox "$sandbox" --color never \
     -m "$model" -c "model_reasoning_effort=\"$reasoning\"" \
     -C "$workspace" "$(cat "$run_dir/prompt.txt")" \
-    > "$run_dir/events.jsonl" 2> "$run_dir/stderr.txt" </dev/null
-  exit_code=$?
+    2> "$run_dir/stderr.txt" </dev/null \
+    | bb "$repo_root/bench/event_timing.clj" tap "$run_dir/event-clock.tsv" \
+      > "$run_dir/events.jsonl"
+  event_pipeline_status=("${PIPESTATUS[@]}")
+  exit_code=${event_pipeline_status[0]}
+  observer_exit_code=${event_pipeline_status[1]}
   set -e
 
   end_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
   wall_ms=$((end_ms - start_ms))
+  if [ "$observer_exit_code" -ne 0 ]; then
+    echo "Event timing observer failed for $run_id: $observer_exit_code" >&2
+    exit 2
+  fi
+  bb "$repo_root/bench/event_timing.clj" summarize \
+    "$run_dir/events.jsonl" "$run_dir/event-clock.tsv" "$start_ms" "$end_ms" \
+    > "$run_dir/phase-timing.edn"
   if [ -n "${mcp_pid:-}" ]; then
     kill "$mcp_pid" 2>/dev/null || true
     wait "$mcp_pid" 2>/dev/null || true
@@ -1732,7 +1770,7 @@ run_one() {
         route_adherent=false
       fi
       ;;
-    mcp-extraction-hint-no-skill)
+    mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill)
       if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
