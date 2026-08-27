@@ -1,6 +1,7 @@
 (ns clj-surgeon.quoted-var-refs-test
   (:require
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]))
 
@@ -41,35 +42,100 @@
             "(ns consumer.core)\n(defn caller [] #'target)\n"
             "sample.core/target")))))
 
-(deftest captured-source-scan-parses-each-candidate-once-for-many-subjects
-  (let [source (str "(ns consumer.core\n"
-                    "  (:require [sample.core :as sample]))\n"
-                    "(def refs [#'sample/first\n"
-                    "           #'sample/second\n"
-                    "           (var sample.core/first)])\n")
-        subjects ["sample.core/second" "sample.core/first"]
-        batch-calls (atom 0)
-        batch quoted-var-refs/references-in-source-for-subjects
-        result
-        (with-redefs
-          [quoted-var-refs/references-in-source-for-subjects
-           (fn [file captured-source captured-subjects]
-             (swap! batch-calls inc)
-             (batch file captured-source captured-subjects))]
-          (quoted-var-refs/scan-sources
-            {"src/consumer/core.clj" source}
-            subjects))]
+(deftest captured-source-scan-builds-one-context-per-candidate-not-subject
+  (let [source
+        (str "(ns consumer.core\n"
+             "  (:require [sample.core :as sample]))\n"
+             "(def refs [#'sample/first\n"
+             "           #'sample/second\n"
+             "           (var sample.core/first)\n"
+             "           #'target])\n"
+             "(def inert '(var sample.core/first))\n"
+             "(def discarded #_(var sample.core/second) nil)\n")
+        sources {"src/consumer/one.clj" source
+                 "src/consumer/two.clj" source}
+        subjects ["sample.core/second"
+                  "sample.core/first"
+                  "sample/first"
+                  "consumer.core/target"
+                  "sample.core/second"]
+        context-var (ns-resolve 'clj-surgeon.quoted-var-refs
+                                'namespace-context)
+        reference-var (ns-resolve 'clj-surgeon.quoted-var-refs
+                                  'var-reference-symbol)
+        original-context @context-var
+        original-reference @reference-var
+        measure
+        (fn [selected-subjects]
+          (let [contexts (atom 0)
+                traversals (atom 0)
+                result
+                (with-redefs-fn
+                  {context-var
+                   (fn [& args]
+                     (swap! contexts inc)
+                     (apply original-context args))
+                   reference-var
+                   (fn [& args]
+                     (swap! traversals inc)
+                     (apply original-reference args))}
+                  #(quoted-var-refs/scan-sources sources selected-subjects))]
+            {:result result
+             :contexts @contexts
+             :traversals @traversals}))
+        single (measure ["sample.core/first"])
+        many (measure subjects)
+        result (:result many)
+        expected-locations
+        (vec
+          (for [[file captured-source] (sort-by key sources)
+                subject subjects
+                reference
+                (quoted-var-refs/references-in-source
+                  file captured-source subject)]
+            (merge reference
+                   {:file_path file
+                    :source_sha256
+                    (structural-lens/source-hash captured-source)
+                    :subject subject
+                    :role :reference})))]
     (is (:ok result))
-    (is (= 1 @batch-calls)
-        "subject count must not multiply candidate-file parsing")
-    (is (= ["sample.core/second"
-            "sample.core/first"
-            "sample.core/first"]
-           (mapv :subject (:locations result))))
-    (is (= ["#'sample/second"
-            "#'sample/first"
-            "(var sample.core/first)"]
-           (mapv :source (:locations result))))))
+    (is (= 2 (:contexts single) (:contexts many))
+        "candidate count, not subject count, owns context construction")
+    (is (= (:traversals single) (:traversals many))
+        "candidate traversal must not multiply with subject count")
+    (is (= expected-locations (:locations result))
+        "batch output preserves complete ordered singleton evidence")
+    (is (= 2 (:candidate-file-count result)))
+    (is (= (count expected-locations) (:reference-count result)))
+    (is (= sources (:sources result)))))
+
+(deftest captured-source-scan-refuses-invalid-or-partial-evidence
+  (let [invalid (quoted-var-refs/scan-sources
+                  {"src/valid.clj" "(ns valid)"}
+                  [nil "" "missing-slash" "too/many/slashes"])]
+    (is (false? (:ok invalid)))
+    (is (= :invalid-quoted-var-subjects (:error-type invalid)))
+    (is (= [{:index 0 :subject nil}
+            {:index 1 :subject ""}
+            {:index 2 :subject "missing-slash"}
+            {:index 3 :subject "too/many/slashes"}]
+           (:invalid-subjects invalid)))
+    (is (not (contains? invalid :locations)))
+    (is (not (contains? invalid :sources))))
+
+  (let [result
+        (quoted-var-refs/scan-sources
+          {"src/a-valid.clj"
+           "(ns valid)\n(def x #'sample.core/target)\n"
+           "src/z-broken.clj"
+           "(ns broken)\n(def x #'sample.core/target\n"}
+          ["sample.core/target"])]
+    (is (false? (:ok result)))
+    (is (= :quoted-var-scan-failed (:error-type result)))
+    (is (not (contains? result :locations)))
+    (is (not (contains? result :sources)))
+    (is (:source-unchanged result))))
 
 (deftest captured-source-scan-is-pure-bounded-and-deterministic
   (let [sources
@@ -96,11 +162,18 @@
            result)
         "map iteration order cannot change proof output"))
 
-  (let [result (quoted-var-refs/scan-sources
-                 {"src/a.clj" "(ns a) (def x #'sample.core/target)"
-                  "src/b.clj" "(ns b) (def x #'sample.core/target)"}
-                 ["sample.core/target"]
-                 {:max-candidate-files 1})]
+  (let [context-var (ns-resolve 'clj-surgeon.quoted-var-refs
+                                'namespace-context)
+        result
+        (with-redefs-fn
+          {context-var
+           (fn [& _]
+             (throw (ex-info "candidate parsing must not start" {})))}
+          #(quoted-var-refs/scan-sources
+             {"src/a.clj" "(ns a) (def x #'sample.core/target)"
+              "src/b.clj" "(ns b) (def x #'sample.core/target)"}
+             ["sample.core/target"]
+             {:max-candidate-files 1}))]
     (is (false? (:ok result)))
     (is (= :quoted-var-scan-budget-exceeded (:error-type result)))
     (is (true? (:source-unchanged result))))
