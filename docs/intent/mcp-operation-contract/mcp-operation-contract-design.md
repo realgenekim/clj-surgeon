@@ -349,6 +349,96 @@ Similarity and ranking evidence cannot close an unknown. This fast path is an
 MCP apply contract only; the CLI `extract!` review policy and its source-hash
 surface remain unchanged.
 
+## Exact Repository Verifier Boundary
+
+The exact verifier is a closed workspace capability, not an arbitrary command
+surface. An `apply_clojure_changes` request may select `verify="exact"`, but it
+cannot supply executable text, arguments, environment values, or a timeout. The
+workspace's `.clj-surgeon.edn` must declare the conventional `"exact"` profile.
+Process-level profiles and built-in `fast` or `full` profiles cannot satisfy
+that selector. Absence or invalid closed data refuses before source mutation.
+
+The first exact profile shape is deliberately singular and bounded:
+
+```clojure
+{:verification-profiles
+ {"exact"
+  {:acceptance :exact-exit
+   :timeout-ms 120000
+   :commands
+   [["clj-kondo" "--lint"
+     "src/example/core.clj"
+     "src/example/moved.clj"
+     "--fail-level" "error"]]}}}
+```
+
+The profile contains exactly one non-empty string argument vector and one
+positive bounded timeout. It cannot contain hot or cold verification, and the
+argument vector cannot contain `{files}`. This preserves the repository's
+declared file scope and relative spelling instead of replacing them with the
+transaction's absolute changed-file set. The process runner resolves only the
+executable through the paved path. It preserves every remaining argument in
+order, uses the canonical project root as cwd, inherits the server environment
+with the paved PATH adjustment, and does not invoke a shell.
+
+Exact-exit is separate from the existing diagnostic-delta policy. In
+diagnostic-delta mode, clj-kondo runs before and after a transaction with cache
+disabled and EDN output so introduced findings can be classified. That is
+useful for a generic changed-file profile, but it is not the command the
+repository declared. Exact-exit therefore performs no pre-write verifier run,
+adds no cache or output arguments, and accepts only the declared process exit.
+This distinction is the permanent ratchet from the rejected `verify=fast`
+experiment, which rolled back safely but rejected warnings that the requested
+`--fail-level error` command permitted.
+
+The existing extraction transaction remains the only mutation authority:
+
+```text
+compile and format candidate bytes
+  -> guarded whole-file write and read-back
+  -> stage inverse receipt
+  -> execute exact project argv against those candidate bytes
+       -> exit 0: publish terminal verified receipt
+       -> ordinary nonzero: exact verification failure, undo all files
+       -> timeout / launch failure / signal crash: unverified, undo all files
+```
+
+The runner aggregates stdout and stderr in arrival order because the MCP command
+surface already reports aggregated diagnostics. It hashes and counts the full
+output before bounding visible text. A passing check returns the project profile
+identity, canonical cwd, resolved argv, exit zero, elapsed time, output byte
+count, and output hash without forcing warning bodies into model context. A
+failed or unverified check additionally returns bounded aggregated diagnostics.
+Timeout, launch failure, crash, and ordinary nonzero exit remain distinct so a
+caller does not mistake an unavailable authority for a semantic rejection.
+
+Every non-pass attempts the existing receipt-backed whole-transaction undo.
+Only verified undo may publish `source_unchanged=true`. A rollback failure keeps
+the recovery evidence and reports manual recovery required. Neither a
+deterministic verifier failure nor an unverified process outcome recommends an
+automatic or blind retry. The caller must fix the reported program diagnostics
+or restore the verifier authority before submitting a new guarded request.
+
+### Behavior matrix
+
+| Profile / process state | Write before verifier | Public outcome | Required evidence | Final source state |
+|---|---|---|---|---|
+| Project `exact`, exit 0 with warnings | Candidate written and read back | success, `verification_complete=true` | profile source, cwd, resolved argv, exit 0, elapsed, output bytes/hash | candidate retained; inverse receipt retained |
+| Project `exact`, ordinary nonzero | Candidate written and read back | `verification-failed` | exit, bounded aggregated diagnostics, verified rollback | original bytes restored; created files removed |
+| Project `exact`, deadline exceeded | Candidate written and read back | `verification-unverified` / timeout | deadline, elapsed, bounded partial output, verified rollback | original bytes restored; created files removed |
+| Project `exact`, executable cannot launch | Candidate written and read back | `verification-unverified` / launch failure | resolved argv, launch diagnostic, verified rollback | original bytes restored; created files removed |
+| Project `exact`, signal-style crash | Candidate written and read back | `verification-unverified` / crash | exit/signal-style status, bounded output, verified rollback | original bytes restored; created files removed |
+| Project `exact`, verifier non-pass and undo fails | Candidate written and read back | recovery required | verifier evidence plus per-file recovery evidence | unknown; never claim `source_unchanged` |
+| Exact profile absent, process-owned, malformed, or not `:exact-exit` | none | pre-write refusal | failed profile/source validation | source unchanged |
+| `fast` or `full` selected | Existing behavior | existing profile result | existing profile evidence | existing semantics unchanged |
+
+Shadow equivalence must precede activation. At minimum, the external command and
+exact profile route must agree on a warning-bearing pass, a normal lint failure,
+a missing file or executable, and one unverified process outcome. The extraction
+boundary witness must prove the verifier observed staged destination bytes and
+that failure restored every original byte, removed every created path, and did
+not leave a usable receipt.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -385,6 +475,7 @@ existing lossless transaction contract.
 | Extraction planning entrance | A top-level `inspect_clojure` mission over the shared pure planner | Fifth public tool; typed batch read operation; CLI subprocess | Planning is a coherent workspace-wide read mission, not one file read, and reuses the existing public read envelope. |
 | Plan-to-apply authority | Exact source hash plus explicit caller decisions | Retained in-memory plan; similarity; unguarded replay | The hash is transport-neutral, stale-safe, and grants no implicit write authority. |
 | Workspace source universe | One deterministic shared scanner for planning and execution | Duplicate scans in each handler; semantic index as authority | Both phases must reason over identical eligible paths and exact bytes without another index lifecycle. |
+| Exact repository verifier | Project-owned `"exact"` profile with `:acceptance :exact-exit`; execute one closed argv after candidate read-back | Arbitrary request command; generic `verify=fast`; clj-kondo diagnostic delta; external second action | It deletes one model boundary without changing file scope, warning policy, command arguments, or rollback authority. |
 | EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
 | Selector recovery | Per-failed-owner bounded hypotheses with no automatic selection | Aggregate candidates, automatic fuzzy selection, or immediate retained continuation | One refusal gives the model enough real structure for an exact retry without letting presentation rank become authority. |
 

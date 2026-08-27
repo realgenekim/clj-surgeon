@@ -136,6 +136,19 @@ the kernel owns exact form closure, counts, source guards, and failure-atomic
 execution. Planning grants no write authority, and a stale plan refuses before
 mutation.
 
+An exact repository verifier may participate in the same guarded mutation only
+when the workspace declares it as closed data. The request names the
+conventional exact profile; it never supplies a command. The executor validates
+that project-owned profile before mutation, writes and reads back the candidate
+bytes through the existing transaction, and then runs the declared argument
+vector from the project root. Exact-exit profiles do not inherit clj-kondo's
+diagnostic-baseline mode: the kernel does not add arguments, compare a finding
+delta, strengthen warning policy, or substitute a built-in profile. Exit zero
+returns terminal verified evidence. Nonzero exit, timeout, launch failure, or
+process crash rolls the complete transaction back. An unavailable verifier is
+unverified, never evidence that the change failed safely enough to retry
+blindly.
+
 ### Compress a coherent read mission without guessing
 
 The read path treats a coherent set of known questions as one immutable
