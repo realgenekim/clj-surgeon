@@ -71,10 +71,10 @@
     "verification_complete=false plus one inspect next_call; continue useful "
     "work and copy it once instead of replaying the edit. Success parses and "
     "reads back every file and publishes an inverse receipt. "
-    "verification_complete=true is terminal. If terminal_response is present "
-    "and this mutation completes all remaining user-requested work, return its "
-    "value exactly without rereading, reverifying, or adding a second summary. "
-    "If work remains, continue from the terminal evidence. Use native "
+    "verification_complete=true is terminal. When terminal_response is present, "
+    "check whether this mutation completes all remaining user-requested work. "
+    "If it does, return terminal_response exactly. Do not add text. If work "
+    "remains, do not return terminal_response; continue from the terminal evidence. Use native "
     "patching for prose or one arbitrary text edit."))
 
 ;; @spec MCP-OP-SCHEMA-001
@@ -679,7 +679,8 @@
             "")
           terminal-response-line
           (when (string? (:terminal_response result))
-            (str "\n→ final response · " (:terminal_response result)))]
+            (str "\n→ If this mutation completes all remaining work, return exactly: "
+                 (:terminal_response result)))]
       (if (:verification_complete result)
         (format (str operation "\n"
                      "  %s edits · %s files · %s\n\n"

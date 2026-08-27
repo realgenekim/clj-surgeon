@@ -859,7 +859,10 @@
       (is (= 1 (count (re-seq (re-pattern
                                 (java.util.regex.Pattern/quote response))
                               summary))))
-      (is (str/includes? summary "2.25 ms")))
+      (is (str/includes? summary "2.25 ms"))
+      (is (str/includes?
+            summary
+            "If this mutation completes all remaining work, return exactly:")))
     (is (= {:type "string"}
            (get-in mcp-tool/clj-change-output-schema
                    [:properties "terminal_response"])))
@@ -901,7 +904,7 @@
                                 (java.util.regex.Pattern/quote response))
                               (get-in @calls [0 :content])))))
       (is (number? (get-in @calls [0 :payload :elapsed_ms])))
-      (is (re-find #"If terminal_response is present"
+      (is (re-find #"When terminal_response is present"
                    mcp-tool/tool-description))
       (finally
         (mcp-tool/init! nil)))))
