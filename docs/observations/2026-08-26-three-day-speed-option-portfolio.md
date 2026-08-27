@@ -69,19 +69,20 @@ available decomposition:
 ```text
 complete wall                                      37.500 s
   extraction apply/kernel                           8.297 s
-  exact clj-kondo command                            1.407 s
-  residual model, scheduling, transport, narration 27.796 s
+  non-kernel residual                               29.203 s
 
 5x target against native 122.278 / 5                24.456 s
 remaining reduction required                        13.044 s
 ```
 
-The 27.796-second residual is not a claim that all of it is hidden reasoning.
-The retained event stream lacks timestamps between model items. It includes
-prompt ingestion, service scheduling, reasoning, tool-call serialization,
-receipt interpretation, two short narrations, and final response generation.
-This is why more item-level clocks are the first experiment, not a speculative
-product rewrite.
+The 29.203-second residual is not a claim that all of it is hidden reasoning.
+The retained event stream lacks timestamps between model items and does not
+report the exact lint command's duration. It includes that lint process, prompt
+ingestion, service scheduling, reasoning, tool-call serialization, receipt
+interpretation, two short narrations, and final response generation. The
+`commands.tsv` value `1407` is command-output character count, not 1.407
+seconds. This is why more item-level clocks are the first experiment, not a
+speculative product rewrite.
 
 The broader three-day telemetry supports the same boundary. The MCP service
 median was 196 ms; `inspect_clojure` median was 177 ms; and
@@ -126,8 +127,9 @@ transaction and roll back on the same exit semantics. The prior generic
 `verify=fast` attempt is negative evidence: no warning policy, scope, or command
 may change.
 
-**Projected option:** The command itself cost 1.407 seconds. Removing its model
-transition may save another 2–4 seconds, for roughly 3–5 seconds total.
+**Projected option:** Unmeasured. The current harness proves one separate
+command action and 1,407 output characters, but not its wall time. Add command
+start/end timestamps before assigning a savings range.
 
 **Falsifier:** Four different existing verifier contracts do not produce
 identical exit/output decisions, or complete wall improves less than 15%.
@@ -135,11 +137,18 @@ identical exit/output decisions, or complete wall improves less than 15%.
 ### 4. Use a cheaper materializer after judgment is complete
 
 The SCI model-routing probe moved from Sol/high at 25.712 seconds to Terra/low
-at 20.262 seconds, with both exact and one-shot. That is a 5.45-second signal,
-not a production design. A fast materializer must receive a complete bounded
-decision and no architectural authority.
+at 20.262 seconds, with both exact and one-shot. A later counterbalanced ABBA
+screen on the frozen 15-owner extraction measured Sol/high at 33.409 and
+35.981 seconds versus Terra/low at 30.616 and 33.068 seconds. Both models were
+2/2 correct, emitted the byte-identical extraction request, used one apply plus
+one exact lint, and produced the same normalized source diff. Terra/low saved
+2.853 seconds or 8.2% at the median; non-kernel residual fell 2.668 seconds.
+This is a real small-n signal, not yet a production design.
 
-**Projected option:** Save 3–6 seconds on the model floor.
+**Measured option:** Save 2.853 seconds in the first ABBA screen. The model and
+reasoning effort changed together, so the screen does not isolate the cause.
+Stop here unless item clocks show model materialization is a dominant removable
+interval; this campaign is optimizing the Sol/high route, not smaller models.
 
 **Falsifier:** The same frozen extraction does not preserve correctness and
 route geometry across counterbalanced fast-materializer replicas.
@@ -187,17 +196,18 @@ extraction gap by itself.
 
 These projections are a portfolio, not additive promises:
 
-| Independent seam | Conservative saving | Optimistic saving |
-|---|---:|---:|
-| Hot complete extraction proof | 4 s | 7 s |
-| Exact verifier inside the same transaction | 3 s | 5 s |
-| Cheaper materializer/decision boundary | 3 s | 6 s |
-| **Combined** | **10 s** | **18 s** |
+| Independent seam | Current evidence |
+|---|---:|
+| Hot complete extraction proof | Projected 4–7 s; phase profile still required |
+| Exact verifier inside the same transaction | Unmeasured; command timestamps and semantic parity required |
+| Cheaper materializer/decision boundary | Measured 2.853 s median in a 2+2 ABBA screen |
 
-Applied to the 37.500-second independent run, the plausible range is 19.5 to
-27.5 seconds. The 24.456-second 5x threshold lies inside that range. This makes
-5x credible, but it requires at least two mechanisms; formatter work or tool
-schema subtraction alone cannot do it.
+The cheaper materializer moved the contemporaneous median from 34.695 to
+31.842 seconds. Against the retained 122.278-second native median, that is
+3.84x and still 7.386 seconds above the 24.456-second 5x threshold. A hot
+complete proof could plausibly close much of that gap; verification compression
+must not be counted until its wall and exact semantics are measured. Formatter
+work or tool-schema subtraction alone cannot do it.
 
 Run the options in increasing cost order:
 
@@ -245,4 +255,3 @@ observable item clocks
 - `docs/observations/2026-08-24-mcp-startup-heap-breakthrough.md`
 - `/tmp/clj-surgeon-agent-usage-20260824-26.json`
 - `/tmp/clj-surgeon-surgeon2-65e72b7-success-arms-r2/runs.tsv`
-
