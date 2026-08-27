@@ -188,6 +188,22 @@ by one uniquely namespaced six-source analyzer contract. The fast lane is
 `make test-fast`; the real-provider lane is `make analyzer-contract-test`; the
 complete `make test` still requires both.
 
+The MCP behavior runner then fell from ten real analyzer launches to zero. Its
+diagnostic multiset policy was already exhaustively pure. The transaction test
+now injects baseline/future receipts while still proving that baseline sees
+original bytes, verification sees staged bytes, success can be undone, and a
+new blocking finding restores the original bytes. The distinct external
+contract moved to the real-provider lane as two sequential calls: one baseline
+and one coherent future snapshot using the project `:lint-as` configuration.
+The affected warm cohort passed 63 tests and 571 assertions with the machine
+event ledger unchanged.
+
+The explicit real-provider lane now contains three launches: one batched move
+corpus plus the diagnostic baseline/future pair. The remaining two target
+launches are the forward-reference and binding-analysis schema contracts. Until
+those land and the five-launch lane passes remotely or under a fresh-green
+lease, MCP-OP-ANALYZER-008 remains open.
+
 SURGEON2's independent executable design receipt is commit `dd29b6a` on
 `experiment/clj-kondo-admission-gate-design`. Its prototype is evidence, not a
 second production implementation.

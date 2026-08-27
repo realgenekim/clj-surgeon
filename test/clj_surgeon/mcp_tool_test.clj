@@ -1201,7 +1201,7 @@
                                  {:ok true})}
                      (assoc decision-request "verify" "fast"))]
         (is (false? (:ok result)))
-        (is (= "verification-baseline-failed" (:error_type result)))
+        (is (= "invalid-diagnostic-output" (:error_type result)))
         (is (true? (:source_unchanged result)))
         (is (false? @verification-called?))
         (doseq [[relative source] before]
@@ -1241,6 +1241,46 @@
         original (str "(ns sample.core)\n"
                       "(defn target [] {:status :old :value missing})\n")
         profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]]}}
+        observations (atom [])
+        observe! (fn [phase root profile received-profiles files]
+                   (let [observation {:phase phase
+                                      :root (.getCanonicalPath (io/file root))
+                                      :profile profile
+                                      :profiles received-profiles
+                                      :files files
+                                      :source (slurp source)}]
+                     (swap! observations conj observation)
+                     observation))
+        capture-baseline! (fn [root profile received-profiles files]
+                            (observe! :baseline root profile received-profiles files)
+                            {:ok true
+                             :profile "fast"
+                             :checks [{:ok true
+                                       :command "clj-kondo"
+                                       :diagnostics
+                                       {:findings [{:filename "src/sample/core.clj"
+                                                    :type :unresolved-symbol
+                                                    :level :warning
+                                                    :message "Unresolved symbol: missing"}]}}]})
+        verify! (fn [root profile received-profiles files]
+                  (let [{candidate :source}
+                        (observe! :future root profile received-profiles files)
+                        introduced? (str/includes? candidate "another-missing")]
+                    {:ok (not introduced?)
+                     :profile "fast"
+                     :checks [{:ok (not introduced?)
+                               :command "clj-kondo"
+                               :diagnostic-delta
+                               {:unchanged-count 1
+                                :introduced-count (if introduced? 1 0)
+                                :blocking-introduced-count (if introduced? 1 0)
+                                :blocking-introduced
+                                (if introduced?
+                                  [{:filename "src/sample/core.clj"
+                                    :type :unresolved-symbol
+                                    :level :warning
+                                    :message "Unresolved symbol: another-missing"}]
+                                  [])}}]}))
         request (fn [replacement]
                   {"changes"
                    [{"id" "status"
@@ -1258,7 +1298,9 @@
         (let [result (mcp-tool/execute-request!
                        {:project-root (.getPath workspace)
                         :receipt-dir (.getPath receipt-dir)
-                        :verification-profiles profiles}
+                        :verification-profiles profiles
+                        :capture-verification-baseline! capture-baseline!
+                        :verify! verify!}
                        (request ":new"))]
           (is (:ok result))
           (is (= 1 (get-in result
@@ -1275,7 +1317,9 @@
         (let [result (mcp-tool/execute-request!
                        {:project-root (.getPath workspace)
                         :receipt-dir (.getPath receipt-dir)
-                        :verification-profiles profiles}
+                        :verification-profiles profiles
+                        :capture-verification-baseline! capture-baseline!
+                        :verify! verify!}
                        (request "another-missing"))]
           (is (false? (:ok result)))
           (is (= "verification-failed" (:error_type result)))
@@ -1284,6 +1328,15 @@
                            [:verification :checks 0 :diagnostic-delta
                             :blocking-introduced-count])))
           (is (= original (slurp source)))))
+      (testing "the fake boundary observes original then staged bytes exactly once"
+        (is (= [:baseline :future :baseline :future]
+               (mapv :phase @observations)))
+        (is (= [original original]
+               (mapv :source (filter #(= :baseline (:phase %)) @observations))))
+        (is (str/includes? (:source (nth @observations 1)) ":status :new"))
+        (is (str/includes? (:source (nth @observations 3)) "another-missing"))
+        (is (apply = (map #(select-keys % [:root :profile :profiles :files])
+                          @observations))))
       (finally
         (delete-tree! workspace)))))
 
