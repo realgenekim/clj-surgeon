@@ -157,6 +157,13 @@ contract materializes six baseline/candidate snapshots under six unique
 namespaces, then submits one no-cache directory lint. Unique namespaces prevent
 one snapshot from satisfying another.
 
+The next ratchet made the MCP behavior runner analyzer-free. The diagnostic
+policy matrix remains in pure `diagnostic-delta` tests, and the MCP transaction
+test injects normalized baseline/future receipts while retaining staged-byte,
+undo, failure, and rollback assertions. The real macro/config boundary moved to
+the analyzer-contract lane as exactly two calls. The focused MCP cohort passed
+63 tests and 571 assertions with the host event ledger unchanged.
+
 ## Admission and convoy law
 
 The analyzer-owned `fcntl` lock prevents overlap across agents, JVMs, and

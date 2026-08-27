@@ -743,42 +743,33 @@
 (deftest exact-verification-admission-timeout-is-unverified
   ;; @spec MCP-OP-ANALYZER-002
   ;; @spec MCP-OP-ANALYZER-004
-  (let [root (.getCanonicalPath (io/file "."))
-        lock-path (str (.resolve
-                         (java.nio.file.Files/createTempDirectory
-                           "clj-surgeon-exact-admission-"
-                           (make-array java.nio.file.attribute.FileAttribute 0))
-                         "clj-kondo.lock"))
-        gate (.getCanonicalPath (io/file "resources/clj-kondo-admission.py"))
-        options (into-array
-                  java.nio.file.OpenOption
-                  [java.nio.file.StandardOpenOption/CREATE
-                   java.nio.file.StandardOpenOption/READ
-                   java.nio.file.StandardOpenOption/WRITE])]
-    (with-open [channel (java.nio.channels.FileChannel/open
-                          (java.nio.file.Path/of lock-path (make-array String 0))
-                          options)
-                _lock (.lock channel)]
-      (binding [process-env/*clj-kondo-lock-path* lock-path
-                process-env/*clj-kondo-admission-path* gate
-                process-env/*pressure-status-path* "/definitely/missing/status.json"
-                process-env/*maximum-normalized-load* 1000000.0]
-        (let [result (change-buffer/run-exact-verification!
-                       root
-                       {:profile "exact"
-                        :profile-source :project
-                        :profile-sha256 (apply str (repeat 64 "a"))
-                        :acceptance :exact-exit
-                        :timeout-ms 250
-                        :argv ["clj-kondo" "--lint" "must-not-launch"]})]
-          (is (false? (:ok result)))
-          (is (= :verification-unverified (:error-type result)))
-          (is (= :admission-timeout (:process-outcome result)))
-          (is (= :admission-timeout (get-in result [:admission :status])))
-          (is (= :clj-kondo-admission-timeout
-                 (get-in result [:admission :error-type])))
-          (is (str/includes? (:diagnostics result)
-                             "clj-kondo-admission-timeout")))))))
+  (with-redefs [process-env/run-bounded!
+                (fn [_]
+                  {:finished? true
+                   :exit 75
+                   :elapsed_ms 10.0
+                   :output "clj-kondo-admission-timeout"
+                   :output-bytes 27
+                   :output-sha256 (apply str (repeat 64 "a"))
+                   :output-truncated false
+                   :admission {:status :admission-timeout
+                               :error-type :clj-kondo-admission-timeout}})]
+    (let [result (change-buffer/run-exact-verification!
+                   (.getCanonicalPath (io/file "."))
+                   {:profile "exact"
+                    :profile-source :project
+                    :profile-sha256 (apply str (repeat 64 "a"))
+                    :acceptance :exact-exit
+                    :timeout-ms 1000
+                    :argv ["clj-kondo" "--lint" "must-not-launch"]})]
+      (is (false? (:ok result)))
+      (is (= :verification-unverified (:error-type result)))
+      (is (= :admission-timeout (:process-outcome result)))
+      (is (= :admission-timeout (get-in result [:admission :status])))
+      (is (= :clj-kondo-admission-timeout
+             (get-in result [:admission :error-type])))
+      (is (str/includes? (:diagnostics result)
+                         "clj-kondo-admission-timeout")))))
 
 (deftest basis-coverage-and-provider-ambiguity-refuse-as-data
   (change-buffer/clear-bases!)
@@ -1039,103 +1030,6 @@
         (is (= (:basis prepared) (get-in prepared [:next_call :basis]))))
       (finally
         (change-buffer/clear-bases!)))))
-
-(deftest cache-independent-diagnostic-deltas-use-one-coherent-future-snapshot
-  (let [root (.toFile
-               (java.nio.file.Files/createTempDirectory
-                 "clj-surgeon-diagnostic-delta-"
-                 (make-array java.nio.file.attribute.FileAttribute 0)))
-        core (io/file root "src/sample/core.clj")
-        caller (io/file root "src/sample/caller.clj")
-        macros (io/file root "src/sample/macros.clj")
-        kondo-config (io/file root ".clj-kondo/config.edn")
-        profiles {"fast" {:commands [["clj-kondo" "--lint" "{files}"]]}}
-        files ["src/sample/core.clj" "src/sample/caller.clj"
-               "src/sample/macros.clj"]]
-    (try
-      (doseq [file [core caller macros kondo-config]]
-        (.mkdirs (.getParentFile file)))
-      (spit kondo-config
-            "{:lint-as {sample.macros/>defn clojure.core/defn}}\n")
-      (spit caller "(ns sample.caller)\n")
-      (spit macros
-            (str "(ns sample.macros)\n"
-                 "(defmacro >defn [& body] (cons 'defn body))\n"))
-
-      (testing "an existing diagnostic survives unrelated line drift"
-        (spit core
-              (str "(ns sample.core)\n"
-                   "(defn legacy [] missing)\n"))
-        (let [baseline (change-buffer/capture-verification-baseline!
-                         root "fast" profiles files)]
-          (is (:ok baseline))
-          (is (= 1 (count (get-in baseline [:checks 0 :diagnostics :findings]))))
-          (spit core
-                (str "(ns sample.core)\n\n"
-                     "(def stable :stable)\n"
-                     "(defn legacy [] missing)\n"))
-          (let [verification (change-buffer/run-verification!
-                               root "fast" profiles files baseline)]
-            (is (:ok verification))
-            (is (= 1 (get-in verification
-                             [:checks 0 :diagnostic-delta :unchanged-count])))
-            (is (zero? (get-in verification
-                               [:checks 0 :diagnostic-delta
-                                :blocking-introduced-count]))))))
-
-      (testing "one additional diagnostic is a regression"
-        (spit core
-              (str "(ns sample.core)\n\n"
-                   "(def stable :stable)\n"
-                   "(defn legacy [] missing)\n"))
-        (let [baseline (change-buffer/capture-verification-baseline!
-                         root "fast" profiles files)]
-          (spit core
-                (str "(ns sample.core)\n\n"
-                     "(def stable :stable)\n"
-                     "(defn legacy [] missing)\n"
-                     "(defn added [] another-missing)\n"))
-          (let [verification (change-buffer/run-verification!
-                               root "fast" profiles files baseline)]
-            (is (false? (:ok verification)))
-            (is (= 1 (get-in verification
-                             [:checks 0 :diagnostic-delta
-                              :blocking-introduced-count]))))))
-
-      (testing "a macro-defined Var and its new caller resolve in one future run"
-        (spit core
-              (str "(ns sample.core\n"
-                   "  (:require [sample.macros :as macros]))\n"
-                   "(defn existing [] :ok)\n"))
-        (spit caller
-              (str "(ns sample.caller\n"
-                   "  (:require [sample.core :as core]))\n"
-                   "(def before (core/existing))\n"))
-        (let [baseline (change-buffer/capture-verification-baseline!
-                         root "fast" profiles files)]
-          (is (:ok baseline))
-          (is (= 1 (count (get-in baseline
-                                  [:checks 0 :diagnostics :findings])))
-              "the future transaction may remove a pre-existing warning")
-          (spit core
-                (str "(ns sample.core\n"
-                     "  (:require [sample.macros :as macros]))\n"
-                     "(defn existing [] :ok)\n"
-                     "(macros/>defn added [] :added)\n"))
-          (spit caller
-                (str "(ns sample.caller\n"
-                     "  (:require [sample.core :as core]))\n"
-                     "(def before (core/existing))\n"
-                     "(def after (core/added))\n"))
-          (let [verification (change-buffer/run-verification!
-                               root "fast" profiles files baseline)]
-            (is (:ok verification))
-            (is (empty? (get-in verification
-                                [:checks 0 :diagnostic-delta
-                                 :blocking-introduced]))))))
-      (finally
-        (doseq [file (reverse (file-seq root))]
-          (.delete file))))))
 
 (deftest exact-file-owner-preparation-is-confined-unique-and-definition-only
   (let [project (temp-project)
