@@ -35,6 +35,7 @@
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
+   [clj-surgeon.syntax-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]
    [clj-surgeon.xray-test]
    [clojure.test :refer [run-tests]]))
@@ -54,6 +55,7 @@
                    'clj-surgeon.file-ops-test
                    'clj-surgeon.show-form-test
                    'clj-surgeon.structural-lens-test
+                   'clj-surgeon.syntax-var-refs-test
                    'clj-surgeon.lens-query-test
                    'clj-surgeon.cljc.merge-test
                    'clj-surgeon.cljc.split-test
