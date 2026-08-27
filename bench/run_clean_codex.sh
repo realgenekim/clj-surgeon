@@ -311,7 +311,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     case "$context" in
@@ -336,6 +336,7 @@ validate_run_matrix() {
       && [ "$context" != mcp-hint-no-skill ] \
       && [ "$context" != mcp-extraction-hint-no-skill ] \
       && [ "$context" != mcp-extraction-tool-first-no-skill ] \
+      && [ "$context" != mcp-extraction-fused-tool-first-no-skill ] \
       && [ "$context" != mcp-extraction-internal-no-skill ] \
       && [ "$context" != mcp-extraction-plan-no-skill ] \
       && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -372,6 +373,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-transform-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-tool-first-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-fused-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-internal-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
@@ -1077,7 +1079,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1120,6 +1122,7 @@ run_one() {
     && [ "$context" != mcp-hint-no-skill ] \
     && [ "$context" != mcp-extraction-hint-no-skill ] \
     && [ "$context" != mcp-extraction-tool-first-no-skill ] \
+    && [ "$context" != mcp-extraction-fused-tool-first-no-skill ] \
     && [ "$context" != mcp-extraction-internal-no-skill ] \
     && [ "$context" != mcp-extraction-plan-no-skill ] \
     && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -1286,6 +1289,10 @@ run_one() {
   fi
   if [ "$context" = 'mcp-extraction-tool-first-no-skill' ]; then
     printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]}}. Every field except workspace_root is nested inside extraction; no extraction field is top-level. The task already supplies every value and caller scope. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'mcp-extraction-fused-tool-first-no-skill' ]; then
+    printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]},"verify":"exact"}. Every extraction field is nested inside extraction; verify is top-level. The project-owned exact profile runs the task-declared clj-kondo command against staged bytes inside the atomic transaction. Do not run clj-kondo or any other shell verifier. Treat verification_complete=true and the exact-exit evidence as terminal mutation and verification proof.' \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-internal-no-skill' ]; then
@@ -1788,6 +1795,15 @@ run_one() {
         || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
         || [ "$mcp_failures" -ne 0 ] || [ "$verified" != true ] \
         || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
+    mcp-extraction-fused-tool-first-no-skill)
+      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 0 ] \
+        || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
         route_adherent=false
       fi
       ;;
