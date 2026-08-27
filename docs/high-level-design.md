@@ -149,6 +149,16 @@ process crash rolls the complete transaction back. An unavailable verifier is
 unverified, never evidence that the change failed safely enough to retry
 blindly.
 
+A successful exact-verifier mutation may also publish one deterministic
+terminal response. This response is an apply-owned presentation of normalized
+commit, read-back, receipt, and exact-exit evidence; it is never verification
+authority and never model-authored. The response is absent for non-exact
+success, pending verification, refusal, rollback, failure, and every unverified
+state. The shared MCP operation finalizer remains unchanged and continues to
+own only elapsed time. A coding agent may relay the terminal response verbatim
+only when that mutation completes all remaining user-requested work; otherwise
+the agent treats it as terminal evidence for that operation and continues.
+
 ### Compress a coherent read mission without guessing
 
 The read path treats a coherent set of known questions as one immutable
