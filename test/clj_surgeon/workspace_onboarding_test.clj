@@ -118,10 +118,8 @@
     (is (str/includes? block "required = true"))
     (is (str/includes? block
                        "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]"))
-    (is (str/includes? block "[mcp_servers.cclsp]"))
-    (is (str/includes? block
-                       "[mcp_servers.cclsp]\nurl = \"http://127.0.0.1:7891/mcp\"\nrequired = false"))
-    (is (str/includes? block "\"resolve_var_surface\""))
+    (is (not (str/includes? block "[mcp_servers.cclsp]")))
+    (is (not (str/includes? block "resolve_var_surface")))
     (is (not (str/includes? block "rename")))))
 
 (deftest upsert-preserves-unmanaged-settings-and-is-idempotent
@@ -143,7 +141,7 @@
                     "[mcp_servers.unrelated]\n"
                     "command = \"keep-me\"\n")
         after (onboarding/upsert-workspace-block before options)]
-    (is (= 1 (count (re-seq #"\[mcp_servers\.cclsp\]" after))))
+    (is (not (str/includes? after "[mcp_servers.cclsp]")))
     (is (= 1 (count (re-seq #"\[mcp_servers\.clj-surgeon\]" after))))
     (is (not (str/includes? after "old-cclsp")))
     (is (not (str/includes? after "OLD_ROOT")))
@@ -159,7 +157,7 @@
         before (str "[mcp_servers.cclsp]\ncommand = \"old-cclsp\"\n\n"
                     managed "\n")
         after (onboarding/upsert-workspace-block before options)]
-    (is (= 1 (count (re-seq #"\[mcp_servers\.cclsp\]" after))))
+    (is (not (str/includes? after "[mcp_servers.cclsp]")))
     (is (= 1 (count (re-seq #"\[mcp_servers\.clj-surgeon\]" after))))
     (is (str/includes? after "http://127.0.0.1:7889/mcp"))
     (is (not (str/includes? after "old-cclsp")))
@@ -189,8 +187,7 @@
                (try
                  (onboarding/upsert-workspace-block source options)
                  (catch Exception e e)))))))
-  (doseq [[field bad-url] [[:surgeon-url "http://localhost:7889/mcp"]
-                           [:cclsp-url "https://127.0.0.1:7891/mcp"]]]
+  (doseq [[field bad-url] [[:surgeon-url "http://localhost:7889/mcp"]]]
     (is (= {:error-type :invalid-workspace-mcp-url
             :field field
             :value bad-url}
@@ -215,6 +212,7 @@
       (is (:changed receipt))
       (is (:restart-required receipt))
       (is (str/starts-with? installed "model = \"gpt-5\"\n"))
+      (is (not (str/includes? installed "[mcp_servers.cclsp]")))
       (is (= installed
              (slurp target)))
       (is (false?
@@ -341,6 +339,7 @@
         "onboarding another workspace must not interrupt active shared sessions")
     (is (= 2 (count (filter #(some #{"mcp-start"} (:command %)) @commands))))
     (is (= 2 (count @probes)))
+    (is (every? #(= onboarding/shared-cclsp-url (:url %)) @probes))
     (is (every? #(some (fn [argument]
                          (str/starts-with? argument "CCLSP_STATE_DIR="))
                        (:command %))
@@ -351,12 +350,14 @@
            (get-in first-result [:servers :clj-surgeon])))
     (is (= onboarding/shared-cclsp-url
            (get-in first-result [:servers :cclsp])))
+    (is (not (str/includes? (slurp (:codex-config first-result))
+                            "[mcp_servers.cclsp]")))
     (is (= 1 (count (re-seq
                       (re-pattern (java.util.regex.Pattern/quote
                                     (.getCanonicalPath root)))
                       (slurp (:cclsp-config first-result))))))))
 
-(deftest up-reports-when-a-managed-cclsp-restart-invalidates-client-sessions
+(deftest internal-semantic-provider-restart-does-not-invalidate-agent-sessions
   (let [root (.toFile
                (java.nio.file.Files/createTempDirectory
                  "clj-surgeon-up-restart"
@@ -381,5 +382,5 @@
                                      {:ok true :workspace workspace})})]
     (is (:ok result))
     (is (:cclsp-server-restarted result))
-    (is (:agent-session-restart-required result))
+    (is (false? (:agent-session-restart-required result)))
     (is (:restart-required result))))
