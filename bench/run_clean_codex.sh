@@ -311,13 +311,14 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     if [ "$version" = native ] \
       && [ "$context" != no-skill ] \
       && [ "$context" != native-hint-no-skill ] \
-      && [ "$context" != native-read-hint-no-skill ]; then
+      && [ "$context" != native-read-hint-no-skill ] \
+      && [ "$context" != native-champion-extraction-no-skill ]; then
       echo "Native matrix cells require a native no-skill context: $cell" >&2
       return 2
     fi
@@ -360,6 +361,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
+  validate_run_matrix 'native:native-champion-extraction-no-skill'
   computed_route_adherent native-computed-hint-no-skill 0 0 0 0 1 1 true
   if computed_route_adherent native-computed-hint-no-skill 1 0 0 0 1 1 true; then
     echo "native route self-test accepted an MCP read" >&2
@@ -1005,7 +1007,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1030,7 +1032,8 @@ run_one() {
   if [ "$version" = native ] \
     && [ "$context" != no-skill ] \
     && [ "$context" != native-hint-no-skill ] \
-    && [ "$context" != native-read-hint-no-skill ]; then
+    && [ "$context" != native-read-hint-no-skill ] \
+    && [ "$context" != native-champion-extraction-no-skill ]; then
     echo "The native version requires a native no-skill context: $run_id" >&2
     exit 2
   fi
@@ -1224,6 +1227,16 @@ run_one() {
   fi
   if [ "$context" = 'native-read-hint-no-skill' ]; then
     printf '%s\n' '' 'Use native source inspection and apply_patch for this exact edit. Read only enough of the named owner to construct one precise patch, then apply it once. A successful apply_patch result is terminal mutation proof; do not reread or diff afterward.' \
+      >> "$run_dir/prompt.txt"
+  fi
+  if [ "$context" = 'native-champion-extraction-no-skill' ]; then
+    printf '%s\n' '' 'Native-control route instructions:' '' \
+      'Optimize native editing for the shortest correct complete wall time. Do not use clj-surgeon in any form: no binary, skill, MCP server, MCP tool, generated clj-surgeon command, or copied Surgeon output. Do not inspect the fixture after directory, capsule hashes, Git history, or any expected-result artifact.' '' \
+      'All material extraction decisions are already supplied. Treat the named source namespace and its remaining callers as the supplied caller scope. Do not rediscover extraction ownership or search for external callers.' '' \
+      'Batch the minimum pre-edit inspection needed to obtain the namespace declaration, the exact lexical spans of the 15 named forms and their attached comments, and occurrences of those names in the remaining source. Do not read the entire 4,594-line file. Derive destination dependencies from the moved source spans. Do not perform optional cleanup or reorder forms.' '' \
+      'Then choose exactly one coherent native mutation: one apply_patch updating both target files, or one bounded generated local script executed once whose only persistent writes are the two target files. Prefer mechanical copying over retranscription. Preserve each moved form lexical source, metadata, docstring, reader syntax, attached comments, and original relative order. A focused destination require with :refer for only the moved Vars still called by the source is acceptable. Leave every unrelated source form unchanged. Make only not-blank public.' '' \
+      'Build stale-source assertions into the patch or script: each named form exists exactly once before mutation, the destination is absent, and expected source spans match. If an assertion fails, stop without writing.' '' \
+      'After mutation, run the exact clj-kondo command from the task once. If it succeeds, do not reread, diff, format, or run another verifier. If it fails, use only its diagnostics for one bounded repair, then rerun that same exact command once. If the second verification fails, stop and report failure.' \
       >> "$run_dir/prompt.txt"
   fi
 
