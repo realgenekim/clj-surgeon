@@ -121,6 +121,52 @@ then recovered through `apply_clojure_extraction`. Its 1/2 one-shot rate keeps
 it below every 2/2 arm regardless of the fast successful observation. Raw
 artifact recovery and phase-timing review remain before a release verdict.
 
+## Completed N=2 ranking
+
+Reliability is the first sort key; wall time ranks only valid one-shot cells.
+
+| Rank | Catalog | One-shot | Valid walls | Midpoint | Gap to 21.815s best | Time saved vs 122.278s native |
+|---:|---|---:|---|---:|---:|---:|
+| 1 | W · `extract_clojure` | 2/2 | 24.681s, 31.970s | 28.326s | +6.511s | 93.952s |
+| 2 | U · `apply_clojure_changes` | 2/2 | 29.026s, 28.191s | 28.609s | +6.794s | 93.670s |
+| 3 | X · `move_clojure_forms` | 2/2 | 28.216s, 35.119s | 31.668s | +9.853s | 90.611s |
+| DNF | V · `apply_clojure_extraction` | 1/2 | 27.652s; one 52.484s recovery | — | — | — |
+
+Howard Cosell can call W the leader after two rounds. The commission cannot
+yet call it the champion. W leads U by only 0.283s while its observed range is
+7.289s. U's range is 0.835s. The measured separation is ordinary run noise
+until a larger counterbalanced U/W cohort reproduces it.
+
+The phase clocks strengthen that caution:
+
+| Catalog | Initial materialization midpoint | Server midpoint | Receipt midpoint |
+|---|---:|---:|---:|
+| W | 22.943s | 1.962s | 2.550s |
+| U | 22.479s | 2.316s | 2.955s |
+
+W did not make the first call appear faster. Its initial model interval was
+0.464s slower than U. Its small total lead came from 0.355s less server time
+and 0.405s less receipt time, neither of which establishes a vocabulary-caused
+selection advantage. The next experiment therefore compares only U and W with
+more counterbalanced replicas; it does not promote W from this screen.
+
+## Retained evidence and one harness defect
+
+The complete result archives were copied back from Anvil and their SHA-256
+hashes matched the remote artifacts:
+
+- orders 1–2: `/tmp/clj-surgeon-catalog-results-2f47ddc-20260828T171739Z.tar.gz`,
+  `9d058818214c2c35b501e400b3c5f33335d6b76f9add2a32233f3c2b692eca74`;
+- orders 3–8: `/tmp/clj-surgeon-catalog-results-2f47ddc-20260828T172110Z.tar.gz`,
+  `32626a113936f949b7749a0acf843c9875dc0549a9285788d1a1a15a3cb009f4`.
+
+The second remote wrapper exited after producing every result because the
+catalog test JVM created an untracked `.cpcache/` and the postflight asserted a
+completely empty Git status. Source remained unchanged. This is a harness
+cleanliness defect, not a failed model cell; future runs must isolate the
+Clojure cache or explicitly exclude that generated directory while preserving
+the source-dirt gate.
+
 The larger architectural win is already durable. A catalog variant is now an
 edge projection over one semantic kernel, and its public schema is executable
 authority. This makes vocabulary cheap to change, safe to falsify, and honest
