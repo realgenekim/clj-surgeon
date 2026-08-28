@@ -20,6 +20,19 @@
   (get (meta (:tool-fn tool))
        :clj-surgeon.experiments.mcp-candidate-response/canonical-handler))
 
+(defn- java-json-value [value]
+  (cond
+    (map? value)
+    (let [result (java.util.LinkedHashMap.)]
+      (doseq [[key child] value]
+        (.put result (name key) (java-json-value child)))
+      result)
+
+    (sequential? value)
+    (java.util.ArrayList. (map java-json-value value))
+
+    :else value))
+
 (deftest catalog-name-validation
   (is (= :A (candidate/normalize-catalog :A)))
   (is (= :L (candidate/normalize-catalog "L")))
@@ -272,6 +285,40 @@
                 "continue_clojure_plan"
                 "transform_clojure"]
                (mapv :name tools)))))))
+
+(deftest name-only-extraction-admits-the-real-sdk-request-shape
+  (let [calls (atom [])
+        callback-results (atom [])
+        fake-handler
+        (fn [_exchange params callback]
+          (swap! calls conj params)
+          (callback ["ok"] false {:ok true}))
+        base-tools
+        (mapv #(if (= :clj-change (:id %))
+                 (assoc % :tool-fn fake-handler)
+                 %)
+              (mcp-server/public-tool-registry))
+        extraction
+        (tool-by-name (candidate/catalog-tools :U base-tools)
+                      "apply_clojure_changes")
+        request
+        (java-json-value
+          {:workspace_root "/tmp/work"
+           :extraction
+           {:file "src/cfp_scheduler_killer/views.clj"
+            :to "src/cfp_scheduler_killer/views/format.clj"
+            :forms ["date-fmt" "fmt-date" "not-blank"]
+            :require_policy "minimal"
+            :public_forms ["not-blank"]}
+           :verify "exact"})]
+    ((:tool-fn extraction)
+     nil request
+     (fn [content error? structured]
+       (swap! callback-results conj [content error? structured])))
+    (is (= 1 (count @calls)))
+    (is (= [["ok"] false
+            {:ok true :invoked_tool "apply_clojure_changes"}]
+           (first @callback-results)))))
 
 (deftest effect-catalogs-preserve-handlers-and-separate-preview-from-commit
   (let [base (mcp-server/public-tool-registry)

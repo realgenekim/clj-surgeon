@@ -3,16 +3,22 @@
 (defn- public-key [value]
   (if (keyword? value) (name value) (str value)))
 
+(defn- object-value? [value]
+  (or (map? value) (instance? java.util.Map value)))
+
+(defn- array-value? [value]
+  (or (sequential? value) (instance? java.util.List value)))
+
 (defn- public-map [value]
-  (when (map? value)
+  (when (object-value? value)
     (into {} (map (fn [[key child]] [(public-key key) child])) value)))
 
 (declare valid?)
 
 (defn- type-valid? [expected value]
   (case expected
-    "object" (map? value)
-    "array" (sequential? value)
+    "object" (object-value? value)
+    "array" (array-value? value)
     "string" (string? value)
     "integer" (integer? value)
     "number" (number? value)
@@ -22,35 +28,46 @@
 (def supported-schema-keywords
   #{:type :description :title :additionalProperties :properties :required
     :items :minItems :maxItems :uniqueItems :minLength :pattern :minimum
-    :maximum :const :enum :allOf :anyOf :oneOf :not})
+    :maximum :const :enum :allOf :anyOf :oneOf :not :default
+    :minProperties :maxProperties})
 
 (defn- unsupported-schema-keywords [schema]
   (let [local (remove supported-schema-keywords (keys schema))
         property-children (vals (:properties schema))
-        direct-children (remove nil? [(:items schema) (:not schema)])
+        direct-children (remove nil? [(:items schema) (:not schema)
+                                      (when (map? (:additionalProperties schema))
+                                        (:additionalProperties schema))])
         branch-children (mapcat #(or (% schema) []) [:allOf :anyOf :oneOf])]
     (into (set local)
           (mapcat unsupported-schema-keywords)
           (concat property-children direct-children branch-children))))
 
 (defn- object-valid? [schema value]
-  (if-not (map? value)
+  (if-not (object-value? value)
     true
     (let [value (public-map value)
           properties (public-map (:properties schema))
           required (map public-key (:required schema))
-          unexpected (remove (set (keys properties)) (keys value))]
+          unexpected (remove (set (keys properties)) (keys value))
+          additional-schema (when (map? (:additionalProperties schema))
+                              (:additionalProperties schema))]
       (and
         (every? #(contains? value %) required)
+        (or (not (:minProperties schema))
+            (<= (:minProperties schema) (count value)))
+        (or (not (:maxProperties schema))
+            (<= (count value) (:maxProperties schema)))
         (or (not= false (:additionalProperties schema))
             (empty? unexpected))
+        (or (not additional-schema)
+            (every? #(valid? additional-schema (get value %)) unexpected))
         (every? (fn [[key child-schema]]
                   (or (not (contains? value key))
                       (valid? child-schema (get value key))))
                 properties)))))
 
 (defn- array-valid? [schema value]
-  (if-not (sequential? value)
+  (if-not (array-value? value)
     true
     (and
       (or (not (:minItems schema))
