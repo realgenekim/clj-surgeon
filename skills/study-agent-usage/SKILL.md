@@ -35,6 +35,35 @@ CLI and MCP clj-surgeon operations, cclsp semantic reads, native Clojure
 actions, tool payload sizes, direct tool wall, complete Codex turn wall, and
 collapsed privacy-safe `route_phases` for each Codex task and provider session.
 
+Codex task turns also contain an `event_clock`. It uses the client's completed
+item clocks to distinguish measured model reasoning, model messages, MCP and
+shell execution, file changes, collaboration, compaction, and unattributed
+gaps. Render the longest Surgeon-using turns from an existing receipt with:
+
+```bash
+make study-agent-timeline RECEIPT=/tmp/receipt.json
+```
+
+Use `AGENT_TIMELINE_ARGS='--turn-key HASH --timeline-minimum-ms 0'` for one
+complete turn, `--timeline-around-surgeon 3` for compact call-centered
+storyboards, or `--all-turns` for the native control population. The renderer
+reads only privacy-safe receipt fields. `model-reasoning` means Codex recorded
+a completed Reasoning item; it does not expose hidden chain of thought.
+`unattributed-gap` means no completed item owns that wall interval. It can
+include inference, scheduling, prompt ingestion, serialization, transport,
+logging, or UI delay. Never relabel all unattributed wall as model thinking.
+
+Use the clock as a product microscope. Look for a repeated transition such as:
+
+```text
+model-reasoning -> surgeon-read -> model-reasoning -> surgeon-apply
+```
+
+The removable prize is usually a complete decision boundary, not milliseconds
+inside the tool. A contract can win by returning the next guarded call,
+compiling derivable facts internally, fusing exact verification, or supplying a
+terminal mutation response. Preserve the model's authority over task scope.
+
 The same receipt joins service telemetry for the exact time window:
 
 - clj-surgeon MCP calls, outcomes, refusal types, request shapes, file reads,
@@ -57,6 +86,13 @@ skill-load -> surgeon-read -> live-probe -> native-patch -> verify
 Adjacent equivalent actions are collapsed. One outer action can carry several
 kinds when it batches routes. Use these phases to locate turn amplification,
 fallbacks, and duplicated discovery without reading raw commands.
+
+When comparing CLI and MCP, separate capability from visibility. A CLI choice
+is proven avoidable only when the operation had an MCP equivalent and the
+caller had already used or discovered that MCP surface. Otherwise report it as
+likely avoidable or a locally defensible fallback. Record whether the CLI was
+under test, the MCP operation was absent, the session catalog was stale, or the
+caller simply mixed transports. Do not infer intent from operation counts.
 
 Stop on nonzero exit or a receipt status other than `ok`. Do not replace a
 missing cutoff with a guessed date; supply `--since` from the prior study.
@@ -131,4 +167,5 @@ make study-agent-usage-self-test
 
 The self-test covers both transcript formats, marker discovery, skill
 visibility versus loading, CLI and MCP route counting, native-action counting,
-Surgeon and LSP service aggregation, and the privacy contract.
+Surgeon and LSP service aggregation, completed-item event clocks, overlap-safe
+coverage, and the privacy contract.

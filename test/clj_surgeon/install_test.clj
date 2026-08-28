@@ -16,16 +16,16 @@
 (defn- run-make
   [& args]
   @(proc/process
-     (into ["make" "--no-print-directory"] args)
-     {:dir project-root
-      :err :string
-      :out :string}))
+    (into ["make" "--no-print-directory"] args)
+    {:dir project-root
+     :err :string
+     :out :string}))
 
 (defn- run-installed-cli
   [path & args]
   @(proc/process
-     (into [(str path)] args)
-     {:err :string :out :string}))
+    (into [(str path)] args)
+    {:err :string :out :string}))
 
 (defn- slurp-path
   [path]
@@ -123,14 +123,14 @@
         claude-cli (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md")
         legacy (-> (slurp "skill.md")
                    (str/replace
-                     "[advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md)"
-                     "[advanced MCP routes](references/mcp-advanced.md)")
+                    "[advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md)"
+                    "[advanced MCP routes](references/mcp-advanced.md)")
                    (str/replace
-                     "[advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md)"
-                     "[advanced CLI operations](references/advanced-operations.md)")
+                    "[advanced CLI operations](skills/clj-surgeon/references/advanced-operations.md)"
+                    "[advanced CLI operations](references/advanced-operations.md)")
                    (str/replace
-                     "[CLI fallback](skills/clj-surgeon/references/cli-fallback.md)"
-                     "[CLI fallback](references/cli-fallback.md)"))]
+                    "[CLI fallback](skills/clj-surgeon/references/cli-fallback.md)"
+                    "[CLI fallback](references/cli-fallback.md)"))]
     (testing "the native Claude package is byte-identical to the canonical package"
       (is (= canonical claude-native))
       (is (= canonical-mcp claude-mcp))
@@ -143,11 +143,11 @@
     (testing "the optional entrance stays advanced-only while its references stay complete"
       (is (not (str/includes? canonical ":op :xray")))
       (assert-skill-contracts
-        "canonical Codex skill" canonical canonical-mcp canonical-cli)
+       "canonical Codex skill" canonical canonical-mcp canonical-cli)
       (assert-skill-contracts
-        "native Claude skill" claude-native claude-mcp claude-cli)
+       "native Claude skill" claude-native claude-mcp claude-cli)
       (assert-skill-contracts
-        "legacy Claude entrance" legacy canonical-mcp canonical-cli))))
+       "legacy Claude entrance" legacy canonical-mcp canonical-cli))))
 
 (deftest install-help-makes-both-destinations-explicit
   (let [{:keys [exit out err]} (run-make "help")]
@@ -167,7 +167,7 @@
       (is (str/includes? out "make install-dev"))
       (is (str/includes? out "Branch-live")))
     (testing "bounded clean-context acceptance batteries are discoverable"
-      (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-usage-self-test" "retain-benchmark-result" "verify-benchmark-retention"]]
+      (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-timeline" "study-agent-usage-self-test" "cclsp-client-audit" "retain-benchmark-result" "verify-benchmark-retention"]]
         (is (str/includes? out target))))))
 
 (deftest mcp-reload-manifest-covers-the-routed-runtime
@@ -317,10 +317,10 @@
             (is (not (str/includes? launcher project-root)))
             (is (= project-root
                    (.getCanonicalPath
-                     (io/file (str/trim (slurp-path control-plane-root))))))
+                    (io/file (str/trim (slurp-path control-plane-root))))))
             (is (str/includes?
-                  (slurp (str control-plane-root ".receipt.edn"))
-                  ":artifact :control-plane-root"))))
+                 (slurp (str control-plane-root ".receipt.edn"))
+                 ":artifact :control-plane-root"))))
         (testing "a hostile caller bb.edn cannot shadow the copied runtime"
           (let [hostile-root (fs/path tmp-dir "hostile-checkout")
                 hostile-src (fs/path hostile-root "src" "clj_surgeon")]
@@ -356,9 +356,9 @@
             (is (= codex-mcp claude-mcp))
             (is (= codex-cli claude-cli))
             (assert-skill-contracts
-              "installed Codex skill" codex codex-mcp codex-cli)
+             "installed Codex skill" codex codex-mcp codex-cli)
             (assert-skill-contracts
-              "installed Claude skill" claude claude-mcp claude-cli))))
+             "installed Claude skill" claude claude-mcp claude-cli))))
       (finally
         (delete-temp-tree tmp-dir)))))
 
