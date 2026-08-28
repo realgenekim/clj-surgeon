@@ -175,6 +175,12 @@ Test these catalogs first:
 1. A: current names with disjoint strict descriptions and schemas.
 2. L: `edit_clojure` and `apply_clojure_plan`.
 3. C: `edit_clojure` and `refactor_clojure`.
+4. M: `edit_clojure`, `extract_clojure`, `apply_clojure_plan`, and
+   `transform_clojure` with split schemas.
+5. N: M with `transform_clojure_with_clojure` to test the atomic-chord versus
+   computed-solo language.
+6. O: M with `apply_clojure_edits` and `run_clojure_transform` to test the
+   edits-as-data versus program language.
 
 Use the same implementation commit, fixtures, output contract, and scorer for
 all catalogs. Change only tool names, descriptions, and the public routing
@@ -239,6 +245,40 @@ Names and descriptions earn credit only when the selected route changes. If a
 candidate reduces thinking time but preserves every route, record the gain but
 do not infer better tool understanding. If a schema move improves performance,
 separate that result from the name comparison with a factorial arm.
+
+## Orthogonality gate
+
+A good catalog gives each control one job. A fresh caller must not need to
+choose between two controls that accept the same intent.
+
+Option M currently has one confirmed overlap and one missing seam:
+
+| Pair | Classification | Falsifier |
+|---|---|---|
+| `edit_clojure` and `transform_clojure` | Defect | A standalone program must select transform. A computed program that must commit with literal actions or owner deletion must select edit. |
+| `edit_clojure` and `extract_clojure` | Orthogonal | Exact namespace movement selects extract. A supplied edit batch selects edit. |
+| `inspect_clojure` and `extract_clojure` | Defect risk | A mechanically complete extraction must call extract first and finish in one call. A genuine unknown may refuse with a completed frozen plan, but must not cause rediscovery. |
+| `edit_clojure` and `apply_clojure_plan` | Authority boundary | A complete decision selects edit. Only an exact retained basis and filled decisions select plan. |
+| `extract_clojure` and `apply_clojure_plan` | Missing continuation seam | Current extraction retries reuse the complete extraction request. The product has no executable extraction `plan_id` input. |
+
+The first schema ratchet to test is:
+
+```text
+standalone computed rule ----------------> transform_clojure
+computed rule + another source action ---> edit_clojure programs
+```
+
+Do not enforce this ratchet in production until a compatibility review. The
+current editor permits a programs-only request.
+
+The exact-verification boundary is a separate factorial. A complete edit might
+need project verification to participate in rollback. Test whether
+`edit_clojure` should accept the project-owned exact verifier. Do not force a
+complete decision through a semantic-plan route only to obtain verification.
+
+`apply_clojure_plan` is not a freely selected mutation tool. It is valid only
+when `inspect_clojure` returned the retained basis and exact next call. A
+fabricated or stale basis must refuse before mutation.
 
 ## Migration plan if a rename wins
 

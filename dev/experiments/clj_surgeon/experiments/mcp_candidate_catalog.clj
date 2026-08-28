@@ -6,7 +6,7 @@
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]))
 
-(def supported-catalogs [:A :L :C :M :N])
+(def supported-catalogs [:A :L :C :M :N :O])
 
 (def mutation-tool-ids
   #{:edit-clojure
@@ -24,6 +24,89 @@
       "verification gate must participate in rollback.")
     :status :not-implemented
     :reason "Requires a product contract change, not a catalog projection."}])
+
+(def option-m-controls
+  [:inspect :edit :extract :plan :transform])
+
+(def option-m-overlap-matrix
+  [{:pair [:inspect :edit]
+    :classification :intentional-composition
+    :boundary "Inspect returns evidence. Edit consumes a complete decision."}
+   {:pair [:inspect :extract]
+    :classification :defect-risk
+    :boundary
+    (str
+      "A complete extraction must call extract directly. A genuine unknown "
+      "must not trigger separate rediscovery planning.")}
+   {:pair [:inspect :plan]
+    :classification :intentional-composition
+    :boundary "Inspect creates the retained basis and exact next call."}
+   {:pair [:inspect :transform]
+    :classification :orthogonal
+    :boundary "Inspect reads source evidence. Transform computes one selection."}
+   {:pair [:edit :extract]
+    :classification :orthogonal
+    :boundary
+    (str
+      "Edit applies supplied actions. Extract derives namespace movement, "
+      "dependencies, visibility, and caller evidence.")}
+   {:pair [:edit :plan]
+    :classification :orthogonal-authority
+    :boundary
+    (str
+      "Edit receives a complete decision. Plan accepts only a retained basis "
+      "and its filled decisions.")}
+   {:pair [:edit :transform]
+    :classification :defect
+    :boundary
+    (str
+      "A programs-only edit duplicates transform commit=true. The proposed "
+      "ratchet reserves standalone programs for transform and allows edit "
+      "programs only in a mixed atomic chord.")}
+   {:pair [:extract :plan]
+    :classification :missing-continuation-seam
+    :boundary
+    (str
+      "Current extraction retries reuse the complete extraction request. A "
+      "plan_id plus genuine decisions is not a production input.")}
+   {:pair [:extract :transform]
+    :classification :orthogonal
+    :boundary "Extract moves named owners. Transform rewrites one selection."}
+   {:pair [:plan :transform]
+    :classification :orthogonal-authority
+    :boundary
+    "Plan consumes retained decisions. Transform executes a supplied rule."}])
+
+(def option-m-falsifier-cards
+  [{:id :standalone-program
+    :given "One selection and one bounded SCI rule with no other source action."
+    :must-select :transform
+    :must-not-select :edit}
+   {:id :mixed-computed-chord
+    :given
+    "One bounded SCI rule that must commit with a literal edit or owner deletion."
+    :must-select :edit
+    :must-not-select :transform}
+   {:id :complete-extraction
+    :given "Exact source, destination, owners, and every caller decision."
+    :must-select :extract
+    :must-not-select :inspect}
+   {:id :ambiguous-extraction
+    :given "One genuine caller decision is absent."
+    :must-select :extract
+    :must-produce :pre-write-completed-plan}
+   {:id :complete-edit-with-exact-verification
+    :given "Every edit is complete and project verification must roll back."
+    :factorial :complete-edit-exact-verification
+    :must-not-infer :semantic-plan}
+   {:id :retained-basis
+    :given "inspect_clojure returned one basis and exact next call."
+    :must-select :plan
+    :must-preserve [:workspace_root :basis :site_ids :decisions :verify]}
+   {:id :invented-plan
+    :given "No inspect_clojure basis or next call exists."
+    :must-not-select :plan
+    :must-produce :typed-pre-write-refusal}])
 
 (def compact-description
   (str
@@ -87,6 +170,21 @@
     "programs, or exact owner deletions. Surgeon compiles all items against "
     "one frozen snapshot and commits them atomically. Use "
     "run_clojure_transform only for one standalone computed rule."))
+
+(def atomic-chord-description
+  (str
+    "Commit one atomic Clojure edit chord. Supply literal or structural "
+    "actions, optional bounded computed programs, and exact owner deletions. "
+    "Surgeon compiles all actions against one frozen snapshot. Use "
+    "transform_clojure_with_clojure for a computed solo with one selection "
+    "and one bounded SCI rule."))
+
+(def computed-solo-description
+  (str
+    "Preview or commit one computed Clojure solo. Supply one structural "
+    "selection and one bounded SCI rule. Preview is the default. Use "
+    "edit_clojure when a computed program must commit atomically with literal "
+    "or structural actions or exact owner deletions."))
 
 (defn normalize-catalog
   "Return one supported catalog keyword or refuse unsupported input."
@@ -173,9 +271,21 @@
    (catalog-tools catalog (mcp-server/public-tool-registry)))
   ([catalog base-tools]
    (let [catalog (normalize-catalog catalog)]
-     (if (#{:M :N} catalog)
+     (if (#{:M :N :O} catalog)
        (cond->> (split-catalog-tools base-tools)
          (= :N catalog)
+         (mapv (fn [tool]
+                 (case (:id tool)
+                   :edit-clojure
+                   (assoc tool :description atomic-chord-description)
+
+                   :transform-clojure
+                   (project-tool tool "transform_clojure_with_clojure"
+                                 computed-solo-description)
+
+                   tool)))
+
+         (= :O catalog)
          (mapv (fn [tool]
                  (case (:id tool)
                    :edit-clojure
@@ -228,9 +338,13 @@
     {:catalog (normalize-catalog catalog)
      :names (mapv :name tools)
      :schema-characters (schema-characters tools)
-     :deferred-factorials (if (#{:M :N} (normalize-catalog catalog))
+     :deferred-factorials (if (#{:M :N :O} (normalize-catalog catalog))
                             deferred-factorials
                             [])
+     :orthogonality (when (#{:M :N :O} (normalize-catalog catalog))
+                      {:controls option-m-controls
+                       :overlap-matrix option-m-overlap-matrix
+                       :falsifier-cards option-m-falsifier-cards})
      :handlers
      (mapv (fn [{:keys [id name tool-fn]}]
              {:id id
