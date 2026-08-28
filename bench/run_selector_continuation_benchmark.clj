@@ -23,6 +23,8 @@
 (def model (env "BENCH_MODEL" "gpt-5.6-sol"))
 (def reasoning (env "BENCH_REASONING" "high"))
 (def port (parse-long (env "BENCH_PORT" "7895")))
+(def lane-order
+  (mapv keyword (str/split (env "BENCH_ORDER" "pre,post") #",")))
 (def auth-file
   (env "CODEX_AUTH_FILE"
        (str (fs/path (System/getProperty "user.home") ".codex/auth.json"))))
@@ -318,9 +320,12 @@
 
 (defn run! []
   (ensure-inputs!)
+  (when-not (= #{:pre :post} (set lane-order))
+    (throw (ex-info "BENCH_ORDER must contain pre and post exactly once"
+                    {:order lane-order})))
   (prepare-corpus!)
-  (let [rows [(run-lane! :pre pre-root)
-              (run-lane! :post post-root)]
+  (let [roots {:pre pre-root :post post-root}
+        rows (mapv #(run-lane! % (roots %)) lane-order)
         receipt (write-receipt! rows)]
     (println (json/generate-string receipt {:pretty true}))
     (println "Raw benchmark directory:" result-root)))
