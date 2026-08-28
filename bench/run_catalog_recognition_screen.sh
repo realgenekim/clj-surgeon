@@ -167,6 +167,25 @@ normalize_client_surface() {
   ' "$registry_receipt" > "$output"
 }
 
+expected_client_surface() {
+  local role_receipt=$1 output=$2
+  jq -S '
+    .tools
+    | map(
+        .["input-schema"] |= del(.oneOf)
+        | if .annotations == null then .annotations = {}
+          else .annotations = {
+            title: .annotations.title,
+            readOnlyHint: .annotations["read-only"],
+            destructiveHint: .annotations.destructive,
+            idempotentHint: .annotations.idempotent,
+            openWorldHint: .annotations["open-world"]
+          }
+          end)
+    | sort_by(.name)
+  ' "$role_receipt" > "$output"
+}
+
 wait_for_model() {
   local pid=$1 deadline now
   deadline=$((SECONDS + timeout_seconds))
@@ -211,6 +230,34 @@ EOF
   score_response "$tmp/bad.json" "$tmp/roles.json" "$tmp/bad-score.json"
   [ "$(jq -r .ok "$tmp/bad-score.json")" = false ]
 
+  cat > "$tmp/advertised-surface.json" <<'EOF'
+{"tools":[{"name":"inspect_clojure","description":"read","input-schema":{"type":"object","oneOf":[{"required":["requests"]}]},"output-schema":{"type":"object"},"annotations":{"title":"Inspect","read-only":true,"destructive":false,"idempotent":true,"open-world":false,"return-direct":false}}]}
+EOF
+  cat > "$tmp/expected-client-surface.json" <<'EOF'
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Inspect"
+    },
+    "description": "read",
+    "input-schema": {
+      "type": "object"
+    },
+    "name": "inspect_clojure",
+    "output-schema": {
+      "type": "object"
+    }
+  }
+]
+EOF
+  expected_client_surface "$tmp/advertised-surface.json" \
+    "$tmp/actual-client-surface.json"
+  cmp "$tmp/expected-client-surface.json" "$tmp/actual-client-surface.json"
+
   recognition_prompt > "$tmp/prompt.txt"
   if rg -q 'apply_clojure_changes|apply_clojure_extraction|extract_clojure|move_clojure_forms' \
     "$tmp/prompt.txt"; then
@@ -223,6 +270,7 @@ EOF
     'catalog recognition screen self-test: PASS' \
     '  counterbalance: UVWX / VWXU / WXUV / XUVW' \
     '  scorer: positive and wrong-first-choice falsifier passed' \
+    '  transport: only observed Codex schema/annotation projection admitted' \
     '  prompt: no candidate extraction name leaked'
   rm -rf "$tmp"
   trap - EXIT
@@ -354,11 +402,14 @@ for replicate in $(seq 1 "$replicates"); do
       printf 'expected=%s\nactual=%s\n' "$expected_tools" "$actual_tools" >&2
       exit 2
     fi
-    expected_surface=$(jq -S -c '.tools | sort_by(.name)' "$role_receipt")
+    expected_client_surface "$role_receipt" \
+      "$run_dir/admitted-client-surface.json"
+    expected_surface=$(jq -S -c '.' \
+      "$run_dir/admitted-client-surface.json")
     actual_surface=$(jq -S -c '.["tool-projection"] | sort_by(.name)' \
       "$registry_receipt")
     if [ "$actual_surface" != "$expected_surface" ]; then
-      echo "Independent Codex client changed the advertised tool surface: $run_id" >&2
+      echo "Independent Codex client exceeded the admitted transport projection: $run_id" >&2
       exit 2
     fi
     normalize_client_surface "$registry_receipt" "$role_receipt" \
