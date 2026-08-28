@@ -248,3 +248,21 @@ wins the fresh service window by 6.365s. Across all eight valid one-shot runs
 per arm, U's cumulative median remains 29.066s while W's moves to 31.907s. The
 control now leads by 2.841s. The retained name survives the requested
 apex-predator retest.
+
+The rematch again localizes the advantage before the first call:
+
+| Catalog | Initial materialization midpoint | MCP observer midpoint | Server midpoint | Receipt midpoint |
+|---|---:|---:|---:|---:|
+| U | 25.686s | 2.462s | 2.422s | 2.355s |
+| W | 32.598s | 2.017s | 1.980s | 2.250s |
+
+W remained about 0.445s faster inside the MCP observer interval and 0.105s
+faster after the receipt. U reached the first call 6.912s sooner. The retained
+name's advantage is model decision materialization, not a faster structural
+kernel.
+
+The copied rematch archive is
+`/tmp/clj-surgeon-catalog-apex-rematch-results-2f47ddc-20260828T174625Z.tar.gz`,
+SHA-256
+`3a99beea2aa60575f3eb6bc16031de3185be54a3bb2af86a86815ac68893cbca`;
+the local hash matched the remote receipt.
