@@ -351,6 +351,22 @@ validate_run_matrix() {
   done
 }
 
+tool_first_extraction_prompt() {
+  local catalog=$1
+  local verification=$2
+  local first_action
+  if [ -n "$catalog" ]; then
+    first_action='Your first emitted item must be the available extraction-capable Clojure mutation tool call. Select the control from its extraction-only input schema. Do not assume a canonical tool name.'
+  else
+    first_action='Your first emitted item must be the apply_clojure_changes tool call.'
+  fi
+  if [ "$verification" = fused ]; then
+    printf '%s\n' "$first_action Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {\"workspace_root\":\"<current workspace>\",\"extraction\":{\"file\":\"<supplied source>\",\"to\":\"<supplied destination>\",\"forms\":[\"<all supplied forms in order>\"],\"require_policy\":\"minimal\",\"public_forms\":[\"<task-declared public form>\"],\"caller_changes\":[],\"ignored_caller_files\":[]},\"verify\":\"exact\"}. Every extraction field is nested inside extraction; verify is top-level. The project-owned exact profile runs the task-declared clj-kondo command against staged bytes inside the atomic transaction. Do not run clj-kondo or any other shell verifier. Treat verification_complete=true and the exact-exit evidence as terminal mutation and verification proof."
+  else
+    printf '%s\n' "$first_action Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {\"workspace_root\":\"<current workspace>\",\"extraction\":{\"file\":\"<supplied source>\",\"to\":\"<supplied destination>\",\"forms\":[\"<all supplied forms in order>\"],\"require_policy\":\"minimal\",\"public_forms\":[\"<task-declared public form>\"],\"caller_changes\":[],\"ignored_caller_files\":[]}}. Every field except workspace_root is nested inside extraction; no extraction field is top-level. The task already supplies every value and caller scope. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with a read tool, read source, call another mutation tool, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once."
+  fi
+}
+
 if [ "${BENCH_OWNER_PROBE_SELF_TEST:-false}" = true ]; then
   acquire_result_owner
   release_result_owner
@@ -380,6 +396,16 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'native:native-hint-no-skill'
   validate_run_matrix 'native:native-read-hint-no-skill'
   validate_run_matrix 'native:native-champion-extraction-no-skill'
+  candidate_n_prompt=$(tool_first_extraction_prompt N separate)
+  candidate_t_prompt=$(tool_first_extraction_prompt T fused)
+  canonical_prompt=$(tool_first_extraction_prompt '' separate)
+  [[ "$candidate_n_prompt" == *"available extraction-capable"* ]]
+  [[ "$candidate_t_prompt" == *"available extraction-capable"* ]]
+  [[ "$candidate_n_prompt" != *"apply_clojure_changes"* ]]
+  [[ "$candidate_n_prompt" != *"edit_clojure"* ]]
+  [[ "$candidate_t_prompt" != *"apply_clojure_changes"* ]]
+  [[ "$candidate_t_prompt" != *"edit_clojure"* ]]
+  [[ "$canonical_prompt" == *"apply_clojure_changes"* ]]
   if validate_run_matrix 'pre:mcp-extraction-hint-no-skill'; then
     echo 'benchmark matrix self-test accepted an MCP context without an MCP server' >&2
     exit 1
@@ -1314,11 +1340,11 @@ run_one() {
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-tool-first-no-skill' ]; then
-    printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]}}. Every field except workspace_root is nested inside extraction; no extraction field is top-level. The task already supplies every value and caller scope. Omit verify because the task supplies its exact verifier; do not launch or inspect a full verification job. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. Treat the successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
+    printf '%s\n' '' "$(tool_first_extraction_prompt "$candidate_catalog" separate)" \
       >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-fused-tool-first-no-skill' ]; then
-    printf '%s\n' '' 'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]},"verify":"exact"}. Every extraction field is nested inside extraction; verify is top-level. The project-owned exact profile runs the task-declared clj-kondo command against staged bytes inside the atomic transaction. Do not run clj-kondo or any other shell verifier. Treat verification_complete=true and the exact-exit evidence as terminal mutation and verification proof.' \
+    printf '%s\n' '' "$(tool_first_extraction_prompt "$candidate_catalog" fused)" \
       >> "$run_dir/prompt.txt"
     if [ -n "${BENCH_FUSED_SUCCESS_RESPONSE:-}" ]; then
       printf '%s\n' "After a successful terminal receipt, reply with exactly this text and no additional analysis: ${BENCH_FUSED_SUCCESS_RESPONSE}" \
