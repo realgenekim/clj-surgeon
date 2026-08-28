@@ -45,7 +45,7 @@
     "apply refuses missing, unmoved, already-public, or unsupported declarations. "
     "Exact forms, caller edits, and files counts may be derived. "
     "Direct extraction reports structural caller candidates, not semantic completeness. "
-    "Otherwise, use changes for different actions or owner-level edits. Each changes item contains id, files, "
+    "Otherwise, use changes for different actions or owner-level edits. Never combine edits and changes. If any insertion, deletion, rename, assoc_entry, or heterogeneous action needs changes, encode every action in one changes array. Each changes item contains id, files, "
     "expect, exactly one of forms or owner, and exactly one action: replace, delete, "
     "insert_before, insert_after, rename_binding, or assoc_entry. Exact replacement, "
     "insertion, and assoc_entry "

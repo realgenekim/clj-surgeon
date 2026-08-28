@@ -69,7 +69,7 @@
     "changes"
     {:type "array"
      :minItems 1
-     :description "Complete structural changes. IDs must be unique."
+     :description "Complete structural changes. IDs must be unique. Never combine edits and changes; if any action needs changes, encode the complete transaction here."
      :items
      {:type "object"
       :additionalProperties false
