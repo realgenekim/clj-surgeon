@@ -32,6 +32,13 @@ Paths in scope:
 - `test/clj_surgeon/mcp_*_test.clj`
 - `docs/high-level-design.md`
 - `docs/intent/mcp-operation-contract/**`
+- `docs/intent/operation-algebra/**`
+- `src/clj_surgeon/operation_algebra.clj`
+- `src/clj_surgeon/intent_transaction.clj`
+- `src/clj_surgeon/core.clj`
+- `test/clj_surgeon/operation_algebra_test.clj`
+- `test/clj_surgeon/intent_transaction_test.clj`
+- `test/clj_surgeon/cli_dispatch_test.clj`
 - `Makefile`
 
 ## Linked-Intent Development (MANDATORY)
