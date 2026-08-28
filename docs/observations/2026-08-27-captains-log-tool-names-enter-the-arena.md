@@ -3,7 +3,20 @@
 **Date:** 2026-08-27  
 **Owner:** `clj-surgeon-x9d`  
 **Experiment head:** `a953e418cf06c458199c9bda670af1c2b5d8157f`
-**Status:** clean alternate-universe screen complete; keep catalog A
+**Status:** historical screen; strong verdict withdrawn by adversarial audit
+
+> **Correction, 2026-08-28:** Do not use the 1-of-11 result below as a
+> vocabulary verdict. The audit found that `edit_clojure` and the semantic
+> change tool shared a permissive runtime handler. L, M, and N could therefore
+> execute extraction through the nominal edit entrance even though its
+> advertised schema excluded extraction; the facade then relabeled the result
+> as `edit_clojure`, and the route scorer marked semantically correct work as a
+> failure. The required Anvil verifier was also absent, the exact client-seen
+> `tools/list` surface was not retained, the arms changed more than names, and
+> every catalog had only one replica. See
+> [the adversarial Captain's Log](2026-08-28-captains-log-catalog-screen-verdict-withdrawn.md)
+> and the complete hashed trace archive before interpreting this historical
+> record.
 
 ## Why test names at all?
 
@@ -345,7 +358,7 @@ Two environmental facts remain separate from the catalog verdict:
   cannot turn their edit- or inspect-first selections into extraction-first
   routes.
 
-### Decision
+### Original decision — withdrawn by the 2026-08-28 adversarial audit
 
 Keep catalog A. Do not publish any rename, `_bang`, `_commit`, dotted name, or
 expanded extraction catalog from this screen. Do not spend a larger cohort on
