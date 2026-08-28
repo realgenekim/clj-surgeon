@@ -185,6 +185,78 @@ extraction next-call supplied by task preparation. The kernel must not guess
 global task intent, and the experiment must not coach the answer through a
 hard-coded tool name.
 
+## Architectural smell exposed by the experiment
+
+Changing a public tool name should be one edge-level data change. It was not.
+The production vocabulary appears in registry names and schemas, handler result
+fields, human summaries, refusal remedies, and `next_call.tool`. A projected
+catalog key therefore created a contradictory interface: the model entered
+through the candidate name and recovered through the legacy name.
+
+The desired boundary is a public interface facade:
+
+```text
+model
+  -> public role/name/schema adapter
+  -> canonical semantic operation
+  -> typed semantic outcome
+  -> public result/next-call renderer
+  -> model
+```
+
+Below that facade, code should use semantic roles such as `:edit`, `:extract`,
+`:plan`, `:transform-preview`, and `:transform-commit`. It should not contain
+public tool identifiers. The facade alone maps roles to public names, titles,
+schemas, summaries, and `next_call.tool`.
+
+This does not authorize blind response rewriting. Results contain source,
+diffs, diagnostics, verifier output, argv, hashes, receipts, and user text that
+may legitimately include a tool-like string. The facade may project only typed
+public identifier slots and exact server-owned routing templates. It must
+preserve evidence and `terminal_response` byte-for-byte.
+
+The isolated catalog server is the experimental form of this facade. Do not
+refactor the production runtime before the naming comparison, because changing
+both mechanism and vocabulary would confound the experiment. If a candidate
+earns publication, promote the facade as a separate product ratchet and add a
+permanent no-public-name-below-the-boundary test.
+
+### Why Kent Beck would approve—and where he would object
+
+The facade earns its keep by making the next real experiment cheaper. Today a
+rename requires coordinated edits to the registry, schemas, summaries,
+remedies, and next calls, followed by leak archaeology. With the facade, a
+rename should be one role-to-name map change plus interface tests.
+
+The safe sequence is:
+
+1. characterize catalog A through the canonical handler;
+2. insert the facade and require byte-identical A responses;
+3. represent operation and continuation identity as semantic roles;
+4. move one server-owned routing template at a time behind the renderer;
+5. forbid public tool identifiers below the boundary;
+6. change only the role-to-name map for each candidate experiment.
+
+The counterfactual matters: the facade is a failure if it becomes a large
+repair layer that recursively rewrites arbitrary handler output. That would
+hide the coupling, not remove it. Catalog A byte equality, a typed projection
+whitelist, and byte preservation for source, diagnostics, diffs, receipts,
+hashes, verifier evidence, and terminal relay text are the stop gates.
+
+The first broad response-projector draft was 459 changed lines. It was rejected
+before commit. The replacement is a surgical catalog hook plus a separate pure
+typed adapter and focused boundary tests. This is the Kent Beck move: lower the
+cost and risk of the experiment before running the experiment.
+
+The option-value payoff is larger than renaming. With one frozen kernel and
+scorer, the facade lets us vary names, tool count, schema partitions, effect
+signals, descriptions, ordering, refusal detail, continuation routing, and
+terminal presentation independently. Losing interfaces leave no production
+machinery behind. The causal discipline is to change one public factor at a
+time while freezing the handler commit, fixture, caller stratum, and semantic
+acceptance gate. This is `(N × K × sigma) / t` expressed as an executable
+architecture.
+
 ## What became cheaper
 
 We can now project and test a public catalog without changing product handlers
