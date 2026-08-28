@@ -3,7 +3,9 @@
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.operation-algebra :as algebra]
+   [clj-surgeon.outline :as outline]
    [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (def ^:private preview-context
@@ -31,6 +33,148 @@
 (defn- entry
   ([] (entry transaction/compile-transaction))
   ([compiler] (algebra/change-entry compiler)))
+
+(defn- required-namespaces
+  [source]
+  (let [ns-form (read-string source)]
+    (->> ns-form
+         (filter seq?)
+         (filter #(= :require (first %)))
+         (mapcat rest)
+         (map first)
+         set)))
+
+(defn- top-level-form-source
+  [file owner]
+  (or (some (fn [{:keys [name source]}]
+              (when (= owner name) source))
+            (outline/top-level-form-records file (slurp file)))
+      (throw (ex-info "Architecture owner not found"
+                      {:file file :owner owner}))))
+
+(defn- architecture-references
+  [source]
+  (let [form (read-string source)
+        all-symbols (->> (tree-seq coll? seq form)
+                         (filter symbol?))
+        invoked-heads (->> (tree-seq coll? seq form)
+                           (keep #(when (seq? %) (first %)))
+                           (filter symbol?))
+        raw-effect-symbols #{'slurp 'spit 'Files/move
+                             'java.io.File/createTempFile 'System/exit}
+        effect-head? #(re-find
+                        #"(?i)(^|/)(write|publish|stage|rollback|recover|format|verif|process|launch|mcp|json|exit|move|createTempFile|slurp|spit)(!|$|-)|\.delete"
+                        (str %))]
+    (set (concat (filter #(str/ends-with? (str %) "!") all-symbols)
+                 (filter raw-effect-symbols all-symbols)
+                 (filter effect-head? invoked-heads)))))
+
+(defn- runtime-architecture-inventory
+  []
+  (let [file "src/clj_surgeon/intent_transaction.clj"
+        refs #(architecture-references
+                (top-level-form-source file %))]
+    {:preview (refs 'plan-change)
+     :commit-entry (refs 'execute-change!)
+     :commit-runtime (refs 'commit-compiled!)
+     :receipt-stage (refs 'stage-receipt!)
+     :receipt-publish (refs 'publish-staged-receipt!)
+     :rollback (refs 'recovery-result)}))
+
+(deftest operation-algebra-architecture-is-transport-neutral-and-bounded
+  ;; @spec OP-ALG-CATALOG-001, OP-ALG-COMPILE-001, OP-ALG-EFFECT-001,
+  ;; @spec OP-ALG-EFFECT-002, OP-ALG-EFFECT-003, OP-ALG-EFFECT-004,
+  ;; @spec OP-ALG-EFFECT-005
+  (let [source (slurp "src/clj_surgeon/operation_algebra.clj")
+        compiler transaction/compile-transaction
+        catalog-entry (algebra/change-entry compiler)
+        preview-entry (select-keys (get core/ops-registry :change)
+                                   [:handler :canonical-operation
+                                    :lifecycle :category])
+        commit-entry (select-keys (get core/ops-registry :change!)
+                                  [:handler :canonical-operation
+                                   :lifecycle :category])]
+    (testing "the algebra depends only on pure set operations"
+      (is (= #{'clojure.set} (required-namespaces source)))
+      (doseq [forbidden ["requiring-resolve"
+                         "ns-resolve"
+                         "clj-surgeon.mcp"
+                         "cheshire/"
+                         "clojure.data.json"
+                         "json/"
+                         "jsonista/"
+                         "System/exit"]]
+        (is (not (str/includes? source forbidden)) forbidden))
+      (is (str/includes? source "@spec OP-ALG-EFFECT-005")))
+    (testing "the compiler is injected without an alternate resolver"
+      (is (identical? compiler (:compiler catalog-entry))))
+    (testing "the public registry assigns lifecycle but category grants nothing"
+      (is (= {:handler transaction/plan-change
+              :canonical-operation :change
+              :lifecycle :preview
+              :category :write}
+             preview-entry))
+      (is (= {:handler transaction/execute-change!
+              :canonical-operation :change
+              :lifecycle :commit
+              :category :write}
+             commit-entry))
+      (is (= (algebra/derive-capabilities catalog-entry commit-context)
+             (algebra/derive-capabilities
+               (assoc catalog-entry :category :read)
+               commit-context))))
+    (testing "the bounded entry names only the transaction effect inventory"
+      (is (= #{:source-read
+               :source-write
+               :receipt-stage
+               :receipt-publish
+               :rollback}
+             (:maximum-effects catalog-entry)))
+      (is (= {:preview #{:source-read}
+              :commit #{:source-read
+                        :source-write
+                        :receipt-stage
+                        :receipt-publish
+                        :rollback}}
+             (:lifecycle-effects catalog-entry)))
+      (is (= {:error "Operation context does not authorize required effects"
+              :error-type :effect-capability-denied
+              :missing-effects [:formatter-launch
+                                :process-exit
+                                :verifier-launch]}
+             (algebra/authorize-effects
+               (:capabilities
+                 (algebra/derive-capabilities catalog-entry commit-context))
+               #{:formatter-launch :process-exit :verifier-launch})))
+      (is (= {:preview #{'refuse! 'validate-spec!}
+              :commit-entry #{'.delete
+                              'assert-receipt-does-not-alias-source!
+                              'commit-compiled!
+                              'execute-change!
+                              'prepare-compiled!
+                              'publish-staged-receipt!
+                              'refuse!
+                              'slurp
+                              'stage-receipt!
+                              'validate-receipt!}
+              :commit-runtime #{'assert-file-hash!
+                                'commit-compiled!
+                                'execute-writes!
+                                'recover-transaction!
+                                'refuse!
+                                'slurp
+                                'write-source!
+                                'file-ops/atomic-write!}
+              :receipt-stage #{'.delete
+                               'refuse!
+                               'slurp
+                               'spit
+                               'stage-receipt!
+                               'validate-receipt!
+                               'java.io.File/createTempFile}
+              :receipt-publish #{'publish-staged-receipt! 'Files/move}
+              :rollback #{'read-source! 'write-source!}}
+             (runtime-architecture-inventory))))))
 
 ;; @spec OP-ALG-CATALOG-001, OP-ALG-CONTEXT-001, OP-ALG-CONTEXT-002,
 ;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-002, OP-ALG-EFFECT-004
