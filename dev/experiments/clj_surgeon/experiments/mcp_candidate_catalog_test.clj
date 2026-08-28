@@ -16,6 +16,10 @@
   [tools name]
   (some #(when (= name (:name %)) %) tools))
 
+(defn- canonical-handler [tool]
+  (get (meta (:tool-fn tool))
+       :clj-surgeon.experiments.mcp-candidate-response/canonical-handler))
+
 (deftest catalog-name-validation
   (is (= :A (candidate/normalize-catalog :A)))
   (is (= :L (candidate/normalize-catalog "L")))
@@ -146,8 +150,8 @@
           (is (= (count base) (count tools)))
           (is (= "edit_clojure" (:name edit)))
           (is (= expected-change-name (:name change)))
-          (is (identical? (:tool-fn base-edit) (:tool-fn edit)))
-          (is (identical? (:tool-fn base-change) (:tool-fn change)))
+          (is (identical? (:tool-fn base-edit) (canonical-handler edit)))
+          (is (identical? (:tool-fn base-change) (canonical-handler change)))
           (is (= (:schema base-edit) (:schema edit)))
           (is (= (:schema base-change) (:schema change)))
           (is (= (:output-schema base-edit) (:output-schema edit)))
@@ -165,7 +169,7 @@
             "apply_clojure_plan" "transform_clojure"]
            (mapv :name tools)))
     (doseq [tool [edit extraction plan]]
-      (is (identical? (:tool-fn base-change) (:tool-fn tool)))
+      (is (identical? (:tool-fn base-change) (canonical-handler tool)))
       (is (= (:output-schema base-change) (:output-schema tool))))
     (is (= (:outcome-classes base-edit) (:outcome-classes edit)))
     (is (= (:outcome-classes base-change) (:outcome-classes extraction)))
@@ -208,8 +212,8 @@
            (mapv :name aliased)))
     (is (= (mapv :schema split) (mapv :schema aliased)))
     (is (every? true? (map identical?
-                           (map :tool-fn split)
-                           (map :tool-fn aliased))))
+                           (map canonical-handler split)
+                           (map canonical-handler aliased))))
     (is (= (get-in (candidate/schema-characters split) [:total])
            (get-in (candidate/schema-characters aliased) [:total])))))
 
@@ -221,8 +225,8 @@
            (mapv :name aliased)))
     (is (= (mapv :schema split) (mapv :schema aliased)))
     (is (every? true? (map identical?
-                           (map :tool-fn split)
-                           (map :tool-fn aliased))))))
+                           (map canonical-handler split)
+                           (map canonical-handler aliased))))))
 
 (deftest effect-catalogs-preserve-handlers-and-separate-preview-from-commit
   (let [base (mcp-server/public-tool-registry)
@@ -251,8 +255,8 @@
               commit (nth tools 5)]
           (is (= names (mapv :name tools)))
           (is (every? #(re-matches #"[A-Za-z0-9_.-]+" (:name %)) tools))
-          (is (identical? (:tool-fn base-transform) (:tool-fn preview)))
-          (is (identical? (:tool-fn base-transform) (:tool-fn commit)))
+          (is (identical? (:tool-fn base-transform) (canonical-handler preview)))
+          (is (identical? (:tool-fn base-transform) (canonical-handler commit)))
           (is (= (:output-schema base-transform) (:output-schema preview)))
           (is (= (:output-schema base-transform) (:output-schema commit)))
           (is (nil? (get-in preview [:schema :properties "commit"])))
