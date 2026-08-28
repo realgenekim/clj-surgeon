@@ -143,6 +143,21 @@ The parallel screen stopped after the already-running A, M, and Q canaries.
 L, C, O, P, R, and S must not run against the contaminated surface. The A, M,
 and Q results remain retained harness evidence, not candidate verdicts.
 
+The stopped Anvil screen produced these contaminated controls:
+
+| Catalog | First call | Complete route | Meaning | Wall | Disposition |
+|---|---|---|---|---:|---|
+| A | `apply_clojure_changes` | one legacy mutation route | preserved | 43.090s | Control only; harness said verified while the model reported verifier blockage. |
+| M | `inspect_clojure` | inspect refusal -> edit success | preserved | 74.160s | Harness falsifier; one refusal and wrong public route. |
+| Q | `inspect_clojure` | six MCP calls -> failed native mutation | not changed | 314.748s | Harness falsifier; no destination file and scorer false. |
+
+A did not prove that a blurry name is intrinsically clearer. It proved that a
+name supported consistently by the remaining production instructions beats a
+new name contradicted by those instructions. This is still important product
+evidence: a rename is an interface migration, not a catalog-key substitution.
+It must change the complete caller-visible language together or not change at
+all.
+
 ## Current decision
 
 Do not publish N, T, `_bang`, `_commit`, or any other rename yet. Preserve the
