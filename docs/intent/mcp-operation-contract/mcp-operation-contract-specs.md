@@ -52,6 +52,12 @@ tests witness the requirement.
 - [x] **MCP-OP-EDIT-004**: When a root-scoped EDN edit succeeds, clj-surgeon shall parse and read back every future file and preserve all bytes outside the exact replaced subtrees, including comments and metadata.
 - [x] **MCP-OP-EDIT-005**: When a compact Clojure edit uses `within.namespace=true`, clj-surgeon shall resolve the file's unique namespace form without requiring the caller to repeat its name, and shall refuse before writing if that owner is not unique.
 
+## Tolerant Direct-Change Compilation
+
+- [ ] **MCP-OP-EDIT-006**: When a direct `changes` request omits top-level aggregate `expect`, clj-surgeon shall derive exact `changes`, `edits`, and distinct `files` counts from the required per-change guards; when a caller supplies redundant aggregate counts, the compiler shall report and ignore disagreement without weakening any per-change guard.
+- [x] **MCP-OP-EDIT-007**: When one `insert_before` or `insert_after` array item contains several complete Clojure forms, clj-surgeon shall deterministically split and insert them in source order; malformed syntax or detached comments shall still refuse before write at the exact array-item path.
+- [ ] **MCP-OP-EDIT-008**: The public direct-change description shall state that packed complete forms are accepted, aggregate expectations are optional derived bookkeeping, and callers shall omit `verify` unless the user or repository explicitly requests a configured transaction profile.
+
 ## Extraction Planning
 
 - [x] **MCP-OP-PLAN-001**: When `inspect_clojure` receives a valid `plan-extraction` mission, clj-surgeon shall compile the result through the same pure extraction planner used by execution and shall not write or retain mutation authority.

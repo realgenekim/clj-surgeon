@@ -538,6 +538,27 @@ tools do not change in this slice. Generalization to compact edit or transform
 requires a separate evidence law because their terminal verification meaning
 is weaker than a project-owned exact-exit profile.
 
+## Tolerant Direct-Change Compilation
+
+Direct `changes` keep exact per-change `matches`, `each_form`, and `each_file`
+guards as mutation authority. Top-level aggregate `expect` is bookkeeping that
+the compiler can derive after every change has validated. Its absence therefore
+does not create an unknown, and a supplied disagreement does not override the
+guarded compiled transaction. The public result reports that normalization so
+the caller can learn the smaller request shape.
+
+Insertion arrays remain explicit action boundaries, but one array item may be
+a pasted block containing several complete forms. The compiler parses the
+complete block losslessly and expands it into ordered insertion forms. It does
+not auto-balance delimiters, detach comments, select an owner, or repair source.
+Malformed input refuses before write at the original array-item path.
+
+Verification remains proportional and caller-owned. The tool contract shall
+not invite a model to add `verify` merely because it is available. A caller
+uses a project-owned transaction profile only when the user or repository
+explicitly requests that profile; otherwise whole-file parse, read-back, and
+receipt evidence remain the mutation proof.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
