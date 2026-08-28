@@ -48,6 +48,36 @@
     (is (= {:ok true} (admission/authorize edit-schema {"programs" []})))
     (is (= 0 (:matching-branches (admission/authorize edit-schema {}))))))
 
+(deftest property-values-are-authority-not-documentation
+  (let [commit-schema {:type "object"
+                       :additionalProperties false
+                       :properties {"commit" {:type "boolean" :const true}}
+                       :required ["commit"]}
+        preview-schema {:type "object"
+                        :additionalProperties false
+                        :properties {"expression" {:type "string"
+                                                   :minLength 1}}
+                        :required ["expression"]}]
+    (is (= {:ok true} (admission/authorize commit-schema {"commit" true})))
+    (doseq [invalid [false nil "false" 1]]
+      (is (= :public-schema-denied
+             (:error-type (admission/authorize commit-schema
+                                               {"commit" invalid})))))
+    (is (= :public-schema-denied
+           (:error-type (admission/authorize preview-schema
+                                             {"expression" "identity"
+                                              "commit" true}))))
+    (is (= :public-schema-denied
+           (:error-type (admission/authorize preview-schema
+                                             {"expression" ""}))))))
+
+(deftest unknown-schema-authority-fails-closed
+  (let [result (admission/authorize {:type "object"
+                                     :if {:required ["commit"]}}
+                                    {})]
+    (is (= :public-schema-denied (:error-type result)))
+    (is (= [:if] (:unsupported-schema-keywords result)))))
+
 (defn -main [& _]
   (let [{:keys [fail error]}
         (run-tests 'clj-surgeon.experiments.mcp-candidate-admission-test)]

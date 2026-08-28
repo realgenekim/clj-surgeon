@@ -774,9 +774,9 @@ candidate_catalog=${BENCH_MCP_CANDIDATE_CATALOG:-}
 setup_root=""
 
 case "$candidate_catalog" in
-  ""|A|L|C|M|N|O|P|Q|R|S|T) ;;
+  ""|A|L|C|M|N|O|P|Q|R|S|T|U|V|W|X) ;;
   *)
-    echo "BENCH_MCP_CANDIDATE_CATALOG must be A through T as documented: $candidate_catalog" >&2
+    echo "BENCH_MCP_CANDIDATE_CATALOG must be a documented catalog A through X: $candidate_catalog" >&2
     exit 2
     ;;
 esac
@@ -1507,6 +1507,45 @@ run_one() {
     && [ -n "$(find "$codex_home/skills" -iname '*clj-surgeon*' -print -quit)" ]; then
     echo "$version isolation exposed a clj-surgeon skill for $run_id" >&2
     exit 2
+  fi
+
+  if [ "$version" = mcp ] && [ -n "$candidate_catalog" ]; then
+    local client_registry_receipt="$run_dir/codex-mcp-registry.json"
+    local preflight_codex
+    preflight_codex=$(PATH="$run_path" command -v codex)
+    (
+      cd "$repo_root"
+      PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
+        clojure -J-Xms32m -J-Xmx256m \
+        -Sdeps '{:paths ["src" "bench"]}' -M \
+        -m capture-codex-mcp-registry \
+        --codex "$preflight_codex" \
+        --output "$client_registry_receipt" --server clj-surgeon
+    ) > "$run_dir/codex-mcp-registry.stdout" \
+      2> "$run_dir/codex-mcp-registry.stderr"
+    local expected_catalog_tools actual_catalog_tools
+    local expected_catalog_surface actual_catalog_surface
+    expected_catalog_tools=$(jq -c '[.roles[]] | unique | sort' \
+      "$catalog_role_receipt")
+    actual_catalog_tools=$(jq -c '."tool-names" | sort' \
+      "$client_registry_receipt")
+    if [ "$actual_catalog_tools" != "$expected_catalog_tools" ]; then
+      echo "Codex client registry differs from candidate catalog for $run_id" >&2
+      printf 'expected=%s\nactual=%s\n' \
+        "$expected_catalog_tools" "$actual_catalog_tools" >&2
+      exit 2
+    fi
+    expected_catalog_surface=$(jq -S -c '.tools | sort_by(.name)' \
+      "$catalog_role_receipt")
+    actual_catalog_surface=$(jq -S -c '."tool-projection" | sort_by(.name)' \
+      "$client_registry_receipt")
+    if [ "$actual_catalog_surface" != "$expected_catalog_surface" ]; then
+      echo "Codex client registry changed the candidate tool surface for $run_id" >&2
+      exit 2
+    fi
+    # This is an independent same-binary/same-home Codex client preflight.
+    # The measured turn's first tool call remains the behavioral authority.
+    printf '%s\n' true > "$run_dir/codex-client-surface-preflight.txt"
   fi
 
   task_prompt "$task" "$context" > "$run_dir/prompt.txt"

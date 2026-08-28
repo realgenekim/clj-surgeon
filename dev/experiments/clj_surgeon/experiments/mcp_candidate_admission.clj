@@ -3,46 +3,109 @@
 (defn- public-key [value]
   (if (keyword? value) (name value) (str value)))
 
-(defn- present? [param-keys field]
-  (contains? param-keys (public-key field)))
+(defn- public-map [value]
+  (when (map? value)
+    (into {} (map (fn [[key child]] [(public-key key) child])) value)))
 
-(declare matches-constraint?)
+(declare valid?)
 
-(defn- matches-composite? [param-keys constraint]
+(defn- type-valid? [expected value]
+  (case expected
+    "object" (map? value)
+    "array" (sequential? value)
+    "string" (string? value)
+    "integer" (integer? value)
+    "number" (number? value)
+    "boolean" (instance? Boolean value)
+    false))
+
+(def supported-schema-keywords
+  #{:type :description :title :additionalProperties :properties :required
+    :items :minItems :maxItems :uniqueItems :minLength :pattern :minimum
+    :maximum :const :enum :allOf :anyOf :oneOf :not})
+
+(defn- unsupported-schema-keywords [schema]
+  (let [local (remove supported-schema-keywords (keys schema))
+        property-children (vals (:properties schema))
+        direct-children (remove nil? [(:items schema) (:not schema)])
+        branch-children (mapcat #(or (% schema) []) [:allOf :anyOf :oneOf])]
+    (into (set local)
+          (mapcat unsupported-schema-keywords)
+          (concat property-children direct-children branch-children))))
+
+(defn- object-valid? [schema value]
+  (if-not (map? value)
+    true
+    (let [value (public-map value)
+          properties (public-map (:properties schema))
+          required (map public-key (:required schema))
+          unexpected (remove (set (keys properties)) (keys value))]
+      (and
+        (every? #(contains? value %) required)
+        (or (not= false (:additionalProperties schema))
+            (empty? unexpected))
+        (every? (fn [[key child-schema]]
+                  (or (not (contains? value key))
+                      (valid? child-schema (get value key))))
+                properties)))))
+
+(defn- array-valid? [schema value]
+  (if-not (sequential? value)
+    true
+    (and
+      (or (not (:minItems schema))
+          (<= (:minItems schema) (count value)))
+      (or (not (:maxItems schema))
+          (<= (count value) (:maxItems schema)))
+      (or (not (:uniqueItems schema))
+          (= (count value) (count (distinct value))))
+      (or (not (:items schema))
+          (every? #(valid? (:items schema) %) value)))))
+
+(defn- scalar-valid? [schema value]
   (and
-    (or (not (:required constraint))
-        (every? #(present? param-keys %) (:required constraint)))
-    (or (not (:allOf constraint))
-        (every? #(matches-constraint? param-keys %) (:allOf constraint)))
-    (or (not (:anyOf constraint))
-        (some #(matches-constraint? param-keys %) (:anyOf constraint)))
-    (or (not (:oneOf constraint))
-        (= 1 (count (filter #(matches-constraint? param-keys %)
-                            (:oneOf constraint)))))
-    (or (not (:not constraint))
-        (not (matches-constraint? param-keys (:not constraint))))))
+    (or (not (contains? schema :const)) (= (:const schema) value))
+    (or (not (:enum schema)) (some #(= value %) (:enum schema)))
+    (or (not (:minLength schema))
+        (and (string? value) (<= (:minLength schema) (count value))))
+    (or (not (:pattern schema))
+        (and (string? value)
+             (boolean (re-find (re-pattern (:pattern schema)) value))))
+    (or (not (:minimum schema))
+        (and (number? value) (<= (:minimum schema) value)))
+    (or (not (:maximum schema))
+        (and (number? value) (<= value (:maximum schema))))))
 
-(defn- matches-constraint? [param-keys constraint]
-  (matches-composite? param-keys constraint))
+(defn valid?
+  "Validate the JSON Schema subset published by clj-surgeon MCP tools."
+  [schema value]
+  (and
+    (or (not (:type schema)) (type-valid? (:type schema) value))
+    (object-valid? schema value)
+    (array-valid? schema value)
+    (scalar-valid? schema value)
+    (or (not (:allOf schema)) (every? #(valid? % value) (:allOf schema)))
+    (or (not (:anyOf schema)) (some #(valid? % value) (:anyOf schema)))
+    (or (not (:oneOf schema))
+        (= 1 (count (filter #(valid? % value) (:oneOf schema)))))
+    (or (not (:not schema)) (not (valid? (:not schema) value)))))
 
 (defn authorize
-  "Authorize top-level request shape against one advertised public schema.
-
-  The shared kernel remains responsible for value and nested validation. This
-  membrane makes the public property set and branch selector executable before
-  any shared handler can observe the request."
+  "Enforce one advertised public schema before its shared handler runs."
   [schema params]
-  (let [param-keys (set (map public-key (keys params)))
+  (let [params (or params {})
+        unsupported (vec (sort (unsupported-schema-keywords schema)))
+        param-keys (set (map public-key (keys params)))
         property-keys (set (map public-key (keys (:properties schema))))
         unexpected (vec (sort (remove property-keys param-keys)))
         branches (or (:oneOf schema) [schema])
-        matching-branches (count (filter #(matches-constraint? param-keys %)
-                                         branches))]
-    (if (and (empty? unexpected) (= 1 matching-branches))
+        matching-branches (count (filter #(valid? % params) branches))]
+    (if (and (empty? unsupported) (valid? schema params))
       {:ok true}
       {:ok false
-       :error "The invoked public tool does not authorize this request shape"
+       :error "The invoked public tool does not authorize this request"
        :error-type :public-schema-denied
+       :unsupported-schema-keywords unsupported
        :unexpected-fields unexpected
        :matching-branches matching-branches
        :mutation-attempted false

@@ -23,7 +23,7 @@
 (deftest catalog-name-validation
   (is (= :A (candidate/normalize-catalog :A)))
   (is (= :L (candidate/normalize-catalog "L")))
-  (is (= [:A :L :C :M :N :O :P :Q :R :S :T]
+  (is (= [:A :L :C :M :N :O :P :Q :R :S :T :U :V :W :X]
          candidate/supported-catalogs))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Unsupported MCP candidate catalog"
@@ -59,6 +59,21 @@
                   :transform-commit "apply_clojure_transform"
                   :transform-preview "preview_clojure_transform"}}
          (candidate/catalog-role-receipt :T))))
+
+(deftest catalog-runtime-receipt-retains-the-exact-advertised-surface
+  (let [receipt (candidate/catalog-runtime-receipt :V)]
+    (is (= (candidate/catalog-role-receipt :V)
+           (select-keys receipt [:catalog :roles])))
+    (is (= (mapv :name (candidate/catalog-tools :V))
+           (:tool-order receipt)
+           (mapv :name (:tools receipt))))
+    (is (= (candidate/catalog-instructions :V) (:instructions receipt)))
+    (is (every? #(and (string? (:description %))
+                      (map? (:input-schema %))
+                      (map? (:output-schema %))
+                      (or (nil? (:annotations %))
+                          (map? (:annotations %))))
+                (:tools receipt)))))
 
 (deftest alternate-catalogs-expose-one-self-consistent-pre-call-universe
   (doseq [catalog candidate/supported-catalogs]
@@ -228,6 +243,36 @@
                            (map canonical-handler split)
                            (map canonical-handler aliased))))))
 
+(deftest name-only-extraction-family-preserves-every-other-public-byte
+  (let [catalogs [:U :V :W :X]
+        tools-by-catalog (into {} (map (juxt identity candidate/catalog-tools)
+                                       catalogs))
+        extraction-names (set (map #(get-in (candidate/catalog-lexicon %)
+                                            [:extract])
+                                   catalogs))
+        normalize-extraction-name
+        (fn [tools]
+          (mapv (fn [tool]
+                  (cond-> (assoc tool :tool-fn (canonical-handler tool))
+                    (contains? extraction-names (:name tool))
+                    (assoc :name "EXTRACTION_CANDIDATE")))
+                tools))]
+    (is (= #{"apply_clojure_changes"
+             "apply_clojure_extraction"
+             "extract_clojure"
+             "move_clojure_forms"}
+           extraction-names))
+    (is (apply = (map (comp normalize-extraction-name tools-by-catalog)
+                      catalogs)))
+    (doseq [catalog catalogs]
+      (let [tools (tools-by-catalog catalog)]
+        (is (= ["inspect_clojure"
+                "edit_clojure"
+                (get-in (candidate/catalog-lexicon catalog) [:extract])
+                "continue_clojure_plan"
+                "transform_clojure"]
+               (mapv :name tools)))))))
+
 (deftest effect-catalogs-preserve-handlers-and-separate-preview-from-commit
   (let [base (mcp-server/public-tool-registry)
         base-transform (tool-by-id base :transform-clojure)
@@ -344,7 +389,9 @@
       (is (= (candidate/catalog-instructions :L)
              (:instructions @observed)))
       (is (= "/tmp/catalog-role-receipt.json" (:path @written)))
-      (is (= (candidate/catalog-role-receipt :L)
+      (is (= (json/parse-string
+               (json/generate-string (candidate/catalog-runtime-receipt :L))
+               true)
              (json/parse-string (:contents @written) true)))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"require the full tool profile"

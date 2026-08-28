@@ -8,7 +8,7 @@
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.string :as str]))
 
-(def supported-catalogs [:A :L :C :M :N :O :P :Q :R :S :T])
+(def supported-catalogs [:A :L :C :M :N :O :P :Q :R :S :T :U :V :W :X])
 
 (def role-lexicons
   "One complete public vocabulary for each alternate catalog.
@@ -82,12 +82,36 @@
        :extract "move_clojure_owners"
        :plan "apply_clojure_plan"
        :transform-preview "preview_clojure_transform"
-       :transform-commit "apply_clojure_transform"}})
+       :transform-commit "apply_clojure_transform"}
+   :U {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "apply_clojure_changes"
+       :plan "continue_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :V {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "apply_clojure_extraction"
+       :plan "continue_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :W {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "extract_clojure"
+       :plan "continue_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :X {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "move_clojure_forms"
+       :plan "continue_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}})
 
 (def public-role-keys
   [:inspect :edit :extract :plan :transform-preview :transform-commit])
 
-(declare normalize-catalog)
+(declare catalog-instructions catalog-tools normalize-catalog)
 
 (defn catalog-lexicon
   "Return the complete role vocabulary for one catalog."
@@ -103,6 +127,24 @@
                   (map (fn [[role tool-name]]
                          [role tool-name]))
                   (catalog-lexicon catalog))}))
+
+(defn catalog-runtime-receipt
+  "Return the exact advertised catalog surface used for client parity gates."
+  [catalog]
+  (let [catalog (normalize-catalog catalog)
+        tools (catalog-tools catalog)]
+    (assoc (catalog-role-receipt catalog)
+           :instructions (catalog-instructions catalog)
+           :tool-order (mapv :name tools)
+           :tools
+           (mapv (fn [{:keys [name description schema output-schema
+                              annotations]}]
+                   {:name name
+                    :description description
+                    :input-schema schema
+                    :output-schema output-schema
+                    :annotations annotations})
+                 tools))))
 
 (def mutation-tool-ids
   #{:edit-clojure
@@ -525,6 +567,30 @@
         (update :output-schema project-schema-prose lexicon role)
         (update :annotations project-schema-prose lexicon role))))
 
+(def neutral-role-lexicon
+  {:inspect "the inspection tool"
+   :edit "the exact-edit tool"
+   :extract "the extraction tool"
+   :plan "the plan-continuation tool"
+   :transform-preview "the transform tool"
+   :transform-commit "the transform tool"})
+
+(defn- project-name-only-tool-surface
+  "Project stable prose while varying only the public extraction name."
+  [public-lexicon tool]
+  (let [role (operation-role tool)
+        description (if (= (:id tool) :candidate-apply-clojure-plan)
+                      (basis-plan-description* neutral-role-lexicon)
+                      (role-description tool role neutral-role-lexicon))]
+    (-> tool
+        (assoc :name (get public-lexicon role)
+               :description description)
+        (update :tool-fn #(response/wrap-handler public-lexicon role
+                                                 (:schema tool) %))
+        (update :schema project-schema-prose neutral-role-lexicon role)
+        (update :output-schema project-schema-prose neutral-role-lexicon role)
+        (update :annotations project-schema-prose neutral-role-lexicon role))))
+
 (defn catalog-tools
   "Project one candidate catalog over canonical public tool entries.
 
@@ -535,15 +601,18 @@
   ([catalog base-tools]
    (let [catalog (normalize-catalog catalog)
          lexicon (catalog-lexicon catalog)
+         name-only? (#{:U :V :W :X} catalog)
          tools (cond
                  (#{:P :Q :R :S :T} catalog)
                  (effect-catalog-tools catalog base-tools)
 
-                 (#{:M :N :O} catalog)
+                 (#{:M :N :O :U :V :W :X} catalog)
                  (split-catalog-tools base-tools)
 
                  :else base-tools)]
-     (mapv #(project-tool-surface lexicon %) tools))))
+     (if name-only?
+       (mapv #(project-name-only-tool-surface lexicon %) tools)
+       (mapv #(project-tool-surface lexicon %) tools)))))
 
 (defn- schema-facing-prose
   [value]
@@ -685,7 +754,7 @@
       (println "clj-surgeon candidate MCP catalog:" (name catalog)))
     (when catalog-receipt-file
       (spit catalog-receipt-file
-            (json/generate-string (catalog-role-receipt catalog))))
+            (json/generate-string (catalog-runtime-receipt catalog))))
     (with-redefs [mcp-tool/all-tools (constantly projected-tools)
                   mcp-server/server-instructions projected-instructions]
       (http-server/start server-opts))))
