@@ -172,6 +172,74 @@
       (invalid-outcome violations)
       {:ok true :outcome outcome})))
 
+(defn classify-change-terminal
+  "Convert one observed CLI change terminal into validated canonical facts."
+  [{:keys [point legacy-result capabilities compiled-facts receipt-facts
+           observed-effects]}]
+  (let [rolled-back? (true? (:rolled-back legacy-result))
+        error-type (:error-type legacy-result)
+        [status phase source-state]
+        (case point
+          (:compile :authority) [:refused :compile :unchanged]
+          :receipt-stage [:refused :receipt-stage :unchanged]
+          :commit (cond
+                    (= :source-hash-mismatch error-type)
+                    [:refused :snapshot :unchanged]
+
+                    rolled-back?
+                    [:failed :rollback :restored]
+
+                    :else
+                    [:unverified :rollback :unknown])
+          :receipt-publish (if rolled-back?
+                             [:failed :rollback :restored]
+                             [:unverified :rollback :unknown])
+          :success [:ok :receipt-publish :committed]
+          [:unverified :rollback :unknown])
+        source-files (:files compiled-facts)
+        files (case source-state
+                :committed
+                (mapv #(select-keys % [:file :result-hash]) source-files)
+
+                :restored
+                (mapv (fn [{:keys [file source-hash]}]
+                        {:file file :original-hash source-hash})
+                      source-files)
+
+                nil)
+        receipt (when (= :committed source-state)
+                  (merge {:published true :publication-count 1}
+                         receipt-facts))
+        outcome
+        (cond-> {:operation :change
+                 :operation-version 1
+                 :status status
+                 :phase phase
+                 :source-state source-state
+                 :effects {:declared capabilities
+                           :observed (vec observed-effects)}}
+          (:counts compiled-facts)
+          (assoc :counts (:counts compiled-facts))
+
+          (seq files)
+          (assoc :files files)
+
+          receipt
+          (assoc :receipt receipt))]
+    (validate-outcome outcome)))
+
+(defn observe-change-terminal
+  "Validate one canonical terminal and return the identical legacy result."
+  [observation legacy-result]
+  (let [classification
+        (classify-change-terminal
+          (assoc observation :legacy-result legacy-result))]
+    (when (:error classification)
+      (throw
+        (ex-info (:error classification)
+                 (dissoc classification :error))))
+    legacy-result))
+
 (defn compile-change
   "Compile one change through its catalog compiler and return a
    transport-neutral outcome beside the unchanged compiled transaction."

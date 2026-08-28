@@ -96,57 +96,128 @@
     (is (= {:ok true :outcome outcome}
            (algebra/validate-outcome outcome))))
   (doseq [outcome [{:status :ok
-  :phase :receipt-publish
-  :source-state :committed
-  :effects {:observed [:source-write]}}
- {:status :refused
-  :phase :compile
-  :source-state :unchanged
-  :effects {:observed [:source-write]}}
- {:status :failed
-  :phase :rollback
-  :source-state :restored
-  :effects {:observed [:source-write :rollback]}}
- {:status :unverified
-  :phase :rollback
-  :source-state :unknown
-  :safe-to-retry true
-  :effects {:observed [:source-write :rollback]}}
- {:status :ok
-  :phase :receipt-publish
-  :source-state :committed
-  :files [{:file "src/app.clj" :result-hash "result"}]
-  :receipt {:published true :publication-count 2}
-  :effects {:observed [:source-write :receipt-publish]}}
- {:status :failed
-  :phase :compile
-  :source-state :unchanged
-  :effects {:observed [:source-read]}}
- {:status :ok
-  :phase :rollback
-  :source-state :restored
-  :files [{:file "src/app.clj" :original-hash "original"}]
-  :effects {:observed [:source-write :rollback]}}
- {:status :refused
-  :phase :receipt-publish
-  :source-state :unchanged
-  :receipt {:published true :publication-count 1}
-  :effects {:observed [:receipt-publish]}}
- {:status :ok
-  :phase :compile
-  :source-state :unchanged
-  :future-sources {"src/app.clj" "(ns app)"}
-  :stdout "transport data"
-  :effects {:observed [:source-read]}}
- {:status :ok
-  :phase :receipt-publish
-  :source-state :committed
-  :files [{:file "src/a.clj" :result-hash "a"}
-          {:file "src/b.clj"}]
-  :receipt {:published true :publication-count 1}
-  :effects {:observed [:source-write :receipt-publish]}}]]
+                    :phase :receipt-publish
+                    :source-state :committed
+                    :effects {:observed [:source-write]}}
+                   {:status :refused
+                    :phase :compile
+                    :source-state :unchanged
+                    :effects {:observed [:source-write]}}
+                   {:status :failed
+                    :phase :rollback
+                    :source-state :restored
+                    :effects {:observed [:source-write :rollback]}}
+                   {:status :unverified
+                    :phase :rollback
+                    :source-state :unknown
+                    :safe-to-retry true
+                    :effects {:observed [:source-write :rollback]}}
+                   {:status :ok
+                    :phase :receipt-publish
+                    :source-state :committed
+                    :files [{:file "src/app.clj" :result-hash "result"}]
+                    :receipt {:published true :publication-count 2}
+                    :effects {:observed [:source-write :receipt-publish]}}
+                   {:status :failed
+                    :phase :compile
+                    :source-state :unchanged
+                    :effects {:observed [:source-read]}}
+                   {:status :ok
+                    :phase :rollback
+                    :source-state :restored
+                    :files [{:file "src/app.clj" :original-hash "original"}]
+                    :effects {:observed [:source-write :rollback]}}
+                   {:status :refused
+                    :phase :receipt-publish
+                    :source-state :unchanged
+                    :receipt {:published true :publication-count 1}
+                    :effects {:observed [:receipt-publish]}}
+                   {:status :ok
+                    :phase :compile
+                    :source-state :unchanged
+                    :future-sources {"src/app.clj" "(ns app)"}
+                    :stdout "transport data"
+                    :effects {:observed [:source-read]}}
+                   {:status :ok
+                    :phase :receipt-publish
+                    :source-state :committed
+                    :files [{:file "src/a.clj" :result-hash "a"}
+                            {:file "src/b.clj"}]
+                    :receipt {:published true :publication-count 1}
+                    :effects {:observed [:source-write :receipt-publish]}}]]
     (is (= :invalid-operation-outcome
            (:error-type (algebra/validate-outcome outcome))))))
+
+(deftest classifies-every-cli-terminal-without-changing-the-legacy-result
+  (let [capabilities #{:source-read :source-write :receipt-stage
+                       :receipt-publish :rollback}
+        compiled-facts {:counts {:changes 1 :edits 1 :files 1}
+                        :files [{:file "src/app.clj"
+                                 :source-hash "original"
+                                 :result-hash "result"}]}
+        receipt-facts {:path ".clj-surgeon-receipts/receipt.edn"}
+        rows [{:point :compile
+               :legacy-result {:error-type :invalid-change}
+               :observed-effects [:source-read]
+               :expected [:refused :compile :unchanged]}
+              {:point :authority
+               :legacy-result {:error-type :effect-capability-denied}
+               :observed-effects [:source-read]
+               :expected [:refused :compile :unchanged]}
+              {:point :receipt-stage
+               :legacy-result {:error-type :receipt-stage-failed}
+               :observed-effects [:source-read :receipt-stage]
+               :expected [:refused :receipt-stage :unchanged]}
+              {:point :commit
+               :legacy-result {:error-type :source-hash-mismatch}
+               :observed-effects [:source-read :receipt-stage]
+               :expected [:refused :snapshot :unchanged]}
+              {:point :commit
+               :legacy-result {:error-type :write-failed :rolled-back true}
+               :observed-effects [:source-read :receipt-stage
+                                  :source-write :rollback]
+               :expected [:failed :rollback :restored]}
+              {:point :commit
+               :legacy-result {:error-type :write-failed}
+               :observed-effects [:source-read :receipt-stage
+                                  :source-write :rollback]
+               :expected [:unverified :rollback :unknown]}
+              {:point :receipt-publish
+               :legacy-result {:error-type :publish-failed :rolled-back true}
+               :observed-effects [:source-read :receipt-stage :source-write
+                                  :receipt-publish :rollback]
+               :expected [:failed :rollback :restored]}
+              {:point :receipt-publish
+               :legacy-result {:error-type :publish-failed}
+               :observed-effects [:source-read :receipt-stage :source-write
+                                  :receipt-publish :rollback]
+               :expected [:unverified :rollback :unknown]}
+              {:point :success
+               :legacy-result {:ok true :receipt "legacy"}
+               :observed-effects [:source-read :receipt-stage
+                                  :source-write :receipt-publish]
+               :expected [:ok :receipt-publish :committed]}]]
+    (doseq [{:keys [point legacy-result observed-effects expected]} rows]
+      (let [observation {:point point
+                         :capabilities capabilities
+                         :compiled-facts compiled-facts
+                         :receipt-facts receipt-facts
+                         :observed-effects observed-effects}
+            classification
+            (algebra/classify-change-terminal
+              (assoc observation :legacy-result legacy-result))
+            outcome (:outcome classification)]
+        (is (= {:ok true :outcome outcome} classification))
+        (is (= expected
+               ((juxt :status :phase :source-state) outcome)))
+        (is (= legacy-result
+               (algebra/observe-change-terminal observation legacy-result)))
+        (is (not-any? #(contains? outcome %)
+                      [:original-sources :future-sources :stdout :stderr
+                       :json :callback-state :human-summary]))
+        (when (= :unknown (:source-state outcome))
+          (is (nil? (:files outcome)))
+          (is (not (true? (:safe-to-retry outcome)))))))))
 
 ;; @spec OP-ALG-COMPILE-001, OP-ALG-PREVIEW-001, OP-ALG-OUTCOME-003
 (deftest change-preview-compiles-once-without-copying-transaction-state
