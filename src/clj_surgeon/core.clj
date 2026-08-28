@@ -485,6 +485,7 @@
 ;; ============================================================
 
 (def ops-registry
+  ;; @spec OP-ALG-CLI-001, OP-ALG-DECODE-001, OP-ALG-IDENTITY-001
   "Single source of truth for all operations.
    Each key is the canonical op name. Drives dispatch, help, and error messages."
   ;; hash-map, NOT sorted-map: sorted-map COMPARES keys on contains?/get, so any

@@ -1,4 +1,5 @@
 (ns qualify-inspect-candidate
+  ;; @spec OP-ALG-PERF-001
   (:require
    [babashka.process :as process]
    [cheshire.core :as json]

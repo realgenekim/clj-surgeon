@@ -1,6 +1,7 @@
 #!/usr/bin/env bb
 
 (ns run-operation-algebra-perf-002
+  ;; @spec OP-ALG-PERF-002
   (:require
    [babashka.process :as process]
    [clojure.edn :as edn]

@@ -445,6 +445,7 @@
                  (:changed-characters program-result)))))))
 
 (defn- execute-explicit-change!
+  ;; @spec OP-ALG-MCP-001
   [config root resolved receipt verify]
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# @spec OP-ALG-PERF-001
 set -euo pipefail
 
 if [ "${1:-}" = "--self-test" ]; then
