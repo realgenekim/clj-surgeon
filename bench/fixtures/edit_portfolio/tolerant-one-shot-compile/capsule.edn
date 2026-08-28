@@ -1,0 +1,16 @@
+{:id :tolerant-one-shot-compile
+ :decision-boundary :complete-decision-supplied
+ :provenance {:kind :real-task-derived
+              :source "retained three-attempt multi-file MCP editing incident"
+              :minimized "preserves packed complete forms, exact per-change guards, and redundant wrong aggregate bookkeeping"}
+ :targets ["src/book.clj" "test/book_test.clj"]
+ :hashes {"src/book.clj"
+          {:before "13b327376fcd3d75a0b314e9181a55114face4492d3dfc37252bd4740c76eb13"
+           :after "bddb34bbabd947f9bc49b198a899f3b5cee319ec9696b6cb9026a4206bf16e06"}
+          "test/book_test.clj"
+          {:before "3c50fd8fb2edb45b0f7c73bd5caf2152c80ac91282365d500ba88fb60a8cad18"
+           :after "719110b20bd19b53f7ca4bb8a7ea10355e4a91a1282de1031ae05b132a892a65"}}
+ :verification {:exact-bytes-secondary true
+                :meaning-preserved true
+                :parse-clojure true}
+ :expected {:changed-files 2 :edits 3}}
