@@ -192,6 +192,16 @@ resolution, batching, or persistent formatting may recover 0.5–2 seconds and
 is important for `clj-surgeon-tmr.1`. It cannot explain or close a 13-second
 extraction gap by itself.
 
+Test a second, independent formatter hypothesis: Surgeon owns formatting of the
+exact changed Clojure files inside the guarded transaction and returns terminal
+formatter evidence. Compare that route with an otherwise identical edit followed
+by a model-issued formatter call. Freeze formatter version, configuration,
+changed-file set, and accepted output. Measure complete wall and action count,
+not only formatter CPU. The expected prize is deletion of a model/tool boundary;
+formatter process reuse is a smaller, separable option. Preserve rollback on
+formatter failure and unrelated source bytes. This experiment is tracked by
+`clj-surgeon-dkj`.
+
 ## Credible path to a 5x extraction result
 
 These projections are a portfolio, not additive promises:
