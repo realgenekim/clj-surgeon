@@ -344,6 +344,8 @@
                            "preserved 1 completed request from the frozen snapshot"))
         (is (str/includes? summary
                            "retry only mistyped; do not reread before"))
+        (is (str/includes? summary
+                           "copy continuation.retry_template.arguments"))
         (is (= false (get-in structured [:continuation :write_authority])))
         (is (= ["before"]
                (get-in structured [:continuation :completed_request_ids])))
@@ -352,6 +354,17 @@
         (is (= "(def beta 7)"
                (get-in structured
                        [:continuation :completed_results 0 :forms 0 :source])))
+        (is (= (.getCanonicalPath project)
+               (get-in structured
+                       [:continuation :retry_template :arguments
+                        :workspace_root])))
+        (is (= [nil]
+               (get-in structured
+                       [:continuation :retry_template :arguments
+                        :requests 0 :forms])))
+        (is (= {:requests 1 :files 1}
+               (get-in structured
+                       [:continuation :retry_template :arguments :expect])))
         (is (not (str/includes? summary "(def answer"))))
       (finally
         (inspect-tool/init! nil)
@@ -376,40 +389,39 @@
                         "file" "src/b.clj" "forms" ["bet"]
                         "expect" {"forms" 1}}
                        {"id" "c" "operation" "forms"
-                        "file" "src/c.clj" "forms" ["gamma"]
+                        "file" "src/c.clj" "forms" ["gamm"]
                         "expect" {"forms" 1}}]
            "expect" {"requests" 3 "files" 3}})
         guards-1 (get-in initial [:continuation :snapshot_guards])
+        retry-1 (get-in initial [:continuation :retry_template :arguments])
+        unfilled
+        (inspect-tool/execute-inspect!
+          {:project-root (.getPath project)}
+          retry-1)
         second
         (inspect-tool/execute-inspect!
           {:project-root (.getPath project)}
-          {"snapshot_guards" guards-1
-           "requests" [{"id" "b" "operation" "forms"
-                        "file" "src/b.clj" "forms" ["beta"]
-                        "expect" {"forms" 1}}
-                       {"id" "c" "operation" "forms"
-                        "file" "src/c.clj" "forms" ["gamm"]
-                        "expect" {"forms" 1}}]
-           "expect" {"requests" 2 "files" 2}})
-        guards-2 (get-in second [:continuation :snapshot_guards])]
+          (assoc-in retry-1 [:requests 0 :forms 0] "beta"))
+        guards-2 (get-in second [:continuation :snapshot_guards])
+        retry-2 (get-in second [:continuation :retry_template :arguments])]
     (try
       (is (= ["a"]
              (get-in initial [:continuation :completed_request_ids])))
       (is (= #{"src/a.clj" "src/b.clj" "src/c.clj"}
              (set (keys guards-1))))
+      (is (= "invalid-mcp-request" (:error_type unfilled)))
+      (is (not (contains? unfilled :continuation)))
       (is (= ["b"]
              (get-in second [:continuation :completed_request_ids])))
       (is (= #{"src/a.clj" "src/b.clj" "src/c.clj"}
              (set (keys guards-2))))
+      (is (= {:requests 1 :files 1} (:expect retry-2)))
+      (is (= [nil] (get-in retry-2 [:requests 0 :forms])))
       (spit a-file "(ns a)\n(def alpha :changed)\n")
       (let [stale
             (inspect-tool/execute-inspect!
               {:project-root (.getPath project)}
-              {"snapshot_guards" guards-2
-               "requests" [{"id" "c" "operation" "forms"
-                            "file" "src/c.clj" "forms" ["gamma"]
-                            "expect" {"forms" 1}}]
-               "expect" {"requests" 1 "files" 1}})]
+              (assoc-in retry-2 [:requests 0 :forms 0] "gamma"))]
         (is (false? (:ok stale)))
         (is (= "snapshot-guard-mismatch" (:error_type stale)))
         (is (= "snapshot" (:failed_stage stale)))

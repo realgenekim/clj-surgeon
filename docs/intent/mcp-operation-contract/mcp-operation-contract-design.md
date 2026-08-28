@@ -226,6 +226,15 @@ failure inside the first request has no complete sibling evidence and remains
 fail-empty. Schema, path, parse, snapshot, cardinality, guard, and output-budget
 failures also remain fail-empty.
 
+The continuation publishes a non-executable `retry_template` so the model does
+not reconstruct retry bookkeeping. Its `arguments` contain the canonical
+workspace root, pending request suffix, mechanically recomputed aggregate
+expectation, and every snapshot guard. Each failed selector is replaced by
+`null` and named in `holes` with its rejected value and `authority=false`. The
+caller fills only those holes. Replaying the template unchanged fails schema
+validation; the template cannot repeat the known-bad selector or imply a
+correction.
+
 Exact proof relations, hash-guarded executable retries, explicit clue
 resolution, and declarative read missions remain separate modules. They
 advance only when selector diagnostics plus inline sibling continuation cannot

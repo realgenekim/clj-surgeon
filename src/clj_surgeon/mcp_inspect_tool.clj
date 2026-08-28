@@ -43,9 +43,10 @@
     "request and every failed owner, supplies the complete bounded name-only "
     "owner vocabulary, and ranks up to ten hypotheses per missing owner. "
     "After a selector-local failure, a continuation preserves completed sibling "
-    "results and SHA-256 guards for every original file. Correct only the pending "
-    "selector, retry that subset with all continuation.snapshot_guards, and do not "
-    "reread completed siblings. Every guarded file is verified before evaluation; "
+    "results and SHA-256 guards for every original file. Copy "
+    "continuation.retry_template.arguments, replace every declared null selector "
+    "hole with one exact owner, and submit that complete guarded request. Do not "
+    "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
     "read_complete=true is "
@@ -70,11 +71,48 @@
     "pending_request_count" positive-integer-schema
     "pending_request_ids" {:type "array" :items {:type "string"}}
     "snapshot_guards" snapshot-guards-schema
-    "completed_results" {:type "array"}}
+    "completed_results" {:type "array"}
+    "retry_template"
+    {:type "object"
+     :additionalProperties false
+     :properties
+     {"executable" {:const false}
+      "snapshot_bound" {:const true}
+      "selector_authority" {:const false}
+      "write_authority" {:const false}
+      "arguments"
+      {:type "object"
+       :additionalProperties false
+       :properties
+       {"workspace_root" {:type "string" :minLength 1}
+        "snapshot_guards" snapshot-guards-schema
+        "requests" {:type "array" :minItems 1 :maxItems inspect/max-requests}
+        "expect" {:type "object"
+                  :additionalProperties false
+                  :properties {"requests" positive-integer-schema
+                               "files" positive-integer-schema}
+                  :required ["requests" "files"]}}
+       :required ["workspace_root" "snapshot_guards" "requests" "expect"]}
+      "holes"
+      {:type "array"
+       :minItems 1
+       :items {:type "object"
+               :additionalProperties false
+               :properties
+               {"path" {:type "array" :minItems 4}
+                "request_id" {:type "string" :minLength 1}
+                "kind" {:const "exact-top-level-owner"}
+                "rejected_value" {:type "string" :minLength 1}
+                "must_replace" {:const true}
+                "authority" {:const false}}
+               :required ["path" "request_id" "kind" "rejected_value"
+                          "must_replace" "authority"]}}}
+     :required ["executable" "snapshot_bound" "selector_authority"
+                "write_authority" "arguments" "holes"]}}
    :required ["snapshot_bound" "selector_authority" "write_authority"
               "completed_request_count" "completed_request_ids"
               "pending_request_count" "pending_request_ids"
-              "snapshot_guards" "completed_results"]})
+              "snapshot_guards" "completed_results" "retry_template"]})
 (def ^:private source-file-schema
   {:type "string"
    :minLength 1
@@ -781,6 +819,13 @@
         telemetry params result {:total_ms (:inspection_elapsed_ms result)}))
     result))
 
+(defn- attach-workspace-root
+  [result workspace-root]
+  (cond-> (assoc result :workspace_root workspace-root)
+    (get-in result [:continuation :retry_template :arguments])
+    (assoc-in [:continuation :retry_template :arguments :workspace_root]
+              workspace-root)))
+
 (defn execute-inspect!
   "Route one inspect request to a canonical workspace context, then execute it."
   [config params]
@@ -790,14 +835,15 @@
       (let [result (execute-inspect-in-context! config normalized)
             resolved (workspace/canonical-root (:project-root config))]
         (cond-> result
-          (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
+          (:ok resolved) (attach-workspace-root (:workspace-root resolved))))
       (let [workspace-router (or (:workspace-router config)
                                  (workspace/router config))
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
-          (assoc (execute-inspect-in-context! (:config routed) (:params routed))
-                 :workspace_root (:workspace-root routed)))))))
+          (attach-workspace-root
+            (execute-inspect-in-context! (:config routed) (:params routed))
+            (:workspace-root routed)))))))
 
 ;; @spec MCP-OP-READ-DIAG-002
 (defn- inspect-summary
@@ -866,7 +912,7 @@
                        (if (= 1 completed-count) "" "s")
                        (str/join ", " pending-ids)))
              (cond
-               continuation "\n→ correct the pending selector and retry with continuation.snapshot_guards"
+               continuation "\n→ copy continuation.retry_template.arguments, fill only its null selector holes, and submit it"
                diagnostic? "\n→ choose one exact owner and retry"
                :else (format "\n→ %s" (or (:next_action result) "correct_request"))))))
 
