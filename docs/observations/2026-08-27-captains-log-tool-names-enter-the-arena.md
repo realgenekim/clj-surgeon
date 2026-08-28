@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-27  
 **Owner:** `clj-surgeon-x9d`  
-**Experiment head:** `6128b9babacdfc44cc9e59efa323c323a751e948`  
-**Status:** first falsifiers complete; full Anvil catalog screen in flight
+**Experiment head:** `a953e418cf06c458199c9bda670af1c2b5d8157f`
+**Status:** clean alternate-universe screen complete; keep catalog A
 
 ## Why test names at all?
 
@@ -158,7 +158,7 @@ evidence: a rename is an interface migration, not a catalog-key substitution.
 It must change the complete caller-visible language together or not change at
 all.
 
-## Current decision
+## Decision after the contaminated falsifier
 
 Do not publish N, T, `_bang`, `_commit`, or any other rename yet. Preserve the
 two ugly local results. First make the alternate catalog internally complete:
@@ -262,3 +262,114 @@ architecture.
 We can now project and test a public catalog without changing product handlers
 or the shared runtime. A naming hypothesis can fail in one clean caller before
 it becomes an API migration. That option value is the main win so far.
+
+## Clean alternate-universe screen
+
+Commit `a953e41` closed the response-side leak. The candidate facade projects
+only typed public identifier slots and exact server-owned routing phrases. It
+preserves source, diffs, diagnostics, hashes, receipts, verifier evidence, and
+terminal response bytes. Catalog A is characterized byte-for-byte against the
+canonical handler. The focused cold gate passed 22 tests and 319 assertions.
+
+The clean Anvil screen then ran all 11 supported catalogs. Each run used:
+
+- a fresh Codex home with no installed Surgeon CLI or skill;
+- `gpt-5.6-sol` at high reasoning;
+- exact commit `a953e418cf06c458199c9bda670af1c2b5d8157f`;
+- frozen input manifest
+  `aa637f4e9bbc949645007d4859510523a04de4981b251043df2039e0083c4d12`;
+- the same extraction task, fixture, prompt, scorer, and private MCP launch;
+- one replica, serial execution within each lane, and zero source archaeology;
+- no shared `:7888`, install, reload, or product-runtime change.
+
+Correctness precedes speed in this table. `Semantic` says whether the resulting
+source meaning survived. `Route` says whether the catalog led the caller through
+the intended public one-shot extraction path. A semantically correct fallback
+is still a catalog failure when it requires discovery, refusals, or raw MCP.
+
+| Catalog | Extraction-facing name | First role | Observed route | Semantic | Route correct | Wall |
+|---|---|---|---|---|---|---:|
+| A | `apply_clojure_changes` | extract | one public extraction transaction | correct | **yes** | **45.600s** |
+| L | `apply_clojure_plan` | edit | compact edit route | correct | no | 68.965s |
+| C | `refactor_clojure` | inspect | inspect-led, three MCP failures | correct | no | 141.374s |
+| M | `extract_clojure` | edit | compact edit route | correct | no | 117.048s |
+| N | `extract_clojure` | edit | compact edit twice; one MCP failure | correct | no | 99.037s |
+| O | `extract_clojure` | inspect | inspect twice; no destination | no mutation | no | 102.784s |
+| P | `commit_clojure_extraction` | inspect | inspect twice, raw `tools/list`, then raw commit | correct | no | 162.240s |
+| Q | `clojure.extract.commit` | inspect | refused unknown fields; required name unavailable | no mutation | no | 87.951s |
+| R | `extract_clojure_commit` | inspect | refusal, MCP discovery, raw commit | correct | no | 169.374s |
+| S | `extract_clojure_bang` | inspect | two refusals, MCP discovery, raw commit | correct | no | 165.448s |
+| T | `move_clojure_owners` | inspect | three refusals, read-only plan, no mutation | no mutation | no | 143.744s |
+
+Catalog A is the only benchmark-correct arm. It selected the extraction role
+first, performed one atomic mutation, and completed without discovery or MCP
+failure. Its byte-exact score was false, but the semantic scorer was correct;
+byte equality is secondary for this benchmark and did not change meaning.
+
+R and S are useful negative evidence. Their kernels could perform the task, and
+their final source was semantically correct. Their public interfaces did not
+make that capability usable: Sol first selected inspect, rejected the normal
+route, rediscovered the private MCP protocol, and invoked the extraction tool
+raw. They took 3.71x and 3.63x A's wall time. This is not a fair speed contest
+between valid arms; it is the measured cost of a failed catalog route.
+
+### Honest interpretation
+
+This screen does not prove that the string `apply_clojure_changes` is the best
+possible name in isolation. A catalog is a coupled public contract: name,
+description, schema partition, order, title, effect annotations, refusal
+language, and result projection. The experiment proves that the complete A
+contract works and that none of the ten alternate contracts earned a release
+cohort.
+
+The surprising result is valuable. Names that looked clearer in a design
+review—`extract_clojure`, `_commit`, `_bang`, and `move_clojure_owners`—did not
+produce clearer behavior. Fresh Sol often interpreted the supplied extraction
+payload as an edit or inspect request. When it recovered, it paid several model
+and tool boundaries to do so. Conceptual elegance did not beat the established
+route.
+
+The screen is one replica per catalog. That is sufficient for the elimination
+gate because every challenger failed route correctness. It is not sufficient
+to estimate small performance differences among correct catalogs. No
+challenger therefore advances to a replicated speed cohort.
+
+Two environmental facts remain separate from the catalog verdict:
+
+- the requested `~/bin/clj-kondo` was absent on the Anvil seats. Catalog A's
+  atomic mutation verification still succeeded; several failed routes later
+  found an equivalent linter. Future performance cohorts should provide one
+  candidate-pinned verifier path;
+- dev-b experienced a repaired composer refusal and had an old dormant Java
+  process during part of the lane. This can confound M/N/O/P wall time, but it
+  cannot turn their edit- or inspect-first selections into extraction-first
+  routes.
+
+### Decision
+
+Keep catalog A. Do not publish any rename, `_bang`, `_commit`, dotted name, or
+expanded extraction catalog from this screen. Do not spend a larger cohort on
+a challenger that failed its first-action gate.
+
+Keep the facade architecture. It earned its keep independently of the losing
+names: we can now test names, descriptions, schema partitions, ordering, and
+result presentation without modifying handlers or the shared runtime. The
+next product ratchet is a behavior-neutral public-interface boundary with
+catalog A byte parity and a guard that forbids public names below the boundary.
+That change should make future interface experiments cheap; it should not
+change the installed catalog by itself.
+
+### Immutable evidence
+
+| Lane | Catalogs | Result root | Artifact manifests |
+|---|---|---|---|
+| dev-a | A, L, C | `/srv/fleet/dev-a/clj-surgeon-catalog-results-clean-a953e418cf06-alc` | A `2b2670708045d22b3251a7e8ab76fae2f9ebebd672e602b27f5b2a83c3cbaefe`; L `c355b06e7e12e05968cb882241e1ae22d70b30b5c195846e22e1f42cbbce2834`; C `ead70bd7a4e57b0416e2c6ff6d6c799bf02ef18b3b3d827f5a0a516806b03830` |
+| dev-b | M, N, O, P | `/srv/fleet/dev-b/clj-surgeon-catalog-results-clean-a953e418cf06-mnop` | M `9ebcb2a5dcf591a04de84d8d8a0c1d882fee5d78a69e76d984fbc9de81cc21c1`; N `991b770f06f87441148563ad82b5b922133e206c06e2ebbeb5f9ff1ea7b37b86`; O `12ccdcfb412284e06b5726bc7aaa68efdbb12ac2f105ed7c94e10557f5a13835`; P `0058b40a8c5fe742625866e3d44e27e2a436919a0db4c2eda494401f0f963738` |
+| dev-c | Q, R, S, T | `/srv/fleet/dev-c/clj-surgeon-catalog-results-clean-a953e418cf06-qrst` | Q `11b28adfc1876e4220367c493959b6bc422b72bdc4eaa2ec66beb990ce518197`; R `3797646ed4d4eac1111907130bf54c7175a64e8337462e45676380e688291f99`; S `a20798fffa75b6860175f989fddc79f46310729106fc6f9144556f07c2961d21`; T `1d79fc60cb47299cc257398398e2d53e86eefb01448f4d891ea91a765ba2ea4e` |
+
+Every arm retained exactly one terminal receipt, one zero-archaeology receipt,
+and a 26-file artifact manifest. Every lane finished at the exact experiment
+head with no tracked or staged diff and no lane-owned benchmark or candidate
+MCP process. The repaired bridge refusal was
+`bridge-refusal-d9f8c9280f29`; its retry was picked up as
+`agentmsg-08e79e925117`.
