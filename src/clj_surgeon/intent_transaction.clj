@@ -1854,6 +1854,36 @@
                           [StandardCopyOption/ATOMIC_MOVE
                            StandardCopyOption/REPLACE_EXISTING])))
 
+(defn- terminal-observed-effects
+  [point legacy-result]
+  (case point
+    (:compile :authority) [:source-read]
+    :receipt-stage [:source-read :receipt-stage]
+    :commit (if (= :source-hash-mismatch (:error-type legacy-result))
+              [:source-read :receipt-stage]
+              [:source-read :receipt-stage :source-write :rollback])
+    :receipt-publish [:source-read :receipt-stage :source-write
+                      :receipt-publish :rollback]
+    :success [:source-read :receipt-stage :source-write :receipt-publish]
+    [:source-read]))
+
+(defn- observe-change-result
+  [point capabilities compiled receipt-facts legacy-result]
+  (let [counts (select-keys compiled
+                            [:intent-count :match-count
+                             :change-count :changed-file-count])
+        files (when (:ok compiled)
+                (mapv #(select-keys % [:file :source-hash :result-hash])
+                      (changed-file-plans compiled)))]
+    (operation-algebra/observe-change-terminal
+      {:point point
+       :capabilities capabilities
+       :compiled-facts (cond-> {:files files}
+                         (seq counts) (assoc :counts counts))
+       :receipt-facts receipt-facts
+       :observed-effects (terminal-observed-effects point legacy-result)}
+      legacy-result)))
+
 (defn- compile-change-spec
   [spec]
   (validate-spec! spec)
@@ -1891,64 +1921,97 @@
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
                      compiled)]
-      (do
-        (assert-receipt-does-not-alias-source! receipt-path spec)
-        (when authority-error
-          (refuse! (:error-type authority-error)
-                   (:error authority-error)
-                   (dissoc authority-error :error :error-type)))
-        (when-not (:error compiled)
-          (let [authorization
-                (operation-algebra/authorize-effects
-                  capabilities
-                  #{:source-write
-                    :receipt-stage
-                    :receipt-publish
-                    :rollback})]
-            (when (:error authorization)
-              (refuse! (:error-type authorization)
-                       (:error authorization)
-                       (dissoc authorization :error :error-type))))))
-      (if (:error compiled)
-        (assoc compiled :phase :compile :source-unchanged true)
-        (let [receipt (build-receipt compiled)
-              staged (stage-receipt! receipt-path receipt)]
-          (try
-            (let [commit (commit-compiled! compiled)]
-              (if (:error commit)
-                commit
-                (try
-                  (publish-staged-receipt! staged receipt-path)
-                  (let [published (edn/read-string (slurp receipt-path))]
-                    (validate-receipt! published)
-                    (merge commit
-                           (cond-> {:receipt-file receipt-path
-                                    :receipt-hash (:receipt-hash receipt)
-                                    :intent-count (:intent-count compiled)
-                                    :match-count (:match-count compiled)
-                                    :inverse (:inverse receipt)}
-                             (:change-count compiled)
-                             (assoc :change-count (:change-count compiled))
+      (assert-receipt-does-not-alias-source! receipt-path spec)
+      (cond
+        authority-error
+        (observe-change-result
+          :authority capabilities compiled nil authority-error)
 
-                             (:format compiled)
-                             (assoc :format (:format compiled)))))
-                  (catch Exception publish-error
-                    (let [inverse (compile-inverse
+        (:error compiled)
+        (observe-change-result
+          :compile capabilities compiled nil
+          (assoc compiled :phase :compile :source-unchanged true))
+
+        :else
+        (let [authorization
+              (operation-algebra/authorize-effects
+                capabilities
+                #{:source-write
+                  :receipt-stage
+                  :receipt-publish
+                  :rollback})]
+          (if (:error authorization)
+            (observe-change-result
+              :authority capabilities compiled nil authorization)
+            (let [receipt (build-receipt compiled)
+                  staged-result
+                  (try
+                    {:staged (stage-receipt! receipt-path receipt)}
+                    (catch clojure.lang.ExceptionInfo e
+                      {:error-result
+                       (merge {:error (.getMessage e)} (ex-data e))})
+                    (catch Exception e
+                      {:error-result
+                       {:error (.getMessage e)
+                        :error-type :transaction-write-exception}}))]
+              (if-let [stage-error (:error-result staged-result)]
+                (observe-change-result
+                  :receipt-stage capabilities compiled nil stage-error)
+                (let [staged (:staged staged-result)]
+                  (try
+                    (let [commit (commit-compiled! compiled)]
+                      (if (:error commit)
+                        (observe-change-result
+                          :commit capabilities compiled nil commit)
+                        (try
+                          (publish-staged-receipt! staged receipt-path)
+                          (let [published (edn/read-string (slurp receipt-path))]
+                            (validate-receipt! published)
+                            (let [result
+                                  (merge
+                                    commit
+                                    (cond->
+                                      {:receipt-file receipt-path
+                                       :receipt-hash (:receipt-hash receipt)
+                                       :intent-count (:intent-count compiled)
+                                       :match-count (:match-count compiled)
+                                       :inverse (:inverse receipt)}
+                                      (:change-count compiled)
+                                      (assoc :change-count
+                                             (:change-count compiled))
+
+                                      (:format compiled)
+                                      (assoc :format (:format compiled))))]
+                              (observe-change-result
+                                :success capabilities compiled
+                                {:path receipt-path
+                                 :hash (:receipt-hash receipt)}
+                                result)))
+                          (catch Exception publish-error
+                            (let [inverse
+                                  (compile-inverse
                                     receipt (:future-sources compiled))
-                          rollback (if (:ok inverse)
-                                     (commit-compiled! inverse)
-                                     inverse)]
-                      {:error (if (:ok rollback)
-                                "Receipt publication failed; all files restored"
-                                "Receipt publication failed; manual recovery required")
-                       :error-type (if (:ok rollback)
+                                  rollback (if (:ok inverse)
+                                             (commit-compiled! inverse)
+                                             inverse)
+                                  result
+                                  {:error (if (:ok rollback)
+                                            "Receipt publication failed; all files restored"
+                                            "Receipt publication failed; manual recovery required")
+                                   :error-type
+                                   (if (:ok rollback)
                                      :receipt-write-failed
                                      :transaction-recovery-required)
-                       :cause-error (.getMessage publish-error)
-                       :rolled-back (boolean (:ok rollback))
-                       :recovery rollback})))))
-            (finally
-              (when (.exists staged) (.delete staged)))))))
+                                   :cause-error (.getMessage publish-error)
+                                   :rolled-back (boolean (:ok rollback))
+                                   :recovery rollback}]
+                              (observe-change-result
+                                :receipt-publish capabilities compiled
+                                {:path receipt-path
+                                 :hash (:receipt-hash receipt)}
+                                result))))))
+                    (finally
+                      (when (.exists staged) (.delete staged)))))))))))
     (catch clojure.lang.ExceptionInfo e
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e

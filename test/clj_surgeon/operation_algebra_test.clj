@@ -349,6 +349,35 @@
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))
+(deftest public-commit-validates-one-canonical-terminal-before-return
+  (let [workspace (temp-workspace)
+        source-file (io/file workspace "app.clj")
+        receipt-file (io/file workspace "receipt.edn")
+        source-path (.getPath source-file)
+        calls (atom [])
+        original-observer algebra/observe-change-terminal]
+    (try
+      (spit source-file "(ns app)\n(defn title [] (old-title))\n")
+      (let [result
+            (with-redefs [algebra/observe-change-terminal
+                          (fn [observation legacy-result]
+                            (swap! calls conj
+                                   [(:point observation)
+                                    (:status
+                                      (:outcome
+                                        (algebra/classify-change-terminal
+                                          (assoc observation
+                                                 :legacy-result
+                                                 legacy-result))))])
+                            (original-observer observation legacy-result))]
+              (transaction/execute-change!
+                {:spec (file-change-spec source-path)
+                 :receipt-out (.getPath receipt-file)}))]
+        (is (:ok result))
+        (is (= [[:success :ok]] @calls)))
+      (finally
+        (doseq [file (reverse (file-seq workspace))]
+          (io/delete-file file true))))))
 (deftest public-commit-refuses-before-effects-when-catalog-denies-authority
   ;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-003, OP-ALG-COMMIT-002
   (let [workspace (temp-workspace)
