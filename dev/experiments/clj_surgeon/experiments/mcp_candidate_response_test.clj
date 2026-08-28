@@ -10,6 +10,13 @@
 (def legacy-names
   ["apply_clojure_changes" "edit_clojure" "transform_clojure"])
 
+(def valid-extraction-params
+  {"workspace_root" "/tmp/work"
+   "extraction" {"file" "src/a.clj"
+                 "to" "src/b.clj"
+                 "forms" ["a"]
+                 "require_policy" "minimal"}})
+
 (defn- protocol-strings [{:keys [content structured]}]
   (concat content
           (keep structured [:operation :error :remedy :decision-rule])
@@ -77,8 +84,7 @@
                     (swap! kernel-calls inc))]
       ((:tool-fn edit-tool)
        nil
-       {"workspace_root" "/tmp/work"
-        "extraction" {"file" "src/a.clj"}}
+       valid-extraction-params
        #(reset! observed {:content %1
                           :error? %2
                           :structured %3})))
@@ -107,8 +113,7 @@
                                :operation "apply_clojure_changes"}))]
       ((:tool-fn extraction-tool)
        nil
-       {"workspace_root" "/tmp/work"
-        "extraction" {"file" "src/a.clj"}}
+       valid-extraction-params
        #(reset! observed {:content %1
                           :error? %2
                           :structured %3})))
@@ -137,7 +142,7 @@
                       [(str "apply_clojure_changes\n  refused\n→ " remedy)]
                       true structured))]
       ((:tool-fn extraction-tool)
-       nil {"extraction" {}}
+       nil valid-extraction-params
        #(reset! observed {:content %1
                           :error? %2
                           :structured %3})))
@@ -148,6 +153,34 @@
            (get-in @observed [:structured :invoked_tool])))
     (is (= "apply_clojure_changes" (get-in @observed [:structured :source])))
     (is (= ["edit_clojure"] (get-in @observed [:structured :diagnostics])))))
+
+(deftest effect-facades-enforce-commit-authority-before-the-handler
+  (doseq [catalog [:P :Q :R :S :T]]
+    (testing (name catalog)
+      (let [lexicon (candidate/catalog-lexicon catalog)
+            tools (candidate/catalog-tools catalog)
+            commit-tool (tool-by-name tools (:transform-commit lexicon))
+            preview-tool (tool-by-name tools (:transform-preview lexicon))
+            calls (atom 0)
+            callback (fn [& _])
+            fake-handler (fn [& _] (swap! calls inc))
+            commit-handler (response/wrap-handler lexicon :transform-commit
+                                                  (:schema commit-tool)
+                                                  fake-handler)
+            preview-handler (response/wrap-handler lexicon :transform-preview
+                                                   (:schema preview-tool)
+                                                   fake-handler)
+            base {"file" "src/a.clj"
+                  "expression" "(form 'a)"
+                  "expect" {"matches" 1
+                            "max_changed_characters" 10}}]
+        (doseq [invalid [false nil "false" 1]]
+          (commit-handler nil (assoc base "commit" invalid) callback))
+        (is (= 0 @calls))
+        (commit-handler nil (assoc base "commit" true) callback)
+        (is (= 1 @calls))
+        (preview-handler nil (assoc base "commit" true) callback)
+        (is (= 1 @calls))))))
 
 (deftest every-catalog-projects-extract-success-and-refusal
   (doseq [catalog candidate/supported-catalogs]
@@ -235,7 +268,7 @@
                         (callback (:content canonical)
                                   (:error? canonical)
                                   (:structured canonical)))]
-          ((:tool-fn tool) nil {"changes" [] "expect" {}}
+          ((:tool-fn tool) nil valid-extraction-params
                            #(reset! observed {:content %1 :error? %2 :structured %3})))
         (is (= (:content canonical) (:content @observed)))
         (is (= (:error? canonical) (:error? @observed)))
