@@ -160,9 +160,12 @@ W on the same exact candidate, model, fixture, scorer, and Anvil seat.
 | 1 | U | 31.637s | pass: one call, no reads or shell |
 | 2 | W | 35.678s | pass: one call, no reads or shell |
 | 3 | W | 29.926s | pass: one call, no reads or shell |
+| 4 | U | 29.106s | pass: one call, no reads or shell |
 
-U wins this paired position by 4.041s. W's 0.283s pilot lead has not reproduced
-monotonically; the remaining counterbalanced positions decide the verdict.
+The first complete ABBA block gives U a 30.372s midpoint and W a 32.802s
+midpoint; U leads by 2.431s. Across the pilot and confirmation so far, U's
+four-run median is 29.066s and W's is 30.948s. W's 0.283s pilot lead has not
+reproduced; the remaining counterbalanced block decides the verdict.
 
 ## Retained evidence and one harness defect
 
