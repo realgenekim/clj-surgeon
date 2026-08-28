@@ -6,7 +6,7 @@
 (deftest direct-change-contract-is-projected-from-the-published-schema
   (is (= {:request
           {:allowed #{"changes" "expect" "verify"}
-           :required #{"changes" "expect"}}
+           :required #{"changes"}}
           :change
           {:allowed #{"id" "files" "forms" "owner" "find" "inside"
                       "replace" "delete" "insert_before" "insert_after"

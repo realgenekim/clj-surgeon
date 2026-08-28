@@ -91,8 +91,8 @@
 (deftest editor-gesture-tolerates-redundant-aggregate-expect
   (let [validated
         (contract/validate-tool-params
-          (assoc gesture-request "expect"
-                 {"changes" 0 "edits" 1 "files" 1}))]
+         (assoc gesture-request "expect"
+                {"changes" 0 "edits" 1 "files" 1}))]
     (is (:ok validated) (pr-str validated))
     (is (= {:ignored ["expect"]
             :reason "editor counts are derived"}
@@ -174,8 +174,8 @@
     (testing "EDN owner deletion"
       (let [result
             (contract/validate-tool-params
-              {"delete_owners" [{"file" "bench/a.edn"
-                                 "forms" ["settings"]}]})]
+             {"delete_owners" [{"file" "bench/a.edn"
+                                "forms" ["settings"]}]})]
         (is (false? (:ok result)))
         (is (= :invalid-edn-editor-scope (:reason result)))
         (is (= ["delete_owners" 0 "file"] (:path result)))
@@ -268,21 +268,21 @@
 (deftest direct-change-accepts-only-closed-verification-profiles
   ;; @spec MCP-OP-VERIFY-001
   (let [validated (contract/validate-tool-params
-                    (assoc valid-request "verify" "fast"))
+                   (assoc valid-request "verify" "fast"))
         exact (contract/validate-tool-params
-                (assoc valid-request "verify" "exact"))]
+               (assoc valid-request "verify" "exact"))]
     (is (:ok validated))
     (is (:ok exact))
     (is (= "fast" (get-in validated [:params :verify])))
     (is (= "exact" (get-in exact [:params :verify])))
     (is (= :invalid-enum
            (:reason (contract/validate-tool-params
-                      (assoc valid-request "verify" "eventually")))))))
+                     (assoc valid-request "verify" "eventually")))))))
 
 (deftest accepts-java-json-containers-from-the-mcp-sdk
   (let [clojure-result (contract/validate-tool-params valid-request)
         java-result (contract/validate-tool-params
-                      (java-json-containers valid-request))]
+                     (java-json-containers valid-request))]
     (is (:ok java-result))
     (is (= clojure-result java-result))))
 
@@ -322,8 +322,8 @@
          {"id" "six" "files" ["src/b.cljs"] "forms" ["b"]
           "find" ":old-f" "replace" ":new-f" "expect" {"matches" 1}}]
         result (contract/validate-tool-params
-                 {"changes" changes
-                  "expect" {"changes" 6 "edits" 7 "files" 2}})]
+                {"changes" changes
+                 "expect" {"changes" 6 "edits" 7 "files" 2}})]
     (is (:ok result))
     (is (= 6 (count (get-in result [:params :changes]))))))
 
@@ -500,8 +500,8 @@
         result (contract/classify-kernel-result "/work/project" refusal)
         custom-result
         (contract/classify-kernel-result
-          "/work/project"
-          (assoc refusal :remedy "Pass one complete parseable Clojure form in :find."))]
+         "/work/project"
+         (assoc refusal :remedy "Pass one complete parseable Clojure form in :find."))]
     (is (= false (:ok result)))
     (is (= "invalid-intent-form" (:error_type result)))
     (is (= "invalid-intent-form" (:reason result)))
@@ -520,13 +520,13 @@
 
 (deftest normalized-refusal-preserves-an-actionable-compiler-diagnostic
   (let [result (contract/normalize-refusal
-                 {:ok false
-                  :error-type :invalid-mcp-request
-                  :reason :unknown-fields
-                  :path ["changes" 3]
-                  :unknown ["owner"]
-                  :allowed ["expect" "files" "find" "forms" "id" "replace"]
-                  :error "Request contains unknown fields"})]
+                {:ok false
+                 :error-type :invalid-mcp-request
+                 :reason :unknown-fields
+                 :path ["changes" 3]
+                 :unknown ["owner"]
+                 :allowed ["expect" "files" "find" "forms" "id" "replace"]
+                 :error "Request contains unknown fields"})]
     (is (= "unknown-fields" (:reason result)))
     (is (= ["changes" 3] (:path result)))
     (is (= ["owner"] (:unknown result)))
@@ -534,11 +534,11 @@
            (:allowed result)))
     (is (:source_unchanged result)))
   (let [result (contract/normalize-refusal
-                 {:error-type :overlapping-intents
-                  :error "Changes overlap in src/app.clj"
-                  :change-ids [:namespace :render]
-                  :intent-indexes [0 2]
-                  :source-unchanged true})]
+                {:error-type :overlapping-intents
+                 :error "Changes overlap in src/app.clj"
+                 :change-ids [:namespace :render]
+                 :intent-indexes [0 2]
+                 :source-unchanged true})]
     (is (= ["namespace" "render"] (:change_ids result)))
     (is (= [0 2] (:change_indexes result)))
     (is (str/includes? (:remedy result) "namespace and render"))
@@ -547,15 +547,15 @@
 (deftest verification-refusal-names-the-failed-check-and-bounds-its-output
   (let [long-output (apply str (repeat 3000 "x"))
         result (contract/normalize-refusal
+                {:ok false
+                 :error-type :verification-failed
+                 :error "Verification failed; rolled back"
+                 :rolled-back true
+                 :verification
                  {:ok false
-                  :error-type :verification-failed
-                  :error "Verification failed; rolled back"
-                  :rolled-back true
-                  :verification
-                  {:ok false
-                   :profile "fast"
-                   :checks [{:ok false :command "clj-kondo" :exit 2
-                             :output long-output}]}})]
+                  :profile "fast"
+                  :checks [{:ok false :command "clj-kondo" :exit 2
+                            :output long-output}]}})]
     (is (= "verification-failed" (:error_type result)))
     (is (true? (:source_unchanged result)))
     (is (true? (:rolled_back result)))
@@ -585,13 +585,13 @@
               "unknown-fields"]]]
       (testing label
         (let [result (contract/validate-tool-params
-                       (assoc valid-request "changes"
-                              [(assoc change "owner" owner)]))]
+                      (assoc valid-request "changes"
+                             [(assoc change "owner" owner)]))]
           (is (false? (:ok result)))
           (is (= expected (some-> (:reason result) name))))))
     (let [result (contract/validate-tool-params
-                   (assoc valid-request "changes"
-                          [(assoc change "forms" ["ide-shell"])]))]
+                  (assoc valid-request "changes"
+                         [(assoc change "forms" ["ide-shell"])]))]
       (is (false? (:ok result)))
       (is (= "ambiguous-change-owner" (some-> (:reason result) name))))))
 
@@ -621,8 +621,8 @@
               "unknown-fields"]]]
       (testing label
         (let [result (contract/validate-tool-params
-                       (assoc-in valid-request ["changes" 0 "forms"]
-                                 [form-owner]))]
+                      (assoc-in valid-request ["changes" 0 "forms"]
+                                [form-owner]))]
           (is (false? (:ok result)))
           (is (= expected (some-> (:reason result) name))))))))
 
@@ -675,6 +675,8 @@
         request {"changes" [change]
                  "expect" {"changes" 91 "edits" 92 "files" 93}}
         validated (contract/validate-tool-params request)
+        without-aggregate
+        (contract/validate-tool-params (dissoc request "expect"))
         transaction (some-> validated :params
                             contract/tool-params->transaction)]
     (is (:ok validated) (pr-str validated))
@@ -683,6 +685,10 @@
            (:input-normalization validated)))
     (is (= {:changes 1 :edits 1 :files 1}
            (get-in validated [:params :expect])))
+    (is (:ok without-aggregate) (pr-str without-aggregate))
+    (is (= {:changes 1 :edits 1 :files 1}
+           (get-in without-aggregate [:params :expect])))
+    (is (not (contains? without-aggregate :input-normalization)))
     (is (= [:insert-right
             ["(deftest renders-a-button (is true))"
              "(deftest renders-a-link (is true))"]]
@@ -731,8 +737,8 @@
             ["changes" 0 "owner"]]]]
     (testing (name label)
       (let [result (contract/validate-tool-params
-                     {"changes" [change]
-                      "expect" {"changes" 1 "edits" 1 "files" 1}})]
+                    {"changes" [change]
+                     "expect" {"changes" 1 "edits" 1 "files" 1}})]
         (is (false? (:ok result)))
         (is (= :invalid-top-level-insertion-owner (:reason result)))
         (is (= path (:path result)))))))
@@ -837,5 +843,5 @@
            (get-in transaction [:changes 0 :expect])))
     (is (= :invalid-delete-action
            (:reason
-             (contract/validate-tool-params
-               (assoc-in request ["changes" 0 "delete"] false)))))))
+            (contract/validate-tool-params
+             (assoc-in request ["changes" 0 "delete"] false)))))))
