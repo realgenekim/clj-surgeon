@@ -158,6 +158,10 @@ W on the same exact candidate, model, fixture, scorer, and Anvil seat.
 | Order | Catalog | Wall | Outcome |
 |---:|---|---:|---|
 | 1 | U | 31.637s | pass: one call, no reads or shell |
+| 2 | W | 35.678s | pass: one call, no reads or shell |
+
+U wins this paired position by 4.041s. W's 0.283s pilot lead has not reproduced
+monotonically; the remaining counterbalanced positions decide the verdict.
 
 ## Retained evidence and one harness defect
 
