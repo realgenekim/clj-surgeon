@@ -1,6 +1,7 @@
 # MCP Mutation Tool Naming Options
 
-**Status:** Design options for `clj-surgeon-x9d`. No public API change.
+**Status:** Clean screen complete for `clj-surgeon-x9d`. Keep catalog A; no
+public API rename.
 
 **Scope:** `edit_clojure` and `apply_clojure_changes`
 
@@ -428,11 +429,27 @@ fabricated or stale basis must refuse before mutation.
 
 ## Recommendation
 
-Test the schema boundary before the rename. Use Option A as the control, then
-compare Options L and C. The working preference is Option L because
-`apply_clojure_plan` names the authority boundary more precisely than
-`refactor_clojure`.
+The clean alternate-universe screen is complete. Catalog A was the only one of
+11 catalogs to select the extraction role first and finish through the intended
+one-shot public route. It completed correctly in 45.600 seconds. Every renamed
+catalog failed route correctness. R and S eventually produced semantically
+correct source only after refusal, MCP discovery, and raw calls; they took
+169.374 and 165.448 seconds. No challenger passed the gate required for a
+replicated speed cohort.
 
-Do not ship a rename from design judgment alone. The current names already
-support a proven fast path. A new name must improve first-call routing or
-complete verified task time without reducing Sol performance.
+Keep the current public names and the stricter disjoint descriptions and
+schemas represented by Option A. The prior working preference for Option L is
+rejected by the experiment: it selected the compact edit role and took 68.965
+seconds despite preserving source meaning. Option C selected inspect first and
+took 141.374 seconds.
+
+Do not ship `_bang`, `_commit`, dotted, action-verb, or extraction-specific
+renames from design judgment. Preserve the public-interface facade as the main
+architectural win. Promote it only as a behavior-neutral ratchet with catalog A
+byte parity, typed outcome projection, and a permanent no-public-name-below-
+the-boundary guard. This keeps future interface experiments cheap without
+spending production stability on a losing vocabulary.
+
+The complete table, immutable evidence roots and hashes, environmental
+confounds, and causal interpretation are in
+`docs/observations/2026-08-27-captains-log-tool-names-enter-the-arena.md`.
