@@ -10,6 +10,45 @@ owner_dir="$result_dir/.benchmark-owner"
 owner_metadata="$owner_dir/owner.tsv"
 owner_token=""
 
+mcp_role_jq='def mcp_role:
+  if .tool == $mcp_inspect then "inspect"
+  elif .tool == $mcp_edit then "edit"
+  elif (.tool == $mcp_extract
+        and (($mcp_extract != $mcp_plan)
+             or ((.arguments // {}) | has("extraction")))) then "extract"
+  elif .tool == $mcp_plan then "plan"
+  elif (.tool == $mcp_transform_commit
+        and (($mcp_legacy_transform_is_mutation == true)
+             or ($mcp_transform_commit != $mcp_transform_preview)
+             or ((.arguments.commit // false) == true))) then "transform-commit"
+  elif .tool == $mcp_transform_preview then "transform-preview"
+  else null
+  end;'
+
+configure_canonical_mcp_roles() {
+  mcp_inspect_tool=inspect_clojure
+  mcp_edit_tool=edit_clojure
+  mcp_extract_tool=apply_clojure_changes
+  mcp_plan_tool=apply_clojure_changes
+  mcp_transform_preview_tool=transform_clojure
+  mcp_transform_commit_tool=transform_clojure
+  mcp_legacy_transform_is_mutation=true
+}
+
+configure_candidate_mcp_roles() {
+  local receipt=$1
+  test -s "$receipt"
+  mcp_inspect_tool=$(jq -er '.roles.inspect' "$receipt")
+  mcp_edit_tool=$(jq -er '.roles.edit' "$receipt")
+  mcp_extract_tool=$(jq -er '.roles.extract' "$receipt")
+  mcp_plan_tool=$(jq -er '.roles.plan' "$receipt")
+  mcp_transform_preview_tool=$(jq -er '.roles["transform-preview"]' "$receipt")
+  mcp_transform_commit_tool=$(jq -er '.roles["transform-commit"]' "$receipt")
+  mcp_legacy_transform_is_mutation=false
+}
+
+configure_canonical_mcp_roles
+
 if ! [[ "$computed_site_count" =~ ^[1-9][0-9]*$ ]] \
   || [ "$computed_site_count" -gt 128 ]; then
   echo "BENCH_COMPUTED_SITE_COUNT must be an integer from 1 through 128: $computed_site_count" >&2
@@ -146,7 +185,15 @@ append_result_row() {
 }
 
 interaction_counts() {
-  jq -r -s '
+  jq -r -s \
+    --arg mcp_inspect "$mcp_inspect_tool" \
+    --arg mcp_edit "$mcp_edit_tool" \
+    --arg mcp_extract "$mcp_extract_tool" \
+    --arg mcp_plan "$mcp_plan_tool" \
+    --arg mcp_transform_preview "$mcp_transform_preview_tool" \
+    --arg mcp_transform_commit "$mcp_transform_commit_tool" \
+    --argjson mcp_legacy_transform_is_mutation "$mcp_legacy_transform_is_mutation" \
+    "$mcp_role_jq"'
     ([.[] | select(.type == "turn.completed")] | length) as $user_turns
     | [.[]
        | select(.type == "item.started"
@@ -158,9 +205,10 @@ interaction_counts() {
        | map(.type == "file_change"
              or (.type == "mcp_tool_call"
                  and .server == "clj-surgeon"
-                 and (.tool == "apply_clojure_changes"
-                      or .tool == "edit_clojure"
-                      or .tool == "transform_clojure"))
+                 and ((mcp_role == "edit")
+                      or (mcp_role == "extract")
+                      or (mcp_role == "plan")
+                      or (mcp_role == "transform-commit")))
              or (.type == "command_execution"
                  and (((.command // "") | test("(^|[ /])apply_patch( |$)"))
                       or (((.command // "") | contains("clj-surgeon"))
@@ -184,9 +232,6 @@ mcp_apply_success_count() {
     | select(.type == "item.completed"
              and .item.type == "mcp_tool_call"
              and .item.server == "clj-surgeon"
-             and (.item.tool == "apply_clojure_changes"
-                  or .item.tool == "edit_clojure"
-                  or .item.tool == "transform_clojure")
              and .item.status == "completed")
     | (.item.result.structured_content // .item.result.structuredContent // {}) as $receipt
     | select($receipt.verification_complete == true and $receipt.committed == true)]
@@ -198,9 +243,6 @@ mcp_apply_verified() {
     | select(.type == "item.completed"
              and .item.type == "mcp_tool_call"
              and .item.server == "clj-surgeon"
-             and (.item.tool == "apply_clojure_changes"
-                  or .item.tool == "edit_clojure"
-                  or .item.tool == "transform_clojure")
              and .item.status == "completed")
     | (.item.result.structured_content // .item.result.structuredContent // {}) as $receipt
     | select($receipt.verification_complete == true
@@ -223,13 +265,22 @@ native_mutation_failure_count() {
 }
 
 mcp_first_mutation() {
-  jq '
+  jq \
+    --arg mcp_inspect "$mcp_inspect_tool" \
+    --arg mcp_edit "$mcp_edit_tool" \
+    --arg mcp_extract "$mcp_extract_tool" \
+    --arg mcp_plan "$mcp_plan_tool" \
+    --arg mcp_transform_preview "$mcp_transform_preview_tool" \
+    --arg mcp_transform_commit "$mcp_transform_commit_tool" \
+    --argjson mcp_legacy_transform_is_mutation "$mcp_legacy_transform_is_mutation" \
+    "$mcp_role_jq"'
     ([.[]
       | select((.type == "mcp_tool_call"
                 and .server == "clj-surgeon"
-                and (.tool == "apply_clojure_changes"
-                     or .tool == "edit_clojure"
-                     or .tool == "transform_clojure"))
+                and ((mcp_role == "edit")
+                     or (mcp_role == "extract")
+                     or (mcp_role == "plan")
+                     or (mcp_role == "transform-commit")))
                or .type == "file_change"
                or (.type == "command_execution"
                    and (((.command // "") | test("(^|[ /])apply_patch( |$)"))
@@ -239,9 +290,32 @@ mcp_first_mutation() {
      | first // {}) as $first
     | ($first.type == "mcp_tool_call"
        and $first.server == "clj-surgeon"
-       and ($first.tool == "apply_clojure_changes"
-            or $first.tool == "edit_clojure"
-            or $first.tool == "transform_clojure"))' "$1"
+       and (($first | mcp_role) == "edit"
+            or ($first | mcp_role) == "extract"
+            or ($first | mcp_role) == "plan"
+            or ($first | mcp_role) == "transform-commit"))' "$1"
+}
+
+mcp_role_count() {
+  local events_file=$1
+  local role=$2
+  jq -s \
+    --arg role "$role" \
+    --arg mcp_inspect "$mcp_inspect_tool" \
+    --arg mcp_edit "$mcp_edit_tool" \
+    --arg mcp_extract "$mcp_extract_tool" \
+    --arg mcp_plan "$mcp_plan_tool" \
+    --arg mcp_transform_preview "$mcp_transform_preview_tool" \
+    --arg mcp_transform_commit "$mcp_transform_commit_tool" \
+    --argjson mcp_legacy_transform_is_mutation "$mcp_legacy_transform_is_mutation" \
+    "$mcp_role_jq"'
+    [.[]
+     | select(.type == "item.started"
+              and .item.type == "mcp_tool_call"
+              and .item.server == "clj-surgeon")
+     | .item
+     | select(mcp_role == $role)]
+    | length' "$events_file"
 }
 
 catalog_source_archaeology_count() {
@@ -551,6 +625,51 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     > "$self_test_root/catalog-commands.json"
   test "$(catalog_source_archaeology_count \
     "$self_test_root/catalog-commands.json")" -eq 1
+
+  printf '%s\n' \
+    '{"catalog":"T","roles":{"edit":"write_clojure_edits","extract":"move_clojure_owners","inspect":"inspect_clojure","plan":"apply_clojure_plan","transform-commit":"apply_clojure_transform","transform-preview":"preview_clojure_transform"}}' \
+    > "$self_test_root/catalog-T-role-receipt.json"
+  configure_candidate_mcp_roles "$self_test_root/catalog-T-role-receipt.json"
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"move_clojure_owners","arguments":{"extraction":{"file":"src/sample.clj"}}}}' \
+    '{"type":"item.completed","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"move_clojure_owners","status":"completed","result":{"structured_content":{"ok":true,"committed":true,"verification_complete":true,"next_action":"none"}}}}' \
+    > "$self_test_root/catalog-T-extraction.jsonl"
+  jq -s '[.[] | select(.type == "item.started") | .item]' \
+    "$self_test_root/catalog-T-extraction.jsonl" \
+    > "$self_test_root/catalog-T-extraction-items.json"
+  test "$(mcp_first_mutation "$self_test_root/catalog-T-extraction-items.json")" = true
+  test "$(mcp_role_count "$self_test_root/catalog-T-extraction.jsonl" extract)" -eq 1
+  test "$(mcp_role_count "$self_test_root/catalog-T-extraction.jsonl" plan)" -eq 0
+  test "$(mcp_apply_success_count "$self_test_root/catalog-T-extraction.jsonl")" -eq 1
+  test "$(mcp_apply_verified "$self_test_root/catalog-T-extraction.jsonl")" = true
+  IFS=$'\t' read -r _ _ self_test_discovery_round_trips \
+    self_test_post_decision_round_trips \
+    < <(interaction_counts "$self_test_root/catalog-T-extraction.jsonl")
+  test "$self_test_discovery_round_trips" -eq 0
+  test "$self_test_post_decision_round_trips" -eq 1
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_plan","arguments":{"basis":{"id":"b-1"}}}}' \
+    > "$self_test_root/catalog-T-wrong-plan.jsonl"
+  test "$(mcp_role_count "$self_test_root/catalog-T-wrong-plan.jsonl" extract)" -eq 0
+  test "$(mcp_role_count "$self_test_root/catalog-T-wrong-plan.jsonl" plan)" -eq 1
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"preview_clojure_transform","arguments":{}}}' \
+    > "$self_test_root/catalog-T-preview.jsonl"
+  jq -s '[.[] | .item]' "$self_test_root/catalog-T-preview.jsonl" \
+    > "$self_test_root/catalog-T-preview-items.json"
+  test "$(mcp_first_mutation "$self_test_root/catalog-T-preview-items.json")" = false
+
+  configure_canonical_mcp_roles
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"extraction":{"file":"src/sample.clj"}}}}' \
+    > "$self_test_root/catalog-A-extraction.jsonl"
+  test "$(mcp_role_count "$self_test_root/catalog-A-extraction.jsonl" extract)" -eq 1
+  test "$(mcp_role_count "$self_test_root/catalog-A-extraction.jsonl" plan)" -eq 0
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"basis":{"id":"b-1"}}}}' \
+    > "$self_test_root/catalog-A-plan.jsonl"
+  test "$(mcp_role_count "$self_test_root/catalog-A-plan.jsonl" extract)" -eq 0
+  test "$(mcp_role_count "$self_test_root/catalog-A-plan.jsonl" plan)" -eq 1
 
   make_native_bin "$self_test_root/native-bin" "$PATH"
   if PATH="$self_test_root/native-bin" command -v clj-surgeon >/dev/null 2>&1; then
@@ -1227,6 +1346,7 @@ run_one() {
   bb "$repo_root/bench/initialize_benchmark_workspace.clj" "$workspace" >/dev/null
   if [ "$version" = mcp ]; then
     local ready_file="$run_dir/mcp-ready.edn"
+    local catalog_role_receipt="$run_dir/mcp-catalog-role-receipt.json"
     local server_started_ms server_ready_ms
     local mcp_java_opts=()
     local mcp_profile_args=()
@@ -1265,7 +1385,8 @@ run_one() {
           -Sdeps '{:paths ["src" "dev/experiments"]}'
           -X:clj-surgeon/mcp
           clj-surgeon.experiments.mcp-candidate-catalog/start
-          :catalog ":$candidate_catalog")
+          :catalog ":$candidate_catalog"
+          :catalog-receipt-file "$(bb -e '(prn (first *command-line-args*))' "$catalog_role_receipt")")
       else
         mcp_server_command+=(-X:clj-surgeon/mcp)
       fi
@@ -1295,6 +1416,11 @@ run_one() {
     if [ ! -s "$ready_file" ]; then
       echo "Persistent MCP did not become ready for $run_id" >&2
       exit 2
+    fi
+    if [ -n "$candidate_catalog" ]; then
+      configure_candidate_mcp_roles "$catalog_role_receipt"
+    else
+      configure_canonical_mcp_roles
     fi
     local mcp_url
     mcp_url=$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :url println)' "$ready_file")
@@ -1653,11 +1779,10 @@ run_one() {
     and (.command | contains(":expect"))
     and (.command | contains("--help") | not))] | length > 0' "$run_dir/commands.json")
   if [ "$expect_used" = false ]; then
-    expect_used=$(jq -s '[.[] | select(.type == "item.started"
-      and .item.type == "mcp_tool_call"
-      and .item.server == "clj-surgeon"
-      and (.item.tool == "edit_clojure"
-           or .item.tool == "transform_clojure"))] | length > 0' "$run_dir/events.jsonl")
+    if [ "$(mcp_role_count "$run_dir/events.jsonl" edit)" -gt 0 ] \
+      || [ "$(mcp_role_count "$run_dir/events.jsonl" transform-commit)" -gt 0 ]; then
+      expect_used=true
+    fi
   fi
   separate_apply_seen=$(jq '[.[] | select((.command | contains("clj-surgeon"))
     and (.command | contains("replace-subform!"))
@@ -1841,22 +1966,15 @@ run_one() {
   fi
 
   local route_adherent=true inspect_calls edit_calls transform_calls apply_calls
-  inspect_calls=$(jq -s '[.[] | select(.type == "item.started"
-    and .item.type == "mcp_tool_call"
-    and .item.server == "clj-surgeon"
-    and .item.tool == "inspect_clojure")] | length' "$run_dir/events.jsonl")
-  edit_calls=$(jq -s '[.[] | select(.type == "item.started"
-    and .item.type == "mcp_tool_call"
-    and .item.server == "clj-surgeon"
-    and .item.tool == "edit_clojure")] | length' "$run_dir/events.jsonl")
-  transform_calls=$(jq -s '[.[] | select(.type == "item.started"
-    and .item.type == "mcp_tool_call"
-    and .item.server == "clj-surgeon"
-    and .item.tool == "transform_clojure")] | length' "$run_dir/events.jsonl")
-  apply_calls=$(jq -s '[.[] | select(.type == "item.started"
-    and .item.type == "mcp_tool_call"
-    and .item.server == "clj-surgeon"
-    and .item.tool == "apply_clojure_changes")] | length' "$run_dir/events.jsonl")
+  local extraction_calls plan_calls transform_preview_calls transform_commit_calls
+  inspect_calls=$(mcp_role_count "$run_dir/events.jsonl" inspect)
+  edit_calls=$(mcp_role_count "$run_dir/events.jsonl" edit)
+  extraction_calls=$(mcp_role_count "$run_dir/events.jsonl" extract)
+  plan_calls=$(mcp_role_count "$run_dir/events.jsonl" plan)
+  transform_preview_calls=$(mcp_role_count "$run_dir/events.jsonl" transform-preview)
+  transform_commit_calls=$(mcp_role_count "$run_dir/events.jsonl" transform-commit)
+  transform_calls=$((transform_preview_calls + transform_commit_calls))
+  apply_calls=$((extraction_calls + plan_calls))
   if ! computed_route_adherent "$context" "$inspect_calls" "$edit_calls" \
     "$transform_calls" "$apply_calls" "$file_changes" "$source_commands" \
     "$text_reader"; then
@@ -1864,7 +1982,8 @@ run_one() {
   fi
   case "$context" in
     mcp-extraction-internal-no-skill)
-      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
+        || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 1 ] \
         || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
@@ -1873,7 +1992,8 @@ run_one() {
       fi
       ;;
     mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill)
-      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
+        || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$mcp_apply_successes" -ne 1 ] \
         || [ "$mcp_failures" -ne 0 ] || [ "$verified" != true ] \
@@ -1882,7 +2002,8 @@ run_one() {
       fi
       ;;
     mcp-extraction-fused-tool-first-no-skill)
-      if [ "$inspect_calls" -ne 0 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
+        || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 0 ] \
         || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
@@ -1891,7 +2012,8 @@ run_one() {
       fi
       ;;
     mcp-extraction-plan-no-skill)
-      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 1 ] || [ "$extraction_calls" -ne 1 ] \
+        || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 1 ] \
         || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
@@ -1900,7 +2022,8 @@ run_one() {
       fi
       ;;
     mcp-extraction-discover-no-skill)
-      if [ "$inspect_calls" -ne 1 ] || [ "$apply_calls" -ne 1 ] \
+      if [ "$inspect_calls" -ne 1 ] || [ "$extraction_calls" -ne 1 ] \
+        || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
         || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 2 ] \
         || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
