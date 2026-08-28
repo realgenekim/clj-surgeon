@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA = "clj-surgeon.agent-usage-ethnography.v4"
+SCHEMA = "clj-surgeon.agent-usage-ethnography.v5"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
@@ -68,6 +68,108 @@ def iso_time(value: datetime) -> str:
 
 def stable_key(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def canonical_sha256(value: object) -> str:
+    rendered = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+
+
+def structural_target(value: object) -> object:
+    """Remove request bookkeeping while retaining only hashable target shape."""
+    omitted_keys = {
+        "expect", "id", "include_source", "snapshot_guards", "workspace_root"
+    }
+    if isinstance(value, dict):
+        return {
+            key: structural_target(item)
+            for key, item in sorted(value.items())
+            if key not in omitted_keys
+        }
+    if isinstance(value, list):
+        return [structural_target(item) for item in value]
+    return value
+
+
+def source_hashes(
+    value: object, parent_key: str = "", hash_context: bool = False
+) -> set[str]:
+    """Collect only exact SHA-256 values carried by source/hash evidence fields."""
+    result = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key)
+            result.update(source_hashes(
+                item,
+                key_text,
+                hash_context
+                or key_text.endswith("_hash")
+                or key_text.endswith("_hashes"),
+            ))
+    elif isinstance(value, list):
+        for item in value:
+            result.update(source_hashes(item, parent_key, hash_context))
+    elif (
+        isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{64}", value)
+        and (
+            hash_context
+            or parent_key.endswith("_hash")
+            or parent_key.endswith("_hashes")
+        )
+    ):
+        result.add(value)
+    return result
+
+
+def compile_inspect_clock_evidence(arguments: object, result: object) -> dict:
+    """Compile comparable inspect identities without retaining request/source data."""
+    safe_arguments = arguments if isinstance(arguments, dict) else {}
+    requests = safe_arguments.get("requests")
+    requests = requests if isinstance(requests, list) else []
+    evidence = {
+        "batch_cardinality": len(requests),
+        "structural_target_sha256": canonical_sha256(
+            structural_target({"requests": requests})
+        ),
+    }
+    hashes = source_hashes(result)
+    if hashes:
+        evidence["snapshot_sha256"] = canonical_sha256(sorted(hashes))
+    return evidence
+
+
+def target_files(value: object, parent_key: str = "") -> set[str]:
+    """Return internal file identities used only to compile a public relation."""
+    result = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            result.update(target_files(item, str(key)))
+    elif isinstance(value, list):
+        for item in value:
+            result.update(target_files(item, parent_key))
+    elif isinstance(value, str) and parent_key in {"file", "files"}:
+        result.add(value)
+    return result
+
+
+def structural_target_relation(current: object, following: object) -> str:
+    """Classify adjacent inspect targets without emitting either target."""
+    if not isinstance(current, dict) or not isinstance(following, dict):
+        return "unknown"
+    current_files = target_files(current)
+    following_files = target_files(following)
+    if not current_files or not following_files:
+        return "unknown"
+    if current == following:
+        return "exact"
+    if current_files == following_files:
+        return "same-files"
+    if current_files & following_files:
+        return "overlapping-files"
+    return "disjoint-files"
 
 
 def js_tool_methods(source: str) -> set[str]:
@@ -285,6 +387,20 @@ def completed_item_clock_sample(payload: dict) -> dict | None:
                 "transform_clojure"
             }:
                 sample["operation"] = tool
+            if tool == "inspect_clojure":
+                arguments = (
+                    item.get("arguments")
+                    if isinstance(item.get("arguments"), dict)
+                    else {}
+                )
+                sample.update(compile_inspect_clock_evidence(
+                    arguments, item.get("result")
+                ))
+                requests = arguments.get("requests")
+                requests = requests if isinstance(requests, list) else []
+                sample["_structural_target"] = structural_target(
+                    {"requests": requests}
+                )
         elif server == "cclsp":
             sample["kind"] = "semantic-read"
             if tool in {
@@ -380,6 +496,19 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
             ),
             "next_kind": endpoint["kind"] if endpoint else "turn-end",
         }
+        for key in (
+            "action_ordinal", "batch_cardinality", "snapshot_sha256",
+            "structural_target_sha256",
+        ):
+            if key in item:
+                result[key] = item[key]
+        if endpoint and "action_ordinal" in endpoint:
+            result["next_action_ordinal"] = endpoint["action_ordinal"]
+        if endpoint and endpoint.get("kind") == "surgeon-read":
+            result["target_relation"] = structural_target_relation(
+                item.get("_structural_target"),
+                endpoint.get("_structural_target"),
+            )
         if endpoint and endpoint.get("operation"):
             result["next_operation"] = endpoint["operation"]
         if endpoint and endpoint.get("transport"):
@@ -685,6 +814,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                 if not item_turn_id or item_turn_id == current_turn["_turn_id"]:
                     sample = completed_item_clock_sample(event_payload)
                     if sample:
+                        sample["action_ordinal"] = len(current_turn["_clock_samples"]) + 1
                         current_turn["_clock_samples"].append(sample)
             continue
         if event.get("type") != "response_item":
@@ -1223,6 +1353,8 @@ def collect(args) -> dict:
             "workspace_paths_emitted": False,
             "session_keys_hashed": True,
             "raw_service_events_emitted": False,
+            "structural_targets_hashed": True,
+            "source_hashes_rehashed": True,
         },
         "providers": {
             "codex": provider_summary("codex", codex_sessions),
@@ -1340,21 +1472,61 @@ def self_test() -> int:
         {
             "structuredContent": {
                 "file_hashes": {"src/private.clj": private_snapshot_hash},
-                "results": [{
-                    "file": "src/private.clj",
-                    "file_hash": private_snapshot_hash,
-                    "source": "PRIVATE_SOURCE_CANARY",
-                }],
+                "results": [{"source": "PRIVATE_SOURCE_CANARY"}],
             },
         },
     )
     assert inspect_evidence == {
         "batch_cardinality": 2,
-        "structural_target_sha256": "5482eab5b80984cf089d0cd5a2935f2a495d7aef11ba9eef7cf4e60bddfc24bd",
-        "snapshot_sha256": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "structural_target_sha256": "cd87f8ce80370f498648589d63c92dec2a5b9deac8760a7390440866fce90b73",
+        "snapshot_sha256": "5adb8c3d42601f14dc3c467830d23dcc75ffae17236d02c6bb26c6e31b1c3c8e",
     }
     assert "PRIVATE" not in json.dumps(inspect_evidence)
     assert private_snapshot_hash not in json.dumps(inspect_evidence)
+    assert structural_target_relation(
+        {"requests": [{"file": "PRIVATE_A", "forms": ["first"]}]},
+        {"requests": [{"file": "PRIVATE_A", "forms": ["first"]}]},
+    ) == "exact"
+    assert structural_target_relation(
+        {"requests": [{"file": "PRIVATE_A", "forms": ["first"]}]},
+        {"requests": [{"file": "PRIVATE_A", "forms": ["second"]}]},
+    ) == "same-files"
+    assert structural_target_relation(
+        {"requests": [{"files": ["PRIVATE_A", "PRIVATE_B"]}]},
+        {"requests": [{"file": "PRIVATE_B"}]},
+    ) == "overlapping-files"
+    assert structural_target_relation(
+        {"requests": [{"file": "PRIVATE_A"}]},
+        {"requests": [{"file": "PRIVATE_B"}]},
+    ) == "disjoint-files"
+    assert structural_target_relation({}, {}) == "unknown"
+    assert structural_target_relation({"requests": []}, None) == "unknown"
+    relation_clock = compile_event_clock(clock_start, 1000, [
+        {
+            "kind": "surgeon-read",
+            "operation": "inspect_clojure",
+            "transport": "mcp",
+            "action_ordinal": 1,
+            "_structural_target": {
+                "requests": [{"file": "PRIVATE_A", "forms": ["first"]}]
+            },
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 100,
+        },
+        {
+            "kind": "surgeon-read",
+            "operation": "inspect_clojure",
+            "transport": "mcp",
+            "action_ordinal": 2,
+            "_structural_target": {
+                "requests": [{"file": "PRIVATE_A", "forms": ["second"]}]
+            },
+            "started_at_ms": clock_start_ms + 200,
+            "completed_at_ms": clock_start_ms + 300,
+        },
+    ])
+    assert relation_clock["post_surgeon_boundaries"][0]["target_relation"] == "same-files"
+    assert "PRIVATE_A" not in json.dumps(relation_clock)
     with tempfile.TemporaryDirectory(prefix="study-agent-usage-") as tmp:
         root = Path(tmp)
         observations = root / "docs" / "observations"
@@ -1483,6 +1655,8 @@ def self_test() -> int:
         rendered_clock = render_event_clock_receipt(receipt, top=1, minimum_ms=0)
         assert "model-reasoning" in rendered_clock
         assert "surgeon-read · mcp inspect_clojure completed" in rendered_clock
+        assert "action#2 batch=1 target=" in rendered_clock
+        assert "snapshot=" in rendered_clock
         assert "PRIVATE_" not in rendered_clock
         assert claude["clj_surgeon_ops"] == {":xray": 1}
         assert claude["activation_trigger_visible_sessions"] == 0
@@ -1855,6 +2029,20 @@ def render_event_clock_receipt(
                 detail = f"{detail or ''} {item['status']}".strip()
             if item.get("phase"):
                 detail = f"{detail or ''} {item['phase']}".strip()
+            if item.get("action_ordinal") is not None:
+                detail = f"{detail or ''} action#{item['action_ordinal']}".strip()
+            if item.get("batch_cardinality") is not None:
+                detail = (
+                    f"{detail or ''} batch={item['batch_cardinality']}"
+                ).strip()
+            if item.get("structural_target_sha256"):
+                detail = (
+                    f"{detail or ''} target={item['structural_target_sha256'][:12]}"
+                ).strip()
+            if item.get("snapshot_sha256"):
+                detail = (
+                    f"{detail or ''} snapshot={item['snapshot_sha256'][:12]}"
+                ).strip()
             suffix = f" · {detail}" if detail else ""
             lines.append(
                 f"  +{concise_duration(item.get('offset_ms') or 0):>9}  "
