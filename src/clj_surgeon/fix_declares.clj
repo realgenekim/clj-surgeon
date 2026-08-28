@@ -172,6 +172,7 @@
    1. Move defns above their first callers (safe ones only)
    2. Delete stale declare lines
    Returns a log of actions taken."
+  ;; @spec MCP-OP-ANALYZER-007
   ([file]
    (execute! file {}))
   ([file options]

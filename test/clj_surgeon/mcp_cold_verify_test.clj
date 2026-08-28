@@ -84,6 +84,9 @@
         lock-path (str (java.nio.file.Files/createTempFile
                          "clj-surgeon-cold-admission-" ".lock"
                          (make-array java.nio.file.attribute.FileAttribute 0)))
+        priority-lock-path (str (java.nio.file.Files/createTempFile
+                                  "clj-surgeon-cold-priority-" ".lock"
+                                  (make-array java.nio.file.attribute.FileAttribute 0)))
         gate (.getCanonicalPath
                (java.io.File. "resources/clj-kondo-admission.py"))
         options (into-array
@@ -98,6 +101,7 @@
                             options)
                   _lock (.lock channel)]
         (binding [process-env/*clj-kondo-lock-path* lock-path
+                  process-env/*clj-kondo-priority-lock-path* priority-lock-path
                   process-env/*clj-kondo-admission-path* gate
                   process-env/*pressure-status-path* "/definitely/missing/status.json"
                   process-env/*maximum-normalized-load* 1000000.0]

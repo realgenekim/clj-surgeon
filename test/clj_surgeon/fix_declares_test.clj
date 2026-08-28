@@ -115,6 +115,7 @@
                  (str/index-of new-source "(defn caller-b"))))))))
 
 (deftest execute-reuses-the-frozen-owner-plan-after-the-first-analysis
+  ;; @spec MCP-OP-ANALYZER-007
   (with-temp-file multi-declares
     (fn [path]
       (let [calls (atom 0)
@@ -133,6 +134,7 @@
             (is (not (str/includes? new-source "(declare bar)")))))))))
 
 (deftest planning-authority-loss-leaves-source-unchanged
+  ;; @spec MCP-OP-ANALYZER-007
   (with-temp-file simple-forward-ref
     (fn [path]
       (let [before (slurp path)]
