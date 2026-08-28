@@ -224,3 +224,17 @@ frozen Sol/high task. Do not rename the production tool from this portfolio.
 Future catalog experiments should test a materially different hypothesis or a
 different decision stratum, not rerun synonyms until noise yields a preferred
 answer.
+
+## Apex-predator rematch
+
+Gene requested one fresh verification that the retained control remains on
+top. A serial U, W, W, U rematch uses the same exact candidate, Sol/high,
+fixture, scorer, and Anvil seat.
+
+| Order | Catalog | Wall | Outcome |
+|---:|---|---:|---|
+| 1 | U | 34.392s | pass: one call, no reads or shell |
+
+This first U observation is slower than its earlier distribution. The paired
+W observations determine whether this is catalog behavior or current service
+conditions; it is not compared to the older median in isolation.
