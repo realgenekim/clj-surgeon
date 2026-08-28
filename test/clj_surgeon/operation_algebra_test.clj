@@ -251,3 +251,27 @@
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))
+(deftest public-commit-refuses-before-effects-when-catalog-denies-authority
+  ;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-003, OP-ALG-COMMIT-002
+  (let [workspace (temp-workspace)
+        source-file (io/file workspace "app.clj")
+        receipt-file (io/file workspace "receipt.edn")
+        source-path (.getPath source-file)
+        original-source "(ns app)\n(defn title [] (old-title))\n"
+        original-entry algebra/change-entry]
+    (try
+      (spit source-file original-source)
+      (let [result
+            (with-redefs [algebra/change-entry
+                          (fn [compiler]
+                            (assoc (original-entry compiler)
+                                   :maximum-effects #{:source-read}))]
+              (transaction/execute-change!
+                {:spec (file-change-spec source-path)
+                 :receipt-out (.getPath receipt-file)}))]
+        (is (= :effect-capability-denied (:error-type result)))
+        (is (= original-source (slurp source-file)))
+        (is (not (.exists receipt-file))))
+      (finally
+        (doseq [file (reverse (file-seq workspace))]
+          (io/delete-file file true))))))
