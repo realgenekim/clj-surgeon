@@ -99,10 +99,10 @@
        "delete" {:type "boolean" :enum [true]
                  :description "Delete every exact named owner in forms, including attached comments and separators. Does not use find or the semantic provider."}
        "insert_before" {:type "array" :minItems 1
-                        :description "Insert complete Clojure forms before a nested find match, or omit find to insert before exactly one named top-level forms owner. Comment-bearing gaps refuse."
+                        :description "Insert complete Clojure forms before a nested find match, or omit find to insert before exactly one named top-level forms owner. One array item may contain several complete forms. Comment-bearing gaps refuse."
                         :items {:type "string" :minLength 1}}
        "insert_after" {:type "array" :minItems 1
-                       :description "Insert complete Clojure forms after a nested find match, or omit find to insert after exactly one named top-level forms owner. Comment-bearing gaps refuse."
+                       :description "Insert complete Clojure forms after a nested find match, or omit find to insert after exactly one named top-level forms owner. One array item may contain several complete forms. Comment-bearing gaps refuse."
                        :items {:type "string" :minLength 1}}
        "rename_binding"
        {:type "object"
@@ -191,14 +191,14 @@
     "expect"
     {:type "object"
      :additionalProperties false
-     :description "Aggregate transaction cardinality. All three counts are required."
+     :description "Optional redundant aggregate bookkeeping. Surgeon derives exact counts from per-change guards and reports any supplied disagreement as ignored normalization."
      :properties
      {"changes" (assoc positive-integer-schema :description "Number of change objects.")
       "edits" (assoc positive-integer-schema :description "Total exact replacements.")
       "files" (assoc positive-integer-schema :description "Total files that must change.")}
      :required ["changes" "edits" "files"]}
     "verify" verification-schema}
-   :required ["changes" "expect"]})
+   :required ["changes"]})
 
 (def editor-gesture-schema
   {:type "object"
