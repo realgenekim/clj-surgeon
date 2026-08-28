@@ -1,0 +1,269 @@
+# MCP Mutation Tool Naming Options
+
+**Status:** Design options for `clj-surgeon-x9d`. No public API change.
+
+**Scope:** `edit_clojure` and `apply_clojure_changes`
+
+## Decision question
+
+Which public names and request shapes let a fresh coding agent select the
+correct Clojure mutation tool on its first call?
+
+The current tools share an atomic mutation runtime, but they serve different
+decision states:
+
+- The compact editor receives a complete edit decision. The caller supplies
+  exact old and new forms, a bounded computed relation, or exact owner names.
+- The change compiler receives or derives a semantic change plan. It can use a
+  prepared basis, compile an extraction, and run project verification that
+  participates in rollback.
+
+Both tools use guards, one frozen snapshot, atomic commit, read-back evidence,
+and an inverse receipt. Therefore, names such as `safe`, `guarded`, `atomic`,
+or `transaction` do not distinguish the tools.
+
+## Protected facts
+
+Any naming experiment must preserve these facts:
+
+1. `edit_clojure` is the proven fast path for an already-decided batch.
+2. `apply_clojure_changes` supports prepared decisions, extraction, and
+   rollback-participating verification.
+3. A direct extraction can compile and commit in one call. It does not require
+   a separate public planning call.
+4. A genuine unresolved decision must refuse before mutation.
+5. Native patching remains appropriate for prose and a small arbitrary text
+   edit.
+6. A public rename must not weaken the measured Sol route.
+7. The CLI has separate compatibility laws. MCP naming does not require a
+   matching CLI command rename.
+
+## Term map
+
+| Preferred term | Meaning in this review |
+|---|---|
+| complete edit decision | The request contains every edit and mechanical guard needed to compile the mutation. |
+| semantic change plan | Surgeon prepares or derives owners, sites, caller decisions, extraction facts, or transaction gates. |
+| project verification | A repository-owned command that runs inside the transaction and can cause rollback. |
+| compatibility alias | An old tool name that invokes the new canonical handler during migration. |
+
+Avoid `simple`, `complex`, `light`, and `heavy` in public descriptions. Those
+terms describe implementation cost, not a request contract.
+
+## Scoring method
+
+The scores below are design priors, not experimental results. A score of 5
+means that the option appears clear or inexpensive. A score of 1 means that
+the option appears ambiguous or expensive.
+
+`Migration` scores ease of migration. A high score means low migration cost.
+The `CLI` score measures conceptual clarity for a CLI user. It does not propose
+renaming the existing CLI operations.
+
+## Candidate portfolio
+
+| ID | Public name or shape | Fresh Sol | Claude Opus or Fable | CLI | Migration | Main benefit | Main defect |
+|---|---|---:|---:|---:|---:|---|---|
+| A | Keep `edit_clojure` and `apply_clojure_changes` with disjoint schemas | 4 | 4 | 3 | 5 | Preserves the proven names and removes request overlap. | Both verbs remain generic. A caller must read the descriptions. |
+| B | `edit_clojure` and `apply_clojure_plan` | 5 | 5 | 4 | 3 | Names the decision-state boundary directly. | The server can derive the plan in the same call, so `plan` must include compiler-derived plans. |
+| C | `edit_clojure` and `refactor_clojure` | 5 | 5 | 5 | 3 | Matches common editor vocabulary and makes tool choice easy to explain. | Some verified changes are not refactors. The name can overstate semantic intent. |
+| D | `apply_clojure_edits` and `apply_clojure_intent` | 4 | 4 | 4 | 2 | Uses parallel grammar and distinguishes supplied edits from semantic intent. | `intent` is abstract and can imply that the model may omit required decisions. |
+| E | `commit_clojure_edits` and `execute_clojure_change` | 4 | 4 | 4 | 2 | Both names state that the tools mutate source. | `commit` and `execute` do not explain why two tools exist. |
+| F | `edit_clojure` and `transact_clojure` | 4 | 4 | 3 | 3 | Signals that the second tool owns additional transaction gates. | The compact editor is also transactional, so the distinction is technically false. |
+| G | `patch_clojure` and `refactor_clojure` | 5 | 5 | 5 | 2 | Uses a familiar local-change versus semantic-change pair. | `patch` understates computed programs, multi-file atomic edits, and owner deletion. |
+| H | `apply_exact_clojure_edits` and `apply_prepared_clojure_change` | 5 | 5 | 4 | 2 | Makes the authority source explicit in both names. | The names are long. `exact` can be misread as byte-exact output rather than exact guards. |
+| I | `edit_clojure` and `run_clojure_operation` | 3 | 3 | 3 | 3 | Leaves room for extraction and future semantic operations. | `operation` is vague and does not guide selection. |
+| J | One `change_clojure` tool with `kind: exact`, `prepared`, or `extraction` | 5 | 5 | 4 | 1 | Removes the first tool-selection decision. | Creates a large tagged-union schema. Prior evidence found fewer public schemas slower, so this option reopens a stopped direction. |
+| K | One `edit_clojure` tool with mutually exclusive `edits`, `basis`, or `extraction` branches | 4 | 4 | 4 | 1 | Preserves the established short name and one-shot routes. | Makes one generic editor own incompatible authority rules and a large schema. |
+| L | `edit_clojure` for complete decisions. `apply_clojure_plan` for semantic plans and rollback-participating gates. | 5 | 5 | 5 | 2 | Aligns the public boundary with authority. It moves exact insertion, rename, and map updates to the compact route. | Requires schema movement and compatibility work before the naming benefit is real. |
+
+## Top three options
+
+### 1. Option L: `edit_clojure` and `apply_clojure_plan`
+
+This option has the clearest executable rule:
+
+```text
+complete edit decision ----> edit_clojure
+semantic plan or gate -----> apply_clojure_plan
+```
+
+The distinction depends on request authority, not perceived complexity.
+Exact insertion, deletion, local rename, and map updates belong in
+`edit_clojure` when the request contains the full decision. A prepared basis,
+an extraction compiler, or project verification belongs in
+`apply_clojure_plan`.
+
+Proposed strict descriptions:
+
+> `edit_clojure`: Commit one complete Clojure edit decision. Supply exact old
+> and new forms, bounded computed programs, or exact owner deletions. Surgeon
+> compiles all items against one frozen snapshot and commits them atomically.
+> Use `apply_clojure_plan` when Surgeon must prepare or derive semantic change
+> facts, or when project verification must participate in rollback.
+
+> `apply_clojure_plan`: Compile and apply one semantic Clojure change plan. Use
+> a prepared basis, an extraction request, or a change that requires project
+> verification with rollback. Surgeon refuses unresolved decisions before
+> mutation. Use `edit_clojure` when the request already contains every edit and
+> guard.
+
+Why it leads:
+
+- The descriptions contain one reciprocal selection rule.
+- The names do not claim that only the second tool is safe or atomic.
+- The boundary can absorb current overlap instead of preserving accidental
+  schema history.
+- `plan` remains accurate when the server derives the plan internally, if the
+  contract defines a plan as the compiler result rather than a prior public
+  artifact.
+
+### 2. Option A: keep the names and make the schemas disjoint
+
+This is the lowest-risk option. It can earn most of the selection benefit
+without changing public identifiers. Move every fully specified edit action to
+`edit_clojure`. Reserve `apply_clojure_changes` for prepared or
+compiler-derived semantic work and rollback-participating gates.
+
+Why it remains a finalist:
+
+- The current fast path and installed routing remain unchanged.
+- Existing traces and clients need no name migration.
+- The team can test the schema boundary before a rename adds another variable.
+- If agents still select the wrong tool after the schemas are disjoint, the
+  evidence can justify a later rename.
+
+The defect is semantic debt. `apply_clojure_changes` still sounds like the
+general mutation tool, although the intended contract is narrower.
+
+### 3. Option C: `edit_clojure` and `refactor_clojure`
+
+This pair gives fresh callers the strongest familiar analogy. Editors expose
+direct edits and semantic refactors. Extraction, binding-aware rename, caller
+changes, and verification-backed structural work fit the second term.
+
+Why it remains a finalist:
+
+- The names are short and easy to contrast.
+- The distinction is likely legible before a caller reads the full schema.
+- CLI users already understand edit versus refactor vocabulary.
+
+The defect is scope accuracy. A transaction can use project verification
+without being a refactor. This option must fail if clean-context callers avoid
+`refactor_clojure` for such changes.
+
+## Options to reject before experiments
+
+- Reject F because both tools are transactions.
+- Reject I because `operation` does not guide selection.
+- Do not reopen J or K without new causal evidence. A single large tool schema
+  previously lost performance, and tool-count reduction alone is not the goal.
+- Treat G as a useful prompt label, not a preferred API. `patch` understates
+  the compact editor's structural and computed capabilities.
+
+## Executable clean-context evaluation
+
+### Goal
+
+Measure whether a candidate improves correct first-call routing without
+regressing complete verified task time.
+
+### Candidate catalogs
+
+Test these catalogs first:
+
+1. A: current names with disjoint strict descriptions and schemas.
+2. L: `edit_clojure` and `apply_clojure_plan`.
+3. C: `edit_clojure` and `refactor_clojure`.
+
+Use the same implementation commit, fixtures, output contract, and scorer for
+all catalogs. Change only tool names, descriptions, and the public routing
+projection. Do not install a candidate catalog on the shared MCP server.
+
+### Frozen task strata
+
+Use at least three tasks in each stratum:
+
+| Stratum | Correct first action |
+|---|---|
+| Exact known nested or multi-file edits | Compact editor |
+| Exact insertion, owner deletion, local rename, or map update | Compact editor after the schema boundary supports it |
+| Prepared basis with filled decisions | Semantic-plan tool |
+| Direct extraction with mechanically derivable facts | Semantic-plan tool |
+| Project verification that must roll back on failure | Semantic-plan tool |
+| Prose or arbitrary non-structural text edit | Neither Surgeon mutation tool |
+
+Include at least one deliberately small task in each Surgeon stratum. This
+checks whether a name causes unnecessary escalation based on perceived task
+size.
+
+### Small screen
+
+Run two fresh sessions per catalog, caller, and stratum in a counterbalanced
+order. Use Sol/high, Claude Opus, and Claude Fable. Stop a candidate early if
+it produces either result:
+
+- a wrong mutation tool in more than one session;
+- a Sol median complete wall that is more than 5 percent slower than the
+  current catalog on the same tasks.
+
+### Expanded cohort
+
+For candidates that pass the screen, run eight fresh sessions per caller and
+stratum. Preserve caller and model strata. Do not pool them.
+
+Record:
+
+1. first mutation tool;
+2. first-call schema validity;
+3. number of preflight reads;
+4. refusal count before the successful mutation;
+5. total tool actions;
+6. semantic correctness;
+7. complete verified task wall;
+8. request and response bytes;
+9. final response behavior.
+
+The release gate is:
+
+- no Sol correctness regression;
+- no Sol p50 complete-wall regression greater than 5 percent;
+- at least a 30 percent reduction in wrong first-tool selection or
+  schema-invalid first calls;
+- no Claude caller loses the current one-shot successful route;
+- the prose control continues to select native editing.
+
+### Causal interpretation
+
+Names and descriptions earn credit only when the selected route changes. If a
+candidate reduces thinking time but preserves every route, record the gain but
+do not infer better tool understanding. If a schema move improves performance,
+separate that result from the name comparison with a factorial arm.
+
+## Migration plan if a rename wins
+
+1. Land the disjoint request boundary before the rename.
+2. Add registry-derived tests for canonical names and compatibility aliases.
+3. Publish the new canonical names in `tools/list`.
+4. Keep old names as invocation-only aliases when the MCP dispatcher supports
+   non-advertised aliases.
+5. If hidden aliases are not possible, advertise aliases for one bounded
+   release and measure whether the larger catalog harms routing.
+6. Keep the old result operation names during the compatibility window, or add
+   an explicit versioned result field. Do not change input and output names
+   silently in one release.
+7. Update installed Codex and Claude skills from the same immutable commit.
+8. Hot reload once, then verify one old cached caller and one fresh caller.
+9. Remove aliases only after retained telemetry shows no old-name calls in the
+   declared observation window.
+
+## Recommendation
+
+Test the schema boundary before the rename. Use Option A as the control, then
+compare Options L and C. The working preference is Option L because
+`apply_clojure_plan` names the authority boundary more precisely than
+`refactor_clojure`.
+
+Do not ship a rename from design judgment alone. The current names already
+support a proven fast path. A new name must improve first-call routing or
+complete verified task time without reducing Sol performance.
