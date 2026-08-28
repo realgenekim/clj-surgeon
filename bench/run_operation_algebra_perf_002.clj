@@ -40,7 +40,7 @@
   [file]
   (sha256 (slurp file)))
 
-(defn run!
+(defn run-command!
   [argv opts]
   (let [started (System/nanoTime)
         result @(process/process argv opts)
@@ -57,8 +57,8 @@
 
 (defn git-value
   [repository & args]
-  (let [result (run! (into ["git" "-C" repository] args)
-                     {:out :string :err :string})]
+  (let [result (run-command! (into ["git" "-C" repository] args)
+                             {:out :string :err :string})]
     (assert-success! result "Git command failed")
     (str/trim (:out result))))
 
@@ -66,8 +66,8 @@
   [harness-root repository source-ref destination]
   (let [script (str (io/file harness-root
                              "bench/materialize_benchmark_candidate.sh"))
-        result (run! [script repository source-ref destination]
-                     {:out :string :err :string})]
+        result (run-command! [script repository source-ref destination]
+                             {:out :string :err :string})]
     (assert-success! result "Candidate materialization failed")
     (let [receipt-file (io/file destination "candidate-receipt.edn")
           receipt (edn/read-string (slurp receipt-file))]
@@ -91,8 +91,8 @@
   ;; The candidate wrapper needs Babashka, but no other development runtime.
   (let [bb-path (str/trim
                   (:out (assert-success!
-                          (run! ["sh" "-c" "command -v bb"]
-                                {:out :string :err :string})
+                          (run-command! ["sh" "-c" "command -v bb"]
+                                        {:out :string :err :string})
                           "Babashka is unavailable")))
         link (io/file directory "bb")]
     (java.nio.file.Files/createSymbolicLink
@@ -131,12 +131,12 @@
 
 (defn run-arm!
   [{:keys [arm candidate workspace request-text raw-dir env phase sequence]}]
-  (let [result (run! [(:wrapper candidate) ":op" ":change" ":spec-file" "-"]
-                     {:dir workspace
-                      :in request-text
-                      :out :string
-                      :err :string
-                      :extra-env env})
+  (let [result (run-command! [(:wrapper candidate) ":op" ":change" ":spec-file" "-"]
+                             {:dir workspace
+                              :in request-text
+                              :out :string
+                              :err :string
+                              :extra-env env})
         prefix (format "%02d-%s-%s" sequence (name phase) (name arm))
         stdout-file (io/file raw-dir (str prefix ".stdout.edn"))
         stderr-file (io/file raw-dir (str prefix ".stderr.txt"))]

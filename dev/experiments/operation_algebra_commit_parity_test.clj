@@ -1,5 +1,6 @@
 (ns operation-algebra-commit-parity-test
   (:require
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is run-tests testing]]
    [operation-algebra-commit-parity :as parity]))
 
@@ -25,7 +26,7 @@
   ;; OP-ALG-SHADOW-001
   (let [result (parity/report (System/getProperty "user.dir")
                               (.getCanonicalPath
-                                (clojure.java.io/file
+                                (io/file
                                   "dev/experiments/operation_algebra_commit_parity.clj")))]
     (is (= parity/candidate-commit (:candidate-commit result)))
     (is (= parity/pre-cutover-commit (:pre-cutover-commit result)))
