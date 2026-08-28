@@ -1480,8 +1480,17 @@ run_one() {
     curl --fail --silent --show-error "${mcp_url%/mcp}/healthz" >/dev/null
     server_ready_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
     printf '%s\n' "$((server_ready_ms - server_started_ms))" > "$run_dir/mcp-bootstrap-ms.txt"
-    bb "$repo_root/bench/write_mcp_config.clj" \
-      "$codex_home/config.toml" --url "$mcp_url" >/dev/null
+    if [ -n "$candidate_catalog" ]; then
+      local candidate_enabled_tools
+      candidate_enabled_tools=$(jq -c '[.roles[]] | unique | sort' \
+        "$catalog_role_receipt")
+      bb "$repo_root/bench/write_mcp_config.clj" \
+        "$codex_home/config.toml" --url "$mcp_url" \
+        --enabled-tools-edn "$candidate_enabled_tools" >/dev/null
+    else
+      bb "$repo_root/bench/write_mcp_config.clj" \
+        "$codex_home/config.toml" --url "$mcp_url" >/dev/null
+    fi
   fi
   local run_path
   run_path="$bin_dir:$PATH"
