@@ -2,8 +2,7 @@
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clojure.edn :as edn]
-   [clojure.java.io :as io]
-   [clojure.string :as str])
+   [clojure.java.io :as io])
   (:import
    (java.nio.charset StandardCharsets)
    (java.nio.file Files)
