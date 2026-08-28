@@ -142,10 +142,34 @@
               {"requests"
                [{"id" "escape" "operation" "outline"
                  "file" "src/outside.clj"}]
+               "expect" {"requests" 1 "files" 1}})
+            target-hash (structural-lens/source-hash (slurp target))
+            guarded-alias-result
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath project)
+               :read-source (fn [path] (swap! reads inc) (slurp path))}
+              {"snapshot_guards" {"src/target.clj" target-hash
+                                  "src/alias.clj" target-hash}
+               "requests"
+               [{"id" "one" "operation" "outline" "file" "src/target.clj"}]
+               "expect" {"requests" 1 "files" 1}})
+            guarded-escape-result
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath project)
+               :read-source (fn [path] (swap! reads inc) (slurp path))}
+              {"snapshot_guards" {"src/outside.clj" target-hash}
+               "requests"
+               [{"id" "escape" "operation" "outline"
+                 "file" "src/outside.clj"}]
                "expect" {"requests" 1 "files" 1}})]
         (is (= "aggregate-file-expectation-mismatch"
                (:error_type alias-result)))
         (is (= "path-outside-project" (:error_type escape-result)))
+        (is (= "snapshot-guard-alias-collision"
+               (:error_type guarded-alias-result)))
+        (is (= "snapshot" (:failed_stage guarded-alias-result)))
+        (is (= "path-outside-project" (:error_type guarded-escape-result)))
+        (is (= "snapshot" (:failed_stage guarded-escape-result)))
         (is (zero? @reads)))
       (finally
         (delete-tree! project)
@@ -331,6 +355,144 @@
         (is (not (str/includes? summary "(def answer"))))
       (finally
         (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest guarded-selector-retry-preserves-completed-siblings-across-retries
+  ;; @spec MCP-OP-READ-GUARD-001 MCP-OP-READ-CONT-001 MCP-OP-READ-CONT-002
+  (let [project (temp-dir)
+        a-file (write-source! project "src/a.clj"
+                              "(ns a)\n(def alpha 1)\n")
+        _b-file (write-source! project "src/b.clj"
+                               "(ns b)\n(def beta 2)\n")
+        _c-file (write-source! project "src/c.clj"
+                               "(ns c)\n(def gamma 3)\n")
+        initial
+        (inspect-tool/execute-inspect!
+          {:project-root (.getPath project)}
+          {"requests" [{"id" "a" "operation" "forms"
+                        "file" "src/a.clj" "forms" ["alpha"]
+                        "expect" {"forms" 1}}
+                       {"id" "b" "operation" "forms"
+                        "file" "src/b.clj" "forms" ["bet"]
+                        "expect" {"forms" 1}}
+                       {"id" "c" "operation" "forms"
+                        "file" "src/c.clj" "forms" ["gamma"]
+                        "expect" {"forms" 1}}]
+           "expect" {"requests" 3 "files" 3}})
+        guards-1 (get-in initial [:continuation :snapshot_guards])
+        second
+        (inspect-tool/execute-inspect!
+          {:project-root (.getPath project)}
+          {"snapshot_guards" guards-1
+           "requests" [{"id" "b" "operation" "forms"
+                        "file" "src/b.clj" "forms" ["beta"]
+                        "expect" {"forms" 1}}
+                       {"id" "c" "operation" "forms"
+                        "file" "src/c.clj" "forms" ["gamm"]
+                        "expect" {"forms" 1}}]
+           "expect" {"requests" 2 "files" 2}})
+        guards-2 (get-in second [:continuation :snapshot_guards])]
+    (try
+      (is (= ["a"]
+             (get-in initial [:continuation :completed_request_ids])))
+      (is (= #{"src/a.clj" "src/b.clj" "src/c.clj"}
+             (set (keys guards-1))))
+      (is (= ["b"]
+             (get-in second [:continuation :completed_request_ids])))
+      (is (= #{"src/a.clj" "src/b.clj" "src/c.clj"}
+             (set (keys guards-2))))
+      (spit a-file "(ns a)\n(def alpha :changed)\n")
+      (let [stale
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath project)}
+              {"snapshot_guards" guards-2
+               "requests" [{"id" "c" "operation" "forms"
+                            "file" "src/c.clj" "forms" ["gamma"]
+                            "expect" {"forms" 1}}]
+               "expect" {"requests" 1 "files" 1}})]
+        (is (false? (:ok stale)))
+        (is (= "snapshot-guard-mismatch" (:error_type stale)))
+        (is (= "snapshot" (:failed_stage stale)))
+        (is (= "src/a.clj" (:file stale)))
+        (is (not (contains? stale :results)))
+        (is (not (contains? stale :continuation)))
+        (is (not (contains? stale :source)))
+        (is (= "refresh_snapshot" (:next_action stale))))
+      (finally
+        (delete-tree! project)))))
+
+(deftest selector-continuation-obeys-the-complete-public-envelope-budget
+  ;; @spec MCP-OP-READ-CONT-002
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(def alpha 1)\n(def beta 2)\n")
+        calls (atom [])
+        budget-var (ns-resolve 'clj-surgeon.mcp-inspect-tool
+                               'max-public-result-bytes)]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (with-redefs-fn
+        {budget-var 1}
+        #(inspect-tool/handle-inspect
+           nil
+           {"requests" [{"id" "before" "operation" "forms"
+                         "file" "src/demo.clj" "forms" ["beta"]
+                         "expect" {"forms" 1}}
+                        {"id" "mistyped" "operation" "forms"
+                         "file" "src/demo.clj" "forms" ["bet"]
+                         "expect" {"forms" 1}}]
+            "expect" {"requests" 2 "files" 1}}
+           (fn [content error? structured]
+             (swap! calls conj {:content content :error? error?
+                                :structured structured}))))
+      (let [{:keys [content error? structured]} (first @calls)
+            summary (first content)]
+        (is error?)
+        (is (= "inspect-output-limit" (:error_type structured)))
+        (is (= "output-budget" (:failed_stage structured)))
+        (is (not (contains? structured :continuation)))
+        (is (not (contains? structured :results)))
+        (is (not (contains? structured :source)))
+        (is (not (str/includes? summary "(def beta"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest guarded-path-and-read-failures-refuse-at-the-snapshot-stage
+  ;; @spec MCP-OP-READ-GUARD-001 MCP-OP-READ-CONT-002
+  (let [project (temp-dir)
+        source-file (write-source! project "src/demo.clj"
+                                   "(ns demo)\n(def alpha 1)\n")
+        unreadable (io/file project "src/unreadable.clj")
+        _ (.mkdirs unreadable)
+        source-hash (structural-lens/source-hash (slurp source-file))
+        dummy-hash (apply str (repeat 64 "a"))
+        request {"requests" [{"id" "demo" "operation" "forms"
+                              "file" "src/demo.clj" "forms" ["alpha"]
+                              "expect" {"forms" 1}}]
+                 "expect" {"requests" 1 "files" 1}}
+        run (fn [guards]
+              (inspect-tool/execute-inspect!
+                {:project-root (.getPath project)}
+                (assoc request "snapshot_guards" guards)))]
+    (try
+      (doseq [[label result]
+              [[:invalid-path
+                (run {"src/demo.clj" source-hash
+                      "../outside.clj" dummy-hash})]
+               [:missing-file
+                (run {"src/demo.clj" source-hash
+                      "src/missing.clj" dummy-hash})]
+               [:unreadable-file
+                (run {"src/demo.clj" source-hash
+                      "src/unreadable.clj" dummy-hash})]]]
+        (testing (name label)
+          (is (false? (:ok result)))
+          (is (= "snapshot" (:failed_stage result)))
+          (is (not (contains? result :results)))
+          (is (not (contains? result :continuation)))
+          (is (not (contains? result :source)))))
+      (finally
         (delete-tree! project)))))
 
 (deftest uninitialized-handler-reports-elapsed-time

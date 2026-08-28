@@ -42,11 +42,39 @@
     "refused on every failure. A forms owner-selection refusal names the failed "
     "request and every failed owner, supplies the complete bounded name-only "
     "owner vocabulary, and ranks up to ten hypotheses per missing owner. "
-    "Hypotheses are never selection authority. read_complete=true is "
+    "After a selector-local failure, a continuation preserves completed sibling "
+    "results and SHA-256 guards for every original file. Correct only the pending "
+    "selector, retry that subset with all continuation.snapshot_guards, and do not "
+    "reread completed siblings. Every guarded file is verified before evaluation; "
+    "a changed guard refuses without source or write authority. Hypotheses are "
+    "never selection authority, and continuation is never write authority. "
+    "read_complete=true is "
     "terminal. Never writes."))
 
 (def ^:private positive-integer-schema {:type "integer" :minimum 1})
 (def ^:private non-negative-integer-schema {:type "integer" :minimum 0})
+(def ^:private snapshot-guards-schema
+  {:type "object"
+   :minProperties 1
+   :maxProperties inspect/max-files
+   :additionalProperties {:type "string" :pattern "^[0-9a-f]{64}$"}})
+(def ^:private continuation-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"snapshot_bound" {:const true}
+    "selector_authority" {:const false}
+    "write_authority" {:const false}
+    "completed_request_count" non-negative-integer-schema
+    "completed_request_ids" {:type "array" :items {:type "string"}}
+    "pending_request_count" positive-integer-schema
+    "pending_request_ids" {:type "array" :items {:type "string"}}
+    "snapshot_guards" snapshot-guards-schema
+    "completed_results" {:type "array"}}
+   :required ["snapshot_bound" "selector_authority" "write_authority"
+              "completed_request_count" "completed_request_ids"
+              "pending_request_count" "pending_request_ids"
+              "snapshot_guards" "completed_results"]})
 (def ^:private source-file-schema
   {:type "string"
    :minLength 1
@@ -71,6 +99,11 @@
    :properties
    {"workspace_root" {:type "string" :minLength 1
                       :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "snapshot_guards"
+    (assoc snapshot-guards-schema
+           :description (str "Optional stateless retry fence mapping every requested file, plus any completed sibling files, "
+                             "to the SHA-256 returned by a prior selector-local continuation. Every requested file must be present. "
+                             "All guarded files are captured and verified before request evaluation; mismatch refuses without source or continuation."))
     "requests"
     {:type "array"
      :minItems 1
@@ -242,6 +275,8 @@
     "file_count" {:type "integer"}
     "results" {:type "array"}
     "file_hashes" {:type "object"}
+    "snapshot_guards" snapshot-guards-schema
+    "continuation" continuation-schema
     "source_character_count" {:type "integer"}
     "failed_request" {:type "object"}
     "failure_count" {:type "integer"}
@@ -563,68 +598,118 @@
        :next_action "correct_request"}
       normalized)))
 
+;; @spec MCP-OP-READ-GUARD-001
 (defn capture-snapshots
   "Resolve and read each distinct canonical file once in first-reference order.
 
   `read-source` is injectable for boundary tests and receives a canonical path."
-  [project-root requests read-source expected-file-count]
-  (try
-    (let [root (mcp-paths/real-root project-root)
-          files (vec (distinct (map :file requests)))
-          resolved (mapv #(mcp-paths/resolve-source-path root %) files)
-          refusal (first (remove :ok resolved))]
-      (if refusal
-        refusal
-        (let [canonical-count (count (distinct (map #(str (:canonical %))
-                                                    resolved)))]
-          (if-not (= expected-file-count canonical-count)
-            {:ok false
-             :operation "inspect_clojure"
-             :error_type "aggregate-file-expectation-mismatch"
-             :error "Declared file count does not match distinct canonical files"
-             :expected expected-file-count
-             :actual canonical-count
-             :read_complete false
-             :source_unchanged true
-             :next_action "correct_request"}
-            (loop [remaining resolved
-                   cache {}
-                   snapshots (array-map)
-                   reads 0]
-              (if-let [{:keys [relative path canonical]} (first remaining)]
-                (let [cache-key (str canonical)]
-                  (if-let [captured (get cache cache-key)]
-                    (recur (next remaining) cache
-                           (assoc snapshots relative
-                                  (assoc captured :file relative))
-                           reads)
-                    (let [source (read-source path)]
-                      (when-not (string? source)
-                        (throw
-                          (ex-info "Source reader must return a string"
-                                   {:error-type :source-read-failed
-                                    :file relative})))
-                      (let [captured {:file relative
-                                      :source source
-                                      :hash (structural-lens/source-hash source)}]
-                        (recur (next remaining)
-                               (assoc cache cache-key captured)
-                               (assoc snapshots relative captured)
-                               (inc reads))))))
-                {:ok true
-                 :root root
-                 :snapshots snapshots
-                 :file_read_count reads}))))))
-    (catch Exception error
-      {:ok false
-       :operation "inspect_clojure"
-       :error_type (name (or (:error-type (ex-data error))
-                             :source-read-failed))
-       :error (.getMessage error)
-       :file (:file (ex-data error))
-       :read_complete false
-       :source_unchanged true
-       :next_action "correct_request"})))
+  ([project-root requests read-source expected-file-count]
+   (capture-snapshots project-root requests read-source expected-file-count nil))
+  ([project-root requests read-source expected-file-count snapshot-guards]
+   (try
+     (let [root (mcp-paths/real-root project-root)
+           request-files (vec (distinct (map :file requests)))
+           files (vec (distinct (concat request-files (keys snapshot-guards))))
+           resolved (mapv #(mcp-paths/resolve-source-path root %) files)
+           refusal (first (remove :ok resolved))]
+       (if refusal
+         (cond-> refusal
+           snapshot-guards
+           (assoc :failed_stage "snapshot"
+                  :read_complete false
+                  :source_unchanged true))
+         (let [request-resolved (subvec resolved 0 (count request-files))
+               canonical-count (count (distinct (map #(str (:canonical %))
+                                                     request-resolved)))
+               aliases (when snapshot-guards
+                         (->> resolved
+                              (group-by #(str (:canonical %)))
+                              vals
+                              (filter #(< 1 (count (distinct (map :relative %)))))
+                              first))]
+           (cond
+             (not= expected-file-count canonical-count)
+             {:ok false
+              :operation "inspect_clojure"
+              :error_type "aggregate-file-expectation-mismatch"
+              :error "Declared file count does not match distinct canonical files"
+              :expected expected-file-count
+              :actual canonical-count
+              :read_complete false
+              :source_unchanged true
+              :next_action "correct_request"}
+
+             aliases
+             {:ok false
+              :operation "inspect_clojure"
+              :error_type "snapshot-guard-alias-collision"
+              :error "Several supplied paths resolve to the same canonical file"
+              :files (mapv :relative aliases)
+              :failed_stage "snapshot"
+              :read_complete false
+              :source_unchanged true
+              :next_action "correct_request"}
+
+             :else
+             (let [captured
+                   (loop [remaining resolved
+                          cache {}
+                          snapshots (array-map)
+                          reads 0]
+                     (if-let [{:keys [relative path canonical]} (first remaining)]
+                       (let [cache-key (str canonical)]
+                         (if-let [snapshot (get cache cache-key)]
+                           (recur (next remaining) cache
+                                  (assoc snapshots relative
+                                         (assoc snapshot :file relative))
+                                  reads)
+                           (let [source (read-source path)]
+                             (when-not (string? source)
+                               (throw
+                                 (ex-info "Source reader must return a string"
+                                          {:error-type :source-read-failed
+                                           :file relative})))
+                             (let [snapshot {:file relative
+                                             :source source
+                                             :hash (structural-lens/source-hash source)}]
+                               (recur (next remaining)
+                                      (assoc cache cache-key snapshot)
+                                      (assoc snapshots relative snapshot)
+                                      (inc reads))))))
+                       {:snapshots snapshots :file_read_count reads}))
+                   mismatch
+                   (some (fn [[file expected-hash]]
+                           (let [actual-hash (get-in captured [:snapshots file :hash])]
+                             (when-not (= expected-hash actual-hash)
+                               {:file file
+                                :expected_hash expected-hash
+                                :actual_hash actual-hash})))
+                         snapshot-guards)]
+               (if mismatch
+                 (merge
+                   {:ok false
+                    :operation "inspect_clojure"
+                    :error_type "snapshot-guard-mismatch"
+                    :error "A guarded file changed after the prior continuation"
+                    :failed_stage "snapshot"
+                    :actual_state "changed"
+                    :read_complete false
+                    :source_unchanged true
+                    :next_action "refresh_snapshot"}
+                   mismatch)
+                 (merge {:ok true :root root} captured)))))))
+     (catch Exception error
+       (cond->
+         {:ok false
+          :operation "inspect_clojure"
+          :error_type (name (or (:error-type (ex-data error))
+                                :source-read-failed))
+          :error (.getMessage error)
+          :file (:file (ex-data error))
+          :read_complete false
+          :source_unchanged true
+          :next_action "correct_request"}
+         snapshot-guards (assoc :failed_stage "snapshot"))))))
 
 (defn- execute-inspect-in-context!
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
@@ -681,7 +766,8 @@
                   captured (capture-snapshots
                              project-root (:requests normalized)
                              (or read-source slurp)
-                             (get-in normalized [:expect :files]))]
+                             (get-in normalized [:expect :files])
+                             (:snapshot-guards normalized))]
               (if-not (:ok captured)
                 (inspect-refusal captured)
                 (assoc
@@ -735,6 +821,9 @@
                                  (count available-owners))
           available-count (or (:available_owner_count result)
                               available-returned)
+          continuation (:continuation result)
+          completed-count (:completed_request_count continuation)
+          pending-ids (:pending_request_ids continuation)
           failure-label (if (= "ambiguous-form" (:error_type failure))
                           "ambiguous form"
                           "missing form")
@@ -770,7 +859,16 @@
                     "ranking is non-authoritative. Semantic selection "
                     "among them is allowed; the exact retry verifies "
                     "the selection.\n"))
-          "\n→ choose one exact owner and retry")))
+             (when continuation
+               (format (str "  preserved %d completed request%s from the frozen snapshot\n"
+                            "  retry only %s; do not reread before the guarded retry\n")
+                       completed-count
+                       (if (= 1 completed-count) "" "s")
+                       (str/join ", " pending-ids)))
+             (cond
+               continuation "\n→ correct the pending selector and retry with continuation.snapshot_guards"
+               diagnostic? "\n→ choose one exact owner and retry"
+               :else (format "\n→ %s" (or (:next_action result) "correct_request"))))))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)
@@ -784,14 +882,35 @@
     :else
     (inspect/concise-summary result)))
 
+;; @spec MCP-OP-READ-CONT-002
 (defn- enforce-result-budget
   [raw-result]
-  (if (and (:ok raw-result)
-           (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
+  (cond
+    (and (:ok raw-result)
+         (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
     (enforce-public-result-budget
       (inspect-summary (assoc raw-result :elapsed_ms 0.0))
       raw-result)
-    raw-result))
+
+    (:continuation raw-result)
+    (let [required-bytes
+          (mcp-result-byte-count
+            (inspect-summary (assoc raw-result :elapsed_ms 0.0))
+            raw-result)]
+      (if (<= required-bytes max-public-result-bytes)
+        raw-result
+        {:ok false
+         :operation "inspect_clojure"
+         :error_type "inspect-output-limit"
+         :error "The complete selector refusal and continuation exceed the public MCP output budget"
+         :failed_stage "output-budget"
+         :required {:public-result-bytes required-bytes}
+         :limits {:public-result-bytes max-public-result-bytes}
+         :read_complete false
+         :source_unchanged true
+         :next_action "narrow_request"}))
+
+    :else raw-result))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001
