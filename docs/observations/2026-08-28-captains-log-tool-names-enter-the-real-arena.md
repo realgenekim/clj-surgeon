@@ -172,6 +172,19 @@ one-shot observations. U's combined median is 29.066s and W's is 30.948s, so U
 leads by 1.882s overall. W's 0.283s pilot lead did not reproduce. The clearer
 extraction noun did not beat the established control on this task.
 
+The confirmation clocks localize the loss:
+
+| Catalog | Initial materialization median | MCP observer median | Server median | Receipt median | Reasoning-token median |
+|---|---:|---:|---:|---:|---:|
+| U | 23.660s | 2.503s | 2.462s | 2.738s | 345 |
+| W | 26.317s | 2.097s | 2.059s | 3.283s | 439 |
+
+W saved 0.406s at the MCP boundary, where the public projection should have
+almost no causal performance effect. It lost 2.658s before the first tool call
+and 0.544s after the receipt. The model also emitted 94 more reasoning tokens
+at the median. The hoped-for semantic shortcut did not occur; the novel name
+made Sol deliberate longer in this frozen catalog.
+
 ## Retained evidence and one harness defect
 
 The complete result archives were copied back from Anvil and their SHA-256
@@ -181,6 +194,8 @@ hashes matched the remote artifacts:
   `9d058818214c2c35b501e400b3c5f33335d6b76f9add2a32233f3c2b692eca74`;
 - orders 3–8: `/tmp/clj-surgeon-catalog-results-2f47ddc-20260828T172110Z.tar.gz`,
   `32626a113936f949b7749a0acf843c9875dc0549a9285788d1a1a15a3cb009f4`.
+- U/W confirmation: `/tmp/clj-surgeon-catalog-confirm-results-2f47ddc-20260828T173212Z.tar.gz`,
+  `e9bf58e36bdbf6a5950a2c5a88f916f8f8cf32d6a590506f114e04c5253b11e3`.
 
 The second remote wrapper exited after producing every result because the
 catalog test JVM created an untracked `.cpcache/` and the postflight asserted a
