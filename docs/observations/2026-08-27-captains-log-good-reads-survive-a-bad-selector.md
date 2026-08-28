@@ -97,7 +97,8 @@ the caller no longer rereads A or reconstructs the complete batch.
 
 Focused verification is green:
 
-- inspect contract, adapter, and server schema: 46 tests / 472 assertions;
+- inspect contract, adapter, and server schema: 46 tests / 472 assertions in
+  both the warm nREPL loop and a fresh 64 MiB initial / 512 MiB maximum JVM;
 - malformed, non-string, missing, unreadable, outside-root, aliased, and stale
   guards fail closed;
 - first-request selector, cardinality, parse, and output-budget failures expose
