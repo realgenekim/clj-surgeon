@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is run-tests testing]]))
 
 (defn- tool-by-id
@@ -22,6 +23,102 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Unsupported MCP candidate catalog"
                         (candidate/normalize-catalog :unknown))))
+
+(deftest every-catalog-defines-one-complete-role-lexicon
+  (doseq [catalog candidate/supported-catalogs]
+    (testing (name catalog)
+      (let [lexicon (candidate/catalog-lexicon catalog)]
+        (is (= (set candidate/public-role-keys) (set (keys lexicon))))
+        (is (every? #(and (string? %) (not-empty %)) (vals lexicon))))))
+  (is (= {:inspect "inspect_clojure"
+          :edit "edit_clojure"
+          :extract "extract_clojure"
+          :plan "apply_clojure_plan"
+          :transform-preview "transform_clojure_with_clojure"
+          :transform-commit "transform_clojure_with_clojure"}
+         (candidate/catalog-lexicon :N)))
+  (is (= {:inspect "inspect_clojure"
+          :edit "write_clojure_edits"
+          :extract "move_clojure_owners"
+          :plan "apply_clojure_plan"
+          :transform-preview "preview_clojure_transform"
+          :transform-commit "apply_clojure_transform"}
+         (candidate/catalog-lexicon :T))))
+
+(deftest alternate-catalogs-expose-one-self-consistent-pre-call-universe
+  (doseq [catalog candidate/supported-catalogs]
+    (testing (name catalog)
+      (let [{:keys [initialize-instructions tools]}
+            (candidate/caller-visible-surface catalog)]
+        (is (string? initialize-instructions))
+        (is (= (set (vals (candidate/catalog-lexicon catalog)))
+               (set (map :name tools))))
+        (is (empty? (candidate/unavailable-public-name-leaks catalog))))))
+  (testing "N may name edit_clojure but cannot leak either unavailable legacy mutation"
+    (let [leaks (set (map :name
+                          (candidate/unavailable-public-name-leaks :N)))
+          visible (candidate/caller-visible-strings :N)]
+      (is (some #{"edit_clojure"} visible))
+      (is (not (contains? leaks "apply_clojure_changes")))
+      (is (not (contains? leaks "transform_clojure")))
+      (is (not-any? #(re-find #"(?<![A-Za-z0-9_.!_-])apply_clojure_changes(?![A-Za-z0-9_.!_-])" %)
+                    visible))
+      (is (not-any? #(re-find #"(?<![A-Za-z0-9_.!_-])transform_clojure(?![A-Za-z0-9_.!_-])" %)
+                    visible))))
+  (testing "T exposes none of the three legacy mutation names"
+    (let [visible (candidate/caller-visible-strings :T)]
+      (doseq [legacy ["apply_clojure_changes" "edit_clojure"
+                      "transform_clojure"]]
+        (is (not-any? #(.contains ^String % legacy) visible)
+            {:legacy legacy})))))
+
+(deftest leak-detector-catches-the-exact-n-and-t-regressions
+  (let [real-catalog-tools candidate/catalog-tools
+        base-tools (mcp-server/public-tool-registry)
+        inject-description
+        (fn [catalog leaked-names]
+          (update-in (real-catalog-tools catalog base-tools) [0 :description]
+                     str " " (str/join " " leaked-names)))]
+    (with-redefs [candidate/catalog-tools
+                  (fn
+                    ([catalog]
+                     (inject-description catalog
+                                         ["apply_clojure_changes"
+                                          "transform_clojure"]))
+                    ([catalog _base-tools]
+                     (inject-description catalog
+                                         ["apply_clojure_changes"
+                                          "transform_clojure"])))]
+      (is (= #{"apply_clojure_changes" "transform_clojure"}
+             (set (map :name
+                       (candidate/unavailable-public-name-leaks :N))))))
+    (with-redefs [candidate/catalog-tools
+                  (fn
+                    ([catalog]
+                     (inject-description catalog
+                                         ["apply_clojure_changes"
+                                          "edit_clojure"
+                                          "transform_clojure"]))
+                    ([catalog _base-tools]
+                     (inject-description catalog
+                                         ["apply_clojure_changes"
+                                          "edit_clojure"
+                                          "transform_clojure"])))]
+      (is (= #{"apply_clojure_changes" "edit_clojure"
+               "transform_clojure"}
+             (set (map :name
+                       (candidate/unavailable-public-name-leaks :T))))))))
+
+(deftest catalog-projection-does-not-mutate-canonical-registration
+  (let [instructions mcp-server/server-instructions
+        contracts (mcp-server/tool-contracts
+                    (mcp-server/public-tool-registry))]
+    (doseq [catalog candidate/supported-catalogs]
+      (candidate/caller-visible-surface catalog))
+    (is (= instructions mcp-server/server-instructions))
+    (is (= contracts
+           (mcp-server/tool-contracts
+             (mcp-server/public-tool-registry))))))
 
 (deftest rename-only-catalogs-preserve-mechanics
   (let [base (mcp-server/public-tool-registry)
@@ -76,7 +173,7 @@
                  (:description extraction)))
     (is (re-find #"from the inspect_clojure next call"
                  (:description plan)))
-    (is (re-find #"standalone computed preview or commit"
+    (is (re-find #"one standalone computed relation"
                  (:description edit)))
     (is (= :not-implemented
            (get-in (candidate/catalog-report :M)
@@ -169,8 +266,10 @@
     (let [commit-tools (candidate/catalog-tools :R)
           bang-tools (candidate/catalog-tools :S)
           action-tools (candidate/catalog-tools :T)]
-      (is (= "edit_clojure!" (get-in commit-tools [1 :annotations :title])))
-      (is (= "edit_clojure!" (get-in bang-tools [1 :annotations :title])))
+      (is (= "edit_clojure_commit!"
+             (get-in commit-tools [1 :annotations :title])))
+      (is (= "edit_clojure_bang!"
+             (get-in bang-tools [1 :annotations :title])))
       (is (= "write_clojure_edits!"
              (get-in action-tools [1 :annotations :title])))
       (is (nil? (get-in (candidate/catalog-tools :P)
@@ -196,12 +295,21 @@
              :retained-basis :invented-plan}
            (set (map :id falsifier-cards))))))
 
+(deftest post-call-response-projection-remains-an-explicit-route-gate
+  (is (= :deferred
+         (get-in (candidate/catalog-report :N)
+                 [:route-gates :post-call-response-projection :status])))
+  (is (re-find #"Legacy operation fields"
+               (get-in (candidate/catalog-report :T)
+                       [:route-gates :post-call-response-projection :reason]))))
+
 (deftest isolated-start-projects-the-selected-catalog
   (let [observed (atom nil)]
     (with-redefs [http-server/start
                   (fn [opts]
                     (reset! observed {:opts opts
-                                      :tools (mcp-tool/all-tools)})
+                                      :tools (mcp-tool/all-tools)
+                                      :instructions mcp-server/server-instructions})
                     :stopped)]
       (is (= :stopped
              (candidate/start {:catalog :L
@@ -211,7 +319,9 @@
       (is (not (contains? (:opts @observed) :catalog)))
       (is (= ["inspect_clojure" "apply_clojure_plan" "edit_clojure"
               "transform_clojure"]
-             (mapv :name (:tools @observed))))))
+             (mapv :name (:tools @observed))))
+      (is (= (candidate/catalog-instructions :L)
+             (:instructions @observed)))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"require the full tool profile"
                         (candidate/start {:catalog :A

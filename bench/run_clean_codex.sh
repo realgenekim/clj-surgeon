@@ -244,6 +244,13 @@ mcp_first_mutation() {
             or $first.tool == "transform_clojure"))' "$1"
 }
 
+catalog_source_archaeology_count() {
+  jq '[.[]
+    | select((.command // "")
+             | test("(^|[/ ])(AGENTS\\.md|CLAUDE\\.md|SKILL\\.md|run_clean_codex\\.sh|mcp_candidate_catalog\\.clj|mcp_(server|tool|schema)\\.clj)([ /]|$)"))]
+    | length' "$1"
+}
+
 computed_route_adherent() {
   local context=$1 inspect_calls=$2 edit_calls=$3 transform_calls=$4
   local apply_calls=$5 file_changes=$6 source_commands=$7 text_reader=$8
@@ -356,7 +363,7 @@ tool_first_extraction_prompt() {
   local verification=$2
   local first_action
   if [ -n "$catalog" ]; then
-    first_action='Your first emitted item must be the available extraction-capable Clojure mutation tool call. Select the control from its extraction-only input schema. Do not assume a canonical tool name.'
+    first_action='Your first emitted item must be the available extraction-capable Clojure mutation tool call. Select the control only from the initialize instructions and tools/list surface. Do not assume a canonical tool name. Do not inspect server, client, tool, benchmark, rule, or skill source to discover a name; any such source archaeology invalidates this first-selection run.'
   else
     first_action='Your first emitted item must be the apply_clojure_changes tool call.'
   fi
@@ -401,6 +408,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   canonical_prompt=$(tool_first_extraction_prompt '' separate)
   [[ "$candidate_n_prompt" == *"available extraction-capable"* ]]
   [[ "$candidate_t_prompt" == *"available extraction-capable"* ]]
+  [[ "$candidate_n_prompt" == *"source archaeology invalidates"* ]]
   [[ "$candidate_n_prompt" != *"apply_clojure_changes"* ]]
   [[ "$candidate_n_prompt" != *"edit_clojure"* ]]
   [[ "$candidate_t_prompt" != *"apply_clojure_changes"* ]]
@@ -535,6 +543,14 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   jq -s '[.[] | .item]' "$self_test_root/transform-first-mutation.jsonl" \
     > "$self_test_root/transform-first-mutation-items.json"
   test "$(mcp_first_mutation "$self_test_root/transform-first-mutation-items.json")" = true
+  printf '%s\n' \
+    '{"command":"rg apply_clojure_changes /tmp/tool/src/clj_surgeon/mcp_tool.clj"}' \
+    '{"command":"rg moved-owner /tmp/workspace/src/sample/server.clj"}' \
+    > "$self_test_root/catalog-commands.jsonl"
+  jq -s . "$self_test_root/catalog-commands.jsonl" \
+    > "$self_test_root/catalog-commands.json"
+  test "$(catalog_source_archaeology_count \
+    "$self_test_root/catalog-commands.json")" -eq 1
 
   make_native_bin "$self_test_root/native-bin" "$PATH"
   if PATH="$self_test_root/native-bin" command -v clj-surgeon >/dev/null 2>&1; then
@@ -1471,6 +1487,13 @@ run_one() {
     "$run_dir/events.jsonl" > "$run_dir/started-items.json"
   jq -r '.[] | [.id, .command, (.exit_code // ""), (.aggregated_output | length)] | @tsv' \
     "$run_dir/commands.json" > "$run_dir/commands.tsv"
+  local catalog_source_archaeology_commands=0
+  if [ -n "$candidate_catalog" ]; then
+    catalog_source_archaeology_commands=$(catalog_source_archaeology_count \
+      "$run_dir/commands.json")
+    printf '%s\n' "$catalog_source_archaeology_commands" \
+      > "$run_dir/catalog-source-archaeology-count.txt"
+  fi
 
   local usage input_tokens cached_tokens uncached_tokens output_tokens reasoning_tokens
   local user_turns tool_round_trips discovery_round_trips post_decision_round_trips
@@ -1900,6 +1923,13 @@ run_one() {
   esac
   printf '%s\n' "$route_adherent" > "$run_dir/route-adherent.txt"
   if [ "$route_adherent" != true ]; then
+    exact_correct=false
+    correct=false
+  fi
+
+  if [ -n "$candidate_catalog" ] \
+    && [ "$catalog_source_archaeology_commands" -ne 0 ]; then
+    echo "Candidate first-selection run used source archaeology: $catalog_source_archaeology_commands" >&2
     exact_correct=false
     correct=false
   fi
