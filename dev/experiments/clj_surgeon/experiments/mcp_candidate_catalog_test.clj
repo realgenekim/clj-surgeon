@@ -17,7 +17,8 @@
 (deftest catalog-name-validation
   (is (= :A (candidate/normalize-catalog :A)))
   (is (= :L (candidate/normalize-catalog "L")))
-  (is (= [:A :L :C :M :N :O] candidate/supported-catalogs))
+  (is (= [:A :L :C :M :N :O :P :Q :R :S :T]
+         candidate/supported-catalogs))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Unsupported MCP candidate catalog"
                         (candidate/normalize-catalog :unknown))))
@@ -114,6 +115,68 @@
     (is (every? true? (map identical?
                            (map :tool-fn split)
                            (map :tool-fn aliased))))))
+
+(deftest effect-catalogs-preserve-handlers-and-separate-preview-from-commit
+  (let [base (mcp-server/public-tool-registry)
+        base-transform (tool-by-id base :transform-clojure)
+        expected-names
+        {:P ["inspect_clojure" "commit_clojure_edits"
+             "commit_clojure_extraction" "apply_clojure_plan"
+             "preview_clojure_transform" "commit_clojure_transform"]
+         :Q ["inspect_clojure" "clojure.edit.commit"
+             "clojure.extract.commit" "clojure.plan.apply"
+             "clojure.transform.preview" "clojure.transform.commit"]
+         :R ["inspect_clojure" "edit_clojure_commit"
+             "extract_clojure_commit" "apply_clojure_plan"
+             "transform_clojure_preview" "transform_clojure_commit"]
+         :S ["inspect_clojure" "edit_clojure_bang"
+             "extract_clojure_bang" "apply_clojure_plan_bang"
+             "transform_clojure_with_clojure"
+             "transform_clojure_with_clojure_bang"]
+         :T ["inspect_clojure" "write_clojure_edits"
+             "move_clojure_owners" "apply_clojure_plan"
+             "preview_clojure_transform" "apply_clojure_transform"]}]
+    (doseq [[catalog names] expected-names]
+      (testing (name catalog)
+        (let [tools (candidate/catalog-tools catalog base)
+              preview (nth tools 4)
+              commit (nth tools 5)]
+          (is (= names (mapv :name tools)))
+          (is (every? #(re-matches #"[A-Za-z0-9_.-]+" (:name %)) tools))
+          (is (identical? (:tool-fn base-transform) (:tool-fn preview)))
+          (is (identical? (:tool-fn base-transform) (:tool-fn commit)))
+          (is (= (:output-schema base-transform) (:output-schema preview)))
+          (is (= (:output-schema base-transform) (:output-schema commit)))
+          (is (nil? (get-in preview [:schema :properties "commit"])))
+          (is (= true (get-in commit [:schema :properties "commit" :const])))
+          (is (some #{"commit"} (:required (:schema commit)))))))))
+
+(deftest effect-catalogs-publish-conservative-mcp-annotations
+  (doseq [catalog [:P :Q :R :S :T]]
+    (testing (name catalog)
+      (let [tools (candidate/catalog-tools catalog)
+            inspect (first tools)
+            mutations (subvec tools 1 4)
+            preview (nth tools 4)
+            transform-commit (nth tools 5)]
+        (is (= true (get-in inspect [:annotations :read-only])))
+        (doseq [tool (conj mutations transform-commit)]
+          (is (= candidate/mutation-annotations
+                 (dissoc (:annotations tool) :title))))
+        (is (= candidate/read-only-annotations
+               (dissoc (:annotations preview) :title))))))
+  (testing "titles can contain Clojure bang syntax without changing MCP names"
+    (let [commit-tools (candidate/catalog-tools :R)
+          bang-tools (candidate/catalog-tools :S)
+          action-tools (candidate/catalog-tools :T)]
+      (is (= "edit_clojure!" (get-in commit-tools [1 :annotations :title])))
+      (is (= "edit_clojure!" (get-in bang-tools [1 :annotations :title])))
+      (is (= "write_clojure_edits!"
+             (get-in action-tools [1 :annotations :title])))
+      (is (nil? (get-in (candidate/catalog-tools :P)
+                        [1 :annotations :title])))
+      (is (nil? (get-in (candidate/catalog-tools :Q)
+                        [1 :annotations :title]))))))
 
 (deftest option-m-classifies-every-pair-and-falsifier
   (let [report (candidate/catalog-report :M)

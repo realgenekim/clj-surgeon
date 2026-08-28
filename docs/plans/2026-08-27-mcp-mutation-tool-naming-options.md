@@ -181,10 +181,124 @@ Test these catalogs first:
    computed-solo language.
 6. O: M with `apply_clojure_edits` and `run_clojure_transform` to test the
    edits-as-data versus program language.
+7. P: effect-first verbs: `commit_clojure_edits`,
+   `commit_clojure_extraction`, `preview_clojure_transform`, and
+   `commit_clojure_transform`.
+8. Q: dotted effect names such as `clojure.edit.commit` and
+   `clojure.transform.preview`.
+9. R: portable `_commit` names with human titles such as `edit_clojure!`.
+10. S: portable `_bang` names with human titles that contain the real `!`.
+11. T: action verbs: `write_clojure_edits`, `move_clojure_owners`,
+    `preview_clojure_transform`, and `apply_clojure_transform`.
 
 Use the same implementation commit, fixtures, output contract, and scorer for
 all catalogs. Change only tool names, descriptions, and the public routing
 projection. Do not install a candidate catalog on the shared MCP server.
+
+MCP tool names permit ASCII letters, digits, underscore, hyphen, and dot.
+They do not permit a literal `!`. Catalogs R and S therefore put the Clojure
+bang in `annotations.title`, not in the canonical tool name.
+
+### Effect annotation audit
+
+The candidate projection uses these conservative annotations:
+
+| Control | `readOnlyHint` | `destructiveHint` | `idempotentHint` | Reason |
+|---|---:|---:|---:|---|
+| Inspect or transform preview | true | false | true | The control does not write source. Repetition has no environmental effect. |
+| Edit, extraction, retained plan, or transform commit | false | true | false | The control can replace or delete source. A refusal or rollback does not remove this capability. |
+
+All projected controls use `openWorldHint=false`. They operate on the local
+workspace, not an external entity. These fields are hints. They do not grant
+authority and do not replace source guards.
+
+The MCP specification defines `destructiveHint=false` as additive-only. A
+source rewrite is not additive-only. The experiment therefore does not label
+guarded or rollback-capable rewrites as non-destructive. It also leaves
+mutations non-idempotent. That is the conservative choice for client retry
+behavior.
+
+Sources:
+
+- https://modelcontextprotocol.io/specification/2025-11-25/schema#toolannotations
+- https://modelcontextprotocol.io/specification/2025-11-25/server/tools#tool-names
+
+### Name truth table
+
+| Shape | Accurate signal | Truth problem |
+|---|---|---|
+| `_commit` | The operation requests a commit. | A safe refusal or successful rollback does not commit. |
+| `_bang` plus a bang title | The operation may mutate. | The convention is clear to Clojure users but can be opaque to other callers. |
+| Dotted names | Namespace and effect compose consistently. | Dots add visual ceremony without explaining the authority boundary. |
+| Action verbs | `write`, `move`, `preview`, and `apply` state the intended effect. | The names are longer, and `apply_clojure_plan` remains valid only for a retained basis. |
+| Title-only bang | A UI can show normal Clojure effect notation. | A caller that sees only the canonical name receives no bang signal. |
+
+The isolated server proves that `tools/list` retains `annotations.title`.
+Codex event traces identify calls by the canonical name. Whether Codex uses
+the title during selection remains an experimental question. The current
+Claude clean harness is CLI-only and cannot answer the title question.
+
+### First-person LLM-user verdict
+
+I want four controls that feel like editor chords:
+
+```text
+inspect ------------------------> show exact evidence
+edit ---------------------------> apply one supplied atomic chord
+extract ------------------------> move exact named owners
+transform with Clojure ---------> compute one bounded solo
+retained plan next call --------> continue only from inspect evidence
+```
+
+`edit_clojure` already feels fast. I can see all supplied literal,
+structural, computed, and delete actions and send one batch. I would not
+rename that proven control only to make the names symmetrical.
+
+`transform_clojure_with_clojure` makes the computed solo explicit. I still
+hesitate when `edit_clojure` accepts a programs-only request, because that
+request overlaps the standalone transform. Reserve a standalone program for
+transform. Permit an edit program only when it composes with another action.
+
+`extract_clojure` should finish a mechanically complete extraction in one
+call. A genuine unknown can refuse before write and return an exact retry.
+Do not insert a public plan call into the complete route.
+
+I should never freely select `apply_clojure_plan`. I should call it only from
+an exact `inspect_clojure` next call with a retained basis. This constraint is
+more important than the plan tool's name.
+
+Catalog T is the clearest effect-signaling challenger. `move_clojure_owners`
+and `preview_clojure_transform` tell me what the controls do. Catalog N is the
+strongest minimal vocabulary because it preserves `edit_clojure` and names
+the computed rule directly. Test N and T before `_commit`, dotted, or `_bang`
+variants.
+
+### Isolated harness commands
+
+Run the no-model identity suite:
+
+```bash
+clojure -Sdeps '{:paths ["src" "dev/experiments"]}' \
+  -M:clj-surgeon/mcp \
+  -m clj-surgeon.experiments.mcp-candidate-catalog-test
+```
+
+Select a fresh Codex catalog with `BENCH_MCP_CANDIDATE_CATALOG`. For example:
+
+```bash
+BENCH_MCP_CANDIDATE_CATALOG=N \
+BENCH_PRE_COMMIT=HEAD BENCH_POST_COMMIT=HEAD \
+BENCH_RUN_MATRIX='mcp:mcp-extraction-tool-first-no-skill' \
+BENCH_TASKS=sessionize-format-extraction \
+BENCH_INCLUDE_COMPACT=false BENCH_REPLICATES=1 BENCH_PARALLELISM=1 \
+BENCH_MODEL=gpt-5.6-sol BENCH_REASONING=high \
+BENCH_RESULT_DIR=/tmp/clj-surgeon-catalog-N-sol \
+bash bench/run_clean_codex.sh
+```
+
+Use T instead of N for the action-verb challenger. The harness starts an
+isolated candidate-owned MCP server. It does not install or reload the shared
+server.
 
 ### Frozen task strata
 
@@ -195,7 +309,7 @@ Use at least three tasks in each stratum:
 | Exact known nested or multi-file edits | Compact editor |
 | Exact insertion, owner deletion, local rename, or map update | Compact editor after the schema boundary supports it |
 | Prepared basis with filled decisions | Semantic-plan tool |
-| Direct extraction with mechanically derivable facts | Semantic-plan tool |
+| Direct extraction with mechanically derivable facts | Extraction tool |
 | Project verification that must roll back on failure | Semantic-plan tool |
 | Prose or arbitrary non-structural text edit | Neither Surgeon mutation tool |
 
