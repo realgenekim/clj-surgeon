@@ -234,7 +234,9 @@ fixture, scorer, and Anvil seat.
 | Order | Catalog | Wall | Outcome |
 |---:|---|---:|---|
 | 1 | U | 34.392s | pass: one call, no reads or shell |
+| 2 | W | 43.607s | pass: one call, no reads or shell |
 
 This first U observation is slower than its earlier distribution. The paired
 W observations determine whether this is catalog behavior or current service
-conditions; it is not compared to the older median in isolation.
+conditions; it is not compared to the older median in isolation. In the first
+paired position, U leads W by 9.215s.
