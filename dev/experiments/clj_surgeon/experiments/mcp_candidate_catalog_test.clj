@@ -17,7 +17,7 @@
 (deftest catalog-name-validation
   (is (= :A (candidate/normalize-catalog :A)))
   (is (= :L (candidate/normalize-catalog "L")))
-  (is (= [:A :L :C :M :N] candidate/supported-catalogs))
+  (is (= [:A :L :C :M :N :O] candidate/supported-catalogs))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Unsupported MCP candidate catalog"
                         (candidate/normalize-catalog :unknown))))
@@ -91,11 +91,11 @@
     (is (<= split-size base-size)
         {:base base-size :split split-size})))
 
-(deftest data-versus-program-aliases-preserve-split-catalog
+(deftest atomic-chord-aliases-preserve-split-catalog
   (let [split (candidate/catalog-tools :M)
         aliased (candidate/catalog-tools :N)]
-    (is (= ["inspect_clojure" "apply_clojure_edits" "extract_clojure"
-            "apply_clojure_plan" "run_clojure_transform"]
+    (is (= ["inspect_clojure" "edit_clojure" "extract_clojure"
+            "apply_clojure_plan" "transform_clojure_with_clojure"]
            (mapv :name aliased)))
     (is (= (mapv :schema split) (mapv :schema aliased)))
     (is (every? true? (map identical?
@@ -103,6 +103,35 @@
                            (map :tool-fn aliased))))
     (is (= (get-in (candidate/schema-characters split) [:total])
            (get-in (candidate/schema-characters aliased) [:total])))))
+
+(deftest data-versus-program-aliases-preserve-split-catalog
+  (let [split (candidate/catalog-tools :M)
+        aliased (candidate/catalog-tools :O)]
+    (is (= ["inspect_clojure" "apply_clojure_edits" "extract_clojure"
+            "apply_clojure_plan" "run_clojure_transform"]
+           (mapv :name aliased)))
+    (is (= (mapv :schema split) (mapv :schema aliased)))
+    (is (every? true? (map identical?
+                           (map :tool-fn split)
+                           (map :tool-fn aliased))))))
+
+(deftest option-m-classifies-every-pair-and-falsifier
+  (let [report (candidate/catalog-report :M)
+        {:keys [controls overlap-matrix falsifier-cards]}
+        (:orthogonality report)
+        pairs (map :pair overlap-matrix)]
+    (is (= 5 (count controls)))
+    (is (= 10 (count pairs)))
+    (is (= 10 (count (set (map set pairs)))))
+    (is (every? :classification overlap-matrix))
+    (is (= :defect
+           (:classification
+             (some #(when (= [:edit :transform] (:pair %)) %)
+                   overlap-matrix))))
+    (is (= #{:standalone-program :mixed-computed-chord :complete-extraction
+             :ambiguous-extraction :complete-edit-with-exact-verification
+             :retained-basis :invented-plan}
+           (set (map :id falsifier-cards))))))
 
 (deftest isolated-start-projects-the-selected-catalog
   (let [observed (atom nil)]

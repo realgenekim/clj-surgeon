@@ -560,9 +560,9 @@ candidate_catalog=${BENCH_MCP_CANDIDATE_CATALOG:-}
 setup_root=""
 
 case "$candidate_catalog" in
-  ""|A|L|C|M|N) ;;
+  ""|A|L|C|M|N|O) ;;
   *)
-    echo "BENCH_MCP_CANDIDATE_CATALOG must be A, L, C, M, or N: $candidate_catalog" >&2
+    echo "BENCH_MCP_CANDIDATE_CATALOG must be A, L, C, M, N, or O: $candidate_catalog" >&2
     exit 2
     ;;
 esac
