@@ -102,8 +102,9 @@ public extraction name as the first selected tool.
 | 4 | X | `move_clojure_forms` | 28.216s | pass: one call, no reads or shell |
 | 5 | X | `move_clojure_forms` | 35.119s | pass: one call, no reads or shell |
 | 6 | W | `extract_clojure` | 31.970s | pass: one call, no reads or shell |
+| 7 | V | `apply_clojure_extraction` | 27.652s | pass: one call, no reads or shell |
 
-The remaining mirrored order is V, U. A DNF is retained and the
+The remaining mirrored order is U. A DNF is retained and the
 tournament continues; one losing arm no longer stops collection of independent
 options.
 
@@ -113,9 +114,10 @@ W currently leads the valid full-edit arms with a two-run midpoint of 28.326s
 (24.681s, 31.970s). X follows at 31.668s (28.216s, 35.119s), an absolute gap of
 3.342s. U has one valid 29.026s observation pending its mirror. W's midpoint is
 6.511s slower than the best replicated Surgeon route and 93.952s faster than
-native. V's explicit noun did
-not help its first caller: Sol selected the compact editor first, received a
-safe refusal, then recovered through `apply_clojure_extraction`. These are real
+native. V is now split: its mirror finished in one clean call at 27.652s, but
+its first caller selected the compact editor first, received a safe refusal,
+then recovered through `apply_clojure_extraction`. Its 1/2 one-shot rate keeps
+it below every 2/2 arm regardless of the fast successful observation. These are real
 observations, but no release verdict is valid until the mirrored calls complete.
 
 The larger architectural win is already durable. A catalog variant is now an
