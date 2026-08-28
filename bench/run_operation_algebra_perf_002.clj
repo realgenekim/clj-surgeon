@@ -221,7 +221,10 @@
           reference-output (:parsed (first warmups))
           all-rows (concat warmups rows)
           output-parity (every? #(= reference-output (:parsed %)) all-rows)
-          blocked-invocations (-> (slurp blocked-events) str/split-lines count)
+          blocked-invocations (->> (slurp blocked-events)
+                                   str/split-lines
+                                   (remove str/blank?)
+                                   count)
           pre-summary (summarize pre-rows)
           post-summary (summarize post-rows)
           p50-regression (regression-percent (:p50-ms pre-summary)
