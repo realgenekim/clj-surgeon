@@ -4,7 +4,7 @@ Read and follow [CLAUDE.md](CLAUDE.md) before making changes. It is the
 canonical repository instruction file for all coding agents, regardless of
 vendor or runtime.
 
-Its Clojure routing and deferred-cclsp discovery rules apply before native
+Its Clojure routing and Surgeon-owned semantic escalation rules apply before native
 Read, Edit, grep, sed, or cat touches existing source. Load the working-tree
 skill before acting.
 

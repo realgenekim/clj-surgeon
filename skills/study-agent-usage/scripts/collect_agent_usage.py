@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA = "clj-surgeon.agent-usage-ethnography.v3"
+SCHEMA = "clj-surgeon.agent-usage-ethnography.v4"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
@@ -230,12 +230,233 @@ def collapse_route_actions(actions: list[dict]) -> list[dict]:
     return phases
 
 
+def first_route_kind(kinds: list[str]) -> str:
+    """Return one stable clock lane without retaining a command or payload."""
+    return kinds[0] if kinds else "shell"
+
+
+def safe_item_status(value: object) -> str | None:
+    rendered = str(value or "").lower()
+    return rendered if rendered in {
+        "cancelled", "completed", "declined", "failed", "in_progress"
+    } else None
+
+
+def completed_item_clock_sample(payload: dict) -> dict | None:
+    """Compile one Codex completed item into privacy-safe timing evidence."""
+    item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+    item_type = str(item.get("type") or "")
+    started_at_ms = payload.get("started_at_ms")
+    completed_at_ms = payload.get("completed_at_ms")
+    if not isinstance(started_at_ms, (int, float)) or not isinstance(completed_at_ms, (int, float)):
+        return None
+    if completed_at_ms < started_at_ms:
+        return None
+
+    sample = {
+        "kind": "other-tool",
+        "started_at_ms": round(started_at_ms),
+        "completed_at_ms": round(completed_at_ms),
+    }
+    status = safe_item_status(item.get("status"))
+    if status:
+        sample["status"] = status
+
+    if item_type == "Reasoning":
+        sample["kind"] = "model-reasoning"
+    elif item_type == "AgentMessage":
+        sample["kind"] = "model-message"
+        phase = str(item.get("phase") or "").lower()
+        if phase in {"commentary", "final"}:
+            sample["phase"] = phase
+    elif item_type == "McpToolCall":
+        server = str(item.get("server") or "")
+        tool = str(item.get("tool") or "")
+        sample["transport"] = "mcp"
+        if server == "clj-surgeon":
+            if tool == "inspect_clojure":
+                sample["kind"] = "surgeon-read"
+            elif tool in {"apply_clojure_changes", "edit_clojure"}:
+                sample["kind"] = "surgeon-apply"
+            else:
+                sample["kind"] = "surgeon-plan"
+            if tool in {
+                "apply_clojure_changes", "edit_clojure", "inspect_clojure",
+                "transform_clojure"
+            }:
+                sample["operation"] = tool
+        elif server == "cclsp":
+            sample["kind"] = "semantic-read"
+            if tool in {
+                "find_references", "inspect_runtime", "resolve_var_surface",
+                "resolve_var_surfaces"
+            }:
+                sample["operation"] = tool
+        elif server == "director-progress":
+            sample["kind"] = "coordination"
+        else:
+            sample["kind"] = "other-tool"
+    elif item_type == "CommandExecution":
+        command = item.get("command")
+        if isinstance(command, list):
+            command = " ".join(str(value) for value in command)
+        command = str(command or "")
+        kinds = route_kinds(command, "shell")
+        sample["kind"] = first_route_kind(kinds)
+        matches = list(SURGEON_RE.finditer(command))
+        operations = sorted({match.group(1) or ":help" for match in matches})
+        sample["transport"] = "cli" if matches else "shell"
+        if matches:
+            sample["invocation_count"] = len(matches)
+        if len(operations) == 1:
+            sample["operation"] = operations[0]
+    elif item_type == "FileChange":
+        sample["kind"] = "native-patch"
+        sample["transport"] = "native"
+    elif item_type == "UserMessage":
+        sample["kind"] = "human-input"
+    elif item_type == "ContextCompaction":
+        sample["kind"] = "context-compaction"
+    elif item_type in {"CollabAgentToolCall", "SubAgentActivity"}:
+        sample["kind"] = "collaboration"
+    return sample
+
+
+def merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged = []
+    for start, end in sorted(intervals):
+        if end <= start:
+            continue
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def interval_coverage(intervals: list[tuple[int, int]]) -> int:
+    return sum(end - start for start, end in merge_intervals(intervals))
+
+
+def clipped_kind_coverage(items: list[dict], kind: str, start: int, end: int) -> int:
+    return interval_coverage([
+        (max(start, item["_start_ms"]), min(end, item["_end_ms"]))
+        for item in items
+        if item["kind"] == kind and item["_end_ms"] > start and item["_start_ms"] < end
+    ])
+
+
+def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_end_ms: int) -> list[dict]:
+    """Measure Surgeon completion to the caller's next externally visible act."""
+    endpoint_kinds = {
+        "collaboration", "coordination", "human-input", "model-message",
+        "native-patch", "native-read", "other-tool", "semantic-read", "shell",
+        "surgeon-apply", "surgeon-plan", "surgeon-read", "verify",
+    }
+    boundaries = []
+    for item in items:
+        if not item["kind"].startswith("surgeon-"):
+            continue
+        endpoint = next((
+            candidate for candidate in items
+            if candidate["kind"] in endpoint_kinds
+            and candidate["_start_ms"] >= item["_end_ms"]
+            and candidate is not item
+        ), None)
+        boundary_end = endpoint["_start_ms"] if endpoint else turn_end_ms
+        boundary_start = item["_end_ms"]
+        result = {
+            "offset_ms": item["_start_ms"] - turn_start_ms,
+            "operation": item.get("operation"),
+            "transport": item.get("transport"),
+            "status": item.get("status"),
+            "tool_wall_ms": item["_end_ms"] - item["_start_ms"],
+            "boundary_ms": max(0, boundary_end - boundary_start),
+            "model_reasoning_ms": clipped_kind_coverage(
+                items, "model-reasoning", boundary_start, boundary_end
+            ),
+            "model_message_ms": clipped_kind_coverage(
+                items, "model-message", boundary_start, boundary_end
+            ),
+            "next_kind": endpoint["kind"] if endpoint else "turn-end",
+        }
+        if endpoint and endpoint.get("operation"):
+            result["next_operation"] = endpoint["operation"]
+        if endpoint and endpoint.get("transport"):
+            result["next_transport"] = endpoint["transport"]
+        boundaries.append({key: value for key, value in result.items() if value is not None})
+    return boundaries
+
+
+def compile_event_clock(started_at: str, duration_ms: int, samples: list[dict]) -> dict:
+    """Build an ordered measured-item and unattributed-gap clock for one turn."""
+    turn_start_ms = round(parse_time(started_at).timestamp() * 1000)
+    turn_end_ms = turn_start_ms + max(0, int(duration_ms or 0))
+    bounded = []
+    for sample in samples:
+        start = max(turn_start_ms, min(turn_end_ms, sample["started_at_ms"]))
+        end = max(start, min(turn_end_ms, sample["completed_at_ms"]))
+        item = {
+            key: value
+            for key, value in sample.items()
+            if key not in {"started_at_ms", "completed_at_ms"}
+        }
+        item["offset_ms"] = start - turn_start_ms
+        item["wall_ms"] = end - start
+        item["_end_ms"] = end
+        item["_start_ms"] = start
+        bounded.append(item)
+    bounded.sort(key=lambda item: (item["_start_ms"], item["_end_ms"], item["kind"]))
+
+    items = []
+    cursor = turn_start_ms
+    by_kind = Counter()
+    for item in bounded:
+        if item["_start_ms"] > cursor:
+            items.append({
+                "kind": "unattributed-gap",
+                "offset_ms": cursor - turn_start_ms,
+                "wall_ms": item["_start_ms"] - cursor,
+            })
+        public_item = {
+            key: value for key, value in item.items() if not key.startswith("_")
+        }
+        items.append(public_item)
+        by_kind[public_item["kind"]] += public_item["wall_ms"]
+        cursor = max(cursor, item["_end_ms"])
+    if cursor < turn_end_ms:
+        items.append({
+            "kind": "unattributed-gap",
+            "offset_ms": cursor - turn_start_ms,
+            "wall_ms": turn_end_ms - cursor,
+        })
+
+    measured_intervals = merge_intervals([
+        (item["_start_ms"], item["_end_ms"]) for item in bounded
+    ])
+    measured_coverage_ms = interval_coverage(measured_intervals)
+    unattributed_wall_ms = max(0, turn_end_ms - turn_start_ms - measured_coverage_ms)
+    duration = max(0, turn_end_ms - turn_start_ms)
+    return {
+        "items": items,
+        "by_kind_ms": dict(sorted(by_kind.items())),
+        "measured_coverage_ms": measured_coverage_ms,
+        "unattributed_wall_ms": unattributed_wall_ms,
+        "coverage_ratio": round(measured_coverage_ms / duration, 4) if duration else None,
+        "post_surgeon_boundaries": compile_post_surgeon_boundaries(
+            bounded, turn_start_ms, turn_end_ms
+        ),
+    }
+
+
 def finalize_turn(turn: dict) -> dict:
     result = dict(turn)
     samples = result.pop("clj_surgeon_action_wall_ms")
     prompts = result.pop("_user_messages")
     final_message = result.pop("_final_message")
     route_actions = result.pop("_route_actions")
+    clock_samples = result.pop("_clock_samples")
+    result.pop("_turn_id")
     prompt_text = "\n\n".join(prompts)
     result["clj_surgeon_action_wall"] = distribution(samples)
     duration = result.get("duration_ms") or 0
@@ -246,6 +467,9 @@ def finalize_turn(turn: dict) -> dict:
     result["final_message_sha256"] = hashlib.sha256(final_message.encode("utf-8")).hexdigest()
     result["commit_candidates"] = sorted(set(re.findall(r"(?<![0-9a-f])([0-9a-f]{7,40})(?![0-9a-f])", final_message)))
     result["route_phases"] = collapse_route_actions(route_actions)
+    result["event_clock"] = compile_event_clock(
+        result["started_at"], result.get("duration_ms") or 0, clock_samples
+    )
     return result
 
 
@@ -432,6 +656,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
             event_payload = event.get("payload") or {}
             if event_payload.get("type") == "task_started":
                 current_turn = {
+                    "_turn_id": str(event_payload.get("turn_id") or ""),
                     "turn_key": stable_key(str(event_payload.get("turn_id") or timestamp)),
                     "started_at": iso_time(timestamp),
                     "completed": False,
@@ -443,6 +668,7 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                     "_user_messages": [],
                     "_final_message": "",
                     "_route_actions": [],
+                    "_clock_samples": [],
                 }
             elif event_payload.get("type") == "task_complete" and current_turn:
                 current_turn["completed"] = True
@@ -454,6 +680,12 @@ def analyze_codex_file(path: Path, since: datetime, until: datetime) -> dict | N
                 message = str(event_payload.get("message") or "")
                 if message and not message.startswith("<environment_context>"):
                     current_turn["_user_messages"].append(message)
+            elif event_payload.get("type") == "item_completed" and current_turn:
+                item_turn_id = str(event_payload.get("turn_id") or "")
+                if not item_turn_id or item_turn_id == current_turn["_turn_id"]:
+                    sample = completed_item_clock_sample(event_payload)
+                    if sample:
+                        current_turn["_clock_samples"].append(sample)
             continue
         if event.get("type") != "response_item":
             continue
@@ -659,6 +891,11 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
     route_action_kinds = Counter()
     cclsp_methods = Counter()
     refusal_types = Counter()
+    clock_item_wall_by_kind = Counter()
+    post_surgeon_boundary_wall = []
+    post_surgeon_reasoning_wall = []
+    post_surgeon_endpoints = Counter()
+    post_surgeon_transports = Counter()
     surgeon_wall = []
     native_patch_wall = []
     for session in relevant:
@@ -672,6 +909,14 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         for phase in session["route_phases"]:
             for kind in phase["kinds"]:
                 route_action_kinds[kind] += phase["actions"]
+        for turn in session["task_turns"]:
+            clock = turn.get("event_clock") or {}
+            clock_item_wall_by_kind.update(clock.get("by_kind_ms") or {})
+            for boundary in clock.get("post_surgeon_boundaries") or []:
+                post_surgeon_boundary_wall.append(boundary.get("boundary_ms") or 0)
+                post_surgeon_reasoning_wall.append(boundary.get("model_reasoning_ms") or 0)
+                post_surgeon_endpoints[boundary.get("next_kind") or "unknown"] += 1
+                post_surgeon_transports[boundary.get("transport") or "unknown"] += 1
     return {
         "provider": provider,
         "sessions_in_window": len(sessions),
@@ -694,6 +939,11 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         "cclsp_methods": dict(sorted(cclsp_methods.items())),
         "route_features": dict(sorted(route_features.items())),
         "route_action_kinds": dict(sorted(route_action_kinds.items())),
+        "event_clock_item_wall_by_kind_ms": dict(sorted(clock_item_wall_by_kind.items())),
+        "post_surgeon_boundary_wall": distribution(post_surgeon_boundary_wall),
+        "post_surgeon_reasoning_wall": distribution(post_surgeon_reasoning_wall),
+        "post_surgeon_endpoints": dict(sorted(post_surgeon_endpoints.items())),
+        "post_surgeon_transports": dict(sorted(post_surgeon_transports.items())),
         "native_clojure_actions": dict(sorted(native.items())),
         "bounded_clojure_reads": sum(s["bounded_clojure_reads"] for s in relevant),
         "unbounded_clojure_reads": sum(s["unbounded_clojure_reads"] for s in relevant),
@@ -1023,6 +1273,50 @@ def self_test() -> int:
     assert js_tool_methods(
         'tools.mcp__clj-surgeon__inspect_clojure({})'
     ) == {"mcp__clj-surgeon__inspect_clojure"}
+    clock_start = "2026-08-05T00:00:00Z"
+    clock_start_ms = round(parse_time(clock_start).timestamp() * 1000)
+    overlap_clock = compile_event_clock(clock_start, 1000, [
+        {
+            "kind": "model-reasoning",
+            "started_at_ms": clock_start_ms - 100,
+            "completed_at_ms": clock_start_ms + 600,
+        },
+        {
+            "kind": "other-tool",
+            "started_at_ms": clock_start_ms + 500,
+            "completed_at_ms": clock_start_ms + 1200,
+        },
+    ])
+    assert overlap_clock["measured_coverage_ms"] == 1000
+    assert overlap_clock["unattributed_wall_ms"] == 0
+    assert overlap_clock["coverage_ratio"] == 1.0
+    assert overlap_clock["by_kind_ms"] == {
+        "model-reasoning": 600,
+        "other-tool": 500,
+    }
+    cli_sample = completed_item_clock_sample({
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+        "item": {
+            "type": "CommandExecution",
+            "command": "~/bin/clj-surgeon :op :cat :file /PRIVATE/CLI/PATH.clj :form f",
+            "cwd": "/PRIVATE/CWD",
+            "stdout": "PRIVATE_STDOUT",
+        },
+    })
+    assert cli_sample == {
+        "kind": "surgeon-read",
+        "operation": ":cat",
+        "transport": "cli",
+        "invocation_count": 1,
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+    }
+    assert completed_item_clock_sample({
+        "started_at_ms": 2,
+        "completed_at_ms": 1,
+        "item": {"type": "Reasoning"},
+    }) is None
     with tempfile.TemporaryDirectory(prefix="study-agent-usage-") as tmp:
         root = Path(tmp)
         observations = root / "docs" / "observations"
@@ -1037,6 +1331,9 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T00:59:00Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "turn-1"}},
                 {"timestamp": "2026-08-05T00:59:30Z", "type": "event_msg", "payload": {"type": "user_message", "message": "private service goal"}},
                 {"timestamp": "2026-08-05T01:00:00Z", "type": "response_item", "payload": {"type": "message", "role": "developer", "content": "clj-surgeon:"}},
+                {"timestamp": "2026-08-05T01:00:15Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891610000, "completed_at_ms": 1785891615000, "item": {"type": "Reasoning", "summary_text": "PRIVATE_REASONING_CANARY", "raw_content": "PRIVATE_RAW_CANARY"}}},
+                {"timestamp": "2026-08-05T01:00:20.200Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891620000, "completed_at_ms": 1785891620200, "item": {"type": "McpToolCall", "server": "clj-surgeon", "tool": "inspect_clojure", "arguments": {"workspace_root": "/PRIVATE/CLOCK/PATH"}, "result": "PRIVATE_RESULT_CANARY", "status": "completed"}}},
+                {"timestamp": "2026-08-05T01:00:22Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891621000, "completed_at_ms": 1785891622000, "item": {"type": "AgentMessage", "phase": "commentary", "content": "PRIVATE_MESSAGE_CANARY"}}},
                 {"timestamp": "2026-08-05T01:01:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c1", "name": "exec", "input": "await tools.exec_command({cmd:\"cat /x/clj-surgeon/SKILL.md\"})"}},
                 {"timestamp": "2026-08-05T01:02:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c2", "name": "exec", "input": "await tools.exec_command({cmd:\"clj-surgeon :op :cat :file src/app.clj :form f\"})"}},
                 {"timestamp": "2026-08-05T01:03:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c3", "name": "exec", "input": "await tools.apply_patch(\"*** src/other.clj\\n+ docs say clj-surgeon :op :xray\")"}},
@@ -1110,6 +1407,36 @@ def self_test() -> int:
         ]
         assert all(phase["actions"] == 1 for phase in codex_phases)
         assert codex["sessions"][0]["task_turns"][0]["route_phases"] == codex_phases
+        clock = codex["sessions"][0]["task_turns"][0]["event_clock"]
+        assert [item["kind"] for item in clock["items"][:5]] == [
+            "unattributed-gap", "model-reasoning", "unattributed-gap",
+            "surgeon-read", "unattributed-gap"
+        ]
+        assert [item["wall_ms"] for item in clock["items"][:5]] == [70000, 5000, 5000, 200, 800]
+        assert clock["items"][3]["operation"] == "inspect_clojure"
+        assert clock["items"][3]["status"] == "completed"
+        assert clock["by_kind_ms"]["model-reasoning"] == 5000
+        assert clock["by_kind_ms"]["surgeon-read"] == 200
+        assert clock["measured_coverage_ms"] == 6200
+        assert clock["unattributed_wall_ms"] == 293800
+        assert clock["coverage_ratio"] == 0.0207
+        assert clock["post_surgeon_boundaries"] == [{
+            "offset_ms": 80000,
+            "operation": "inspect_clojure",
+            "transport": "mcp",
+            "status": "completed",
+            "tool_wall_ms": 200,
+            "boundary_ms": 800,
+            "model_reasoning_ms": 0,
+            "model_message_ms": 0,
+            "next_kind": "model-message",
+        }]
+        assert codex["post_surgeon_boundary_wall"]["median_ms"] == 800
+        assert codex["post_surgeon_transports"] == {"mcp": 1}
+        rendered_clock = render_event_clock_receipt(receipt, top=1, minimum_ms=0)
+        assert "model-reasoning" in rendered_clock
+        assert "surgeon-read · mcp inspect_clojure completed" in rendered_clock
+        assert "PRIVATE_" not in rendered_clock
         assert claude["clj_surgeon_ops"] == {":xray": 1}
         assert claude["activation_trigger_visible_sessions"] == 0
         assert claude["skill_loads"] == 1
@@ -1155,6 +1482,11 @@ def self_test() -> int:
         assert receipt["services"]["cclsp_and_clojure_lsp"]["workspace_count"] == 1
         assert "/private/workspace" not in json.dumps(receipt)
         assert "private service goal" not in json.dumps(receipt)
+        assert "PRIVATE_REASONING_CANARY" not in json.dumps(receipt)
+        assert "PRIVATE_RAW_CANARY" not in json.dumps(receipt)
+        assert "PRIVATE_RESULT_CANARY" not in json.dumps(receipt)
+        assert "PRIVATE_MESSAGE_CANARY" not in json.dumps(receipt)
+        assert "/PRIVATE/CLOCK/PATH" not in json.dumps(receipt)
     print("study-agent-usage self-test passed")
     return 0
 
@@ -1182,6 +1514,28 @@ def parser() -> argparse.ArgumentParser:
         "--full",
         action="store_true",
         help="Also emit the complete receipt on stdout instead of the compact summary",
+    )
+    result.add_argument(
+        "--render-receipt",
+        help="Render privacy-safe Codex event clocks from an existing receipt",
+    )
+    result.add_argument("--session-key", help="Render only one hashed session key")
+    result.add_argument("--turn-key", help="Render only one hashed task-turn key")
+    result.add_argument(
+        "--timeline-top", type=int, default=5,
+        help="Maximum turns to render when --turn-key is absent (default: 5)",
+    )
+    result.add_argument(
+        "--timeline-minimum-ms", type=int, default=250,
+        help="Hide non-Surgeon timeline items shorter than this wall (default: 250)",
+    )
+    result.add_argument(
+        "--timeline-around-surgeon", type=int, default=0,
+        help="Show only N neighboring clock items around each Surgeon item",
+    )
+    result.add_argument(
+        "--all-turns", action="store_true",
+        help="Include turns with no Surgeon call in event-clock rendering",
     )
     result.add_argument("--pretty", action="store_true")
     result.add_argument("--self-test", action="store_true")
@@ -1213,6 +1567,10 @@ def compact_summary(receipt: dict, receipt_path: Path) -> dict:
             "clj_surgeon_calls": provider.get("clj_surgeon_calls", 0),
             "clj_surgeon_ops": provider.get("clj_surgeon_ops", {}),
             "route_action_kinds": provider.get("route_action_kinds", {}),
+            "post_surgeon_boundary_wall": provider.get("post_surgeon_boundary_wall", {}),
+            "post_surgeon_reasoning_wall": provider.get("post_surgeon_reasoning_wall", {}),
+            "post_surgeon_endpoints": provider.get("post_surgeon_endpoints", {}),
+            "post_surgeon_transports": provider.get("post_surgeon_transports", {}),
         }
     return {
         "status": receipt.get("status"),
@@ -1226,10 +1584,148 @@ def compact_summary(receipt: dict, receipt_path: Path) -> dict:
     }
 
 
+def concise_duration(milliseconds: int | float) -> str:
+    value = max(0, float(milliseconds or 0))
+    if value < 1000:
+        return f"{round(value)}ms"
+    if value < 60000:
+        return f"{value / 1000:.3f}s"
+    return f"{int(value // 60000)}m{(value % 60000) / 1000:05.2f}s"
+
+
+def render_event_clock_receipt(
+    receipt: dict,
+    *,
+    top: int = 5,
+    minimum_ms: int = 250,
+    session_key: str | None = None,
+    turn_key: str | None = None,
+    all_turns: bool = False,
+    around_surgeon: int = 0,
+) -> str:
+    """Render only privacy-safe clock fields from one completed receipt."""
+    candidates = []
+    for session in receipt.get("providers", {}).get("codex", {}).get("sessions", []):
+        if session_key and session.get("session_key") != session_key:
+            continue
+        for turn in session.get("task_turns", []):
+            if turn_key and turn.get("turn_key") != turn_key:
+                continue
+            if not all_turns and not turn.get("clj_surgeon_calls"):
+                continue
+            if turn.get("event_clock"):
+                candidates.append((session.get("session_key"), turn))
+    candidates.sort(key=lambda value: value[1].get("duration_ms") or 0, reverse=True)
+    if not turn_key:
+        candidates = candidates[:max(1, top)]
+
+    lines = [
+        f"Agent event clock · {receipt.get('window', {}).get('since')} → {receipt.get('window', {}).get('until')}",
+        "Measured reasoning is a Codex Reasoning item. Unattributed gaps can include inference, scheduling, transport, serialization, logging, or UI delay.",
+        "",
+    ]
+    if not candidates:
+        lines.append("No matching Codex turns with event-clock evidence.")
+        return "\n".join(lines)
+
+    for candidate_session_key, turn in candidates:
+        clock = turn["event_clock"]
+        by_kind = clock.get("by_kind_ms", {})
+        surgeon_ms = sum(by_kind.get(kind, 0) for kind in (
+            "surgeon-read", "surgeon-plan", "surgeon-apply"
+        ))
+        model_ms = by_kind.get("model-reasoning", 0) + by_kind.get("model-message", 0)
+        lines.extend([
+            f"session {candidate_session_key} · turn {turn.get('turn_key')} · {'complete' if turn.get('completed') else 'bounded-incomplete'}",
+            "  " + " · ".join([
+                f"wall {concise_duration(turn.get('duration_ms') or 0)}",
+                f"model items {concise_duration(model_ms)}",
+                f"Surgeon {concise_duration(surgeon_ms)}",
+                f"unattributed {concise_duration(clock.get('unattributed_wall_ms') or 0)}",
+                f"coverage {100 * (clock.get('coverage_ratio') or 0):.1f}%",
+            ]),
+        ])
+        clock_items = clock.get("items", [])
+        focus_indices = None
+        if around_surgeon > 0:
+            surgeon_indices = [
+                index for index, item in enumerate(clock_items)
+                if str(item.get("kind", "")).startswith("surgeon-")
+            ]
+            focus_indices = {
+                neighbor
+                for index in surgeon_indices
+                for neighbor in range(
+                    max(0, index - around_surgeon),
+                    min(len(clock_items), index + around_surgeon + 1),
+                )
+            }
+        omitted_count = 0
+        omitted_wall = 0
+        last_shown_index = None
+        for index, item in enumerate(clock_items):
+            keep = (
+                index in focus_indices if focus_indices is not None else (
+                    item.get("wall_ms", 0) >= minimum_ms
+                    or str(item.get("kind", "")).startswith("surgeon-")
+                    or item.get("kind") == "semantic-read"
+                )
+            )
+            if not keep:
+                omitted_count += 1
+                omitted_wall += item.get("wall_ms", 0)
+                continue
+            if last_shown_index is None and index:
+                lines.append(f"  … {index} earlier clock items omitted")
+            elif last_shown_index is not None and index > last_shown_index + 1:
+                lines.append(
+                    f"  … {index - last_shown_index - 1} intervening clock items omitted"
+                )
+            detail = item.get("operation")
+            if item.get("transport"):
+                detail = f"{item['transport']} {detail or ''}".strip()
+            if item.get("invocation_count", 0) > 1:
+                detail = f"{detail or ''} x{item['invocation_count']}".strip()
+            if item.get("status"):
+                detail = f"{detail or ''} {item['status']}".strip()
+            if item.get("phase"):
+                detail = f"{detail or ''} {item['phase']}".strip()
+            suffix = f" · {detail}" if detail else ""
+            lines.append(
+                f"  +{concise_duration(item.get('offset_ms') or 0):>9}  "
+                f"{concise_duration(item.get('wall_ms') or 0):>9}  "
+                f"{item.get('kind')}{suffix}"
+            )
+            last_shown_index = index
+        if last_shown_index is not None and last_shown_index < len(clock_items) - 1:
+            lines.append(
+                f"  … {len(clock_items) - last_shown_index - 1} later clock items omitted"
+            )
+        if omitted_count:
+            lines.append(
+                f"  … {omitted_count} items below {minimum_ms}ms omitted "
+                f"({concise_duration(omitted_wall)} combined raw item wall)"
+            )
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
 def main() -> int:
     args = parser().parse_args()
     if args.self_test:
         return self_test()
+    if args.render_receipt:
+        receipt = json.loads(Path(args.render_receipt).expanduser().read_text(encoding="utf-8"))
+        print(render_event_clock_receipt(
+            receipt,
+            top=args.timeline_top,
+            minimum_ms=args.timeline_minimum_ms,
+            session_key=args.session_key,
+            turn_key=args.turn_key,
+            all_turns=args.all_turns,
+            around_surgeon=args.timeline_around_surgeon,
+        ))
+        return 0
     receipt = collect(args)
     receipt_path = Path(args.receipt_out).expanduser() if args.receipt_out else default_receipt_path(receipt)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)

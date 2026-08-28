@@ -40,4 +40,8 @@
   with the source transaction.
 - If the MCP tools are unavailable, use the installed `clj-surgeon` CLI when
   its structural operation materially helps. Otherwise use native tools.
+- Direct cclsp and clojure-lsp MCP clients are retired. Do not discover,
+  register, start, or call them from an agent session. Use `inspect_clojure`
+  preparation for semantic questions; Surgeon owns bounded provider
+  escalation behind its public contract.
 <!-- END CLJ-SURGEON ROUTING v:1 -->

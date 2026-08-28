@@ -46,7 +46,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -60,6 +60,7 @@ help:
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Reload live Clojure and publish changed tool schemas"
 	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
+	@echo "  make cclsp-client-audit        Refuse direct repo cclsp registrations and launchers"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
 	@echo "  make mcp-status                Check both hot MCPs, nREPL, and Codex registration"
 	@echo "  make workspace-mcp-onboard WORKSPACE=/repo  Compatibility alias for clj-surgeon up"
@@ -76,6 +77,7 @@ help:
 	@echo "  make install-dev               Branch-live CLI and skill links (development only)"
 	@echo "  make nrepl                     Start bb nREPL"
 	@echo "  make study-agent-usage         Join agent routes with Surgeon, cclsp, and LSP telemetry"
+	@echo "  make study-agent-timeline      Render model/tool/gap clocks from RECEIPT=/path/to/receipt.json"
 	@echo "  make study-agent-usage-self-test Test the bounded cross-agent history collector"
 	@echo "  make benchmark-clean-codex     Run the 32-session clean Codex benchmark"
 	@echo "  make benchmark-harness-self-test Test benchmark isolation without model calls"
@@ -157,6 +159,7 @@ mcp-test: mcp-operation-oracle
 	@$(MAKE) --no-print-directory clj-kondo-admission-path-self-test
 	@$(MAKE) --no-print-directory analyzer-contract-target-self-test
 	@$(MAKE) --no-print-directory cclsp-start-self-test
+	@$(MAKE) --no-print-directory cclsp-client-audit-self-test
 
 clj-kondo-admission-path-self-test:
 	@sh test/clj_kondo_admission_path_test.sh
@@ -188,6 +191,12 @@ mcp-reload:
 cclsp-start-self-test:
 	@sh test/cclsp_start_test.sh
 	@sh test/cclsp_launch_path_test.sh
+
+cclsp-client-audit-self-test:
+	@sh test/direct_cclsp_client_audit_test.sh
+
+cclsp-client-audit:
+	@python3 dev/audit_direct_cclsp_clients.py --root "$(abspath $(CLJ_SURGEON_HOME)..)"
 
 cclsp-start:
 	@set -eu; \
@@ -689,6 +698,10 @@ outline:
 
 study-agent-usage:
 	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --pretty $(AGENT_USAGE_ARGS)
+
+study-agent-timeline:
+	@test -n "$(RECEIPT)" || { echo "RECEIPT is required"; exit 2; }
+	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --render-receipt "$(RECEIPT)" $(AGENT_TIMELINE_ARGS)
 
 study-agent-usage-self-test:
 	@python3 skills/study-agent-usage/scripts/collect_agent_usage.py --self-test

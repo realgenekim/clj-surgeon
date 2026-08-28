@@ -156,11 +156,12 @@ updates, and verification gates. It is not a chronological coding diary.
   absent from the compact editor, or gates that must participate in rollback.
   Use the process-starting CLI only when MCP is unavailable, the operation is
   not exposed there, or the CLI itself is under test.
-- For cross-file definitions, references, implementations, incoming calls,
-  and outgoing calls, search the deferred MCP catalog for `mcp__cclsp__*` before
-  falling back to source. Use the published tool schema; do not guess
-  arguments. Do not reopen source only to recover an enclosing form that the
-  semantic result already names.
+- Do not discover, register, or call the semantic backend directly. For
+  cross-file definitions, references, implementations, incoming calls, and
+  outgoing calls, use Surgeon `inspect_clojure` preparation. Surgeon owns any
+  required semantic escalation and returns the exact source anchors. Do not
+  reopen source only to recover an enclosing form that the result already
+  names.
 - For several known structural questions, prefer the read-only
   `inspect_clojure` MCP tool. One `read_complete=true` result is terminal
   evidence; do not split or repeat the batch.
@@ -184,14 +185,14 @@ updates, and verification gates. It is not a chronological coding diary.
   constructing that boundary. Once the successor is live, prefer it for real
   eligible edits and record any fallback as interface evidence; this
   construction exception must not dissuade use of the new API being built.
-- A named-form result includes the exact `source_anchor` required by cclsp.
-  Copy it into `resolve_var_surface`. For up to four related known Vars, use
-  one ordered `resolve_var_surfaces` call. Do not discard exact evidence and
-  restart with an unanchored workspace-symbol query.
+- A named-form result includes the exact `source_anchor` needed by Surgeon's
+  semantic preparation. Preserve it. For up to four related known Vars, submit
+  one ordered `subjects` request. Do not discard exact evidence and restart
+  with an unanchored workspace-symbol query.
 - For an unanchored fully qualified Var, keep the caller's canonical
   `workspace_root` even when the Var may live in a configured sibling project.
-  Do not guess a sibling path. Onboarding publishes source roots; cclsp returns
-  the authoritative workspace and the exact shortlist or fallback evidence.
+  Do not guess a sibling path. Onboarding publishes source roots; Surgeon
+  returns the authoritative workspace and exact fallback evidence.
 - If one Var or one related Var set names the change but exact sites are
   unknown, call `inspect_clojure` with `mode=prepare-change`, one concise
   `intent`, and either `subject=namespace/name` or an ordered `subjects` array.
@@ -211,11 +212,11 @@ updates, and verification gates. It is not a chronological coding diary.
   as the native route; never add a tool call merely because Surgeon performed
   the edit. Escalate to `apply_clojure_changes` only when required gates must
   roll back the transaction or its unique semantic operations are required.
-- If cclsp does not index a known owner, prepare it with project-relative
-  `file` plus exact top-level `form`. This exact-source route does not claim a
-  reference surface.
-- cclsp does not have write authority in this repository. Use clj-surgeon for
-  structural writes, guarded transactions, and receipts.
+- If semantic preparation does not index a known owner, prepare it with
+  project-relative `file` plus exact top-level `form`. This exact-source route
+  does not claim a reference surface.
+- No private semantic provider has write authority in this repository. Use
+  clj-surgeon for structural writes, guarded transactions, and receipts.
 - Public pure functions for testable logic: `source-paths-from-config`, `filter-projects-by-hits`, `format-file-text`, `format-ls-tree-text`, `extract-ns-requires`
 - Private I/O wrappers delegate immediately to pure functions; for example,
   `extract-source-paths` delegates to `source-paths-from-config`.
