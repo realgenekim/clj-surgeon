@@ -212,8 +212,8 @@ to measure even if the production name ultimately remains unchanged.
 ## Final verdict
 
 Keep catalog U's `apply_clojure_changes` name for the extraction route. It was
-6/6 semantically correct and one-shot, and its combined median was 1.882s
-faster than the strongest challenger. `extract_clojure` was also 6/6 correct,
+8/8 semantically correct and one-shot, and its combined median was 2.841s
+faster than the strongest challenger. `extract_clojure` was also 8/8 correct,
 but the confirmation localized its loss before the first call rather than in
 the structural kernel. `apply_clojure_extraction` failed one of two first-tool
 routes. `move_clojure_forms` was correct but slower.
@@ -266,3 +266,100 @@ The copied rematch archive is
 SHA-256
 `3a99beea2aa60575f3eb6bc16031de3185be54a3bb2af86a86815ac68893cbca`;
 the local hash matched the remote receipt.
+
+## Brain Fleet interpretation: the mess may be at the right level
+
+The practical product decision is stronger than the causal explanation.
+Brain Fleet assigns roughly 80–85% confidence that retaining U is the correct
+decision: no challenger earned migration cost, U remained 8/8, and W did not
+beat it. Confidence that the public name itself caused the complete measured
+advantage is only about 60–70% because order and caller-surface confounds remain.
+
+The leading hypothesis is not that a messy monolith beats clean architecture.
+Catalog U actually combines:
+
+```text
+familiar apply_clojure_changes retrieval key
+  -> strict extraction-only schema
+  -> separate continuation operation
+  -> runtime admission before effects
+  -> one unchanged semantic kernel
+```
+
+The name may look vague when the ontology classifies mechanisms. The frozen
+task, however, authorizes a heterogeneous outcome: move 15 owners, create a
+namespace, rewrite requires and callers, change one Var's visibility, format,
+verify, and roll back on failure. `extract_clojure` names the headline
+mechanism. `apply_clojure_changes` names the complete authorization envelope.
+The evolved label may therefore have landed accidentally at the better
+abstraction level.
+
+A second plausible mechanism is learned action grammar. `apply_*_changes`
+resembles the decisive mutation grammar of `apply_patch` and many change APIs.
+Fresh Codex homes remove installed skills and session history; they do not
+remove the model's broad lexical priors. `extract` is polysemous: it can mean a
+read, data extraction, function extraction, or namespace movement. A capable
+model may spend more effort reconciling that narrow name with a 7,384-character
+schema that owns caller edits, visibility, verification, and rollback.
+
+The raw evidence supports localization, not mind reading:
+
+- after normalizing the temporary workspace path, all four apex-rematch call
+  payloads had the same SHA-256;
+- all four final responses were byte-identical;
+- U and W had byte-identical descriptions, schemas, annotations, and peer
+  controls after normalizing the extraction identifier;
+- across all eight runs, initial-materialization medians were about 22.741s U
+  and 26.238s W;
+- reasoning-token medians were 345 U and 452.5 W;
+- W's server boundary was about 0.477s faster.
+
+Thus Surgeon did not make U faster. Sol reached the same mutation sooner.
+
+## Adversarial limits on the story
+
+The experiment is strong hill-climbing evidence, not a universal naming law:
+
+1. The measured task explicitly requires the first available extraction
+   control and supplies the exact object shape. This isolates routing friction
+   well but is less naturalistic than an open-ended coding task.
+2. The preflight app-server was separate from the measured `codex exec`. It
+   proves the expected client surface existed, not the exact order presented
+   to the measured model.
+3. The retained helper sorted its projection. Raw app-server tool-name maps put
+   U first alphabetically and W third. Primacy may be part of U's practical
+   advantage. V was also first and still produced one DNF, so order is not a
+   complete explanation.
+4. Every turn also exposed 49 unrelated `codex_apps` tools. This matches a real
+   rich Codex environment but adds tool-context and service variance.
+5. U/W selection and the final rematch were adaptive rather than one frozen
+   preregistered cohort. V and X have only two runs each.
+6. An exact unblocked permutation of the eight U and eight W walls gives an
+   observed 2.995s mean advantage but only about 0.094 one-sided and 0.188
+   two-sided probability under label exchange. U was faster in 46 of 64
+   cross-arm pairs. The direction is useful for retaining an incumbent, but
+   the uncertainty interval still includes no intrinsic name effect.
+
+The earned wording is: on this forced-extraction Sol/high task,
+`apply_clojure_changes` remained 8/8 one-shot and was observed 2.841s faster at
+the median than the strongest alternative. No alternative earned a rename.
+
+## Highest-information next experiments
+
+1. Disable unrelated app tools, retain the actual measured process's complete
+   catalog and order, and run a randomized safe refusal canary.
+2. Cross U/W names with earlier/later ordinal position. This separates lexical
+   affordance from client primacy.
+3. Cross U/W with a simple owner move and the full caller/visibility/verifier
+   transaction. This tests whether U wins because it names the broader
+   authorization envelope.
+4. Keep U's name fixed and compare the old combined schema with the strict
+   extraction/continuation split. This measures whether the facade's internal
+   ontology helps independently of naming.
+5. Keep U and test one shorter front-loaded description. The remaining large
+   hill is the 23–26s before the first call, not the roughly 2s kernel.
+
+Do not build a synonym zoo or infer a heuristic router. Tool names are retrieval
+cues; schemas and admission authorize; the kernel proves effects. The facade's
+greatest win is that it lets these hypotheses be changed and falsified cheaply
+without moving the semantic machinery.
