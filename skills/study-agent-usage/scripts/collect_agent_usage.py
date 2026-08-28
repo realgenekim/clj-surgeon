@@ -1487,6 +1487,36 @@ def self_test() -> int:
         assert "PRIVATE_RESULT_CANARY" not in json.dumps(receipt)
         assert "PRIVATE_MESSAGE_CANARY" not in json.dumps(receipt)
         assert "/PRIVATE/CLOCK/PATH" not in json.dumps(receipt)
+        chain_receipt = {
+            "window": receipt["window"],
+            "providers": {"codex": {"sessions": [{
+                "session_key": "session-safe",
+                "task_turns": [{
+                    "turn_key": "turn-safe",
+                    "event_clock": {"post_surgeon_boundaries": [
+                        {"operation": "inspect_clojure", "transport": "mcp", "status": "completed", "boundary_ms": 7000, "model_reasoning_ms": 3000, "next_kind": "surgeon-read", "next_operation": "inspect_clojure", "next_transport": "mcp"},
+                        {"operation": "inspect_clojure", "transport": "mcp", "status": "failed", "boundary_ms": 11000, "model_reasoning_ms": 8000, "next_kind": "surgeon-read", "next_operation": "inspect_clojure", "next_transport": "mcp"},
+                        {"operation": "inspect_clojure", "transport": "mcp", "status": "completed", "boundary_ms": 9000, "model_reasoning_ms": 2000, "next_kind": "native-patch", "next_transport": "native"},
+                    ]},
+                }],
+            }]}}
+        }
+        chains = compile_same_route_read_chains(chain_receipt)
+        assert chains == [{
+            "session_key": "session-safe",
+            "turn_key": "turn-safe",
+            "transport": "mcp",
+            "calls": 3,
+            "cumulative_boundary_ms": 18000,
+            "max_boundary_ms": 11000,
+            "model_reasoning_ms": 11000,
+            "operations": ["inspect_clojure"],
+            "failed_calls": 1,
+        }]
+        rendered_chains = render_read_chain_receipt(chain_receipt)
+        assert "3 calls" in rendered_chains
+        assert "boundary 18.000s" in rendered_chains
+        assert "PRIVATE_" not in rendered_chains
     print("study-agent-usage self-test passed")
     return 0
 
@@ -1518,6 +1548,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--render-receipt",
         help="Render privacy-safe Codex event clocks from an existing receipt",
+    )
+    result.add_argument(
+        "--render-read-chains",
+        help="Rank privacy-safe same-route Surgeon read chains from an existing receipt",
+    )
+    result.add_argument(
+        "--read-chain-top", type=int, default=12,
+        help="Maximum read chains to render (default: 12)",
     )
     result.add_argument("--session-key", help="Render only one hashed session key")
     result.add_argument("--turn-key", help="Render only one hashed task-turn key")
@@ -1591,6 +1629,84 @@ def concise_duration(milliseconds: int | float) -> str:
     if value < 60000:
         return f"{value / 1000:.3f}s"
     return f"{int(value // 60000)}m{(value % 60000) / 1000:05.2f}s"
+
+
+def compile_same_route_read_chains(receipt: dict) -> list[dict]:
+    """Rank contiguous Surgeon-read chains without retaining source or prompt text."""
+    chains = []
+    for session in receipt.get("providers", {}).get("codex", {}).get("sessions", []):
+        for turn in session.get("task_turns", []):
+            current = None
+            for boundary in turn.get("event_clock", {}).get("post_surgeon_boundaries", []):
+                same_route_read = (
+                    boundary.get("next_kind") == "surgeon-read"
+                    and boundary.get("transport") == boundary.get("next_transport")
+                )
+                if same_route_read:
+                    if current is None:
+                        current = {
+                            "session_key": session.get("session_key"),
+                            "turn_key": turn.get("turn_key"),
+                            "transport": boundary.get("transport"),
+                            "calls": 1,
+                            "cumulative_boundary_ms": 0,
+                            "max_boundary_ms": 0,
+                            "model_reasoning_ms": 0,
+                            "operations": [],
+                            "failed_calls": 0,
+                        }
+                    current["calls"] += 1
+                    current["cumulative_boundary_ms"] += boundary.get("boundary_ms") or 0
+                    current["max_boundary_ms"] = max(
+                        current["max_boundary_ms"], boundary.get("boundary_ms") or 0
+                    )
+                    current["model_reasoning_ms"] += boundary.get("model_reasoning_ms") or 0
+                    if boundary.get("operation"):
+                        current["operations"].append(boundary["operation"])
+                    if boundary.get("status") == "failed":
+                        current["failed_calls"] += 1
+                    continue
+                if current is not None:
+                    if boundary.get("operation"):
+                        current["operations"].append(boundary["operation"])
+                    if boundary.get("status") == "failed":
+                        current["failed_calls"] += 1
+                    current["operations"] = list(dict.fromkeys(current["operations"]))
+                    chains.append(current)
+                    current = None
+            if current is not None:
+                current["operations"] = list(dict.fromkeys(current["operations"]))
+                chains.append(current)
+    chains.sort(
+        key=lambda chain: (
+            chain["cumulative_boundary_ms"], chain["calls"], chain["max_boundary_ms"]
+        ),
+        reverse=True,
+    )
+    return chains
+
+
+def render_read_chain_receipt(receipt: dict, *, top: int = 12) -> str:
+    """Render a privacy-safe shortlist for compiled-read-mission research."""
+    chains = compile_same_route_read_chains(receipt)
+    lines = [
+        f"Same-route Surgeon read chains · {receipt.get('window', {}).get('since')} → {receipt.get('window', {}).get('until')}",
+        "A chain contains contiguous read→read boundaries on one transport; rank is opportunity, not proof that the reads were batchable.",
+        "",
+    ]
+    for index, chain in enumerate(chains[:max(1, top)], start=1):
+        operations = ",".join(chain["operations"]) or "unknown"
+        lines.append(
+            f"{index:>2}. session {chain['session_key']} · turn {chain['turn_key']} · "
+            f"{chain['transport']} · {chain['calls']} calls · "
+            f"boundary {concise_duration(chain['cumulative_boundary_ms'])} · "
+            f"reasoning {concise_duration(chain['model_reasoning_ms'])} · "
+            f"max {concise_duration(chain['max_boundary_ms'])} · "
+            f"failed {chain['failed_calls']} · ops {operations}"
+        )
+    if not chains:
+        lines.append("No contiguous same-route Surgeon read chains.")
+    return "\n".join(lines)
 
 
 def render_event_clock_receipt(
@@ -1714,6 +1830,10 @@ def main() -> int:
     args = parser().parse_args()
     if args.self_test:
         return self_test()
+    if args.render_read_chains:
+        receipt = json.loads(Path(args.render_read_chains).expanduser().read_text(encoding="utf-8"))
+        print(render_read_chain_receipt(receipt, top=args.read_chain_top))
+        return 0
     if args.render_receipt:
         receipt = json.loads(Path(args.render_receipt).expanduser().read_text(encoding="utf-8"))
         print(render_event_clock_receipt(

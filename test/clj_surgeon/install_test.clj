@@ -167,7 +167,7 @@
       (is (str/includes? out "make install-dev"))
       (is (str/includes? out "Branch-live")))
     (testing "bounded clean-context acceptance batteries are discoverable"
-      (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-timeline" "study-agent-usage-self-test" "cclsp-client-audit" "retain-benchmark-result" "verify-benchmark-retention"]]
+      (doseq [target ["benchmark-codex-skill" "benchmark-claude-skill" "benchmark-agent-skills" "benchmark-agent-skills-self-test" "study-agent-usage" "study-agent-timeline" "study-agent-read-chains" "study-agent-usage-self-test" "cclsp-client-audit" "retain-benchmark-result" "verify-benchmark-retention"]]
         (is (str/includes? out target))))))
 
 (deftest mcp-reload-manifest-covers-the-routed-runtime
