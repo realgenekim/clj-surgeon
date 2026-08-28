@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.binding-rename :as binding-rename]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.operation-algebra :as operation-algebra]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
@@ -1423,7 +1424,17 @@
     (validate-spec! spec)
     (let [canonical-spec (canonicalize-spec spec)
           sources (read-sources (spec-files canonical-spec))]
-      (public-plan (compile-transaction sources canonical-spec)))
+      (public-plan
+        (:compiled
+          (operation-algebra/compile-change
+            {:operation :change
+             :operation-version 1
+             :entrance :cli
+             :policy :cli-legacy
+             :lifecycle :preview}
+            compile-transaction
+            sources
+            canonical-spec))))
     (catch clojure.lang.ExceptionInfo e
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e
@@ -1849,7 +1860,17 @@
   (let [canonical-spec (canonicalize-spec spec)
         sources (read-sources (spec-files canonical-spec))]
     {:spec canonical-spec
-     :compiled (compile-transaction sources canonical-spec)}))
+     :compiled
+     (:compiled
+       (operation-algebra/compile-change
+         {:operation :change
+          :operation-version 1
+          :entrance :cli
+          :policy :cli-legacy
+          :lifecycle :commit}
+         compile-transaction
+         sources
+         canonical-spec))}))
 
 (defn execute-change!
   "Compile, commit, verify, and publish one durable inverse receipt."
