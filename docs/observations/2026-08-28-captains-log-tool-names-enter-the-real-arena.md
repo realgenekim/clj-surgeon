@@ -150,6 +150,15 @@ and 0.405s less receipt time, neither of which establishes a vocabulary-caused
 selection advantage. The next experiment therefore compares only U and W with
 more counterbalanced replicas; it does not promote W from this screen.
 
+## U/W confirmation, live
+
+The confirmation uses the serial counterbalanced order U, W, W, U, W, U, U,
+W on the same exact candidate, model, fixture, scorer, and Anvil seat.
+
+| Order | Catalog | Wall | Outcome |
+|---:|---|---:|---|
+| 1 | U | 31.637s | pass: one call, no reads or shell |
+
 ## Retained evidence and one harness defect
 
 The complete result archives were copied back from Anvil and their SHA-256
