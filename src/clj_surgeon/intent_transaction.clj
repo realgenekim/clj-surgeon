@@ -1427,12 +1427,12 @@
       (public-plan
         (:compiled
           (operation-algebra/compile-change
+            (operation-algebra/change-entry compile-transaction)
             {:operation :change
              :operation-version 1
              :entrance :cli
              :policy :cli-legacy
              :lifecycle :preview}
-            compile-transaction
             sources
             canonical-spec))))
     (catch clojure.lang.ExceptionInfo e
@@ -1863,12 +1863,12 @@
      :compiled
      (:compiled
        (operation-algebra/compile-change
+         (operation-algebra/change-entry compile-transaction)
          {:operation :change
           :operation-version 1
           :entrance :cli
           :policy :cli-legacy
           :lifecycle :commit}
-         compile-transaction
          sources
          canonical-spec))}))
 

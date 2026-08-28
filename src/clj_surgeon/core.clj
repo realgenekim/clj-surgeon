@@ -22,7 +22,6 @@
    [clj-surgeon.forward-refs :as fwd]
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
-   [clj-surgeon.operation-algebra :as operation-algebra]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
@@ -612,7 +611,7 @@
                                    "clj-surgeon :op :replace-subform! :plan plan.edn"]
                        :category  :write}
 
-    :change           {:handler   operation-algebra/plan-change
+    :change           {:handler   intent-transaction/plan-change
                        :canonical-operation :change
                        :lifecycle :preview
                        :desc      "Compile one scoped structural change transaction without writing source"
@@ -631,7 +630,7 @@
                        :category  :write
                        :pair      :change!}
 
-    :change!          {:handler   operation-algebra/execute-change!
+    :change!          {:handler   intent-transaction/execute-change!
                        :canonical-operation :change
                        :lifecycle :commit
                        :desc      "Apply one guarded structural change transaction and save its inverse receipt"

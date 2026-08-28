@@ -9,10 +9,7 @@
 (def ^:private context-keys
   #{:operation :operation-version :entrance :policy :lifecycle})
 
-(def ^:private write-effects
-  #{:source-write :receipt-stage :receipt-publish})
-
-(def change-entry
+(def ^:private change-contract
   {:operation :change
    :operation-version 1
    :lifecycles #{:preview :commit}
@@ -40,11 +37,12 @@
                          :receipt-publish
                          :formatter-launch
                          :verifier-launch
-                         :rollback}}
-   :compiler (fn [sources spec]
-               ((requiring-resolve
-                  'clj-surgeon.intent-transaction/compile-transaction)
-                sources spec))})
+                         :rollback}}})
+
+(defn change-entry
+  "Bind the pure change contract to its one injected compiler."
+  [compiler]
+  (assoc change-contract :compiler compiler))
 
 (defn- invalid-context
   [message data]
@@ -159,34 +157,22 @@
       {:ok true :outcome outcome})))
 
 (defn compile-change
-  "Compile one change through an injected or catalog compiler and return a
+  "Compile one change through its catalog compiler and return a
    transport-neutral outcome beside the unchanged compiled transaction."
-  ([context sources spec]
-   (compile-change context (:compiler change-entry) sources spec))
-  ([context compiler sources spec]
-   (let [authority (derive-capabilities change-entry context)]
-     (if (:error authority)
-       authority
-       (let [compiled (compiler sources spec)
-             outcome {:status (if (:error compiled) :refused :ok)
-                      :phase :compile
-                      :source-state :unchanged
-                      :effects {:observed [:source-read]}}
-             validation (validate-outcome outcome)]
-         (if (:error validation)
-           validation
-           {:ok true
-            :context context
-            :capabilities (:capabilities authority)
-            :compiled compiled
-            :outcome outcome}))))))
-
-(defn plan-change
-  "CLI preview adapter over the existing authoritative implementation."
-  [opts]
-  ((requiring-resolve 'clj-surgeon.intent-transaction/plan-change) opts))
-
-(defn execute-change!
-  "CLI commit adapter over the existing authoritative implementation."
-  [opts]
-  ((requiring-resolve 'clj-surgeon.intent-transaction/execute-change!) opts))
+  [entry context sources spec]
+  (let [authority (derive-capabilities entry context)]
+    (if (:error authority)
+      authority
+      (let [compiled ((:compiler entry) sources spec)
+            outcome {:status (if (:error compiled) :refused :ok)
+                     :phase :compile
+                     :source-state :unchanged
+                     :effects {:observed [:source-read]}}
+            validation (validate-outcome outcome)]
+        (if (:error validation)
+          validation
+          {:ok true
+           :context context
+           :capabilities (:capabilities authority)
+           :compiled compiled
+           :outcome outcome})))))
