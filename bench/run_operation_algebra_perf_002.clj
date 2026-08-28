@@ -162,12 +162,16 @@
       (assoc row :parsed parsed))))
 
 (defn -main
-  [& [repository pre-ref post-ref output-root]]
+  [& [repository pre-ref post-ref output-root measured-runs-text]]
   (when-not (every? some? [repository pre-ref post-ref output-root])
     (binding [*out* *err*]
-      (println "usage: run_operation_algebra_perf_002.clj REPOSITORY PRE_COMMIT POST_COMMIT OUTPUT"))
+      (println "usage: run_operation_algebra_perf_002.clj REPOSITORY PRE_COMMIT POST_COMMIT OUTPUT [RUNS_PER_ARM]"))
     (System/exit 64))
-  (let [repository (.getCanonicalPath (io/file repository))
+  (let [measured-runs (parse-long (or measured-runs-text "20"))
+        _ (when-not (and measured-runs (>= measured-runs 8))
+            (throw (ex-info "RUNS_PER_ARM must be at least 8"
+                            {:runs-per-arm measured-runs-text})))
+        repository (.getCanonicalPath (io/file repository))
         harness-root (.getCanonicalPath (io/file "."))
         output (io/file output-root)]
     (when (.exists output)
@@ -203,7 +207,7 @@
                                         (if (odd? replicate)
                                           [:pre :post]
                                           [:post :pre]))
-                                      (range 1 9)))
+                                      (range 1 (inc measured-runs))))
           counter (atom 0)
           invoke (fn [phase arm]
                    (run-arm! {:arm arm
@@ -233,14 +237,16 @@
                                              (:p95-ms post-summary))
           gate (and output-parity
                     (zero? blocked-invocations)
-                    (= 8 (:runs pre-summary) (:runs post-summary))
+                    (= measured-runs
+                       (:runs pre-summary)
+                       (:runs post-summary))
                     (<= p50-regression 5.0)
                     (<= p95-regression 5.0))
           report
           {:schema :clj-surgeon.operation-algebra-perf-002/v1
            :gate-passed gate
            :protocol {:warmups-per-arm 1
-                      :measured-runs-per-arm 8
+                      :measured-runs-per-arm measured-runs
                       :counterbalanced true
                       :warmup-order warmup-order
                       :measured-order measured-order
