@@ -164,11 +164,13 @@ W on the same exact candidate, model, fixture, scorer, and Anvil seat.
 | 5 | W | 35.607s | pass: one call, no reads or shell |
 | 6 | U | 27.460s | pass: one call, no reads or shell |
 | 7 | U | 30.190s | pass: one call, no reads or shell |
+| 8 | W | 28.977s | pass: one call, no reads or shell |
 
-The first complete ABBA block gives U a 30.372s midpoint and W a 32.802s
-midpoint; U leads by 2.431s. Across the pilot and confirmation so far, U's
-four-run median is 29.066s and W's is 30.948s. W's 0.283s pilot lead has not
-reproduced; the remaining counterbalanced block decides the verdict.
+The complete confirmation gives U a 29.648s median and W a 32.767s median; U
+leads by 3.119s. Across pilot and confirmation, each arm now has six valid
+one-shot observations. U's combined median is 29.066s and W's is 30.948s, so U
+leads by 1.882s overall. W's 0.283s pilot lead did not reproduce. The clearer
+extraction noun did not beat the established control on this task.
 
 ## Retained evidence and one harness defect
 
