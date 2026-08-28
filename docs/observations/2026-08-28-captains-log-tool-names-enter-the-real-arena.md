@@ -162,6 +162,7 @@ W on the same exact candidate, model, fixture, scorer, and Anvil seat.
 | 3 | W | 29.926s | pass: one call, no reads or shell |
 | 4 | U | 29.106s | pass: one call, no reads or shell |
 | 5 | W | 35.607s | pass: one call, no reads or shell |
+| 6 | U | 27.460s | pass: one call, no reads or shell |
 
 The first complete ABBA block gives U a 30.372s midpoint and W a 32.802s
 midpoint; U leads by 2.431s. Across the pilot and confirmation so far, U's
