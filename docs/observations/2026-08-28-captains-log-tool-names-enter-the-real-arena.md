@@ -3,7 +3,7 @@
 **Date:** 2026-08-28  
 **Owner:** `clj-surgeon-x9d`  
 **Candidate head:** `2f47ddc4cad9c8090b27105baea6d1c14c8ef009`  
-**Status:** live, counterbalanced U/V/W/X full-edit tournament in progress
+**Status:** complete; retain `apply_clojure_changes` for the extraction route
 
 ## Why this is a new experiment
 
@@ -208,3 +208,19 @@ The larger architectural win is already durable. A catalog variant is now an
 edge projection over one semantic kernel, and its public schema is executable
 authority. This makes vocabulary cheap to change, safe to falsify, and honest
 to measure even if the production name ultimately remains unchanged.
+
+## Final verdict
+
+Keep catalog U's `apply_clojure_changes` name for the extraction route. It was
+6/6 semantically correct and one-shot, and its combined median was 1.882s
+faster than the strongest challenger. `extract_clojure` was also 6/6 correct,
+but the confirmation localized its loss before the first call rather than in
+the structural kernel. `apply_clojure_extraction` failed one of two first-tool
+routes. `move_clojure_forms` was correct but slower.
+
+This is not evidence that familiar names are universally superior. It is
+evidence that none of these three name-only extraction variants improved this
+frozen Sol/high task. Do not rename the production tool from this portfolio.
+Future catalog experiments should test a materially different hypothesis or a
+different decision stratum, not rerun synonyms until noise yields a preferred
+answer.
