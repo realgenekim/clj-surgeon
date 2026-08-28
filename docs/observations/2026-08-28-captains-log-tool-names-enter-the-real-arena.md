@@ -98,21 +98,27 @@ public extraction name as the first selected tool.
 |---:|---|---|---:|---|
 | 1 | U | `apply_clojure_changes` | 29.026s | pass: one call, no reads or shell |
 | 2 | V | `edit_clojure` | 52.484s | DNF: wrong first control; extraction recovered on call two |
+| 3 | W | `extract_clojure` | 24.681s | pass: one call, no reads or shell |
+| 4 | X | `move_clojure_forms` | 28.216s | pass: one call, no reads or shell |
+| 5 | X | `move_clojure_forms` | 35.119s | pass: one call, no reads or shell |
+| 6 | W | `extract_clojure` | 31.970s | pass: one call, no reads or shell |
 
-The remaining mirrored order is W, X, X, W, V, U. A DNF is retained and the
+The remaining mirrored order is V, U. A DNF is retained and the
 tournament continues; one losing arm no longer stops collection of independent
 options.
 
 ## Current interpretation
 
-U is the only valid full-edit arm so far. V's explicit noun did not help this
-caller: Sol selected the compact editor first, received a safe refusal, then
-recovered through `apply_clojure_extraction`. This is real negative evidence,
-but one V observation is not a release verdict. Its mirrored run remains
-necessary.
+W currently leads the valid full-edit arms with a two-run midpoint of 28.326s
+(24.681s, 31.970s). X follows at 31.668s (28.216s, 35.119s), an absolute gap of
+3.342s. U has one valid 29.026s observation pending its mirror. W's midpoint is
+6.511s slower than the best replicated Surgeon route and 93.952s faster than
+native. V's explicit noun did
+not help its first caller: Sol selected the compact editor first, received a
+safe refusal, then recovered through `apply_clojure_extraction`. These are real
+observations, but no release verdict is valid until the mirrored calls complete.
 
 The larger architectural win is already durable. A catalog variant is now an
 edge projection over one semantic kernel, and its public schema is executable
 authority. This makes vocabulary cheap to change, safe to falsify, and honest
 to measure even if the production name ultimately remains unchanged.
-
