@@ -25,6 +25,7 @@
 (def port (parse-long (env "BENCH_PORT" "7895")))
 (def lane-order
   (mapv keyword (str/split (env "BENCH_ORDER" "pre,post") #",")))
+(def prompt-style (keyword (env "BENCH_PROMPT_STYLE" "manual-continuation")))
 (def auth-file
   (env "CODEX_AUTH_FILE"
        (str (fs/path (System/getProperty "user.home") ".codex/auth.json"))))
@@ -151,10 +152,17 @@
     "top-level insertion can be validated relative to its named owner without repeating "
     "the complete owner source. If the first call refuses, recover that exact existing "
     "owner from the read-only response evidence; do not guess.\n\n"
-    "If the refusal exposes continuation.completed_results and continuation.snapshot_guards, "
-    "preserve the completed result and retry only continuation.pending_request_ids with the "
-    "corrected owner and every supplied snapshot guard. If no continuation is exposed, retry "
-    "the complete original batch with only the wrong owner corrected. Use native search only "
+    (if (= prompt-style :retry-template)
+      (str "If refused, follow the response's final retry instruction exactly. If retry_template "
+           "is present, copy retry_template.arguments, replace only its null selector hole with "
+           "one exact listed owner, and call inspect_clojure once. Do not reconstruct fields from "
+           "the original request. If no retry_template is present, retry the complete original "
+           "batch with only the wrong owner corrected. ")
+      (str "If the refusal exposes continuation.completed_results and continuation.snapshot_guards, "
+           "preserve the completed result and retry only continuation.pending_request_ids with the "
+           "corrected owner and every supplied snapshot guard. If no continuation is exposed, retry "
+           "the complete original batch with only the wrong owner corrected. "))
+    "Use native search only "
     "if the refusal evidence is insufficient. Do not outline, read whole files, use Git history, "
     "use clj-surgeon CLI, or access anything outside this workspace. Stop after read_complete=true.\n\n"
     "Return only JSON matching the required schema. Set task_id to "
