@@ -80,6 +80,28 @@ problem. Surgeon lets every model stop rebuilding a fragile parser during the
 task: the model decides what should move; the kernel owns exact form boundaries,
 balanced delimiters, snapshot guards, rollback, and verification.
 
+### Clojure can change Clojure
+
+`transform_clojure` is the unusual instrument in the catalog: the agent writes
+one bounded Clojure function, and Surgeon runs it in SCI over exact selected
+Clojure syntax. The result becomes guarded source edits; it does not become
+arbitrary host code.
+
+```text
+Clojure source
+    ↓ exact structural selection
+bounded Clojure function in SCI
+    ↓ exact cardinality + changed-character budget
+preview or atomic guarded commit
+```
+
+The function cannot perform I/O, launch processes, load namespaces, mutate
+host state, or use Java interop. `transform_clojure` previews by default.
+`edit_clojure` can also combine computed SCI programs with literal edits and
+owner deletions in one frozen transaction. In editor terms,
+`transform_clojure` is the solo instrument; `edit_clojure` plays the complete
+atomic chord.
+
 The failed first native attempt is evidence of the removed failure class, not
 a speedup denominator. A fresh Terra retry eventually passed the same semantic
 scorer and ran the exact verifier successfully, but still required 178.477
