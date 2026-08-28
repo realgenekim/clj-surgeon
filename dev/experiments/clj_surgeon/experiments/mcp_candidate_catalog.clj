@@ -93,6 +93,16 @@
   [catalog]
   (get role-lexicons (normalize-catalog catalog)))
 
+(defn catalog-role-receipt
+  "Return the transport-neutral role receipt consumed by benchmark scorers."
+  [catalog]
+  (let [catalog (normalize-catalog catalog)]
+    {:catalog (name catalog)
+     :roles (into (sorted-map)
+                  (map (fn [[role tool-name]]
+                         [role tool-name]))
+                  (catalog-lexicon catalog))}))
+
 (def mutation-tool-ids
   #{:edit-clojure
     :clj-change
@@ -659,7 +669,7 @@
 
   This experiment supports only the full tool profile. It does not install,
   reload, or change the production dispatcher."
-  [{:keys [catalog tool-profile] :as opts}]
+  [{:keys [catalog catalog-receipt-file tool-profile] :as opts}]
   (when (and tool-profile (not= :full tool-profile))
     (throw (ex-info "Candidate catalogs require the full tool profile"
                     {:tool-profile tool-profile
@@ -667,9 +677,12 @@
   (let [catalog (normalize-catalog catalog)
         projected-tools (catalog-tools catalog)
         projected-instructions (catalog-instructions catalog)
-        server-opts (dissoc opts :catalog)]
+        server-opts (dissoc opts :catalog :catalog-receipt-file)]
     (binding [*out* *err*]
       (println "clj-surgeon candidate MCP catalog:" (name catalog)))
+    (when catalog-receipt-file
+      (spit catalog-receipt-file
+            (json/generate-string (catalog-role-receipt catalog))))
     (with-redefs [mcp-tool/all-tools (constantly projected-tools)
                   mcp-server/server-instructions projected-instructions]
       (http-server/start server-opts))))

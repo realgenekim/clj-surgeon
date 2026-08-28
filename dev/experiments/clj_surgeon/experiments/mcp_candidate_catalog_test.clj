@@ -1,5 +1,6 @@
 (ns clj-surgeon.experiments.mcp-candidate-catalog-test
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.experiments.mcp-candidate-catalog :as candidate]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
@@ -44,6 +45,16 @@
           :transform-preview "preview_clojure_transform"
           :transform-commit "apply_clojure_transform"}
          (candidate/catalog-lexicon :T))))
+
+(deftest catalog-role-receipt-is-one-transport-neutral-scorer-contract
+  (is (= {:catalog "T"
+          :roles {:edit "write_clojure_edits"
+                  :extract "move_clojure_owners"
+                  :inspect "inspect_clojure"
+                  :plan "apply_clojure_plan"
+                  :transform-commit "apply_clojure_transform"
+                  :transform-preview "preview_clojure_transform"}}
+         (candidate/catalog-role-receipt :T))))
 
 (deftest alternate-catalogs-expose-one-self-consistent-pre-call-universe
   (doseq [catalog candidate/supported-catalogs]
@@ -304,24 +315,33 @@
                        [:route-gates :post-call-response-projection :reason]))))
 
 (deftest isolated-start-projects-the-selected-catalog
-  (let [observed (atom nil)]
+  (let [observed (atom nil)
+        written (atom nil)]
     (with-redefs [http-server/start
                   (fn [opts]
                     (reset! observed {:opts opts
                                       :tools (mcp-tool/all-tools)
                                       :instructions mcp-server/server-instructions})
-                    :stopped)]
+                    :stopped)
+                  spit
+                  (fn [path contents]
+                    (reset! written {:path path :contents contents}))]
       (is (= :stopped
              (candidate/start {:catalog :L
+                               :catalog-receipt-file "/tmp/catalog-role-receipt.json"
                                :project-dir "/tmp/example"
                                :port 0})))
       (is (= "/tmp/example" (get-in @observed [:opts :project-dir])))
       (is (not (contains? (:opts @observed) :catalog)))
+      (is (not (contains? (:opts @observed) :catalog-receipt-file)))
       (is (= ["inspect_clojure" "apply_clojure_plan" "edit_clojure"
               "transform_clojure"]
              (mapv :name (:tools @observed))))
       (is (= (candidate/catalog-instructions :L)
-             (:instructions @observed)))))
+             (:instructions @observed)))
+      (is (= "/tmp/catalog-role-receipt.json" (:path @written)))
+      (is (= (candidate/catalog-role-receipt :L)
+             (json/parse-string (:contents @written) true)))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"require the full tool profile"
                         (candidate/start {:catalog :A
