@@ -665,6 +665,44 @@
         (is (= reason (:reason result)))
         (is (= path (:path result)))))))
 
+(deftest normalizes-only-provable-editor-bookkeeping
+  (let [packed
+        (str "(deftest renders-a-button (is true))\n"
+             "(deftest renders-a-link (is true))")
+        change (-> (get-in valid-request ["changes" 0])
+                   (dissoc "replace")
+                   (assoc "insert_after" [packed]))
+        request {"changes" [change]
+                 "expect" {"changes" 91 "edits" 92 "files" 93}}
+        validated (contract/validate-tool-params request)
+        transaction (some-> validated :params
+                            contract/tool-params->transaction)]
+    (is (:ok validated) (pr-str validated))
+    (is (= {:ignored ["expect"]
+            :reason "aggregate counts are derived from exact change guards"}
+           (:input-normalization validated)))
+    (is (= {:changes 1 :edits 1 :files 1}
+           (get-in validated [:params :expect])))
+    (is (= [:insert-right
+            ["(deftest renders-a-button (is true))"
+             "(deftest renders-a-link (is true))"]]
+           (get-in transaction [:changes 0 :do]))))
+  (let [malformed
+        (str "(deftest renders-a-button (is true))\n"
+             "(deftest renders-a-link (is true))))")
+        request
+        {"changes"
+         [(-> (get-in valid-request ["changes" 0])
+              (dissoc "replace")
+              (assoc "insert_after" [malformed]))]
+         "expect" {"changes" 1 "edits" 1 "files" 1}}
+        result (contract/validate-tool-params request)]
+    (is (false? (:ok result)))
+    (is (= :invalid-intent-form (:error-type result)))
+    (is (= :invalid-intent-form (:reason result)))
+    (is (= ["changes" 0 "insert_after" 0] (:path result)))
+    (is (re-find #"Unmatched delimiter" (:error result)))))
+
 (deftest validates-top-level-insertion-without-repeating-owner-source
   (let [change (-> (get-in valid-request ["changes" 0])
                    (dissoc "find" "replace")
