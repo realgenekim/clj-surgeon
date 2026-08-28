@@ -124,6 +124,14 @@ about JSON, callbacks, stdout, exit status, or shell syntax. Operation-specific
 compilers may select and prove facts but may not format, write, verify, roll
 back, or publish receipts.
 
+Catalog category is presentation metadata, not effect authority. The operation
+contract separately declares a closed effect set such as source mutation,
+receipt publication, formatter launch, verifier launch, and process exit. The
+trusted entrance and operation lifecycle determine which declared effects are
+available. Only the shared effect runtime receives the corresponding
+capabilities; a category, bang suffix, handler name, alias, or request field
+cannot grant them.
+
 The canonical outcome records shared factual evidence such as operation
 identity, phase, source state, counts, hashes, verification state, receipt, and
 owned elapsed work. CLI and MCP projections may omit, rename, or render those
@@ -304,6 +312,20 @@ defaults and compatibility behavior. MCP strict policy preserves confinement,
 budgets, exact verification, and complete decision accounting. Neither policy
 may be selected or weakened by ordinary request data.
 
+### Separate discoverability from effect authority
+
+Operation categories organize help and discovery. They do not classify whether
+an operation is a preview, a conditional mutation, or a terminal mutation.
+Effect declarations are closed data owned by the operation contract, while
+effect execution remains confined to allowlisted runtime entry points.
+
+Deriving authority from the existing `write` category was rejected because the
+category intentionally includes previews and conditional writers. Deriving it
+from a bang suffix was rejected because naming convention cannot prove the
+reachable effect graph. The ordinary suite inventories source writers, receipt
+publishers, process launchers, and lower-layer exits and fails when an
+unallowlisted authority appears.
+
 ### Finalize results through one explicit operation envelope
 
 The MCP boundary uses a shared finalizer rather than independent handler
@@ -365,6 +387,9 @@ counterexample that the native contract tests missed.
 - A migrated CLI subprocess adds no analyzer, formatter, verifier, writer, or
   receipt publisher and regresses p50 and p95 process wall by no more than five
   percent.
+- Catalog category, operation spelling, aliases, and caller data never grant
+  effect authority; the ordinary suite proves every live writer, receipt
+  publisher, process launcher, and lower-layer exit is declared and allowlisted.
 - Selector-local refusals expose the exact missing owner and preserve completed
   sibling work through a snapshot-bound continuation without exposing partial
   evidence as complete results.
