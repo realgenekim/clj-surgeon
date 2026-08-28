@@ -6,17 +6,18 @@
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]))
 
-(def supported-catalogs [:A :L :C :M :N :O])
+(def supported-catalogs [:A :L :C :M :N :O :P :Q :R :S :T])
 
 (def mutation-tool-ids
   #{:edit-clojure
     :clj-change
     :candidate-extract-clojure
-    :candidate-apply-clojure-plan})
+    :candidate-apply-clojure-plan
+    :candidate-transform-commit})
 
 (def deferred-factorials
   [{:id :complete-edit-exact-verification
-    :catalogs [:M :N]
+    :catalogs [:M :N :O :P :Q :R :S :T]
     :hypothesis
     (str
       "Allow edit_clojure to select the project-owned exact verifier for a "
@@ -186,6 +187,20 @@
     "edit_clojure when a computed program must commit atomically with literal "
     "or structural actions or exact owner deletions."))
 
+(def transform-preview-description
+  (str
+    "Preview one computed Clojure transformation. Supply one structural "
+    "selection and one bounded SCI rule. This control cannot commit. Use the "
+    "transform commit control after the decision is complete, or use the edit "
+    "commit control when the program must commit with other source actions."))
+
+(def transform-commit-description
+  (str
+    "Commit one standalone computed Clojure transformation. Supply one "
+    "structural selection, one bounded SCI rule, and commit=true. Use the "
+    "preview control when the decision is incomplete. Use the edit commit "
+    "control when this program must commit with other source actions."))
+
 (defn normalize-catalog
   "Return one supported catalog keyword or refuse unsupported input."
   [catalog]
@@ -262,6 +277,126 @@
                [tool])))
          vec)))
 
+(def effect-names
+  {:P {:edit "commit_clojure_edits"
+       :extract "commit_clojure_extraction"
+       :plan "apply_clojure_plan"
+       :preview "preview_clojure_transform"
+       :transform "commit_clojure_transform"}
+   :Q {:edit "clojure.edit.commit"
+       :extract "clojure.extract.commit"
+       :plan "clojure.plan.apply"
+       :preview "clojure.transform.preview"
+       :transform "clojure.transform.commit"}
+   :R {:edit "edit_clojure_commit"
+       :extract "extract_clojure_commit"
+       :plan "apply_clojure_plan"
+       :preview "transform_clojure_preview"
+       :transform "transform_clojure_commit"}
+   :S {:edit "edit_clojure_bang"
+       :extract "extract_clojure_bang"
+       :plan "apply_clojure_plan_bang"
+       :preview "transform_clojure_with_clojure"
+       :transform "transform_clojure_with_clojure_bang"}
+   :T {:edit "write_clojure_edits"
+       :extract "move_clojure_owners"
+       :plan "apply_clojure_plan"
+       :preview "preview_clojure_transform"
+       :transform "apply_clojure_transform"}})
+
+(def effect-titles
+  {:R {:edit "edit_clojure!"
+       :extract "extract_clojure!"
+       :plan "apply_clojure_plan!"
+       :preview "transform_clojure"
+       :transform "transform_clojure!"}
+   :S {:edit "edit_clojure!"
+       :extract "extract_clojure!"
+       :plan "apply_clojure_plan!"
+       :preview "transform_clojure_with_clojure"
+       :transform "transform_clojure_with_clojure!"}
+   :T {:edit "write_clojure_edits!"
+       :extract "move_clojure_owners!"
+       :plan "apply_clojure_plan!"
+       :preview "preview_clojure_transform"
+       :transform "apply_clojure_transform!"}})
+
+(def read-only-annotations
+  {:read-only true
+   :destructive false
+   :idempotent true
+   :open-world false
+   :return-direct false})
+
+(def mutation-annotations
+  {:read-only false
+   :destructive true
+   :idempotent false
+   :open-world false
+   :return-direct false})
+
+(defn- with-effect-annotations
+  [tool annotations title]
+  (assoc tool :annotations
+         (cond-> annotations
+           title (assoc :title title))))
+
+(defn- effect-catalog-tools
+  [catalog base-tools]
+  (let [names (get effect-names catalog)
+        titles (get effect-titles catalog)
+        split (split-catalog-tools base-tools)
+        transform (tool-by-id split :transform-clojure)
+        preview-schema (update (:schema transform) :properties dissoc "commit")
+        commit-schema (-> (:schema transform)
+                          (assoc-in [:properties "commit"]
+                                    {:type "boolean" :const true})
+                          (update :required (fnil conj []) "commit"))
+        preview-tool (-> transform
+                         (assoc :id :candidate-transform-preview
+                                :name (:preview names)
+                                :description transform-preview-description
+                                :schema preview-schema)
+                         (with-effect-annotations
+                           read-only-annotations
+                           (:preview titles)))
+        commit-tool (-> transform
+                        (assoc :id :candidate-transform-commit
+                               :name (:transform names)
+                               :description transform-commit-description
+                               :schema commit-schema)
+                        (with-effect-annotations
+                          mutation-annotations
+                          (:transform titles)))]
+    (->> split
+         (mapcat
+           (fn [tool]
+             (case (:id tool)
+               :edit-clojure
+               [(-> tool
+                    (assoc :name (:edit names))
+                    (with-effect-annotations
+                      mutation-annotations
+                      (:edit titles)))]
+
+               :candidate-extract-clojure
+               [(-> tool
+                    (assoc :name (:extract names))
+                    (with-effect-annotations
+                      mutation-annotations
+                      (:extract titles)))]
+
+               :candidate-apply-clojure-plan
+               [(-> tool
+                    (assoc :name (:plan names))
+                    (with-effect-annotations
+                      mutation-annotations
+                      (:plan titles)))]
+
+               :transform-clojure [preview-tool commit-tool]
+               [tool])))
+         vec)))
+
 (defn catalog-tools
   "Project one candidate catalog over canonical public tool entries.
 
@@ -271,49 +406,51 @@
    (catalog-tools catalog (mcp-server/public-tool-registry)))
   ([catalog base-tools]
    (let [catalog (normalize-catalog catalog)]
-     (if (#{:M :N :O} catalog)
-       (cond->> (split-catalog-tools base-tools)
-         (= :N catalog)
-         (mapv (fn [tool]
-                 (case (:id tool)
-                   :edit-clojure
-                   (assoc tool :description atomic-chord-description)
+     (if (#{:P :Q :R :S :T} catalog)
+       (effect-catalog-tools catalog base-tools)
+       (if (#{:M :N :O} catalog)
+         (cond->> (split-catalog-tools base-tools)
+           (= :N catalog)
+           (mapv (fn [tool]
+                   (case (:id tool)
+                     :edit-clojure
+                     (assoc tool :description atomic-chord-description)
 
-                   :transform-clojure
-                   (project-tool tool "transform_clojure_with_clojure"
-                                 computed-solo-description)
+                     :transform-clojure
+                     (project-tool tool "transform_clojure_with_clojure"
+                                   computed-solo-description)
 
-                   tool)))
+                     tool)))
 
-         (= :O catalog)
-         (mapv (fn [tool]
-                 (case (:id tool)
-                   :edit-clojure
-                   (project-tool tool "apply_clojure_edits"
-                                 apply-edits-description)
+           (= :O catalog)
+           (mapv (fn [tool]
+                   (case (:id tool)
+                     :edit-clojure
+                     (project-tool tool "apply_clojure_edits"
+                                   apply-edits-description)
 
-                   :transform-clojure
-                   (project-tool tool "run_clojure_transform"
-                                 transform-description)
+                     :transform-clojure
+                     (project-tool tool "run_clojure_transform"
+                                   transform-description)
 
-                   tool))))
-       (mapv
-         (fn [tool]
-           (case (:id tool)
-             :edit-clojure
-             (project-tool tool "edit_clojure" compact-description)
+                     tool))))
+         (mapv
+           (fn [tool]
+             (case (:id tool)
+               :edit-clojure
+               (project-tool tool "edit_clojure" compact-description)
 
-             :clj-change
-             (case catalog
-               :A (project-tool tool "apply_clojure_changes" plan-description)
-               :L (project-tool tool "apply_clojure_plan" plan-description)
-               :C (project-tool tool "refactor_clojure" plan-description))
+               :clj-change
+               (case catalog
+                 :A (project-tool tool "apply_clojure_changes" plan-description)
+                 :L (project-tool tool "apply_clojure_plan" plan-description)
+                 :C (project-tool tool "refactor_clojure" plan-description))
 
-             :transform-clojure
-             (assoc tool :description transform-description)
+               :transform-clojure
+               (assoc tool :description transform-description)
 
-             tool))
-         base-tools)))))
+               tool))
+           base-tools))))))
 
 (defn schema-characters
   "Return serialized input-schema characters for each tool and the catalog."
@@ -338,10 +475,12 @@
     {:catalog (normalize-catalog catalog)
      :names (mapv :name tools)
      :schema-characters (schema-characters tools)
-     :deferred-factorials (if (#{:M :N :O} (normalize-catalog catalog))
+     :deferred-factorials (if (#{:M :N :O :P :Q :R :S :T}
+                               (normalize-catalog catalog))
                             deferred-factorials
                             [])
-     :orthogonality (when (#{:M :N :O} (normalize-catalog catalog))
+     :orthogonality (when (#{:M :N :O :P :Q :R :S :T}
+                           (normalize-catalog catalog))
                       {:controls option-m-controls
                        :overlap-matrix option-m-overlap-matrix
                        :falsifier-cards option-m-falsifier-cards})
@@ -350,6 +489,10 @@
              {:id id
               :name name
               :handler-var (str tool-fn)})
+           tools)
+     :annotations
+     (mapv (fn [{:keys [name annotations]}]
+             {:name name :annotations annotations})
            tools)}))
 
 (defn start
