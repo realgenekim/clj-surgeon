@@ -318,6 +318,30 @@ mcp_role_count() {
     | length' "$events_file"
 }
 
+first_selected_tool_evidence() {
+  local started_items_file=$1
+  jq -r \
+    --arg mcp_inspect "$mcp_inspect_tool" \
+    --arg mcp_edit "$mcp_edit_tool" \
+    --arg mcp_extract "$mcp_extract_tool" \
+    --arg mcp_plan "$mcp_plan_tool" \
+    --arg mcp_transform_preview "$mcp_transform_preview_tool" \
+    --arg mcp_transform_commit "$mcp_transform_commit_tool" \
+    --argjson mcp_legacy_transform_is_mutation "$mcp_legacy_transform_is_mutation" \
+    "$mcp_role_jq"'
+    ([.[]
+      | select(.type == "mcp_tool_call" and .server == "clj-surgeon")]
+     | first) as $first
+    | (if $first == null
+       then [["first_selected_tool", "none"],
+             ["resolved_catalog_role", "none"]]
+       else [["first_selected_tool", ($first.tool // "unnamed")],
+             ["resolved_catalog_role", (($first | mcp_role) // "unresolved")]]
+       end)
+    | .[]
+    | @tsv' "$started_items_file"
+}
+
 catalog_source_archaeology_count() {
   jq '[.[]
     | select((.command // "")
@@ -637,6 +661,13 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   jq -s '[.[] | select(.type == "item.started") | .item]' \
     "$self_test_root/catalog-T-extraction.jsonl" \
     > "$self_test_root/catalog-T-extraction-items.json"
+  first_selected_tool_evidence \
+    "$self_test_root/catalog-T-extraction-items.json" \
+    > "$self_test_root/catalog-T-first-selected-tool.tsv"
+  test "$(awk -F '\t' '$1 == "first_selected_tool" {print $2}' \
+    "$self_test_root/catalog-T-first-selected-tool.tsv")" = move_clojure_owners
+  test "$(awk -F '\t' '$1 == "resolved_catalog_role" {print $2}' \
+    "$self_test_root/catalog-T-first-selected-tool.tsv")" = extract
   test "$(mcp_first_mutation "$self_test_root/catalog-T-extraction-items.json")" = true
   test "$(mcp_role_count "$self_test_root/catalog-T-extraction.jsonl" extract)" -eq 1
   test "$(mcp_role_count "$self_test_root/catalog-T-extraction.jsonl" plan)" -eq 0
@@ -658,6 +689,28 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   jq -s '[.[] | .item]' "$self_test_root/catalog-T-preview.jsonl" \
     > "$self_test_root/catalog-T-preview-items.json"
   test "$(mcp_first_mutation "$self_test_root/catalog-T-preview-items.json")" = false
+
+  printf '%s\n' \
+    '[{"type":"mcp_tool_call","server":"clj-surgeon","tool":"unmapped_candidate_alias","arguments":{}}]' \
+    > "$self_test_root/catalog-T-unresolved-items.json"
+  first_selected_tool_evidence \
+    "$self_test_root/catalog-T-unresolved-items.json" \
+    > "$self_test_root/catalog-T-unresolved-first-selected-tool.tsv"
+  test "$(awk -F '\t' '$1 == "first_selected_tool" {print $2}' \
+    "$self_test_root/catalog-T-unresolved-first-selected-tool.tsv")" = unmapped_candidate_alias
+  test "$(awk -F '\t' '$1 == "resolved_catalog_role" {print $2}' \
+    "$self_test_root/catalog-T-unresolved-first-selected-tool.tsv")" = unresolved
+
+  printf '%s\n' \
+    '[{"type":"command_execution","command":"true"}]' \
+    > "$self_test_root/no-mcp-selection-items.json"
+  first_selected_tool_evidence \
+    "$self_test_root/no-mcp-selection-items.json" \
+    > "$self_test_root/no-mcp-first-selected-tool.tsv"
+  test "$(awk -F '\t' '$1 == "first_selected_tool" {print $2}' \
+    "$self_test_root/no-mcp-first-selected-tool.tsv")" = none
+  test "$(awk -F '\t' '$1 == "resolved_catalog_role" {print $2}' \
+    "$self_test_root/no-mcp-first-selected-tool.tsv")" = none
 
   configure_canonical_mcp_roles
   printf '%s\n' \
@@ -990,7 +1043,7 @@ if [ "${BENCH_RESUME:-false}" != true ] && [ -f "$result_dir/runs.tsv" ]; then
 fi
 if [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route\tdecision_supplied\tpost_decision_source_commands\tchange_used\tchange_apply_used\tchange_apply_successes\tfailed_mutation_actions\ttemp_manifest_patch\tsingle_change_transaction\tmcp_calls\tmcp_successes\tmcp_failures\tmcp_tool_output_bytes\tmcp_first_mutation\tuser_turns\ttool_round_trips\tdiscovery_round_trips\tpost_decision_round_trips' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route\tdecision_supplied\tpost_decision_source_commands\tchange_used\tchange_apply_used\tchange_apply_successes\tfailed_mutation_actions\ttemp_manifest_patch\tsingle_change_transaction\tmcp_calls\tmcp_successes\tmcp_failures\tmcp_tool_output_bytes\tmcp_first_mutation\tuser_turns\ttool_round_trips\tdiscovery_round_trips\tpost_decision_round_trips\tfirst_selected_tool\tresolved_catalog_role' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -1611,6 +1664,13 @@ run_one() {
     "$run_dir/events.jsonl" > "$run_dir/commands.json"
   jq -s '[.[] | select(.type == "item.started") | .item]' \
     "$run_dir/events.jsonl" > "$run_dir/started-items.json"
+  first_selected_tool_evidence "$run_dir/started-items.json" \
+    > "$run_dir/first-selected-tool.tsv"
+  local first_selected_tool resolved_catalog_role
+  first_selected_tool=$(awk -F '\t' '$1 == "first_selected_tool" {print $2; exit}' \
+    "$run_dir/first-selected-tool.tsv")
+  resolved_catalog_role=$(awk -F '\t' '$1 == "resolved_catalog_role" {print $2; exit}' \
+    "$run_dir/first-selected-tool.tsv")
   jq -r '.[] | [.id, .command, (.exit_code // ""), (.aggregated_output | length)] | @tsv' \
     "$run_dir/commands.json" > "$run_dir/commands.tsv"
   local catalog_source_archaeology_commands=0
@@ -2076,6 +2136,7 @@ run_one() {
     "$temp_manifest_patch" "$single_change_transaction" "$mcp_calls" "$mcp_successes" \
     "$mcp_failures" "$mcp_tool_output_bytes" "$mcp_first_mutation" \
     "$user_turns" "$tool_round_trips" "$discovery_round_trips" "$post_decision_round_trips"
+  printf -v row '%s\t%s\t%s' "$row" "$first_selected_tool" "$resolved_catalog_role"
   append_result_row "$run_id" "$row"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
