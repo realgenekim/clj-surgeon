@@ -21,11 +21,18 @@ human retain architectural judgment. The kernel supplies exact structural
 perception, guarded mutation, failure-atomic transactions, and terminal
 evidence against a frozen source snapshot.
 
-The CLI and persistent MCP service expose the same underlying structural
-authority through entrances suited to different latency and integration needs.
-The MCP service uses a uniform public operation envelope around specialized
-handlers. The envelope owns cross-cutting result evidence; handlers own the
-domain result and its concise summary.
+The CLI and persistent MCP service are transport-native projections over one
+operation algebra and canonical domain outcome. Each entrance decodes its own
+public contract and selects a trusted policy profile. Small operation-specific
+compilers own domain facts. The shared transaction runtime owns snapshots,
+formatting, mutation, verification, rollback, and receipts.
+
+The CLI does not call the MCP transport or consume MCP presentation and policy.
+The MCP service does not parse CLI output or inherit CLI compatibility policy.
+Both entrances consume the same compiled domain facts and project them through
+their existing public contracts. The MCP service additionally uses a uniform
+public operation envelope around its projections; that envelope owns
+cross-cutting result evidence and concise human presentation.
 
 ## Target Users
 
@@ -43,6 +50,10 @@ domain result and its concise summary.
 - Preserve source spelling, comments, ownership, and snapshot guards without
   transferring design judgment into the tool.
 - Commit one coherent multi-owner decision as one reversible transaction.
+- Compile shared operation facts and terminal outcomes once, then project them
+  without duplicating domain rules in CLI and MCP adapters.
+- Preserve CLI compatibility and MCP safety policy as explicit entrance-owned
+  profiles rather than weakening either contract for superficial uniformity.
 - Apply one exact root-scoped data change across an explicit set of Clojure or
   EDN files without repeating the same guarded intent per file.
 - Give every public MCP result enough uniform evidence for a caller to
@@ -64,6 +75,10 @@ domain result and its concise summary.
 - Reporting incomplete read evidence as a complete batch or granting write
   authority from a refused read.
 - Turning every cross-cutting field into a new framework or middleware layer.
+- Routing the CLI through HTTP, stdio MCP, JSON, MCP handlers, or a running
+  service.
+- Requiring equal public operation counts, request schemas, output shapes, or
+  recovery workflows across CLI and MCP.
 - Retaining a second logic model that finds no counterexample beyond native
   tests.
 
@@ -80,43 +95,58 @@ domain result and its concise summary.
   observability discipline as a successful mutation.
 - **Bookkeeping over judgment.** The kernel performs exact mechanics while the
   model and human decide meaning.
+- **Common truth over common facade.** Entrances share compiled facts and
+  terminal outcomes while retaining the public contracts and policies that fit
+  their callers.
 
 ## System Design
 
 ```mermaid
 flowchart TD
-    A[Coding agent] -->|MCP| E[Public operation envelope]
-    A -->|process invocation| C[CLI entrance]
-    E --> I[Inspect handler]
-    E --> X[Exact edit handler]
-    E --> P[Prepared change handler]
-    E --> L[Extraction planning handler]
-    E --> T[Computed transform handler]
-    I --> K[Structural kernel]
-    X --> K
-    P --> K
-    L --> K
-    T --> K
-    C --> K
-    K --> S[rewrite-clj source snapshot]
-    K --> V[Parser / formatter / linter / tests]
-    E --> R[Uniform result evidence]
+    A[Coding agent] -->|MCP| M[MCP JSON decoder]
+    A -->|process invocation| C[CLI argv / EDN decoder]
+    M --> O[Operation catalog + MCP strict policy]
+    C --> L[Operation catalog + CLI legacy policy]
+    O --> F[Small operation-specific compilers]
+    L --> F
+    F --> K[Structural kernel + transaction runtime]
+    K --> S[rewrite-clj frozen source snapshot]
+    K --> V[Parser / formatter / verifier / rollback]
+    K --> D[Canonical domain outcome]
+    D --> E[MCP operation envelope + text / structured projection]
+    D --> P[CLI EDN / stdout / exit projection]
 ```
 
-The public operation envelope measures server-owned execution and finalizes a
-common result contract. It does not interpret domain outcomes. Each handler
-returns its specialized data and supplies its concise human summary. The
-envelope adds common evidence and ensures success and refusal paths obey the
-same public law.
+The operation catalog selects one specialized compiler and one policy profile
+from the trusted entrance. Policy is not caller-supplied request data. The
+compiler returns canonical domain facts or a typed refusal without knowing
+about JSON, callbacks, stdout, exit status, or shell syntax. Operation-specific
+compilers may select and prove facts but may not format, write, verify, roll
+back, or publish receipts.
+
+The canonical outcome records shared factual evidence such as operation
+identity, phase, source state, counts, hashes, verification state, receipt, and
+owned elapsed work. CLI and MCP projections may omit, rename, or render those
+facts differently to preserve their contracts. Internal convergence therefore
+does not imply equal public tools or schemas.
+
+The MCP public operation envelope measures server-owned execution and
+finalizes the MCP result contract. It does not interpret domain outcomes. The
+envelope adds common evidence and ensures MCP success and refusal paths obey
+the same public law. The CLI projection separately preserves stable EDN,
+stdout, stderr, exit status, aliases, stdin and spec-file behavior, receipts,
+and undo workflows.
 
 Long-running verification has two clocks: request time describes the bounded
 request that launched or inspected the job; job time describes asynchronous
 work completed elsewhere. Neither value substitutes for the other.
 
-The first leaf design is the MCP operation contract under
-`docs/intent/mcp-operation-contract/`. Other subsystems remain outside the
-initial Linked-Intent Development scope and continue to follow the repository's
-existing plans and testing guidance.
+The MCP operation contract under `docs/intent/mcp-operation-contract/` owns the
+MCP projection and operation-envelope behavior. A separate operation-algebra
+leaf owns canonical domain outcomes, trusted entrance policies, and the
+dependency rule between adapters, compilers, and effects. Each operation moves
+into that algebra through a separately reversible vertical slice; existing
+routes remain authoritative until differential tests prove parity.
 
 The compact exact editor treats `.edn` as lossless Clojure data, not as a
 namespace. An EDN edit must use root scope, may apply one exact replacement to
@@ -252,6 +282,28 @@ tool-owned typo, spelling, or naming heuristics.
 
 ## Key Design Decisions
 
+### Share the operation algebra, not the MCP facade
+
+CLI and MCP share pure operation facts, canonical outcomes, and the transaction
+runtime. They retain separate decoders, policies, presentation, and recovery
+workflows. The first migration shadows non-mutating `change` compilation, then
+`change!`, because both entrances already converge on the intent-transaction
+kernel.
+
+Routing CLI through HTTP or stdio MCP was rejected because it adds service
+availability, transport failure, JSON conversion, and MCP policy to a native
+process. Calling current MCP handlers in-process was rejected as the target
+because it couples CLI behavior to callbacks, MCP normalization, runtime
+configuration, and the small MCP tool vocabulary. A universal tagged request
+schema was rejected because it erases operation-specific invariants. The
+fallback is continued shared kernels with separate envelopes when a vertical
+slice cannot preserve both public contracts cheaply.
+
+Trusted entrance policies are explicit. CLI legacy policy preserves existing
+defaults and compatibility behavior. MCP strict policy preserves confinement,
+budgets, exact verification, and complete decision accounting. Neither policy
+may be selected or weakened by ordinary request data.
+
 ### Finalize results through one explicit operation envelope
 
 The MCP boundary uses a shared finalizer rather than independent handler
@@ -307,6 +359,12 @@ counterexample that the native contract tests missed.
   behavior change.
 - Representative structural tasks remain correctness-gated and are compared
   against native routes by complete wall time, not server timing alone.
+- A migrated operation compiles identical future bytes, hashes, and domain
+  facts through CLI and MCP projections while preserving CLI stdout, stderr,
+  exit status, receipt, and undo behavior.
+- A migrated CLI subprocess adds no analyzer, formatter, verifier, writer, or
+  receipt publisher and regresses p50 and p95 process wall by no more than five
+  percent.
 - Selector-local refusals expose the exact missing owner and preserve completed
   sibling work through a snapshot-bound continuation without exposing partial
   evidence as complete results.
