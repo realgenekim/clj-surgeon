@@ -477,4 +477,46 @@ only if at least 26 of the 51 MCP pairs are honestly groupable.
 
 Retained replay:
 `/tmp/clj-surgeon-agent-usage-24h-clock-20260827-v5.json`, SHA-256
-`2bbddc51ec42c3795dae3f044093511d633ac2067a0efebbba815eba046ff73a`.
+`0cd2cf409df6819aed787c942ba0b194ade8c18e812ede71c497c3aeacc1a03d`.
+
+## Broad read-mission gate: stop
+
+The second oracle used only mechanically inspectable evidence. For each MCP
+read-to-read pair, it asked whether the second target was an exact repeat,
+already requested, or named as an exact source symbol in the first returned
+source. A refusal retry was not counted: its correction still required model
+judgment. An outline-to-forms transition was not counted: the owner choice was
+made from the first result. A file overlap alone was never counted.
+
+| Classification | Pairs | Groupable | Boundary wall |
+|---|---:|---|---:|
+| Exact repeat | 2 | yes | 13.382s |
+| Already requested subset | 1 | yes | 5.864s |
+| Exact source-linked follow-up | 7 | yes | 52.944s |
+| Refusal recovery | 13 | no | 85.189s |
+| Outline-driven selection | 11 | no | 120.133s |
+| Judgment-dependent or unrelated | 17 | no | 492.551s |
+
+Only 10 of 51 MCP pairs, 19.6 percent, passed. Their 72.190 seconds were 9.4
+percent of MCP read-to-read boundary wall. The preregistered gate required at
+least 26 groupable pairs. It missed decisively.
+
+Do not build a general read-mission graph or operation-proof dossier from this
+corpus. The model was usually doing real exploratory work: selecting owners
+from an outline, correcting a safe refusal, or changing the next question after
+reading source. Automatically returning more source would increase evidence
+without deleting the judgment boundary.
+
+Three narrower facts survive:
+
+1. exact rereads are real but rare;
+2. exact source-linked continuation exists but is a small stratum; and
+3. refusal recovery is more frequent than redundant reads and already has a
+   concrete one-shot compiler incident.
+
+The next hill is therefore tolerant one-shot compilation (`clj-surgeon-tmr.6`),
+not compiled read missions. Replay the retained three-change/two-file failure:
+split several complete inserted forms when their syntax is independently
+valid, derive redundant aggregate counts from compiled intents, and continue to
+refuse the malformed extra parenthesis before any write. This attacks repeated
+model boundaries while keeping the model's architectural judgment intact.

@@ -129,8 +129,17 @@ def compile_inspect_clock_evidence(arguments: object, result: object) -> dict:
     safe_arguments = arguments if isinstance(arguments, dict) else {}
     requests = safe_arguments.get("requests")
     requests = requests if isinstance(requests, list) else []
+    operations = Counter(
+        str(request.get("operation") or "unknown")
+        for request in requests
+        if isinstance(request, dict)
+    )
     evidence = {
         "batch_cardinality": len(requests),
+        "file_cardinality": len(target_files({"requests": requests})),
+        "request_operations": dict(sorted(operations.items())),
+        "result_outcome": inspect_result_outcome(result),
+        "selector_cardinality": selector_cardinality(requests),
         "structural_target_sha256": canonical_sha256(
             structural_target({"requests": requests})
         ),
@@ -153,6 +162,35 @@ def target_files(value: object, parent_key: str = "") -> set[str]:
     elif isinstance(value, str) and parent_key in {"file", "files"}:
         result.add(value)
     return result
+
+
+def selector_cardinality(requests: list[object]) -> int:
+    """Count explicit owner/subject selectors without retaining their values."""
+    total = 0
+    for request in requests:
+        if not isinstance(request, dict):
+            continue
+        for key in ("forms", "subjects"):
+            values = request.get(key)
+            if isinstance(values, list):
+                total += len(values)
+        for key in ("owner", "subject"):
+            if request.get(key) is not None:
+                total += 1
+    return total
+
+
+def inspect_result_outcome(result: object) -> str:
+    if not isinstance(result, dict):
+        return "unknown"
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict) and structured.get("ok") is True:
+        return "ok"
+    if isinstance(structured, dict) and structured.get("ok") is False:
+        return "refused"
+    if result.get("isError") is True:
+        return "error"
+    return "unknown"
 
 
 def structural_target_relation(current: object, following: object) -> str:
@@ -497,8 +535,9 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
             "next_kind": endpoint["kind"] if endpoint else "turn-end",
         }
         for key in (
-            "action_ordinal", "batch_cardinality", "snapshot_sha256",
-            "structural_target_sha256",
+            "action_ordinal", "batch_cardinality", "file_cardinality",
+            "request_operations", "result_outcome", "selector_cardinality",
+            "snapshot_sha256", "structural_target_sha256",
         ):
             if key in item:
                 result[key] = item[key]
@@ -509,6 +548,12 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
                 item.get("_structural_target"),
                 endpoint.get("_structural_target"),
             )
+            for key in (
+                "batch_cardinality", "file_cardinality", "request_operations",
+                "result_outcome", "selector_cardinality",
+            ):
+                if key in endpoint:
+                    result[f"next_{key}"] = endpoint[key]
         if endpoint and endpoint.get("operation"):
             result["next_operation"] = endpoint["operation"]
         if endpoint and endpoint.get("transport"):
@@ -1478,9 +1523,20 @@ def self_test() -> int:
     )
     assert inspect_evidence == {
         "batch_cardinality": 2,
+        "file_cardinality": 1,
+        "request_operations": {"forms": 1, "outline": 1},
+        "result_outcome": "unknown",
+        "selector_cardinality": 1,
         "structural_target_sha256": "cd87f8ce80370f498648589d63c92dec2a5b9deac8760a7390440866fce90b73",
         "snapshot_sha256": "5adb8c3d42601f14dc3c467830d23dcc75ffae17236d02c6bb26c6e31b1c3c8e",
     }
+    assert inspect_result_outcome(
+        {"structuredContent": {"ok": True}}
+    ) == "ok"
+    assert inspect_result_outcome(
+        {"structuredContent": {"ok": False}}
+    ) == "refused"
+    assert inspect_result_outcome({"isError": True}) == "error"
     assert "PRIVATE" not in json.dumps(inspect_evidence)
     assert private_snapshot_hash not in json.dumps(inspect_evidence)
     assert structural_target_relation(
@@ -1646,6 +1702,10 @@ def self_test() -> int:
             "next_kind": "model-message",
             "action_ordinal": 2,
             "batch_cardinality": 1,
+            "file_cardinality": 1,
+            "request_operations": {"forms": 1},
+            "result_outcome": "unknown",
+            "selector_cardinality": 1,
             "structural_target_sha256": clock["items"][3]["structural_target_sha256"],
             "snapshot_sha256": clock["items"][3]["snapshot_sha256"],
             "next_action_ordinal": 3,
