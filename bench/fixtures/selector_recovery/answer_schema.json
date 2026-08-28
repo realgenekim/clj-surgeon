@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {"type": "string"},
+    "selected_owner": {"type": "string"},
+    "read_complete": {"type": "boolean"}
+  },
+  "required": ["task_id", "selected_owner", "read_complete"]
+}
