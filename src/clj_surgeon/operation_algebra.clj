@@ -88,6 +88,16 @@
                        lifecycle-effects
                        profile-effects)})))
 
+(defn authorize-effects
+  "Refuse before effects when a runtime action is absent from the computed set."
+  [capabilities required-effects]
+  (let [missing (set/difference required-effects capabilities)]
+    (if (seq missing)
+      {:error "Operation context does not authorize required effects"
+       :error-type :effect-capability-denied
+       :missing-effects (vec (sort missing))}
+      {:ok true})))
+
 (defn- invalid-outcome
   [violations]
   {:error "Canonical operation outcome violates the terminal-state law"
