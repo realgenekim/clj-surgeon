@@ -5,6 +5,83 @@ ClojureScript, and CLJC files. It parses source with
 [rewrite-clj](https://github.com/clj-commons/rewrite-clj) and returns EDN.
 Claude Code and Codex skills teach coding agents the shortest safe commands.
 
+## Headline: one transaction is now five-times-native across agent families
+
+The current high-water mark is a real historical extraction: move 15 named
+forms, their comments, dependencies, visibility change, and 63 remaining
+caller occurrences out of a 4,594-line namespace. Surgeon compiles that
+supplied decision into one snapshot-guarded transaction, formats staged bytes,
+runs the repository's exact verifier, reads the committed bytes back, and
+returns one terminal receipt.
+
+Matched serial Anvil measurements at exact product commit `573e240`:
+
+| Caller | Surgeon route | Matched native | Speedup | Surgeon actions |
+|---|---:|---:|---:|---:|
+| Codex Sol/high | 21.446s | 207.898s | 9.69x | 1 apply |
+| Codex Terra/high | 23.621s | 178.477s | 7.56x | 1 apply |
+| Claude Fable/high | 14.325s | 128.512s | 8.97x | 1 discovery + 1 apply |
+| Claude Opus/high | 12.924s | 82.377s | 6.37x | 1 discovery + 1 apply |
+
+Every listed arm passed the same semantic scorer. The Surgeon arms performed
+no source read, native edit, shell verification, or recovery call. Both Claude
+arms resolved their deferred MCP catalog with one visible `ToolSearch`, called
+`apply_clojure_changes` once, received exact-exit verification inside the
+transaction, and returned the server's terminal response exactly. The Anvil
+native routes required eight commands for Sol and nine tool actions for each
+Claude model.
+
+These are one matched pair per caller, so they prove capability, route shape,
+and a large advantage; they do not yet estimate tail latency. Independent
+local Claude pairs reproduced the finding: Fable was 18.850s versus 102.051s
+(5.41x), and Opus was 12.754s versus 107.484s (8.43x). The earlier promoted
+Sol product cohort measured a 19.216s Surgeon median versus the retained
+122.278s correct-native median (6.36x).
+
+Codex remains the frozen performance control. Claude compatibility is
+additive: Claude gets a thin deferred-discovery adapter, while Sol keeps its
+direct first-action path. In the Anvil run, Sol's first apply started after
+14.651s of model materialization, the server completed in 2.367s, and Sol
+relayed the receipt 3.030s later. Fable and Opus paid for discovery but still
+materialized the apply in about 6.8s and 5.5s respectively. We will not tax or
+weaken the Sol route to manufacture caller parity.
+
+The important mechanism is not faster parsing. It is phase deletion:
+
+```text
+native:   discover spans → assemble script/patch → repair → lint → narrate
+Surgeon:  [Claude may discover tool] → one compiled verified transaction
+```
+
+Why make structure a product primitive? In an additive Terra/high screen, the
+native caller generated a Perl program to perform this extraction and to
+balance the Clojure delimiters. That script replaced a complete
+`(:import ...)))` clause with `))`, leaving an unmatched closing parenthesis.
+The namespace no longer parsed after 219.303 seconds and seven commands. The
+same Terra caller gave Surgeon the architectural decision once, and
+rewrite-clj performed the guarded structural transaction correctly in 23.621
+seconds.
+
+This is not an isolated quoting mishap. Coding agents will reach for Perl,
+Python, regexes, line slicing, delimiter counters, and repeated patches when
+asked to manipulate structure using only text tools. Balancing Clojure forms
+amid comments, strings, metadata, quoting, and reader conditionals is a parser
+problem. Surgeon lets every model stop rebuilding a fragile parser during the
+task: the model decides what should move; the kernel owns exact form boundaries,
+balanced delimiters, snapshot guards, rollback, and verification.
+
+The failed first native attempt is evidence of the removed failure class, not
+a speedup denominator. A fresh Terra retry eventually passed the same semantic
+scorer and ran the exact verifier successfully, but still required 178.477
+seconds and an in-run repair cycle. The correct matched result is therefore
+7.56x in Surgeon's favor. We report matched speed only when both routes pass.
+
+The [cross-caller benchmark plan](docs/plans/cross-caller-mcp-extraction-benchmark.md)
+defines the replication and promotion gates. The longer hill climb—including the
+3.23x direct route, exact-verifier fusion, and terminal receipt that crossed
+5x—is recorded in the
+[captain's log](docs/observations/2026-08-27-captains-log-terminal-proof-ended-the-second-plan.md).
+
 Use clj-surgeon to:
 
 - inspect a namespace without reading the complete file
