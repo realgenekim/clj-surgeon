@@ -199,16 +199,32 @@ The public hypothesis need not expose a numeric confidence value. It reports
 rank, basis, and `authority=false`. This prevents a caller from mistaking a
 presentation score for proof.
 
-### Keep the first recovery slice stateless
+### Keep selector hypotheses stateless; preserve proven siblings inline
 
-The first slice changes only selector-refusal evidence. It preserves
-`ok=false`, `read_complete=false`, and `source_unchanged=true`. It returns no
-ordinary successful `results`, retains no server continuation, accepts no new
-input fields, and does not involve a semantic provider.
+Selector hypotheses remain stateless. A selector-local refusal after one or
+more complete sibling requests may additionally return an inline continuation.
+The continuation contains the already-computed ordered sibling results, exact
+hash guards for every original request file, and completed and pending request
+IDs. It remains
+`ok=false`, `read_complete=false`, `source_unchanged=true`, and
+`write_authority=false`. It returns no ordinary successful `results`, retains
+no server state, publishes no executable `next_call`, accepts no new input
+fields, and does not involve a semantic provider.
 
-Exact proof relations, hash-guarded executable retries, successful-sibling
-continuation, explicit clue resolution, and declarative read missions remain
-separate modules. They advance only when the stateless evidence slice cannot
+The inline continuation is read evidence from one frozen snapshot, not a
+completed batch and not mutation authority. Its purpose is narrow: after the
+caller corrects a selector, it can retry only the failed and unevaluated suffix
+without requesting already-returned source again. That retry must copy every
+guard, including files absent from the retry requests. The kernel captures the
+union of requested and guard-only files and checks all hashes before evaluating
+request zero. A stale completed-sibling file therefore blocks the retry. A
+failure inside the first request has no complete sibling evidence and remains
+fail-empty. Schema, path, parse, snapshot, cardinality, guard, and output-budget
+failures also remain fail-empty.
+
+Exact proof relations, hash-guarded executable retries, explicit clue
+resolution, and declarative read missions remain separate modules. They
+advance only when selector diagnostics plus inline sibling continuation cannot
 meet the two-call and no-native-discovery gate.
 
 ## Asynchronous Verification
@@ -569,8 +585,8 @@ existing lossless transaction contract.
    specified structured MCP failure envelope.
 3. Whether an exact proof relation should emit a hash-guarded executable read
    retry after the stateless hypothesis slice has field evidence.
-4. Whether successful sibling reads should use a server-retained continuation
-   instead of remaining fail-empty.
+4. Whether inline successful-sibling evidence earns a later server-retained
+   continuation. The current slice deliberately retains no server state.
 
 ## References
 
