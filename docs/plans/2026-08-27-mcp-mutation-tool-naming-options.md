@@ -1,7 +1,14 @@
 # MCP Mutation Tool Naming Options
 
-**Status:** Clean screen complete for `clj-surgeon-x9d`. Keep catalog A; no
-public API rename.
+**Status:** The first clean screen was invalidated by adversarial audit. No
+catalog winner; no public API rename.
+
+The experiment's original 1-of-11 conclusion is withdrawn. The runtime did not
+enforce the invoked tool's schema, the scorer rejected semantically correct
+cross-tool execution, the required verifier was absent, and the exact
+client-observed catalog was not retained. See
+[`2026-08-28-captains-log-catalog-screen-verdict-withdrawn.md`](../observations/2026-08-28-captains-log-catalog-screen-verdict-withdrawn.md)
+for the corrected law and complete trace archive.
 
 **Scope:** `edit_clojure` and `apply_clojure_changes`
 
@@ -427,9 +434,9 @@ fabricated or stale basis must refuse before mutation.
 9. Remove aliases only after retained telemetry shows no old-name calls in the
    declared observation window.
 
-## Recommendation
+## Original recommendation — withdrawn
 
-The clean alternate-universe screen is complete. Catalog A was the only one of
+The original clean alternate-universe screen reported that catalog A was the only one of
 11 catalogs to select the extraction role first and finish through the intended
 one-shot public route. It completed correctly in 45.600 seconds. Every renamed
 catalog failed route correctness. R and S eventually produced semantically
@@ -453,3 +460,8 @@ spending production stability on a losing vocabulary.
 The complete table, immutable evidence roots and hashes, environmental
 confounds, and causal interpretation are in
 `docs/observations/2026-08-27-captains-log-tool-names-enter-the-arena.md`.
+
+This recommendation is retained as historical evidence, not current guidance.
+The names remain an open question. A corrected cohort must first enforce each
+public entrance's schema at runtime, retain the exact client-observed tool
+surface, require successful verification, and counterbalance repeated callers.
