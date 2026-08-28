@@ -256,6 +256,55 @@ speedup. It used exactly two MCP calls: prepare, then apply and verify. This is
 one paired probe, not a replicated median or a 3x claim. See the
 [transaction Captain's Log](docs/observations/2026-08-07-captains-log-the-decision-became-a-transaction.md).
 
+### The five-times-native extraction hill
+
+Several weeks of dogfooding changed the optimization target. Surgeon operations
+were often already subsecond, yet complete coding turns remained slow because
+the model repeatedly stopped to inspect, reconstruct a plan, apply, lint,
+interpret the receipt, and narrate evidence that the kernel had already proved.
+The project therefore optimizes complete verified task time rather than tool
+execution time or Surgeon adoption.
+
+The frozen north-star task is a historical 15-form namespace extraction with
+caller handling. Every promoted route uses the same Sol/high caller stratum and
+meaning-preservation scorer. The retained native control is correct and takes
+122.278 seconds.
+
+| Earned route | Complete wall | Relative to native |
+|---|---:|---:|
+| Native source/edit route | 122.278 s | 1.00x |
+| One-shot Surgeon extraction | 37.871 s | 3.23x |
+| Fused exact verification, ordinary response | 27.471 s mean | 4.45x |
+| Fused verification plus terminal response | 21.815 s mean | 5.61x |
+| Promoted product cohort | **19.216 s median** | **6.36x** |
+
+The final route is one atomic `apply_clojure_changes` call. It moves the forms,
+updates declared callers, formats staged bytes, runs the repository-owned exact
+verifier, reads the writes back, publishes hashes and a durable receipt, and
+rolls back on non-pass outcomes. Mechanically derivable planning moved inside
+that transaction. A conditional terminal response lets the model relay concise
+success evidence when the mutation completes all remaining work. In the
+promoted cohort this removed another model interpretation boundary without
+causing compound tasks to stop early.
+
+The result is intentionally scoped. It does not claim that Surgeon is 6.36x
+faster for ordinary one-line edits, exploratory work, or every model. Native
+patching remains the right competitor for a small visible literal change.
+Surgeon earns the interaction when one understood decision spans enough forms,
+callers, files, formatting, and verification that native editing would pay
+several model/tool boundaries.
+
+Negative results were part of the hill climb. Fewer MCP schemas were slower.
+A compact plan handle missed its gate. Broad fuzzy ranking was rejected.
+Formatter CPU was not the missing 13 seconds. A selector continuation removed
+duplicate reads but initially made complete wall time worse; simpler guidance
+recovered the loss but still missed the fixed speed gate. These receipts keep
+the project from optimizing attractive proxies instead of the user-visible
+outcome. See the
+[terminal-proof Captain's Log](docs/observations/2026-08-27-captains-log-terminal-proof-ended-the-second-plan.md),
+[three-day option portfolio](docs/observations/2026-08-26-three-day-speed-option-portfolio.md),
+and [agent-usage release window](docs/observations/2026-08-27-agent-usage-release-window.md).
+
 ## Production examples
 
 clj-surgeon renamed this project from `ns-surgeon` to `clj-surgeon` in less
