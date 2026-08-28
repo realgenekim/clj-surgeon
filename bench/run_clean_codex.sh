@@ -556,7 +556,16 @@ pre_commit=${BENCH_PRE_COMMIT:-19a20b0}
 post_commit=${BENCH_POST_COMMIT:-80154bc}
 model=${BENCH_MODEL:-gpt-5.6-sol}
 reasoning=${BENCH_REASONING:-medium}
+candidate_catalog=${BENCH_MCP_CANDIDATE_CATALOG:-}
 setup_root=""
+
+case "$candidate_catalog" in
+  ""|A|L|C|M|N) ;;
+  *)
+    echo "BENCH_MCP_CANDIDATE_CATALOG must be A, L, C, M, or N: $candidate_catalog" >&2
+    exit 2
+    ;;
+esac
 
 cleanup() {
   release_result_owner
@@ -1200,10 +1209,25 @@ run_one() {
         exit 2
         ;;
     esac
+    if [ -n "$candidate_catalog" ] \
+      && [ "${BENCH_MCP_TOOL_PROFILE:-full}" != full ]; then
+      echo "BENCH_MCP_CANDIDATE_CATALOG requires BENCH_MCP_TOOL_PROFILE=full" >&2
+      exit 2
+    fi
     server_started_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
     (
       cd "$repo_root"
-      exec clojure "${mcp_java_opts[@]}" -X:clj-surgeon/mcp \
+      local -a mcp_server_command=(clojure "${mcp_java_opts[@]}")
+      if [ -n "$candidate_catalog" ]; then
+        mcp_server_command+=(
+          -Sdeps '{:paths ["src" "dev/experiments"]}'
+          -X:clj-surgeon/mcp
+          clj-surgeon.experiments.mcp-candidate-catalog/start
+          :catalog ":$candidate_catalog")
+      else
+        mcp_server_command+=(-X:clj-surgeon/mcp)
+      fi
+      exec "${mcp_server_command[@]}" \
         "${mcp_profile_args[@]}" \
         :project-dir "$(bb -e '(prn (first *command-line-args*))' "$workspace")" \
         :telemetry :full \
@@ -1214,6 +1238,8 @@ run_one() {
         :ready-file "$(bb -e '(prn (first *command-line-args*))' "$ready_file")"
     ) >"$run_dir/mcp-server.stdout" 2>"$run_dir/mcp-server.stderr" &
     mcp_pid=$!
+    printf '%s\n' "${candidate_catalog:-canonical}" \
+      > "$run_dir/mcp-candidate-catalog.txt"
     local attempt
     for attempt in $(seq 1 240); do
       [ -s "$ready_file" ] && break
