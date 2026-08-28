@@ -363,3 +363,75 @@ Do not build a synonym zoo or infer a heuristic router. Tool names are retrieval
 cues; schemas and admission authorize; the kernel proves effects. The facade's
 greatest win is that it lets these hypotheses be changed and falsified cheaply
 without moving the semantic machinery.
+
+## Naming chapter closed
+
+The experiment did its job. Keep `apply_clojure_changes`; retain the facade
+that made alternative catalogs cheap; stop spending hill-climbing capacity on
+synonyms, ordinal-position controls, or a production rename. Those controls
+remain useful if a future interface claim specifically depends on vocabulary,
+but they are not the next product hill.
+
+The durable architectural result is more important than the winning label:
+
+```text
+public projection can change cheaply
+  -> typed schema defines request authority
+  -> admission refuses unsupported effects
+  -> one transport-neutral kernel compiles and proves the transaction
+```
+
+This is a Kent Beck win even though the incumbent name won. We lowered the
+cost of changing the interface, used that option to run a real tournament, and
+learned that no migration currently pays for itself. Reversibility prevented
+the experiment from becoming a speculative rename program.
+
+## Next hill: compile the read decision, not another name
+
+The highest-frequency measured waste is now the model boundary between related
+structural reads. In the retained 24-hour clock:
+
+- 75 Surgeon-read-to-Surgeon-read transitions consumed 1,084 seconds;
+- a direct Surgeon operation had a median wall of about 0.243 seconds; and
+- the next agent action arrived about 9.1 seconds later.
+
+The likely prize is not making a 243 ms read into a 120 ms read. It is deleting
+one or more nine-second decisions by returning the complete evidence needed for
+one coherent judgment.
+
+```text
+today
+  inspect A      0.243s
+  model decides  ~9.1s
+  inspect B      0.243s
+  model decides  ~9.1s
+  mutate
+
+candidate
+  compiled read mission: A + B + ownership + snapshot guards
+  model decides once
+  mutate
+```
+
+This is not permission to build a graph compiler. Generic batching and selector
+continuation already missed their speed gates. The first experiment is an
+offline oracle over the retained 75 transitions:
+
+1. classify whether the second read was mechanically knowable at the first;
+2. distinguish hidden-result recovery, distrust/re-read, judgment-dependent
+   investigation, and unrelated sequential work;
+3. proceed only if at least half are mechanically groupable; and
+4. only then compare ordinary inspection with one operation-proof dossier.
+
+The product keep gate is exact task correctness, one read, zero fallback, no
+more than 1.25 times the unique evidence bytes, and at least 30 percent lower
+complete wall. If fewer than half of the second reads were knowable up front,
+stop. The event clock remains useful and the product stays unchanged.
+
+This hill outranks further work on the 22--26 second first-call interval for
+the naming fixture. That interval is real, but its removability is not yet
+localized and its catalog contained substantial unrelated tool context. The
+read-transition corpus gives us a repeated, measured decision boundary and a
+zero-code falsifier. If the dossier gate fails, the next candidate is to keep
+the winning mutation name and kernel fixed while shrinking only its exact
+decision surface.
