@@ -87,9 +87,9 @@
       :else
       {:ok true
        :capabilities (set/intersection
-                      (:maximum-effects entry)
-                      lifecycle-effects
-                      profile-effects)})))
+                       (:maximum-effects entry)
+                       lifecycle-effects
+                       profile-effects)})))
 
 ;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-003
 (defn authorize-effects
@@ -128,9 +128,9 @@
                             phase)))
         forbidden-keys
         (set/intersection
-         (set (keys outcome))
-         #{:original-sources :future-sources :stdout :stderr :exit-status
-           :json :callback-state :human-summary})
+          (set (keys outcome))
+          #{:original-sources :future-sources :stdout :stderr :exit-status
+            :json :callback-state :human-summary})
         wrote? (contains? observed :source-write)
         published? (contains? observed :receipt-publish)
         result-proved?
@@ -177,6 +177,8 @@
       {:ok true :outcome outcome})))
 
 (defn classify-change-terminal
+  ;; @spec OP-ALG-COMMIT-003, OP-ALG-COMMIT-004, OP-ALG-OUTCOME-001,
+  ;; @spec OP-ALG-OUTCOME-002, OP-ALG-REFUSE-001, OP-ALG-STALE-001
   "Convert one observed CLI change terminal into validated canonical facts."
   [{:keys [point legacy-result capabilities compiled-facts receipt-facts
            observed-effects]}]
@@ -237,11 +239,11 @@
   [observation legacy-result]
   (let [classification
         (classify-change-terminal
-         (assoc observation :legacy-result legacy-result))]
+          (assoc observation :legacy-result legacy-result))]
     (when (:error classification)
       (throw
-       (ex-info (:error classification)
-                (dissoc classification :error))))
+        (ex-info (:error classification)
+                 (dissoc classification :error))))
     legacy-result))
 
 ;; @spec OP-ALG-COMPILE-001, OP-ALG-PREVIEW-001, OP-ALG-OUTCOME-003

@@ -299,6 +299,8 @@
            (:error-type (algebra/validate-outcome outcome))))))
 
 (deftest classifies-every-cli-terminal-without-changing-the-legacy-result
+  ;; @spec OP-ALG-COMMIT-003, OP-ALG-RECEIPT-003, OP-ALG-REFUSE-001,
+  ;; @spec OP-ALG-STALE-001
   (let [capabilities #{:source-read :source-write :receipt-stage
                        :receipt-publish :rollback}
         compiled-facts {:counts {:changes 1 :edits 1 :files 1}
@@ -407,6 +409,7 @@
 
 ;; @spec OP-ALG-IDENTITY-001, OP-ALG-PREVIEW-002, OP-ALG-PARITY-001
 (deftest cli-registry-routes-change-lifecycles-through-the-algebra
+  ;; @spec OP-ALG-CLI-001, OP-ALG-DECODE-001
   (let [registry @(ns-resolve 'clj-surgeon.core 'ops-registry)]
     (is (= transaction/plan-change (get-in registry [:change :handler])))
     (is (= :change (get-in registry [:change :canonical-operation])))

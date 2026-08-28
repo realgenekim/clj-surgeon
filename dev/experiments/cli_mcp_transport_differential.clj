@@ -1,4 +1,5 @@
 (ns cli-mcp-transport-differential
+  ;; @spec OP-ALG-PARITY-001, OP-ALG-PREVIEW-002
   (:require
    [cheshire.core :as json]
    [clj-surgeon.core :as core]

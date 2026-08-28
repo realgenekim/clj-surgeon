@@ -1,4 +1,5 @@
 (ns cli-mcp-transport-differential-test
+  ;; @spec OP-ALG-PARITY-001, OP-ALG-PERF-001
   (:require
    [babashka.process :as process]
    [cli-mcp-transport-differential :as differential]

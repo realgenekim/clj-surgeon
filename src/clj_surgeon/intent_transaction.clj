@@ -1915,6 +1915,9 @@
      :authority-error (when (:error algebra-result) algebra-result)}))
 
 (defn execute-change-with-context!
+  ;; @spec OP-ALG-COMMIT-001, OP-ALG-COMMIT-002, OP-ALG-CONTEXT-001,
+  ;; @spec OP-ALG-CONTEXT-002, OP-ALG-IDENTITY-001, OP-ALG-RECEIPT-003,
+  ;; @spec OP-ALG-RUNTIME-001
   "Compile, commit, verify, and publish one durable inverse receipt."
   [context {:keys [spec receipt-out prepare-compiled!] :as opts}]
   (try
