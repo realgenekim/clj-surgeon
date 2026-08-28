@@ -191,12 +191,12 @@ automatically re-read and recompile newer bytes. Missing receipt evidence after
 an interrupted mutation is unverified, never failed-and-safe-to-retry.
 
 Post-commit MCP verification is an entrance-policy decoration over the shared
-commit result, not part of shared transaction state. A verifier pass retains
-the commit and published receipt. A verifier failure or unverified process
-outcome invokes guarded undo; receipt removal is claimed only when deletion is
-proved. Failed rollback yields `:unverified`, `:source-state :unknown`, and
-recovery-required evidence. CLI receives no new verifier behavior. Shared
-verifier policy can move later through a separately reviewed matrix.
+commit result, not part of slice-1 shared transaction state. Its pass, failure,
+unverified, rollback, receipt-retention, and asynchronous-pending laws remain
+owned by the sibling MCP operation contract. CLI receives no new verifier
+behavior. Formatter decoration is likewise excluded from slice-1 equivalent
+policy. Mapping either decoration into a later shared outcome requires a
+separately reviewed state matrix.
 
 ## Canonical Outcome
 
@@ -231,7 +231,11 @@ read-back after rollback; `:unknown` is used whenever those claims cannot be
 proved. A projection may map these values into legacy booleans and fields, but
 it may never upgrade `:unknown`.
 
-### Legal terminal states
+### Slice-1 legal terminal states
+
+This table is exhaustive only for synchronous equivalent-policy preview and
+commit, where formatting and verification are absent. It does not replace the
+sibling MCP operation contract's verifier or cold-job state machines.
 
 | Terminal case | Status | Phase | Source state | Receipt/inverse | Required observed effects |
 |---|---|---|---|---|---|
@@ -241,12 +245,10 @@ it may never upgrade `:unknown`.
 | Commit success | `:ok` | `:receipt-publish` | `:committed` | published inverse present | one bounded commit and at most one publish |
 | Handled write or publication failure, rollback proved | `:failed` | `:rollback` | `:restored` | removal state reported from evidence | write attempt plus guarded rollback |
 | Interrupted or rollback-unproved mutation | `:unverified` | last observed phase | `:unknown` | never implies safe retry | only effects actually observed |
-| MCP verifier pass | `:ok` | `:verify` | `:committed` | published inverse retained | verifier decoration after commit |
-| MCP verifier non-pass, undo proved | `:failed` or `:unverified` according to process outcome | `:rollback` | `:restored` | removal claimed only when proved | verifier plus guarded undo |
-| MCP verifier non-pass, undo unproved | `:unverified` | `:rollback` | `:unknown` | recovery-required | no blind retry guidance |
 
-Only these combinations are legal. Projections copy facts from them; they do
-not synthesize contradictory status, phase, source, or receipt claims.
+Only these combinations are legal for slice 1. Projections copy facts from
+them; they do not synthesize contradictory status, phase, source, or receipt
+claims.
 
 The first slice derives this outcome from the existing compiler/runtime result.
 It does not alter compiler semantics to make outcomes look more uniform.
