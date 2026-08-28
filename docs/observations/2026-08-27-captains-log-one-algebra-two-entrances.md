@@ -117,13 +117,32 @@ The Brain Fleet naming review starts only after release publication. It should
 decide whether `edit_clojure` and `apply_clojure_changes` communicate this
 boundary, and whether reshaping is better than a cosmetic rename.
 
-## Remaining release gates
+## Release closure
 
-1. Run the complete serialized milestone suite and one analyzer admission/lint
-   gate without concurrency.
-2. Tag the exact green commit.
-3. Install CLI and both agent skills from that immutable commit.
-4. Announce one shared-MCP window, record PID and CWD, perform one hot reload,
-   and prove both tolerant insertion branches in an isolated workspace.
-5. Close the window without blind retry. Then begin the naming review owned by
-   `clj-surgeon-x9d`.
+All release gates closed at
+`f09a4f9f000ba713002e79d330b8dda1a7b6b0e1`, tagged
+`stable-operation-algebra-verified-20260827`.
+
+- The complete serialized milestone suite passed: core 636 tests / 5,467
+  assertions and MCP 268 tests / 2,260 assertions. The analyzer, heap, stdio,
+  skill, and benchmark gates also passed.
+- An independent Anvil changed-file gate linted the exact release tree with
+  clj-kondo v2026.08.04: 0 errors, 7 retained warnings, 445 ms wall. Its
+  immutable receipt is `/tmp/clj-surgeon-anvil-lint-f09a4f9.receipt`, SHA-256
+  `04e0f3fe95abc62798c38ce5872ead54b5e8d43d36a4466ede1e90d525dd25cc`.
+- `make install` published the stable CLI and both agent skills from the same
+  immutable commit.
+- One `make mcp-reload` returned `status=synchronized`, `ok=true`, and
+  `server-restart-required=false`. The shared server stayed PID 65458 with CWD
+  `/Users/genekim/src.local/clj-surgeon`.
+- A malformed packed insertion refused before write as `invalid-intent-form`
+  in 20.50 ms and reported `source_unchanged=true`.
+- A fresh isolated request then packed two complete insertion forms, supplied
+  the deliberately wrong aggregate 31/32/33, and completed 3 edits across 2
+  files in 1,580.62 ms. The result explicitly recorded that redundant
+  `expect` was ignored, while exact per-change guards remained authoritative.
+- The pre-existing client session remained live: a bounded
+  `inspect_clojure` read completed in 35.53 ms after publication.
+
+The publication window is closed. No restart or blind retry occurred. The next
+work is the naming and public-shape review owned by `clj-surgeon-x9d`.
