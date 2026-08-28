@@ -1317,6 +1317,44 @@ def self_test() -> int:
         "completed_at_ms": 1,
         "item": {"type": "Reasoning"},
     }) is None
+    private_snapshot_hash = "a" * 64
+    inspect_evidence = compile_inspect_clock_evidence(
+        {
+            "workspace_root": "/PRIVATE/WORKSPACE",
+            "requests": [
+                {
+                    "id": "PRIVATE_REQUEST_ID",
+                    "operation": "forms",
+                    "file": "src/private.clj",
+                    "forms": ["PRIVATE_OWNER"],
+                    "expect": {"forms": 1},
+                },
+                {
+                    "id": "PRIVATE_OUTLINE_ID",
+                    "operation": "outline",
+                    "file": "src/private.clj",
+                },
+            ],
+            "expect": {"files": 1, "requests": 2},
+        },
+        {
+            "structuredContent": {
+                "file_hashes": {"src/private.clj": private_snapshot_hash},
+                "results": [{
+                    "file": "src/private.clj",
+                    "file_hash": private_snapshot_hash,
+                    "source": "PRIVATE_SOURCE_CANARY",
+                }],
+            },
+        },
+    )
+    assert inspect_evidence == {
+        "batch_cardinality": 2,
+        "structural_target_sha256": "5482eab5b80984cf089d0cd5a2935f2a495d7aef11ba9eef7cf4e60bddfc24bd",
+        "snapshot_sha256": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+    }
+    assert "PRIVATE" not in json.dumps(inspect_evidence)
+    assert private_snapshot_hash not in json.dumps(inspect_evidence)
     with tempfile.TemporaryDirectory(prefix="study-agent-usage-") as tmp:
         root = Path(tmp)
         observations = root / "docs" / "observations"
@@ -1332,7 +1370,7 @@ def self_test() -> int:
                 {"timestamp": "2026-08-05T00:59:30Z", "type": "event_msg", "payload": {"type": "user_message", "message": "private service goal"}},
                 {"timestamp": "2026-08-05T01:00:00Z", "type": "response_item", "payload": {"type": "message", "role": "developer", "content": "clj-surgeon:"}},
                 {"timestamp": "2026-08-05T01:00:15Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891610000, "completed_at_ms": 1785891615000, "item": {"type": "Reasoning", "summary_text": "PRIVATE_REASONING_CANARY", "raw_content": "PRIVATE_RAW_CANARY"}}},
-                {"timestamp": "2026-08-05T01:00:20.200Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891620000, "completed_at_ms": 1785891620200, "item": {"type": "McpToolCall", "server": "clj-surgeon", "tool": "inspect_clojure", "arguments": {"workspace_root": "/PRIVATE/CLOCK/PATH"}, "result": "PRIVATE_RESULT_CANARY", "status": "completed"}}},
+                {"timestamp": "2026-08-05T01:00:20.200Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891620000, "completed_at_ms": 1785891620200, "item": {"type": "McpToolCall", "server": "clj-surgeon", "tool": "inspect_clojure", "arguments": {"workspace_root": "/PRIVATE/CLOCK/PATH", "requests": [{"id": "PRIVATE_CLOCK_REQUEST", "operation": "forms", "file": "src/private_clock.clj", "forms": ["PRIVATE_CLOCK_OWNER"]}]}, "result": {"structuredContent": {"file_hashes": {"src/private_clock.clj": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, "results": [{"file": "src/private_clock.clj", "file_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "source": "PRIVATE_RESULT_CANARY"}]}}, "status": "completed"}}},
                 {"timestamp": "2026-08-05T01:00:22Z", "type": "event_msg", "payload": {"type": "item_completed", "turn_id": "turn-1", "started_at_ms": 1785891621000, "completed_at_ms": 1785891622000, "item": {"type": "AgentMessage", "phase": "commentary", "content": "PRIVATE_MESSAGE_CANARY"}}},
                 {"timestamp": "2026-08-05T01:01:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c1", "name": "exec", "input": "await tools.exec_command({cmd:\"cat /x/clj-surgeon/SKILL.md\"})"}},
                 {"timestamp": "2026-08-05T01:02:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c2", "name": "exec", "input": "await tools.exec_command({cmd:\"clj-surgeon :op :cat :file src/app.clj :form f\"})"}},
@@ -1415,6 +1453,10 @@ def self_test() -> int:
         assert [item["wall_ms"] for item in clock["items"][:5]] == [70000, 5000, 5000, 200, 800]
         assert clock["items"][3]["operation"] == "inspect_clojure"
         assert clock["items"][3]["status"] == "completed"
+        assert clock["items"][3]["action_ordinal"] == 2
+        assert clock["items"][3]["batch_cardinality"] == 1
+        assert len(clock["items"][3]["structural_target_sha256"]) == 64
+        assert len(clock["items"][3]["snapshot_sha256"]) == 64
         assert clock["by_kind_ms"]["model-reasoning"] == 5000
         assert clock["by_kind_ms"]["surgeon-read"] == 200
         assert clock["measured_coverage_ms"] == 6200
@@ -1430,6 +1472,11 @@ def self_test() -> int:
             "model_reasoning_ms": 0,
             "model_message_ms": 0,
             "next_kind": "model-message",
+            "action_ordinal": 2,
+            "batch_cardinality": 1,
+            "structural_target_sha256": clock["items"][3]["structural_target_sha256"],
+            "snapshot_sha256": clock["items"][3]["snapshot_sha256"],
+            "next_action_ordinal": 3,
         }]
         assert codex["post_surgeon_boundary_wall"]["median_ms"] == 800
         assert codex["post_surgeon_transports"] == {"mcp": 1}
@@ -1451,6 +1498,8 @@ def self_test() -> int:
             "surgeon-read": 1,
         }
         assert receipt["privacy"]["transcript_prose_emitted"] is False
+        assert receipt["privacy"]["structural_targets_hashed"] is True
+        assert receipt["privacy"]["source_hashes_rehashed"] is True
         assert receipt["services"]["clj_surgeon_mcp"]["mcp_tool_calls"] == 2
         assert receipt["services"]["clj_surgeon_mcp"]["error_types"] == {
             "match-count-mismatch": 1
