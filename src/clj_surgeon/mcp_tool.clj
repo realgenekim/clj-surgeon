@@ -488,7 +488,7 @@
                     with-programs)))
 
               :else base-prepare!)
-            result (transaction/execute-change!
+            result (transaction/execute-mcp-change!
                      (cond-> {:spec (:spec resolved) :receipt-out receipt}
                        prepare-compiled!
                        (assoc :prepare-compiled!
