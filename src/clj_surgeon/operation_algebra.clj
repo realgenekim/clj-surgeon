@@ -39,6 +39,7 @@
                          :verifier-launch
                          :rollback}}})
 
+;; @spec OP-ALG-CATALOG-001, OP-ALG-COMPILE-001, OP-ALG-EFFECT-005
 (defn change-entry
   "Bind the pure change contract to its one injected compiler."
   [compiler]
@@ -50,6 +51,8 @@
           :error-type :invalid-operation-context}
          data))
 
+;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-002, OP-ALG-EFFECT-004,
+;; @spec OP-ALG-EFFECT-005
 (defn derive-capabilities
   "Derive effects from catalog, lifecycle, and a trusted adapter context.
    Request data is never accepted as context."
@@ -84,10 +87,11 @@
       :else
       {:ok true
        :capabilities (set/intersection
-                       (:maximum-effects entry)
-                       lifecycle-effects
-                       profile-effects)})))
+                      (:maximum-effects entry)
+                      lifecycle-effects
+                      profile-effects)})))
 
+;; @spec OP-ALG-EFFECT-001, OP-ALG-EFFECT-003
 (defn authorize-effects
   "Refuse before effects when a runtime action is absent from the computed set."
   [capabilities required-effects]
@@ -124,9 +128,9 @@
                             phase)))
         forbidden-keys
         (set/intersection
-          (set (keys outcome))
-          #{:original-sources :future-sources :stdout :stderr :exit-status
-            :json :callback-state :human-summary})
+         (set (keys outcome))
+         #{:original-sources :future-sources :stdout :stderr :exit-status
+           :json :callback-state :human-summary})
         wrote? (contains? observed :source-write)
         published? (contains? observed :receipt-publish)
         result-proved?
@@ -233,13 +237,14 @@
   [observation legacy-result]
   (let [classification
         (classify-change-terminal
-          (assoc observation :legacy-result legacy-result))]
+         (assoc observation :legacy-result legacy-result))]
     (when (:error classification)
       (throw
-        (ex-info (:error classification)
-                 (dissoc classification :error))))
+       (ex-info (:error classification)
+                (dissoc classification :error))))
     legacy-result))
 
+;; @spec OP-ALG-COMPILE-001, OP-ALG-PREVIEW-001, OP-ALG-OUTCOME-003
 (defn compile-change
   "Compile one change through its catalog compiler and return a
    transport-neutral outcome beside the unchanged compiled transaction."

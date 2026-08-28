@@ -18,7 +18,7 @@ prefix: OP-ALG
 - [ ] **OP-ALG-EFFECT-002**: While the `:change` preview lifecycle is active, the operation runtime shall permit source reads and shall permit no source write, receipt stage, receipt publication, formatter launch, verifier launch, or rollback effect.
 - [ ] **OP-ALG-EFFECT-003**: While the `:change` commit lifecycle is active, the operation runtime shall execute effects only through the allowlisted transaction writer, receipt stage/publish functions, rollback function, and trusted entrance decorations declared for that lifecycle.
 - [ ] **OP-ALG-EFFECT-004**: The operation algebra shall treat CLI process exit as projection-owned behavior and shall not expose process exit as an operation-runtime capability.
-- [ ] **OP-ALG-EFFECT-005**: The ordinary operation-algebra architecture witness shall inventory the Vars invoked by the preview and commit entry points and shall fail if `:category` metadata is read as effect authority or if an unallowlisted writer, receipt publisher, formatter, verifier, rollback path, or lower-layer process exit appears in that bounded inventory.
+- [x] **OP-ALG-EFFECT-005**: The ordinary operation-algebra architecture witness shall inventory the Vars invoked by the preview and commit entry points and shall fail if `:category` metadata is read as effect authority or if an unallowlisted writer, receipt publisher, formatter, verifier, rollback path, or lower-layer process exit appears in that bounded inventory.
 
 ## Pure Compilation and Preview
 
