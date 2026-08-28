@@ -75,7 +75,10 @@
         refs #(architecture-references
                 (top-level-form-source file %))]
     {:preview (refs 'plan-change)
-     :commit-entry (refs 'execute-change!)
+     :commit-adapters
+     (into #{}
+           (mapcat refs ['execute-change! 'execute-mcp-change!]))
+     :commit-entry (refs 'execute-change-with-context!)
      :commit-runtime (refs 'commit-compiled!)
      :receipt-stage (refs 'stage-receipt!)
      :receipt-publish (refs 'publish-staged-receipt!)
@@ -147,10 +150,13 @@
                  (algebra/derive-capabilities catalog-entry commit-context))
                #{:formatter-launch :process-exit :verifier-launch})))
       (is (= {:preview #{'refuse! 'validate-spec!}
+              :commit-adapters #{'execute-change!
+                                 'execute-change-with-context!
+                                 'execute-mcp-change!}
               :commit-entry #{'.delete
                               'assert-receipt-does-not-alias-source!
                               'commit-compiled!
-                              'execute-change!
+                              'execute-change-with-context!
                               'prepare-compiled!
                               'publish-staged-receipt!
                               'refuse!
@@ -519,6 +525,46 @@
                  :receipt-out (.getPath receipt-file)}))]
         (is (:ok result))
         (is (= [[:success :ok]] @calls)))
+      (finally
+        (doseq [file (reverse (file-seq workspace))]
+          (io/delete-file file true))))))
+(deftest trusted-adapters-select-context-without-request-authority
+  ;; @spec OP-ALG-CONTEXT-001, OP-ALG-CONTEXT-002, OP-ALG-MCP-001
+  (let [workspace (temp-workspace)
+        source-file (io/file workspace "app.clj")
+        source-path (.getPath source-file)
+        contexts (atom [])
+        original-compile algebra/compile-change
+        entrances [[transaction/execute-change! :cli :cli-legacy]
+                   [transaction/execute-mcp-change! :mcp :mcp-strict]]]
+    (try
+      (spit source-file "(ns app)\n(defn title [] (old-title))\n")
+      (doseq [[execute! entrance policy] entrances]
+        (let [receipt-file
+              (io/file workspace (str (name entrance) "-receipt.edn"))
+              result
+              (with-redefs [algebra/compile-change
+                            (fn [entry context sources spec]
+                              (swap! contexts conj context)
+                              (original-compile entry context sources spec))]
+                (execute! {:spec (file-change-spec source-path)
+                           :receipt-out (.getPath receipt-file)}))]
+          (is (:ok result))
+          (is (:ok (transaction/execute-undo!
+                     {:receipt (.getPath receipt-file)})))
+          (is (= entrance (:entrance (peek @contexts))))
+          (is (= policy (:policy (peek @contexts))))))
+      (is (= [{:operation :change
+               :operation-version 1
+               :entrance :cli
+               :policy :cli-legacy
+               :lifecycle :commit}
+              {:operation :change
+               :operation-version 1
+               :entrance :mcp
+               :policy :mcp-strict
+               :lifecycle :commit}]
+             @contexts))
       (finally
         (doseq [file (reverse (file-seq workspace))]
           (io/delete-file file true))))))

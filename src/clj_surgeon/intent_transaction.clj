@@ -1884,19 +1884,29 @@
        :observed-effects (terminal-observed-effects point legacy-result)}
       legacy-result)))
 
+(def ^:private cli-change-context
+  {:operation :change
+   :operation-version 1
+   :entrance :cli
+   :policy :cli-legacy
+   :lifecycle :commit})
+
+(def ^:private mcp-change-context
+  {:operation :change
+   :operation-version 1
+   :entrance :mcp
+   :policy :mcp-strict
+   :lifecycle :commit})
+
 (defn- compile-change-spec
-  [spec]
+  [context spec]
   (validate-spec! spec)
   (let [canonical-spec (canonicalize-spec spec)
         sources (read-sources (spec-files canonical-spec))
         algebra-result
         (operation-algebra/compile-change
           (operation-algebra/change-entry compile-transaction)
-          {:operation :change
-           :operation-version 1
-           :entrance :cli
-           :policy :cli-legacy
-           :lifecycle :commit}
+          context
           sources
           canonical-spec)]
     {:spec canonical-spec
@@ -1904,9 +1914,9 @@
      :capabilities (:capabilities algebra-result)
      :authority-error (when (:error algebra-result) algebra-result)}))
 
-(defn execute-change!
+(defn execute-change-with-context!
   "Compile, commit, verify, and publish one durable inverse receipt."
-  [{:keys [spec receipt-out prepare-compiled!] :as opts}]
+  [context {:keys [spec receipt-out prepare-compiled!] :as opts}]
   (try
     (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled!}
                                      (keys opts))))]
@@ -1917,7 +1927,7 @@
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
     (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled capabilities authority-error]} (compile-change-spec spec)
+          {:keys [spec compiled capabilities authority-error]} (compile-change-spec context spec)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
                      compiled)]
@@ -2016,6 +2026,16 @@
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e
       {:error (.getMessage e) :error-type :transaction-write-exception})))
+
+(defn execute-change!
+  "Execute one CLI-legacy change transaction."
+  [opts]
+  (execute-change-with-context! cli-change-context opts))
+
+(defn execute-mcp-change!
+  "Execute one MCP-strict change transaction."
+  [opts]
+  (execute-change-with-context! mcp-change-context opts))
 
 (defn execute-undo!
   "Apply the hash-fenced inverse from a durable :change! receipt."
