@@ -12,6 +12,14 @@ Plans complement, and must conform to:
 
 Active plans:
 
+- [Brain Fleet: the next five hills](2026-08-27-brain-fleet-next-hills.md) —
+  Sol/high and Fable/high independently rank the evidence-backed experiment
+  portfolio, preserve the binding stop ledger, and choose the next cheap
+  falsifiers without taxing the proven direct route.
+- [CLI and public operation envelope gap analysis](cli-public-operation-envelope-gap-analysis.md)
+  — converge CLI and MCP on one operation algebra and canonical outcome while
+  preserving their distinct policies, compatibility contracts, and measured
+  routing advantages; includes the matched causal experiment program.
 - [Global compact-editor routing](global-compact-editor-routing.md) —
   implemented canonical, fail-closed installation of the proven compact route
   into every managed Codex and Claude seat.
