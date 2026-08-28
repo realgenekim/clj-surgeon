@@ -323,3 +323,58 @@ invalidated, the server did not restart, and `main` was not mutated. The named
 rollback anchor is immutable commit `66b8a60`; restoration would use
 `make install` from a detached worktree at that commit followed by one hot
 reload.
+
+## Greatest hits against native
+
+The native control remains the same matched-correctness, same-model historical
+15-form extraction at 122.278 seconds. The speed hill advanced in earned steps:
+
+| Route | Complete wall | Relative to native |
+|---|---:|---:|
+| Native edit route | 122.278 s | 1.00x |
+| Direct one-shot Surgeon extraction | 37.871 s | 3.23x |
+| Fused exact verification, ordinary response | 27.471 s mean | 4.45x |
+| Fused verification plus terminal response | 21.815 s mean | 5.61x |
+| Promoted product cohort | 19.216 s median | 6.36x |
+
+The win did not come from making one parser or formatter dramatically faster.
+It came from deleting model-managed boundaries. Mechanical planning moved into
+the frozen extraction transaction. Exact repository verification joined the
+same rollback boundary. A complete terminal receipt then let the caller relay
+one bounded response instead of spending another five seconds interpreting and
+narrating already-proved evidence.
+
+This is not a universal Surgeon-over-native claim. Native patching remains the
+right fearsome competitor for a visible literal change. Surgeon wins when one
+understood decision spans enough owners, callers, files, formatting, and proof
+that native editing pays repeated decision and tool boundaries.
+
+## Next hill: compile the operation proof dossier
+
+A bounded review of the 12 highest-cost retained read chains classified 37
+Surgeon reads and 25 possible read-to-read boundaries. Eight chains repeated
+one product-shaped mission:
+
+```text
+public operation
+-> registry / schema / handler
+-> generic operation envelope
+-> compiler or process
+-> outcome / receipt normalization
+-> declared witnesses
+```
+
+The next experiment is an oracle upper-bound test, not a new compiler. PRE gets
+ordinary `inspect_clojure`; POST gets one precompiled single-call dossier for
+the elapsed-time instrumentation path across the generic envelope and all
+three public MCP tools. The model still decides architectural meaning. The
+kernel may include only literal registry membership, declared handlers,
+schemas, outcome maps, witness maps, exact source anchors, and one frozen
+snapshot.
+
+The hill stops unless POST is exactly correct, uses one Surgeon read with zero
+fallback or follow-up reads, stays within 1.25x PRE's unique evidence bytes,
+and completes at least 30 percent faster. Generic dependency closure is not
+the first experiment: the current `:ls-deps` feasibility probe mis-resolved a
+named definition to a later anonymous top-level expression, so it has not
+earned authority.
