@@ -236,8 +236,15 @@ fixture, scorer, and Anvil seat.
 | 1 | U | 34.392s | pass: one call, no reads or shell |
 | 2 | W | 43.607s | pass: one call, no reads or shell |
 | 3 | W | 31.844s | pass: one call, no reads or shell |
+| 4 | U | 28.329s | pass: one call, no reads or shell |
 
 This first U observation is slower than its earlier distribution. The paired
 W observations determine whether this is catalog behavior or current service
 conditions; it is not compared to the older median in isolation. In the first
 paired position, U leads W by 9.215s.
+
+The complete rematch gives U a 31.361s midpoint and W a 37.726s midpoint. U
+wins the fresh service window by 6.365s. Across all eight valid one-shot runs
+per arm, U's cumulative median remains 29.066s while W's moves to 31.907s. The
+control now leads by 2.841s. The retained name survives the requested
+apex-predator retest.
