@@ -96,28 +96,55 @@
     (is (= {:ok true :outcome outcome}
            (algebra/validate-outcome outcome))))
   (doseq [outcome [{:status :ok
-                    :phase :receipt-publish
-                    :source-state :committed
-                    :effects {:observed [:source-write]}}
-                   {:status :refused
-                    :phase :compile
-                    :source-state :unchanged
-                    :effects {:observed [:source-write]}}
-                   {:status :failed
-                    :phase :rollback
-                    :source-state :restored
-                    :effects {:observed [:source-write :rollback]}}
-                   {:status :unverified
-                    :phase :rollback
-                    :source-state :unknown
-                    :safe-to-retry true
-                    :effects {:observed [:source-write :rollback]}}
-                   {:status :ok
-                    :phase :receipt-publish
-                    :source-state :committed
-                    :files [{:file "src/app.clj" :result-hash "result"}]
-                    :receipt {:published true :publication-count 2}
-                    :effects {:observed [:source-write :receipt-publish]}}]]
+  :phase :receipt-publish
+  :source-state :committed
+  :effects {:observed [:source-write]}}
+ {:status :refused
+  :phase :compile
+  :source-state :unchanged
+  :effects {:observed [:source-write]}}
+ {:status :failed
+  :phase :rollback
+  :source-state :restored
+  :effects {:observed [:source-write :rollback]}}
+ {:status :unverified
+  :phase :rollback
+  :source-state :unknown
+  :safe-to-retry true
+  :effects {:observed [:source-write :rollback]}}
+ {:status :ok
+  :phase :receipt-publish
+  :source-state :committed
+  :files [{:file "src/app.clj" :result-hash "result"}]
+  :receipt {:published true :publication-count 2}
+  :effects {:observed [:source-write :receipt-publish]}}
+ {:status :failed
+  :phase :compile
+  :source-state :unchanged
+  :effects {:observed [:source-read]}}
+ {:status :ok
+  :phase :rollback
+  :source-state :restored
+  :files [{:file "src/app.clj" :original-hash "original"}]
+  :effects {:observed [:source-write :rollback]}}
+ {:status :refused
+  :phase :receipt-publish
+  :source-state :unchanged
+  :receipt {:published true :publication-count 1}
+  :effects {:observed [:receipt-publish]}}
+ {:status :ok
+  :phase :compile
+  :source-state :unchanged
+  :future-sources {"src/app.clj" "(ns app)"}
+  :stdout "transport data"
+  :effects {:observed [:source-read]}}
+ {:status :ok
+  :phase :receipt-publish
+  :source-state :committed
+  :files [{:file "src/a.clj" :result-hash "a"}
+          {:file "src/b.clj"}]
+  :receipt {:published true :publication-count 1}
+  :effects {:observed [:source-write :receipt-publish]}}]]
     (is (= :invalid-operation-outcome
            (:error-type (algebra/validate-outcome outcome))))))
 
