@@ -520,7 +520,7 @@
     (-> tool
         (assoc :name (get lexicon role)
                :description description)
-        (update :tool-fn #(response/wrap-handler lexicon role %))
+        (update :tool-fn #(response/wrap-handler lexicon role (:schema tool) %))
         (update :schema project-schema-prose lexicon role)
         (update :output-schema project-schema-prose lexicon role)
         (update :annotations project-schema-prose lexicon role))))

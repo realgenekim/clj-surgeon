@@ -1,6 +1,7 @@
 (ns clj-surgeon.experiments.mcp-candidate-response
   "Typed post-call projection for isolated naming catalogs."
   (:require
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clojure.string :as str]))
 
 (def routing-templates
@@ -83,21 +84,19 @@
                %))))
 
 (defn project-structured
-  "Project typed public slots; leave evidence-bearing values unchanged."
+  "Project public routing slots without relabeling semantic operation evidence."
   [lexicon invoked-role result]
   (let [project-text #(replace-names % lexicon invoked-role result)
         public-operation (get lexicon invoked-role)]
     (cond->
-      (reduce (fn [projected field]
-                (if (contains? projected field)
-                  (update projected field project-routing-value project-text)
-                  projected))
-              result
-              [:remedy :decision-rule :next_action :remedies])
-      (and (contains? result :operation)
-           (#{:edit :extract :plan} invoked-role)
-           (#{"edit_clojure" "apply_clojure_changes"} (:operation result)))
-      (assoc :operation public-operation)
+      (assoc
+        (reduce (fn [projected field]
+                  (if (contains? projected field)
+                    (update projected field project-routing-value project-text)
+                    projected))
+                result
+                [:remedy :decision-rule :next_action :remedies])
+        :invoked_tool public-operation)
 
       (and (contains? result :error) (known-errors (:error result)))
       (update :error project-text)
@@ -140,14 +139,26 @@
    :error? error?
    :structured (project-structured lexicon invoked-role structured)})
 
-(defn wrap-handler [lexicon invoked-role handler]
+(defn wrap-handler [lexicon invoked-role schema handler]
   (with-meta
     (fn [exchange params callback]
-      (handler exchange params
-               (fn [content error? structured]
-                 (let [{:keys [content error? structured]}
-                       (project-callback lexicon invoked-role
-                                         content error? structured)]
-                   (callback content error? structured)))))
+      (let [admission (admission/authorize schema params)
+            public-tool (get lexicon invoked-role)
+            projected-callback
+            (fn [content error? structured]
+              (let [{:keys [content error? structured]}
+                    (project-callback lexicon invoked-role
+                                      content error? structured)]
+                (callback content error? structured)))]
+        (if (:ok admission)
+          (handler exchange params projected-callback)
+          (projected-callback
+            [(str public-tool
+                  "\n  refused · public-schema-denied"
+                  "\n→ Call the public tool whose schema authorizes this request.")]
+            true
+            (assoc admission
+                   :operation nil
+                   :invoked_tool public-tool)))))
     {::canonical-handler handler
      ::role invoked-role}))

@@ -54,7 +54,8 @@
                      terminal)
         projected (response/project-callback lexicon :extract
                                              [summary] false structured)]
-    (is (= "extract_clojure" (get-in projected [:structured :operation])))
+    (is (= "apply_clojure_changes" (get-in projected [:structured :operation])))
+    (is (= "extract_clojure" (get-in projected [:structured :invoked_tool])))
     (is (str/starts-with? (first (:content projected)) "extract_clojure\n"))
     (is (= terminal (get-in projected [:structured :terminal_response])))
     (is (= 1 (count (re-seq (re-pattern
@@ -63,45 +64,88 @@
     (is (= evidence (select-keys (:structured projected) (keys evidence))))
     (is (not (contains? (get-in projected [:structured :next_call]) :tool)))
     (is (empty? (leaks (update projected :structured dissoc
-                               :source :diff :diagnostics :argv :replacement))))))
+                               :source :diff :diagnostics :argv :replacement
+                               :operation :invoked_tool))))))
 
-(deftest exact-t-refusal-trusts-the-invoked-edit-role
-  (let [lexicon (candidate/catalog-lexicon :T)
-        remedy "Correct the project root or request and call apply_clojure_changes once."
-        decision (first (filter #(str/starts-with? % "Set the decision")
-                                response/routing-templates))
+(deftest exact-t-refuses-extraction-through-the-edit-entrance
+  (let [observed (atom nil)
+        kernel-calls (atom 0)
+        edit-tool (tool-by-name (candidate/catalog-tools :T)
+                                "write_clojure_edits")]
+    (with-redefs [mcp-tool/handle-clj-change
+                  (fn [& _]
+                    (swap! kernel-calls inc))]
+      ((:tool-fn edit-tool)
+       nil
+       {"workspace_root" "/tmp/work"
+        "extraction" {"file" "src/a.clj"}}
+       #(reset! observed {:content %1
+                          :error? %2
+                          :structured %3})))
+    (is (= 0 @kernel-calls))
+    (is (true? (:error? @observed)))
+    (is (= :public-schema-denied
+           (get-in @observed [:structured :error-type])))
+    (is (= "write_clojure_edits"
+           (get-in @observed [:structured :invoked_tool])))
+    (is (nil? (get-in @observed [:structured :operation])))
+    (is (false? (get-in @observed [:structured :mutation-attempted])))
+    (is (false? (get-in @observed [:structured :write-authority])))))
+
+(deftest exact-t-extraction-entrance-reaches-the-shared-kernel-once
+  (let [observed (atom nil)
+        kernel-calls (atom 0)
+        extraction-name (:extract (candidate/catalog-lexicon :T))
+        extraction-tool (tool-by-name (candidate/catalog-tools :T)
+                                      extraction-name)]
+    (with-redefs [mcp-tool/handle-clj-change
+                  (fn [_ _ callback]
+                    (swap! kernel-calls inc)
+                    (callback ["apply_clojure_changes\n  success"]
+                              false
+                              {:ok true
+                               :operation "apply_clojure_changes"}))]
+      ((:tool-fn extraction-tool)
+       nil
+       {"workspace_root" "/tmp/work"
+        "extraction" {"file" "src/a.clj"}}
+       #(reset! observed {:content %1
+                          :error? %2
+                          :structured %3})))
+    (is (= 1 @kernel-calls))
+    (is (false? (:error? @observed)))
+    (is (= "apply_clojure_changes"
+           (get-in @observed [:structured :operation])))
+    (is (= extraction-name
+           (get-in @observed [:structured :invoked_tool])))))
+
+(deftest semantic-operation-survives-public-response-projection
+  (let [remedy "Correct the project root or request and call apply_clojure_changes once."
         structured {:ok false
                     :operation "apply_clojure_changes"
                     :error "apply_clojure_changes refused"
                     :remedy remedy
-                    :decision-rule decision
-                    :remedies [{:message remedy}]
-                    :next_call {:tool "apply_clojure_changes"
-                                :arguments {:replacement "apply_clojure_changes"}}
                     :source "apply_clojure_changes"
                     :diagnostics ["edit_clojure"]}
         observed (atom nil)
-        edit-tool (tool-by-name (candidate/catalog-tools :T)
-                                "write_clojure_edits")
-        returned
-        (with-redefs [mcp-tool/handle-clj-change
-                      (fn [_ _ callback]
-                        (callback
-                          [(str "apply_clojure_changes\n  refused\n→ " remedy)]
-                          true structured)
-                        :canonical-body)]
-          ((:tool-fn edit-tool)
-           nil {} #(reset! observed {:content %1
-                                     :error? %2
-                                     :structured %3})))]
-    (is (= :canonical-body returned))
-    (is (= true (:error? @observed)))
-    (is (= "write_clojure_edits" (get-in @observed [:structured :operation])))
-    (is (= "write_clojure_edits" (get-in @observed [:structured :next_call :tool])))
-    (is (empty? (leaks (update @observed :structured dissoc
-                               :source :diagnostics))))
+        extraction-name (:extract (candidate/catalog-lexicon :T))
+        extraction-tool (tool-by-name (candidate/catalog-tools :T)
+                                      extraction-name)]
+    (with-redefs [mcp-tool/handle-clj-change
+                  (fn [_ _ callback]
+                    (callback
+                      [(str "apply_clojure_changes\n  refused\n→ " remedy)]
+                      true structured))]
+      ((:tool-fn extraction-tool)
+       nil {"extraction" {}}
+       #(reset! observed {:content %1
+                          :error? %2
+                          :structured %3})))
+    (is (true? (:error? @observed)))
     (is (= "apply_clojure_changes"
-           (get-in @observed [:structured :next_call :arguments :replacement])))
+           (get-in @observed [:structured :operation])))
+    (is (= extraction-name
+           (get-in @observed [:structured :invoked_tool])))
     (is (= "apply_clojure_changes" (get-in @observed [:structured :source])))
     (is (= ["edit_clojure"] (get-in @observed [:structured :diagnostics])))))
 
@@ -122,11 +166,16 @@
                        :remedy remedy})
             unavailable (remove (set (vals lexicon)) legacy-names)]
         (doseq [projected [success refusal]]
-          (is (= expected (get-in projected [:structured :operation])))
+          (is (= "apply_clojure_changes"
+                 (get-in projected [:structured :operation])))
+          (is (= expected (get-in projected [:structured :invoked_tool])))
           (is (str/starts-with? (first (:content projected)) expected))
           (is (not-any? (fn [legacy]
                           (some #(contains-token? % legacy)
-                                (remove nil? (protocol-strings projected))))
+                                (remove nil?
+                                        (protocol-strings
+                                          (update projected :structured
+                                                  dissoc :operation)))))
                         unavailable)))))))
 
 (deftest projection-preserves-arbitrary-prose-and-transform-evidence
@@ -167,7 +216,7 @@
     (candidate/catalog-tools :T)
     (is (= canonical (mcp-server/public-tool-registry)))))
 
-(deftest catalog-a-callback-is-byte-for-byte-canonical
+(deftest catalog-a-preserves-semantic-output-and-adds-invoked-identity
   (let [tool (tool-by-name (candidate/catalog-tools :A)
                            "apply_clojure_changes")
         cases [{:content ["apply_clojure_changes\n  success"]
@@ -186,9 +235,14 @@
                         (callback (:content canonical)
                                   (:error? canonical)
                                   (:structured canonical)))]
-          ((:tool-fn tool) nil {}
+          ((:tool-fn tool) nil {"changes" [] "expect" {}}
                            #(reset! observed {:content %1 :error? %2 :structured %3})))
-        (is (= canonical @observed))))))
+        (is (= (:content canonical) (:content @observed)))
+        (is (= (:error? canonical) (:error? @observed)))
+        (is (= (:structured canonical)
+               (dissoc (:structured @observed) :invoked_tool)))
+        (is (= "apply_clojure_changes"
+               (get-in @observed [:structured :invoked_tool])))))))
 
 (defn -main [& _]
   (let [{:keys [fail error]}
