@@ -30,7 +30,10 @@
           :assoc-entry
           {:allowed #{"key" "value"}
            :required #{"key" "value"}}}
-         schema/direct-change-contract)))
+         schema/direct-change-contract))
+  (is (re-find #"Never combine edits and changes"
+               (get-in schema/explicit-change-schema
+                       [:properties "changes" :description]))))
 
 (deftest contract-projection-cannot-ignore-a-published-field
   (testing "a schema edit changes the validator-facing projection immediately"
