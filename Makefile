@@ -667,6 +667,7 @@ test-fast:
 	bb test/run_all.clj
 
 analyzer-contract-test:
+	@# @spec MCP-OP-ANALYZER-008
 	clojure $(MCP_JAVA_OPTS) -M:clj-surgeon/analyzer-contract-test
 
 analyzer-contract-target-self-test:

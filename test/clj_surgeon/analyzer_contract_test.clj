@@ -1,4 +1,5 @@
 (ns clj-surgeon.analyzer-contract-test
+  ;; @spec MCP-OP-ANALYZER-008
   (:require
    [babashka.fs :as fs]
    [clj-surgeon.binding-rename :as binding-rename]
