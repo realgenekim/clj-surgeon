@@ -491,19 +491,19 @@
              :candidate-live-result-hash (:legacy-result-hash live)
              :candidate-live-source-exact (= future-source (:source-after live))
              :shadow-safe shadow-safe?}]
-        (let [result
-              (assoc result
-                     :all-correct
-                     (every? true?
-                             [(:all-case-gates-pass result)
-                              (:exact-receipt-source result)
-                              (:pre-accepts-candidate-receipt result)
-                              (:candidate-accepts-pre-receipt result)
-                              (:cross-version-inverse-equal result)
-                              (:candidate-live-projection-exact result)
-                              (:candidate-live-source-exact result)
-                              (:shadow-safe result)]))]
-          (assoc result :report-hash (data-hash result))))
+        (as-> result complete
+          (assoc complete
+                 :all-correct
+                 (every? true?
+                         [(:all-case-gates-pass complete)
+                          (:exact-receipt-source complete)
+                          (:pre-accepts-candidate-receipt complete)
+                          (:candidate-accepts-pre-receipt complete)
+                          (:cross-version-inverse-equal complete)
+                          (:candidate-live-projection-exact complete)
+                          (:candidate-live-source-exact complete)
+                          (:shadow-safe complete)]))
+          (assoc complete :report-hash (data-hash complete))))
       (finally
         (delete-tree! root)))))
 
