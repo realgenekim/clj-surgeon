@@ -25,6 +25,7 @@
    [clj-surgeon.ls-tree-test]
    [clj-surgeon.move-dependency-test]
    [clj-surgeon.move-test]
+   [clj-surgeon.operation-algebra-test]
    [clj-surgeon.outermost-test]
    [clj-surgeon.outline-test]
    [clj-surgeon.owner-hypotheses-test]
@@ -44,6 +45,7 @@
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test
+                   'clj-surgeon.operation-algebra-test
                    'clj-surgeon.move-dependency-test
                    'clj-surgeon.analyze-test
                    'clj-surgeon.diagnostic-delta-test
