@@ -109,32 +109,44 @@
   [{:keys [status phase source-state files receipt effects safe-to-retry]
     :as outcome}]
   (let [observed (set (:observed effects))
+        terminal [status phase source-state]
+        legal-terminal?
+        (or (= [:ok :compile :unchanged] terminal)
+            (and (= :refused status)
+                 (= :unchanged source-state)
+                 (contains? #{:select :snapshot :compile :receipt-stage}
+                            phase))
+            (= [:ok :receipt-publish :committed] terminal)
+            (= [:failed :rollback :restored] terminal)
+            (and (= :unverified status)
+                 (= :unknown source-state)
+                 (contains? #{:commit :read-back :receipt-publish :rollback}
+                            phase)))
+        forbidden-keys
+        (set/intersection
+          (set (keys outcome))
+          #{:original-sources :future-sources :stdout :stderr :exit-status
+            :json :callback-state :human-summary})
         wrote? (contains? observed :source-write)
         published? (contains? observed :receipt-publish)
-        result-proved? (boolean (some :result-hash files))
-        original-proved? (boolean (some :original-hash files))
+        result-proved?
+        (and (seq files) (every? :result-hash files))
+        original-proved?
+        (and (seq files) (every? :original-hash files))
         publication-count (:publication-count receipt)
         violations
         (cond-> []
-          (not (contains? #{:ok :refused :failed :unverified} status))
-          (conj :invalid-status)
+          (not legal-terminal?)
+          (conj :illegal-terminal-state)
 
-          (not (contains? #{:select :snapshot :compile :receipt-stage
-                            :commit :read-back :receipt-publish :rollback}
-                          phase))
-          (conj :invalid-phase)
-
-          (not (contains? #{:unchanged :committed :restored :unknown}
-                          source-state))
-          (conj :invalid-source-state)
+          (seq forbidden-keys)
+          (conj :forbidden-outcome-fields)
 
           (and (= :unchanged source-state) wrote?)
           (conj :unchanged-after-write)
 
           (and (= :committed source-state)
-               (not (and (= :ok status)
-                         (= :receipt-publish phase)
-                         result-proved?
+               (not (and result-proved?
                          (= true (:published receipt))
                          (= 1 publication-count)
                          wrote?
@@ -142,8 +154,7 @@
           (conj :committed-without-proof)
 
           (and (= :restored source-state)
-               (not (and (= :rollback phase)
-                         original-proved?
+               (not (and original-proved?
                          wrote?
                          (contains? observed :rollback))))
           (conj :restored-without-proof)
@@ -154,14 +165,9 @@
           (and publication-count (not= 1 publication-count))
           (conj :invalid-publication-count)
 
-          (and (= :ok status)
-               (= :compile phase)
-               (not= :unchanged source-state))
-          (conj :preview-source-state)
-
           (and (= :refused status)
-               (not= :unchanged source-state))
-          (conj :refusal-source-state))]
+               (or wrote? published? (= true (:published receipt))))
+          (conj :refusal-after-effect))]
     (if (seq violations)
       (invalid-outcome violations)
       {:ok true :outcome outcome})))
