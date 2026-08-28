@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# Cheap, no-mutation recognition screen for the U/V/W/X candidate catalogs.
+# Cheap, one-call, zero-mutation routing screen for U/V/W/X catalogs.
 #
-# The screen asks a fresh Sol/high caller to select tools for five bounded
-# scenarios without invoking any tool. Every run starts an isolated candidate
-# MCP server and fresh CODEX_HOME, captures the exact tools ingested by the
-# Codex app-server, and refuses before the model when registry parity fails.
+# Every run starts an isolated candidate MCP server and fresh CODEX_HOME. A
+# fresh Sol/high caller must route one complete extraction request to exactly
+# one tool. The source is deliberately absent, so the call refuses before
+# mutation and pays no formatting, lint, or verification cost.
 
 set -euo pipefail
 
@@ -63,80 +63,20 @@ catalog_order() {
   done
 }
 
-recognition_prompt() {
+routing_prompt() {
   cat <<'EOF'
-This is a read-only tool-recognition questionnaire. Do not call any tool. Do
-not execute a shell command, read a file, or change any state.
+This is a safe routing canary. Call exactly one available clj-surgeon MCP tool.
+Do not inspect, read files, use shell commands, or modify files.
 
-For each scenario, choose the single available clj-surgeon MCP tool that you
-would call first:
+The complete decision is to move two exact named top-level owners from one
+Clojure namespace into a new namespace. Use exactly these arguments:
 
-1. extraction: Move 15 exact named top-level owners from one Clojure namespace
-   into a new namespace. The source, destination, ordered owners, visibility
-   decision, caller decisions, and exact verification profile are supplied.
-2. read: Return three exact named forms from one Clojure file.
-3. edit: Apply four supplied literal replacements in three named owners as one
-   guarded atomic edit.
-4. continue_plan: Apply a retained semantic basis after every returned site
-   decision has been filled.
-5. transform: Preview one bounded computed Clojure transformation expressed as
-   a Clojure program.
+{"extraction":{"file":"src/missing/source.clj","to":"src/missing/destination.clj","forms":["alpha","beta"],"public_forms":[],"caller_changes":[],"ignored_caller_files":[],"require_policy":"minimal","expect":{"forms":2,"caller_edits":0,"files":2}}}
 
-Return exactly one JSON object on one line, with no Markdown fence and no other
-text:
-{"first_tool":"TOOL_FOR_EXTRACTION","why":"ONE SHORT REASON","choices":{"read":"TOOL","edit":"TOOL","continue_plan":"TOOL","transform":"TOOL"}}
+Choose the single tool whose public contract owns this extraction. The source
+is deliberately absent, so the tool must refuse before mutation. After that
+one refusal, make no other tool call and reply: routing canary complete
 EOF
-}
-
-strip_single_json_fence() {
-  sed -e '1{/^```json[[:space:]]*$/d;}' -e '${/^```[[:space:]]*$/d;}' "$1"
-}
-
-score_response() {
-  local final_file=$1 role_receipt=$2 score_file=$3 normalized
-  normalized=$(mktemp "${TMPDIR:-/tmp}/clj-surgeon-recognition-json.XXXXXX")
-  strip_single_json_fence "$final_file" > "$normalized"
-
-  local expected_extract expected_read expected_edit expected_plan expected_transform
-  expected_extract=$(jq -r '.roles.extract' "$role_receipt")
-  expected_read=$(jq -r '.roles.inspect' "$role_receipt")
-  expected_edit=$(jq -r '.roles.edit' "$role_receipt")
-  expected_plan=$(jq -r '.roles.plan' "$role_receipt")
-  expected_transform=$(jq -r '.roles["transform-preview"]' "$role_receipt")
-
-  if ! jq -e . "$normalized" >/dev/null 2>&1; then
-    jq -n \
-      --arg expected "$expected_extract" \
-      '{ok:false, format_ok:false, expected_first_tool:$expected,
-        chosen_first_tool:null, explanation:null,
-        all_choices_correct:false, reason:"invalid-json"}' > "$score_file"
-    rm -f "$normalized"
-    return
-  fi
-
-  jq \
-    --arg extract "$expected_extract" \
-    --arg read "$expected_read" \
-    --arg edit "$expected_edit" \
-    --arg plan "$expected_plan" \
-    --arg transform "$expected_transform" '
-      (.first_tool == $extract) as $first_ok
-      | ((.why | type) == "string" and (.why | length) >= 8) as $why_ok
-      | ((.choices.read == $read)
-         and (.choices.edit == $edit)
-         and (.choices.continue_plan == $plan)
-         and (.choices.transform == $transform)) as $choices_ok
-      | {ok: ($first_ok and $why_ok and $choices_ok),
-         format_ok: true,
-         expected_first_tool: $extract,
-         chosen_first_tool: .first_tool,
-         first_choice_correct: $first_ok,
-         explanation: .why,
-         explanation_present: $why_ok,
-         all_choices_correct: $choices_ok,
-         choices: .choices}
-    ' "$normalized" > "$score_file"
-  rm -f "$normalized"
 }
 
 write_codex_config() {
@@ -217,18 +157,11 @@ self_test_run() {
   expected_order=$'UVWX\nVWXU\nWXUV\nXUVW'
   [ "$actual_order" = "$expected_order" ]
 
-  cat > "$tmp/roles.json" <<'EOF'
-{"roles":{"inspect":"inspect_clojure","edit":"edit_clojure","extract":"move_clojure_forms","plan":"continue_clojure_plan","transform-preview":"transform_clojure","transform-commit":"transform_clojure"}}
+  cat > "$tmp/started-items.json" <<'EOF'
+[{"type":"mcp_tool_call","server":"clj-surgeon","tool":"move_clojure_forms"}]
 EOF
-  cat > "$tmp/good.json" <<'EOF'
-{"first_tool":"move_clojure_forms","why":"It owns exact namespace movement.","choices":{"read":"inspect_clojure","edit":"edit_clojure","continue_plan":"continue_clojure_plan","transform":"transform_clojure"}}
-EOF
-  score_response "$tmp/good.json" "$tmp/roles.json" "$tmp/good-score.json"
-  [ "$(jq -r .ok "$tmp/good-score.json")" = true ]
-
-  sed 's/move_clojure_forms/edit_clojure/' "$tmp/good.json" > "$tmp/bad.json"
-  score_response "$tmp/bad.json" "$tmp/roles.json" "$tmp/bad-score.json"
-  [ "$(jq -r .ok "$tmp/bad-score.json")" = false ]
+  [ "$(jq -r '[.[] | select(.type == "mcp_tool_call" and .server == "clj-surgeon")][0].tool' "$tmp/started-items.json")" = move_clojure_forms ]
+  [ "$(jq '[.[] | select(.type == "mcp_tool_call")] | length' "$tmp/started-items.json")" -eq 1 ]
 
   cat > "$tmp/advertised-surface.json" <<'EOF'
 {"tools":[{"name":"inspect_clojure","description":"read","input-schema":{"type":"object","oneOf":[{"required":["requests"]}]},"output-schema":{"type":"object"},"annotations":{"title":"Inspect","read-only":true,"destructive":false,"idempotent":true,"open-world":false,"return-direct":false}}]}
@@ -258,18 +191,19 @@ EOF
     "$tmp/actual-client-surface.json"
   cmp "$tmp/expected-client-surface.json" "$tmp/actual-client-surface.json"
 
-  recognition_prompt > "$tmp/prompt.txt"
+  routing_prompt > "$tmp/prompt.txt"
   if rg -q 'apply_clojure_changes|apply_clojure_extraction|extract_clojure|move_clojure_forms' \
     "$tmp/prompt.txt"; then
-    echo "Recognition prompt leaked a candidate extraction name" >&2
+    echo "Routing prompt leaked a candidate extraction name" >&2
     return 1
   fi
-  rg -q 'Do not call any tool' "$tmp/prompt.txt"
+  rg -q 'Call exactly one available clj-surgeon MCP tool' "$tmp/prompt.txt"
+  rg -q 'deliberately absent' "$tmp/prompt.txt"
 
   printf '%s\n' \
     'catalog recognition screen self-test: PASS' \
     '  counterbalance: UVWX / VWXU / WXUV / XUVW' \
-    '  scorer: positive and wrong-first-choice falsifier passed' \
+    '  scorer: exact first public MCP tool and one-call geometry' \
     '  transport: only observed Codex schema/annotation projection admitted' \
     '  prompt: no candidate extraction name leaked'
   rm -rf "$tmp"
@@ -302,7 +236,7 @@ done
 mkdir -p "$result_dir"
 result_dir=$(cd "$result_dir" && pwd)
 printf '%s\n' \
-  $'run_id\treplicate\tposition\tcatalog\texpected_first_tool\tchosen_first_tool\tcorrect\tall_choices_correct\twall_ms\texit_code\tmcp_calls\tshell_calls\tfile_changes\texplanation' \
+  $'run_id\treplicate\tposition\tcatalog\texpected_first_tool\tchosen_first_tool\tcorrect\tone_call\twall_ms\texit_code\tmcp_calls\tshell_calls\tfile_changes\tfinal_response' \
   > "$result_dir/runs.tsv"
 
 git_head=$(git -C "$repo_root" rev-parse HEAD)
@@ -339,7 +273,7 @@ for replicate in $(seq 1 "$replicates"); do
     registry_receipt="$run_dir/codex-mcp-registry.json"
     mkdir -p "$run_dir" "$codex_home" "$workspace" "$run_dir/mcp-telemetry"
     ln -s "$auth_file" "$codex_home/auth.json"
-    recognition_prompt > "$run_dir/prompt.txt"
+    routing_prompt > "$run_dir/prompt.txt"
     find "$workspace" -type f -print0 | sort -z | xargs -0 shasum -a 256 \
       > "$run_dir/workspace-before.sha256"
     chmod a-w "$workspace"
@@ -446,38 +380,44 @@ for replicate in $(seq 1 "$replicates"); do
       "$run_dir/started-items.json")
     file_changes=$(jq '[.[] | select(.type == "file_change")] | length' \
       "$run_dir/started-items.json")
-    score_response "$run_dir/final.txt" "$role_receipt" "$run_dir/score.json"
+    expected_first=$(jq -r '.roles.extract' "$role_receipt")
+    chosen_first=$(jq -r \
+      '[.[] | select(.type == "mcp_tool_call" and .server == "clj-surgeon")][0].tool // ""' \
+      "$run_dir/started-items.json")
 
     chmod u+w "$workspace"
     find "$workspace" -type f -print0 | sort -z | xargs -0 shasum -a 256 \
       > "$run_dir/workspace-after.sha256"
     mutation_free=true
     if ! cmp -s "$run_dir/workspace-before.sha256" "$run_dir/workspace-after.sha256" \
-      || [ "$mcp_calls" -ne 0 ] || [ "$shell_calls" -ne 0 ] || [ "$file_changes" -ne 0 ]; then
+      || [ "$shell_calls" -ne 0 ] || [ "$file_changes" -ne 0 ]; then
       mutation_free=false
     fi
-    correct=$(jq -r .ok "$run_dir/score.json")
-    if [ "$exit_code" -ne 0 ] || [ "$mutation_free" != true ]; then
-      correct=false
+    one_call=false
+    [ "$mcp_calls" -eq 1 ] && one_call=true
+    correct=false
+    if [ "$exit_code" -eq 0 ] && [ "$mutation_free" = true ] \
+      && [ "$one_call" = true ] && [ "$chosen_first" = "$expected_first" ]; then
+      correct=true
     fi
-    jq --argjson mutation_free "$mutation_free" \
+    final_response=$(tr '\t\r\n' ' ' < "$run_dir/final.txt")
+    jq -n --arg expected "$expected_first" --arg chosen "$chosen_first" \
+      --arg final_response "$final_response" \
+      --argjson correct "$correct" --argjson one_call "$one_call" \
+      --argjson mutation_free "$mutation_free" \
       --argjson mcp_calls "$mcp_calls" \
       --argjson shell_calls "$shell_calls" \
       --argjson file_changes "$file_changes" \
       --argjson wall_ms "$wall_ms" \
-      '. + {mutation_free:$mutation_free,mcp_calls:$mcp_calls,
-            shell_calls:$shell_calls,file_changes:$file_changes,wall_ms:$wall_ms}' \
-      "$run_dir/score.json" > "$run_dir/score.with-evidence.json"
-    mv "$run_dir/score.with-evidence.json" "$run_dir/score.json"
+      '{ok:$correct,expected_first_tool:$expected,chosen_first_tool:$chosen,
+        one_call:$one_call,mutation_free:$mutation_free,mcp_calls:$mcp_calls,
+        shell_calls:$shell_calls,file_changes:$file_changes,wall_ms:$wall_ms,
+        final_response:$final_response}' > "$run_dir/score.json"
 
-    expected_first=$(jq -r .expected_first_tool "$run_dir/score.json")
-    chosen_first=$(jq -r '.chosen_first_tool // ""' "$run_dir/score.json")
-    all_choices=$(jq -r .all_choices_correct "$run_dir/score.json")
-    explanation=$(jq -r '.explanation // "" | gsub("[\\t\\r\\n]+"; " ")' "$run_dir/score.json")
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$run_id" "$replicate" "$position" "$catalog" "$expected_first" \
-      "$chosen_first" "$correct" "$all_choices" "$wall_ms" "$exit_code" \
-      "$mcp_calls" "$shell_calls" "$file_changes" "$explanation" \
+      "$chosen_first" "$correct" "$one_call" "$wall_ms" "$exit_code" \
+      "$mcp_calls" "$shell_calls" "$file_changes" "$final_response" \
       >> "$result_dir/runs.tsv"
     printf '%-18s first=%-28s correct=%-5s wall=%sms\n' \
       "$run_id" "$chosen_first" "$correct" "$wall_ms"
