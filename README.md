@@ -62,6 +62,16 @@ same Terra caller gave Surgeon the architectural decision once, and
 rewrite-clj performed the guarded structural transaction correctly in 23.621
 seconds.
 
+Spark/high found an even funnier solution to the parenthesis problem: do not
+balance the difficult forms—delete almost all of them. Its native route spent
+62.207 seconds, 26 commands, and 984,329 input tokens producing Clojure that
+parsed successfully because scarcely any of the 4,594-line source namespace
+remained. The semantic scorer was less impressed. Spark's Surgeon route moved
+the intended 15 forms, preserved the other 63 caller occurrences and unrelated
+code, and finished correctly in one 11.966-second transaction. We do not call
+that a measured speedup because the native result was wrong; we call it an
+excellent argument for giving enthusiastic models a structural scalpel.
+
 This is not an isolated quoting mishap. Coding agents will reach for Perl,
 Python, regexes, line slicing, delimiter counters, and repeated patches when
 asked to manipulate structure using only text tools. Balancing Clojure forms
