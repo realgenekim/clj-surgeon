@@ -1858,19 +1858,21 @@
   [spec]
   (validate-spec! spec)
   (let [canonical-spec (canonicalize-spec spec)
-        sources (read-sources (spec-files canonical-spec))]
+        sources (read-sources (spec-files canonical-spec))
+        algebra-result
+        (operation-algebra/compile-change
+          (operation-algebra/change-entry compile-transaction)
+          {:operation :change
+           :operation-version 1
+           :entrance :cli
+           :policy :cli-legacy
+           :lifecycle :commit}
+          sources
+          canonical-spec)]
     {:spec canonical-spec
-     :compiled
-     (:compiled
-       (operation-algebra/compile-change
-         (operation-algebra/change-entry compile-transaction)
-         {:operation :change
-          :operation-version 1
-          :entrance :cli
-          :policy :cli-legacy
-          :lifecycle :commit}
-         sources
-         canonical-spec))}))
+     :compiled (:compiled algebra-result)
+     :capabilities (:capabilities algebra-result)
+     :authority-error (when (:error algebra-result) algebra-result)}))
 
 (defn execute-change!
   "Compile, commit, verify, and publish one durable inverse receipt."
@@ -1885,11 +1887,28 @@
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
     (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled]} (compile-change-spec spec)
+          {:keys [spec compiled capabilities authority-error]} (compile-change-spec spec)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
                      compiled)]
-      (assert-receipt-does-not-alias-source! receipt-path spec)
+      (do
+        (assert-receipt-does-not-alias-source! receipt-path spec)
+        (when authority-error
+          (refuse! (:error-type authority-error)
+                   (:error authority-error)
+                   (dissoc authority-error :error :error-type)))
+        (when-not (:error compiled)
+          (let [authorization
+                (operation-algebra/authorize-effects
+                  capabilities
+                  #{:source-write
+                    :receipt-stage
+                    :receipt-publish
+                    :rollback})]
+            (when (:error authorization)
+              (refuse! (:error-type authorization)
+                       (:error authorization)
+                       (dissoc authorization :error :error-type))))))
       (if (:error compiled)
         (assoc compiled :phase :compile :source-unchanged true)
         (let [receipt (build-receipt compiled)
