@@ -26,6 +26,19 @@
                           {:required ["programs"]}
                           {:required ["delete_owners"]}]}}]})
 
+(defn- java-json-value [value]
+  (cond
+    (map? value)
+    (let [result (java.util.LinkedHashMap.)]
+      (doseq [[key child] value]
+        (.put result (name key) (java-json-value child)))
+      result)
+
+    (sequential? value)
+    (java.util.ArrayList. (map java-json-value value))
+
+    :else value))
+
 (deftest public-schema-is-executable-admission-authority
   (testing "the edit entrance cannot smuggle an extraction into the shared kernel"
     (let [result (admission/authorize edit-schema
@@ -70,6 +83,31 @@
     (is (= :public-schema-denied
            (:error-type (admission/authorize preview-schema
                                              {"expression" ""}))))))
+
+(deftest sdk-java-json-values-obey-the-same-authority
+  (let [request (java-json-value
+                  {:workspace_root "/tmp/work"
+                   :extraction {:file "src/a.clj"
+                                :forms ["alpha" "beta"]}})]
+    (is (= {:ok true} (admission/authorize extraction-schema request)))
+    (.put ^java.util.Map request "surprise" true)
+    (is (= ["surprise"]
+           (:unexpected-fields
+             (admission/authorize extraction-schema request))))))
+
+(deftest map-cardinality-and-typed-additional-properties-are-authority
+  (let [schema {:type "object"
+                :default {}
+                :minProperties 1
+                :maxProperties 2
+                :additionalProperties {:type "string"
+                                       :pattern "^[0-9a-f]{4}$"}}]
+    (is (= {:ok true} (admission/authorize schema {"a" "1a2b"})))
+    (doseq [invalid [{}
+                     {"a" "not-a-hash"}
+                     {"a" "1a2b" "b" "2b3c" "c" "3c4d"}]]
+      (is (= :public-schema-denied
+             (:error-type (admission/authorize schema invalid)))))))
 
 (deftest unknown-schema-authority-fails-closed
   (let [result (admission/authorize {:type "object"
