@@ -130,3 +130,32 @@ The next experiment is a small clean-context counterfactual on retained routes:
 This is Kent Beck's ratchet in product form: when one failed selector made the
 next change expensive, preserve the already-proved work and make the retry
 cheap without weakening the source fence.
+
+## First clean-context result: less work, slower task
+
+The N=1/arm counterfactual rejected the first interface as a performance win:
+
+| Arm | Correct | Complete wall | MCP calls | Repeated completed source |
+|---|---:|---:|---:|---:|
+| PRE `f543135` | yes | 25.838 s | 2 | 1,610 bytes |
+| POST `8125854` | yes | 41.456 s | 3 | 0 bytes |
+
+POST correctly selected the missing owner, requested only the pending suffix,
+and copied every guard. It omitted the required aggregate `expect`. Surgeon
+safely refused in 17 ms, but the next model action arrived 8.6 seconds later.
+The server eliminated repeated work while the interface created more model
+work. That is a loss.
+
+The next ratchet therefore compiles the retry bookkeeping too. A continuation
+now supplies a non-executable `retry_template`: canonical workspace root,
+pending requests, recomputed aggregate `expect`, and every guard. Failed owner
+values become explicit `null` holes with `authority=false`; the rejected value
+remains diagnostic evidence only. The model copies
+`retry_template.arguments`, fills only the holes, and submits it. An unchanged
+template schema-refuses, so the server neither guesses nor invites repetition
+of the known-bad selector.
+
+This is the next N=1 gate: exact correctness, two inspect calls, no native
+fallback, no repeated completed source, and a second call byte-equivalent to
+the template except for the null-to-owner substitution. Only if it clears that
+geometry should we spend an ABBA cohort.

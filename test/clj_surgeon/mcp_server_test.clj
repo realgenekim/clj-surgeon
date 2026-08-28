@@ -72,12 +72,20 @@
     (is (= #{"snapshot_bound" "selector_authority" "write_authority"
              "completed_request_count" "completed_request_ids"
              "pending_request_count" "pending_request_ids"
-             "snapshot_guards" "completed_results"}
+             "snapshot_guards" "completed_results" "retry_template"}
            (set (get-in tools [0 :output-schema :properties "continuation"
                                :required]))))
     (is (= false
            (get-in tools [0 :output-schema :properties "continuation"
                           :properties "write_authority" :const])))
+    (is (= false
+           (get-in tools [0 :output-schema :properties "continuation"
+                          :properties "retry_template" :properties
+                          "executable" :const])))
+    (is (= ["workspace_root" "snapshot_guards" "requests" "expect"]
+           (get-in tools [0 :output-schema :properties "continuation"
+                          :properties "retry_template" :properties
+                          "arguments" :required])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits"
              "programs" "delete_owners" "extraction" "workspace_root"}

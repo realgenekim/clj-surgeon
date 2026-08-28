@@ -570,10 +570,45 @@
     (distinct (concat (keys incoming-guards) (map :file requests)))))
 
 ;; @spec MCP-OP-READ-CONT-001 MCP-OP-READ-CONT-002
+(defn- selector-retry-template
+  [pending-requests selector-result snapshot-guards]
+  (let [failed-values (set (map (comp str :form) (:failures selector-result)))
+        failed-request (first pending-requests)
+        holes (->> (:forms failed-request)
+                   (map-indexed
+                     (fn [index form]
+                       (when (contains? failed-values form)
+                         {:path ["requests" 0 "forms" index]
+                          :request_id (:id failed-request)
+                          :kind "exact-top-level-owner"
+                          :rejected_value form
+                          :must_replace true
+                          :authority false})))
+                   (remove nil?)
+                   vec)
+        pending-with-holes
+        (assoc-in pending-requests [0 :forms]
+                  (mapv (fn [form]
+                          (when-not (contains? failed-values form) form))
+                        (:forms failed-request)))]
+    {:executable false
+     :snapshot_bound true
+     :selector_authority false
+     :write_authority false
+     :arguments
+     {:snapshot_guards snapshot-guards
+      :requests pending-with-holes
+      :expect {:requests (count pending-requests)
+               :files (count (distinct (map :file pending-requests)))}}
+     :holes holes}))
+
 (defn- selector-continuation
-  [requests failed-index completed-results snapshots incoming-guards limits]
+  [requests failed-index completed-results snapshots incoming-guards
+   selector-result limits]
   (when (seq completed-results)
-    (let [budget (enforce-output-budget completed-results limits)]
+    (let [budget (enforce-output-budget completed-results limits)
+          pending-requests (subvec requests failed-index)
+          snapshot-guards (snapshot-guards-for requests snapshots incoming-guards)]
       (if-not (:ok budget)
         budget
         {:ok true
@@ -583,10 +618,13 @@
           :write_authority false
           :completed_request_count (count completed-results)
           :completed_request_ids (mapv :id completed-results)
-          :pending_request_count (- (count requests) failed-index)
-          :pending_request_ids (mapv :id (subvec requests failed-index))
-          :snapshot_guards (snapshot-guards-for requests snapshots incoming-guards)
-          :completed_results completed-results}}))))
+          :pending_request_count (count pending-requests)
+          :pending_request_ids (mapv :id pending-requests)
+          :snapshot_guards snapshot-guards
+          :completed_results completed-results
+          :retry_template
+          (selector-retry-template
+            pending-requests selector-result snapshot-guards)}}))))
 
 (defn evaluate-snapshots
   "Evaluate a validated ordered request batch over supplied immutable snapshots.
@@ -616,7 +654,8 @@
                      continuation
                      (when (= :selector (:failed-stage result))
                        (selector-continuation
-                         requests index results snapshots snapshot-guards limits))]
+                         requests index results snapshots snapshot-guards
+                         result limits))]
                  (cond
                    (and continuation (not (:ok continuation))) continuation
                    continuation (assoc refusal :continuation

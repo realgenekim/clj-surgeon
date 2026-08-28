@@ -281,7 +281,25 @@
            (:snapshot_guards continuation)))
     (is (= ["before"] (mapv :id (:completed_results continuation))))
     (is (= "(def beta 2)"
-           (get-in continuation [:completed_results 0 :forms 0 :source])))))
+           (get-in continuation [:completed_results 0 :forms 0 :source])))
+    (is (= false (get-in continuation [:retry_template :executable])))
+    (is (= false (get-in continuation
+                         [:retry_template :selector_authority])))
+    (is (= {:requests 2 :files 1}
+           (get-in continuation [:retry_template :arguments :expect])))
+    (is (= [nil]
+           (get-in continuation
+                   [:retry_template :arguments :requests 0 :forms])))
+    (is (= "later"
+           (get-in continuation
+                   [:retry_template :arguments :requests 1 :id])))
+    (is (= [{:path ["requests" 0 "forms" 0]
+             :request_id "mistyped"
+             :kind "exact-top-level-owner"
+             :rejected_value "answr"
+             :must_replace true
+             :authority false}]
+           (get-in continuation [:retry_template :holes])))))
 
 (deftest non-selector-and-over-budget-failures-publish-no-continuation
   ;; @spec MCP-OP-READ-CONT-002
