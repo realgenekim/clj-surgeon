@@ -4,9 +4,94 @@
    [cheshire.core :as json]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
-   [clj-surgeon.mcp-tool :as mcp-tool]))
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure.string :as str]))
 
 (def supported-catalogs [:A :L :C :M :N :O :P :Q :R :S :T])
+
+(def role-lexicons
+  "One complete public vocabulary for each alternate catalog.
+
+  A role can intentionally map to the same tool as another role. Catalogs A,
+  L, and C retain one combined semantic-change tool. Catalogs M through O
+  retain one transform tool for preview and commit. The effect catalogs split
+  transform preview from transform commit."
+  {:A {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "apply_clojure_changes"
+       :plan "apply_clojure_changes"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :L {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "apply_clojure_plan"
+       :plan "apply_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :C {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "refactor_clojure"
+       :plan "refactor_clojure"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :M {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "extract_clojure"
+       :plan "apply_clojure_plan"
+       :transform-preview "transform_clojure"
+       :transform-commit "transform_clojure"}
+   :N {:inspect "inspect_clojure"
+       :edit "edit_clojure"
+       :extract "extract_clojure"
+       :plan "apply_clojure_plan"
+       :transform-preview "transform_clojure_with_clojure"
+       :transform-commit "transform_clojure_with_clojure"}
+   :O {:inspect "inspect_clojure"
+       :edit "apply_clojure_edits"
+       :extract "extract_clojure"
+       :plan "apply_clojure_plan"
+       :transform-preview "run_clojure_transform"
+       :transform-commit "run_clojure_transform"}
+   :P {:inspect "inspect_clojure"
+       :edit "commit_clojure_edits"
+       :extract "commit_clojure_extraction"
+       :plan "apply_clojure_plan"
+       :transform-preview "preview_clojure_transform"
+       :transform-commit "commit_clojure_transform"}
+   :Q {:inspect "inspect_clojure"
+       :edit "clojure.edit.commit"
+       :extract "clojure.extract.commit"
+       :plan "clojure.plan.apply"
+       :transform-preview "clojure.transform.preview"
+       :transform-commit "clojure.transform.commit"}
+   :R {:inspect "inspect_clojure"
+       :edit "edit_clojure_commit"
+       :extract "extract_clojure_commit"
+       :plan "apply_clojure_plan"
+       :transform-preview "transform_clojure_preview"
+       :transform-commit "transform_clojure_commit"}
+   :S {:inspect "inspect_clojure"
+       :edit "edit_clojure_bang"
+       :extract "extract_clojure_bang"
+       :plan "apply_clojure_plan_bang"
+       :transform-preview "transform_clojure_with_clojure"
+       :transform-commit "transform_clojure_with_clojure_bang"}
+   :T {:inspect "inspect_clojure"
+       :edit "write_clojure_edits"
+       :extract "move_clojure_owners"
+       :plan "apply_clojure_plan"
+       :transform-preview "preview_clojure_transform"
+       :transform-commit "apply_clojure_transform"}})
+
+(def public-role-keys
+  [:inspect :edit :extract :plan :transform-preview :transform-commit])
+
+(declare normalize-catalog)
+
+(defn catalog-lexicon
+  "Return the complete role vocabulary for one catalog."
+  [catalog]
+  (get role-lexicons (normalize-catalog catalog)))
 
 (def mutation-tool-ids
   #{:edit-clojure
@@ -109,98 +194,6 @@
     :must-not-select :plan
     :must-produce :typed-pre-write-refusal}])
 
-(def compact-description
-  (str
-    "Commit one complete Clojure edit decision. Supply exact old and new "
-    "forms, bounded computed programs, or exact owner deletions. Surgeon "
-    "compiles all items against one frozen snapshot and commits them "
-    "atomically. Put a computed relation in programs when it must commit with "
-    "literal edits or deletions. Use transform_clojure only for one standalone "
-    "computed preview or commit. Use the semantic-plan tool when Surgeon must "
-    "prepare or derive semantic change facts, or when project verification "
-    "must participate in rollback."))
-
-(def plan-description
-  (str
-    "Compile and apply one semantic Clojure change plan. Use a prepared "
-    "basis, an extraction request, or a change that requires project "
-    "verification with rollback. Surgeon refuses unresolved decisions "
-    "before mutation. Use edit_clojure when the request already contains "
-    "every edit and guard."))
-
-(def extraction-description
-  (str
-    "Extract exact named Clojure owners into one new namespace. Supply the "
-    "source file, destination, ordered owners, require policy, and every "
-    "known caller decision. When the request is complete, Surgeon compiles, "
-    "commits, and verifies the extraction in this call. Do not request a "
-    "separate public plan. Surgeon derives mechanical visibility and exact "
-    "counts from one frozen workspace snapshot. Only a genuine unresolved "
-    "caller decision refuses before mutation with a completed frozen plan and "
-    "an exact next call."))
-
-(def basis-plan-description
-  (str
-    "Apply one retained Clojure change basis after every genuine decision is "
-    "filled. Preserve workspace_root, basis, site IDs, decisions, and verify "
-    "from the inspect_clojure next call. Surgeon refuses stale source or an "
-    "unresolved decision before mutation. Use extract_clojure for extraction, "
-    "including a mechanically complete one-call extraction."))
-
-(def explicit-edit-description
-  (str
-    "Commit one complete Clojure edit decision. Supply compact exact edits, "
-    "bounded computed programs, exact owner deletions, or fully specified "
-    "structural changes with exact aggregate counts. Surgeon compiles all "
-    "items against one frozen snapshot and commits them atomically. Put a "
-    "computed relation here when it must commit with a literal edit or "
-    "deletion. Use transform_clojure only for one standalone computed preview "
-    "or commit."))
-
-(def transform-description
-  (str
-    "Preview or commit one standalone bounded SCI transformation. Use this "
-    "tool when the request contains one computed relation and no literal edit "
-    "or owner deletion. Put a computed relation in edit_clojure programs when "
-    "all changes must commit as one atomic batch."))
-
-(def apply-edits-description
-  (str
-    "Apply one complete Clojure edit decision stated as data. Supply exact "
-    "old and new forms, fully specified structural changes, bounded computed "
-    "programs, or exact owner deletions. Surgeon compiles all items against "
-    "one frozen snapshot and commits them atomically. Use "
-    "run_clojure_transform only for one standalone computed rule."))
-
-(def atomic-chord-description
-  (str
-    "Commit one atomic Clojure edit chord. Supply literal or structural "
-    "actions, optional bounded computed programs, and exact owner deletions. "
-    "Surgeon compiles all actions against one frozen snapshot. Use "
-    "transform_clojure_with_clojure for a computed solo with one selection "
-    "and one bounded SCI rule."))
-
-(def computed-solo-description
-  (str
-    "Preview or commit one computed Clojure solo. Supply one structural "
-    "selection and one bounded SCI rule. Preview is the default. Use "
-    "edit_clojure when a computed program must commit atomically with literal "
-    "or structural actions or exact owner deletions."))
-
-(def transform-preview-description
-  (str
-    "Preview one computed Clojure transformation. Supply one structural "
-    "selection and one bounded SCI rule. This control cannot commit. Use the "
-    "transform commit control after the decision is complete, or use the edit "
-    "commit control when the program must commit with other source actions."))
-
-(def transform-commit-description
-  (str
-    "Commit one standalone computed Clojure transformation. Supply one "
-    "structural selection, one bounded SCI rule, and commit=true. Use the "
-    "preview control when the decision is incomplete. Use the edit commit "
-    "control when this program must commit with other source actions."))
-
 (defn normalize-catalog
   "Return one supported catalog keyword or refuse unsupported input."
   [catalog]
@@ -213,6 +206,120 @@
       (throw (ex-info "Unsupported MCP candidate catalog"
                       {:catalog catalog
                        :supported supported-catalogs})))))
+
+(defn- catalog-instructions*
+  [{:keys [inspect edit extract plan transform-preview transform-commit]}]
+  (str
+    "Batch known Clojure reads with " inspect ". Use " edit " when the "
+    "request already contains every edit and guard. Use " extract " for "
+    "named-owner namespace movement. Use " plan " only for a retained basis "
+    "and its filled decisions. Use " transform-preview " to preview one "
+    "standalone bounded computed relation"
+    (if (= transform-preview transform-commit)
+      " and commit it only when the request explicitly authorizes commit. "
+      (str "; use " transform-commit " to commit that computed relation. "))
+    "Do not repeat reads after read_complete=true or writes after "
+    "verification_complete=true."))
+
+(defn catalog-instructions
+  "Return initialize instructions written entirely in one catalog lexicon."
+  [catalog]
+  (catalog-instructions* (catalog-lexicon catalog)))
+
+(defn- edit-description*
+  [{:keys [edit plan transform-preview]}]
+  (str
+    "Commit one complete Clojure edit decision with " edit ". Supply exact "
+    "old and new forms, bounded computed programs, exact owner deletions, or "
+    "fully specified structural changes. Surgeon compiles all items against "
+    "one frozen snapshot and commits them atomically. Put a computed relation "
+    "here only when it must commit with another source action. Use "
+    transform-preview " for one standalone computed relation. Use " plan
+    " only for a retained semantic basis and filled decisions."))
+
+(defn- combined-plan-description*
+  [{:keys [edit extract plan inspect]}]
+  (str
+    "Compile and apply one semantic Clojure change with " plan ". Use the "
+    "retained basis returned by " inspect " or use this same control as "
+    extract " for a direct extraction request. Surgeon refuses unresolved "
+    "decisions before mutation. Use " edit " when the request already "
+    "contains every edit and guard."))
+
+(defn- extraction-description*
+  [{:keys [extract]}]
+  (str
+    "Use " extract " to move exact named Clojure owners into one new "
+    "namespace. Supply the source file, destination, ordered owners, require "
+    "policy, and every known caller decision. When the request is complete, "
+    "Surgeon compiles, commits, and verifies the extraction in this call. A "
+    "genuine unresolved caller decision refuses before mutation with a "
+    "completed frozen plan and an exact next call to " extract "."))
+
+(defn- basis-plan-description*
+  [{:keys [inspect extract plan]}]
+  (str
+    "Use " plan " only to apply one retained Clojure change basis after "
+    "every genuine decision is filled. Preserve workspace_root, basis, site "
+    "IDs, decisions, and verify from the " inspect " next call. Surgeon "
+    "refuses stale source or an unresolved decision before mutation. Use "
+    extract " for extraction, including a mechanically complete one-call "
+    "extraction."))
+
+(defn- transform-preview-description*
+  [{:keys [edit transform-preview transform-commit]}]
+  (str
+    "Use " transform-preview " to preview one standalone bounded SCI "
+    "transformation. Supply one structural selection and one bounded rule. "
+    (if (= transform-preview transform-commit)
+      "This same control commits only when commit=true. "
+      (str "This control cannot commit. Use " transform-commit
+           " after the decision is complete. "))
+    "Use " edit " when the program must commit with another source action."))
+
+(defn- transform-commit-description*
+  [{:keys [edit transform-preview transform-commit]}]
+  (str
+    "Use " transform-commit " to commit one standalone bounded SCI "
+    "transformation. Supply one structural selection, one bounded rule, and "
+    "commit=true. Use " transform-preview " while the decision is incomplete. "
+    "Use " edit " when the program must commit with another source action."))
+
+(defn- replace-canonical-tool-names
+  [text lexicon operation-role]
+  (let [transform-role (if (= operation-role :transform-commit)
+                         :transform-commit
+                         :transform-preview)
+        change-role (if (= operation-role :extract) :extract :plan)]
+    (reduce (fn [result [old role]]
+              (str/replace result old (get lexicon role)))
+            text
+            [["inspect_clojure" :inspect]
+             ["apply_clojure_changes" change-role]
+             ["edit_clojure" :edit]
+             ["transform_clojure" transform-role]])))
+
+(defn- project-schema-prose
+  "Replace only descriptive schema strings, never enum/const response data."
+  [value lexicon operation-role]
+  (cond
+    (map? value)
+    (into (empty value)
+          (map (fn [[key child]]
+                 [key (if (and (#{:description "description" :title "title"} key)
+                               (string? child))
+                        (replace-canonical-tool-names
+                          child lexicon operation-role)
+                        (project-schema-prose child lexicon operation-role))]))
+          value)
+
+    (vector? value)
+    (mapv #(project-schema-prose % lexicon operation-role) value)
+
+    (seq? value)
+    (doall (map #(project-schema-prose % lexicon operation-role) value))
+
+    :else value))
 
 (defn- tool-by-id
   [tools id]
@@ -254,18 +361,14 @@
           schema
           ["workspace_root" "basis" "decisions" "verify"]
           [basis-branch])
-        edit-tool (assoc compact
-                         :description explicit-edit-description
-                         :schema edit-schema)
+        edit-tool (assoc compact :schema edit-schema)
         extraction-tool (assoc change
                                :id :candidate-extract-clojure
                                :name "extract_clojure"
-                               :description extraction-description
                                :schema extraction-schema)
         plan-tool (assoc change
                          :id :candidate-apply-clojure-plan
                          :name "apply_clojure_plan"
-                         :description basis-plan-description
                          :schema basis-schema)]
     (->> base-tools
          (mapcat
@@ -273,36 +376,9 @@
              (case (:id tool)
                :clj-change []
                :edit-clojure [edit-tool extraction-tool plan-tool]
-               :transform-clojure [(assoc tool :description transform-description)]
+               :transform-clojure [tool]
                [tool])))
          vec)))
-
-(def effect-names
-  {:P {:edit "commit_clojure_edits"
-       :extract "commit_clojure_extraction"
-       :plan "apply_clojure_plan"
-       :preview "preview_clojure_transform"
-       :transform "commit_clojure_transform"}
-   :Q {:edit "clojure.edit.commit"
-       :extract "clojure.extract.commit"
-       :plan "clojure.plan.apply"
-       :preview "clojure.transform.preview"
-       :transform "clojure.transform.commit"}
-   :R {:edit "edit_clojure_commit"
-       :extract "extract_clojure_commit"
-       :plan "apply_clojure_plan"
-       :preview "transform_clojure_preview"
-       :transform "transform_clojure_commit"}
-   :S {:edit "edit_clojure_bang"
-       :extract "extract_clojure_bang"
-       :plan "apply_clojure_plan_bang"
-       :preview "transform_clojure_with_clojure"
-       :transform "transform_clojure_with_clojure_bang"}
-   :T {:edit "write_clojure_edits"
-       :extract "move_clojure_owners"
-       :plan "apply_clojure_plan"
-       :preview "preview_clojure_transform"
-       :transform "apply_clojure_transform"}})
 
 (def effect-titles
   {:R {:edit "edit_clojure!"
@@ -343,7 +419,12 @@
 
 (defn- effect-catalog-tools
   [catalog base-tools]
-  (let [names (get effect-names catalog)
+  (let [lexicon (catalog-lexicon catalog)
+        names {:edit (:edit lexicon)
+               :extract (:extract lexicon)
+               :plan (:plan lexicon)
+               :preview (:transform-preview lexicon)
+               :transform (:transform-commit lexicon)}
         titles (get effect-titles catalog)
         split (split-catalog-tools base-tools)
         transform (tool-by-id split :transform-clojure)
@@ -355,7 +436,6 @@
         preview-tool (-> transform
                          (assoc :id :candidate-transform-preview
                                 :name (:preview names)
-                                :description transform-preview-description
                                 :schema preview-schema)
                          (with-effect-annotations
                            read-only-annotations
@@ -363,7 +443,6 @@
         commit-tool (-> transform
                         (assoc :id :candidate-transform-commit
                                :name (:transform names)
-                               :description transform-commit-description
                                :schema commit-schema)
                         (with-effect-annotations
                           mutation-annotations
@@ -397,6 +476,43 @@
                [tool])))
          vec)))
 
+(defn- operation-role
+  [{:keys [id]}]
+  (case id
+    :inspect-clojure :inspect
+    :edit-clojure :edit
+    :clj-change :plan
+    :candidate-extract-clojure :extract
+    :candidate-apply-clojure-plan :plan
+    :transform-clojure :transform-preview
+    :candidate-transform-preview :transform-preview
+    :candidate-transform-commit :transform-commit))
+
+(defn- role-description
+  [tool role lexicon]
+  (case role
+    :inspect
+    (replace-canonical-tool-names (:description tool) lexicon :plan)
+
+    :edit (edit-description* lexicon)
+    :extract (extraction-description* lexicon)
+    :plan (combined-plan-description* lexicon)
+    :transform-preview (transform-preview-description* lexicon)
+    :transform-commit (transform-commit-description* lexicon)))
+
+(defn- project-tool-surface
+  [lexicon tool]
+  (let [role (operation-role tool)
+        description (if (= (:id tool) :candidate-apply-clojure-plan)
+                      (basis-plan-description* lexicon)
+                      (role-description tool role lexicon))]
+    (-> tool
+        (assoc :name (get lexicon role)
+               :description description)
+        (update :schema project-schema-prose lexicon role)
+        (update :output-schema project-schema-prose lexicon role)
+        (update :annotations project-schema-prose lexicon role))))
+
 (defn catalog-tools
   "Project one candidate catalog over canonical public tool entries.
 
@@ -405,52 +521,87 @@
   ([catalog]
    (catalog-tools catalog (mcp-server/public-tool-registry)))
   ([catalog base-tools]
-   (let [catalog (normalize-catalog catalog)]
-     (if (#{:P :Q :R :S :T} catalog)
-       (effect-catalog-tools catalog base-tools)
-       (if (#{:M :N :O} catalog)
-         (cond->> (split-catalog-tools base-tools)
-           (= :N catalog)
-           (mapv (fn [tool]
-                   (case (:id tool)
-                     :edit-clojure
-                     (assoc tool :description atomic-chord-description)
+   (let [catalog (normalize-catalog catalog)
+         lexicon (catalog-lexicon catalog)
+         tools (cond
+                 (#{:P :Q :R :S :T} catalog)
+                 (effect-catalog-tools catalog base-tools)
 
-                     :transform-clojure
-                     (project-tool tool "transform_clojure_with_clojure"
-                                   computed-solo-description)
+                 (#{:M :N :O} catalog)
+                 (split-catalog-tools base-tools)
 
-                     tool)))
+                 :else base-tools)]
+     (mapv #(project-tool-surface lexicon %) tools))))
 
-           (= :O catalog)
-           (mapv (fn [tool]
-                   (case (:id tool)
-                     :edit-clojure
-                     (project-tool tool "apply_clojure_edits"
-                                   apply-edits-description)
+(defn- schema-facing-prose
+  [value]
+  (cond
+    (map? value)
+    (mapcat (fn [[key child]]
+              (if (and (#{:description "description" :title "title"} key)
+                       (string? child))
+                [child]
+                (schema-facing-prose child)))
+            value)
 
-                     :transform-clojure
-                     (project-tool tool "run_clojure_transform"
-                                   transform-description)
+    (sequential? value) (mapcat schema-facing-prose value)
+    :else []))
 
-                     tool))))
-         (mapv
-           (fn [tool]
-             (case (:id tool)
-               :edit-clojure
-               (project-tool tool "edit_clojure" compact-description)
+(defn caller-visible-surface
+  "Return every pre-first-call string controlled by the candidate server.
 
-               :clj-change
-               (case catalog
-                 :A (project-tool tool "apply_clojure_changes" plan-description)
-                 :L (project-tool tool "apply_clojure_plan" plan-description)
-                 :C (project-tool tool "refactor_clojure" plan-description))
+  This intentionally excludes post-call result content. Legacy operation
+  fields and human summaries remain a later complete-route projection gate."
+  [catalog]
+  (let [tools (catalog-tools catalog)]
+    {:initialize-instructions (catalog-instructions catalog)
+     :tools
+     (mapv (fn [{:keys [name description schema output-schema annotations]}]
+             {:name name
+              :title (:title annotations)
+              :description description
+              :schema-prose (vec (concat (schema-facing-prose schema)
+                                         (schema-facing-prose output-schema)))})
+           tools)}))
 
-               :transform-clojure
-               (assoc tool :description transform-description)
+(defn caller-visible-strings
+  "Flatten the pre-first-call surface for exact catalog leak checks."
+  [catalog]
+  (let [{:keys [initialize-instructions tools]}
+        (caller-visible-surface catalog)]
+    (into [initialize-instructions]
+          (mapcat (fn [{:keys [name title description schema-prose]}]
+                    (remove nil? (concat [name title description]
+                                         schema-prose))))
+          tools)))
 
-               tool))
-           base-tools))))))
+(defn unavailable-public-name-leaks
+  "Return unavailable mutation identifiers visible before a first call."
+  [catalog]
+  (let [available-tools (set (map :name (catalog-tools catalog)))
+        mutation-name-universe
+        (->> role-lexicons
+             vals
+             (mapcat #(vals (dissoc % :inspect)))
+             (into #{"apply_clojure_changes"
+                     "edit_clojure"
+                     "transform_clojure"}))
+        unavailable (remove available-tools mutation-name-universe)
+        strings (caller-visible-strings catalog)
+        name-pattern
+        (fn [tool-name]
+          (re-pattern
+            (str "(?<![A-Za-z0-9_.!_-])"
+                 (java.util.regex.Pattern/quote tool-name)
+                 "(?![A-Za-z0-9_.!_-])")))]
+    (->> unavailable
+         (keep (fn [tool-name]
+                 (let [evidence (filterv #(re-find (name-pattern tool-name) %)
+                                         strings)]
+                   (when (seq evidence)
+                     {:name tool-name :evidence evidence}))))
+         (sort-by :name)
+         vec)))
 
 (defn schema-characters
   "Return serialized input-schema characters for each tool and the catalog."
@@ -493,7 +644,15 @@
      :annotations
      (mapv (fn [{:keys [name annotations]}]
              {:name name :annotations annotations})
-           tools)}))
+           tools)
+     :route-gates
+     {:post-call-response-projection
+      {:status :deferred
+       :reason
+       (str
+         "This checkpoint isolates first-call selection. Legacy operation "
+         "fields, remedies, next calls, and human summaries must be projected "
+         "and tested before any complete-route or publication claim.")}}}))
 
 (defn start
   "Start one isolated HTTP MCP server with a projected candidate catalog.
@@ -507,8 +666,10 @@
                      :supported [:full]})))
   (let [catalog (normalize-catalog catalog)
         projected-tools (catalog-tools catalog)
+        projected-instructions (catalog-instructions catalog)
         server-opts (dissoc opts :catalog)]
     (binding [*out* *err*]
       (println "clj-surgeon candidate MCP catalog:" (name catalog)))
-    (with-redefs [mcp-tool/all-tools (constantly projected-tools)]
+    (with-redefs [mcp-tool/all-tools (constantly projected-tools)
+                  mcp-server/server-instructions projected-instructions]
       (http-server/start server-opts))))

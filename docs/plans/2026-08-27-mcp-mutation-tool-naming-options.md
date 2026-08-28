@@ -360,6 +360,21 @@ candidate reduces thinking time but preserves every route, record the gain but
 do not infer better tool understanding. If a schema move improves performance,
 separate that result from the name comparison with a factorial arm.
 
+### Alternate-universe boundary
+
+A first-selection catalog is valid only when initialize instructions, every
+advertised tool name and title, every tool description, and schema-facing
+prose use one catalog lexicon. An unavailable legacy mutation name anywhere in
+that pre-call surface invalidates the arm. Source archaeology that reads the
+server, client, tool, benchmark, rule, or skill implementation to recover a
+name also invalidates the arm and must be recorded explicitly.
+
+This checkpoint does not project post-call results. Legacy operation fields,
+remedies, next calls, and human summaries remain a separate complete-route
+gate. No candidate can earn publication or a complete-task performance claim
+until those responses are either projected consistently or proven harmless by
+an isolated response wrapper and a clean-context route cohort.
+
 ## Orthogonality gate
 
 A good catalog gives each control one job. A fresh caller must not need to
