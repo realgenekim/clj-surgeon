@@ -559,6 +559,13 @@ uses a project-owned transaction profile only when the user or repository
 explicitly requests that profile; otherwise whole-file parse, read-back, and
 receipt evidence remain the mutation proof.
 
+Top-level `edits` and `changes` are alternative request languages, not arrays
+to concatenate. When every action is a compact exact replacement, `edits` is
+the smaller language. If any action needs insertion, deletion, rename,
+map-entry insertion, or another direct-change operator, the caller expresses
+the complete atomic decision in `changes`. The public schema and tool text make
+that choice explicit before payload construction.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is

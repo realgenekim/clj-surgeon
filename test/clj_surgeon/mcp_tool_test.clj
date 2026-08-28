@@ -28,7 +28,9 @@
   (is (str/includes? mcp-tool/tool-description
                      "one array item may contain several complete forms"))
   (is (str/includes? mcp-tool/tool-description
-                     "Omit verify unless")))
+                     "Omit verify unless"))
+  (is (str/includes? mcp-tool/tool-description
+                     "Never combine edits and changes")))
 
 (def decision-request
   {"changes"
