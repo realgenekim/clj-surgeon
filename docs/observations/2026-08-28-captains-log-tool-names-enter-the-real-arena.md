@@ -440,3 +440,41 @@ read-transition corpus gives us a repeated, measured decision boundary and a
 zero-code falsifier. If the dossier gate fails, the next candidate is to keep
 the winning mutation name and kernel fixed while shrinking only its exact
 decision surface.
+
+## First read-mission ratchet: identity without disclosure
+
+Receipt schema v5 now attaches a privacy-safe action ordinal to every completed
+clock item. Each `inspect_clojure` item also carries request batch cardinality,
+a SHA-256 identity for its structural target after removing workspace and
+bookkeeping fields, and a SHA-256 over returned source hashes. The original
+path, target, owner names, request IDs, source, expectations, and source hashes
+remain absent. The timeline renderer shows only twelve-character prefixes.
+
+The exact prior 24-hour window was replayed without advancing the study marker.
+It reproduced all 75 read-to-read transitions and their 1,084,371 ms cumulative
+boundary wall. The new relation compiler found:
+
+| Adjacent read relation | Pairs | Boundary wall | Median boundary |
+|---|---:|---:|---:|
+| Exact target | 2 | 13.382s | 7.582s |
+| Same files, different target | 21 | 231.740s | 6.467s |
+| Overlapping files | 16 | 176.129s | 8.894s |
+| Disjoint files | 12 | 348.812s | 22.565s |
+| CLI identity unavailable | 24 | 314.308s | 7.389s |
+
+Thirty-nine of the 51 MCP pairs, or 76.5 percent, stayed on the same or an
+overlapping file set. This clears the investigation gate, not the product gate:
+file overlap does not prove that the second question was knowable before the
+first answer. Only two pairs were exact repeats, so a response cache alone
+cannot capture the prize. The likely product is a coherent decision surface,
+not memoization.
+
+The next bounded step is intent classification of those 39 related pairs. The
+classifier must distinguish questions supplied by the original goal, questions
+mechanically implied by the first request, choices created by the first result,
+refusal recovery, and merely sequential investigation. Product work begins
+only if at least 26 of the 51 MCP pairs are honestly groupable.
+
+Retained replay:
+`/tmp/clj-surgeon-agent-usage-24h-clock-20260827-v5.json`, SHA-256
+`2bbddc51ec42c3795dae3f044093511d633ac2067a0efebbba815eba046ff73a`.

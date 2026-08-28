@@ -53,6 +53,16 @@ a completed Reasoning item; it does not expose hidden chain of thought.
 include inference, scheduling, prompt ingestion, serialization, transport,
 logging, or UI delay. Never relabel all unattributed wall as model thinking.
 
+Receipt schema v5 gives each completed clock item a privacy-safe action
+ordinal. An `inspect_clojure` item also carries its request batch cardinality,
+a SHA-256 identity for the structural target with workspace paths and request
+bookkeeping removed, and—when source-hash evidence was returned—a second
+SHA-256 over the sorted source hashes. The receipt never emits the target,
+workspace path, source, original source hash, request ID, or expectation. Use
+these identities to shortlist repeated-read chains, then inspect only the
+bounded receipt-named transcript region needed to judge whether a later read
+was mechanically knowable earlier.
+
 Use the clock as a product microscope. Look for a repeated transition such as:
 
 ```text
