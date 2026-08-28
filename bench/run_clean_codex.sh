@@ -1535,12 +1535,24 @@ run_one() {
         "$expected_catalog_tools" "$actual_catalog_tools" >&2
       exit 2
     fi
-    expected_catalog_surface=$(jq -S -c '.tools | sort_by(.name)' \
-      "$catalog_role_receipt")
+    expected_catalog_surface=$(jq -S -c '
+      .tools
+      | map(
+          .["input-schema"] |= del(.oneOf)
+          | if .annotations == null then .annotations = {}
+            else .annotations = {
+              title: .annotations.title,
+              readOnlyHint: .annotations["read-only"],
+              destructiveHint: .annotations.destructive,
+              idempotentHint: .annotations.idempotent,
+              openWorldHint: .annotations["open-world"]
+            }
+            end)
+      | sort_by(.name)' "$catalog_role_receipt")
     actual_catalog_surface=$(jq -S -c '."tool-projection" | sort_by(.name)' \
       "$client_registry_receipt")
     if [ "$actual_catalog_surface" != "$expected_catalog_surface" ]; then
-      echo "Codex client registry changed the candidate tool surface for $run_id" >&2
+      echo "Codex client registry exceeded the admitted transport projection for $run_id" >&2
       exit 2
     fi
     # This is an independent same-binary/same-home Codex client preflight.
