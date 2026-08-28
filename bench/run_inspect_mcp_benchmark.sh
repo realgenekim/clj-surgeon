@@ -27,7 +27,7 @@ trap cleanup EXIT
 sanitized_tool_path() {
   local command_name command_path directory
   local result=""
-  for command_name in bb clojure java; do
+  for command_name in bb clojure; do
     command_path=$(command -v "$command_name")
     directory=$(cd "$(dirname "$command_path")" && pwd -P)
     case ":$result:" in
@@ -35,6 +35,16 @@ sanitized_tool_path() {
       *) result=${result:+"$result:"}$directory ;;
     esac
   done
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+    directory=$(cd "$JAVA_HOME/bin" && pwd -P)
+  else
+    command_path=$(command -v java)
+    directory=$(cd "$(dirname "$command_path")" && pwd -P)
+  fi
+  case ":$result:" in
+    *":$directory:"*) ;;
+    *) result=${result:+"$result:"}$directory ;;
+  esac
   for directory in /usr/bin /bin /usr/sbin /sbin; do
     [ -d "$directory" ] || continue
     case ":$result:" in
@@ -53,7 +63,7 @@ qualify_candidate() {
   local qualification_corpus="$qualification_root/workspace"
   local qualification_ready="$qualification_root/mcp-ready.edn"
   local candidate_receipt candidate_commit candidate_tree
-  local ready_pid mcp_url mcp_port tool_path
+  local ready_pid mcp_url mcp_port tool_path qualification_java_home
 
   for command_name in bb clojure git java shasum tar; do
     command -v "$command_name" >/dev/null 2>&1 || {
@@ -80,9 +90,19 @@ qualify_candidate() {
     "$qualification_corpus/src/clj_surgeon/"
 
   tool_path=$(sanitized_tool_path)
+  qualification_java_home=${JAVA_HOME:-}
+  if [ ! -x "$qualification_java_home/bin/java" ] \
+    && [ -x /usr/libexec/java_home ]; then
+    qualification_java_home=$(/usr/libexec/java_home)
+  fi
+  test -x "$qualification_java_home/bin/java" || {
+    echo "Qualification could not resolve JAVA_HOME" >&2
+    exit 2
+  }
   (
     cd "$source_root"
-    exec env -i HOME="$HOME" PATH="$tool_path" \
+    exec env -i HOME="$HOME" JAVA_HOME="$qualification_java_home" \
+      PATH="$tool_path" \
       clojure -J-Xms64m -J-Xmx512m -X:clj-surgeon/mcp \
         :project-dir "$(bb -e '(prn (first *command-line-args*))' "$qualification_corpus")" \
         :telemetry :off \
@@ -140,7 +160,8 @@ qualify_candidate() {
     "$qualification_root/mcp-launch.edn" "$candidate_commit" "$candidate_tree" \
     "$source_root" "$server_pid" "$mcp_url" "$tool_path"
 
-  env -i HOME="$HOME" PATH="$candidate_root/bin:$tool_path" \
+  env -i HOME="$HOME" JAVA_HOME="$qualification_java_home" \
+    PATH="$candidate_root/bin:$tool_path" \
     bb -cp "$source_root/src:$source_root/dev/experiments" \
       "$source_root/bench/qualify_inspect_candidate.clj" \
       "$candidate_root" "$qualification_corpus" "$mcp_url" "$server_pid" \
