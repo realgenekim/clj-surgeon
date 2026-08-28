@@ -112,13 +112,13 @@ These requirements define the project-owned exact-verifier fusion contract.
 ## Deferred Read Mission Surface
 
 - [D] **MCP-OP-READ-AUTH-001**: If one declared exact relation over the complete frozen candidate universe proves one correction, clj-surgeon shall publish its inputs, owner, cardinality, and snapshot evidence as authority. Otherwise, it shall publish no authority.
-- [ ] **MCP-OP-READ-GUARD-001**: When an inspect request supplies frozen file-hash guards, clj-surgeon shall capture the union of requested and guard-only files once and compare every canonical snapshot with its declared hash before request evaluation. Every requested file shall be guarded; guard-only sibling files are allowed. A missing, changed, unreadable, path-invalid, or canonically aliased guard shall refuse the complete read at the snapshot stage with no results, continuation, source body, or next call.
+- [x] **MCP-OP-READ-GUARD-001**: When an inspect request supplies frozen file-hash guards, clj-surgeon shall capture the union of requested and guard-only files once and compare every canonical snapshot with its declared hash before request evaluation. Every requested file shall be guarded; guard-only sibling files are allowed. A missing, changed, unreadable, path-invalid, or canonically aliased guard shall refuse the complete read at the snapshot stage with no results, continuation, source body, or next call.
 - [D] **MCP-OP-READ-RETRY-001**: When one selector failure has exact authority and no other request fails, clj-surgeon shall return one schema-valid next call. It shall change only the proved selector and bind every requested file to its frozen hash.
 - [D] **MCP-OP-READ-RETRY-002**: If correction authority is absent, non-unique, stale, or accompanied by another failure, clj-surgeon shall omit the executable next call. It shall keep `ok=false` and `read_complete=false` and return no ordinary successful results.
 - [D] **MCP-OP-READ-RESOLVE-001**: When one explicit clue resolves exactly one owner in a frozen snapshot, clj-surgeon shall return that owner and its proof trace. Exact clues are literals, containing lines, declared aliases, or fully qualified owners.
 - [D] **MCP-OP-READ-RESOLVE-002**: If an explicit resolution clue matches zero or multiple owners, clj-surgeon shall refuse without choosing an owner.
-- [ ] **MCP-OP-READ-CONT-001**: When a selector-local failure interrupts a batch after one or more complete sibling requests, clj-surgeon shall preserve those ordered sibling results and guards for every original request file in an inline snapshot continuation outside ordinary successful results. The refusal shall remain `ok=false` and `read_complete=false`, shall publish selector and write authority as false, and shall name completed and pending request IDs. The caller may retry only the unresolved suffix when it copies every guard; clj-surgeon shall recheck guard-only completed-sibling files before evaluating the retry.
-- [ ] **MCP-OP-READ-CONT-002**: If no complete sibling precedes the selector failure, or if schema, path, parse, snapshot, cardinality, guard, or output-budget validation fails, clj-surgeon shall return no continuation or partial successful evidence. A continuation shall publish no executable `next_call`; later reads do not retroactively make the original batch complete.
+- [x] **MCP-OP-READ-CONT-001**: When a selector-local failure interrupts a batch after one or more complete sibling requests, clj-surgeon shall preserve those ordered sibling results and guards for every original request file in an inline snapshot continuation outside ordinary successful results. The refusal shall remain `ok=false` and `read_complete=false`, shall publish selector and write authority as false, and shall name completed and pending request IDs. The caller may retry only the unresolved suffix when it copies every guard; clj-surgeon shall recheck guard-only completed-sibling files before evaluating the retry.
+- [x] **MCP-OP-READ-CONT-002**: If no complete sibling precedes the selector failure, or if schema, path, parse, snapshot, cardinality, guard, or output-budget validation fails, clj-surgeon shall return no continuation or partial successful evidence. A continuation shall publish no executable `next_call`; later reads do not retroactively make the original batch complete.
 - [D] **MCP-OP-READ-MISSION-001**: When a caller supplies a declarative read-question graph, clj-surgeon shall reuse frozen snapshots and owner selections while enforcing the declared evidence budget.
 - [D] **MCP-OP-READ-MISSION-002**: When a declarative read mission completes, clj-surgeon shall return guard-ready source anchors without granting write authority or inventing replacement text.
 
@@ -170,7 +170,7 @@ correlation IDs, internal phase telemetry, and CLI/MCP receipt convergence are
 outside these requirements. They require their own reviewed intent before this
 leaf expands to cover them.
 
-Exact read correction authority, hash-guarded retries, successful-sibling
-continuations, explicit clue resolution, and declarative read missions remain
-deferred until the stateless selector-evidence slice has clean-context and field
-evidence.
+Exact read correction authority, executable retries, explicit clue resolution,
+and declarative read missions remain deferred. Stateless hash guards and inline
+successful-sibling continuation are the active bounded slice; they preserve
+proved read work without granting selector, retry, or write authority.

@@ -20,7 +20,8 @@
    :per-request-result 65536
    :aggregate-result 262144})
 
-(def ^:private top-fields #{"requests" "expect"})
+(def ^:private top-fields #{"requests" "expect" "snapshot_guards"})
+(def ^:private required-top-fields #{"requests" "expect"})
 (def ^:private top-expect-fields #{"requests" "files"})
 (def ^:private common-request-fields #{"id" "operation" "file"})
 (def ^:private operation-fields
@@ -37,7 +38,9 @@
 (defn- field-name
   [key]
   (cond
-    (keyword? key) (name key)
+    (keyword? key) (if-let [namespace (namespace key)]
+                     (str namespace "/" (name key))
+                     (name key))
     (string? key) key
     :else (str key)))
 
@@ -131,6 +134,35 @@
         (recur (conj seen value) (inc index)))))
   values)
 
+;; @spec MCP-OP-READ-GUARD-001
+(defn- snapshot-guards!
+  [value path]
+  (when-not (map? value)
+    (refuse! :expected-object path "snapshot_guards must be a JSON object"))
+  (when (empty? value)
+    (refuse! :empty-snapshot-guards path
+             "snapshot_guards must contain at least one file hash"))
+  (into
+    (array-map)
+    (map-indexed
+      (fn [index [raw-file raw-hash]]
+        (let [file (field-name raw-file)
+              _ (when-not (mcp-paths/relative-source-path? file)
+                  (refuse! :invalid-relative-source-path (conj path index "file")
+                           "Expected a project-relative .clj, .cljs, or .cljc guard path without parent traversal"
+                           {:failed-stage :snapshot :file file}))
+              hash raw-hash]
+          (when-not (string? hash)
+            (refuse! :invalid-snapshot-hash (conj path file)
+                     "Snapshot hashes must be strings"
+                     {:file file}))
+          (when-not (re-matches #"[0-9a-f]{64}" hash)
+            (refuse! :invalid-snapshot-hash (conj path file)
+                     "Snapshot hashes must be 64 lowercase hexadecimal characters"
+                     {:file file}))
+          [file hash])))
+    value))
+
 (defn- validate-forms-expect!
   [value path form-count]
   (validate-fields! value #{"forms"} #{"forms"} path)
@@ -217,13 +249,29 @@
   [params]
   (let [params (mcp-contract/json-containers->clj params)]
     (try
-      (validate-fields! params top-fields top-fields [])
+      (validate-fields! params top-fields required-top-fields [])
       (let [raw-requests (nonempty-array! (field params "requests") ["requests"])
             _ (when (> (count raw-requests) max-requests)
                 (refuse! :too-many-requests ["requests"]
                          "Inspect batch exceeds the maximum request count"
                          {:maximum max-requests :actual (count raw-requests)}))
             requests (mapv validate-request! raw-requests (range))
+            snapshot-guards
+            (when (present? params "snapshot_guards")
+              (snapshot-guards! (field params "snapshot_guards")
+                                ["snapshot_guards"]))
+            request-files (set (map :file requests))
+            missing-guards (when snapshot-guards
+                             (vec (sort (remove #(contains? snapshot-guards %)
+                                                request-files))))
+            _ (when (seq missing-guards)
+                (refuse! :missing-snapshot-guards ["snapshot_guards"]
+                         "Every requested file must have a snapshot guard"
+                         {:missing missing-guards}))
+            _ (when (> (count snapshot-guards) max-files)
+                (refuse! :too-many-files ["snapshot_guards"]
+                         "Snapshot guards exceed the maximum file count"
+                         {:maximum max-files :actual (count snapshot-guards)}))
             _ (loop [seen #{}
                      index 0]
                 (when (< index (count requests))
@@ -256,9 +304,10 @@
                    "Inspect batch exceeds the maximum distinct file count"
                    {:maximum max-files :actual actual-files}))
         {:ok true
-         :params {:requests requests
-                  :expect {:requests expected-requests
-                           :files expected-files}}})
+         :params (cond-> {:requests requests
+                          :expect {:requests expected-requests
+                                   :files expected-files}}
+                   snapshot-guards (assoc :snapshot-guards snapshot-guards))})
       (catch clojure.lang.ExceptionInfo error
         (ex-data error)))))
 
@@ -513,13 +562,39 @@
         :results results
         :result_character_count aggregate-count}))))
 
+(defn- snapshot-guards-for
+  [requests snapshots incoming-guards]
+  (into
+    (array-map)
+    (map (fn [file] [file (:hash (get snapshots file))]))
+    (distinct (concat (keys incoming-guards) (map :file requests)))))
+
+;; @spec MCP-OP-READ-CONT-001 MCP-OP-READ-CONT-002
+(defn- selector-continuation
+  [requests failed-index completed-results snapshots incoming-guards limits]
+  (when (seq completed-results)
+    (let [budget (enforce-output-budget completed-results limits)]
+      (if-not (:ok budget)
+        budget
+        {:ok true
+         :continuation
+         {:snapshot_bound true
+          :selector_authority false
+          :write_authority false
+          :completed_request_count (count completed-results)
+          :completed_request_ids (mapv :id completed-results)
+          :pending_request_count (- (count requests) failed-index)
+          :pending_request_ids (mapv :id (subvec requests failed-index))
+          :snapshot_guards (snapshot-guards-for requests snapshots incoming-guards)
+          :completed_results completed-results}}))))
+
 (defn evaluate-snapshots
   "Evaluate a validated ordered request batch over supplied immutable snapshots.
 
   `snapshots` maps each request-relative file to `{:file :source :hash}`."
   ([params snapshots]
    (evaluate-snapshots params snapshots default-output-limits))
-  ([{:keys [requests expect]} snapshots limits]
+  ([{:keys [requests expect snapshot-guards]} snapshots limits]
    (loop [index 0
           results []]
      (if (< index (count requests))
@@ -537,7 +612,16 @@
             :next_action "retry_call"}
            (let [result (evaluate-request request snapshot)]
              (if (:error result)
-               (kernel-refusal request index result)
+               (let [refusal (kernel-refusal request index result)
+                     continuation
+                     (when (= :selector (:failed-stage result))
+                       (selector-continuation
+                         requests index results snapshots snapshot-guards limits))]
+                 (cond
+                   (and continuation (not (:ok continuation))) continuation
+                   continuation (assoc refusal :continuation
+                                       (:continuation continuation))
+                   :else refusal))
                (recur (inc index) (conj results result))))))
        (let [budget (enforce-output-budget results limits)]
          (if-not (:ok budget)
@@ -548,16 +632,18 @@
                                           [file (:hash (get snapshots file))]))
                                    files)
                  source-count (reduce + 0 (map :source_character_count results))]
-             {:ok true
-              :operation "inspect_clojure"
-              :read_complete true
-              :request_count (:requests expect)
-              :file_count (:files expect)
-              :results results
-              :file_hashes file-hashes
-              :source_character_count source-count
-              :result_character_count (:result_character_count budget)
-              :next_action "none"})))))))
+             (cond->
+               {:ok true
+                :operation "inspect_clojure"
+                :read_complete true
+                :request_count (:requests expect)
+                :file_count (:files expect)
+                :results results
+                :file_hashes file-hashes
+                :source_character_count source-count
+                :result_character_count (:result_character_count budget)
+                :next_action "none"}
+               snapshot-guards (assoc :snapshot_guards snapshot-guards)))))))))
 
 (defn- plural
   [count singular]

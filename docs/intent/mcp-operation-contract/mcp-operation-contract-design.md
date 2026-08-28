@@ -209,7 +209,11 @@ IDs. It remains
 `ok=false`, `read_complete=false`, `source_unchanged=true`, and
 `write_authority=false`. It returns no ordinary successful `results`, retains
 no server state, publishes no executable `next_call`, accepts no new input
-fields, and does not involve a semantic provider.
+fields other than the optional stateless `snapshot_guards` retry fence, and
+does not involve a semantic provider. `snapshot_guards` maps every requested
+file and any completed guard-only sibling file to a 64-lowercase-hex SHA-256.
+The server captures and verifies the complete guarded union before it evaluates
+the first retry request.
 
 The inline continuation is read evidence from one frozen snapshot, not a
 completed batch and not mutation authority. Its purpose is narrow: after the

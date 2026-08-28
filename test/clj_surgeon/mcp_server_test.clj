@@ -66,6 +66,18 @@
     (is (str/includes? (:description (nth tools 2))
                        "exact old subtree"))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
+    (is (= "^[0-9a-f]{64}$"
+           (get-in tools [0 :schema :properties "snapshot_guards"
+                          :additionalProperties :pattern])))
+    (is (= #{"snapshot_bound" "selector_authority" "write_authority"
+             "completed_request_count" "completed_request_ids"
+             "pending_request_count" "pending_request_ids"
+             "snapshot_guards" "completed_results"}
+           (set (get-in tools [0 :output-schema :properties "continuation"
+                               :required]))))
+    (is (= false
+           (get-in tools [0 :output-schema :properties "continuation"
+                          :properties "write_authority" :const])))
     (is (= false (get-in tools [1 :schema :additionalProperties])))
     (is (= #{"basis" "decisions" "verify" "changes" "expect" "edits"
              "programs" "delete_owners" "extraction" "workspace_root"}

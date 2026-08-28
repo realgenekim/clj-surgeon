@@ -68,6 +68,25 @@
           [[:top-not-map [] :expected-object []]
            [:unknown-top (assoc forms-request "extra" true)
             :unknown-fields []]
+           [:snapshot-guards-not-map
+            (assoc forms-request "snapshot_guards" [])
+            :expected-object ["snapshot_guards"]]
+           [:empty-snapshot-guards
+            (assoc forms-request "snapshot_guards" {})
+            :empty-snapshot-guards ["snapshot_guards"]]
+           [:invalid-snapshot-hash
+            (assoc forms-request "snapshot_guards"
+                   {"src/example.clj" "ABC"})
+            :invalid-snapshot-hash ["snapshot_guards" "src/example.clj"]]
+           [:non-string-snapshot-hash
+            (assoc forms-request "snapshot_guards"
+                   {"src/example.clj"
+                    1111111111111111111111111111111111111111111111111111111111111111N})
+            :invalid-snapshot-hash ["snapshot_guards" "src/example.clj"]]
+           [:missing-requested-snapshot-guard
+            (assoc forms-request "snapshot_guards"
+                   {"src/other.clj" (apply str (repeat 64 "a"))})
+            :missing-snapshot-guards ["snapshot_guards"]]
            [:missing-top (dissoc forms-request "requests")
             :missing-fields []]
            [:empty-requests (assoc forms-request "requests" [])
@@ -257,8 +276,9 @@
     (is (= ["before"] (:completed_request_ids continuation)))
     (is (= 2 (:pending_request_count continuation)))
     (is (= ["mistyped" "later"] (:pending_request_ids continuation)))
+    (is (= false (:selector_authority continuation)))
     (is (= {"src/example.clj" (:hash source-snapshot)}
-           (:file_hashes continuation)))
+           (:snapshot_guards continuation)))
     (is (= ["before"] (mapv :id (:completed_results continuation))))
     (is (= "(def beta 2)"
            (get-in continuation [:completed_results 0 :forms 0 :source])))))
@@ -286,7 +306,7 @@
                                      :per-request-source 1))]
     (is (= "inspect-cardinality-mismatch" (:error_type non-selector)))
     (is (not (contains? non-selector :continuation)))
-    (is (= "batch-form-selection-failed" (:error_type over-budget)))
+    (is (= "inspect-output-limit" (:error_type over-budget)))
     (is (not (contains? over-budget :continuation)))))
 
 (deftest selector-refusal-reports-every-failed-owner-without-choosing
