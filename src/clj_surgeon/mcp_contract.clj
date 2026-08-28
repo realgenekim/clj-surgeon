@@ -3,7 +3,9 @@
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clojure.set :as set]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser])
   (:import
    (java.nio.file Path Paths)))
 
@@ -216,6 +218,33 @@
     {}
     (sort allowed)))
 
+(defn- complete-insertion-forms
+  [source path]
+  (let [source (nonblank-string! source path)]
+    (try
+      (let [forms (->> (node/children (parser/parse-string-all source))
+                       (remove node/whitespace?)
+                       vec)]
+        (when (some node/comment? forms)
+          (refuse! :invalid-intent-form path
+                   "Insertion strings may not contain detached comments"
+                   {:error-type :invalid-intent-form}))
+        (when (empty? forms)
+          (refuse! :invalid-intent-form path
+                   "Insertion strings must contain at least one complete form"
+                   {:error-type :invalid-intent-form}))
+        (mapv node/string forms))
+      (catch clojure.lang.ExceptionInfo error
+        (if (:reason (ex-data error))
+          (throw error)
+          (refuse! :invalid-intent-form path
+                   (str "Invalid insertion form: " (.getMessage error))
+                   {:error-type :invalid-intent-form})))
+      (catch Exception error
+        (refuse! :invalid-intent-form path
+                 (str "Invalid insertion form: " (.getMessage error))
+                 {:error-type :invalid-intent-form})))))
+
 (defn- validate-change!
   [change index]
   (let [path ["changes" index]
@@ -331,10 +360,12 @@
                 :else
                 (let [sources (nonempty-array! (field change action)
                                                (conj path action))]
-                  (mapv (fn [source source-index]
-                          (nonblank-string! source
-                                            (conj path action source-index)))
-                        sources (range))))]
+                  (vec
+                    (mapcat
+                      (fn [source source-index]
+                        (complete-insertion-forms
+                          source (conj path action source-index)))
+                      sources (range)))))]
           (when (and (#{"insert_before" "insert_after"} action)
                      (not (present? change "find"))
                      (not (and forms? (= 1 (count forms)))))
@@ -500,12 +531,24 @@
       (catch clojure.lang.ExceptionInfo error
         (ex-data error)))))
 
+(defn- derived-aggregate-expect
+  [changes]
+  {:changes (count changes)
+   :edits (reduce + (map #(get-in % [:expect :matches]) changes))
+   :files (count (set (mapcat :files changes)))})
+
 (defn- validate-direct-tool-params
   [params]
   (try
     (validate-fields! params top-fields required-top-fields [])
     (let [raw-changes (nonempty-array! (field params "changes") ["changes"])
           changes (mapv validate-change! raw-changes (range))
+          supplied-expect
+          (validate-count-map!
+            (field params "expect")
+            aggregate-expect-fields required-aggregate-expect-fields
+            ["expect"])
+          derived-expect (derived-aggregate-expect changes)
           verify (when (present? params "verify")
                    (nonblank-string! (field params "verify") ["verify"]))]
       (when (and verify (not (#{"fast" "full" "exact"} verify)))
@@ -519,15 +562,16 @@
               (refuse! :duplicate-id ["changes" index "id"]
                        "Change IDs must be unique" {:id id}))
             (recur (conj seen id) (inc index)))))
-      {:ok true
-       :params
-       (cond->
-         {:changes changes
-          :expect (validate-count-map!
-                    (field params "expect")
-                    aggregate-expect-fields required-aggregate-expect-fields
-                    ["expect"])}
-         verify (assoc :verify verify))})
+      (cond-> {:ok true
+               :params
+               (cond-> {:changes changes
+                        :expect derived-expect}
+                 verify (assoc :verify verify))}
+        (not= supplied-expect derived-expect)
+        (assoc :input-normalization
+               {:ignored ["expect"]
+                :reason
+                "aggregate counts are derived from exact change guards"})))
     (catch clojure.lang.ExceptionInfo error
       (ex-data error))))
 

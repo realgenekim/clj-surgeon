@@ -300,6 +300,84 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest packed-forms-and-wrong-aggregate-compile-once-while-bad-syntax-refuses
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/book.clj")
+        test-file (io/file workspace "test/book_test.clj")
+        source-before "(ns book)\n(defn switch-book [] :old)\n"
+        test-before
+        (str "(ns book-test)\n"
+             "(deftest existing [] (is true))\n"
+             "(deftest selector [] (is true))\n")
+        packed
+        (str "(deftest renders-a-button [] (is true))\n"
+             "(deftest renders-a-link [] (is true))")
+        request
+        {"changes"
+         [{"id" "book-switch"
+           "files" ["src/book.clj"]
+           "forms" ["switch-book"]
+           "find" ":old"
+           "replace" ":new"
+           "expect" {"matches" 1 "each_form" 1}}
+          {"id" "existing-test"
+           "files" ["test/book_test.clj"]
+           "forms" ["existing"]
+           "find" "(is true)"
+           "replace" "(is (= 1 1))"
+           "expect" {"matches" 1 "each_form" 1}}
+          {"id" "packed-tests"
+           "files" ["test/book_test.clj"]
+           "forms" ["selector"]
+           "insert_after" [packed]
+           "expect" {"matches" 1 "each_form" 1}}]
+         "expect" {"changes" 31 "edits" 32 "files" 33}}]
+    (try
+      (io/make-parents source-file)
+      (io/make-parents test-file)
+      (spit source-file source-before)
+      (spit test-file test-before)
+      (let [malformed
+            (assoc-in request ["changes" 2 "insert_after"]
+                      [(str packed ")")])
+            refused
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              malformed)]
+        (is (false? (:ok refused)))
+        (is (= "invalid-intent-form" (:error_type refused)))
+        (is (:source_unchanged refused))
+        (is (= source-before (slurp source-file)))
+        (is (= test-before (slurp test-file))))
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              request)
+            changed-tests (slurp test-file)]
+        (is (:ok result) (pr-str result))
+        (is (= {:ignored ["expect"]
+                :reason
+                "aggregate counts are derived from exact change guards"}
+               (:input_normalization result)))
+        (is (= 3 (:edits result)))
+        (is (= 2 (:files result)))
+        (is (str/includes? (slurp source-file) ":new"))
+        (is (str/includes? changed-tests
+                           "(deftest renders-a-button [] (is true))"))
+        (is (str/includes? changed-tests
+                           "(deftest renders-a-link [] (is true))"))
+        (is (= 1 (count (re-seq #"renders-a-button" changed-tests))))
+        (is (= 1 (count (re-seq #"renders-a-link" changed-tests))))
+        (is (:ok (transaction/execute-undo!
+                   {:receipt (:undo_receipt result)})))
+        (is (= source-before (slurp source-file)))
+        (is (= test-before (slurp test-file))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest editor-gesture-skips-whole-file-formatting
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")
