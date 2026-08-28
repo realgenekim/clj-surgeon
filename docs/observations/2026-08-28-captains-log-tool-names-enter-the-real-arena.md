@@ -414,14 +414,19 @@ candidate
 ```
 
 This is not permission to build a graph compiler. Generic batching and selector
-continuation already missed their speed gates. The first experiment is an
-offline oracle over the retained 75 transitions:
+continuation already missed their speed gates. First contact with the retained
+v4 receipt found that it records operation, transport, wall, and the next
+action, but not a privacy-safe target/snapshot identity or batch cardinality.
+It can count the 75 boundaries but cannot yet prove that read B was knowable
+when read A was issued. The first reversible ratchet is therefore to add those
+fields to the collector and rerun one bounded window. The offline oracle then:
 
-1. classify whether the second read was mechanically knowable at the first;
-2. distinguish hidden-result recovery, distrust/re-read, judgment-dependent
+1. groups reads by action ordinal, structural target, and frozen snapshot;
+2. classifies whether the second read was mechanically knowable at the first;
+3. distinguishes hidden-result recovery, distrust/re-read, judgment-dependent
    investigation, and unrelated sequential work;
-3. proceed only if at least half are mechanically groupable; and
-4. only then compare ordinary inspection with one operation-proof dossier.
+4. proceeds only if at least half are mechanically groupable; and
+5. only then compares ordinary inspection with one operation-proof dossier.
 
 The product keep gate is exact task correctness, one read, zero fallback, no
 more than 1.25 times the unique evidence bytes, and at least 30 percent lower
