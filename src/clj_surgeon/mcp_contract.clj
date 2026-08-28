@@ -544,10 +544,11 @@
     (let [raw-changes (nonempty-array! (field params "changes") ["changes"])
           changes (mapv validate-change! raw-changes (range))
           supplied-expect
-          (validate-count-map!
-            (field params "expect")
-            aggregate-expect-fields required-aggregate-expect-fields
-            ["expect"])
+          (when (present? params "expect")
+            (validate-count-map!
+              (field params "expect")
+              aggregate-expect-fields required-aggregate-expect-fields
+              ["expect"]))
           derived-expect (derived-aggregate-expect changes)
           verify (when (present? params "verify")
                    (nonblank-string! (field params "verify") ["verify"]))]
@@ -567,7 +568,7 @@
                (cond-> {:changes changes
                         :expect derived-expect}
                  verify (assoc :verify verify))}
-        (not= supplied-expect derived-expect)
+        (and supplied-expect (not= supplied-expect derived-expect))
         (assoc :input-normalization
                {:ignored ["expect"]
                 :reason

@@ -54,9 +54,9 @@ tests witness the requirement.
 
 ## Tolerant Direct-Change Compilation
 
-- [ ] **MCP-OP-EDIT-006**: When a direct `changes` request omits top-level aggregate `expect`, clj-surgeon shall derive exact `changes`, `edits`, and distinct `files` counts from the required per-change guards; when a caller supplies redundant aggregate counts, the compiler shall report and ignore disagreement without weakening any per-change guard.
+- [x] **MCP-OP-EDIT-006**: When a direct `changes` request omits top-level aggregate `expect`, clj-surgeon shall derive exact `changes`, `edits`, and distinct `files` counts from the required per-change guards; when a caller supplies redundant aggregate counts, the compiler shall report and ignore disagreement without weakening any per-change guard.
 - [x] **MCP-OP-EDIT-007**: When one `insert_before` or `insert_after` array item contains several complete Clojure forms, clj-surgeon shall deterministically split and insert them in source order; malformed syntax or detached comments shall still refuse before write at the exact array-item path.
-- [ ] **MCP-OP-EDIT-008**: The public direct-change description shall state that packed complete forms are accepted, aggregate expectations are optional derived bookkeeping, and callers shall omit `verify` unless the user or repository explicitly requests a configured transaction profile.
+- [x] **MCP-OP-EDIT-008**: The public direct-change description shall state that packed complete forms are accepted, aggregate expectations are optional derived bookkeeping, and callers shall omit `verify` unless the user or repository explicitly requests a configured transaction profile.
 
 ## Extraction Planning
 
