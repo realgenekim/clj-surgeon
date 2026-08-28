@@ -233,6 +233,62 @@
             (is (not (contains? result :source)))
             (is (not (contains? result :results)))))))))
 
+(deftest selector-local-failure-preserves-only-complete-sibling-requests
+  ;; @spec MCP-OP-READ-CONT-001 MCP-OP-READ-CONT-002
+  (let [source "(ns example)\n(def alpha 1)\n(def beta 2)\n"
+        source-snapshot (snapshot "src/example.clj" source)
+        requests [{:id "before" :operation "forms" :file "src/example.clj"
+                   :forms ["beta"] :expect {:forms 1}}
+                  {:id "mistyped" :operation "forms" :file "src/example.clj"
+                   :forms ["answr"] :expect {:forms 1}}
+                  {:id "later" :operation "outline" :file "src/example.clj"}]
+        result (inspect/evaluate-snapshots
+                 {:requests requests :expect {:requests 3 :files 1}}
+                 {"src/example.clj" source-snapshot})
+        continuation (:continuation result)]
+    (is (false? (:ok result)))
+    (is (false? (:read_complete result)))
+    (is (not (contains? result :results)))
+    (is (not (contains? result :next_call)))
+    (is (= "selector" (:failed_stage result)))
+    (is (= true (:snapshot_bound continuation)))
+    (is (= false (:write_authority continuation)))
+    (is (= 1 (:completed_request_count continuation)))
+    (is (= ["before"] (:completed_request_ids continuation)))
+    (is (= 2 (:pending_request_count continuation)))
+    (is (= ["mistyped" "later"] (:pending_request_ids continuation)))
+    (is (= {"src/example.clj" (:hash source-snapshot)}
+           (:file_hashes continuation)))
+    (is (= ["before"] (mapv :id (:completed_results continuation))))
+    (is (= "(def beta 2)"
+           (get-in continuation [:completed_results 0 :forms 0 :source])))))
+
+(deftest non-selector-and-over-budget-failures-publish-no-continuation
+  ;; @spec MCP-OP-READ-CONT-002
+  (let [source "(ns example)\n(def alpha 1)\n(def beta 2)\n"
+        source-snapshot (snapshot "src/example.clj" source)
+        good {:id "before" :operation "forms" :file "src/example.clj"
+              :forms ["beta"] :expect {:forms 1}}
+        cardinality {:id "count" :operation "match" :file "src/example.clj"
+                     :match "(def _ _)" :expect {:matches 1}}
+        selector {:id "mistyped" :operation "forms" :file "src/example.clj"
+                  :forms ["answr"] :expect {:forms 1}}
+        evaluate (fn [requests limits]
+                   (inspect/evaluate-snapshots
+                     {:requests requests
+                      :expect {:requests (count requests) :files 1}}
+                     {"src/example.clj" source-snapshot}
+                     limits))
+        non-selector (evaluate [good cardinality]
+                               inspect/default-output-limits)
+        over-budget (evaluate [good selector]
+                              (assoc inspect/default-output-limits
+                                     :per-request-source 1))]
+    (is (= "inspect-cardinality-mismatch" (:error_type non-selector)))
+    (is (not (contains? non-selector :continuation)))
+    (is (= "batch-form-selection-failed" (:error_type over-budget)))
+    (is (not (contains? over-budget :continuation)))))
+
 (deftest selector-refusal-reports-every-failed-owner-without-choosing
   ;; @spec MCP-OP-READ-DIAG-001 MCP-OP-READ-DIAG-003 MCP-OP-READ-HYP-001
   (let [source (str "(ns example)\n"

@@ -274,7 +274,7 @@
         (delete-tree! project)))))
 
 (deftest selector-refusal-summary-names-the-miss-and-hypothesis-without-authority
-  ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003
+  ;; @spec MCP-OP-READ-DIAG-002 MCP-OP-READ-DIAG-003 MCP-OP-READ-CONT-001
   (let [project (temp-dir)
         _source (write-source! project "src/demo.clj"
                                "(ns demo)\n(def answer 42)\n(def beta 7)\n")
@@ -316,8 +316,18 @@
                                 "ranking is non-authoritative. Semantic selection "
                                 "among them is allowed; the exact retry verifies "
                                 "the selection.")))
-        (is (str/includes? summary "choose one exact owner and retry"))
-        (is (not (contains? structured :resolved_requests)))
+        (is (str/includes? summary
+                           "preserved 1 completed request from the frozen snapshot"))
+        (is (str/includes? summary
+                           "retry only mistyped; do not reread before"))
+        (is (= false (get-in structured [:continuation :write_authority])))
+        (is (= ["before"]
+               (get-in structured [:continuation :completed_request_ids])))
+        (is (= ["mistyped"]
+               (get-in structured [:continuation :pending_request_ids])))
+        (is (= "(def beta 7)"
+               (get-in structured
+                       [:continuation :completed_results 0 :forms 0 :source])))
         (is (not (str/includes? summary "(def answer"))))
       (finally
         (inspect-tool/init! nil)
