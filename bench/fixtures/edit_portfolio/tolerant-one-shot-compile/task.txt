@@ -1,0 +1,13 @@
+The design decision is complete. Make exactly these three guarded changes and preserve unrelated source meaning.
+
+1. In src/book.clj, only inside switch-book, replace :old with :new once.
+2. In test/book_test.clj, only inside existing, replace (is true) with (is (= 1 1)) once.
+3. In test/book_test.clj, insert this one block immediately after the top-level selector test. The block deliberately contains two complete top-level forms:
+
+(deftest renders-a-button
+  (is true))
+
+(deftest renders-a-link
+  (is true))
+
+The legacy request bookkeeping estimates four edit intents. That aggregate estimate is redundant and may be wrong; the three exact per-change one-match guards above are authoritative. Do not inspect source before editing. Apply the complete decision in one mutation call if the available tool can safely normalize the packed insertion and aggregate bookkeeping. Treat terminal mutation evidence as sufficient; do not reread or diff only because the structural editor performed the edit. In the final answer, state the mutation tool, call count, and whether the first mutation attempt succeeded.
