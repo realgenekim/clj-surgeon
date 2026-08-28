@@ -159,3 +159,41 @@ This is the next N=1 gate: exact correctness, two inspect calls, no native
 fallback, no repeated completed source, and a second call byte-equivalent to
 the template except for the null-to-owner substitution. Only if it clears that
 geometry should we spend an ABBA cohort.
+
+## V2 result: perfect geometry did not buy time
+
+The compiled retry template passed every route and safety gate. In both AB and
+BA order, POST made exactly two MCP calls, used no native search, retransmitted
+no completed request or source, and made its second call byte-equivalent to the
+template except for the single `null` selector hole. PRE reread 1,610 completed
+source bytes on every run.
+
+| Order | PRE wall | POST wall | POST delta |
+|---|---:|---:|---:|
+| AB | 23.770 s | 27.089 s | +3.319 s |
+| BA | 24.208 s | 28.804 s | +4.596 s |
+| Median | 23.989 s | 27.947 s | +3.958 s |
+
+Surgeon was not the bottleneck. In the AB trace its combined server time fell
+from 522.913 ms to 352.001 ms. The complete regression was localized to the
+model boundary after the first refusal: 5.912 s PRE versus 9.489 s POST. The
+compiled template removed bookkeeping errors and duplicate reads, but its
+richer refusal plus contradictory benchmark guidance made the model spend more
+time deciding how to use it.
+
+A prompt-only ablation replaced the manual reconstruction paragraph with one
+instruction: copy `retry_template.arguments`, replace only its null selector
+hole, and call once. POST improved to 23.920 s with the same perfect geometry.
+That recovered almost all of the regression, but missed both predeclared gates:
+it was 0.150 s slower than the retained 23.770 s PRE run and refusal-to-retry
+was 7.310 s rather than the required 6.642 s or less. The paired PRE run was
+28.951 s, illustrating why one favorable comparison was not enough to override
+the fixed absolute gates.
+
+Decision: keep the continuation mechanism as a correct safety and work-
+elimination capability, but do not publish it as a speed optimization and stop
+prompt tuning on this fixture. The next read-path hill must compile a larger
+coherent mission whose eliminated model boundary is materially bigger than the
+new evidence-interpretation cost. This experiment also strengthens the general
+law: fewer calls and bytes are useful telemetry, not the objective; complete
+verified task time decides.
