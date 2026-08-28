@@ -2,6 +2,7 @@
   "Isolated MCP catalog projections for the mutation-tool naming experiment."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.experiments.mcp-candidate-response :as response]
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -519,6 +520,7 @@
     (-> tool
         (assoc :name (get lexicon role)
                :description description)
+        (update :tool-fn #(response/wrap-handler lexicon role %))
         (update :schema project-schema-prose lexicon role)
         (update :output-schema project-schema-prose lexicon role)
         (update :annotations project-schema-prose lexicon role))))
@@ -660,9 +662,10 @@
       {:status :deferred
        :reason
        (str
-         "This checkpoint isolates first-call selection. Legacy operation "
-         "fields, remedies, next calls, and human summaries must be projected "
-         "and tested before any complete-route or publication claim.")}}}))
+         "Legacy operation fields, known routing templates, next-call tool "
+         "names, and summary action lines now use the isolated callback "
+         "projection. Clean-context complete-route behavior remains a later "
+         "gate before any performance or publication claim.")}}}))
 
 (defn start
   "Start one isolated HTTP MCP server with a projected candidate catalog.
