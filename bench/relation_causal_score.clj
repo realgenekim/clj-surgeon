@@ -43,6 +43,15 @@
    :files 9
    :effects 51})
 
+(def expected-client-tool-projection-sha256
+  "Canonical EDN hash of the accepted candidate's token-free Codex projection."
+  "21906d4f502b457ebaf5a2d81d12b75346e7e914a18aa4d724e01d736c5c6603")
+
+(def expected-prompt-template-sha256
+  "Raw UTF-8 hash of task.txt, one LF separator, and the relation prompt after
+  replacing only the final N/R assignment token with <ARM>."
+  "aae4d6f1770f6ab4c799038f40ee67e11610f5f55ce755e11e9ff5c86b9056c3")
+
 (def ^:private canonical-effect-identity-keys
   #{:version :sha256 :files :effects})
 
@@ -127,7 +136,11 @@
                [:prompt-sha256
                 :prompt-template-sha256
                 :client-tool-projection-sha256
-                :environment-sha256])))
+                :environment-sha256])
+       (= expected-prompt-template-sha256
+          (value provenance :prompt-template-sha256))
+       (= expected-client-tool-projection-sha256
+          (value provenance :client-tool-projection-sha256))))
 
 (defn- stable-provenance [provenance]
   (select-keys provenance
@@ -269,6 +282,10 @@
                           (<= (double call-completed) (double turn-completed)))
         t-emit (when clock-order?
                  (/ (- (double call-start) (double turn-start)) 1000000.0))
+        t-apply-verified (when clock-order?
+                           (/ (- (double call-completed)
+                                 (double turn-start))
+                              1000000.0))
         t-verified (when clock-order?
                      (/ (- (double turn-completed) (double turn-start)) 1000000.0))
         event-times (mapv event-time events)
@@ -341,6 +358,7 @@
      :arm (:arm row)
      :errors (vec (distinct errors))
      :metrics {:t-emit-ms t-emit
+               :t-apply-verified-ms t-apply-verified
                :t-verified-ms t-verified}
      :call-id (value start-item :id)
      :workspace-root workspace
@@ -369,11 +387,16 @@
 (defn- comparison [scores]
   (let [n-emit (metric-median scores :N :t-emit-ms)
         r-emit (metric-median scores :R :t-emit-ms)
+        n-apply (metric-median scores :N :t-apply-verified-ms)
+        r-apply (metric-median scores :R :t-apply-verified-ms)
         n-verified (metric-median scores :N :t-verified-ms)
         r-verified (metric-median scores :R :t-verified-ms)]
     {:n-t-emit-median-ms n-emit
      :r-t-emit-median-ms r-emit
      :t-emit-improvement (improvement n-emit r-emit)
+     :n-t-apply-verified-median-ms n-apply
+     :r-t-apply-verified-median-ms r-apply
+     :t-apply-verified-improvement (improvement n-apply r-apply)
      :n-t-verified-median-ms n-verified
      :r-t-verified-median-ms r-verified
      :t-verified-improvement (improvement n-verified r-verified)}))
@@ -418,7 +441,7 @@
         block-2-authorized?
         (and runs-valid? same-evidence? same-provenance? unique-workspaces? block-1
              (>= (or (:t-verified-improvement block-1) -1.0) 0.15)
-             (pos? (or (:t-emit-improvement block-1) -1.0)))
+             (>= (or (:t-emit-improvement block-1) -1.0) 0.20))
         promote?
         (and block-2-authorized? (= 8 (count rows)) block-2 pooled
              (>= (or (:t-emit-improvement block-1) -1.0) 0.20)
@@ -447,6 +470,7 @@
      :pooled pooled
      :gate {:block-2-authorized (boolean block-2-authorized?)
             :promote (boolean promote?)
+            :minimum-block-1-emit-improvement 0.20
             :minimum-block-1-verified-improvement 0.15
             :minimum-final-emit-improvement 0.20
             :minimum-pooled-verified-improvement 0.20}}))
@@ -743,7 +767,10 @@
           tool-names (:tool-names registry)
           tool-projection (:tool-projection registry)
           projected-names (mapv :name tool-projection)
-          executable (:codex-executable environment)]
+          executable (:codex-executable environment)
+          prompt-template-sha256 (sha256 prompt-template)
+          client-tool-projection-sha256
+          (canonical-sha256 tool-projection)]
       (when-not (and (nonblank-string? prompt-prefix)
                      (str/ends-with? prompt expected-suffix)
                      (= "clj-surgeon.codex-mcp-registry.v1"
@@ -765,7 +792,11 @@
                      (canonical-workspace? executable)
                      (sha256? (:codex-sha256 environment))
                      (nonblank-string? (:codex-version environment))
-                     (= executable (:codex-executable registry)))
+                     (= executable (:codex-executable registry))
+                     (= expected-prompt-template-sha256
+                        prompt-template-sha256)
+                     (= expected-client-tool-projection-sha256
+                        client-tool-projection-sha256))
         (throw (ex-info "Prompt, client registry, or environment is invalid"
                         {:prompt-exact (and (nonblank-string? prompt-prefix)
                                             (str/ends-with? prompt
@@ -774,13 +805,15 @@
                          :registry-ok (:ok registry)
                          :tool-names tool-names
                          :projected-names projected-names
-                         :environment-schema (:schema environment)})))
+                         :environment-schema (:schema environment)
+                         :prompt-template-sha256 prompt-template-sha256
+                         :client-tool-projection-sha256
+                         client-tool-projection-sha256})))
       {:ok true
        :provenance
        {:prompt-sha256 (sha256 prompt)
-        :prompt-template-sha256 (sha256 prompt-template)
-        :client-tool-projection-sha256
-        (canonical-sha256 tool-projection)
+        :prompt-template-sha256 prompt-template-sha256
+        :client-tool-projection-sha256 client-tool-projection-sha256
         :environment-sha256 (canonical-sha256 environment)}})
     (catch Exception error
       {:ok false

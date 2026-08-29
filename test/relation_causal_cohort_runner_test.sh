@@ -5,6 +5,73 @@ source_script=$(cd "$(dirname "$0")/.." && pwd -P)/bench/run_relation_causal_coh
 source_repo=$(cd "$(dirname "$source_script")/.." && pwd -P)
 test_root=$(mktemp -d /tmp/clj-surgeon-relation-coordinator-test.XXXXXX)
 trap '[ "${KEEP_RELATION_TEST_TMP:-false}" = true ] || rm -rf "$test_root"' EXIT
+mkdir -p "$test_root/codex-bin" "$test_root/codex-lib" "$test_root/node-bin"
+test_platform_os=$(uname -s)
+test_platform_arch=$(uname -m)
+case "$test_platform_os:$test_platform_arch" in
+  Darwin:arm64)
+    test_platform_package_name=codex-darwin-arm64
+    test_platform_target=aarch64-apple-darwin
+    ;;
+  Darwin:x86_64)
+    test_platform_package_name=codex-darwin-x64
+    test_platform_target=x86_64-apple-darwin
+    ;;
+  Linux:aarch64|Linux:arm64)
+    test_platform_package_name=codex-linux-arm64
+    test_platform_target=aarch64-unknown-linux-musl
+    ;;
+  Linux:x86_64)
+    test_platform_package_name=codex-linux-x64
+    test_platform_target=x86_64-unknown-linux-musl
+    ;;
+  *)
+    printf 'FAIL: unsupported test platform: %s/%s\n' \
+      "$test_platform_os" "$test_platform_arch" >&2
+    exit 1
+    ;;
+esac
+test_platform_package_root="$test_root/node_modules/@openai/$test_platform_package_name"
+test_codex_native_executable="$test_platform_package_root/vendor/$test_platform_target/bin/codex"
+mkdir -p "$(dirname "$test_codex_native_executable")"
+cat > "$test_root/codex-lib/codex.js" <<'CODEX'
+#!/usr/bin/env bash
+if [ "${1:-}" = --version ]; then
+  printf '%s\n' 'codex-cli test-1.0'
+  exit 0
+fi
+exit 23
+CODEX
+chmod +x "$test_root/codex-lib/codex.js"
+ln -s ../codex-lib/codex.js "$test_root/codex-bin/codex"
+printf '{"name":"@openai/codex","version":"test-1.0"}\n' \
+  > "$test_root/package.json"
+printf '{"name":"@openai/%s","version":"test-1.0"}\n' \
+  "$test_platform_package_name" > "$test_platform_package_root/package.json"
+cat > "$test_codex_native_executable" <<'NATIVE'
+#!/usr/bin/env bash
+exit 0
+NATIVE
+cat > "$test_root/node-bin/node" <<'NODE'
+#!/usr/bin/env bash
+if [ "${1:-}" = --version ]; then
+  printf '%s\n' 'vtest-1.0'
+  exit 0
+fi
+exit 24
+NODE
+chmod +x "$test_codex_native_executable" "$test_root/node-bin/node"
+test_path="$test_root/codex-bin:$test_root/node-bin:$PATH"
+test_codex_executable=$(realpath "$test_root/codex-bin/codex")
+test_codex_sha256=$(shasum -a 256 "$test_codex_executable" | awk '{print $1}')
+test_codex_version=$($test_codex_executable --version)
+test_codex_package_sha256=$(shasum -a 256 "$test_root/package.json" | awk '{print $1}')
+test_codex_platform_package_sha256=$(shasum -a 256 "$test_platform_package_root/package.json" | awk '{print $1}')
+test_codex_native_executable=$(realpath "$test_codex_native_executable")
+test_codex_native_sha256=$(shasum -a 256 "$test_codex_native_executable" | awk '{print $1}')
+test_node_executable=$(realpath "$test_root/node-bin/node")
+test_node_sha256=$(shasum -a 256 "$test_node_executable" | awk '{print $1}')
+test_node_version=$($test_node_executable --version)
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -24,6 +91,12 @@ new_repo() {
   cp "$source_script" "$root/bench/run_relation_causal_cohort.sh"
   printf '{}\n' > "$root/deps.edn"
   printf '{}\n' > "$root/bb.edn"
+  printf '*.out\ncalls.log\nscorer.log\n' > "$root/.gitignore"
+  mkdir -p "$root/src/clj_surgeon"
+  printf '(ns clj-surgeon.mcp-change-buffer)\n' \
+    > "$root/src/clj_surgeon/mcp_change_buffer.clj"
+  printf '(ns capture-codex-mcp-registry)\n' \
+    > "$root/bench/capture_codex_mcp_registry.clj"
   printf '{}\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/capsule.edn"
   printf 'task\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt"
   printf 'profile\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/exact-profile.edn"
@@ -44,6 +117,12 @@ new_repo() {
       printf '%s %s\n' "$phase" "$relative" > "$fixture_file"
     done
   done
+  while read -r _ approved_path; do
+    if [ ! -e "$root/$approved_path" ]; then
+      mkdir -p "$(dirname "$root/$approved_path")"
+      printf 'approved placeholder: %s\n' "$approved_path" > "$root/$approved_path"
+    fi
+  done < "$source_repo/bench/relation_causal_artifacts.sha256"
   cat > "$root/bench/run_clean_codex.sh" <<'WORKER'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -104,8 +183,11 @@ for cell in $BENCH_RUN_MATRIX; do
   fi
 done
 printf 'retained\tcomplete\n' >> "$BENCH_RESULT_DIR/runs.tsv"
+if [ "${FAKE_DIRTY_RUNTIME_AFTER_BLOCK:-}" = "$(basename "$BENCH_RESULT_DIR")" ]; then
+  printf '; worker dirtied runtime\n' >> "$FAKE_RUNTIME_FILE"
+fi
 WORKER
-  cat > "$root/bench/fake_scorer.sh" <<'SCORER'
+  cat > "$root/bench/relation_causal_score.clj" <<'SCORER'
 #!/usr/bin/env bash
 set -euo pipefail
 phase=
@@ -133,7 +215,7 @@ case "$phase" in
   *) exit 23 ;;
 esac
 SCORER
-  chmod +x "$root/bench/run_clean_codex.sh" "$root/bench/fake_scorer.sh" \
+  chmod +x "$root/bench/run_clean_codex.sh" "$root/bench/relation_causal_score.clj" \
     "$root/bench/run_relation_causal_cohort.sh"
   (
     cd "$root"
@@ -142,17 +224,10 @@ SCORER
     git config user.name Test
     git add .
     git commit -qm baseline
-    {
-      shasum -a 256 bench/run_relation_causal_cohort.sh
-      shasum -a 256 bench/run_clean_codex.sh
-      shasum -a 256 bench/fake_scorer.sh
-      shasum -a 256 deps.edn
-      shasum -a 256 bb.edn
-      while IFS= read -r fixture_file; do
-        shasum -a 256 "$fixture_file"
-      done < <(find bench/fixtures/edit_portfolio/submission-row-extraction-cleanup \
-        -type f -print | sort)
-    } > artifacts.sha256
+    while read -r _ approved_path; do
+      shasum -a 256 "$approved_path"
+    done < "$source_repo/bench/relation_causal_artifacts.sha256" \
+      > artifacts.sha256
     git add artifacts.sha256
     git commit -qm manifest
   )
@@ -167,15 +242,29 @@ invoke() {
   tree=$(git -C "$root" rev-parse 'HEAD^{tree}')
   manifest_sha=$(shasum -a 256 "$root/artifacts.sha256" | awk '{print $1}')
   env \
+    PATH="$test_path" \
     BENCH_RELATION_EXPECTED_HEAD="$head" \
     BENCH_RELATION_EXPECTED_TREE="$tree" \
     BENCH_RELATION_ARTIFACT_MANIFEST="$root/artifacts.sha256" \
     BENCH_RELATION_EXPECTED_MANIFEST_SHA256="$manifest_sha" \
+    BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE="$test_codex_executable" \
+    BENCH_RELATION_EXPECTED_CODEX_SHA256="$test_codex_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_VERSION="$test_codex_version" \
+    BENCH_RELATION_EXPECTED_PLATFORM_OS="$test_platform_os" \
+    BENCH_RELATION_EXPECTED_PLATFORM_ARCH="$test_platform_arch" \
+    BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256="$test_codex_package_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256="$test_codex_platform_package_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE="$test_codex_native_executable" \
+    BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256="$test_codex_native_sha256" \
+    BENCH_RELATION_EXPECTED_NODE_EXECUTABLE="$test_node_executable" \
+    BENCH_RELATION_EXPECTED_NODE_SHA256="$test_node_sha256" \
+    BENCH_RELATION_EXPECTED_NODE_VERSION="$test_node_version" \
     BENCH_RELATION_RESULT_DIR="$output" \
-    BENCH_RELATION_SCORER="$root/bench/fake_scorer.sh" \
+    BENCH_RELATION_SCORER="$root/bench/relation_causal_score.clj" \
     BENCH_RELATION_SCORER_LAUNCHER=bash \
     FAKE_CALL_LOG="$root/calls.log" \
     FAKE_SCORER_LOG="$root/scorer.log" \
+    FAKE_RUNTIME_FILE="$root/src/clj_surgeon/mcp_change_buffer.clj" \
     "$@" \
     bash "$root/bench/run_relation_causal_cohort.sh"
 }
@@ -187,12 +276,25 @@ test_wrong_and_dirty_identity_refuse() {
   head=$(git -C "$root" rev-parse 'HEAD^{commit}')
   tree=$(git -C "$root" rev-parse 'HEAD^{tree}')
   manifest_sha=$(shasum -a 256 "$root/artifacts.sha256" | awk '{print $1}')
-  if env BENCH_RELATION_EXPECTED_HEAD=0000000000000000000000000000000000000000 \
+  if env PATH="$test_path" \
+    BENCH_RELATION_EXPECTED_HEAD=0000000000000000000000000000000000000000 \
     BENCH_RELATION_EXPECTED_TREE="$tree" \
     BENCH_RELATION_ARTIFACT_MANIFEST="$root/artifacts.sha256" \
     BENCH_RELATION_EXPECTED_MANIFEST_SHA256="$manifest_sha" \
+    BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE="$test_codex_executable" \
+    BENCH_RELATION_EXPECTED_CODEX_SHA256="$test_codex_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_VERSION="$test_codex_version" \
+    BENCH_RELATION_EXPECTED_PLATFORM_OS="$test_platform_os" \
+    BENCH_RELATION_EXPECTED_PLATFORM_ARCH="$test_platform_arch" \
+    BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256="$test_codex_package_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256="$test_codex_platform_package_sha256" \
+    BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE="$test_codex_native_executable" \
+    BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256="$test_codex_native_sha256" \
+    BENCH_RELATION_EXPECTED_NODE_EXECUTABLE="$test_node_executable" \
+    BENCH_RELATION_EXPECTED_NODE_SHA256="$test_node_sha256" \
+    BENCH_RELATION_EXPECTED_NODE_VERSION="$test_node_version" \
     BENCH_RELATION_RESULT_DIR="$output" \
-    BENCH_RELATION_SCORER="$root/bench/fake_scorer.sh" \
+    BENCH_RELATION_SCORER="$root/bench/relation_causal_score.clj" \
     BENCH_RELATION_SCORER_LAUNCHER=bash \
     bash "$root/bench/run_relation_causal_cohort.sh" >"$root/wrong.out" 2>&1; then
     fail 'wrong HEAD was accepted'
@@ -203,6 +305,39 @@ test_wrong_and_dirty_identity_refuse() {
     fail 'dirty manifested artifact was accepted'
   fi
   assert_contains "$root/dirty.out" 'dirty cohort artifacts'
+}
+
+test_admission_shell_error_propagates() {
+  local root output head tree manifest_sha status=0
+  root=$(new_repo admission-shell-error)
+  output="$test_root/admission-shell-error-output"
+  head=$(git -C "$root" rev-parse 'HEAD^{commit}')
+  tree=$(git -C "$root" rev-parse 'HEAD^{tree}')
+  manifest_sha=$(shasum -a 256 "$root/artifacts.sha256" | awk '{print $1}')
+  (
+    unset BENCH_RELATION_EXPECTED_CODEX_VERSION
+    env PATH="$test_path" \
+      BENCH_RELATION_EXPECTED_HEAD="$head" \
+      BENCH_RELATION_EXPECTED_TREE="$tree" \
+      BENCH_RELATION_ARTIFACT_MANIFEST="$root/artifacts.sha256" \
+      BENCH_RELATION_EXPECTED_MANIFEST_SHA256="$manifest_sha" \
+      BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE="$test_codex_executable" \
+      BENCH_RELATION_EXPECTED_CODEX_SHA256="$test_codex_sha256" \
+      BENCH_RELATION_EXPECTED_PLATFORM_OS="$test_platform_os" \
+      BENCH_RELATION_EXPECTED_PLATFORM_ARCH="$test_platform_arch" \
+      BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256="$test_codex_package_sha256" \
+      BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256="$test_codex_platform_package_sha256" \
+      BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE="$test_codex_native_executable" \
+      BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256="$test_codex_native_sha256" \
+      BENCH_RELATION_EXPECTED_NODE_EXECUTABLE="$test_node_executable" \
+      BENCH_RELATION_EXPECTED_NODE_SHA256="$test_node_sha256" \
+      BENCH_RELATION_EXPECTED_NODE_VERSION="$test_node_version" \
+      BENCH_RELATION_RESULT_DIR="$output" \
+      bash "$root/bench/run_relation_causal_cohort.sh"
+  ) >"$root/run.out" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || fail 'admission shell error was reported as success'
+  assert_contains "$root/run.out" 'BENCH_RELATION_EXPECTED_CODEX_VERSION is required'
+  [ ! -e "$root/calls.log" ] || fail 'worker ran after admission shell error'
 }
 
 test_output_and_settings_refuse() {
@@ -241,6 +376,189 @@ test_output_and_settings_refuse() {
     fail 'wrong reasoning was accepted'
   fi
   assert_contains "$root/reasoning.out" 'BENCH_REASONING must be exactly: high'
+  if invoke "$root" "$test_root/wrong-codex-path" \
+      BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE=/usr/bin/false \
+      >"$root/codex-path.out" 2>&1; then
+    fail 'wrong Codex executable was accepted'
+  fi
+  assert_contains "$root/codex-path.out" 'Codex executable identity mismatch'
+  if invoke "$root" "$test_root/wrong-codex-sha" \
+      BENCH_RELATION_EXPECTED_CODEX_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      >"$root/codex-sha.out" 2>&1; then
+    fail 'wrong Codex SHA was accepted'
+  fi
+  assert_contains "$root/codex-sha.out" 'Codex SHA mismatch'
+  if invoke "$root" "$test_root/wrong-codex-version" \
+      BENCH_RELATION_EXPECTED_CODEX_VERSION='codex-cli wrong' \
+      >"$root/codex-version.out" 2>&1; then
+    fail 'wrong Codex version was accepted'
+  fi
+  assert_contains "$root/codex-version.out" 'Codex version mismatch'
+  if invoke "$root" "$test_root/wrong-package-sha" \
+      BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      >"$root/package-sha.out" 2>&1; then
+    fail 'wrong Codex package SHA was accepted'
+  fi
+  assert_contains "$root/package-sha.out" 'Codex package SHA mismatch'
+  if invoke "$root" "$test_root/wrong-platform-package-sha" \
+      BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      >"$root/platform-package-sha.out" 2>&1; then
+    fail 'wrong Codex platform package SHA was accepted'
+  fi
+  assert_contains "$root/platform-package-sha.out" \
+    'Codex platform package SHA mismatch'
+  if invoke "$root" "$test_root/wrong-native-path" \
+      BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE=/usr/bin/false \
+      >"$root/native-path.out" 2>&1; then
+    fail 'wrong Codex native path was accepted'
+  fi
+  assert_contains "$root/native-path.out" 'Codex native executable identity mismatch'
+  if invoke "$root" "$test_root/wrong-native-sha" \
+      BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      >"$root/native-sha.out" 2>&1; then
+    fail 'wrong Codex native SHA was accepted'
+  fi
+  assert_contains "$root/native-sha.out" 'Codex native SHA mismatch'
+  if invoke "$root" "$test_root/wrong-node-sha" \
+      BENCH_RELATION_EXPECTED_NODE_SHA256=0000000000000000000000000000000000000000000000000000000000000000 \
+      >"$root/node-sha.out" 2>&1; then
+    fail 'wrong Node SHA was accepted'
+  fi
+  assert_contains "$root/node-sha.out" 'Node SHA mismatch'
+  if invoke "$root" "$test_root/wrong-node-path" \
+      BENCH_RELATION_EXPECTED_NODE_EXECUTABLE=/usr/bin/false \
+      >"$root/node-path.out" 2>&1; then
+    fail 'wrong Node path was accepted'
+  fi
+  assert_contains "$root/node-path.out" 'Node executable identity mismatch'
+  if invoke "$root" "$test_root/wrong-node-version" \
+      BENCH_RELATION_EXPECTED_NODE_VERSION='vwrong' \
+      >"$root/node-version.out" 2>&1; then
+    fail 'wrong Node version was accepted'
+  fi
+  assert_contains "$root/node-version.out" 'Node version mismatch'
+  if invoke "$root" "$test_root/wrong-platform" \
+      BENCH_RELATION_EXPECTED_PLATFORM_OS='ImpossibleOS' \
+      >"$root/platform.out" 2>&1; then
+    fail 'wrong platform was accepted'
+  fi
+  assert_contains "$root/platform.out" 'Platform OS mismatch'
+  if invoke "$root" "$test_root/wrong-architecture" \
+      BENCH_RELATION_EXPECTED_PLATFORM_ARCH='impossible-arch' \
+      >"$root/architecture.out" 2>&1; then
+    fail 'wrong platform architecture was accepted'
+  fi
+  assert_contains "$root/architecture.out" 'Platform architecture mismatch'
+}
+
+test_dirty_runtime_closure_refuses() {
+  local root output mutation
+  for mutation in untracked-shadow tracked-product tracked-capture; do
+    root=$(new_repo "dirty-runtime-$mutation")
+    output="$test_root/dirty-runtime-$mutation-output"
+    case "$mutation" in
+      untracked-shadow)
+        printf '(ns clj-surgeon.shadow)\n' > "$root/src/clj_surgeon/shadow.clj"
+        ;;
+      tracked-product)
+        printf '; dirty product\n' >> "$root/src/clj_surgeon/mcp_change_buffer.clj"
+        ;;
+      tracked-capture)
+        printf '; dirty capture\n' >> "$root/bench/capture_codex_mcp_registry.clj"
+        ;;
+    esac
+    if invoke "$root" "$output" >"$root/run.out" 2>&1; then
+      fail "dirty $mutation runtime closure was accepted"
+    fi
+    assert_contains "$root/run.out" 'dirty runtime closure'
+    [ ! -e "$root/calls.log" ] || fail "worker ran after dirty $mutation runtime closure"
+  done
+}
+
+test_empty_manifest_refuses_without_masking_exit() {
+  local root output status=0
+  root=$(new_repo empty-manifest)
+  output="$test_root/empty-manifest-output"
+  : > "$root/artifacts.sha256"
+  (
+    cd "$root"
+    git add artifacts.sha256
+    git commit -qm 'empty manifest'
+  )
+  invoke "$root" "$output" >"$root/run.out" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || fail 'empty manifest admission failure was masked'
+  assert_contains "$root/run.out" 'Artifact manifest is empty'
+  [ ! -e "$root/calls.log" ] || fail 'worker ran after empty manifest'
+}
+
+test_realpath_failure_refuses_without_masking_exit() {
+  local root output broken_bin status=0
+  root=$(new_repo realpath-failure)
+  output="$test_root/realpath-failure-output"
+  broken_bin="$test_root/broken-realpath-bin"
+  mkdir "$broken_bin"
+  cat > "$broken_bin/realpath" <<'REALPATH'
+#!/usr/bin/env bash
+exit 127
+REALPATH
+  chmod +x "$broken_bin/realpath"
+  invoke "$root" "$output" PATH="$broken_bin:$test_path" \
+    >"$root/run.out" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || fail 'realpath failure was masked'
+  [ ! -e "$root/calls.log" ] || fail 'worker ran after realpath failure'
+}
+
+test_manifest_path_set_is_exact() {
+  local root output mutation
+  for mutation in remove add substitute; do
+    root=$(new_repo "manifest-$mutation")
+    output="$test_root/manifest-$mutation-output"
+    case "$mutation" in
+      remove)
+        grep -v 'test/clj_surgeon/mcp_compact_relations_test.clj$' \
+          "$root/artifacts.sha256" > "$root/artifacts.next"
+        mv "$root/artifacts.next" "$root/artifacts.sha256"
+        ;;
+      add)
+        printf 'extra\n' > "$root/extra.txt"
+        (cd "$root" && shasum -a 256 extra.txt) >> "$root/artifacts.sha256"
+        ;;
+      substitute)
+        printf 'extra\n' > "$root/extra.txt"
+        grep -v 'test/clj_surgeon/mcp_compact_relations_test.clj$' \
+          "$root/artifacts.sha256" > "$root/artifacts.next"
+        (cd "$root" && shasum -a 256 extra.txt) >> "$root/artifacts.next"
+        mv "$root/artifacts.next" "$root/artifacts.sha256"
+        ;;
+    esac
+    (
+      cd "$root"
+      git add .
+      git commit -qm "manifest $mutation"
+    )
+    if invoke "$root" "$output" >"$root/run.out" 2>&1; then
+      fail "manifest $mutation was accepted"
+    fi
+    case "$mutation" in
+      remove|add) assert_contains "$root/run.out" 'must contain exactly 39 paths' ;;
+      substitute) assert_contains "$root/run.out" 'path set differs' ;;
+    esac
+    [ ! -e "$root/calls.log" ] || fail "worker ran after manifest $mutation"
+  done
+}
+
+test_worker_drift_after_block_one_stops_block_two() {
+  local root output status=0
+  root=$(new_repo worker-drift)
+  output="$test_root/worker-drift-output"
+  invoke "$root" "$output" FAKE_DIRTY_RUNTIME_AFTER_BLOCK=block1 \
+    >"$root/run.out" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || fail 'worker runtime drift was accepted'
+  assert_contains "$root/run.out" 'dirty runtime closure'
+  [ "$(wc -l < "$root/calls.log" | tr -d ' ')" -eq 1 ] \
+    || fail 'block two ran after worker runtime drift'
+  [ ! -e "$output/block2" ] || fail 'block two output exists after worker runtime drift'
+  assert_contains "$output/coordinator-receipt.edn" ':stage :block1'
 }
 
 test_incomplete_fixture_manifest_refuses() {
@@ -259,7 +577,7 @@ test_incomplete_fixture_manifest_refuses() {
     fail 'incomplete fixture manifest was accepted'
   fi
   assert_contains "$root/run.out" \
-    'Artifact manifest omits fixture path: bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt'
+    'Artifact manifest must contain exactly 39 paths'
   [ ! -e "$root/calls.log" ] || fail 'worker ran after incomplete fixture manifest'
 }
 
@@ -354,6 +672,30 @@ test_passing_boundary_executes_both_blocks_once() {
   [ -s "$output/environment.edn" ] || fail 'environment receipt is missing'
   assert_contains "$output/environment.edn" ':model "gpt-5.6-sol"'
   assert_contains "$output/environment.edn" ':reasoning "high"'
+  assert_contains "$output/environment.edn" \
+    ":codex-executable \"$test_codex_executable\""
+  assert_contains "$output/environment.edn" \
+    ":codex-sha256 \"$test_codex_sha256\""
+  assert_contains "$output/environment.edn" \
+    ":codex-version \"$test_codex_version\""
+  assert_contains "$output/environment.edn" \
+    ":codex-package-sha256 \"$test_codex_package_sha256\""
+  assert_contains "$output/environment.edn" \
+    ":codex-platform-package-sha256 \"$test_codex_platform_package_sha256\""
+  assert_contains "$output/environment.edn" \
+    ":codex-native-executable \"$test_codex_native_executable\""
+  assert_contains "$output/environment.edn" \
+    ":codex-native-sha256 \"$test_codex_native_sha256\""
+  assert_contains "$output/environment.edn" \
+    ":node-executable \"$test_node_executable\""
+  assert_contains "$output/environment.edn" \
+    ":node-sha256 \"$test_node_sha256\""
+  assert_contains "$output/environment.edn" \
+    ":node-version \"$test_node_version\""
+  assert_contains "$output/environment.edn" \
+    ":platform-os \"$test_platform_os\""
+  assert_contains "$output/environment.edn" \
+    ":platform-arch \"$test_platform_arch\""
   assert_contains "$output/coordinator-receipt.edn" ':state :complete'
   assert_contains "$output/coordinator-receipt.edn" ':stage :complete'
 }
@@ -371,7 +713,13 @@ test_real_scorer_loads_with_coordinator_classpath() {
 }
 
 test_wrong_and_dirty_identity_refuse
+test_admission_shell_error_propagates
 test_output_and_settings_refuse
+test_dirty_runtime_closure_refuses
+test_empty_manifest_refuses_without_masking_exit
+test_realpath_failure_refuses_without_masking_exit
+test_manifest_path_set_is_exact
+test_worker_drift_after_block_one_stops_block_two
 test_incomplete_fixture_manifest_refuses
 test_child_failure_is_retained_without_retry
 test_block1_gate_stops_and_retains
