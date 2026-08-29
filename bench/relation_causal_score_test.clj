@@ -19,6 +19,35 @@
 (def sha-f (apply str (repeat 64 "f")))
 (def exact-profile-runtime-sha
   "445a770f901066e2c41b7eebfe2e90653e5ee3a60ab4406d1ee41a0535ae3d97")
+(def canonical-effect-sha
+  "b7f4508e322f9e60427ad5b11f39c466cbeeba41c4dff94da799de6339468841")
+
+(def canonical-effect-identity
+  {:version 1
+   :sha256 canonical-effect-sha
+   :files 9
+   :effects 51})
+
+(def environment-evidence
+  {:schema :clj-surgeon.edit-025-environment/v1
+   :model "gpt-5.6-sol"
+   :reasoning "high"
+   :codex-executable "/usr/local/bin/codex"
+   :codex-sha256 sha-f
+   :codex-version "codex-cli 1.2.3"})
+
+(def tool-projection
+  [{:name "apply_clojure_changes"
+    :description "Apply one verified compact mutation."
+    :input-schema {:type "object"}
+    :output-schema {:type "object"}
+    :annotations {:readOnlyHint false}}])
+
+(def provenance
+  {:prompt-sha256 sha-a
+   :prompt-template-sha256 sha-b
+   :client-tool-projection-sha256 (score/canonical-sha256 tool-projection)
+   :environment-sha256 (score/canonical-sha256 environment-evidence)})
 
 (defn- sha256 [text]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
@@ -26,7 +55,8 @@
     (apply str (map #(format "%02x" (bit-and 0xff %)) digest))))
 
 (def expected-evidence
-  {:canonical-transaction-sha256 sha-a
+  {:canonical-effect-identity canonical-effect-identity
+   :canonical-transaction-sha256 sha-a
    :future-hashes-sha256 sha-b
    :receipt-sha256 sha-c
    :read-back-sha256 sha-d
@@ -70,6 +100,7 @@
                :position position
                :arm arm
                :workspace-root workspace
+               :provenance provenance
                :expected-arguments (arguments arm workspace)
                :expected-evidence expected-evidence
                :clocks {:turn-start-ns start-ns
@@ -223,6 +254,23 @@
               (update-in (first passing)
                          [:events 2 :item :evidence] dissoc :receipt-sha256)
               :evidence-incomplete]
+             [:missing-canonical-effect-identity
+              (update-in (first passing)
+                         [:events 2 :item :evidence]
+                         dissoc :canonical-effect-identity)
+              :evidence-incomplete]
+             [:open-canonical-effect-identity
+              (assoc-in (first passing)
+                        [:events 2 :item :evidence
+                         :canonical-effect-identity :private-source]
+                        "must-not-be-public")
+              :evidence-incomplete]
+             [:wrong-canonical-effect-counts
+              (assoc-in (first passing)
+                        [:events 2 :item :evidence
+                         :canonical-effect-identity :effects]
+                        50)
+              :evidence-incomplete]
              [:unverified
               (assoc-in (first passing)
                         [:events 2 :item :evidence :verification-complete] false)
@@ -321,7 +369,49 @@
                    %)
                 passing)]
       (is (false? (get-in (score/cohort-report block-2-loss)
-                          [:gate :promote]))))))
+                          [:gate :promote])))))
+  (testing "one frozen effect identity admits arm-specific caller order"
+    (let [caller-order-hash sha-f
+          reordered
+          (mapv #(if (= :R (:arm %))
+                   (-> %
+                       (assoc-in [:expected-evidence
+                                  :canonical-transaction-sha256]
+                                 caller-order-hash)
+                       (assoc-in [:events 2 :item :evidence
+                                  :canonical-transaction-sha256]
+                                 caller-order-hash))
+                   %)
+                passing)
+          report (score/cohort-report reordered)]
+      (is (:ok report))
+      (is (get-in report [:gate :promote]))))
+  (testing "identity drift fails even when transaction and verifier agree"
+    (let [drifted-identity (assoc canonical-effect-identity :sha256 sha-f)
+          drifted
+          (-> passing
+              (assoc-in [1 :expected-evidence :canonical-effect-identity]
+                        drifted-identity)
+              (assoc-in [1 :events 2 :item :evidence
+                         :canonical-effect-identity]
+                        drifted-identity))
+          report (score/cohort-report drifted)]
+      (is (false? (:ok report)))
+      (is (some #{:invalid-run} (:errors report)))))
+  (testing "prompt, registry, and environment provenance are stable authority"
+    (doseq [[label rows]
+            [[:missing
+              (update-in passing [0] dissoc :provenance)]
+             [:client-surface-drift
+              (assoc-in passing [1 :provenance
+                                 :client-tool-projection-sha256]
+                        sha-f)]
+             [:environment-drift
+              (assoc-in passing [1 :provenance :environment-sha256]
+                        sha-f)]]]
+      (let [report (score/cohort-report rows)]
+        (is (false? (:ok report)) (name label))
+        (is (false? (get-in report [:gate :promote])) (name label))))))
 
 (defn- temp-dir []
   (.toFile (Files/createTempDirectory "relation-score-"
@@ -388,6 +478,7 @@
                     :committed true
                     :edits 51
                     :files 9
+                    :canonical_effect_identity canonical-effect-identity
                     :verification_complete true
                     :read_back_hashes result-hashes
                     :undo_receipt (.getPath receipt-file)
@@ -419,6 +510,23 @@
                 (+ start (long (* (- t-verified-ms 1.0) 1000000)))
                 (+ start (long (* t-verified-ms 1000000)))]
         run-directory (io/file root run-id)
+        _ (.mkdirs run-directory)
+        prompt-file (io/file run-directory "prompt.txt")
+        _ (spit prompt-file
+                (str "Apply the frozen task.\n"
+                     (:prompt (corpus/prompt-material arm workspace-path))
+                     "\n"))
+        registry-file (io/file run-directory "codex-mcp-registry.json")
+        _ (spit registry-file
+                (json/generate-string
+                  {:schema "clj-surgeon.codex-mcp-registry.v1"
+                   :ok true
+                   :server "clj-surgeon"
+                   :codex-executable (:codex-executable environment-evidence)
+                   :tool-names ["apply_clojure_changes"]
+                   :tool-projection tool-projection}))
+        environment-file (io/file root "environment.edn")
+        _ (spit environment-file (pr-str environment-evidence))
         artifacts (write-event-artifacts! run-directory events clocks)
         terminal-file (io/file run-directory "terminal.tsv")
         _ (spit terminal-file
@@ -433,7 +541,10 @@
      :workspace-root workspace-path
      :artifacts {:events (:events-path artifacts)
                  :event-clock (:event-clock-path artifacts)
-                 :terminal (.getPath terminal-file)}}))
+                 :terminal (.getPath terminal-file)
+                 :prompt (.getPath prompt-file)
+                 :client-registry (.getPath registry-file)
+                 :environment (.getPath environment-file)}}))
 
 (defn- raw-cohort! [root]
   (let [descriptors [["b1-n1" 1 1 :N]
@@ -529,7 +640,69 @@
                                score/score-run)]
                 (is (false? (:ok result)) (name label))
                 (is (some #{expected-error} (:errors result))
-                    (name label)))))))
+                    (name label))))))
+        (testing "public identity, prompt, registry, and environment fail closed"
+          (let [events-path (get-in entry [:artifacts :events])
+                raw-lines (str/split-lines (slurp events-path))
+                parsed (mapv #(json/parse-string % true) raw-lines)
+                without-identity
+                (update-in parsed
+                           [3 :item :result :structured_content]
+                           dissoc :canonical_effect_identity)
+                artifacts (write-event-artifacts!
+                            (io/file root "missing-identity")
+                            without-identity
+                            [900000000 1000000000 1100000000
+                             1101000000 1999000000 2000000000])]
+            (is (false?
+                  (:ok
+                    (-> (score/manifest-entry->row
+                          (assoc entry :artifacts
+                                 (merge (:artifacts entry)
+                                        {:events (:events-path artifacts)
+                                         :event-clock
+                                         (:event-clock-path artifacts)}))
+                          nil)
+                        :row
+                        score/score-run))))
+            (doseq [[label artifact replacement]
+                    [[:prompt :prompt "Assignment: wrong\n"]
+                     [:wrong-tool :client-registry
+                      (json/generate-string
+                        {:schema "clj-surgeon.codex-mcp-registry.v1"
+                         :ok true
+                         :server "clj-surgeon"
+                         :codex-executable
+                         (:codex-executable environment-evidence)
+                         :tool-names ["inspect_clojure"]
+                         :tool-projection
+                         [(assoc (first tool-projection)
+                                 :name "inspect_clojure")]})]
+                     [:extra-tool :client-registry
+                      (json/generate-string
+                        {:schema "clj-surgeon.codex-mcp-registry.v1"
+                         :ok true
+                         :server "clj-surgeon"
+                         :codex-executable
+                         (:codex-executable environment-evidence)
+                         :tool-names ["apply_clojure_changes"
+                                      "inspect_clojure"]
+                         :tool-projection
+                         (conj tool-projection
+                               (assoc (first tool-projection)
+                                      :name "inspect_clojure"))})]
+                     [:reasoning :environment
+                      (pr-str (assoc environment-evidence
+                                     :reasoning "low"))]
+                     [:model :environment
+                      (pr-str (assoc environment-evidence
+                                     :model "gpt-5.6-terra"))]]]
+              (let [path (get-in entry [:artifacts artifact])
+                    original (slurp path)]
+                (spit path replacement)
+                (is (false? (:ok (score/manifest-entry->row entry nil)))
+                    (name label))
+                (spit path original))))))
       (finally
         (delete-tree! root)))))
 

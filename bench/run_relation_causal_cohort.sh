@@ -11,6 +11,8 @@ repo_root=$(cd "$(dirname "$script_path")/.." && pwd -P)
 block1_matrix='mcp:mcp-relation-n-no-skill mcp:mcp-relation-r-no-skill mcp:mcp-relation-r-no-skill mcp:mcp-relation-n-no-skill'
 block2_matrix='mcp:mcp-relation-r-no-skill mcp:mcp-relation-n-no-skill mcp:mcp-relation-n-no-skill mcp:mcp-relation-r-no-skill'
 task='submission-row-extraction-cleanup'
+model='gpt-5.6-sol'
+reasoning='high'
 
 die() {
   printf '%s\n' "$1" >&2
@@ -53,9 +55,9 @@ write_receipt() {
   [ "$exit_code" -eq 0 ] && state=complete
   [ -n "${result_root_ready:-}" ] || return 0
   tmp="$result_root/.coordinator-receipt.edn.tmp.$$"
-  printf '{:schema :clj-surgeon.edit-025-coordinator/v1 :state :%s :stage :%s :exit %s :head "%s" :tree "%s" :block_1 "%s" :block_2 "%s"}\n' \
+  printf '{:schema :clj-surgeon.edit-025-coordinator/v1 :state :%s :stage :%s :exit %s :head "%s" :tree "%s" :model "%s" :reasoning "%s" :block_1 "%s" :block_2 "%s"}\n' \
     "$state" "$stage" "$exit_code" "$actual_head" "$actual_tree" \
-    "$block1_matrix" "$block2_matrix" > "$tmp"
+    "$model" "$reasoning" "$block1_matrix" "$block2_matrix" > "$tmp"
   mv "$tmp" "$result_root/coordinator-receipt.edn"
 }
 
@@ -98,6 +100,8 @@ require_exact_setting BENCH_TASKS "$task"
 require_exact_setting BENCH_REPLICATES 1
 require_exact_setting BENCH_PARALLELISM 1
 require_exact_setting BENCH_MCP_TOOL_PROFILE apply
+require_exact_setting BENCH_MODEL "$model"
+require_exact_setting BENCH_REASONING "$reasoning"
 
 case "$result_root" in
   /*) ;;
@@ -155,8 +159,36 @@ worker_rel=$(repo_relative_path "$worker")
 scorer_rel=$(repo_relative_path "$scorer")
 script_rel=$(repo_relative_path "$script_path")
 exact_profile_rel='bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/exact-profile.edn'
-for required in "$script_rel" "$worker_rel" "$scorer_rel" "$exact_profile_rel"; do
+fixture_paths=(
+  "bench/fixtures/edit_portfolio/$task/capsule.edn"
+  "bench/fixtures/edit_portfolio/$task/exact-profile.edn"
+  "bench/fixtures/edit_portfolio/$task/task.txt"
+  "bench/fixtures/edit_portfolio/$task/before/src/sample/review_updates.clj"
+  "bench/fixtures/edit_portfolio/$task/before/src/sample/views/log.clj"
+  "bench/fixtures/edit_portfolio/$task/before/src/sample/views/people.clj"
+  "bench/fixtures/edit_portfolio/$task/before/src/sample/views/review.clj"
+  "bench/fixtures/edit_portfolio/$task/before/test/sample/board_test.clj"
+  "bench/fixtures/edit_portfolio/$task/before/test/sample/reviews_test.clj"
+  "bench/fixtures/edit_portfolio/$task/before/test/sample/status_workflow_test.clj"
+  "bench/fixtures/edit_portfolio/$task/before/test/sample/views_test.clj"
+  "bench/fixtures/edit_portfolio/$task/before/test/sample/voting_policy_test.clj"
+  "bench/fixtures/edit_portfolio/$task/after/src/sample/review_updates.clj"
+  "bench/fixtures/edit_portfolio/$task/after/src/sample/views/log.clj"
+  "bench/fixtures/edit_portfolio/$task/after/src/sample/views/people.clj"
+  "bench/fixtures/edit_portfolio/$task/after/src/sample/views/review.clj"
+  "bench/fixtures/edit_portfolio/$task/after/test/sample/board_test.clj"
+  "bench/fixtures/edit_portfolio/$task/after/test/sample/reviews_test.clj"
+  "bench/fixtures/edit_portfolio/$task/after/test/sample/status_workflow_test.clj"
+  "bench/fixtures/edit_portfolio/$task/after/test/sample/views_test.clj"
+  "bench/fixtures/edit_portfolio/$task/after/test/sample/voting_policy_test.clj"
+)
+for required in "$script_rel" "$worker_rel" "$scorer_rel" \
+  deps.edn bb.edn "$exact_profile_rel"; do
   manifest_contains "$required" || die "Artifact manifest omits required path: $required"
+done
+for fixture_file in "${fixture_paths[@]}"; do
+  manifest_contains "$fixture_file" \
+    || die "Artifact manifest omits fixture path: $fixture_file"
 done
 
 dirty=$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all -- "${manifest_paths[@]}")
@@ -169,6 +201,28 @@ for index in "${!manifest_paths[@]}"; do
   [ "$actual_sha" = "$artifact_sha" ] \
     || die "Artifact SHA mismatch: $artifact_path"
 done
+
+codex_executable=$(command -v codex)
+codex_executable=$(cd "$(dirname "$codex_executable")" && pwd -P)/$(basename "$codex_executable")
+codex_sha256=$(shasum -a 256 "$codex_executable" | awk '{print $1}')
+codex_version=$("$codex_executable" --version)
+[ -n "$codex_version" ] || die "Codex version is empty"
+environment_receipt="$result_root/environment.edn"
+bb -e '
+  (let [[output model reasoning executable executable-sha version]
+        *command-line-args*]
+    (spit output
+          (str
+            (pr-str
+              {:schema :clj-surgeon.edit-025-environment/v1
+               :model model
+               :reasoning reasoning
+               :codex-executable executable
+               :codex-sha256 executable-sha
+               :codex-version version})
+            "\\n")))' \
+  "$environment_receipt" "$model" "$reasoning" "$codex_executable" \
+  "$codex_sha256" "$codex_version"
 
 [ -f "$repo_root/$worker_rel" ] || die "Worker is not a file: $worker_rel"
 [ -f "$repo_root/$scorer_rel" ] || die "Scorer is not a file: $scorer_rel"
@@ -184,6 +238,8 @@ run_block() {
   BENCH_REPLICATES=1 \
   BENCH_PARALLELISM=1 \
   BENCH_MCP_TOOL_PROFILE=apply \
+  BENCH_MODEL="$model" \
+  BENCH_REASONING="$reasoning" \
   BENCH_RETENTION=local \
     bash "$repo_root/$worker_rel"
 }
@@ -207,6 +263,10 @@ validate_raw_run() {
     || die "Run is missing observer clocks: $run_dir" 3
   [ -s "$run_dir/terminal.tsv" ] \
     || die "Run is missing its terminal receipt: $run_dir" 3
+  [ -s "$run_dir/prompt.txt" ] \
+    || die "Run is missing its exact prompt: $run_dir" 3
+  [ -s "$run_dir/codex-mcp-registry.json" ] \
+    || die "Run is missing its Codex client registry: $run_dir" 3
   [ -s "$run_dir/workspace-root.txt" ] \
     || die "Run is missing its workspace identity: $run_dir" 3
   [ "$(awk -F '\t' '$1 == "state" {print $2}' "$run_dir/terminal.tsv")" = completed ] \
@@ -279,25 +339,34 @@ write_block_manifest() {
     scorer_args+=("${ids[$index]}" "${arms[$index]}" \
       "$validated_workspace_root" "$run_dir")
   done
-  bb -e '
-    (let [[block output & fields] *command-line-args*
-          runs (mapv (fn [[run-id arm workspace-root run-dir] position]
-                       {:run-id run-id
+  BENCH_RELATION_ENVIRONMENT_RECEIPT="$environment_receipt" \
+    bb -e '
+        (let [[block output & fields] *command-line-args*
+              environment (System/getenv
+                            "BENCH_RELATION_ENVIRONMENT_RECEIPT")
+              runs (mapv (fn [[run-id arm workspace-root run-dir] position]
+                           {:run-id run-id
+                            :block (parse-long block)
+                            :position position
+                            :arm (keyword arm)
+                            :workspace-root workspace-root
+                            :artifacts
+                            {:events (str run-dir "/events.jsonl")
+                             :event-clock (str run-dir "/event-clock.tsv")
+                             :terminal (str run-dir "/terminal.tsv")
+                             :prompt (str run-dir "/prompt.txt")
+                             :client-registry
+                             (str run-dir "/codex-mcp-registry.json")
+                             :environment environment}})
+                         (partition 4 fields)
+                         (range 1 5))]
+          (spit output
+                (str (pr-str
+                       {:schema :clj-surgeon.edit-025-run-manifest/v1
                         :block (parse-long block)
-                        :position position
-                        :arm (keyword arm)
-                        :workspace-root workspace-root
-                        :artifacts
-                        {:events (str run-dir "/events.jsonl")
-                         :event-clock (str run-dir "/event-clock.tsv")
-                         :terminal (str run-dir "/terminal.tsv")}})
-                     (partition 4 fields)
-                     (range 1 5))]
-      (spit output
-            (str (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
-                          :block (parse-long block)
-                          :runs runs}) "\n")))' \
-    "$block" "$output" "${scorer_args[@]}"
+                        :runs runs})
+                     "\\n")))' \
+      "$block" "$output" "${scorer_args[@]}"
 }
 
 report_authorizes_block2() {

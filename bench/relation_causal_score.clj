@@ -35,6 +35,17 @@
 
 (def ^:private sha256-pattern #"[0-9a-f]{64}")
 
+(def expected-canonical-effect-identity
+  "Frozen by token-free public normalized-flat and relation canaries at
+  candidate 11e216673b07fee22c079810815241d791d63aa9."
+  {:version 1
+   :sha256 "b7f4508e322f9e60427ad5b11f39c466cbeeba41c4dff94da799de6339468841"
+   :files 9
+   :effects 51})
+
+(def ^:private canonical-effect-identity-keys
+  #{:version :sha256 :files :effects})
+
 (defn- sha256? [value]
   (and (string? value)
        (boolean (re-matches sha256-pattern value))))
@@ -95,8 +106,40 @@
                             (not (contains? #{"." ".."} %)))
                       (rest parts))))))
 
+(defn- closed-canonical-effect-identity [identity]
+  (when (map? identity)
+    (let [keys-by-token (mapv (comp keyword name) (keys identity))
+          normalized {:version (value identity :version)
+                      :sha256 (value identity :sha256)
+                      :files (value identity :files)
+                      :effects (value identity :effects)}]
+      (when (and (= (count identity) (count (set keys-by-token)))
+                 (= canonical-effect-identity-keys (set keys-by-token))
+                 (= 1 (:version normalized))
+                 (sha256? (:sha256 normalized))
+                 (= 9 (:files normalized))
+                 (= 51 (:effects normalized)))
+        normalized))))
+
+(defn- provenance-complete? [provenance]
+  (and (map? provenance)
+       (every? #(sha256? (value provenance %))
+               [:prompt-sha256
+                :prompt-template-sha256
+                :client-tool-projection-sha256
+                :environment-sha256])))
+
+(defn- stable-provenance [provenance]
+  (select-keys provenance
+               [:prompt-template-sha256
+                :client-tool-projection-sha256
+                :environment-sha256]))
+
 (defn- evidence-complete? [evidence]
   (and (map? evidence)
+       (= expected-canonical-effect-identity
+          (closed-canonical-effect-identity
+            (value evidence :canonical-effect-identity)))
        (every? #(sha256? (value evidence %))
                [:canonical-transaction-sha256
                 :future-hashes-sha256
@@ -114,6 +157,9 @@
 
 (defn- evidence-oracle-complete? [evidence]
   (and (map? evidence)
+       (= expected-canonical-effect-identity
+          (closed-canonical-effect-identity
+            (value evidence :canonical-effect-identity)))
        (every? #(sha256? (value evidence %))
                [:canonical-transaction-sha256
                 :future-hashes-sha256
@@ -123,19 +169,20 @@
 (defn- evidence-matches-oracle? [expected actual]
   (and (evidence-oracle-complete? expected)
        (= (select-keys expected
-                       [:canonical-transaction-sha256
+                       [:canonical-effect-identity
+                        :canonical-transaction-sha256
                         :future-hashes-sha256
                         :read-back-sha256])
           (select-keys actual
-                       [:canonical-transaction-sha256
+                       [:canonical-effect-identity
+                        :canonical-transaction-sha256
                         :future-hashes-sha256
                         :read-back-sha256]))
        (= (get-in expected [:verifier :profile-sha256])
           (get-in actual [:verifier :profile-sha256]))))
 
 (defn- stable-evidence [evidence]
-  {:canonical-transaction-sha256
-   (:canonical-transaction-sha256 evidence)
+  {:canonical-effect-identity (:canonical-effect-identity evidence)
    :future-hashes-sha256 (:future-hashes-sha256 evidence)
    :read-back-sha256 (:read-back-sha256 evidence)
    :verifier-profile-sha256 (get-in evidence [:verifier :profile-sha256])})
@@ -209,6 +256,7 @@
         actual-evidence (value completion-item :evidence)
         expected-evidence (:expected-evidence row)
         expected-arguments (:expected-arguments row)
+        provenance (:provenance row)
         workspace (:workspace-root row)
         turn-start (get-in row [:clocks :turn-start-ns])
         turn-completed (get-in row [:clocks :turn-completed-ns])
@@ -280,6 +328,8 @@
                    (add-error (not (evidence-matches-oracle?
                                      expected-evidence actual-evidence))
                               :evidence-mismatch)
+                   (add-error (not (provenance-complete? provenance))
+                              :provenance-incomplete)
                    (add-error (or (not clock-order?)
                                   (not (positive-finite? t-emit))
                                   (not (positive-finite? t-verified)))
@@ -294,6 +344,7 @@
                :t-verified-ms t-verified}
      :call-id (value start-item :id)
      :workspace-root workspace
+     :provenance provenance
      :evidence actual-evidence}))
 
 (defn- median [xs]
@@ -349,6 +400,10 @@
         same-evidence? (and runs-valid?
                             (= 1 (count (set (map (comp stable-evidence :evidence)
                                                   scores)))))
+        same-provenance? (and runs-valid?
+                              (= 1 (count (set (map (comp stable-provenance
+                                                          :provenance)
+                                                    scores)))))
         unique-workspaces? (and runs-valid?
                                 (= (count rows)
                                    (count (set (map :workspace-root rows)))))
@@ -361,7 +416,7 @@
         pooled (when (and runs-valid? (= 8 (count scores)))
                  (comparison scores))
         block-2-authorized?
-        (and runs-valid? same-evidence? unique-workspaces? block-1
+        (and runs-valid? same-evidence? same-provenance? unique-workspaces? block-1
              (>= (or (:t-verified-improvement block-1) -1.0) 0.15)
              (pos? (or (:t-emit-improvement block-1) -1.0)))
         promote?
@@ -379,10 +434,12 @@
                  (not (every? :ok scores)) (conj :invalid-run)
                  (and runs-valid? (not same-evidence?))
                  (conj :evidence-identity-drift)
+                 (and runs-valid? (not same-provenance?))
+                 (conj :provenance-drift)
                  (and runs-valid? (not unique-workspaces?))
                  (conj :workspace-reused))]
     {:schema :clj-surgeon.edit-025-relation-causal-cohort/v1
-     :ok (and runs-valid? same-evidence? unique-workspaces?)
+     :ok (and runs-valid? same-evidence? same-provenance? unique-workspaces?)
      :run-count (count rows)
      :errors errors
      :runs scores
@@ -532,6 +589,9 @@
           (->> (value structured :read_back_hashes)
                json-object-keys
                (normalize-workspace-paths workspace))
+          canonical-effect-identity
+          (closed-canonical-effect-identity
+            (value structured :canonical_effect_identity))
           verification (value structured :verification)]
       (when-not (and (canonical-workspace? receipt-path)
                      (canonical-workspace? workspace)
@@ -540,12 +600,15 @@
                      (= "apply_clojure_changes"
                         (value structured :operation))
                      (= 9 (count public-read-back))
+                     (= expected-canonical-effect-identity
+                        canonical-effect-identity)
                      (sha256? public-receipt-hash))
         (throw (ex-info "Receipt or read-back evidence is incomplete"
                         {:receipt receipt-path
                          :receipt-hash public-receipt-hash
                          :read-back-count (count public-read-back)})))
       {:receipt-sha256 public-receipt-hash
+       :canonical-effect-identity canonical-effect-identity
        :read-back-sha256 (canonical-sha256 public-read-back)
        :read-back-hashes public-read-back
        :edit-count (value structured :edits)
@@ -609,7 +672,9 @@
                          (expected-arguments arm "/workspace"))]
                    [arm
                     (when-not (:error compiled)
-                      {:canonical-transaction-sha256
+                      {:canonical-effect-identity
+                       expected-canonical-effect-identity
+                       :canonical-transaction-sha256
                        (:canonical-transaction-sha256 compiled)
                        :future-hashes-sha256
                        (:future-hashes-sha256 compiled)
@@ -651,6 +716,78 @@
        :errors [:terminal-receipt-invalid]
        :error (.getMessage error)})))
 
+(defn- nonblank-string? [value]
+  (and (string? value) (not (str/blank? value))))
+
+(defn- artifact-provenance [entry]
+  (try
+    (let [artifacts (:artifacts entry)
+          workspace (:workspace-root entry)
+          arm (:arm entry)
+          prompt (slurp (:prompt artifacts))
+          arm-prompt (:prompt (corpus/prompt-material arm workspace))
+          expected-suffix (str "\n" arm-prompt "\n")
+          prompt-prefix
+          (when (str/ends-with? prompt expected-suffix)
+            (subs prompt 0 (- (count prompt) (count expected-suffix))))
+          prompt-template
+          (str prompt-prefix
+               "\n"
+               corpus/common-prompt-prefix
+               "<ARM>"
+               corpus/common-prompt-suffix
+               "\n")
+          registry (json/parse-string
+                     (slurp (:client-registry artifacts)) true)
+          environment (edn/read-string (slurp (:environment artifacts)))
+          tool-names (:tool-names registry)
+          tool-projection (:tool-projection registry)
+          projected-names (mapv :name tool-projection)
+          executable (:codex-executable environment)]
+      (when-not (and (nonblank-string? prompt-prefix)
+                     (str/ends-with? prompt expected-suffix)
+                     (= "clj-surgeon.codex-mcp-registry.v1"
+                        (:schema registry))
+                     (true? (:ok registry))
+                     (= "clj-surgeon" (:server registry))
+                     (vector? tool-names)
+                     (vector? tool-projection)
+                     (= ["apply_clojure_changes"] tool-names)
+                     (= 1 (count tool-projection))
+                     (= tool-names projected-names)
+                     (= (count tool-names) (count (set tool-names)))
+                     (= 1 (count (filter #{"apply_clojure_changes"}
+                                         tool-names)))
+                     (= :clj-surgeon.edit-025-environment/v1
+                        (:schema environment))
+                     (= "gpt-5.6-sol" (:model environment))
+                     (= "high" (:reasoning environment))
+                     (canonical-workspace? executable)
+                     (sha256? (:codex-sha256 environment))
+                     (nonblank-string? (:codex-version environment))
+                     (= executable (:codex-executable registry)))
+        (throw (ex-info "Prompt, client registry, or environment is invalid"
+                        {:prompt-exact (and (nonblank-string? prompt-prefix)
+                                            (str/ends-with? prompt
+                                                            expected-suffix))
+                         :registry-schema (:schema registry)
+                         :registry-ok (:ok registry)
+                         :tool-names tool-names
+                         :projected-names projected-names
+                         :environment-schema (:schema environment)})))
+      {:ok true
+       :provenance
+       {:prompt-sha256 (sha256 prompt)
+        :prompt-template-sha256 (sha256 prompt-template)
+        :client-tool-projection-sha256
+        (canonical-sha256 tool-projection)
+        :environment-sha256 (canonical-sha256 environment)}})
+    (catch Exception error
+      {:ok false
+       :errors [:provenance-artifact-invalid]
+       :error (.getMessage error)
+       :data (ex-data error)})))
+
 (defn manifest-entry->row
   "Build one score-run row from a manifest entry and raw retained artifacts."
   [entry _default-expected-evidence]
@@ -664,9 +801,10 @@
                    terminal)
                  {:ok false
                   :errors [:workspace-not-canonical]
-                  :workspace-root declared-workspace})]
-    (if-not (:ok joined)
-      joined
+                  :workspace-root declared-workspace})
+        provenance (when (:ok joined) (artifact-provenance entry))]
+    (if-not (and (:ok joined) (:ok provenance))
+      (if-not (:ok joined) joined provenance)
       (let [events (:events joined)
             starts (filterv #(and (= :item-started (:event %))
                                   (= :mcp-tool-call
@@ -709,6 +847,7 @@
                :position (:position entry)
                :arm (:arm entry)
                :workspace-root (:workspace-root entry)
+               :provenance (:provenance provenance)
                :expected-arguments expected-arguments
                :expected-evidence (expected-run-evidence (:arm entry))
                :clocks {:turn-start-ns (:observer-monotonic-ns turn-start)
