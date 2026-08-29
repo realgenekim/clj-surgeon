@@ -8,6 +8,49 @@
   "(ns sample.app\n  (:require [old.core :as old]))\n(defn f [] 1)\n")
 (def sources {file source})
 
+(def expected-retained-captures
+  [["01-control" 8775
+    "2942a32a06d68c45d436ce8cc47159434fde2908d9c5f19a8e046c297fafc3b9"]
+   ["02-candidate" 5724
+    "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"]
+   ["03-candidate" 5724
+    "e3e487cfce6bed40cbd59793c9cae35144044335bfef9d5d44f8019fef994c9b"]
+   ["04-control" 9460
+    "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"]
+   ["05-candidate" 5103
+    "7e627736baffed2c04fe4c1a8cd7f8edb2cf6be15493a1e0c67abf0b57152506"]
+   ["06-control" 9460
+    "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"]
+   ["07-control" 9460
+    "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"]
+   ["08-candidate" 5724
+    "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"]])
+
+(def expected-candidate-owner-match-rows
+  [["src/sample/review_updates.clj" "push-person-row" 1]
+   ["src/sample/review_updates.clj" "push-active-row" 1]
+   ["src/sample/views/log.clj" "describe-rating" 3]
+   ["src/sample/views/people.clj" "reviewer-summary" 2]
+   ["src/sample/views/people.clj" "rating-row" 1]
+   ["src/sample/views/review.clj" "content-status-control" 1]
+   ["src/sample/views/review.clj" "submission-detail-page" 1]
+   ["src/sample/views/review.clj" "submission-detail-page" 1]
+   ["src/sample/views/review.clj" "review-summary" 1]
+   ["src/sample/views/review.clj" "review-summary" 1]
+   ["src/sample/views/review.clj" "board-page" 1]
+   ["src/sample/views/review.clj" "board-page" 1]
+   ["test/sample/board_test.clj" "render-unrated" 1]
+   ["test/sample/board_test.clj" "render-rated" 1]
+   ["test/sample/reviews_test.clj" "render-result" 1]
+   ["test/sample/reviews_test.clj" "render-weighted" 2]
+   ["test/sample/reviews_test.clj" "render-visible" 1]
+   ["test/sample/status_workflow_test.clj" "render-status" 1]
+   ["test/sample/views_test.clj" "render-opinions" 1]
+   ["test/sample/views_test.clj" "render-histogram" 1]
+   ["test/sample/voting_policy_test.clj" "visible-row" 1]
+   ["test/sample/voting_policy_test.clj" "hidden-row" 1]
+   ["test/sample/voting_policy_test.clj" "revealed-row" 1]])
+
 (deftest law-a-requires-exact-uncontested-direct-namespace-name
   (let [edit (replay/base-edit file)
         lowered (replay/lower-law-a sources edit)]
@@ -96,18 +139,34 @@
   (let [result (replay/product-report)]
     (is (= 8 (:capture-count result)))
     (is (= 4 (:unique-request-count result)))
+    (is (:raw-corpus-bound result))
     (is (:request-hashes-equal result))
+    (is (:owner-match-rows-exact result))
+    (is (= expected-candidate-owner-match-rows
+           (:candidate-owner-match-rows result)))
+    (is (= expected-retained-captures
+           (mapv (juxt :run :actual-capture-bytes
+                       :actual-capture-sha256)
+                 (:runs result))))
     (is (= 8 (:exact-run-count result)))
     (is (:all-eight-exact result))
     (doseq [run (:runs result)]
       (is (:ok run) (pr-str run))
+      (is (:schema-valid run) (pr-str run))
+      (is (:capture-bytes-equal run) (pr-str run))
+      (is (:capture-hash-equal run) (pr-str run))
+      (is (:request-hash-equal run) (pr-str run))
+      (is (:owner-match-rows-preserved run) (pr-str run))
       (if (= :candidate (:base run))
         (do
           (is (= 23 (:owner-row-count run)))
-          (is (= 27 (:declared-match-count run))))
+          (is (= 27 (:declared-match-count run)))
+          (is (= expected-candidate-owner-match-rows
+                 (:owner-match-rows run))))
         (do
           (is (zero? (:owner-row-count run)))
-          (is (zero? (:declared-match-count run)))))
+          (is (zero? (:declared-match-count run)))
+          (is (empty? (:owner-match-rows run)))))
       (is (= 51 (:match-count run)))
       (is (= 9 (:changed-file-count run)))
       (is (:future-hashes-equal run)))))

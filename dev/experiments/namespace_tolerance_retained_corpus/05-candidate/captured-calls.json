@@ -1,0 +1,72 @@
+{
+  "schema" : "clj-surgeon.owner-aware-call-capture.v1",
+  "calls" : [ {
+    "index" : 1,
+    "params" : {
+      "edits" : [ {
+        "files" : [ "src/sample/review_updates.clj" ],
+        "from" : "(:require\n   [sample.reviews :as reviews]\n   [sample.views.review :as view-review])",
+        "to" : "(:require\n   [sample.reviews :as reviews]\n   [sample.views.review :as view-review]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "src/sample/views/log.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review])",
+        "to" : "(:require\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "src/sample/views/people.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review])",
+        "to" : "(:require\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "src/sample/views/review.clj" ],
+        "from" : "(:require\n   [sample.events :as events]\n   [sample.store :as store])",
+        "to" : "(:require\n   [sample.events :as events]\n   [sample.store :as store]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "test/sample/board_test.clj" ],
+        "from" : "(:require\n   [sample.views.review :as view-review])",
+        "to" : "(:require\n   [sample.views.review :as view-review]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "test/sample/reviews_test.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review-view])",
+        "to" : "(:require\n   [sample.views.review :as review-view]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "test/sample/status_workflow_test.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review-view])",
+        "to" : "(:require\n   [sample.views.review :as review-view]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "test/sample/views_test.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review])",
+        "to" : "(:require\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "files" : [ "test/sample/voting_policy_test.clj" ],
+        "from" : "(:require\n   [sample.views.review :as review])",
+        "to" : "(:require\n   [sample.views.review :as review]\n   [sample.views.submission-row :as submission-row])",
+        "matches" : 1
+      }, {
+        "file" : "src/sample/views/review.clj",
+        "within" : {
+          "form" : "detail-controls"
+        },
+        "from" : "(defn detail-controls [event row person mine]\n  (row-controls* event row person mine (chair-on-event? event person) false))",
+        "to" : "(defn detail-controls [event row person mine]\n  (submission-row/row-controls*\n    event row person mine (submission-row/chair-on-event? event person) false))",
+        "matches" : 1
+      } ],
+      "delete_owners" : [ {
+        "file" : "src/sample/views/review.clj",
+        "forms" : [ "chair-on-event?", "fmt-mean", "fmt-aggregate", "fmt-stars", "private-note-block", "star-form", "star-histogram", "reviewer-input-controls", "row-controls*", "opinions-block", "row-controls", "reviewed-by?", "score-for-person", "board-row" ]
+      } ],
+      "symbol_migration" : {
+        "target_alias" : "submission-row",
+        "target_rule" : "preserve-name",
+        "columns" : [ "owner", "from", "matches" ],
+        "files" : [ [ "src/sample/review_updates.clj", [ [ "push-person-row", "view-review/board-row", 1 ], [ "push-active-row", "view-review/board-row", 1 ] ] ], [ "src/sample/views/log.clj", [ [ "describe-rating", "review/fmt-stars", 3 ] ] ], [ "src/sample/views/people.clj", [ [ "reviewer-summary", "review/fmt-mean", 2 ], [ "rating-row", "review/fmt-stars", 1 ] ] ], [ "src/sample/views/review.clj", [ [ "content-status-control", "chair-on-event?", 1 ], [ "submission-detail-page", "score-for-person", 1 ], [ "submission-detail-page", "reviewed-by?", 1 ], [ "review-summary", "fmt-aggregate", 1 ], [ "review-summary", "fmt-mean", 1 ], [ "board-page", "chair-on-event?", 1 ], [ "board-page", "board-row", 1 ] ] ], [ "test/sample/board_test.clj", [ [ "render-unrated", "view-review/board-row", 1 ], [ "render-rated", "view-review/board-row", 1 ] ] ], [ "test/sample/reviews_test.clj", [ [ "render-result", "review-view/board-row", 1 ], [ "render-weighted", "review-view/board-row", 2 ], [ "render-visible", "review-view/board-row", 1 ] ] ], [ "test/sample/status_workflow_test.clj", [ [ "render-status", "review-view/board-row", 1 ] ] ], [ "test/sample/views_test.clj", [ [ "render-opinions", "review/opinions-block", 1 ], [ "render-histogram", "review/star-histogram", 1 ] ] ], [ "test/sample/voting_policy_test.clj", [ [ "visible-row", "review/board-row", 1 ], [ "hidden-row", "review/board-row", 1 ], [ "revealed-row", "review/board-row", 1 ] ] ] ]
+      }
+    }
+  } ]
+}

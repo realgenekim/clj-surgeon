@@ -1,8 +1,11 @@
 (ns clj-surgeon.mcp-compact-location-test
   (:require
+   [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -32,23 +35,25 @@
     source-file))
 
 (defn- normalize-request
-  [source request]
-  (let [validated (contract/validate-tool-params request)]
-    (if-not (:ok validated)
-      validated
-      (let [spec (contract/tool-params->transaction (:params validated))]
-        (let [sources {"src/sample/app.clj" source}
-              prepared
-              (compact-location/normalize-spec
-                sources spec
-                (:compact-location-normalization validated))]
-          (if (:error prepared)
-            prepared
-            (let [compiled
-                  (transaction/compile-transaction sources (:spec prepared))]
-              (if (:error compiled)
-                compiled
-                (assoc prepared :compiled compiled)))))))))
+  ([source request]
+   (normalize-request "src/sample/app.clj" source request))
+  ([file source request]
+   (let [validated (contract/validate-tool-params request)]
+     (if-not (:ok validated)
+       validated
+       (let [spec (contract/tool-params->transaction (:params validated))]
+         (let [sources {file source}
+               prepared
+               (compact-location/normalize-spec
+                 sources spec
+                 (:compact-location-normalization validated))]
+           (if (:error prepared)
+             prepared
+             (let [compiled
+                   (transaction/compile-transaction sources (:spec prepared))]
+               (if (:error compiled)
+                 compiled
+                 (assoc prepared :compiled compiled))))))))))
 
 (deftest source-blind-validation-preserves-omitted-location
   ;; @spec MCP-OP-EDIT-011
@@ -292,3 +297,146 @@
                (slurp source-file))))
       (finally
         (delete-tree! workspace)))))
+
+(deftest noncompact-routes-never-invoke-the-compact-normalizer
+  ;; @spec MCP-OP-EDIT-015
+  (let [normalizer-calls (atom [])
+        normalizer-spy
+        (fn [& args]
+          (swap! normalizer-calls conj args)
+          (throw (ex-info "compact normalizer must not run" {})))]
+    (with-redefs [compact-location/normalize-spec normalizer-spy]
+      (testing "retained basis"
+        (let [workspace (temp-dir)
+              receipt-dir (io/file workspace "receipts")
+              source-file (write-source! workspace
+                                         "(ns sample.app)\n(defn f [] 1)\n")]
+          (try
+            (change-buffer/clear-bases!)
+            (let [prepared
+                  (change-buffer/prepare-change!
+                    {:project-root (.getPath workspace)}
+                    {:file "src/sample/app.clj"
+                     :form "f"
+                     :intent "Change the exact retained owner"})
+                  site (get-in prepared [:decision-sites 0 :id])
+                  result
+                  (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath receipt-dir)
+                     :verify! (fn [_ _ _ files]
+                                {:ok true :files files})}
+                    {"basis" (:basis prepared)
+                     "decisions" [{"site" site
+                                   "replace" "(defn f [] 2)"}]})]
+              (is (:ok prepared) (pr-str prepared))
+              (is (:ok result) (pr-str result))
+              (is (= "(ns sample.app)\n(defn f [] 2)\n"
+                     (slurp source-file))))
+            (finally
+              (change-buffer/clear-bases!)
+              (delete-tree! workspace)))))
+
+      (testing "extraction"
+        (let [workspace (temp-dir)
+              receipt-dir (io/file workspace "receipts")
+              source-file
+              (write-source! workspace
+                             (str "(ns sample.app)\n\n"
+                                  "(defn f [] 1)\n\n"
+                                  "(defn retained [] :ok)\n"))]
+          (try
+            (let [result
+                  (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath receipt-dir)}
+                    {"extraction"
+                     {"file" "src/sample/app.clj"
+                      "to" "src/sample/moved.clj"
+                      "forms" ["f"]
+                      "require_policy" "minimal"}})]
+              (is (:ok result) (pr-str result))
+              (is (str/includes? (slurp source-file) "(defn retained [] :ok)"))
+              (is (.exists (io/file workspace "src/sample/moved.clj"))))
+            (finally
+              (delete-tree! workspace)))))
+
+      (testing "standalone programs"
+        (let [workspace (temp-dir)
+              source-file
+              (write-source! workspace "(ns sample.app)\n(defn f [] :old)\n")]
+          (try
+            (let [result
+                  (program-tool/execute-request!
+                    {:project-root (.getPath workspace)}
+                    {:file "src/sample/app.clj"
+                     :expression
+                     "(-> (form 'f) (match :old) (transform (constantly :new)))"
+                     :expect {:matches 1
+                              :max_changed_characters 8}})]
+              (is (:ok result) (pr-str result))
+              (is (= :transform-preview (:operation result)))
+              (is (= "(ns sample.app)\n(defn f [] :old)\n"
+                     (slurp source-file))))
+            (finally
+              (delete-tree! workspace)))))
+
+      (testing "CLI change preview"
+        (let [workspace (temp-dir)
+              source-file
+              (write-source! workspace "(ns sample.app)\n(defn f [] :old)\n")
+              result (atom nil)]
+          (try
+            (with-out-str
+              (reset! result
+                      (core/run
+                        {:op :change
+                         :spec
+                         {:intents [{:files [(.getPath source-file)]
+                                     :from ":old"
+                                     :to ":new"
+                                     :expect-count 1}]
+                          :expect {:intent-count 1
+                                   :edit-count 1
+                                   :changed-file-count 1}}})))
+            (is (:ok @result) (pr-str @result))
+            (is (= "(ns sample.app)\n(defn f [] :old)\n"
+                   (slurp source-file)))
+            (finally
+              (delete-tree! workspace))))))
+
+    (is (empty? @normalizer-calls)
+        "retained-basis, extraction, standalone-program, and CLI routes bypass compact normalization")))
+
+(deftest cljc-platform-conditional-owner-does-not-authorize-a-location
+  ;; @spec MCP-OP-EDIT-012
+  (let [file "src/sample/app.cljc"
+        source (str "(ns sample.app)\n"
+                    "#?(:clj (defn f [] :old)\n"
+                    "   :cljs (defn f [] :old))\n")
+        result
+        (normalize-request
+          file source
+          {"edits" [{"file" file
+                     "from" "(defn f [] :old)"
+                     "to" "(defn f [] :new)"}]})]
+    (is (not (:ok result)) (pr-str result))
+    (is (= :compact-location-unresolved (:error-type result))
+        (pr-str result))))
+
+(deftest duplicate-namespace-named-owners-block-namespace-fallback
+  ;; @spec MCP-OP-EDIT-012
+  (let [source (str "(ns sample.app\n"
+                    "  (:require [old.core :as old]))\n\n"
+                    "(def sample.app :first)\n"
+                    "(def sample.app :second)\n")
+        result
+        (normalize-request
+          source
+          {"edits" [{"file" "src/sample/app.clj"
+                     "within" {"form" "sample.app"}
+                     "from" "(:require [old.core :as old])"
+                     "to" "(:require [new.core :as new])"}]})]
+    (is (not (:ok result)) (pr-str result))
+    (is (= :change-owner-mismatch (:error-type result))
+        (pr-str result))))
