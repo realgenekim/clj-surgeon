@@ -723,3 +723,83 @@ a native-positive routing control. The historical fixture tests the actual
 crossover hypothesis: once mechanical state grows, one guarded owner-level
 transaction should stay close to one model action while native patch
 materialization grows with the source surface.
+
+## The crossover reappeared at nine files
+
+The benchmark scope needed one correction before another model run. The frozen
+capsule represents the cleanup after a destination namespace already exists,
+not the complete historical extraction that created that destination. Its
+honest topology is nine changed files, 51 guarded edit occurrences, 14 owner
+deletions, and a minimized 44-insertion/457-deletion diff. Destination creation
+and full extraction planning remain out of scope.
+
+The harness now records its own commit independently from the product commit,
+fails on any unexpected Clojure or EDN source path, and scores semantic
+correctness, exact bytes, source inventory, and route adherence separately.
+The admitted compact route requires exactly one successful `edit_clojure`
+transaction and no inspection, shell mutation, native patch, refusal, or
+post-decision read. The native route has no Surgeon exposure.
+
+The first fresh Sol/high Anvil pair was compact-first. Both arms were exact,
+meaning-preserving, route-adherent, and source-set exact:
+
+| Route | Complete wall | Actions | Failed mutation guards |
+|---|---:|---:|---:|
+| compact `edit_clojure` | 55.763s | 1 MCP mutation | 0 |
+| native | 206.727s | 12 shell + 1 file change | 1 |
+
+Compact was 150.964 seconds faster, or 3.71x. It compiled all 51 changes across
+nine files in one verified atomic call. Native eventually produced the same
+exact result, but its first patch guard failed before a successful patch. This
+is the predicted crossover: the small two-file case favors one read plus one
+native patch, while dispersed mechanical state makes native construction and
+recovery grow. A native-first pair remains the counterbalance before this
+becomes a replicated claim.
+
+## A smaller request preserved the complete decision
+
+The 51-change call itself exposed the next cost. Its minified request was 6,409
+bytes. Namespace retranscription and 23 repeated owner-scoped symbol-edit rows
+accounted for about 89 percent of that payload. A bounded experiment replaced
+only those repeated rows with one owner-aware symbol-migration table. The table
+states the target alias and name-preserving relation once, but retains every
+file, owner, old symbol, and exact match count.
+
+The candidate measured 4,403 bytes, a 31.3 percent reduction. It then passed
+through the real JSON normalization, MCP contract validator, request-to-
+transaction adapter, and source compiler against the frozen fixture. The
+candidate and oracle produced:
+
+- the same normalized transaction and addressed replacements;
+- 51 concrete matches across the same nine files;
+- all 23 owner rows and all 27 declared symbol counts;
+- identical future-source hashes matching the capsule; and
+- the same fail-closed owner and count refusals.
+
+This is experiment evidence, not yet a public API. It earns a clean-context
+call-construction screen. The candidate loses if it adds an action or refusal,
+misses first-call exactness, or fails to reduce prompt-to-call emission by at
+least 15 percent. The transaction engine does not change.
+
+## Tolerance stopped where meaning began
+
+The same usage window contained 14 `batch-form-selection-failed` events. Their
+refusal-to-next-action boundaries totaled 136.452 seconds with a 7.522-second
+median. An adversarial trace review found that broad owner normalization would
+be unsafe:
+
+- 12 misses named stale, planned, semantic, or wrong-file owners;
+- two were genuine `declare` plus `defn-` ambiguity; and
+- only one supplied string exactly equaled the file's parsed namespace name.
+
+No observed failure supported namespace-prefix stripping, fuzzy names,
+string/keyword conversion, or automatic definition preference. The one exact
+namespace-identity case cost 13.356 seconds before native discovery and is a
+valid narrow seam. The larger earned hill is better continuation: typed owner
+kinds and ranges, explicit typed selection for ambiguity, and compact
+snapshot-bound retry holes that survive output-budget pressure. This evidence
+was added to `clj-surgeon-p24`.
+
+The law is now sharper: tolerate representation only when one exact relation
+proves the same request. When selecting among meanings, refuse and make the
+human or model choice cheaper.
