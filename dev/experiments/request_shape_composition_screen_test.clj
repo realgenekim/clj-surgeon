@@ -2,6 +2,7 @@
   (:require
    [babashka.fs :as fs]
    [cheshire.core :as json]
+   [clj-surgeon.core :as core]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
@@ -108,6 +109,37 @@
         (is (:verification_complete result))
         (is (= intended-before (slurp intended)))
         (is (= wrong-after (slurp wrong))))
+      (finally
+        (fs/delete-tree workspace)))))
+
+(deftest shipped-line-selector-can-silently-mutate-the-wrong-owner
+  (let [workspace
+        (.toFile
+          (java.nio.file.Files/createTempDirectory
+            "clj-surgeon-wrong-line-"
+            (make-array java.nio.file.attribute.FileAttribute 0)))
+        source-file (io/file workspace "duplicate.clj")
+        before (str "(ns demo.duplicate)\n\n"
+                    "(defn intended [] :old)\n\n"
+                    "(defn wrong [] :old)\n")
+        after (str "(ns demo.duplicate)\n\n"
+                   "(defn intended [] :old)\n\n"
+                   "(defn wrong [] :new)\n")]
+    (try
+      (spit source-file before)
+      (let [result
+            (core/run-edit
+              {:file (.getPath source-file)
+               :expr "(-> (line 5) (match :old) (replace :new))"
+               :expect ":old"})]
+        (is (:ok result) (pr-str result))
+        (is (= :expect-guarded (:mode result)))
+        (is (= [{:form 'wrong}] (get-in result [:applied-edit :path])))
+        (is (= [[:line 5] [:find :old] [:replace :new]]
+               (get-in result [:selector :query])))
+        (is (= ":old" (get-in result [:applied-edit :before])))
+        (is (= ":new" (get-in result [:applied-edit :after])))
+        (is (= after (slurp source-file))))
       (finally
         (fs/delete-tree workspace)))))
 
