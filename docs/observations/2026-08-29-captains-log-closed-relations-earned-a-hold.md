@@ -228,3 +228,57 @@ that saving survived exact mutation, verification, response completion, both
 counterbalanced blocks, and an independent machine. The architecture and the
 measurement now agree: compress repetition, preserve explicit identity, and
 let one proven transaction own the effects.
+
+## Publication receipt
+
+The independently reproduced mechanism and the positional-mutation authority
+P0 were combined at release commit
+`19ab864889799b0028a5f7cb66c63b957ff7b973` and tagged
+`stable-closed-relations-7.35x-native-20260829`. The tag message retains both
+performance denominators: 7.35x versus the earlier matched native cohort and
+33.99 percent faster complete verified wall versus the same-candidate
+normalized-flat control.
+
+The exact milestone gate passed before publication:
+
+- core: 647 tests, 5,562 assertions, zero failures or errors;
+- analyzer contract: 4 tests, 20 assertions, zero failures or errors;
+- MCP: 295 tests, 3,399 assertions, zero failures or errors;
+- MCP stdio smoke, skill mirrors, benchmark harnesses, retention, and evidence
+  manifests: green.
+
+An isolated 250 ms cold-admission witness had earlier produced two timing
+failures. Independent replay at both `19ab864` and unmodified relation base
+`90b47d1` produced the identical result, and the four governing files were
+byte-identical. The deterministic lower admission contract passed 5/5 at both
+refs. The full milestone MCP suite then passed 295/3,399 without a retry. This
+is retained as pre-existing execution-context sensitivity, not erased and not
+misreported as a product regression or a blind-retry success.
+
+One `make install` published the CLI, analyzer gate, Codex skill, Claude skill,
+and unchanged agent-routing block from `19ab864`. The stable CLI receipt names
+source hash
+`a86e00b5afd4d5e0f550999fc95f8d7f33622faceeb703266367cb630ef57d2a`;
+the installed CLI SHA-256 is
+`f64a91fb1f4ff569b807988b2760979360e58bb7a0f26a66f60f40774f9aaef0`.
+The installed skill source hash is
+`cc4f6cc7d378947214d91b6e2260214c4b5061792c8b687a1e44afdec8679c59`.
+
+The installed CLI canary first submitted the known duplicate-content
+`(line 5)` mutation. It exited one with
+`:positional-mutation-authority-refused`; the source SHA-256 remained
+`55cf78789dea785d06fd6fe6c45ffaafbeb9de4bcaa0aa40a8c43d1353af3a1f`.
+The named-owner retry then exited zero and changed only `intended`; `wrong`
+remained byte-identical.
+
+One synchronized `make mcp-reload` changed the live contract hash from
+`f5d0ad45` to `53b40e3f`, with no server restart. Shared PID `65458` remained
+the same. A fresh `tools/list` session exposed `symbol_migration` and
+`require_change`. A fresh isolated relation request then committed 51 effects
+across nine files in 1,635.31 ms, completed the exact project verifier, and
+returned canonical effect identity
+`b7f4508e322f9e60427ad5b11f39c466cbeeba41c4dff94da799de6339468841`.
+Its receipt SHA-256 was
+`6acd5ae7d8efa6fe5c514be62a91e8b6e4b644c4c902ad2ebd52de6a5df7c437`.
+Finally, the pre-existing MCP session completed a structural read in 144.87 ms,
+proving session continuity after the no-restart reload.
