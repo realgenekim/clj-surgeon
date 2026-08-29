@@ -35,13 +35,16 @@ configure_canonical_mcp_roles() {
   mcp_legacy_transform_is_mutation=true
 }
 
-canonical_profile_tool_names_json() {
+canonical_client_tool_names_json() {
   case "$1" in
     full)
       jq -cn '["inspect_clojure","apply_clojure_changes","edit_clojure","transform_clojure"] | sort'
       ;;
     edit)
       jq -cn '["edit_clojure"]'
+      ;;
+    apply)
+      jq -cn '["apply_clojure_changes"]'
       ;;
     *)
       echo "Unsupported canonical MCP tool profile: $1" >&2
@@ -55,7 +58,7 @@ write_canonical_mcp_config() {
   local mcp_url=$2
   local profile=$3
   local enabled_tools
-  enabled_tools=$(canonical_profile_tool_names_json "$profile")
+  enabled_tools=$(canonical_client_tool_names_json "$profile")
   bb "$repo_root/bench/write_mcp_config.clj" \
     "$config_file" --url "$mcp_url" \
     --enabled-tools-edn "$enabled_tools" >/dev/null
@@ -487,7 +490,10 @@ validate_materialization_screen() {
   local matrix=$1 parallelism=$2 replicates=$3 include_compact=$4
   local literal='mcp:mcp-extraction-literal-tool-first-no-skill'
   local control='mcp:mcp-extraction-fused-tool-first-no-skill'
-  [ " $matrix " = *" $literal "* ] || return 0
+  case " $matrix " in
+    *" $literal "*) ;;
+    *) return 0 ;;
+  esac
   if [ "$matrix" != "$control $literal $literal $control" ] \
     || [ "$parallelism" -ne 1 ] \
     || [ "$replicates" -ne 1 ] \
@@ -790,10 +796,11 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_root/no-mcp-first-selected-tool.tsv")" = none
 
   configure_canonical_mcp_roles
-  test "$(canonical_profile_tool_names_json edit)" = '["edit_clojure"]'
-  test "$(canonical_profile_tool_names_json full)" = \
+  test "$(canonical_client_tool_names_json edit)" = '["edit_clojure"]'
+  test "$(canonical_client_tool_names_json apply)" = '["apply_clojure_changes"]'
+  test "$(canonical_client_tool_names_json full)" = \
     '["apply_clojure_changes","edit_clojure","inspect_clojure","transform_clojure"]'
-  if canonical_profile_tool_names_json unknown >/dev/null 2>&1; then
+  if canonical_client_tool_names_json unknown >/dev/null 2>&1; then
     echo "canonical profile self-test accepted an unknown profile" >&2
     exit 1
   fi
@@ -1555,8 +1562,9 @@ run_one() {
     case "${BENCH_MCP_TOOL_PROFILE:-full}" in
       full) mcp_profile_args=(:tool-profile :full) ;;
       edit) mcp_profile_args=(:tool-profile :edit) ;;
+      apply) mcp_profile_args=(:tool-profile :full) ;;
       *)
-        echo "BENCH_MCP_TOOL_PROFILE must be full or edit: ${BENCH_MCP_TOOL_PROFILE}" >&2
+        echo "BENCH_MCP_TOOL_PROFILE must be full, edit, or apply: ${BENCH_MCP_TOOL_PROFILE}" >&2
         exit 2
         ;;
     esac
@@ -1676,7 +1684,7 @@ run_one() {
       expected_catalog_tools=$(jq -c '[.roles[]] | unique | sort' \
         "$catalog_role_receipt")
     else
-      expected_catalog_tools=$(canonical_profile_tool_names_json \
+      expected_catalog_tools=$(canonical_client_tool_names_json \
         "${BENCH_MCP_TOOL_PROFILE:-full}")
     fi
     if [ "$actual_catalog_tools" != "$expected_catalog_tools" ]; then
