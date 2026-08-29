@@ -828,3 +828,67 @@ was added to `clj-surgeon-p24`.
 The law is now sharper: tolerate representation only when one exact relation
 proves the same request. When selecting among meanings, refuse and make the
 human or model choice cheaper.
+
+## A smaller notation lost; namespace tolerance became the prize
+
+The owner-aware symbol table earned a model screen because its pure lowering
+was exact. The capture-only experiment exposed the current `edit_clojure`
+surface and a candidate surface to eight fresh Sol/high callers in serial
+`ABBA/BAAB` order. Both arms used the same task, source, tool name, one-tool
+catalog, and real offline compiler. No run could write source.
+
+The first attempt stopped before launching a model because the harness compared
+the server's raw tool description with Codex's client projection byte-for-byte.
+Codex changes `annotations: null` to `{}` and removes the input schema's
+top-level `anyOf`; every other field matched. The repaired observer now proves
+the `mcpServerStatus/list` provenance, rejects the unrelated 49-tool app/plugin
+cache, permits only those two observed projections, and fails on any other
+delta. This failure became a permanent 10-test/50-assertion measurement ratchet.
+
+The fresh cohort rejected the candidate:
+
+| Arm | Correct first calls | Median call emission | Argument bytes |
+|---|---:|---:|---:|
+| current control | 0/4 | 68.639s | 6,095-6,470 |
+| owner-aware table | 0/4 | 60.595s | 4,122-4,464 |
+
+Candidate emission was 11.72 percent faster, below the 15 percent gate. More
+importantly, no call compiled to the frozen future. The smaller notation does
+not earn product code.
+
+The exact failures revealed a stronger seam. One control and one candidate
+omitted `within` from the first namespace edit. The other six calls, split
+evenly across arms, supplied the same selector:
+
+```json
+{"within":{"form":"sample.review-updates"}}
+```
+
+That string is not a named top-level form. It is the file's exact parsed
+namespace name. All six therefore refused at change zero with the same
+`change-owner-mismatch`; no mutation occurred. Control and candidate did not
+make different semantic mistakes. The unrecovered namespace selector dominated
+both representations before the symbol-migration table mattered.
+
+This converges with the independent 14-refusal audit, where exact namespace
+identity was the only observed injective owner normalization. The next pure
+replay will test two laws against all eight retained calls:
+
+1. A requested named form may lower to the namespace owner only when no named
+   owner matches, exactly one parsed namespace exists, and its name is exactly
+   the requested string.
+2. An omitted selector may lower to the namespace owner only when `from` and
+   `to` are matching namespace clauses and the exact `from` occurs with the
+   declared cardinality inside that unique namespace form.
+
+Both laws must compile to the exact frozen 51-change future. A mismatch,
+multiple namespace forms, competing named owner, non-namespace subtree, stale
+count, or reader-conditional ambiguity still refuses. This is tolerance as a
+proof, not tolerance as a guess.
+
+Two harness defects remain explicit and separate from the model result. The
+frozen aggregate omitted its first score because Clojure `-e` consumed the
+first file as argument zero, and the capture server omitted required
+`elapsed_ms` from its structured success response. The retained per-run
+emission clocks and captured arguments remain usable for offline replay, but no
+MCP-success or complete-turn claim is made from this cohort.
