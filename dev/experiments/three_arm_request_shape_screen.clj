@@ -21,6 +21,7 @@
 (def arms [:flat :file-groups :closed-relations])
 (def cohort-order [:flat :file-groups :closed-relations
                    :closed-relations :file-groups :flat])
+(def expected-final-response "call captured")
 
 (defn- refusal [error-type error data]
   (merge {:ok false
@@ -429,7 +430,7 @@
       :else
       (let [compiled
             (mapv #(compile-one-require-change
-                     (get sources (get % "file")) add %)
+                    (get sources (get % "file")) add %)
                   files)
             failed (some #(when-not (:ok %) %) compiled)]
         (if failed
@@ -502,10 +503,10 @@
 (def expected-decision-coverage
   {:files
    (vec (sort (distinct
-                (concat (map #(get % "file")
-                             (get migration/oracle-request "edits"))
-                        (map #(get % "file")
-                             (get migration/oracle-request "delete_owners"))))))
+               (concat (map #(get % "file")
+                            (get migration/oracle-request "edits"))
+                       (map #(get % "file")
+                            (get migration/oracle-request "delete_owners"))))))
    :symbol-sites (mapv symbol-site migration/oracle-rewrite-edits)
    :non-default-counts
    (vec (keep (fn [edit]
@@ -528,9 +529,9 @@
         (remove (set (concat namespace-edits symbol-edits)) edits)]
     {:files
      (vec (sort (distinct
-                  (concat (map #(get % "file") edits)
-                          (map #(get % "file")
-                               (get request "delete_owners"))))))
+                 (concat (map #(get % "file") edits)
+                         (map #(get % "file")
+                              (get request "delete_owners"))))))
      :symbol-sites (mapv symbol-site symbol-edits)
      :non-default-counts
      (vec (filter #(not= 1 (last %)) (map symbol-site symbol-edits)))
@@ -544,9 +545,9 @@
 
 (defn- explicit-symbol-sites [migration-table]
   (vec
-    (for [[file sites] (get migration-table "files")
-          [owner from matches] sites]
-      [file owner from matches])))
+   (for [[file sites] (get migration-table "files")
+         [owner from matches] sites]
+     [file owner from matches])))
 
 (defn decision-coverage [arm arguments expanded]
   (let [arguments (public-json arguments)
@@ -558,20 +559,20 @@
           (let [require-change (get arguments "require_change")]
             {:files
              (vec
-               (sort
-                 (distinct
-                   (concat
-                     (map #(get % "file") (get require-change "files"))
-                     (map first
-                          (get-in arguments ["symbol_migration" "files"]))
-                     (map #(get % "file") (get arguments "edits"))
-                     (map #(get % "file") (get arguments "delete_owners"))))))
+              (sort
+               (distinct
+                (concat
+                 (map #(get % "file") (get require-change "files"))
+                 (map first
+                      (get-in arguments ["symbol_migration" "files"]))
+                 (map #(get % "file") (get arguments "edits"))
+                 (map #(get % "file") (get arguments "delete_owners"))))))
              :symbol-sites
              (explicit-symbol-sites (get arguments "symbol_migration"))
              :non-default-counts
              (vec (filter #(not= 1 (last %))
                           (explicit-symbol-sites
-                            (get arguments "symbol_migration"))))
+                           (get arguments "symbol_migration"))))
              :require
              {:add [(get-in require-change ["add" "lib"])
                     (get-in require-change ["add" "as"])]
@@ -664,6 +665,8 @@
                          (zero? (:recovery-count geometry))
                          (zero? (:shell-call-count geometry))
                          (zero? (:file-change-count geometry)))
+        final-response (:final-agent-message geometry)
+        final-response-exact? (= expected-final-response final-response)
         payload-bytes (json-bytes arguments)
         payload-ok?
         (case arm
@@ -674,11 +677,17 @@
     {:schema :clj-surgeon.three-arm-request-shape-run/v1
      :arm arm
      :correct (and exact? transaction-equal? adherence? one-action?
+                   final-response-exact?
                    (:complete coverage) payload-ok?)
      :semantic-exact exact?
      :treatment-adherent adherence?
      :one-action one-action?
      :payload {:bytes payload-bytes :within-budget payload-ok?}
+     :final-agent-message {:expected expected-final-response
+                           :actual final-response
+                           :bytes (when (string? final-response)
+                                    (alength (.getBytes final-response "UTF-8")))
+                           :exact final-response-exact?}
      :decision-coverage coverage
      :compiler {:canonical-transaction-equal transaction-equal?
                 :future-hashes-equal exact?
@@ -715,59 +724,59 @@
         permuted-expansion (expand-closed-relations sources permuted-b)]
     {:a-mixed-flat
      (falsifier-result
-       (expand-file-groups (assoc a "edits" [migration/bespoke-edit]))
-       :ambiguous-edit-shape)
+      (expand-file-groups (assoc a "edits" [migration/bespoke-edit]))
+      :ambiguous-edit-shape)
      :a-local-file
      (falsifier-result
-       (expand-file-groups
-         (assoc-in a ["file_groups" 0 "edits" 0 "file"] "src/other.clj"))
-       :ambiguous-local-file)
+      (expand-file-groups
+       (assoc-in a ["file_groups" 0 "edits" 0 "file"] "src/other.clj"))
+      :ambiguous-local-file)
      :a-duplicate-group
      (falsifier-result
-       (expand-file-groups
-         (update a "file_groups" conj first-group))
-       :duplicate-file-group)
+      (expand-file-groups
+       (update a "file_groups" conj first-group))
+      :duplicate-file-group)
      :b-duplicate-require-file
      (falsifier-result
-       (expand-closed-relations
-         sources
-         (update-in b ["require_change" "files"] conj first-change))
-       :duplicate-require-file)
+      (expand-closed-relations
+       sources
+       (update-in b ["require_change" "files"] conj first-change))
+      :duplicate-require-file)
      :b-missing-source
      (falsifier-result
-       (expand-closed-relations (dissoc sources alias-file) b)
-       :missing-frozen-source)
+      (expand-closed-relations (dissoc sources alias-file) b)
+      :missing-frozen-source)
      :b-platform-conditional
      (falsifier-result
-       (expand-closed-relations
-         (update sources alias-file
-                 str/replace
-                 "(:require"
-                 "(:require #?(:clj [sample.conditional :as conditional])")
-         b)
-       :platform-conditional-require)
+      (expand-closed-relations
+       (update sources alias-file
+               str/replace
+               "(:require"
+               "(:require #?(:clj [sample.conditional :as conditional])")
+       b)
+      :platform-conditional-require)
      :b-alias-collision
      (falsifier-result
-       (expand-closed-relations
-         (update sources alias-file
-                 str/replace
-                 "(:require"
-                 "(:require [sample.other :as submission-row]")
-         b)
-       :require-alias-collision)
+      (expand-closed-relations
+       (update sources alias-file
+               str/replace
+               "(:require"
+               "(:require [sample.other :as submission-row]")
+       b)
+      :require-alias-collision)
      :b-duplicate-symbol-row
      (let [site (get-in b ["symbol_migration" "files" 0 1 0])]
        (falsifier-result
-         (expand-closed-relations
-           sources
-           (update-in b ["symbol_migration" "files" 0 1] conj site))
-         :duplicate-expanded-edit))
+        (expand-closed-relations
+         sources
+         (update-in b ["symbol_migration" "files" 0 1] conj site))
+        :duplicate-expanded-edit))
      :b-row-permutation
      (and (:ok permuted-expansion)
           (false? (:complete
-                    (decision-coverage :closed-relations
-                                       permuted-b
-                                       permuted-expansion)))
+                   (decision-coverage :closed-relations
+                                      permuted-b
+                                      permuted-expansion)))
           (false? (treatment-adherent? :closed-relations permuted-b)))}))
 
 (defn prerequisite-report []
@@ -780,6 +789,7 @@
                   :recovery-count 0
                   :shell-call-count 0
                   :file-change-count 0
+                  :final-agent-message expected-final-response
                   :prompt-to-call-ms 0.0}
         scores (into {}
                      (map (fn [[arm request]]
@@ -841,16 +851,19 @@
 (defn -main [& args]
   (case (first args)
     "score"
-    (let [{:keys [arm capture timing mcp-calls shell-calls file-changes]}
+    (let [{:keys [arm capture timing mcp-calls shell-calls file-changes
+                  final-response]}
           (parse-pairs (rest args))
           capture (read-json capture)
           timing (edn/read-string (slurp (io/file timing)))
+          final-response (slurp (io/file final-response))
           calls (get capture "calls")
           geometry {:mcp-call-count (parse-long mcp-calls)
                     :refusal-count 0
                     :recovery-count (max 0 (dec (parse-long mcp-calls)))
                     :shell-call-count (parse-long shell-calls)
                     :file-change-count (parse-long file-changes)
+                    :final-agent-message final-response
                     :prompt-to-call-ms
                     (owner-screen/prompt-to-first-call-ms timing)}
           {:keys [sources expected-after-hashes]} (migration/load-fixture)]
@@ -867,4 +880,9 @@
       (when-not (:all-prerequisites-green result)
         (System/exit 1)))
 
-    (throw (ex-info "Usage: score|cohort|prerequisites" {:args args}))))
+    (throw
+     (ex-info
+      (str "Usage: score --arm ARM --capture FILE --timing FILE "
+           "--mcp-calls N --shell-calls N --file-changes N "
+           "--final-response FILE | cohort SCORE... | prerequisites")
+      {:args args}))))

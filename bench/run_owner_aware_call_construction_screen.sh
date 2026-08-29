@@ -105,11 +105,18 @@ run_zero_model_tests() {
     return 1
   fi
   rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
-  clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
+  clojure -J-Xms64m -J-Xmx512m \
+    -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
     '(load-file "dev/experiments/three_arm_request_shape_screen_test.clj")
      (load-file "dev/experiments/owner_aware_call_capture_server_test.clj")
-     (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")'
+     (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")
+     (load-file "dev/experiments/clj_surgeon/experiments/mcp_candidate_admission_test.clj")
+     (let [{:keys [fail error]}
+           (clojure.test/run-tests
+             (quote clj-surgeon.experiments.mcp-candidate-admission-test))]
+       (when (pos? (+ fail error))
+         (System/exit 1)))'
   printf '%s\n' \
     'three-arm request-shape screen self-test: PASS' \
     '  cohort: flat, file-groups, closed-relations, closed-relations, file-groups, flat' \
@@ -276,6 +283,8 @@ for arm in "${arms[@]}"; do
   mcp_calls=$(jq -s '[.[] | select(.type == "item.started" and .item.type == "mcp_tool_call")] | length' "$run_dir/events.jsonl")
   shell_calls=$(jq -s '[.[] | select(.type == "item.started" and .item.type == "command_execution")] | length' "$run_dir/events.jsonl")
   file_changes=$(jq -s '[.[] | select(.type == "item.started" and .item.type == "file_change")] | length' "$run_dir/events.jsonl")
+  jq -j -s '[.[] | select(.type == "item.completed" and .item.type == "agent_message")] | last.item.text // empty' \
+    "$run_dir/events.jsonl" > "$run_dir/final-agent-message.txt"
   [ "$exit_code" -eq 0 ] || echo "Codex exited $exit_code: $run_id" >&2
   [ -s "$capture_file" ] || { echo "No captured call: $run_id" >&2; exit 2; }
 
@@ -284,6 +293,7 @@ for arm in "${arms[@]}"; do
     --arm "$arm" --capture "$capture_file" \
     --timing "$run_dir/event-timing.edn" --mcp-calls "$mcp_calls" \
     --shell-calls "$shell_calls" --file-changes "$file_changes" \
+    --final-response "$run_dir/final-agent-message.txt" \
     > "$run_dir/score.edn"
   score_paths+=("$run_dir/score.edn")
   printf '%s %s\n' "$run_id" "$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :correct println)' "$run_dir/score.edn")"

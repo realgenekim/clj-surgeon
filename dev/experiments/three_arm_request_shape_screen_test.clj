@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clojure.test :refer [deftest is run-tests]]
+   [owner-aware-symbol-migration :as migration]
    [three-arm-request-shape-screen :as screen]))
 
 (deftest every-treatment-lowers-to-the-same-frozen-future
@@ -38,13 +39,13 @@
     (is (= {:ok true} (admission/authorize b-schema b-request)))
     (is (= :public-schema-denied
            (:error-type
-             (admission/authorize
-               a-schema
-               {"file_groups"
-                [{"file" "src/a.clj"
-                  "edits" [{"file" "src/a.clj"
-                            "from" "old"
-                            "to" "new"}]}]}))))))
+            (admission/authorize
+             a-schema
+             {"file_groups"
+              [{"file" "src/a.clj"
+                "edits" [{"file" "src/a.clj"
+                          "from" "old"
+                          "to" "new"}]}]}))))))
 
 (deftest ambiguity-and-source-falsifiers-refuse-before-authority
   (let [falsifiers (screen/falsifier-report)]
@@ -66,6 +67,26 @@
     (is (every? true? (vals (:gate (screen/cohort-report green)))))
     (is (false? (get-in (screen/cohort-report red)
                         [:gate :all-treatment-adherent])))))
+
+(deftest final-agent-message-is-part-of-correctness
+  (let [{:keys [sources expected-after-hashes]} (migration/load-fixture)
+        base-geometry {:mcp-call-count 1
+                       :refusal-count 0
+                       :recovery-count 0
+                       :shell-call-count 0
+                       :file-change-count 0
+                       :prompt-to-call-ms 0.0}
+        score (fn [message]
+                (screen/score-call
+                 sources expected-after-hashes :flat (screen/flat-request)
+                 (assoc base-geometry :final-agent-message message)))
+        exact (score "call captured")
+        varied (score "Captured.")]
+    (is (:correct exact))
+    (is (get-in exact [:final-agent-message :exact]))
+    (is (= "call captured" (get-in exact [:final-agent-message :actual])))
+    (is (false? (:correct varied)))
+    (is (false? (get-in varied [:final-agent-message :exact])))))
 
 (let [{:keys [fail error]} (run-tests)]
   (when (pos? (+ fail error))
