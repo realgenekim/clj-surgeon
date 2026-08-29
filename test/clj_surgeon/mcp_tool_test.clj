@@ -23,6 +23,8 @@
   (is (= :live :live)))
 
 (deftest direct-change-description-teaches-the-one-shot-shape
+  ;; @spec MCP-OP-EDIT-008
+  ;; @spec MCP-OP-EDIT-009
   (is (str/includes? mcp-tool/tool-description
                      "aggregate expect is optional"))
   (is (str/includes? mcp-tool/tool-description
@@ -311,6 +313,7 @@
         (delete-tree! workspace)))))
 
 (deftest packed-forms-and-wrong-aggregate-compile-once-while-bad-syntax-refuses
+  ;; @spec MCP-OP-EDIT-010
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")
         source-file (io/file workspace "src/book.clj")
