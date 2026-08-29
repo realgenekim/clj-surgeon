@@ -4,15 +4,16 @@ Date: 2026-08-29
 
 Bead: `clj-surgeon-45j`
 
-Product HLD review base: `f5d58ce`; the mechanism correction is committed with
-this protocol.
+The HLD, mechanism correction, and this protocol are one approval unit. Later
+corrections supersede the earlier commit labels recorded in repository history.
 
-## Why the denominator changed
+## Why the denominator changed twice
 
-The first F/A/B screen retained an important ugly result, but its first
-interpretation was wrong. The two flat callers and both file-group callers did
-not omit the namespace edits or the bespoke `detail-controls` edit. They
-constructed all 33 edit rows and all 14 owner deletions.
+The first F/A/B screen retained an important ugly result, but both its first
+interpretation and its capture-only correctness labels were wrong. The two flat
+callers and both file-group callers did not omit the namespace edits or the
+bespoke `detail-controls` edit. They constructed all 33 edit rows and all 14
+owner deletions.
 
 All four non-relation callers addressed the nine namespace edits as named
 forms, for example:
@@ -21,21 +22,44 @@ forms, for example:
 {"within":{"form":"sample.views.log"}}
 ```
 
-The compact editor requires the namespace owner:
+The canonical spelling is the namespace owner:
 
 ```json
 {"within":{"namespace":true}}
 ```
 
-The compiler therefore refused `change-owner-mismatch` before mutation. The
-closed relation was 2/2 because `require_change` asks the model for the real
-decision—file, exact add, and optional exact removal—while the compiler derives
-the namespace address and guarded clause replacement.
+The historical capture scorer called the generic transaction compiler directly
+and therefore refused `change-owner-mismatch`. Production does not take that
+path. Its compact-location normalizer proves that an exact namespace name in
+`within.form` identifies the namespace when no competing top-level owner has
+that name, then emits the canonical namespace location.
 
-This changes the mechanism from “relation fields remind the model about omitted
-work” to “relation fields remove a derived structural-address decision.” It
-does not change the no-speed-claim boundary: the first screen was capture-only
-and the F/A arms did not complete.
+Replaying the immutable calls through the current product path corrected the
+record:
+
+| Arm | Historical capture score | Product-equivalent replay |
+|---|---:|---:|
+| F flat | 0/2 | 2/2 exact |
+| A file groups | 0/2 | 1/2 exact; one real schema failure |
+| B closed relations | 2/2 | 2/2 exact after pure expansion |
+
+Every successful replay compiled 51 matches across 9 files to all frozen future
+hashes. The capture scorer's omission of compact-location normalization caused
+the false negatives.
+
+The relation hypothesis is therefore narrower and cleaner: it may make the
+same correct decision cheaper to state. It does not rescue flat correctness.
+The first screen remains capture-only, so its timing is descriptive rather than
+a product speed claim.
+
+There was a second harness confound. The cohort's one-tool surface replaced the
+production `edit_clojure` description with the generic change-tool description.
+The production description already distinguishes `{form}` from
+`{namespace:true}` and `{namespace:name}`. The experimental description instead
+led with “Each edits item contains file, within {form},” while later mixing in a
+typed namespace-owner spelling from the direct-change language. The nested
+schema was correct, but the high-salience prose was not the production contract.
+Future arms must preserve the candidate's production description byte-for-byte.
 
 ## Authoritative correct flat control
 
@@ -88,6 +112,35 @@ Raw JSON hashes may differ because map key order is not authority. Canonical
 request equality is the required precondition; the real product cohort must
 also retain normalized transaction and future hashes.
 
+## Product-equivalent replay proof
+
+The same bounded 512 MiB analysis nREPL replayed the retained calls through
+`mcp_contract/validate-tool-params`, `tool-params->transaction`,
+`mcp_compact_location/normalize-spec`, and the generic transaction compiler.
+It performed no source mutation.
+
+Both flat requests became exact. Each produced nine
+`namespace-name-in-form` normalization records and the complete 51-match,
+9-file future. The first grouped request did the same after its pure file-group
+expansion. The second grouped request remains inadmissible and is not counted
+as a correct performance observation.
+
+The historical scorer's direct call to the experimental migration compiler is
+therefore not a faithful product oracle. Future harnesses must traverse the
+candidate's complete public admission and normalization path before scoring.
+
+The corrected retained timing comparison is:
+
+| Arm | Product-equivalent exact | Prompt-to-call midpoint | Capture wall midpoint | Payload |
+|---|---:|---:|---:|---:|
+| F normalized flat | 2/2 | 65.841 s | 68.500 s | 6,470 B |
+| B closed relation | 2/2 | 48.912 s | 51.500 s | 2,715 B |
+
+B reached the complete first call 16.929 seconds (25.7 percent) sooner and its
+capture wall was 17.0 seconds (24.8 percent) lower. Because the arm surfaces
+differed and the harness did not mutate or verify, this is the signal that
+earns the next experiment—not its conclusion.
+
 ## One candidate, one visible surface
 
 The causal cohort must use one immutable product candidate that implements
@@ -112,11 +165,14 @@ Before the first model token, prove:
 1. candidate commit, tree, binary, task, fixture, scorer, harness, verifier,
    and tool-surface hashes are frozen;
 2. both oracle requests pass the public schema and real compiler;
-3. relation expansion equals the flat canonical transaction;
+3. relation expansion equals the normalized flat canonical transaction;
 4. both compile to 51 edits, 9 files, and all nine frozen future hashes;
 5. both select the same exact verifier and terminal-response contract;
-6. the flat route never invokes relation lowering; and
-7. a fresh client registry exposes exactly one tool and one identical surface.
+6. both routes traverse the same compact-location normalizer, while the flat
+   route never invokes relation lowering; and
+7. a fresh client registry exposes exactly one tool and one identical surface,
+   using the production compact-editor description rather than the generic
+   change-tool prose.
 
 ## Smallest useful cohort
 
@@ -124,11 +180,14 @@ Run one serial, counterbalanced screen on one Anvil seat with fresh state per
 run:
 
 ```text
-Block 1: F R R F
+Block 1: N R R N
 ```
 
+`N` is the already-correct normalized flat route. `R` is relation lowering
+followed by that same normalizer and generic compiler.
+
 Every attempt is retained after model launch. Do not replace an incorrect,
-slow, or treatment-nonadherent run. The screen stops if either F is incorrect,
+slow, or treatment-nonadherent run. The screen stops if either N is incorrect,
 either R is incorrect, or R improves complete verified midpoint by less than
 15 percent. A stopped screen is evidence against promotion, not permission to
 tune the prompt under the same protocol identity.
@@ -137,7 +196,7 @@ If all four calls are exact and the signal is at least 15 percent, run the
 predeclared complementary block:
 
 ```text
-Block 2: R F F R
+Block 2: R N N R
 ```
 
 At `N=8`, promotion requires:

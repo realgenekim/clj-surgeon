@@ -11,7 +11,7 @@ model, Anvil, or running process was changed.
 
 ## Recommendation
 
-Build one compact-entrance relation compiler that accepts the proven pair
+Build one experimental compact-entrance relation compiler that accepts the pair
 `symbol_migration` plus `require_change`, lowers it to ordinary compact edits,
 and delegates the complete result to the existing transaction. Do not add an
 executor, plan handle, cache, or second canonical representation.
@@ -53,21 +53,43 @@ MCP compact request
 
 ## Evidence boundary
 
-The retained F/A/B cohort at `d8a80f7` proves one product hypothesis, not a
-speed multiple:
+The retained F/A/B capture cohort at `d8a80f7` was scored by an experimental
+compiler that bypassed production's source-proved compact-location normalizer.
+Its original F=0/2 and A=0/2 labels are false negatives for current product
+behavior.
 
-- F flat: 0/2 exact;
-- A file groups: 0/2 exact;
-- B closed relations: 2/2 exact, 2,715 bytes, 48.912-second prompt midpoint,
-  51.500-second capture-only wall midpoint; and
-- F and A supplied the complete 33 edit rows and 14 deletions, but addressed all
-  nine namespace rows as named forms instead of the namespace owner; those
-  complete semantic decisions therefore refused `change-owner-mismatch`.
+Pure replay through the current product path established:
 
-The mechanism is decision and address legibility. Product work must preserve
-four explicit classes—symbol migration, require delta, exceptional edits, and
-owner deletions—while deriving the exact namespace address mechanically. The
-incorrect controls forbid a causal performance claim.
+- F flat: 2/2 exact, 51 matches, 9 files, all frozen future hashes;
+- A file groups: 1/2 exact; the other request remains a public-schema failure;
+- B closed relations: 2/2 exact after pure expansion to the same canonical
+  transaction; and
+- F and A supplied the complete 33 edit rows and 14 deletions. Three exact
+  namespace names in `within.form` normalize deterministically to namespace
+  ownership. One typed object is outside the admitted schema.
+
+Among the product-equivalent exact F and B calls, B used 2,715 bytes instead of
+6,470 and reached the first call at a 48.912-second midpoint instead of 65.841
+seconds: 16.929 seconds, or 25.7 percent, sooner. Capture-only wall was 17.0
+seconds, or 24.8 percent, lower. These are descriptive `N=2` signals from a
+non-mutating harness. They justify a product-shaped experiment, not a speed
+claim or merge.
+
+The unique mechanism under test is construction legibility and compression,
+not correctness rescue. Current location normalization already makes the flat
+control exact. Product work must preserve four explicit classes—symbol
+migration, require delta, exceptional edits, and owner deletions—while proving
+that relation lowering lowers complete verified wall beyond the normalized flat
+route.
+
+The cohort surface was also not production-realistic. It replaced the
+compact-specific tool description—which explicitly teaches `{form}`,
+`{namespace:true}`, and `{namespace:name}`—with the generic change description,
+whose first compact instruction said each edit contained `within {form}`. The
+nested schema remained correct. This teaching conflict explains why every
+non-relation caller chose the `form` property and further invalidates the old
+correctness contrast. The next harness must preserve the exact production
+description and prove the actual client registry projection before model launch.
 
 ## Existing production functions to reuse
 
@@ -290,8 +312,9 @@ Keep cases 1–5 and 8 pure. Use filesystem/process boundaries only for 6–7.
 
 ## What not to import
 
-- Do not ship `file_groups`; it was 0/2 and did not expose the missing
-  decisions.
+- Do not ship `file_groups`; product-equivalent replay made only 1/2 exact, it
+  was slower than flat, and it did not remove a meaningful construction
+  decision.
 - Do not ship the experimental MCP admission shim, capture server, registry
   observer, scorer, cohort timer, decision-coverage oracle, fixture constants,
   payload budgets, or model prompts.
@@ -311,13 +334,18 @@ Keep cases 1–5 and 8 pure. Use filesystem/process boundaries only for 6–7.
   semantic surface.
 - Do not expose the relation through CLI, generic `changes`, programs,
   extraction, basis continuations, or another public tool.
-- Do not claim the 48.912/51.500-second observation as a speedup. Only a real
-  correct mutation cohort with exact verification can establish performance.
+- Do not claim the 48.912/51.500-second observation as product speedup. It is a
+  descriptive capture-only signal against a product-equivalent exact flat arm.
+  Only a same-candidate real mutation cohort with exact verification can
+  establish performance.
 
 ## Go/no-go
 
-**GO** to HLD review for this paired, file-set-equal, one-transaction seam.
+**GO** to HLD review and an experimental candidate for this paired,
+file-set-equal, one-transaction seam. **NO-GO** to production promotion until a
+same-surface normalized-flat versus relation mutation cohort passes the HLD
+gate.
 
 **NO-GO** to product implementation before HLD, LLD, and EARS approval; to
 importing the experiment wholesale; to changing the transaction engine; or to
-claiming a speed result from incorrect controls.
+claiming product speed from the capture-only screen.
