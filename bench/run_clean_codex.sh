@@ -237,6 +237,14 @@ prepare_mcp_registry_launch_dir() {
     "$root_literal" > "$launch_dir/deps.edn"
 }
 
+prepare_mcp_server_launch_dir() {
+  local launch_dir=$1
+  mkdir -p "$launch_dir"
+  ln -s "$repo_root/deps.edn" "$launch_dir/deps.edn"
+  ln -s "$repo_root/src" "$launch_dir/src"
+  ln -s "$repo_root/dev" "$launch_dir/dev"
+}
+
 interaction_counts() {
   jq -r -s \
     --arg mcp_inspect "$mcp_inspect_tool" \
@@ -730,6 +738,15 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   ) > "$self_test_root/cache-probe.stdout" \
     2> "$self_test_root/cache-probe.stderr"
   test -d "$registry_launch_probe/.cpcache"
+  server_launch_probe="$self_test_root/mcp-server-launch"
+  prepare_mcp_server_launch_dir "$server_launch_probe"
+  (
+    cd "$server_launch_probe"
+    clojure -J-Xms32m -J-Xmx256m -M:clj-surgeon/mcp \
+      -e '(println :server-cache-probe)'
+  ) > "$self_test_root/server-cache-probe.stdout" \
+    2> "$self_test_root/server-cache-probe.stderr"
+  test -d "$server_launch_probe/.cpcache"
   repo_cache_after=$(
     if [ -d "$repo_root/.cpcache" ]; then
       find "$repo_root/.cpcache" -type f -print
@@ -1677,6 +1694,7 @@ run_one() {
   if [ "$version" = mcp ]; then
     local ready_file="$run_dir/mcp-ready.edn"
     local catalog_role_receipt="$run_dir/mcp-catalog-role-receipt.json"
+    local mcp_server_launch_dir="$run_dir/mcp-server-launch"
     local server_started_ms server_ready_ms
     local mcp_java_opts=()
     local mcp_profile_args=()
@@ -1708,8 +1726,9 @@ run_one() {
       exit 2
     fi
     server_started_ms=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    prepare_mcp_server_launch_dir "$mcp_server_launch_dir"
     (
-      cd "$repo_root"
+      cd "$mcp_server_launch_dir"
       local -a mcp_server_command=(clojure "${mcp_java_opts[@]}")
       if [ -n "$candidate_catalog" ]; then
         mcp_server_command+=(
