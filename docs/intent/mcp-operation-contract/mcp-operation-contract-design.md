@@ -705,6 +705,376 @@ supplied value fields, state the complete mapping, and tell the caller to retry
 the exposed `edit_clojure` operation. They do not redirect the caller to the
 heavier public tool.
 
+## Closed Compact Relations
+
+Closed compact relations let a caller state one already-decided mechanical
+relationship once instead of repeating its expanded source fragments. The
+first relation mode pairs an exact symbol migration with an exact require
+change. It is available only through the MCP compact-edit request language used
+by `edit_clojure` and the compact `edits` branch of
+`apply_clojure_changes`. It lowers to the same ordinary guarded edits,
+compact-location normalization, and generic transaction compiler as the
+normalized flat representation.
+
+The relation compiler is a pure request facade. It owns no source discovery,
+plan identity, cache, write path, receipt, or retry authority. Its output is
+ordinary compact data, bounded normalization evidence, or one typed refusal.
+The existing transaction remains the only component that captures source,
+authorizes mutation, writes, reads back, verifies, receipts, and rolls back.
+
+### Public request shape
+
+The first slice admits `symbol_migration` and `require_change` only as a pair.
+Both fields are closed objects, and their ordered canonical file lists must be
+identical. A request may also contain ordinary compact `edits` and exact
+`delete_owners`. The `apply_clojure_changes` compact branch retains its
+existing `verify` field; `edit_clojure` does not gain one. The relation pair
+may not combine with `changes`, `programs`, extraction, a retained basis, or
+another relation spelling.
+
+`symbol_migration` has this closed shape:
+
+| Field | Contract |
+|---|---|
+| `target_alias` | One nonblank Clojure alias symbol. |
+| `target_rule` | Exactly `preserve-name`. |
+| `columns` | Exactly `[owner, from, matches]`, in that order. |
+| `files` | A nonempty ordered vector of `[file, rows]` tuples. Each canonical file is unique and each ordered `rows` vector is nonempty. |
+| row `owner` | One nonblank exact named top-level owner. |
+| row `from` | One qualified Clojure symbol token. |
+| row `matches` | One positive exact integer count. |
+
+Each migration row is unique by canonical file, owner, and source symbol. The
+only derived value is `target_alias/name(from)`: the qualifier changes and the
+exact unqualified name is preserved. The relation does not rename the local
+name, resolve Vars, discover references, select owners, or choose a target
+namespace.
+
+Alias, owner, namespace, and symbol fields use the same Clojure reader and
+symbol predicates as the existing compact contract. `from` must parse as one
+plain symbol node with exactly one nonblank qualifier and one nonblank name.
+Keywords, strings, quoted forms, metadata-bearing forms, reader forms, and
+unqualified or multiply qualified spellings are outside this slice. The
+generated target must differ from `from`; a target alias equal to the source
+qualifier is a no-op refusal.
+
+`require_change` has this closed shape:
+
+| Field | Contract |
+|---|---|
+| `add` | One exact `{lib, as}` namespace and alias pair. |
+| `files` | A nonempty ordered vector of `{file, remove?}` objects with exactly the migration file set. |
+| file `remove` | Omitted, or one exact `{lib, as}` pair to remove from that file. |
+
+The normative JSON shape for one file is:
+
+```json
+{
+  "symbol_migration": {
+    "target_alias": "next",
+    "target_rule": "preserve-name",
+    "columns": ["owner", "from", "matches"],
+    "files": [
+      ["src/sample/core.clj", [["render", "old/view", 2]]]
+    ]
+  },
+  "require_change": {
+    "add": {"lib": "sample.next", "as": "next"},
+    "files": [
+      {"file": "src/sample/core.clj",
+       "remove": {"lib": "sample.old", "as": "old"}}
+    ]
+  }
+}
+```
+
+Every object shown is closed: `symbol_migration`, `require_change`, `add`,
+each require file, and `remove` reject additional properties. File paths,
+owners, aliases, namespaces, and symbols are JSON strings; `matches` is a JSON
+integer. Each migration file tuple has exactly two elements, `[file, rows]`.
+Each migration row has exactly three values aligned with the fixed columns.
+Missing or additional tuple or row values refuse. Presence of either top-level
+relation key activates paired admission, including when its decoded value is
+`null`. A null relation, add, file, row, or removal refuses. Omission of a
+file's `remove` property is the only spelling that means no removal.
+
+The migration `target_alias` must equal `require_change.add.as`. The explicit
+`add.lib` is the target namespace for every generated qualified symbol. The
+compiler never derives a namespace from an alias. A removal is a caller-owned
+decision; absence of `remove` means no removal, not inferred cleanup.
+
+The two ordered file vectors are compared element-by-element after canonical,
+root-confined resolution. Each canonical file occurs once. Two raw spellings
+of one canonical path within either vector refuse. Across the vectors, the same
+normalized workspace-relative spelling must occur once at the same index;
+different spellings that resolve to the same file refuse. The required paired
+occurrence is not a duplicate. Public evidence retains those normalized paths
+in request order; absolute resolved paths remain internal. Canonicalization may
+validate identity, but it cannot reorder files.
+
+Unknown keys, duplicate decoded entries, partial pairs, cross-pair mixtures,
+legacy fields that mask an incomplete pair, empty values, nonpositive counts,
+duplicate files or rows, file-set mismatch, unsupported target rules, and
+disallowed route combinations refuse before source capture. The application
+does not claim authority over duplicate raw JSON keys already collapsed by an
+upstream decoder.
+
+### Compilation pipeline and single capture
+
+Compilation proceeds in one direction:
+
+```text
+compact MCP request
+  -> validate the closed relation pair and route combination
+  -> run existing source-blind compact edit-field normalization
+  -> lower symbol rows source-blind to ordinary owner-scoped compact edits
+  -> combine relation files with literal-edit and owner-deletion files
+  -> resolve a unique canonical, root-confined capture universe
+  -> capture that complete source map exactly once
+  -> lower require changes from the captured source map
+  -> combine require, symbol, normalized literal, and deletion actions
+  -> run existing compact location normalization
+  -> run the unchanged generic transaction compiler and effect path
+```
+
+Existing compact edit-field normalization and source-blind symbol lowering
+establish every literal and relation edit before the transaction captures
+source. The paired file-set law therefore makes `require_change` source-aware
+without a private `capture_files` protocol, prepared-request branch, or second
+read. Literal edits and owner deletions may add files to the capture universe,
+but the require compiler may not widen it.
+
+The pure facade has two explicit phases. Phase A accepts the decoded request,
+validates the closed pair, normalizes caller-supplied edit fields through the
+existing source-blind adapter, emits canonical symbol edits, and returns the
+complete ordered declared file references plus closed pending require data. It
+performs no I/O or canonical filesystem resolution. The declared intent comes
+from normalized literal edits, generated symbol edits, expanded
+owner-deletion actions, and the paired relation. Phase A consumes and removes
+`symbol_migration` after it emits symbol edits; only the closed
+`require_change` remains as non-executable pending data. The existing
+root-confined resolver maps that complete intent to one unique canonical
+capture universe, rejects aliases, and captures it exactly once.
+
+Phase B accepts only the pending require data and that captured source map. It
+emits complete namespace edits, consumes and removes `require_change`, and
+delegates to compact-location normalization. Its output contains neither
+public relation key. Neither phase may be applied twice to the same internal
+request. Phase B cannot add a file, read or recapture source, or retain an
+independently executable plan.
+
+Canonical root confinement and path-alias rejection occur before capture. Two
+request spellings that resolve to the same canonical file refuse instead of
+silently coalescing. The pure require lowerer receives the already-captured map;
+it cannot read a path, stat a file, query a semantic provider, invoke a parser
+service, or recapture after a refusal.
+
+### Frozen-source require lowering
+
+Each paired file must contain exactly one direct top-level namespace and one
+direct `:require` clause. The first slice accepts only comment-free direct
+vector libspecs. Prefix lists, reader conditionals, platform-specific clauses,
+unsupported libspec options, detached comments, duplicate owners, and
+ambiguous clause ownership refuse.
+
+Against the frozen namespace, the compiler proves all of these facts:
+
+1. The declared target namespace is absent from every direct libspec,
+   regardless of alias or options.
+2. Its alias is not bound to any direct libspec.
+3. Each declared removal identifies exactly one direct libspec.
+4. The add and removal pairs are distinct, and a removal cannot use the target
+   alias.
+5. No undeclared removal or layout choice is required.
+6. The emitted namespace edit is one complete exact clause replacement with
+   namespace scope and one match.
+
+Removal decisions and migration source qualifiers are independent. A file may
+retain its old alias for unrelated uses, and several migration rows in one file
+may have different source qualifiers. The relation compiler does not infer a
+removal from those rows or require `from` qualifiers to equal `remove.as`.
+
+Byte generation follows one lossless relation. The compiler removes an exact
+declared libspec first. For a non-first removal it removes that node and its
+immediately preceding whitespace separator; for the first removal it removes
+the node and its immediately following whitespace separator. At least one
+direct libspec must survive. It then appends the exact canonical vector
+`[add.lib :as add.as]` after the last surviving direct libspec and before the
+clause delimiter, copying the exact whitespace separator immediately preceding
+that last survivor. The separator must contain only whitespace and commas. An
+empty clause, a removal that leaves no survivor, a missing separator, a
+comment-bearing separator, or a separator that cannot be associated with one
+direct sibling refuses. Single-line and multiline clauses are both supported
+when this relation is unique; trailing namespace whitespace and newline bytes
+outside the replaced clause remain unchanged.
+
+The lowerer preserves every unrelated byte and comment. For an admitted
+request and frozen source map, it emits one deterministic byte result. When
+that result is not uniquely determined by the supported syntax, it refuses; it
+does not choose a layout, infer an unused require, or normalize nearby source.
+
+### Composition, disjointness, and authority
+
+The composed request has four ordered action classes:
+
+1. generated require-clause edits;
+2. generated symbol-migration edits;
+3. caller-supplied literal compact edits; and
+4. exact owner deletions.
+
+Within each class, request file and row order is stable. Across classes,
+canonical addresses must be disjoint. Duplicate generated rows, two edits that
+address the same exact subtree, a literal edit that overlaps a generated edit,
+or deletion of an owner containing a generated or literal edit refuses the
+complete request. One stale owner, subtree, count, or source hash also refuses
+the complete request. Successful sibling lowering never creates partial write
+authority or an executable retry.
+
+Disjointness is decided after the ordinary compiler resolves matches against
+the frozen map. Every generated and literal match has a canonical file and
+half-open byte span. All spans must be pairwise nonintersecting: identical,
+nested, and partially intersecting spans refuse. A deletion owner may contain
+no generated or literal span. A generated replacement whose future value is
+equal to its source value refuses as a no-op. The generic compiler remains the
+span and overlap authority; the relation facade may reject obvious duplicate
+file/owner/row identities earlier but cannot declare unresolved edits disjoint.
+
+Expanded and declared rows are charged against the existing request, file,
+edit, match, source-byte, and output-byte budgets before mutation. Every
+generated edit then passes through the ordinary compact-location normalizer and
+generic compiler. That compiler re-resolves owners, exact `from` subtrees,
+cardinality, future parse, and frozen hashes. Relation lowering is therefore
+representation compilation, not mutation authority.
+
+Budget accounting is singular. Wire and decoded-request limits apply to the
+submitted pair, including raw relation rows. The canonical file limit applies
+to the unique resolved union. Expanded edit and match limits use the canonical
+direct actions after the existing source-blind adapter expands grouped literal
+files and owner-deletion groups, plus the generated migration and require
+actions. Each canonical action contributes its authoritative match count.
+Source-byte limits run once on the captured map; future-output limits run once
+on the generic compiled result. The same action is never charged again merely
+because it crossed a lowering phase.
+
+### Refusal and rollback matrix
+
+| Condition | Stage | Result law |
+|---|---|---|
+| One relation field absent, malformed, unknown, duplicated, or combined with a disallowed route | source-blind admission | Typed pre-source refusal; no capture and `write_authority=false`. |
+| Ordered relation file sets differ, alias bindings disagree, or a canonical path aliases another | source-blind admission/path resolution | Complete pre-capture refusal; no sibling continuation. |
+| Namespace, require clause, addition, removal, comment, reader conditional, platform, or layout is missing or ambiguous | frozen-source require lowering | Complete pre-write refusal against the one captured map; no recapture or guessed remedy. |
+| Generated, literal, or deletion actions overlap, duplicate, exceed a budget, or fail ordinary generic validation | composition/generic compilation | Complete pre-write refusal; every source remains unchanged. |
+| A source guard changes before the first write | commit guard | Existing stale-source refusal; no recompilation against newer bytes. |
+| A race or configured verifier failure occurs after writing begins | existing effect path | Existing failure-atomic rollback and read-back proof; no blind retry. |
+| Rollback cannot prove restoration | existing effect path | Recovery-required outcome; never claim `source_unchanged=true`. |
+
+The transaction promises failure atomicity with rollback, not simultaneous
+multi-file isolation. Similarity, edit distance, source proximity, lexical
+ranking, and semantic-provider evidence cannot satisfy a missing relation
+decision.
+
+Only a failure originating in Phase A, Phase B, or relation composition adds a
+closed `compact_relation_diagnostic` object to the ordinary structured result.
+The ordinary envelope has these required top-level fields:
+
+| Field | Contract |
+|---|---|
+| `error_type` | Stable relation-specific keyword spelling serialized as a string. |
+| `error` | One bounded human-readable reason. |
+| `mutation_attempted` | Exactly `false`. |
+| `write_authority` | Exactly `false`. |
+| `next_action` | Exactly `correct_request`. |
+
+`compact_relation_diagnostic` contains `failed_stage`, one of
+`relation-admission`, `path-resolution`, `require-lowering`, or
+`relation-composition`, plus optional `path`. When present, `path` is the closed
+object `{field, file_index?, row_index?}`. `field` is the exact top-level JSON
+field string; indexes are zero-based integers. The diagnostic omits `path` when
+no single request location owns the failure.
+
+The first slice has one error type per relation-owned stage:
+`invalid-compact-relation`, `compact-relation-path-conflict`,
+`require-change-unprovable`, and `compact-relation-overlap`, respectively.
+Failures delegated to existing compact or transaction stages retain their
+existing error type and ordinary envelope and omit
+`compact_relation_diagnostic`; they are not rebranded as relation failures.
+
+The refusal includes no source body, generated partial request, executable
+retry, or `terminal_response`. It may claim `source_unchanged=true` only after
+the source boundary has proved that no write began. Once effects begin, the
+existing verification, rollback, recovery-required, and manual-recovery
+envelopes own the outcome; relation diagnostics do not overwrite them.
+
+### Result evidence and route isolation
+
+A successful relation transaction must contain the top-level structured-result
+field `compact_relation_normalization`; a relation-absent transaction must omit
+that field. The object has this closed shape:
+
+| Field | Contract |
+|---|---|
+| `version` | Integer `1`. |
+| `relations` | Exactly the JSON string vector `["symbol_migration", "require_change"]`. |
+| `target_rule` | Exactly `preserve-name`. |
+| `files` | Complete ordered normalized workspace-relative relation file vector. |
+| `migration_rows` | Declared migration-row count. |
+| `require_files` | Declared require-file count. |
+| `literal_edits` | Caller-supplied literal-edit count. |
+| `deleted_owners` | Exact named-owner deletion count. |
+| `declared_matches` | Sum of authoritative expanded match counts. |
+| `expanded_edits` | Total expanded edit count charged to the transaction. |
+| `edit_ids` | Complete ordered generated IDs: `relation/require/N` then `relation/symbol/N`. |
+
+Generated IDs use unpadded zero-based decimal ordinals assigned in request
+order after canonical file resolution. Require IDs precede symbol IDs in the
+evidence vector; each class has its own ordinal sequence beginning at zero.
+
+The existing request limits bound the complete file and ID vectors, so this
+evidence is never silently truncated. A result that cannot return the complete
+evidence within the public output budget refuses before mutation.
+
+It returns no source bodies and does not imply that relation lowering verified
+program semantics. Transaction hashes, read-back, receipt, verifier, rollback,
+and terminal-response evidence retain their existing owners and meanings.
+
+Flat compact edits remain supported. Relation-absent requests do not call the
+relation lowerer. Generic `changes`, programs, retained-basis changes,
+extraction, CLI operations, and unsupported CLJC require shapes do not expose
+or invoke this relation mode. Both MCP tools project the same relation fields
+and lowering evidence; only `apply_clojure_changes` may select its existing
+transaction verifier. CLI projection is a separate future adapter over the
+same pure compiler; the first slice changes only the measured compact MCP
+request language.
+
+### Causal acceptance boundary
+
+The relation mode is not promoted because it uses fewer bytes. Its hypothesis
+is that naming a complete repeated relationship removes caller construction
+decisions. A same-candidate, same-surface, real-mutation cohort must therefore
+compare the already-correct normalized flat representation with the relation
+representation while holding the production description, schema, location
+normalizer, transaction, verifier, task, model, and scorer constant.
+
+Both arms must compile to byte-identical canonical transactions and frozen
+future files and complete exact verification in one first call. The relation
+arm must reduce median request-emission time in both counterbalanced blocks and
+by at least 20 percent pooled. It must independently reduce complete verified
+wall time by at least 20 percent pooled. Capture-only evidence, payload-size
+reduction, meaning-preserving byte drift, or a complete-wall win without the
+emission-time result cannot promote the mechanism.
+
+The immutable causal protocol defines two four-run serial blocks:
+`N R R N`, then `R N N R`, where `N` is normalized flat and `R` is the
+relation representation. Every post-launch attempt is retained. Both arms see
+the same relation-capable tool catalog, task, model, effort, fixture, verifier,
+and scorer. `T_emit` runs from turn start through the observer event containing
+the complete tool arguments. `T_verified` runs from turn start through final
+completion of an exact first-call verified mutation. Medians and improvement
+are computed per block and pooled only from eligible exact runs; a missing,
+incorrect, nonadherent, retried, or unverified run fails the cohort rather than
+being dropped. The complete identity, isolation, estimator, and stop laws live
+in the referenced Correct Flat-Control Causal Protocol.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -746,6 +1116,7 @@ existing lossless transaction contract.
 | Selector recovery | Per-failed-owner bounded hypotheses with no automatic selection | Aggregate candidates, automatic fuzzy selection, or immediate retained continuation | One refusal gives the model enough real structure for an exact retry without letting presentation rank become authority. |
 | Compact location tolerance | Three compact-only injective relations over one frozen snapshot, lowered to explicit generic selectors | Global namespace fallback; root-scope default; fuzzy owner selection; source-blind inference | The accepted spellings recover observed model mistakes while every zero/many, stale, nested, or competing case remains a pre-write refusal and generic CLI/direct semantics do not widen. |
 | Compact edit field tolerance | One source-blind closed algebra that preserves `from`/`to` and lowers exactly one complete `old`/`new` or `before`/`after` pair | Prompt-only correction; fuzzy key repair; accept equal duplicate pairs; widen generic changes | The three observed spellings encode the same exact guarded relation, while all 61 other six-field subsets remain pre-source refusals. |
+| Closed compact relations | Require one paired `symbol_migration` plus `require_change`, lower through one captured source map, then delegate to the existing compact and generic transaction path | Flat rows only; standalone require language; private capture protocol; new plan or executor; heuristic migration | The pair states one complete repeated decision without granting discovery or write authority. Identical file sets make source-aware require lowering possible inside the existing one-capture transaction. |
 
 ## Open Questions & Future Decisions
 
@@ -774,4 +1145,6 @@ existing lossless transaction contract.
 
 - [clj-surgeon HLD](../../high-level-design.md)
 - [Uniform MCP elapsed-time plan](../../plans/uniform-mcp-elapsed-time.md)
+- [Closed-relation product seam audit](../../observations/2026-08-29-symbol-migration-require-change-product-seam-audit.md)
+- [Correct flat-control causal protocol](../../observations/2026-08-29-correct-flat-control-and-relation-causal-protocol.md)
 - CLI/MCP receipt issue: `clj-surgeon-9xi`
