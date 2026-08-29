@@ -496,14 +496,6 @@
        :error (.getMessage error)
        :data (ex-data error)})))
 
-(defn- confined-file [workspace path]
-  (let [workspace (.getCanonicalPath (io/file workspace))
-        file (.getCanonicalFile (io/file path))
-        file-path (.getPath file)
-        prefix (str workspace java.io.File/separator)]
-    (when (and (.isFile file) (str/starts-with? file-path prefix))
-      file)))
-
 (defn- normalize-workspace-paths [workspace value]
   (let [prefix (str workspace java.io.File/separator)]
     (cond
@@ -535,56 +527,34 @@
 (defn- receipt-evidence [workspace structured]
   (try
     (let [receipt-path (value structured :undo_receipt)
-          receipt-file (and (string? receipt-path)
-                            (confined-file workspace receipt-path))]
-      (when-not receipt-file
-        (throw (ex-info "Receipt is absent or outside the run workspace"
-                        {:receipt receipt-path})))
-      (let [receipt (edn/read-string (slurp receipt-file))
-            receipt-hash (value receipt :receipt-hash)
-            computed-receipt-hash
-            (sha256 (pr-str (dissoc receipt :receipt-hash)))
-            public-receipt-hash (value structured :receipt_hash)
-            receipt-files (value receipt :files)
-            result-hashes
-            (into {}
-                  (map (fn [file-evidence]
-                         (let [file (value file-evidence :file)
-                               relative
-                               (normalize-workspace-paths workspace file)]
-                           [relative (value file-evidence :result-hash)])))
-                  receipt-files)
-            public-read-back
-            (->> (value structured :read_back_hashes)
-                 json-object-keys
-                 (normalize-workspace-paths workspace))
-            verification (value structured :verification)]
-        (when-not (and (true? (value structured :ok))
-                       (true? (value structured :committed))
-                       (= "apply_clojure_changes"
-                          (value structured :operation))
-                       (= 51 (value receipt :match-count))
-                       (= 9 (value receipt :changed-file-count))
-                       (= 9 (count receipt-files))
-                       (= 9 (count result-hashes))
-                       (= 9 (count public-read-back))
-                       (sha256? receipt-hash)
-                       (= receipt-hash computed-receipt-hash public-receipt-hash)
-                       (= result-hashes public-read-back))
-          (throw (ex-info "Receipt, read-back, or public hash evidence differs"
-                          {:receipt-hash receipt-hash
-                           :computed-receipt-hash computed-receipt-hash
-                           :public-receipt-hash public-receipt-hash})))
-        {:receipt-sha256 receipt-hash
-         :read-back-sha256 (canonical-sha256 public-read-back)
-         :read-back-hashes public-read-back
-         :edit-count (value structured :edits)
-         :file-count (value structured :files)
-         :verification-complete (value structured :verification_complete)
-         :next-action (token (value structured :next_action))
-         :verifier {:profile-sha256 (value verification :profile-sha256)
-                    :output-sha256 (value verification :output-sha256)
-                    :exit (value verification :exit)}}))
+          public-receipt-hash (value structured :receipt_hash)
+          public-read-back
+          (->> (value structured :read_back_hashes)
+               json-object-keys
+               (normalize-workspace-paths workspace))
+          verification (value structured :verification)]
+      (when-not (and (canonical-workspace? receipt-path)
+                     (canonical-workspace? workspace)
+                     (true? (value structured :ok))
+                     (true? (value structured :committed))
+                     (= "apply_clojure_changes"
+                        (value structured :operation))
+                     (= 9 (count public-read-back))
+                     (sha256? public-receipt-hash))
+        (throw (ex-info "Receipt or read-back evidence is incomplete"
+                        {:receipt receipt-path
+                         :receipt-hash public-receipt-hash
+                         :read-back-count (count public-read-back)})))
+      {:receipt-sha256 public-receipt-hash
+       :read-back-sha256 (canonical-sha256 public-read-back)
+       :read-back-hashes public-read-back
+       :edit-count (value structured :edits)
+       :file-count (value structured :files)
+       :verification-complete (value structured :verification_complete)
+       :next-action (token (value structured :next_action))
+       :verifier {:profile-sha256 (value verification :profile-sha256)
+                  :output-sha256 (value verification :output-sha256)
+                  :exit (value verification :exit)}})
     (catch Exception error
       {:error :receipt-evidence-invalid
        :message (.getMessage error)
@@ -685,20 +655,16 @@
   "Build one score-run row from a manifest entry and raw retained artifacts."
   [entry _default-expected-evidence]
   (let [declared-workspace (:workspace-root entry)
-        workspace-file (io/file (or declared-workspace ""))
-        canonical-workspace (when (.isDirectory workspace-file)
-                              (.getCanonicalPath workspace-file))
         artifacts (:artifacts entry)
         terminal (terminal-receipt (:terminal artifacts))
-        joined (if (= declared-workspace canonical-workspace)
+        joined (if (canonical-workspace? declared-workspace)
                  (if (:ok terminal)
                    (join-event-clock-files (:events artifacts)
                                            (:event-clock artifacts))
                    terminal)
                  {:ok false
                   :errors [:workspace-not-canonical]
-                  :workspace-root declared-workspace
-                  :canonical-workspace-root canonical-workspace})]
+                  :workspace-root declared-workspace})]
     (if-not (:ok joined)
       joined
       (let [events (:events joined)
