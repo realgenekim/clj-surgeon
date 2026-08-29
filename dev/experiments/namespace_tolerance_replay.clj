@@ -18,7 +18,8 @@
    [rewrite-clj.parser :as parser]))
 
 (def capture-schema "clj-surgeon.owner-aware-call-capture.v1")
-(def default-capture-root "/tmp/clj-surgeon-namespace-replay.1Uggqs")
+(def default-capture-root
+  "dev/experiments/namespace_tolerance_retained_corpus")
 (def namespace-clause-kinds
   #{:refer-clojure :require :require-macros :use :use-macros
     :import :load :gen-class})
@@ -28,6 +29,10 @@
   (let [digest (java.security.MessageDigest/getInstance "SHA-256")]
     (.update digest (.getBytes (str value) "UTF-8"))
     (format "%064x" (java.math.BigInteger. 1 (.digest digest)))))
+
+(defn utf8-byte-count
+  [value]
+  (alength (.getBytes (str value) "UTF-8")))
 
 (defn meaningful-children
   [form-node]
@@ -276,6 +281,25 @@
     (migration/compile-manifest request)
     {:ok true :request request :owner-row-count 0 :declared-match-count 0}))
 
+(defn symbol-migration-owner-match-rows
+  [request]
+  (mapv
+    (fn [[file [owner _from matches]]]
+      [file owner matches])
+    (mapcat
+      (fn [[file sites]]
+        (map (fn [site] [file site]) sites))
+      (get-in request ["symbol_migration" "files"] []))))
+
+(defn expanded-owner-match-rows
+  [request row-count]
+  (mapv
+    (fn [edit]
+      [(get edit "file")
+       (get-in edit ["within" "form"])
+       (get edit "matches")])
+    (take-last row-count (get request "edits" []))))
+
 (defn lower-request
   [sources enabled-rules request]
   (let [expanded (expand-symbol-migration request)]
@@ -301,10 +325,15 @@
 
 (defn compile-product
   [sources request]
-  (let [expanded (expand-symbol-migration request)]
+  (let [requested-owner-match-rows
+        (symbol-migration-owner-match-rows request)
+        expanded (expand-symbol-migration request)]
     (if-not (:ok expanded)
       expanded
-      (let [validated (contract/validate-tool-params (:request expanded))]
+      (let [owner-match-rows
+            (expanded-owner-match-rows
+              (:request expanded) (:owner-row-count expanded))
+            validated (contract/validate-tool-params (:request expanded))]
         (if-not (:ok validated)
           validated
           (let [spec (contract/tool-params->transaction (:params validated))
@@ -316,6 +345,10 @@
               (assoc prepared
                      :owner-row-count (:owner-row-count expanded)
                      :declared-match-count (:declared-match-count expanded)
+                     :requested-owner-match-rows requested-owner-match-rows
+                     :owner-match-rows owner-match-rows
+                     :owner-match-rows-preserved
+                     (= requested-owner-match-rows owner-match-rows)
                      :compiled
                      (transaction/compile-transaction
                        sources (:spec prepared))))))))))
@@ -325,10 +358,18 @@
   (let [result (compile-product sources (:request capture))
         compiled (:compiled result)]
     (merge
-      (select-keys capture [:run :base :capture-sha256])
+      (select-keys capture
+                   [:run :base :capture-file :capture-bytes
+                    :capture-sha256 :actual-capture-bytes
+                    :actual-capture-sha256 :capture-bytes-equal
+                    :capture-hash-equal :request-sha256
+                    :actual-request-sha256 :request-hash-equal
+                    :schema-valid])
       {:ok (and (:ok result) (:ok compiled))
        :owner-row-count (:owner-row-count result)
        :declared-match-count (:declared-match-count result)
+       :owner-match-rows (:owner-match-rows result)
+       :owner-match-rows-preserved (:owner-match-rows-preserved result)
        :match-count (:match-count compiled)
        :changed-file-count (:changed-file-count compiled)
        :future-hashes-equal
@@ -404,13 +445,25 @@
 (defn retained-captures
   [manifest]
   (mapv
-    (fn [{:keys [request-sha256] :as run}]
-      (let [request (retained-request manifest run)
-            actual (sha256 (pr-str (canonical-data request)))]
-        (assoc run
+    (fn [{:keys [run capture-file capture-bytes capture-sha256
+                 request-sha256]
+          :as retained}]
+      (let [capture (load-capture (io/file capture-file) run)
+            request (:request capture)
+            actual-request-sha256
+            (sha256 (pr-str (canonical-data request)))]
+        (assoc retained
                :request request
-               :request-hash-equal (= request-sha256 actual)
-               :actual-request-sha256 actual)))
+               :actual-capture-bytes (:capture-bytes capture)
+               :actual-capture-sha256 (:capture-sha256 capture)
+               :actual-request-sha256 actual-request-sha256
+               :capture-bytes-equal
+               (= capture-bytes (:capture-bytes capture))
+               :capture-hash-equal
+               (= capture-sha256 (:capture-sha256 capture))
+               :request-hash-equal
+               (= request-sha256 actual-request-sha256)
+               :schema-valid (= capture-schema (:schema capture)))))
     (:runs manifest)))
 
 (defn product-report
@@ -420,13 +473,35 @@
         captures (retained-captures manifest)
         runs (mapv #(replay-product-one sources expected-after-hashes %)
                    captures)
-        request-hashes-equal (every? :request-hash-equal captures)]
+        request-hashes-equal (every? :request-hash-equal captures)
+        raw-corpus-bound
+        (every?
+          #(and (:schema-valid %)
+                (:capture-bytes-equal %)
+                (:capture-hash-equal %)
+                (:request-hash-equal %))
+          captures)
+        expected-owner-match-rows (:candidate-owner-match-rows manifest)
+        owner-match-rows-exact
+        (every?
+          (fn [run]
+            (and (:owner-match-rows-preserved run)
+                 (= (if (= :candidate (:base run))
+                      expected-owner-match-rows
+                      [])
+                    (:owner-match-rows run))))
+          runs)]
     {:capture-count (count captures)
      :unique-request-count (count (set (map :request-sha256 captures)))
+     :raw-corpus-bound raw-corpus-bound
      :request-hashes-equal request-hashes-equal
+     :candidate-owner-match-rows expected-owner-match-rows
+     :owner-match-rows-exact owner-match-rows-exact
      :exact-run-count (count (filter :exact-future runs))
      :all-eight-exact (and (= 8 (count captures))
+                           raw-corpus-bound
                            request-hashes-equal
+                           owner-match-rows-exact
                            (every? :exact-future runs))
      :runs runs}))
 
@@ -448,13 +523,17 @@
        (sort-by #(.getPath %))))
 
 (defn load-capture
-  [capture-file]
-  (let [raw (slurp capture-file)
-        capture (json/parse-string raw)]
-    {:run (.getName (.getParentFile capture-file))
-     :capture-sha256 (sha256 raw)
-     :schema (get capture "schema")
-     :request (get-in capture ["calls" 0 "params"])}))
+  ([capture-file]
+   (load-capture capture-file (.getName (.getParentFile capture-file))))
+  ([capture-file run]
+   (let [raw (slurp capture-file)
+         capture (json/parse-string raw)]
+     {:run run
+      :capture-file (.getPath capture-file)
+      :capture-bytes (utf8-byte-count raw)
+      :capture-sha256 (sha256 raw)
+      :schema (get capture "schema")
+      :request (get-in capture ["calls" 0 "params"])})))
 
 (defn replay-one
   [sources expected-after-hashes enabled-rules capture]

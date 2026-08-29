@@ -1,5 +1,7 @@
 {:schema :clj-surgeon.injective-location-retained-corpus/v1
- :source-corpus "/tmp/clj-surgeon-namespace-replay.1Uggqs"
+ :source-corpus-provenance "/tmp/clj-surgeon-namespace-replay.1Uggqs"
+ :durable-corpus-root
+ "dev/experiments/namespace_tolerance_retained_corpus"
  :captured-at "2026-08-28"
  :fixture "bench/fixtures/edit_portfolio/submission-row-extraction-cleanup"
  :expected {:calls 8 :unique-requests 4 :matches 51 :files 9}
@@ -13,52 +15,92 @@
   "sample.status-workflow-test"
   "sample.views-test"
   "sample.voting-policy-test"]
+ :candidate-owner-match-rows
+ [["src/sample/review_updates.clj" "push-person-row" 1]
+  ["src/sample/review_updates.clj" "push-active-row" 1]
+  ["src/sample/views/log.clj" "describe-rating" 3]
+  ["src/sample/views/people.clj" "reviewer-summary" 2]
+  ["src/sample/views/people.clj" "rating-row" 1]
+  ["src/sample/views/review.clj" "content-status-control" 1]
+  ["src/sample/views/review.clj" "submission-detail-page" 1]
+  ["src/sample/views/review.clj" "submission-detail-page" 1]
+  ["src/sample/views/review.clj" "review-summary" 1]
+  ["src/sample/views/review.clj" "review-summary" 1]
+  ["src/sample/views/review.clj" "board-page" 1]
+  ["src/sample/views/review.clj" "board-page" 1]
+  ["test/sample/board_test.clj" "render-unrated" 1]
+  ["test/sample/board_test.clj" "render-rated" 1]
+  ["test/sample/reviews_test.clj" "render-result" 1]
+  ["test/sample/reviews_test.clj" "render-weighted" 2]
+  ["test/sample/reviews_test.clj" "render-visible" 1]
+  ["test/sample/status_workflow_test.clj" "render-status" 1]
+  ["test/sample/views_test.clj" "render-opinions" 1]
+  ["test/sample/views_test.clj" "render-histogram" 1]
+  ["test/sample/voting_policy_test.clj" "visible-row" 1]
+  ["test/sample/voting_policy_test.clj" "hidden-row" 1]
+  ["test/sample/voting_policy_test.clj" "revealed-row" 1]]
  :runs
  [{:run "01-control"
    :base :oracle
    :location-shape :namespace-clauses-and-complete-owner-omitted
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/01-control/captured-calls.json"
+   :capture-bytes 8775
    :capture-sha256 "2942a32a06d68c45d436ce8cc47159434fde2908d9c5f19a8e046c297fafc3b9"
    :request-sha256 "ded50596f3b4e13f90339b1cf28aef844663d46fad4f313945783feb1adb8ee8"
    :request-bytes 6095}
   {:run "02-candidate"
    :base :candidate
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/02-candidate/captured-calls.json"
+   :capture-bytes 5724
    :capture-sha256 "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"
    :request-sha256 "50368ad9bee0c92e343d0f958ea8178c6f032f1540b150ca79a8bf53affe944c"
    :request-bytes 4464}
   {:run "03-candidate"
    :base :candidate
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/03-candidate/captured-calls.json"
+   :capture-bytes 5724
    :capture-sha256 "e3e487cfce6bed40cbd59793c9cae35144044335bfef9d5d44f8019fef994c9b"
    :request-sha256 "50368ad9bee0c92e343d0f958ea8178c6f032f1540b150ca79a8bf53affe944c"
    :request-bytes 4464}
   {:run "04-control"
    :base :oracle
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/04-control/captured-calls.json"
+   :capture-bytes 9460
    :capture-sha256 "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
    :request-sha256 "9cdae4edf957b747f753d0ec1180f2d82dfc1f7d269ae35f64c96b84d1542f34"
    :request-bytes 6470}
   {:run "05-candidate"
    :base :candidate
    :location-shape :namespace-clauses-omitted
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/05-candidate/captured-calls.json"
+   :capture-bytes 5103
    :capture-sha256 "7e627736baffed2c04fe4c1a8cd7f8edb2cf6be15493a1e0c67abf0b57152506"
    :request-sha256 "352bc16aae2b1dbc0f9bc5b7044b1a20d85e969f0aa37b98532cd59053e47644"
    :request-bytes 4122}
   {:run "06-control"
    :base :oracle
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/06-control/captured-calls.json"
+   :capture-bytes 9460
    :capture-sha256 "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
    :request-sha256 "9cdae4edf957b747f753d0ec1180f2d82dfc1f7d269ae35f64c96b84d1542f34"
    :request-bytes 6470}
   {:run "07-control"
    :base :oracle
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/07-control/captured-calls.json"
+   :capture-bytes 9460
    :capture-sha256 "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
    :request-sha256 "9cdae4edf957b747f753d0ec1180f2d82dfc1f7d269ae35f64c96b84d1542f34"
    :request-bytes 6470}
   {:run "08-candidate"
    :base :candidate
    :location-shape :namespace-name-in-form
+   :capture-file "dev/experiments/namespace_tolerance_retained_corpus/08-candidate/captured-calls.json"
+   :capture-bytes 5724
    :capture-sha256 "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"
    :request-sha256 "50368ad9bee0c92e343d0f958ea8178c6f032f1540b150ca79a8bf53affe944c"
    :request-bytes 4464}]}
