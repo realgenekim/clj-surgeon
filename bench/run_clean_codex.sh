@@ -220,6 +220,14 @@ append_result_row() {
   release_row_lock
 }
 
+write_workspace_root_receipt() {
+  local workspace=$1 receipt=$2 canonical tmp
+  canonical=$(cd "$workspace" && pwd -P)
+  tmp="$receipt.tmp.$$"
+  printf '%s\n' "$canonical" > "$tmp"
+  mv "$tmp" "$receipt"
+}
+
 interaction_counts() {
   jq -r -s \
     --arg mcp_inspect "$mcp_inspect_tool" \
@@ -899,6 +907,10 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   printf '%s\n' 'starting bytes' > "$self_test_workspace/fixture.txt"
   bb "$repo_root/bench/initialize_benchmark_workspace.clj" \
     "$self_test_workspace" >/dev/null
+  write_workspace_root_receipt "$self_test_workspace" \
+    "$self_test_root/workspace-root.txt"
+  test "$(cat "$self_test_root/workspace-root.txt")" \
+    = "$(cd "$self_test_workspace" && pwd -P)"
   test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
   test -z "$(git -C "$self_test_workspace" status --short)"
   bb -cp "$repo_root/bench" \
@@ -1612,6 +1624,7 @@ run_one() {
   ln -s "$auth_file" "$codex_home/auth.json"
   install_treatment_skill "$version" "$context" "$codex_home"
   prepare_workspace "$task" "$workspace"
+  write_workspace_root_receipt "$workspace" "$run_dir/workspace-root.txt"
   if [ "$context" = mcp-rule-no-skill ]; then
     # Markdown backticks are literal project-rule text.
     # shellcheck disable=SC2016
