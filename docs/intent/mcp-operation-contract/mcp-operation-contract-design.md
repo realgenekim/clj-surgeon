@@ -325,6 +325,14 @@ not consume the MCP envelope. CLI exit status, stdout and stderr, process
 startup time, compatibility, and broader operation receipts remain separate
 public contracts tracked by `clj-surgeon-9xi`.
 
+CLI direct structural mutation also follows the shared authority tenet that
+request data cannot widen effect authority. A direct `:expect`-guarded
+`:edit` must start with a caller-visible named owner. Lines, ordinals, indexes,
+and relative positions remain valid for reads, diagnostics, and reviewable
+hash-fenced plans, but they cannot select the subject of a direct write. The
+complete leaf design and retained wrong-owner falsifiers are in
+[Positional mutation authority](../positional-mutation-authority/positional-mutation-authority-design.md).
+
 # #Extraction Planning Boundary
 
 The CLI and MCP share the pure extraction planner, not each other's transport

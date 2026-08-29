@@ -390,7 +390,7 @@
                                             (when row
                                               (outline/attached-comment-start
                                                 lines row))}]))
-                                   walked))
+                                      walked))
         entries (mapv (fn [item]
                         (if-let [owner (get walked-by-location
                                             (location-key (:zloc item)))]
@@ -869,6 +869,36 @@
   "CLI arguments accepted by the plan-only :edit facade."
   #{:op :file :query :plan-out :expect})
 
+(defn- direct-edit-owner-refusal
+  "Refuse a valid direct-write query that does not name its top-level owner.
+   Invalid queries fall through to the existing query refusal."
+  [{:keys [file query plan-out]}]
+  (try
+    (let [parsed-query (parse-query query true)
+          first-step (first parsed-query)
+          terminal-step (last parsed-query)]
+      (when (and (vector? terminal-step)
+                 (#{:replace :replace-span} (first terminal-step))
+                 (not (and (vector? first-step)
+                           (= :form (first first-step)))))
+        {:operation :edit
+         :file file
+         :query parsed-query
+         :plan-out plan-out
+         :error "Direct :expect-guarded edits require a named top-level owner. Start with (form 'OWNER), or remove :expect and use :plan-out for review."
+         :error-type :positional-mutation-authority-refused
+         :source-unchanged true
+         :source-state :unchanged
+         :first-step first-step
+         :required-root [:form 'OWNER]
+         :remedies
+         {:named-owner
+          {:instruction "Name the top-level owner with (form 'OWNER) before a direct :expect-guarded edit."}
+          :plan-review
+          {:instruction "Remove :expect, write the plan with :plan-out, review it, then apply it with :replace-subform!."}}}))
+    (catch Exception _
+      nil)))
+
 (defn evaluate-edit
   "Pure plan-only facade over evaluate-lens. Successful getter-only queries
    refuse because :edit must include an existing terminal lens transform."
@@ -1121,9 +1151,15 @@
    With :expect, the plan is also applied in the same invocation once the
    selection structurally equals the declared form."
   [{:keys [file plan-out expect] :as opts} evaluator]
+  ;; @spec MCP-OP-POS-AUTH-001
+  ;; @spec MCP-OP-POS-AUTH-002
+  ;; @spec MCP-OP-POS-AUTH-003
+  ;; @spec MCP-OP-POS-AUTH-004
   (let [unsupported (seq (remove edit-allowed-arguments (keys opts)))
         expect-supplied? (contains? opts :expect)
-        parsed-expect (when expect-supplied? (parse-expect expect))]
+        parsed-expect (when expect-supplied? (parse-expect expect))
+        owner-refusal (when expect-supplied?
+                        (direct-edit-owner-refusal opts))]
     (cond
       unsupported
       (evaluate-edit "" opts)
@@ -1149,6 +1185,9 @@
              :file file
              :plan-out plan-out
              :expect expect)
+
+      owner-refusal
+      owner-refusal
 
       (and (not expect-supplied?) (nil? plan-out))
       {:operation :edit
