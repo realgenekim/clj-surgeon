@@ -40,7 +40,7 @@
    "not-blank"])
 
 (def expected-final-text
-  "Done — extraction and exact verification completed.")
+  "Captured.")
 
 (def production-instructions mcp-server/server-instructions)
 
@@ -51,6 +51,9 @@
 (def expected-client-target-surface-sha256
   {:control "91d7b6c61b16ead67f3f3cae47eb1a8ba53d266b480b19f0697f50a50dc8a508"
    :treatment "d602120b9e3b96d8c136551f5516800674adddbbd06e33a4a94326a35314ffef"})
+
+(def expected-client-peer-surface-sha256
+  "7c71c9881902ef527d18562e0d0f94c897728bcf2c3d7d15b2cc07aacf4059c4")
 
 (defn- sha256-bytes [^bytes bytes]
   (let [digest (doto (MessageDigest/getInstance "SHA-256") (.update bytes))]
@@ -68,6 +71,9 @@
 (defn- read-json-lines [path]
   (with-open [reader (io/reader path)]
     (mapv #(json/parse-string % true) (remove empty? (line-seq reader)))))
+
+(defn- json-roundtrip [value]
+  (json/parse-string (json/generate-string value) true))
 
 (defn- public-tool [tool]
   (-> (select-keys tool [:id :name :description :schema :output-schema
@@ -136,24 +142,23 @@
 
 (defn- validate-client-catalog [advertised registry expected-server]
   (let [advertised-tools (:tools advertised)
-        observer-tools (mapv #(-> % (assoc :input-schema (:schema %))
-                                  (dissoc :schema :id :structured?))
-                             advertised-tools)
         client-tools (:tool-projection registry)
+        client-by-name (into {} (map (juxt :name identity)) client-tools)
+        client-peer-tools (filterv #(not= "apply_clojure_changes" (:name %))
+                                   client-tools)
+        peer-sha (surface/sha256 client-peer-tools)
         expected-source
         (assoc owner-aware-mcp-surface-observer/registry-observation-source
-               :server-selector {:field "name" :value expected-server})
-        comparisons (when (= (count observer-tools) (count client-tools))
-                      (mapv observer/compare-tool-surfaces
-                            observer-tools client-tools))]
+               :server-selector {:field "name" :value expected-server})]
     {:ok (and (= "clj-surgeon.codex-mcp-registry.v1" (:schema registry))
               (= expected-source (:observation-source registry))
               (= expected-server (:server registry))
               (= (vec (sort (map :name advertised-tools)))
                  (:tool-names registry))
-              (= (count observer-tools) (count client-tools))
-              (every? :ok comparisons))
-     :catalog-count (count client-tools) :comparisons comparisons}))
+              (= (set (map :name advertised-tools)) (set (keys client-by-name)))
+              (= expected-client-peer-surface-sha256 peer-sha))
+     :catalog-count (count client-tools)
+     :client-peer-surface-sha256 peer-sha}))
 
 (defn- transition-ms [timing phase]
   (some #(when (= phase (:phase %)) (:observer-elapsed-ms %))
@@ -162,8 +167,9 @@
 (defn surface-evidence [advertised-path registry-path arm expected-server]
   (let [advertised (read-json advertised-path)
         registry (read-json registry-path)
-        expected-tools (mapv public-tool
-                             (capture-server/capture-tools arm "/dev/null"))
+        expected-tools (json-roundtrip
+                         (mapv public-tool
+                               (capture-server/capture-tools arm "/dev/null")))
         client-target (first (filter #(= "apply_clojure_changes" (:name %))
                                      (:tool-projection registry)))
         client-target-sha (some-> client-target surface/sha256)]
@@ -197,6 +203,9 @@
         route (route-evidence events-value)
         compiler (compiler-evidence repo-root arguments)
         logical-sha (file-sha256 logical-arguments)
+        requested-workspace (some-> (:workspace_root arguments) io/file .getCanonicalPath)
+        isolated-workspace (some-> workspace io/file .getCanonicalPath)
+        workspace-root-exact? (= isolated-workspace requested-workspace)
         workspace-clean? (= {:before [] :after []} manifest-value)
         clocks {:pre-first-call-ms
                 (transition-ms timing-value :initial-tool-call-materialization)
@@ -211,7 +220,8 @@
                          (get-in capture-value [:calls 0 :tool_name]))
                       (:ok route) (:ok compiler)
                       (= expected-logical-arguments-sha256 logical-sha)
-                      workspace-clean? (every? number? (vals clocks)))]
+                      workspace-root-exact? workspace-clean?
+                      (every? number? (vals clocks)))]
     {:schema :clj-surgeon.extraction-tool-surface-capture-run/v1
      :run-id run-id :position position :arm arm :correct correct?
      :codex-exit-status codex-exit
@@ -225,7 +235,9 @@
                 (surface/sha256 (:tool-projection registry-value))
                 :logical-arguments-sha256 logical-sha}
      :surface {:exact surface-ok :client client :public-admission public}
-     :route route :compiler compiler :workspace-clean workspace-clean?
+     :route route :compiler compiler
+     :workspace-root-exact workspace-root-exact?
+     :workspace-clean workspace-clean?
      :clocks clocks}))
 
 (defn- midpoint [values]
@@ -325,6 +337,32 @@
             :treatment-sha256 (expected-target-surface-sha256 :treatment)}
            (select-keys (surface/surface-report)
                         [:control-sha256 :treatment-sha256])))))
+
+(deftest client-comparison-is-name-joined-and-server-surface-is-json-normalized
+  (let [advertised-tools
+        (json-roundtrip
+          (mapv public-tool
+                (capture-server/capture-tools :control "/tmp/control")))
+        client-tools
+        (->> advertised-tools
+             (map #(-> % (assoc :input-schema (:schema %))
+                       (dissoc :schema :id :structured?)))
+             (sort-by :name)
+             vec)
+        advertised {:tools advertised-tools}
+        peer-sha (surface/sha256
+                   (filterv #(not= "apply_clojure_changes" (:name %))
+                            client-tools))
+        registry {:schema "clj-surgeon.codex-mcp-registry.v1"
+                  :observation-source
+                  (assoc observer/registry-observation-source
+                         :server-selector {:field "name" :value "clj-surgeon"})
+                  :server "clj-surgeon"
+                  :tool-names (mapv :name client-tools)
+                  :tool-projection client-tools}]
+    (is (not= (mapv :name advertised-tools) (mapv :name client-tools)))
+    (with-redefs [expected-client-peer-surface-sha256 peer-sha]
+      (is (:ok (validate-client-catalog advertised registry "clj-surgeon"))))))
 
 (deftest first-action-and-no-effect-falsifiers
   (is (:ok (route-evidence (synthetic-events []))))

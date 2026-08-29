@@ -2,6 +2,10 @@
  :status :go-capture-only-model-screen
  :task :sessionize-format-extraction
  :caller {:model "gpt-5.6-sol" :reasoning "high"}
+ :capture-prompt
+ {:bytes 2053
+  :sha256 "101af5af476bc6f3e477e1170254cb30f7673e8857feeac157d0d402a343f139"
+  :terminal-response "Captured."}
  :retained-control
  {:candidate "51efa0591fc4083fa875a4754b7d56d88497b26b"
   :prompt {:bytes 2097
@@ -35,6 +39,9 @@
     :sha256 "e29ecae49417c0bb27575763c92a41460b7e2fa8de5178a151d5a5ba7b326180"}}}
  :surface-law
  {:catalog :full-production-order
+  :client-peer-projection
+  {:structural-sha256 "7c71c9881902ef527d18562e0d0f94c897728bcf2c3d7d15b2cc07aacf4059c4"
+   :canonical-json-sha256 "8f840364ace1933f820a75ecba3e8c369af77368f58313096d7e7b4606c19774"}
   :unchanged [:server-instructions :peer-tools :tool-name :output-schema
               :annotations :capture-response :prompt :task]
   :treatment-diff [:apply-clojure-changes-description
