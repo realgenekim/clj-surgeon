@@ -8,7 +8,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 model=gpt-5.6-sol
 reasoning=high
-arms=(control candidate candidate control candidate control control candidate)
+cohort_arms=(control candidate candidate control candidate control control candidate)
+pilot_arms=(control candidate)
+arms=("${cohort_arms[@]}")
 result_dir=${BENCH_RESULT_DIR:-}
 auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
 timeout_seconds=${BENCH_TIMEOUT_SECONDS:-180}
@@ -44,7 +46,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$pilot" = true ]; then
-  arms=(control candidate)
+  arms=("${pilot_arms[@]}")
 fi
 if [ "$preflight_only" = true ] && [ "$pilot" != true ]; then
   echo "--preflight-only requires --pilot" >&2
@@ -90,7 +92,19 @@ wait_for_pid() {
   wait "$pid"
 }
 
+arms_json() {
+  printf '%s\n' "$@" | jq -R . | jq -s .
+}
+
+assert_declared_orders() {
+  [ "$(arms_json "${pilot_arms[@]}" | jq -c .)" = \
+    '["control","candidate"]' ]
+  [ "$(arms_json "${cohort_arms[@]}" | jq -c .)" = \
+    '["control","candidate","candidate","control","candidate","control","control","candidate"]' ]
+}
+
 run_zero_model_tests() {
+  assert_declared_orders
   screen_prompt > "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
   if rg -q 'symbol_migration|target_alias|preserve-name' \
     "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"; then
@@ -152,9 +166,10 @@ jq -n \
   --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_prereq.clj" | awk '{print $1}')" \
   --arg observer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_mcp_surface_observer.clj" | awk '{print $1}')" \
   --arg fixture_sha "$(shasum -a 256 "$repo_root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt" | awk '{print $1}')" \
+  --argjson order "$(arms_json "${arms[@]}")" \
   '{schema:$schema,git_head:$head,integration_base:$base,mode:$mode,
     model:$model,reasoning:$reasoning,
-    order:["control","candidate","candidate","control","candidate","control","control","candidate"],
+    order:$order,
     hashes:{harness:$harness_sha,scorer:$scorer_sha,observer:$observer_sha,task:$fixture_sha}}' \
   > "$result_dir/run-config.json"
 
