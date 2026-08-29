@@ -200,6 +200,7 @@
     "verify" verification-schema}
    :required ["changes"]})
 
+;; @spec MCP-OP-EDIT-019
 (def editor-gesture-schema
   {:type "object"
    :additionalProperties false
