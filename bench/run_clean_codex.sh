@@ -228,6 +228,15 @@ write_workspace_root_receipt() {
   mv "$tmp" "$receipt"
 }
 
+prepare_mcp_registry_launch_dir() {
+  local launch_dir=$1 root_literal
+  mkdir -p "$launch_dir"
+  ln -s "$repo_root/bench" "$launch_dir/bench"
+  root_literal=$(printf '%s' "$repo_root" | jq -Rs .)
+  printf '{:paths ["bench"] :deps {local/clj-surgeon {:local/root %s}}}\n' \
+    "$root_literal" > "$launch_dir/deps.edn"
+}
+
 interaction_counts() {
   jq -r -s \
     --arg mcp_inspect "$mcp_inspect_tool" \
@@ -707,6 +716,26 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
   result_dir="$self_test_root/results"
   owner_dir="$result_dir/.benchmark-owner"
   owner_metadata="$owner_dir/owner.tsv"
+
+  registry_launch_probe="$self_test_root/mcp-registry-launch"
+  repo_cache_before=$(
+    if [ -d "$repo_root/.cpcache" ]; then
+      find "$repo_root/.cpcache" -type f -print
+    fi | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'
+  )
+  prepare_mcp_registry_launch_dir "$registry_launch_probe"
+  (
+    cd "$registry_launch_probe"
+    clojure -J-Xms32m -J-Xmx256m -M -e '(println :cache-probe)'
+  ) > "$self_test_root/cache-probe.stdout" \
+    2> "$self_test_root/cache-probe.stderr"
+  test -d "$registry_launch_probe/.cpcache"
+  repo_cache_after=$(
+    if [ -d "$repo_root/.cpcache" ]; then
+      find "$repo_root/.cpcache" -type f -print
+    fi | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'
+  )
+  test "$repo_cache_after" = "$repo_cache_before"
 
   acquire_result_owner
   set +e
@@ -1770,13 +1799,15 @@ run_one() {
 
   if [ "$version" = mcp ]; then
     local client_registry_receipt="$run_dir/codex-mcp-registry.json"
+    local client_registry_launch_dir="$run_dir/mcp-registry-launch"
     local preflight_codex
     preflight_codex=$(PATH="$run_path" command -v codex)
+    prepare_mcp_registry_launch_dir "$client_registry_launch_dir"
     (
-      cd "$repo_root"
+      cd "$client_registry_launch_dir"
       PATH="$run_path" ZDOTDIR="$zsh_dir" CODEX_HOME="$codex_home" \
         clojure -J-Xms32m -J-Xmx256m \
-        -Sdeps '{:paths ["src" "bench"]}' -M \
+        -M \
         -m capture-codex-mcp-registry \
         --codex "$preflight_codex" \
         --output "$client_registry_receipt" --server clj-surgeon

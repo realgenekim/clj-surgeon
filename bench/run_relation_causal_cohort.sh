@@ -60,7 +60,9 @@ manifest_contains() {
 
 write_receipt() {
   local exit_code=$1 state=failed tmp
-  [ "$exit_code" -eq 0 ] && state=complete
+  if [ "$exit_code" -eq 0 ] && [ "${coordinator_complete:-false}" = true ]; then
+    state=complete
+  fi
   [ -n "${result_root_ready:-}" ] || return 0
   tmp="$result_root/.coordinator-receipt.edn.tmp.$$"
   printf '{:schema :clj-surgeon.edit-025-coordinator/v1 :state :%s :stage :%s :exit %s :head "%s" :tree "%s" :model "%s" :reasoning "%s" :block_1 "%s" :block_2 "%s"}\n' \
@@ -85,27 +87,45 @@ result_root_ready=
 actual_head=
 actual_tree=
 owner_dir=
+coordinator_complete=false
 trap 'cleanup "$?"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-expected_head=${BENCH_RELATION_EXPECTED_HEAD:?BENCH_RELATION_EXPECTED_HEAD is required}
-expected_tree=${BENCH_RELATION_EXPECTED_TREE:?BENCH_RELATION_EXPECTED_TREE is required}
-manifest=${BENCH_RELATION_ARTIFACT_MANIFEST:?BENCH_RELATION_ARTIFACT_MANIFEST is required}
-expected_manifest_sha=${BENCH_RELATION_EXPECTED_MANIFEST_SHA256:?BENCH_RELATION_EXPECTED_MANIFEST_SHA256 is required}
-expected_codex_executable=${BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE:?BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE is required}
-expected_codex_sha256=${BENCH_RELATION_EXPECTED_CODEX_SHA256:?BENCH_RELATION_EXPECTED_CODEX_SHA256 is required}
-expected_codex_version=${BENCH_RELATION_EXPECTED_CODEX_VERSION:?BENCH_RELATION_EXPECTED_CODEX_VERSION is required}
-expected_platform_os=${BENCH_RELATION_EXPECTED_PLATFORM_OS:?BENCH_RELATION_EXPECTED_PLATFORM_OS is required}
-expected_platform_arch=${BENCH_RELATION_EXPECTED_PLATFORM_ARCH:?BENCH_RELATION_EXPECTED_PLATFORM_ARCH is required}
-expected_codex_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256 is required}
-expected_codex_platform_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256 is required}
-expected_codex_native_executable=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE:?BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE is required}
-expected_codex_native_sha256=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256 is required}
-expected_node_executable=${BENCH_RELATION_EXPECTED_NODE_EXECUTABLE:?BENCH_RELATION_EXPECTED_NODE_EXECUTABLE is required}
-expected_node_sha256=${BENCH_RELATION_EXPECTED_NODE_SHA256:?BENCH_RELATION_EXPECTED_NODE_SHA256 is required}
-expected_node_version=${BENCH_RELATION_EXPECTED_NODE_VERSION:?BENCH_RELATION_EXPECTED_NODE_VERSION is required}
-result_root=${BENCH_RELATION_RESULT_DIR:?BENCH_RELATION_RESULT_DIR is required}
+expected_head=${BENCH_RELATION_EXPECTED_HEAD-}
+[ -n "$expected_head" ] || die "BENCH_RELATION_EXPECTED_HEAD is required"
+expected_tree=${BENCH_RELATION_EXPECTED_TREE-}
+[ -n "$expected_tree" ] || die "BENCH_RELATION_EXPECTED_TREE is required"
+manifest=${BENCH_RELATION_ARTIFACT_MANIFEST-}
+[ -n "$manifest" ] || die "BENCH_RELATION_ARTIFACT_MANIFEST is required"
+expected_manifest_sha=${BENCH_RELATION_EXPECTED_MANIFEST_SHA256-}
+[ -n "$expected_manifest_sha" ] || die "BENCH_RELATION_EXPECTED_MANIFEST_SHA256 is required"
+expected_codex_executable=${BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE-}
+[ -n "$expected_codex_executable" ] || die "BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE is required"
+expected_codex_sha256=${BENCH_RELATION_EXPECTED_CODEX_SHA256-}
+[ -n "$expected_codex_sha256" ] || die "BENCH_RELATION_EXPECTED_CODEX_SHA256 is required"
+expected_codex_version=${BENCH_RELATION_EXPECTED_CODEX_VERSION-}
+[ -n "$expected_codex_version" ] || die "BENCH_RELATION_EXPECTED_CODEX_VERSION is required"
+expected_platform_os=${BENCH_RELATION_EXPECTED_PLATFORM_OS-}
+[ -n "$expected_platform_os" ] || die "BENCH_RELATION_EXPECTED_PLATFORM_OS is required"
+expected_platform_arch=${BENCH_RELATION_EXPECTED_PLATFORM_ARCH-}
+[ -n "$expected_platform_arch" ] || die "BENCH_RELATION_EXPECTED_PLATFORM_ARCH is required"
+expected_codex_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256-}
+[ -n "$expected_codex_package_sha256" ] || die "BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256 is required"
+expected_codex_platform_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256-}
+[ -n "$expected_codex_platform_package_sha256" ] || die "BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256 is required"
+expected_codex_native_executable=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE-}
+[ -n "$expected_codex_native_executable" ] || die "BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE is required"
+expected_codex_native_sha256=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256-}
+[ -n "$expected_codex_native_sha256" ] || die "BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256 is required"
+expected_node_executable=${BENCH_RELATION_EXPECTED_NODE_EXECUTABLE-}
+[ -n "$expected_node_executable" ] || die "BENCH_RELATION_EXPECTED_NODE_EXECUTABLE is required"
+expected_node_sha256=${BENCH_RELATION_EXPECTED_NODE_SHA256-}
+[ -n "$expected_node_sha256" ] || die "BENCH_RELATION_EXPECTED_NODE_SHA256 is required"
+expected_node_version=${BENCH_RELATION_EXPECTED_NODE_VERSION-}
+[ -n "$expected_node_version" ] || die "BENCH_RELATION_EXPECTED_NODE_VERSION is required"
+result_root=${BENCH_RELATION_RESULT_DIR-}
+[ -n "$result_root" ] || die "BENCH_RELATION_RESULT_DIR is required"
 worker=${BENCH_RELATION_WORKER:-$repo_root/bench/run_clean_codex.sh}
 scorer=${BENCH_RELATION_SCORER:-$repo_root/bench/relation_causal_score.clj}
 scorer_launcher=${BENCH_RELATION_SCORER_LAUNCHER:-bb}
@@ -484,11 +504,14 @@ validate_raw_run() {
     || die "Run apply event omits its workspace identity: $run_dir" 3
   [ "$event_workspace_root" = "$validated_workspace_root" ] \
     || die "Run workspace receipt differs from apply arguments: $run_dir" 3
-  for seen_workspace in "${cohort_workspace_roots[@]}"; do
+  local workspace_index seen_workspace
+  for ((workspace_index=0; workspace_index<cohort_workspace_root_count; workspace_index++)); do
+    seen_workspace=${cohort_workspace_roots[$workspace_index]}
     [ "$seen_workspace" != "$validated_workspace_root" ] \
       || die "Run workspace identity was reused: $validated_workspace_root" 3
   done
-  cohort_workspace_roots+=("$validated_workspace_root")
+  cohort_workspace_roots[$cohort_workspace_root_count]=$validated_workspace_root
+  cohort_workspace_root_count=$((cohort_workspace_root_count + 1))
 }
 
 write_block_manifest() {
@@ -575,6 +598,7 @@ report_is_complete() {
 }
 
 cohort_workspace_roots=()
+cohort_workspace_root_count=0
 validated_workspace_root=
 stage=block1
 run_block block1 "$block1_matrix"
@@ -605,4 +629,5 @@ run_scorer --phase final \
 report_is_complete "$final_report" || die "Final scorer report is incomplete" 3
 
 stage=complete
+coordinator_complete=true
 printf 'Relation causal cohort complete: %s\n' "$result_root"
