@@ -73,6 +73,52 @@
          (= :drop-top-level-any-of (:normalization input-relation))
          (conj :drop-top-level-any-of))})))
 
+(defn advertised->client-tool
+  "Project one JSON-roundtripped server tool into the fields Codex observes."
+  [tool]
+  (-> tool
+      (assoc :input-schema (:schema tool))
+      (dissoc :schema :id :structured?)))
+
+(defn validate-catalog
+  "Validate one complete advertised catalog against one Codex registry receipt.
+
+  Tools are joined by exact name. Codex may reorder the advertised catalog only
+  into the exact order recorded in tool-names. Cardinality, names, provenance,
+  and each projected tool surface remain exact under compare-tool-surfaces."
+  [advertised-tools registry-receipt expected-server]
+  (let [expected-source
+        (assoc registry-observation-source
+               :server-selector {:field "name" :value expected-server})
+        advertised-names (mapv :name advertised-tools)
+        client-tools (:tool-projection registry-receipt)
+        client-names (mapv :name client-tools)
+        client-by-name (into {} (map (juxt :name identity)) client-tools)
+        advertised-by-name (into {} (map (juxt :name identity)) advertised-tools)
+        comparisons
+        (mapv (fn [name]
+                (compare-tool-surfaces
+                  (advertised->client-tool (get advertised-by-name name))
+                  (get client-by-name name)))
+              advertised-names)
+        ok? (and (= registry-schema (:schema registry-receipt))
+                 (= expected-source (:observation-source registry-receipt))
+                 (true? (:ok registry-receipt))
+                 (= expected-server (:server registry-receipt))
+                 (= (vec (sort advertised-names))
+                    (:tool-names registry-receipt))
+                 (= client-names (:tool-names registry-receipt))
+                 (= (set advertised-names) (set (keys client-by-name)))
+                 (= (count advertised-tools)
+                    (count client-tools)
+                    (count client-by-name))
+                 (every? :ok comparisons))]
+    {:ok ok?
+     :advertised-tool-names advertised-names
+     :client-tool-names client-names
+     :catalog-count (count client-tools)
+     :comparisons comparisons}))
+
 (defn validate-observation
   "Validate exact client-visible MCP evidence for one expected tool.
 
