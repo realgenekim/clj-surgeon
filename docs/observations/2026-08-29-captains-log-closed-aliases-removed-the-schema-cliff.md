@@ -52,6 +52,13 @@ matched baseline, not a simultaneous-arm estimate.
 
 ## Native comparison
 
+The cleanest exact paired row retained from the first historical cohort is
+59.879 seconds for one-shot Surgeon versus 269.173 seconds for correct native.
+Using that native task as the denominator, Arm B's 61.436-second midpoint is
+**4.38 times faster**: 207.737 seconds less wall time, or 77.2 percent lower.
+Arm B is only 1.557 seconds slower than that earlier Surgeon apex despite this
+cohort using two fresh callers and a stricter client-surface admission gate.
+
 The closest retained correct-native midpoint for this exact workload is
 346.912 seconds. Against that denominator, Arm B's 61.436-second midpoint is
 **5.65 times faster**.
