@@ -572,7 +572,7 @@ def compile_action_emission_evidence(
         and item["_end_ms"] > boundary_start
         and item["_end_ms"] <= boundary_end
     ]
-    if completed_reasoning_ends:
+    if endpoint and completed_reasoning_ends:
         result["last_reasoning_end_to_next_action_start_ms"] = max(
             0, boundary_end - max(completed_reasoning_ends)
         )
