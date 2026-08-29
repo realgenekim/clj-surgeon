@@ -1,0 +1,61 @@
+{:schema "clj-surgeon.edit-field-alias-capture.v1"
+ :archive
+ {:file "clj-surgeon-location-abba-20260829T060610Z.tar.gz"
+  :sha256 "d109fa0bef5c40a9cdb9313bfa5ff9e361258d338e9fd80c5ba92c8d81b5eded"
+  :fixture "submission-row-extraction-cleanup"
+  :workload {:edit-items 33
+             :namespace-locations 9
+             :form-locations 24
+             :literal-matches 37
+             :deleted-owners 14
+             :total-edits 51
+             :files 9}}
+ :canonicalization
+ {:remove-fields ["workspace_root"]
+  :lower-pairs {["old" "new"] ["from" "to"]
+                ["before" "after"] ["from" "to"]}
+  :all-eight-semantic-sha256
+  "a38392ed0b1791fdebb94440ed4edd4fb226a7480bee74c2dcdc2a233ec3144d"}
+ :calls
+ [{:run "01-A" :call 1 :status :refused :workspace-root false
+   :pair ["old" "new"]
+   :arguments-sha256 "9071930bde7b0299945f518a0631d41829ad0fecca53628dfff9c52a15fccf92"
+   :elapsed-ms 7.209626}
+  {:run "01-A" :call 2 :status :committed :workspace-root true
+   :pair ["from" "to"]
+   :arguments-sha256 "4a9b5758278f7feaf847761cace1d19eefa10d02e66a0724ba6604300e2cdd69"
+   :elapsed-ms 1069.411412}
+  {:run "02-B" :call 1 :status :refused :workspace-root true
+   :pair ["old" "new"]
+   :arguments-sha256 "f41832551a298ad2349b4ae52d6811f462518b141bd497787aa398462e5edd49"
+   :elapsed-ms 7.817278}
+  {:run "02-B" :call 2 :status :refused :workspace-root true
+   :pair ["before" "after"]
+   :arguments-sha256 "2eaf60e597afb2ebc3e32fba26a1b16215fc588f4595d8f27e6e48210389328d"
+   :elapsed-ms 3.90956}
+  {:run "03-B" :call 1 :status :refused :workspace-root true
+   :pair ["before" "after"]
+   :arguments-sha256 "529a7c8b5330e4f372c0da163fe029113475ee19254e3583700992f3233516b5"
+   :elapsed-ms 10.119548}
+  {:run "03-B" :call 2 :status :committed :workspace-root true
+   :pair ["from" "to"]
+   :arguments-sha256 "4dadd3e9c7fc1a6f3c2369b0980b60cd353f7b6f126f9cf422b6b7c367ec870e"
+   :elapsed-ms 1139.806958}
+  {:run "04-A" :call 1 :status :refused :workspace-root false
+   :pair ["old" "new"]
+   :arguments-sha256 "9071930bde7b0299945f518a0631d41829ad0fecca53628dfff9c52a15fccf92"
+   :elapsed-ms 7.706111}
+  {:run "04-A" :call 2 :status :committed :workspace-root true
+   :pair ["from" "to"]
+   :arguments-sha256 "342e713815d57e3f7ed3a1ef0fbb24ef6c720b7a90e2085ec680934fad1680b3"
+   :elapsed-ms 1046.979437}]
+ :refusal
+ {:error-type "invalid-mcp-request"
+  :reason "unknown-fields"
+  :path ["edits" 0]
+  :allowed ["file" "files" "from" "matches" "to" "within"]
+  :old-new-unknown ["new" "old"]
+  :before-after-unknown ["after" "before"]
+  :source-unchanged true
+  :current-remedy
+  "Correct the named field and call apply_clojure_changes once. No source was changed."}}
