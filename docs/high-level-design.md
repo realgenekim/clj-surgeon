@@ -199,6 +199,81 @@ delegates to the unchanged generic transaction compiler. The generic compiler
 retains exact match counts, frozen-source hashes, future parsing, atomic commit,
 read-back, receipts, and rollback as the mutation authority.
 
+### Compile closed edit relations before the generic transaction
+
+Large already-decided changes may repeat one mechanical relationship across
+many exact owners. Requiring the caller to expand that relationship into every
+`from`/`to` source fragment can make a complete decision difficult to state and
+easy to omit. The compact editor may therefore accept a small closed set of
+explicit edit relations when each relation lowers mechanically into ordinary
+exact edits against the same frozen source snapshot.
+
+The first product slice admits two relations that a retained 51-edit/9-file
+cohort exercised independently:
+
+1. A symbol migration names one target alias, the fixed `preserve-name` rule,
+   and ordered file groups of exact owner, old symbol, and match count rows. It
+   derives only `target-alias/name(old-symbol)` and emits one ordinary
+   owner-scoped edit per row.
+2. A require change names one exact namespace/alias pair to add and an ordered
+   file set whose entries may name one exact namespace/alias pair to remove. It
+   derives the complete namespace-clause replacement from each frozen file.
+
+Ordinary compact `edits` remain available for exceptions that do not fit either
+relation, and `delete_owners` remains the exact top-level deletion surface. One
+request may combine all four categories as one already-decided transaction:
+
+```text
+compact edit request
+  -> source-blind closed-shape validation
+  -> one frozen source capture
+  -> pure relation compilation
+       -> require changes -------- exact namespace edits
+       -> symbol migration ------- exact owner-scoped edits
+       -> literal exceptions ----- existing compact edits
+       -> owner deletions -------- existing exact deletions
+  -> existing compact location normalization
+  -> unchanged generic transaction compiler
+  -> existing parse, atomic write, read-back, receipt, and rollback
+```
+
+This is request compilation, not a refactoring catalog. The caller still
+chooses every file, owner, old symbol, target alias, require addition, require
+removal, literal exception, and deletion. The compiler does not discover call
+sites, choose an alias, infer unused requires, select similar owners, or widen
+the declared file set. A missing or ambiguous decision remains the caller's
+responsibility.
+
+The relation boundary is fail-closed:
+
+- relation objects are closed and reject unknown, partial, duplicate, or
+  conflicting fields before mutation;
+- ordered file and owner rows must be unique, non-empty, and carry positive
+  exact match counts;
+- the symbol relation supports only the declared `preserve-name` rule and
+  produces no replacement other than the stated alias plus the old symbol's
+  exact unqualified name;
+- each require addition must be absent from the frozen namespace, and each
+  declared removal must identify exactly one direct require entry;
+- alias, namespace, reader-conditional, comment, or platform ambiguity refuses
+  the complete request before write;
+- every expanded edit is revalidated by the generic compiler against the same
+  frozen source map, so relation compilation grants no independent write
+  authority; and
+- one failed relation or expanded edit refuses the complete mixed request.
+
+Successful results report bounded relation identity, input and expanded row
+counts, declared match totals, affected files, and the existing transaction
+hashes. They do not return source bodies or imply that the relation itself
+verified program semantics. The ordinary result remains terminal only for the
+completed mutation and its configured verification profile.
+
+The flat compact-edit language remains a supported alternative during
+adoption. The relation compiler is a pure facade over the existing transaction
+algebra, not another plan representation or executor. CLI parity is deferred:
+the first slice changes only the compact MCP entrance whose model-side
+construction cost and omission pattern were directly measured.
+
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
 manifest, complete structural caller evidence, a frozen source identity, and a
