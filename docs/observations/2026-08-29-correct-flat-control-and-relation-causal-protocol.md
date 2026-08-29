@@ -176,8 +176,14 @@ Before the first model token, prove:
 
 ## Smallest useful cohort
 
-Run one serial, counterbalanced screen on one Anvil seat with fresh state per
-run:
+Run one serial, counterbalanced screen on one Anvil seat. Every run receives a
+new isolated workspace copied from the same frozen starting tree and verified
+byte-for-byte before model launch; a fresh Codex home/session; a fresh receipt
+directory; and a new private MCP server. The runner starts the server before the
+timed turn, performs the same bounded surface/identity warm-up, and then proves
+that request, receipt, and tool-call caches are empty. Dependency and build
+artifacts are read-only and shared equally. The server stops after the run.
+These lifecycle rules are fixed for every arm and cannot change between blocks.
 
 ```text
 Block 1: N R R N
@@ -187,10 +193,13 @@ Block 1: N R R N
 followed by that same normalizer and generic compiler.
 
 Every attempt is retained after model launch. Do not replace an incorrect,
-slow, or treatment-nonadherent run. The screen stops if either N is incorrect,
-either R is incorrect, or R improves complete verified midpoint by less than
-15 percent. A stopped screen is evidence against promotion, not permission to
-tune the prompt under the same protocol identity.
+slow, or treatment-nonadherent run. For an arm, `median` means the ordinary
+sorted-sample median; with two observations it is the arithmetic mean of the
+two central values. Block improvement is
+`(median(T_verified_N) - median(T_verified_R)) / median(T_verified_N)`.
+The screen stops if either N is incorrect, either R is incorrect, or block-one
+improvement is less than 15 percent. A stopped screen is evidence against
+promotion, not permission to tune the prompt under the same protocol identity.
 
 If all four calls are exact and the signal is at least 15 percent, run the
 predeclared complementary block:
@@ -205,8 +214,9 @@ At `N=8`, promotion requires:
 - one `edit_clojure` call per run and no other action;
 - identical canonical transaction and future hashes;
 - exact verification inside the transaction;
-- R faster in both counterbalanced blocks; and
-- at least 20 percent lower pooled complete verified midpoint or median.
+- the R median lower than the N median in each counterbalanced block; and
+- pooled improvement of at least 20 percent, using the same formula over all
+  four `T_verified` observations per arm.
 
 The cohort is capped at eight. A borderline result is not promoted.
 

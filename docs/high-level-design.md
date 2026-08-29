@@ -307,10 +307,10 @@ The relation boundary is fail-closed:
 - the capture universe is the canonical, root-confined union of relation,
   literal-edit, and owner-deletion files; aliases of the same canonical path
   refuse, and the existing transaction captures that union exactly once;
-- ordered migration files are unique after canonicalization; rows are unique
-  by canonical file, owner, and old symbol, non-empty, and carry positive exact
-  match counts; require entries are unique by canonical file and exact
-  namespace/alias identity;
+- ordered migration files are unique after canonicalization; every file group
+  contains at least one row; rows are unique by canonical file, owner, and old
+  symbol, non-empty, and carry positive exact match counts; require entries are
+  unique by canonical file and exact namespace/alias identity;
 - the symbol relation supports only the declared `preserve-name` rule and
   accepts only one exact symbol token per row; it produces no replacement other
   than the stated alias plus that symbol's exact unqualified name;
@@ -320,8 +320,9 @@ The relation boundary is fail-closed:
   refuses before write;
 - each require addition must be absent from the frozen namespace, and each
   declared removal must identify exactly one direct require entry;
-- alias, namespace, reader-conditional, comment, or platform ambiguity refuses
-  the complete request before write;
+- the first slice accepts only comment-free direct require clauses. Any comment,
+  alias, namespace, reader-conditional, or platform ambiguity refuses the
+  complete request before write;
 - require lowering is deterministic and injective: one admitted closed request
   plus one frozen source map yields one byte result, preserves every unrelated
   byte and comment, and otherwise refuses instead of choosing a layout;
@@ -354,11 +355,13 @@ entrance whose model-side construction cost and omission pattern were directly
 measured, while leaving the compiler reusable by a later CLI adapter.
 
 This relation is promoted only if a fresh, correct-control mutation cohort
-proves exact future bytes or the approved meaning-preserving equivalent,
+proves a byte-identical canonical transaction and exact future bytes,
 configured verification, first-call correctness, and lower complete verified
-wall time after charging the larger schema surface. The control must traverse
-the same candidate and the same source-proved compact-location normalizer; the
-treatment adds only closed-relation lowering before that common path.
+wall time after charging the larger schema surface. Meaning-preserving but
+byte-different outcomes may be recorded separately; they cannot promote this
+request-shape experiment. The control must traverse the same candidate and the
+same source-proved compact-location normalizer; the treatment adds only
+closed-relation lowering before that common path.
 Capture-only evidence does not satisfy that gate. A relation whose construction
 advantage does not recur, whose callers route around it, or whose complete-task
 time fails to beat the normalized flat route remains experimental or is

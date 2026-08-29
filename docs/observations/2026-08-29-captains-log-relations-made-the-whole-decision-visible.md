@@ -83,8 +83,9 @@ only causal hypothesis worth carrying forward.
 This was still a capture-only `N=2` screen. The arms exposed different schemas,
 the harness did not mutate files, and no exact verifier ran. Therefore:
 
-- **GO** to an experimental same-candidate relation compiler and real mutation
-  screen after HLD approval;
+- **GO** to LLD and EARS design after HLD approval, then to red tests,
+  implementation, verification, and the real mutation screen only after each
+  Linked-Intent gate passes;
 - **NO-GO** to claim a product speedup or a new Surgeon-versus-native multiple;
 - **NO-GO** to claim relations are needed for correctness;
 - **NO-GO** to merge the experimental compiler wholesale; and
@@ -120,3 +121,27 @@ narrower and more falsifiable.
 
 That is the useful form of `(N * K * sigma) / t`: parallel review does not only
 find more wins. It prevents us from manufacturing them.
+
+## The measuring instrument was repaired
+
+The reusable owner-aware screen now inherits `mcp-tool/edit-tool-description`
+and the production editor schema for both arms. Its subject and oracle both run
+through runtime admission, `tool-params->transaction`, source-proved
+compact-location normalization, and the generic transaction compiler. The
+capture-server test independently compares its control against the real public
+tool registry, while the client-surface observer explicitly rejects regression
+to the generic change-tool description.
+
+The bounded zero-model suite is green:
+
+```text
+owner-aware prerequisite             3 tests / 15 assertions
+call-construction scorer             4 tests / 30 assertions
+capture-server projection            2 tests / 15 assertions
+Codex registry surface observer      4 tests / 16 assertions
+```
+
+These repairs prevent the next cohort from reproducing either historical
+confound. They do not retroactively change clock provenance: the retained
+65.841-second and 48.912-second midpoints remain bound to the original
+arm-specific surfaces and are descriptive only.
