@@ -1,0 +1,20 @@
+{:schema :clj-surgeon.owner-aware-symbol-migration-experiment/v1
+ :base-commit "e9f8e100c839b4664505b45f15f7bb7d44eef9a3"
+ :model-calls 0
+ :mutation-actions 0
+ :payload {:oracle-bytes 6409
+           :candidate-bytes 4403
+           :budget 4500}
+ :decision {:owner-row-count 23
+            :declared-match-count 27}
+ :parity {:normalized-transaction-equal true
+          :addressed-replacements-equal true
+          :future-hashes-equal true
+          :expected-after-hashes-equal true
+          :match-count 51
+          :changed-file-count 9}
+ :refusals {:wrong-owner {:refused true
+                          :error-type :change-owner-mismatch}
+            :wrong-count {:refused true
+                          :error-type :expect-count-mismatch}}
+ :all-correct true}
