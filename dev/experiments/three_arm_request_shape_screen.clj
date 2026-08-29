@@ -145,25 +145,28 @@
                  (update :anyOf conj {:required ["file_groups"]}))}
 
     :closed-relations
-    {:name "edit_clojure"
-     :description closed-relations-description
-     :schema (-> mcp-schema/editor-tool-schema
-                 (assoc-in [:properties owner-screen/candidate-field-name]
-                           owner-screen/candidate-field-schema)
-                 (assoc-in [:properties "require_change"]
-                           require-change-field-schema)
-                 (update :anyOf conj
-                         {:required ["symbol_migration" "require_change"]})
-                 ;; Legacy flat requests remain valid when they use neither
-                 ;; candidate field. Once either candidate field appears,
-                 ;; both complete candidate fields are required.
-                 (update :allOf (fnil conj [])
-                         {:anyOf
-                          [{:not {:anyOf
-                                  [{:required ["symbol_migration"]}
-                                   {:required ["require_change"]}]}}
-                           {:required ["symbol_migration"
-                                       "require_change"]}]}))}
+    (let [base mcp-schema/editor-tool-schema
+          legacy-authority (:anyOf base)
+          candidate-authority
+          {:required ["symbol_migration" "require_change"]}
+          legacy-only-authority
+          {:anyOf legacy-authority
+           :not {:anyOf [{:required ["symbol_migration"]}
+                         {:required ["require_change"]}]}}]
+      {:name "edit_clojure"
+       :description closed-relations-description
+       :schema (-> base
+                   (assoc-in [:properties owner-screen/candidate-field-name]
+                             owner-screen/candidate-field-schema)
+                   (assoc-in [:properties "require_change"]
+                             require-change-field-schema)
+                   (update :anyOf conj candidate-authority)
+                   ;; The Codex SDK drops only the historical top-level anyOf.
+                   ;; Keep candidate closure in a preserved oneOf: either the
+                   ;; complete pair is used, or a legacy branch is used with
+                   ;; neither candidate field present.
+                   (assoc :oneOf [candidate-authority
+                                  legacy-only-authority]))})
 
     (throw (ex-info "Unknown three-arm screen arm" {:arm arm}))))
 
