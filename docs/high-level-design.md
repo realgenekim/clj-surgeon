@@ -251,8 +251,12 @@ The relation boundary is fail-closed:
 - ordered file and owner rows must be unique, non-empty, and carry positive
   exact match counts;
 - the symbol relation supports only the declared `preserve-name` rule and
-  produces no replacement other than the stated alias plus the old symbol's
-  exact unqualified name;
+  accepts only one exact symbol token per row; it produces no replacement other
+  than the stated alias plus that symbol's exact unqualified name;
+- in every migration file, the target alias must already name one direct
+  require entry in the frozen namespace or must be established by the same
+  request's require change; an absent alias or an alias bound to another
+  namespace refuses before write;
 - each require addition must be absent from the frozen namespace, and each
   declared removal must identify exactly one direct require entry;
 - alias, namespace, reader-conditional, comment, or platform ambiguity refuses
@@ -269,10 +273,11 @@ verified program semantics. The ordinary result remains terminal only for the
 completed mutation and its configured verification profile.
 
 The flat compact-edit language remains a supported alternative during
-adoption. The relation compiler is a pure facade over the existing transaction
-algebra, not another plan representation or executor. CLI parity is deferred:
-the first slice changes only the compact MCP entrance whose model-side
-construction cost and omission pattern were directly measured.
+adoption. The relation compiler is a transport-neutral pure facade over the
+existing transaction algebra, not another plan representation or executor.
+CLI projection is deferred: the first public slice changes only the compact MCP
+entrance whose model-side construction cost and omission pattern were directly
+measured, while leaving the compiler reusable by a later CLI adapter.
 
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
