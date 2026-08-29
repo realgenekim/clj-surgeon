@@ -1583,6 +1583,259 @@ def self_test() -> int:
     ])
     assert relation_clock["post_surgeon_boundaries"][0]["target_relation"] == "same-files"
     assert "PRIVATE_A" not in json.dumps(relation_clock)
+
+    # Action-emission v6 privacy and compatibility witnesses. These fixtures
+    # use only synthetic completed-item data; no provider history is read.
+    private_source_hash = "f" * 64
+    private_result_hash = "e" * 64
+    private_arguments = {
+        "workspace_root": "/PRIVATE/ROOT/ALPHA",
+        "edits": [{
+            "file": "src/PRIVATE_PATH.clj",
+            "from": "PRIVATE_SOURCE_LITERAL",
+            "to": "λ",
+        }],
+        "request_id": "PRIVATE_REQUEST_ID",
+        "url": "https://private.example.invalid/path",
+        "account": "PRIVATE_ACCOUNT",
+        "secret": "PRIVATE_SECRET",
+        "source_hash": private_source_hash,
+    }
+    private_result = {
+        "structuredContent": {
+            "source": "PRIVATE_RESULT_SOURCE",
+            "diagnostic": "PRIVATE_RESULT_DIAGNOSTIC",
+            "source_hash": private_result_hash,
+        }
+    }
+
+    def synthetic_mcp_sample(arguments, *, result_marker="missing"):
+        item = {
+            "type": "McpToolCall",
+            "server": "clj-surgeon",
+            "tool": "edit_clojure",
+            "arguments": arguments,
+            "status": "completed",
+        }
+        if result_marker != "missing":
+            item["result"] = result_marker
+        return completed_item_clock_sample({
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 10,
+            "item": item,
+        })
+
+    private_sample = synthetic_mcp_sample(
+        private_arguments, result_marker=private_result
+    )
+    private_evidence = private_sample["action_evidence"]
+    expected_argument_json = json.dumps(
+        private_arguments,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    # UTF-8 byte count, not Python character count.
+    assert private_evidence["argument_canonical_bytes"] == len(
+        expected_argument_json.encode("utf-8")
+    )
+    assert private_evidence["argument_canonical_bytes"] > len(expected_argument_json)
+    assert private_evidence["result_canonical_bytes"] == len(json.dumps(
+        private_result,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8"))
+
+    short_root_sample = synthetic_mcp_sample({
+        **private_arguments, "workspace_root": "/x"
+    })
+    long_root_sample = synthetic_mcp_sample({
+        **private_arguments, "workspace_root": "/PRIVATE/MUCH/LONGER/ROOT"
+    })
+    assert (
+        short_root_sample["action_evidence"]["argument_canonical_bytes"]
+        != long_root_sample["action_evidence"]["argument_canonical_bytes"]
+    )
+    assert (
+        short_root_sample["action_evidence"]["logical_argument_sha256"]
+        == long_root_sample["action_evidence"]["logical_argument_sha256"]
+    )
+    changed_decision_sample = synthetic_mcp_sample({
+        **private_arguments, "secret": "PRIVATE_DIFFERENT_DECISION"
+    })
+    assert (
+        private_evidence["logical_argument_sha256"]
+        != changed_decision_sample["action_evidence"]["logical_argument_sha256"]
+    )
+    assert len(private_evidence["logical_argument_sha256"]) == 64
+
+    public_private_sample = json.dumps(private_sample)
+    for canary in [
+        "/PRIVATE/ROOT/ALPHA", "PRIVATE_PATH", "PRIVATE_SOURCE_LITERAL",
+        "private.example", "PRIVATE_ACCOUNT", "PRIVATE_SECRET",
+        "PRIVATE_REQUEST_ID", "PRIVATE_RESULT_SOURCE",
+        "PRIVATE_RESULT_DIAGNOSTIC", private_source_hash, private_result_hash,
+    ]:
+        assert canary not in public_private_sample
+
+    missing_result_evidence = synthetic_mcp_sample(
+        private_arguments
+    )["action_evidence"]
+    null_result_evidence = synthetic_mcp_sample(
+        private_arguments, result_marker=None
+    )["action_evidence"]
+    assert "result_canonical_bytes" not in missing_result_evidence
+    assert null_result_evidence["result_canonical_bytes"] == 4
+
+    endpoint_sample = synthetic_mcp_sample(
+        {"workspace_root": "/PRIVATE/ENDPOINT", "edits": []},
+        result_marker={"ok": True},
+    )
+    endpoint_sample.update({
+        "action_ordinal": 7,
+        "started_at_ms": clock_start_ms + 600,
+        "completed_at_ms": clock_start_ms + 700,
+    })
+    emission_clock = compile_event_clock(clock_start, 1000, [
+        {
+            "kind": "surgeon-read",
+            "transport": "mcp",
+            "operation": "inspect_clojure",
+            "action_ordinal": 1,
+            "action_evidence": {"result_canonical_bytes": 91},
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 100,
+        },
+        {
+            "kind": "shell",
+            "action_ordinal": 2,
+            "started_at_ms": clock_start_ms + 50,
+            "completed_at_ms": clock_start_ms + 350,
+        },
+        {
+            "kind": "context-compaction",
+            "action_ordinal": 3,
+            "started_at_ms": clock_start_ms + 80,
+            "completed_at_ms": clock_start_ms + 500,
+        },
+        {
+            "kind": "model-reasoning",
+            "action_ordinal": 4,
+            "started_at_ms": clock_start_ms + 150,
+            "completed_at_ms": clock_start_ms + 250,
+        },
+        {
+            "kind": "model-reasoning",
+            "action_ordinal": 5,
+            "started_at_ms": clock_start_ms + 300,
+            "completed_at_ms": clock_start_ms + 400,
+        },
+        {
+            "kind": "model-reasoning",
+            "action_ordinal": 6,
+            "started_at_ms": clock_start_ms + 550,
+            "completed_at_ms": clock_start_ms + 650,
+        },
+        endpoint_sample,
+    ])
+    emission_boundary = next(
+        boundary
+        for boundary in emission_clock["post_surgeon_boundaries"]
+        if boundary.get("action_ordinal") == 1
+    )
+    assert emission_boundary["action_emission"] == {
+        "previous_surgeon_result_canonical_bytes": 91,
+        "next_argument_canonical_bytes": endpoint_sample[
+            "action_evidence"
+        ]["argument_canonical_bytes"],
+        "next_logical_argument_sha256": endpoint_sample[
+            "action_evidence"
+        ]["logical_argument_sha256"],
+        "last_reasoning_end_to_next_action_start_ms": 200,
+        "overlapping_background_wall_ms": 400,
+    }
+
+    no_reasoning_clock = compile_event_clock(clock_start, 400, [
+        {
+            "kind": "surgeon-read",
+            "transport": "mcp",
+            "operation": "inspect_clojure",
+            "action_ordinal": 1,
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 100,
+        },
+        {
+            "kind": "other-tool",
+            "transport": "mcp",
+            "action_ordinal": 2,
+            "started_at_ms": clock_start_ms + 200,
+            "completed_at_ms": clock_start_ms + 300,
+        },
+    ])
+    no_reasoning_emission = no_reasoning_clock[
+        "post_surgeon_boundaries"
+    ][0]["action_emission"]
+    assert "last_reasoning_end_to_next_action_start_ms" not in no_reasoning_emission
+    assert "next_argument_canonical_bytes" not in no_reasoning_emission
+    assert "next_logical_argument_sha256" not in no_reasoning_emission
+    assert no_reasoning_emission["overlapping_background_wall_ms"] == 0
+
+    malformed_mcp = completed_item_clock_sample({
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+        "item": {
+            "type": "McpToolCall",
+            "server": "clj-surgeon",
+            "tool": "edit_clojure",
+            "arguments": "PRIVATE_MALFORMED_ARGUMENTS",
+        },
+    })
+    assert "action_evidence" not in malformed_mcp
+    assert "action_evidence" not in completed_item_clock_sample({
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+        "item": {"type": "AgentMessage", "content": "PRIVATE_MESSAGE"},
+    })
+    assert "action_evidence" not in completed_item_clock_sample({
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+        "item": {"type": "FileChange", "changes": "PRIVATE_PATCH"},
+    })
+    assert "action_evidence" not in completed_item_clock_sample({
+        "started_at_ms": clock_start_ms,
+        "completed_at_ms": clock_start_ms + 10,
+        "item": {"type": "CommandExecution", "command": "PRIVATE_COMMAND"},
+    })
+
+    # A v5-shaped clock remains accepted; unavailable evidence is omitted, not
+    # rewritten as a synthetic zero.
+    v5_clock = compile_event_clock(clock_start, 400, [
+        {
+            "kind": "surgeon-read",
+            "action_ordinal": 1,
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 100,
+        },
+        {
+            "kind": "model-message",
+            "action_ordinal": 2,
+            "started_at_ms": clock_start_ms + 200,
+            "completed_at_ms": clock_start_ms + 300,
+        },
+    ])
+    v5_emission = v5_clock["post_surgeon_boundaries"][0]["action_emission"]
+    assert v5_emission == {"overlapping_background_wall_ms": 0}
+    for canary in [
+        "PRIVATE_MALFORMED_ARGUMENTS", "PRIVATE_MESSAGE", "PRIVATE_PATCH",
+        "PRIVATE_COMMAND",
+    ]:
+        assert canary not in json.dumps({
+            "private_sample": private_sample,
+            "emission_clock": emission_clock,
+            "no_reasoning_clock": no_reasoning_clock,
+            "v5_clock": v5_clock,
+        })
     with tempfile.TemporaryDirectory(prefix="study-agent-usage-") as tmp:
         root = Path(tmp)
         observations = root / "docs" / "observations"
