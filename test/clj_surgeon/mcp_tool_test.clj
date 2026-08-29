@@ -187,6 +187,43 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest editor-gesture-aliases-commit-through-the-public-route
+  ;; @spec MCP-OP-EDIT-017
+  ;; @spec MCP-OP-EDIT-019
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        before "(ns demo)\n\n(defn route-event [] :done)\n"
+        after "(ns demo)\n\n(defn route-event [] :complete)\n"
+        config {:project-root (.getPath workspace)
+                :receipt-dir (.getPath receipt-dir)}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (doseq [[source-field target-field relation]
+              [["old" "new" "old-new"]
+               ["before" "after" "before-after"]]]
+        (spit source-file before)
+        (let [request
+              {"edits"
+               [{"file" "src/demo.clj"
+                 "within" {"form" "route-event"}
+                 source-field ":done"
+                 target-field ":complete"}]}
+              result (mcp-tool/execute-request! config request)]
+          (is (:ok result) (pr-str result))
+          (is (:verification_complete result))
+          (is (= [{:edit_index 0
+                   :relation relation
+                   :requested_fields [source-field target-field]
+                   :emitted_fields ["from" "to"]}]
+                 (:compact_field_normalization result)))
+          (is (= after (slurp source-file)))
+          (is (:ok (transaction/execute-undo!
+                     {:receipt (:undo_receipt result)})))
+          (is (= before (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
 (deftest grouped-root-edn-edit-is-atomic-lossless-and-undoable
   ;; @spec MCP-OP-EDIT-001
   ;; @spec MCP-OP-EDIT-003

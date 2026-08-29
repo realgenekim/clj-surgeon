@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-contract
   (:require
+   [clj-surgeon.mcp-compact-edit-fields :as compact-edit-fields]
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clojure.set :as set]
@@ -636,6 +637,15 @@
       (let [edits
             (when (present? params "edits")
               (nonempty-array! (field params "edits") ["edits"]))
+            normalized-edits
+            (when edits
+              (compact-edit-fields/normalize-edits edits))
+            _ (when (and normalized-edits (not (:ok normalized-edits)))
+                (refuse! (:reason normalized-edits)
+                         (:path normalized-edits)
+                         "Compact edit value fields are incomplete or ambiguous"
+                         (dissoc normalized-edits :ok :reason :path)))
+            edits (or (:edits normalized-edits) edits)
             edit-changes
             (mapv
               (fn [edit index]
@@ -826,6 +836,10 @@
                              index)))
                        vec)})
 
+          (seq (:evidence normalized-edits))
+          (assoc :compact-field-normalization
+                 (:evidence normalized-edits))
+
           redundant-expect?
           (assoc :input-normalization
                  {:ignored ["expect"]
@@ -855,6 +869,10 @@
               (and (:ok validated) (:compact-location-normalization compiled))
               (assoc :compact-location-normalization
                      (:compact-location-normalization compiled))
+
+              (and (:ok validated) (:compact-field-normalization compiled))
+              (assoc :compact-field-normalization
+                     (:compact-field-normalization compiled))
 
               (:input-normalization compiled)
               (assoc :input-normalization (:input-normalization compiled))))

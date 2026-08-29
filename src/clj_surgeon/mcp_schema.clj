@@ -234,15 +234,39 @@
                          {:required ["namespace"]}
                          {:required ["root"]}]}
        "from" {:type "string" :minLength 1
-               :description "The exact old Clojure subtree. Its count must equal matches, which defaults to one."}
+               :description "Canonical source field: the exact old Clojure subtree. Its count must equal matches, which defaults to one."}
        "to" {:type "string" :minLength 1
-             :description "The replacement Clojure subtree."}
+             :description "Canonical target field: the replacement Clojure subtree."}
+       "old" {:type "string" :minLength 1
+              :description "Exact alias for from. Supply only with new."}
+       "new" {:type "string" :minLength 1
+              :description "Exact alias for to. Supply only with old."}
+       "before" {:type "string" :minLength 1
+                 :description "Exact alias for from. Supply only with after."}
+       "after" {:type "string" :minLength 1
+                :description "Exact alias for to. Supply only with before."}
        "matches" positive-integer-schema}
-      :required ["from" "to"]
-      :oneOf [{:required ["file"]
-               :not {:required ["files"]}}
-              {:required ["files"]
-               :not {:required ["file"]}}]}}
+      :allOf
+      [{:oneOf
+        [{:required ["from" "to"]
+          :not {:anyOf [{:required ["old"]}
+                        {:required ["new"]}
+                        {:required ["before"]}
+                        {:required ["after"]}]}}
+         {:required ["old" "new"]
+          :not {:anyOf [{:required ["from"]}
+                        {:required ["to"]}
+                        {:required ["before"]}
+                        {:required ["after"]}]}}
+         {:required ["before" "after"]
+          :not {:anyOf [{:required ["from"]}
+                        {:required ["to"]}
+                        {:required ["old"]}
+                        {:required ["new"]}]}}]}
+       {:oneOf [{:required ["file"]
+                 :not {:required ["files"]}}
+                {:required ["files"]
+                 :not {:required ["file"]}}]}]}}
     "delete_owners"
     {:type "array"
      :minItems 1

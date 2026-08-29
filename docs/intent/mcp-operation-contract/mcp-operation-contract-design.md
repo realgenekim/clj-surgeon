@@ -672,6 +672,39 @@ Omitted `within` never means root scope. Similarity, edit distance, source
 proximity, a unique lexical hint, or a sole remaining candidate never satisfies
 these relations. EDN root-scoped edits retain their existing explicit contract.
 
+## Injective Compact Edit Field Normalization
+
+The compact editor accepts three closed spellings of one exact replacement
+relation: canonical `from`/`to`, `old`/`new`, and `before`/`after`. The alias
+compiler is a source-blind representation boundary, not a source-repair or
+semantic inference engine. It runs before location normalization, path
+resolution, source capture, and the unchanged transaction compiler.
+
+```text
+compact edit JSON
+  -> exact value-pair algebra
+       -> preserve from/to
+       -> lower old/new to from/to
+       -> lower before/after to from/to
+       -> typed pre-source refusal
+  -> ordinary compact location compiler
+  -> unchanged direct transaction compiler
+```
+
+Exactly one complete pair is accepted per edit. Partial pairs, cross-pair
+mixtures, two complete pairs, and canonical fields combined with an alias pair
+refuse the complete request even when their values agree. One invalid sibling
+refuses the batch; successful siblings grant no partial normalization or write
+authority. The lowering preserves the two values byte-for-byte and emits only
+the canonical field names plus bounded relation evidence.
+
+This seam belongs only to the compact `edits` route. Generic `changes`, basis
+continuations, extraction, programs, CLI request semantics, and source-aware
+location normalization do not invoke it. Refusals name the exact edit index and
+supplied value fields, state the complete mapping, and tell the caller to retry
+the exposed `edit_clojure` operation. They do not redirect the caller to the
+heavier public tool.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -712,6 +745,7 @@ existing lossless transaction contract.
 | EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
 | Selector recovery | Per-failed-owner bounded hypotheses with no automatic selection | Aggregate candidates, automatic fuzzy selection, or immediate retained continuation | One refusal gives the model enough real structure for an exact retry without letting presentation rank become authority. |
 | Compact location tolerance | Three compact-only injective relations over one frozen snapshot, lowered to explicit generic selectors | Global namespace fallback; root-scope default; fuzzy owner selection; source-blind inference | The accepted spellings recover observed model mistakes while every zero/many, stale, nested, or competing case remains a pre-write refusal and generic CLI/direct semantics do not widen. |
+| Compact edit field tolerance | One source-blind closed algebra that preserves `from`/`to` and lowers exactly one complete `old`/`new` or `before`/`after` pair | Prompt-only correction; fuzzy key repair; accept equal duplicate pairs; widen generic changes | The three observed spellings encode the same exact guarded relation, while all 61 other six-field subsets remain pre-source refusals. |
 
 ## Open Questions & Future Decisions
 
