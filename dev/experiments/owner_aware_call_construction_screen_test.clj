@@ -1,5 +1,7 @@
 (ns owner-aware-call-construction-screen-test
   (:require
+   [clj-surgeon.mcp-schema :as mcp-schema]
+   [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.test :refer [deftest is testing]]
    [owner-aware-call-construction-screen :as screen]
    [owner-aware-symbol-migration :as migration]))
@@ -15,10 +17,17 @@
 (deftest candidate-surface-adds-only-one-call-construction-field
   (let [control (screen/tool-surface :control)
         candidate (screen/tool-surface :candidate)]
+    (is (= mcp-tool/edit-tool-description (:description control)))
+    (is (not= mcp-tool/tool-description (:description control)))
     (is (= (dissoc control :description :schema)
            (dissoc candidate :description :schema)))
     (is (= (:description control)
            (subs (:description candidate) 0 (count (:description control)))))
+    (is (= mcp-schema/editor-tool-schema (:schema control)))
+    (is (= (get-in mcp-schema/editor-tool-schema
+                   [:properties "edits" :items :properties "within"])
+           (get-in (:schema candidate)
+                   [:properties "edits" :items :properties "within"])))
     (is (= #{screen/candidate-field-name}
            (->> (keys (get-in candidate [:schema :properties]))
                 (remove (set (keys (get-in control [:schema :properties]))))

@@ -2,6 +2,9 @@
   "Pure catalog projection and scorer for the owner-aware call-construction screen."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-compact-location :as compact-location]
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.edn :as edn]
@@ -59,14 +62,14 @@
             candidate-field-schema))
 
 (def candidate-tool-description
-  (str mcp-tool/tool-description candidate-description-suffix))
+  (str mcp-tool/edit-tool-description candidate-description-suffix))
 
 (defn tool-surface
   "Return the exact control or candidate edit_clojure surface."
   [arm]
   (case arm
     :control {:name "edit_clojure"
-              :description mcp-tool/tool-description
+              :description mcp-tool/edit-tool-description
               :schema mcp-schema/editor-tool-schema}
     :candidate {:name "edit_clojure"
                 :description candidate-tool-description
@@ -88,13 +91,27 @@
       (throw (ex-info "Unknown screen arm" {:arm arm})))))
 
 (defn compile-submission
-  "Compile captured public arguments through the real validator and compiler."
+  "Compile captured public arguments through production admission and normalization."
   [sources arm arguments]
   (let [expanded (expand-submission arm arguments)]
-    (if (:ok expanded)
-      (assoc expanded
-             :product (migration/compile-request sources (:request expanded)))
-      expanded)))
+    (if-not (:ok expanded)
+      expanded
+      (let [validated (contract/validate-tool-params (:request expanded))]
+        (if-not (:ok validated)
+          (assoc expanded :product validated)
+          (let [spec (contract/tool-params->transaction (:params validated))
+                prepared
+                (compact-location/normalize-spec
+                  sources spec (:compact-location-normalization validated))
+                product
+                (if (:error prepared)
+                  prepared
+                  (assoc prepared
+                         :transaction (:spec prepared)
+                         :compiled
+                         (transaction/compile-transaction
+                           sources (:spec prepared))))]
+            (assoc expanded :product product)))))))
 
 (defn- compiled-ok? [product]
   (and (:ok product)
@@ -111,14 +128,14 @@
         compiled (compile-submission sources arm arguments)
         product (:product compiled)
         product-compiled (:compiled product)
-        oracle (migration/compile-request
-                 sources
+        oracle (compile-submission
+                 sources :control
                  (dissoc migration/oracle-request "workspace_root"))
         payload-bytes (migration/json-byte-count arguments)
         future-hashes (when (compiled-ok? product)
                         (migration/file-hashes product-compiled))
         exact-future? (= expected-after-hashes future-hashes)
-        normalized-equal? (= (:transaction oracle) (:transaction product))
+        normalized-equal? (= (get-in oracle [:product :transaction]) (:transaction product))
         one-action? (and (= 1 (:mcp-call-count geometry))
                          (zero? (:refusal-count geometry))
                          (zero? (:recovery-count geometry))

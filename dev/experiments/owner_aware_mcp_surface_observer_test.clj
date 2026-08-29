@@ -1,5 +1,6 @@
 (ns owner-aware-mcp-surface-observer-test
   (:require
+   [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.test :refer [deftest is testing]]
    [owner-aware-call-construction-screen :as screen]
    [owner-aware-mcp-surface-observer :as observer]))
@@ -82,14 +83,22 @@
                       (update :input-schema dissoc :anyOf))
         result (observer/validate-observation
                  advertised-receipt (registry-receipt projected)
-                 "clj-surgeon" "edit_clojure")]
+                 "clj-surgeon" "edit_clojure")
+        generic-description-result
+        (observer/validate-observation
+          advertised-receipt
+          (registry-receipt
+            (assoc projected :description mcp-tool/tool-description))
+          "clj-surgeon" "edit_clojure")]
     (is (contains? (get-in advertised-receipt [:tool :input-schema]) :anyOf))
     (is (= observer/registry-observation-source
            (dissoc (:observation-source (registry-receipt projected))
                    :server-selector)))
     (is (:ok result))
     (is (= [:annotations-null-empty-object :drop-top-level-any-of]
-           (:normalizations result)))))
+           (:normalizations result)))
+    (is (= :client-tool-surface-mismatch
+           (:error-type generic-description-result)))))
 
 (deftest every-other-surface-or-provenance-delta-fails-closed
   (doseq [[label receipt expected-error]

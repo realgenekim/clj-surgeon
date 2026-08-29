@@ -1,15 +1,24 @@
 (ns owner-aware-call-capture-server-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-server :as mcp-server]
+   [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is]]
    [owner-aware-call-capture-server :as server]
    [owner-aware-call-construction-screen :as screen]))
 
 (deftest projected-server-surface-is-arm-exact
-  (let [control (server/capture-tool :control "/tmp/control.json")
+  (let [production
+        (first (filter #(= :edit-clojure (:id %))
+                       (mcp-server/public-tool-registry)))
+        control (server/capture-tool :control "/tmp/control.json")
         candidate (server/capture-tool :candidate "/tmp/candidate.json")]
     (is (= "edit_clojure" (:name control) (:name candidate)))
+    (is (= (:schema production) (:schema control)))
+    (is (= (:description production) (:description control)))
+    (is (= mcp-tool/edit-tool-description (:description control)))
+    (is (not= mcp-tool/tool-description (:description control)))
     (is (= (:schema (screen/tool-surface :control)) (:schema control)))
     (is (= (:schema (screen/tool-surface :candidate)) (:schema candidate)))
     (is (= (:description (screen/tool-surface :control))
