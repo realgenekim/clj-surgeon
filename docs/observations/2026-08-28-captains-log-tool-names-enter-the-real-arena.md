@@ -944,3 +944,8 @@ transaction compiler. Do not teach generic CLI/direct `:forms` selectors to
 fall back to namespaces. Do not default omitted `within` to root scope. Exact
 named owners remain authoritative, and every ambiguity or stale fingerprint
 continues to refuse the complete batch before write.
+
+Gene approved HLD commit `ee372cb` on 2026-08-28. The approved boundary makes
+the experimental result actionable without treating it as implementation:
+the next phase is the owning MCP operation-contract design, followed by a new
+review gate before EARS requirements or code.
