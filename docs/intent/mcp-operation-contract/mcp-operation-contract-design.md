@@ -733,6 +733,11 @@ failed the predeclared exact canonical-transaction identity gate. Block 2 did
 not run. The gate remains unchanged; any order-invariant canonicalization is a
 separate design decision and requires a new cohort.
 
+Canonical effect identity is approved for implementation as the forward-only
+answer to that decision. This LLD defines it after generic disjointness proof.
+It does not alter the held scorer, authorize the held second block, or mark
+performance promotion complete.
+
 ## #Public request shape
 
 The first slice admits `symbol_migration` and `require_change` only as a pair.
@@ -959,6 +964,100 @@ Source-byte limits run once on the captured map ; future-output limits run once
 on the generic compiled result. The same action is never charged again merely
 because it crossed a lowering phase.
 
+## #Canonical effect identity after proof
+
+Caller order remains immutable request provenance. It owns request and relation
+indexes, generated IDs, diagnostic paths, diff presentation, receipt vectors,
+and exact request replay. It does not become mutation authority after the
+generic compiler has resolved every compact action against one frozen source
+map and proved the complete concrete edit set disjoint.
+
+The transaction namespace exposes one pure `canonical-effect-identity`
+function over a canonical project root and a successful compiled transaction.
+The caller invokes it only after `compile-transaction*` has returned `ok=true`;
+it does not accept a wire
+request, source map, partial plan, refusal, or receipt. It validates that every
+compiled file resolves under that already-canonical root, has complete source
+and result hashes, and that every concrete effect has one project-relative
+file identity, structural address, exact
+original string, and exact replacement string.
+
+The internal version-one projection is a vector, not an unordered map:
+
+```text
+[:canonical-effect/v1
+ [[:file normalized-project-relative-file
+   source-sha256 result-sha256
+   [[:effect resolved-kind
+     structural-path preorder end-preorder raw-offset
+     exact-before-string exact-after-string]
+    ...]]
+  ...]
+ file-count effect-count]
+```
+
+The function performs no file read or `stat`; it only relativizes the already
+resolved compiled file identities against the supplied canonical root and
+refuses an outside-root or empty identity. Files are sorted lexicographically
+by normalized project-relative path. Effects within a file are sorted by
+structural path, preorder, end preorder, raw offset, resolved kind, exact
+before string, and exact after string. `raw-offset`
+is the compiler's exact source-string offset when present, not a separately
+computed byte index. The
+resolved kind is `insert-left` or `insert-right` when the concrete edit carries
+that insertion side, `delete` when the concrete edit carries deletion, and
+`replace` otherwise. A missing required field is an internal contract error ;
+the function never invents a default.
+
+`exact-before-string` and `exact-after-string` are the complete JVM strings
+already consumed by `apply-edits`. They are not parsed, whitespace-normalized,
+formatted, fingerprinted, truncated, or replaced by hashes inside the
+projection. Structural paths and numeric address fields remain numeric vectors
+and integers. The projection is serialized with one versioned canonical EDN
+vector grammar and hashed with SHA-256. Because the collision boundary contains
+the exact strings and exact resolved addresses, two semantically different
+concrete effects cannot become equal merely through normalization. SHA-256 is
+the public compact identifier for that exact internal projection ; it is not
+used to discard or deduplicate effects.
+
+The public successful compact result contains the closed object
+`canonical_effect_identity={version,sha256,files,effects}`. It contains no
+source body, replacement body, absolute path, request ID, receipt path, or
+receipt hash. Both `edit_clojure` and the compact `edits` branch of
+`apply_clojure_changes` publish it. Generic `changes`, extraction, programs,
+retained basis, planning, and CLI results do not publish it in the first slice.
+Relation lowering receives no special identity path: it produces ordinary
+compact edits, and the identity is derived only from their common compiled
+result.
+
+Permutation invariance is authorized only for complete successful compact
+transactions. A permutation of the same resolved disjoint effects has the same
+projection, SHA-256, file count, effect count, source hashes, result hashes, and
+future bytes. The submitted request hash, positional IDs, diagnostics, diff
+order, receipt bytes, receipt hash, and inverse-edit vector may differ. Those
+differences remain valid provenance and rollback evidence and are never inputs
+to canonical effect identity.
+
+The following existing consumers remain unchanged:
+
+| Consumer | Existing identity/order authority | Canonical-effect change |
+|---|---|---|
+| `compile-transaction*`, `compile-file`, `assert-disjoint-edits!`, `apply-edits` | Resolve original-snapshot effects, refuse intersections, apply address order. | Pure identity reads their successful output; no execution reorder. |
+| `build-receipt`, `receipt-hash`, `validate-receipt!`, `compile-inverse` | Exact receipt bytes, inverse vectors, rollback validation. | No field or hash change; receipt identity remains request-specific. |
+| `commit-compiled!`, `observe-change-result` | Commit/read-back evidence and runtime outcome. | Success copies the already-derived compact identity; it grants no write authority. |
+| `mcp-contract/normalize-success-receipt` | Public terminal receipt, read-back, and verification evidence. | Adds only the closed compact identity object when present. |
+| `mcp_compact_relations` normalization evidence | Ordered request files, relation rows, and generated IDs. | Remains ordered provenance and is not canonical-effect input. |
+| cold verification and undo attachment | Receipt path and receipt hash. | Unchanged; they never accept canonical-effect SHA as receipt authority. |
+| relation causal scorer | Frozen request representation and exact future/verifier evidence. | A new candidate compares canonical-effect identity; the held scorer and cohort remain immutable. |
+
+The projection never makes an unresolved batch commutative. Identical or
+intersecting spans, parent/nested edits, deletion of an edited owner, two
+insertions at one boundary, and transformations that would need another edit's
+future output refuse before any identity exists. Form order inside one insertion
+payload remains explicit caller authority. A sequence such as `old -> middle`
+then `middle -> new` is one composed replacement or two transactions ; request
+permutation cannot make it one snapshot-compiled batch.
+
 ## #Refusal and rollback matrix
 
 | Condition | Stage | Result law |
@@ -1052,16 +1151,17 @@ request language.
 ## #Causal acceptance boundary
 
 The relation mode is not promoted because it uses fewer bytes. Its hypothesis
-is that naming a complete repeated relationship removes caller construction
-decisions. A same-candidate, same-surface, real-mutation cohort must therefore
+is that naming a complete repeated relationship lets the caller emit less exact
+request syntax without losing a decision or verified outcome. A
+same-candidate, same-surface, real-mutation cohort must therefore
 compare the already-correct normalized flat representation with the relation
 representation while holding the production description, schema, location
 normalizer, transaction, verifier, task, model, and scorer constant.
 
 Both arms must make exactly one compact `apply_clojure_changes` call with the
 same project-owned `verify="exact"` profile, compile to byte-identical canonical
-transactions and frozen future files, and complete exact verification in that
-first call. This benchmark shape preserves the authority boundary:
+effect identities and frozen future files, and complete exact verification in
+that first call. This benchmark shape preserves the authority boundary:
 `apply_clojure_changes` owns verifier selection and `edit_clojure` does not gain
 it. The relation arm must reduce median request-emission time in both
 counterbalanced blocks and by at least 20 percent pooled. It must independently
@@ -1075,9 +1175,12 @@ The immutable causal protocol defines two four-run serial blocks:
 relation representation. Every post-launch attempt is retained. Both arms see
 the same relation-capable tool catalog, task, model, effort, fixture, verifier
 and scorer. `T_emit` runs from turn start through the observer event containing
-the complete tool arguments. `T_verified` runs from turn start through final
-completion of an exact first-call verified mutation. Medians and improvement
-are computed per block and pooled only from eligible exact runs ; a missing,
+the complete tool arguments. `T_apply_verified` runs from turn start through
+the exact first-call MCP verification completion. `T_complete_verified` runs
+from turn start through the final response after that verified mutation. The
+latter is the primary user-outcome metric ; the former localizes server and
+post-result time. Medians and improvement are computed per block and pooled
+only from eligible exact runs ; a missing,
 incorrect, nonadherent, retried, or unverified run fails the cohort rather than
 being dropped. The complete identity, isolation, estimator, and stop laws live
 in the referenced Correct Flat-Control Causal Protocol.

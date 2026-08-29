@@ -71,7 +71,8 @@ Each effect key contains:
 5. lossless after identity.
 
 The complete projection also contains canonical source and result hashes plus
-logical file, intent, and edit counts. It excludes:
+canonical file and concrete-effect counts. It excludes representation-specific
+intent counts and:
 
 - synthetic IDs and request indexes;
 - relation file and row declaration indexes;
