@@ -49,7 +49,8 @@
     (is (not-any? #(contains? % "require_change") (get flat "edits")))))
 
 (deftest public-schema-gate-fails-closed
-  (let [flat (corpus/normalized-flat-request workspace-root)
+  (let [{:keys [sources]} (fixture)
+        flat (corpus/normalized-flat-request workspace-root)
         relation (corpus/closed-relation-request workspace-root)]
     (is (:ok (corpus/public-schema-report flat)))
     (is (:ok (corpus/public-schema-report relation)))
@@ -60,32 +61,51 @@
     (do
       (is (false? (:ok (corpus/public-schema-report
                          (assoc flat "expect" {"changes" 51})))))
-      (doseq [invented
-              [{"workspace_root" workspace-root
-                "changes" [flat]
-                "representation" "N"}
-               {"workspace_root" workspace-root
-                "changes" [relation]
-                "relations" true}
-               {"workspace_root" workspace-root "R" relation}
-               {"workspace_root" workspace-root
-                "route" "R"
-                "request" relation}
-               (assoc-in flat ["edits" 0]
-                         {"file" "src/example.clj"
-                          "owner" "example-owner"
-                          "before" "old"
-                          "after" "new"
-                          "matches" 1})
-               (assoc-in flat ["edits" 0 "owner"] "example-owner")
-               (assoc-in flat ["delete_owners" 0]
-                         {"file" "src/example.clj"
-                          "owner" "obsolete"
-                          "owners" ["obsolete"]
-                          "include_attached_comments" true})
-               (assoc relation "symbol_migration" [])
-               (assoc relation "require_change" [])]]
-        (is (false? (:ok (corpus/public-schema-report invented))))))))
+      (doseq [[label invented]
+              [[:changes-wrapper
+                {"workspace_root" workspace-root
+                 "changes" [flat]
+                 "representation" "N"}]
+               [:relations-wrapper
+                {"workspace_root" workspace-root
+                 "changes" [relation]
+                 "relations" true}]
+               [:arm-wrapper
+                {"workspace_root" workspace-root "R" relation}]
+               [:route-wrapper
+                {"workspace_root" workspace-root
+                 "route" "R"
+                 "request" relation}]
+               [:legacy-edit-shape
+                (assoc-in flat ["edits" 0]
+                          {"file" "src/example.clj"
+                           "owner" "example-owner"
+                           "before" "old"
+                           "after" "new"
+                           "matches" 1})]
+               [:top-level-edit-owner
+                (assoc-in flat ["edits" 0 "owner"] "example-owner")]
+               [:legacy-delete-shape
+                (assoc-in flat ["delete_owners" 0]
+                          {"file" "src/example.clj"
+                           "owner" "obsolete"
+                           "owners" ["obsolete"]
+                           "include_attached_comments" true})]
+               [:symbol-migration-array
+                (assoc relation "symbol_migration" [])]
+               [:require-change-array
+                (assoc relation "require_change" [])]
+               [:invented-target-rule
+                (assoc-in relation ["symbol_migration" "target_rule"]
+                          "rename")]
+               [:reordered-columns
+                (assoc-in relation ["symbol_migration" "columns"]
+                          ["from" "owner" "matches"])]]]
+        (let [compiled (corpus/compile-request sources invented)]
+          (is (false? (:ok (corpus/public-schema-report invented)))
+              (name label))
+          (is (false? (get-in compiled [:runtime-contract :ok]))
+              (name label)))))))
 
 (deftest prompt-assignment-is-the-only-prompt-byte-difference
   (let [flat (corpus/prompt-material :N workspace-root)
