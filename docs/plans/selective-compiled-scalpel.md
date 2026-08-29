@@ -64,15 +64,20 @@ small replacements, so model startup dominates. The second shows the actual
 mechanism: owner-level intent prevents the model from reading and reproducing
 hundreds of deleted source lines.
 
-The active generalization case is derived from production commit
+The active generalization case is the cleanup phase derived from production commit
 `fc014632a5160b0f199387e0ec48982e0d9be975`:
 
 - 51 exact edit intents;
 - nine source and test files;
 - 14 obsolete top-level owners with attached comments;
 - namespace require migrations and dispersed caller rewrites;
-- 429 removed lines; and
+- a minimized 44-insertion/457-deletion diff; and
 - exact-byte plus Clojure-parse gates.
+
+Destination creation and full extraction functionality are intentionally out
+of scope. The fixture isolates mutation materialization after the destination
+and architectural decision already exist; it must not be described as the
+complete ten-file historical extraction.
 
 The first admitted exact pair on Anvil completed at 59.879 seconds compact
 versus 269.173 seconds native, a 4.50x paired win. Compact used one MCP action
