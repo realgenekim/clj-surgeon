@@ -949,3 +949,12 @@ Gene approved HLD commit `ee372cb` on 2026-08-28. The approved boundary makes
 the experimental result actionable without treating it as implementation:
 the next phase is the owning MCP operation-contract design, followed by a new
 review gate before EARS requirements or code.
+
+Gene then approved operation-contract design `a548f9f`. The EARS checkpoint
+records six deferred guarantees, `MCP-OP-EDIT-011` through `016`: preserve an
+omitted compact Clojure location without defaulting it, specify each exact
+relation independently, keep normalized batches atomic and generic entrances
+unchanged, and require the retained eight-call exact-future replay plus the
+complete falsifier families before activation. The repository intent audit is
+green with no violations. Red witnesses and product code remain behind the next
+review gate.
