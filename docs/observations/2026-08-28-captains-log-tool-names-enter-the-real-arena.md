@@ -639,3 +639,40 @@ Retained evidence:
   `50ed15eb285eaa9d5e16e6d4817203086e5c5f242de9ba010e140f5962556c44`
   and
   `a19943f90b5d43b81a8ffe36eb6cc17d8ebb07b75b405e6cedcfed9c735ae58a`.
+
+## A syntax refusal became a safe handoff
+
+The final acceptance gate was deliberately not an auto-repair feature. When a
+packed insertion contains malformed Clojure, Surgeon still refuses before any
+source read or write. It now returns a non-executable `retry_template`:
+
+```text
+original guarded request
+  -> replace only changes[i].insert_after[j] with null
+  -> preserve every other file, owner, find, count, and aggregate field
+  -> executable=false
+  -> selector_authority=false
+  -> write_authority=false
+  -> no next_call
+```
+
+The model owns the missing syntax. After it fills that one hole, the ordinary
+request starts validation again with no inherited authority. Surgeon does not
+balance parentheses, select a nearby form, or imply that a retry is safe to
+execute. String-keyed direct callers and keyword-keyed MCP callers compile to
+the same JSON-shaped template.
+
+The permanent witnesses cover the pure contract and the public MCP boundary.
+Focused verification passed 64 tests and 773 assertions. The complete MCP
+milestone passed 269 tests and 2,284 assertions, followed by the heap,
+clj-kondo-admission, cclsp-launch, and direct-client audit gates. The linked
+intent audit reports no violations for `MCP-OP-EDIT-006` through
+`MCP-OP-EDIT-010`.
+
+This closes the production incident without weakening safety:
+
+- complete packed forms compile in order;
+- redundant aggregate bookkeeping is derived;
+- heterogeneous decisions use one request language;
+- malformed syntax produces one caller-owned hole; and
+- exact guards, atomicity, parse, read-back, and receipts remain authoritative.
