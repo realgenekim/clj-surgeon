@@ -166,6 +166,39 @@ A Clojure namespace location may be named explicitly or written as
 `within.namespace=true`. The latter resolves the file's unique `ns` owner so a
 caller need not restate information already present in the target file.
 
+The compact editor may normalize a small set of alternate location spellings
+only after it owns the frozen source snapshot and can prove that the spelling
+denotes one identical structural address. This normalization is a pure
+compact-entrance compiler step; it does not change generic CLI or direct
+transaction selector semantics.
+
+Three relations are admitted:
+
+1. A `within.form` string may become namespace scope only when no named owner
+   matches, exactly one direct namespace owner exists, and its parsed namespace
+   name exactly equals the supplied string.
+2. An omitted location may become namespace scope only for one source file when
+   `from` and `to` are complete namespace clauses with the same clause kind,
+   every lossless `from` match is a direct child of the unique namespace, the
+   declared count is exact, and the same fingerprint occurs nowhere else in
+   the file.
+3. An omitted location may become named-owner scope only when `from` and `to`
+   are complete named top-level forms with the same kind and name, the declared
+   count is one, and the complete lossless `from` fingerprint identifies
+   exactly one direct top-level owner.
+
+A singleton `files` vector may become the identical scalar `file` only inside
+one of these complete proofs. An explicit named owner that resolves remains
+authoritative. A malformed or conflicting location, zero or several candidate
+owners, reader-conditional ambiguity, a nested lookalike, a stale fingerprint,
+or a count mismatch refuses before write. Omission never means root scope, and
+similarity never grants selector or mutation authority.
+
+The normalizer emits an ordinary explicit selector plus bounded evidence, then
+delegates to the unchanged generic transaction compiler. The generic compiler
+retains exact match counts, frozen-source hashes, future parsing, atomic commit,
+read-back, receipts, and rollback as the mutation authority.
+
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
 manifest, complete structural caller evidence, a frozen source identity, and a
