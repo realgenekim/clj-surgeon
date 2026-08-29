@@ -231,6 +231,12 @@
                 rows)))
        vec))
 
+(def normalized-flat-request
+  {"edits" (vec (concat expected-require-edits
+                        (expected-symbol-edits)
+                        [bespoke-edit]))
+   "delete_owners" [moved-owner-deletion]})
+
 (defn- temp-dir []
   (.toFile (Files/createTempDirectory
              "clj-surgeon-compact-relations-test-"
@@ -718,14 +724,25 @@
 
 (deftest mcp-relation-mutation-is-undoable-and-exact-verifiable
   ;; @spec MCP-OP-EDIT-024
+  ;; @spec MCP-OP-EDIT-030
   (let [{:keys [expected-after-hashes expected-before-hashes]} (fixture)
-        normalizations (atom [])]
-    (doseq [[label tool operation request exact?]
-            [[:edit-clojure mcp-tool/edit-clojure-tool "edit_clojure"
-              relation-request false]
-             [:compact-apply mcp-tool/clj-change-tool
+        normalizations (atom [])
+        identities (atom [])]
+    (is (= expected-require-edits
+           (subvec (get normalized-flat-request "edits") 0 9))
+        "the retained flat corpus emits require rows first")
+    (is (= (expected-symbol-edits)
+           (subvec (get normalized-flat-request "edits") 9 32))
+        "the retained flat corpus emits symbol rows second")
+    (doseq [[label tool operation request exact? relation?]
+            [[:normalized-flat mcp-tool/clj-change-tool
               "apply_clojure_changes"
-              (assoc relation-request "verify" "exact") true]]]
+              (assoc normalized-flat-request "verify" "exact") true false]
+             [:relation-edit mcp-tool/edit-clojure-tool "edit_clojure"
+              relation-request false true]
+             [:relation-compact mcp-tool/clj-change-tool
+              "apply_clojure_changes"
+              (assoc relation-request "verify" "exact") true true]]]
       (testing (name label)
         (let [workspace (temp-dir)
               receipt-dir (io/file workspace "receipts")
@@ -743,12 +760,22 @@
                   #'clj-surgeon.intent-transaction/read-sources
                   original-capture @capture-var
                   capture-calls (atom [])
-                  {:keys [error? structured] :as public-result}
-                  (with-redefs-fn
+                  redefinitions
+                  (cond->
                     {capture-var
                      (fn [files]
                        (swap! capture-calls conj (vec files))
                        (original-capture files))}
+                    (not relation?)
+                    (assoc #'relations/compile-source-blind
+                           (fn [& _]
+                             (throw
+                               (ex-info
+                                 "flat corpus must not invoke relation lowering"
+                                 {})))))
+                  {:keys [error? structured] :as public-result}
+                  (with-redefs-fn
+                    redefinitions
                     #(invoke-public-tool! tool config request))
                   receipt-file (when (string? (:undo_receipt structured))
                                  (io/file (:undo_receipt structured)))
@@ -759,15 +786,32 @@
               (is (= operation (:operation structured)))
               (is (:verification_complete structured))
               (is (= "none" (:next_action structured)))
-              (is (= (set (keys expected-relation-normalization))
-                     (set (keys (:compact_relation_normalization structured)))))
-              (is (= expected-relation-normalization
-                     (:compact_relation_normalization structured)))
+              (if relation?
+                (do
+                  (is (= (set (keys expected-relation-normalization))
+                         (set (keys
+                                (:compact_relation_normalization structured)))))
+                  (is (= expected-relation-normalization
+                         (:compact_relation_normalization structured)))
+                  (swap! normalizations conj
+                         (:compact_relation_normalization structured)))
+                (is (not (contains? structured
+                                    :compact_relation_normalization))))
+              (is (= #{:version :sha256 :files :effects}
+                     (set (keys (:canonical_effect_identity structured)))))
+              (is (= 9 (get-in structured
+                               [:canonical_effect_identity :files])))
+              (is (= 51 (get-in structured
+                                [:canonical_effect_identity :effects])))
+              (is (re-matches
+                    #"[0-9a-f]{64}"
+                    (get-in structured
+                            [:canonical_effect_identity :sha256])))
               (is (= 1 (count @capture-calls))
                   (str "one transaction capture must feed Phase B: "
                        (pr-str @capture-calls)))
-              (swap! normalizations conj
-                     (:compact_relation_normalization structured))
+              (swap! identities conj
+                     (:canonical_effect_identity structured))
               (is (= expected-after-hashes (:read_back_hashes structured)))
               (is (and (string? (:receipt_hash structured))
                        (re-matches #"[0-9a-f]{64}"
@@ -832,7 +876,10 @@
               (mcp-tool/init! nil)
               (delete-tree! workspace))))))
     (is (= 2 (count @normalizations)))
-    (is (apply = @normalizations)))
+    (is (apply = @normalizations))
+    (is (= 3 (count @identities)))
+    (is (apply = @identities)
+        "normalized-flat and relation requests share one effect identity across entrances"))
   (testing "edit_clojure refuses verification before capture"
     (let [workspace (temp-dir)
           receipt-dir (io/file workspace "receipts")
@@ -878,6 +925,7 @@
           (is (= "verification-failed" (:error_type result)))
           (is (= :ordinary-nonzero
                  (get-in result [:verification :process-outcome])))
+          (is (not (contains? result :canonical_effect_identity)))
           (is (:rolled_back result))
           (is (not (contains? result :compact_relation_diagnostic)))
           (doseq [file relation-files]
@@ -960,6 +1008,7 @@
                                "expect" {"matches" 1 "each_form" 1}}]
                    "expect" {"changes" 1 "edits" 1 "files" 1}})]
             (is (:ok result) (pr-str result))
+            (is (not (contains? result :canonical_effect_identity)))
             (is (:ok (transaction/execute-undo!
                        {:receipt (:undo_receipt result)})))))
         (testing "programs refuse on their own route"
@@ -986,6 +1035,7 @@
                                  "replace" "(defn f [] :basis)"}]})]
             (is (:ok prepared) (pr-str prepared))
             (is (:ok result) (pr-str result))
+            (is (not (contains? result :canonical_effect_identity)))
             (is (:ok (transaction/execute-undo!
                        {:receipt (:receipt-file result)})))))
         (testing "CLI preview does not enter the MCP relation facade"

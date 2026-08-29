@@ -526,7 +526,9 @@
 
 (defn- execute-explicit-change!
   ;; @spec OP-ALG-MCP-001
-  [config root resolved receipt verify compact-location-plan relation-plan]
+  ;; @spec MCP-OP-EDIT-030
+  [config root resolved receipt verify compact-location-plan relation-plan
+   compact-effect-identity?]
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
                           verify (:verification-profiles config)
@@ -559,7 +561,7 @@
       (let [base-prepare! (:prepare-compiled! config)
             programs (:programs resolved)
             relation-evidence (atom nil)
-            prepare-compiled!
+            base-prepare-compiled!
             (cond
               (seq programs)
               (fn [project-root compiled]
@@ -570,6 +572,19 @@
                     with-programs)))
 
               :else base-prepare!)
+            prepare-compiled!
+            (if compact-effect-identity?
+              (fn [project-root compiled]
+                (let [prepared (if base-prepare-compiled!
+                                 (base-prepare-compiled! project-root compiled)
+                                 compiled)]
+                  (if (:error prepared)
+                    prepared
+                    (assoc prepared
+                           :canonical-effect-identity
+                           (transaction/canonical-effect-identity
+                             project-root prepared)))))
+              base-prepare-compiled!)
             relation-prepare
             (when relation-plan
               (fn [sources _spec]
@@ -643,6 +658,10 @@
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners
                                :symbol_migration :require_change])
+        compact-effect-identity?
+        (and (not (contains? normalized-params :programs))
+             (some #(contains? normalized-params %)
+                   [:edits :delete_owners :symbol_migration :require_change]))
         config (cond
                  (:verification-profile-selection-fn config)
                  (let [{:keys [profiles source]}
@@ -758,7 +777,8 @@
                                 config root resolved receipt
                                 (get-in validated [:params :verify])
                                 (:compact-location-normalization validated)
-                                (:compact-relation-plan validated))))
+                                (:compact-relation-plan validated)
+                                compact-effect-identity?)))
                     classified (cond->
                                  (contract/classify-kernel-result
                                    (.toString root) result)

@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.set :as set]
    [clojure.string :as str]
    [rewrite-clj.node :as node]
@@ -99,6 +100,7 @@
     :source-read-failed
     :source-hash-mismatch
     :extraction-decisions-required
+    :invalid-canonical-effect-input
     :unknown-arguments})
 
 (defn- field-name
@@ -1135,8 +1137,127 @@
       (assoc :change_indexes (:intent-indexes result))
       (contains? result :remedies) (assoc :remedies (:remedies result)))))
 
-;; @spec MCP-OP-EDIT-024
+(def ^:private canonical-effect-identity-keys
+  #{:version :sha256 :files :effects :projection})
+
+(defn- valid-canonical-effect-file?
+  [file]
+  (and (string? file)
+       (not (str/blank? file))
+       (not (str/includes? file "\\"))
+       (try
+         (let [path (java.nio.file.Paths/get file (make-array String 0))]
+           (and (not (.isAbsolute path))
+                (= file (str (.normalize path)))))
+         (catch Exception _ false))))
+
+(defn- canonical-effect-row-sort-key
+  [[_ kind path preorder end-preorder raw-offset before after]]
+  [path preorder end-preorder raw-offset kind before after])
+
+(defn- valid-canonical-effect-row?
+  [row]
+  (and (vector? row)
+       (= 8 (count row))
+       (= :effect (nth row 0))
+       (#{:insert-left :insert-right :delete :replace} (nth row 1))
+       (let [path (nth row 2)]
+         (and (vector? path)
+              (seq path)
+              (every? #(and (integer? %) (not (neg? %))) path)))
+       (integer? (nth row 3))
+       (not (neg? (nth row 3)))
+       (integer? (nth row 4))
+       (<= (nth row 3) (nth row 4))
+       (let [raw-offset (nth row 5)]
+         (or (nil? raw-offset)
+             (and (integer? raw-offset) (not (neg? raw-offset)))))
+       (string? (nth row 6))
+       (string? (nth row 7))
+       (let [kind (nth row 1)
+             raw-offset (nth row 5)
+             before (nth row 6)
+             after (nth row 7)
+             natural-offset? (and (integer? raw-offset)
+                                  (not (neg? raw-offset)))]
+         (case kind
+           (:insert-left :insert-right)
+           (and natural-offset?
+                (empty? before)
+                (not (str/blank? after)))
+
+           :delete
+           (and natural-offset?
+                (not (str/blank? before))
+                (empty? after))
+
+           :replace
+           (and (not (str/blank? before))
+                (not (str/blank? after)))))))
+
+(defn- valid-canonical-effect-file-row?
+  [row]
+  (and (vector? row)
+       (= 5 (count row))
+       (= :file (nth row 0))
+       (valid-canonical-effect-file? (nth row 1))
+       (string? (nth row 2))
+       (re-matches #"[0-9a-f]{64}" (nth row 2))
+       (string? (nth row 3))
+       (re-matches #"[0-9a-f]{64}" (nth row 3))
+       (let [effects (nth row 4)]
+         (and (vector? effects)
+              (seq effects)
+              (every? valid-canonical-effect-row? effects)
+              (= effects
+                 (vec (sort-by canonical-effect-row-sort-key effects)))))))
+
+(defn- valid-canonical-effect-projection?
+  [projection]
+  (and (vector? projection)
+       (= 4 (count projection))
+       (= :canonical-effect/v1 (nth projection 0))
+       (let [files (nth projection 1)
+             declared-file-count (nth projection 2)
+             declared-effect-count (nth projection 3)]
+         (and (vector? files)
+              (seq files)
+              (every? valid-canonical-effect-file-row? files)
+              (= files (vec (sort-by second files)))
+              (= (count files) (count (set (map second files))))
+              (integer? declared-file-count)
+              (pos? declared-file-count)
+              (= declared-file-count (count files))
+              (integer? declared-effect-count)
+              (pos? declared-effect-count)
+              (= declared-effect-count
+                 (reduce + (map #(count (nth % 4)) files)))))))
+
+(defn- canonical-effect-summary
+  [identity result]
+  (when-not (and (map? identity)
+                 (= canonical-effect-identity-keys (set (keys identity)))
+                 (= 1 (:version identity))
+                 (string? (:sha256 identity))
+                 (re-matches #"[0-9a-f]{64}" (:sha256 identity))
+                 (integer? (:files identity))
+                 (pos? (:files identity))
+                 (integer? (:effects identity))
+                 (pos? (:effects identity))
+                 (valid-canonical-effect-projection? (:projection identity))
+                 (= (:files identity) (nth (:projection identity) 2))
+                 (= (:effects identity) (nth (:projection identity) 3))
+                 (= (:files identity) (:changed-file-count result))
+                 (= (:effects identity) (:match-count result))
+                 (= (:sha256 identity)
+                    (structural-lens/source-hash
+                      (pr-str (:projection identity)))))
+    (throw (ex-info "Kernel success has invalid canonical effect identity"
+                    {:reason :invalid-canonical-effect-identity})))
+  (select-keys identity [:version :sha256 :files :effects]))
+
 (defn normalize-success-receipt
+  ;; @spec MCP-OP-EDIT-024, MCP-OP-EDIT-030
   "Reduce a complete kernel result to terminal verification evidence. Requires read-back hashes and an inverse receipt."
   [project-root result]
   (when-not (and (:ok result)
@@ -1158,7 +1279,11 @@
           (get-in result [:verified :read-back-hashes]))
         receipt (:receipt-file result)
         cold (get-in result [:verification :cold-verification])
-        verification-complete? (not= :running (:status cold))]
+        verification-complete? (not= :running (:status cold))
+        canonical-identity
+        (when (contains? result :canonical-effect-identity)
+          (canonical-effect-summary (:canonical-effect-identity result)
+                                    result))]
     (cond->
       {:ok true
        :operation "apply_clojure_changes"
@@ -1188,6 +1313,8 @@
       (:compact-relation-normalization result)
       (assoc :compact_relation_normalization
              (:compact-relation-normalization result))
+      canonical-identity
+      (assoc :canonical_effect_identity canonical-identity)
       (and cold (not verification-complete?))
       (assoc :next_call (:next_call cold)))))
 
