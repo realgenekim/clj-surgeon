@@ -47,24 +47,16 @@
 
 (defn- namespace-symbol! [value path]
   (when-not (and (string? value)
-                 (not (str/blank? value))
-                 (try
-                   (let [parsed (read-string value)]
-                     (and (symbol? parsed)
-                          (nil? (namespace parsed))
-                          (= value (str parsed))))
-                   (catch Exception _ false)))
+                 (re-matches simple-symbol-pattern value))
     (fail! "Expected one exact namespace symbol" path))
   value)
 
 (defn- migration-symbol! [value path]
-  (let [parsed (when (string? value)
-                 (try (read-string value) (catch Exception _ nil)))]
-    (when-not (and (symbol? parsed)
-                   (= value (str parsed))
-                   (not (str/blank? (name parsed))))
+  (let [parts (when (string? value) (str/split value #"/" -1))]
+    (when-not (and (#{1 2} (count parts))
+                   (every? #(re-matches simple-symbol-pattern %) parts))
       (fail! "Expected one exact Clojure symbol" path))
-    parsed))
+    (symbol value)))
 
 (defn- nonblank! [value path]
   (when-not (and (string? value) (not (str/blank? value)))
@@ -382,35 +374,35 @@
             _ (when (and remove (not= 1 (count remove-positions)))
                 (fail! "Declared removal must match exactly one direct libspec"
                        ["require_change" "files" file-index "remove"]))
-            only-removed? (and remove (= 1 (count entries)))
+            _ (when (and remove (= 1 (count entries)))
+                (fail! "One direct libspec must survive a declared removal"
+                       ["require_change" "files" file-index "remove"]))
             target (target-node add)
             changed-children
-            (if only-removed?
-              (assoc children (first entry-indexes) target)
-              (let [without-removal
-                    (if-not remove
-                      children
-                      (let [position (first remove-positions)
-                            entry-index (get entry-indexes position)
-                            [start end]
-                            (if (zero? position)
-                              [entry-index (dec (get entry-indexes 1))]
-                              [(inc (get entry-indexes (dec position))) entry-index])]
-                        (remove-range children start end)))
-                    remaining-entry-indexes
-                    (vec (keep-indexed
-                           (fn [index node]
-                             (when (entry-facts node) index))
-                           without-removal))
-                    last-index (last remaining-entry-indexes)
-                    previous-index (or (last (butlast remaining-entry-indexes)) 0)
-                    separator (subvec without-removal
-                                      (inc previous-index) last-index)]
-                (when (empty? separator)
-                  (fail! "A unique whitespace separator is required"
-                         ["require_change" "files" file-index]))
-                (insert-after without-removal last-index
-                              (conj (vec separator) target))))
+            (let [without-removal
+                  (if-not remove
+                    children
+                    (let [position (first remove-positions)
+                          entry-index (get entry-indexes position)
+                          [start end]
+                          (if (zero? position)
+                            [entry-index (dec (get entry-indexes 1))]
+                            [(inc (get entry-indexes (dec position))) entry-index])]
+                      (remove-range children start end)))
+                  remaining-entry-indexes
+                  (vec (keep-indexed
+                         (fn [index node]
+                           (when (entry-facts node) index))
+                         without-removal))
+                  last-index (last remaining-entry-indexes)
+                  previous-index (or (last (butlast remaining-entry-indexes)) 0)
+                  separator (subvec without-removal
+                                    (inc previous-index) last-index)]
+              (when (empty? separator)
+                (fail! "A unique whitespace separator is required"
+                       ["require_change" "files" file-index]))
+              (insert-after without-removal last-index
+                            (conj (vec separator) target)))
             from (z/string require-loc)
             to (n/string (n/list-node changed-children))]
         {"file" (:file file-spec)

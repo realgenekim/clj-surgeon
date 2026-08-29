@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-contract
   (:require
    [clj-surgeon.mcp-compact-edit-fields :as compact-edit-fields]
+   [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clojure.set :as set]
@@ -847,6 +848,26 @@
     (catch clojure.lang.ExceptionInfo error
       (ex-data error))))
 
+(defn- validate-editor-tool-params [params]
+  (let [compiled (editor-gestures->direct-params params)]
+    (if (:ok compiled)
+      (let [validated (validate-direct-tool-params (:params compiled))]
+        (cond-> validated
+          (and (:ok validated) (seq (:programs compiled)))
+          (assoc-in [:params :programs] (:programs compiled))
+
+          (and (:ok validated) (:compact-location-normalization compiled))
+          (assoc :compact-location-normalization
+                 (:compact-location-normalization compiled))
+
+          (and (:ok validated) (:compact-field-normalization compiled))
+          (assoc :compact-field-normalization
+                 (:compact-field-normalization compiled))
+
+          (:input-normalization compiled)
+          (assoc :input-normalization (:input-normalization compiled))))
+      compiled)))
+
 (defn validate-tool-params
   "Validate JSON-shaped apply_clojure_changes parameters and return normalized data.
 
@@ -854,29 +875,25 @@
   [params]
   (let [params (json-containers->clj params)]
     (cond
+      (compact-relations/relation-request? params)
+      (let [relation-plan (compact-relations/compile-source-blind params)]
+        (if-not (:ok relation-plan)
+          relation-plan
+          (let [request (update (:request relation-plan) "edits"
+                                #(vec (concat
+                                        (:generated-symbol-edits relation-plan)
+                                        (or % []))))
+                validated (validate-editor-tool-params request)]
+            (cond-> validated
+              (:ok validated)
+              (assoc :compact-relation-plan relation-plan)))))
+
       (present? params "extraction")
       (validate-extraction-tool-params params)
 
       (some #(present? params %)
             ["edits" "programs" "delete_owners"])
-      (let [compiled (editor-gestures->direct-params params)]
-        (if (:ok compiled)
-          (let [validated (validate-direct-tool-params (:params compiled))]
-            (cond-> validated
-              (and (:ok validated) (seq (:programs compiled)))
-              (assoc-in [:params :programs] (:programs compiled))
-
-              (and (:ok validated) (:compact-location-normalization compiled))
-              (assoc :compact-location-normalization
-                     (:compact-location-normalization compiled))
-
-              (and (:ok validated) (:compact-field-normalization compiled))
-              (assoc :compact-field-normalization
-                     (:compact-field-normalization compiled))
-
-              (:input-normalization compiled)
-              (assoc :input-normalization (:input-normalization compiled))))
-          compiled))
+      (validate-editor-tool-params params)
 
       :else
       (validate-direct-tool-params params))))
@@ -1075,6 +1092,23 @@
       (assoc :next_call (public-extraction-data (:next-call result)))
       (contains? result :next-action)
       (assoc :next_action (:next-action result))
+      (and (contains? result :failed-stage)
+           (contains? #{:invalid-compact-relation
+                        :compact-relation-path-conflict
+                        :require-change-unprovable
+                        :compact-relation-overlap}
+                      error-type))
+      (assoc :compact_relation_diagnostic
+             (cond-> {:failed_stage (name (:failed-stage result))}
+               (:path result)
+               (assoc :path
+                      (let [path (:path result)]
+                        (cond-> {:field (first path)}
+                          (integer? (nth path 2 nil))
+                          (assoc :file_index (nth path 2))
+
+                          (integer? (nth path 4 nil))
+                          (assoc :row_index (nth path 4)))))))
       (contains? result :change-ids)
       (assoc :change_ids (mapv #(if (keyword? %) (name %) (str %))
                                (:change-ids result)))

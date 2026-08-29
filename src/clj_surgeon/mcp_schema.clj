@@ -308,12 +308,55 @@
                :required ["matches" "max_changed_characters"]}}
     :required ["file" "expression" "expect"]}})
 
+(def compact-relation-lib-alias-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"lib" {:type "string" :minLength 1}
+    "as" {:type "string" :minLength 1}}
+   :required ["lib" "as"]})
+
+(def symbol-migration-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"target_alias" {:type "string" :minLength 1}
+    "target_rule" {:type "string" :enum ["preserve-name"]}
+    "columns" {:type "array"
+               :minItems 3
+               :maxItems 3
+               :items {:type "string"}}
+    "files" {:type "array"
+             :minItems 1
+             :items {:type "array" :minItems 2 :maxItems 2}}}
+   :required ["target_alias" "target_rule" "columns" "files"]})
+
+(def require-change-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"add" compact-relation-lib-alias-schema
+    "files"
+    {:type "array"
+     :minItems 1
+     :items
+     {:type "object"
+      :additionalProperties false
+      :properties
+      {"file" {:type "string" :minLength 1}
+       "remove" compact-relation-lib-alias-schema}
+      :required ["file"]}}}
+   :required ["add" "files"]})
+
 (def editor-hybrid-schema
   (-> editor-gesture-schema
       (assoc-in [:properties "programs"] editor-programs-schema)
+      (assoc-in [:properties "symbol_migration"] symbol-migration-schema)
+      (assoc-in [:properties "require_change"] require-change-schema)
       (assoc :anyOf [{:required ["edits"]}
                      {:required ["programs"]}
-                     {:required ["delete_owners"]}])))
+                     {:required ["delete_owners"]}
+                     {:required ["symbol_migration" "require_change"]}])))
 
 (def editor-tool-schema
   (-> editor-hybrid-schema
@@ -373,17 +416,23 @@
    [{:required ["basis" "decisions"]
      :not {:anyOf [{:required ["changes"]} {:required ["expect"]}
                    {:required ["edits"]} {:required ["programs"]}
-                   {:required ["delete_owners"]} {:required ["extraction"]}]}}
+                   {:required ["delete_owners"]}
+                   {:required ["symbol_migration"]}
+                   {:required ["require_change"]}
+                   {:required ["extraction"]}]}}
     {:required ["changes" "expect"]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["edits"]}
                    {:required ["programs"]}
                    {:required ["delete_owners"]}
+                   {:required ["symbol_migration"]}
+                   {:required ["require_change"]}
                    {:required ["extraction"]}]}}
     {:anyOf [{:required ["edits"]}
              {:required ["programs"]}
-             {:required ["delete_owners"]}]
+             {:required ["delete_owners"]}
+             {:required ["symbol_migration" "require_change"]}]
      :not {:anyOf [{:required ["basis"]}
                    {:required ["decisions"]}
                    {:required ["changes"]}
@@ -396,6 +445,8 @@
                    {:required ["edits"]}
                    {:required ["programs"]}
                    {:required ["delete_owners"]}
+                   {:required ["symbol_migration"]}
+                   {:required ["require_change"]}
                    {:required ["expect"]}]}}]})
 
 (defn closed-object-shape

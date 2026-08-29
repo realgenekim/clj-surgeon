@@ -73,7 +73,8 @@
                         [:properties "programs" :items])]
     (is (some #(= [{:required ["edits"]}
                    {:required ["programs"]}
-                   {:required ["delete_owners"]}]
+                   {:required ["delete_owners"]}
+                   {:required ["symbol_migration" "require_change"]}]
                   (:anyOf %))
               routes))
     (is (= #{"file" "files" "within" "from" "to"
