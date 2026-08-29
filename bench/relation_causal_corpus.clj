@@ -232,7 +232,7 @@
    "delete_owners" [moved-owner-deletion]})
 
 (def common-prompt-prefix
-  (str "Apply the complete frozen submission-row cleanup in exactly one "
+  (str "Apply the complete frozen cleanup in exactly one "
        "apply_clojure_changes call. Send one arguments object directly; do not "
        "wrap it in changes, representation, relations, route, arm, N, R, or any "
        "other meta-object. The exact top-level fields for N are workspace_root, "
@@ -242,7 +242,10 @@
        "verify=exact. Use these exact value-free shapes: each edits row is "
        "{file,within:{namespace:true|form:<owner>},from,to,matches}; each "
        "delete_owners row is {file,forms:[...]}; symbol_migration is one object "
-       "{target_alias,target_rule,columns,files:[[file,[[owner,from,matches]...]]...]}; "
+       "with target_alias derived from the supplied target symbols, target_rule "
+       "exactly \"preserve-name\", columns exactly "
+       "[\"owner\",\"from\",\"matches\"], and "
+       "files shaped [[file,[[owner,from,matches]...]]...]; "
        "require_change is one object "
        "{add:{lib,as},files:[{file,optional remove:{lib,as}}...]}. Never use "
        "before/after, a top-level owner in an edit, owners or "
