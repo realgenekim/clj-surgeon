@@ -1,0 +1,18 @@
+{:verification-profiles
+ {"exact"
+  {:acceptance :exact-exit
+   :timeout-ms 120000
+   :commands
+   [["clj-kondo"
+     "--cache" "false"
+     "--lint"
+     "src/sample/review_updates.clj"
+     "src/sample/views/log.clj"
+     "src/sample/views/people.clj"
+     "src/sample/views/review.clj"
+     "test/sample/board_test.clj"
+     "test/sample/reviews_test.clj"
+     "test/sample/status_workflow_test.clj"
+     "test/sample/views_test.clj"
+     "test/sample/voting_policy_test.clj"
+     "--fail-level" "error"]]}}}

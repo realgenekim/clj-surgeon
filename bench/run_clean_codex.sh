@@ -14,6 +14,13 @@ mcp_role_jq='def mcp_role:
   if .tool == $mcp_inspect then "inspect"
   elif .tool == $mcp_edit then "edit"
   elif (.tool == $mcp_extract
+        and ((.arguments // {})
+             | (has("edits")
+                or has("programs")
+                or has("delete_owners")
+                or has("symbol_migration")
+                or has("require_change")))) then "compact-apply"
+  elif (.tool == $mcp_extract
         and (($mcp_extract != $mcp_plan)
              or ((.arguments // {}) | has("extraction")))) then "extract"
   elif .tool == $mcp_plan then "plan"
@@ -235,6 +242,7 @@ interaction_counts() {
              or (.type == "mcp_tool_call"
                  and .server == "clj-surgeon"
                  and ((mcp_role == "edit")
+                      or (mcp_role == "compact-apply")
                       or (mcp_role == "extract")
                       or (mcp_role == "plan")
                       or (mcp_role == "transform-commit")))
@@ -307,6 +315,7 @@ mcp_first_mutation() {
       | select((.type == "mcp_tool_call"
                 and .server == "clj-surgeon"
                 and ((mcp_role == "edit")
+                     or (mcp_role == "compact-apply")
                      or (mcp_role == "extract")
                      or (mcp_role == "plan")
                      or (mcp_role == "transform-commit")))
@@ -320,6 +329,7 @@ mcp_first_mutation() {
     | ($first.type == "mcp_tool_call"
        and $first.server == "clj-surgeon"
        and (($first | mcp_role) == "edit"
+            or ($first | mcp_role) == "compact-apply"
             or ($first | mcp_role) == "extract"
             or ($first | mcp_role) == "plan"
             or ($first | mcp_role) == "transform-commit"))' "$1"
@@ -445,7 +455,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|mcp-relation-n-no-skill|mcp-relation-r-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     case "$context" in
@@ -475,6 +485,8 @@ validate_run_matrix() {
       && [ "$context" != mcp-extraction-internal-no-skill ] \
       && [ "$context" != mcp-extraction-plan-no-skill ] \
       && [ "$context" != mcp-extraction-discover-no-skill ] \
+      && [ "$context" != mcp-relation-n-no-skill ] \
+      && [ "$context" != mcp-relation-r-no-skill ] \
       && [ "$context" != native-computed-hint-no-skill ] \
       && [ "$context" != edit-computed-hint-no-skill ] \
       && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -501,6 +513,50 @@ validate_materialization_screen() {
     echo 'Literal extraction materialization requires one serial C R R C cohort with no bonus arms' >&2
     return 2
   fi
+}
+
+validate_relation_block() {
+  local matrix=$1 tasks=$2 parallelism=$3 replicates=$4 include_compact=$5 profile=$6
+  local n='mcp:mcp-relation-n-no-skill'
+  local r='mcp:mcp-relation-r-no-skill'
+  local block_one="$n $r $r $n"
+  local block_two="$r $n $n $r"
+  case " $matrix " in
+    *" $n "*|*" $r "*) ;;
+    *) return 0 ;;
+  esac
+  if { [ "$matrix" != "$block_one" ] && [ "$matrix" != "$block_two" ]; } \
+    || [ "$tasks" != submission-row-extraction-cleanup ] \
+    || [ "$parallelism" -ne 1 ] \
+    || [ "$replicates" -ne 1 ] \
+    || [ "$include_compact" != false ] \
+    || [ "$profile" != apply ]; then
+    echo 'Relation cohort requires one serial N R R N or R N N R block, the frozen submission-row task, and the apply-only client profile' >&2
+    return 2
+  fi
+}
+
+relation_arm_for_context() {
+  case "$1" in
+    mcp-relation-n-no-skill) printf 'N\n' ;;
+    mcp-relation-r-no-skill) printf 'R\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+prepare_relation_workspace() {
+  local context=$1 task=$2 workspace=$3 profile_source
+  relation_arm_for_context "$context" >/dev/null 2>&1 || return 0
+  if [ "$task" != submission-row-extraction-cleanup ]; then
+    echo "Relation context requires submission-row-extraction-cleanup: $task" >&2
+    return 2
+  fi
+  profile_source="$portfolio_fixture_root/$task/exact-profile.edn"
+  if [ ! -f "$profile_source" ]; then
+    echo "Missing frozen relation exact profile: $profile_source" >&2
+    return 2
+  fi
+  cp "$profile_source" "$workspace/.clj-surgeon.edn"
 }
 
 tool_first_extraction_prompt() {
@@ -570,6 +626,17 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-extraction-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-fused-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-literal-tool-first-no-skill'
+  validate_run_matrix 'mcp:mcp-relation-n-no-skill'
+  validate_run_matrix 'mcp:mcp-relation-r-no-skill'
+  relation_block_one='mcp:mcp-relation-n-no-skill mcp:mcp-relation-r-no-skill mcp:mcp-relation-r-no-skill mcp:mcp-relation-n-no-skill'
+  validate_relation_block "$relation_block_one" \
+    'submission-row-extraction-cleanup' 1 1 false apply
+  if validate_relation_block \
+    'mcp:mcp-relation-r-no-skill mcp:mcp-relation-n-no-skill' \
+    'submission-row-extraction-cleanup' 1 1 false apply 2>/dev/null; then
+    echo 'relation screen accepted an incomplete schedule' >&2
+    exit 1
+  fi
   materialization_matrix='mcp:mcp-extraction-fused-tool-first-no-skill mcp:mcp-extraction-literal-tool-first-no-skill mcp:mcp-extraction-literal-tool-first-no-skill mcp:mcp-extraction-fused-tool-first-no-skill'
   validate_materialization_screen "$materialization_matrix" 1 1 false
   if validate_materialization_screen \
@@ -814,6 +881,11 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     > "$self_test_root/catalog-A-plan.jsonl"
   test "$(mcp_role_count "$self_test_root/catalog-A-plan.jsonl" extract)" -eq 0
   test "$(mcp_role_count "$self_test_root/catalog-A-plan.jsonl" plan)" -eq 1
+  printf '%s\n' \
+    '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"edits":[{"file":"src/sample.clj"}]}}}' \
+    > "$self_test_root/catalog-A-compact-apply.jsonl"
+  test "$(mcp_role_count "$self_test_root/catalog-A-compact-apply.jsonl" compact-apply)" -eq 1
+  test "$(mcp_role_count "$self_test_root/catalog-A-compact-apply.jsonl" plan)" -eq 0
 
   make_native_bin "$self_test_root/native-bin" "$PATH"
   if PATH="$self_test_root/native-bin" command -v clj-surgeon >/dev/null 2>&1; then
@@ -1259,6 +1331,23 @@ task_prompt() {
 }
 
 if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
+  test "$(relation_arm_for_context mcp-relation-n-no-skill)" = N
+  test "$(relation_arm_for_context mcp-relation-r-no-skill)" = R
+  if relation_arm_for_context mcp-hint-no-skill >/dev/null 2>&1; then
+    echo 'relation arm resolver accepted a non-relation context' >&2
+    exit 1
+  fi
+  relation_profile_workspace=$(mktemp -d /tmp/clj-surgeon-relation-profile.XXXXXX)
+  prepare_relation_workspace mcp-relation-n-no-skill \
+    submission-row-extraction-cleanup "$relation_profile_workspace"
+  cmp -s \
+    "$portfolio_fixture_root/submission-row-extraction-cleanup/exact-profile.edn" \
+    "$relation_profile_workspace/.clj-surgeon.edn"
+  test "$(bb "$repo_root/bench/relation_causal_corpus.clj" \
+    --prompt N "$relation_profile_workspace" | grep -c 'Assignment: N')" -eq 1
+  test "$(bb "$repo_root/bench/relation_causal_corpus.clj" \
+    --prompt R "$relation_profile_workspace" | grep -c 'Assignment: R')" -eq 1
+  rm -rf "$relation_profile_workspace"
   task_prompt sessionize-format-extraction mcp-extraction-hint-no-skill \
     | grep -q 'Move exactly these 15 named top-level forms'
   task_prompt sessionize-format-extraction mcp-extraction-hint-no-skill \
@@ -1439,7 +1528,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|mcp-relation-n-no-skill|mcp-relation-r-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1492,6 +1581,8 @@ run_one() {
     && [ "$context" != mcp-extraction-internal-no-skill ] \
     && [ "$context" != mcp-extraction-plan-no-skill ] \
     && [ "$context" != mcp-extraction-discover-no-skill ] \
+    && [ "$context" != mcp-relation-n-no-skill ] \
+    && [ "$context" != mcp-relation-r-no-skill ] \
     && [ "$context" != native-computed-hint-no-skill ] \
     && [ "$context" != edit-computed-hint-no-skill ] \
     && [ "$context" != mcp-transform-hint-no-skill ] \
@@ -1540,6 +1631,7 @@ run_one() {
       > "$workspace/AGENTS.md"
   fi
   bb "$repo_root/bench/initialize_benchmark_workspace.clj" "$workspace" >/dev/null
+  prepare_relation_workspace "$context" "$task" "$workspace"
   if [ "$version" = mcp ]; then
     local ready_file="$run_dir/mcp-ready.edn"
     local catalog_role_receipt="$run_dir/mcp-catalog-role-receipt.json"
@@ -1725,6 +1817,12 @@ run_one() {
   fi
 
   task_prompt "$task" "$context" > "$run_dir/prompt.txt"
+  if relation_arm=$(relation_arm_for_context "$context" 2>/dev/null); then
+    printf '%s\n' '' \
+      "$(bb "$repo_root/bench/relation_causal_corpus.clj" \
+        --prompt "$relation_arm" "$workspace")" \
+      >> "$run_dir/prompt.txt"
+  fi
   if [ "$context" = 'explicit-no-skill' ]; then
     printf '%s\n' '' 'Use the installed clj-surgeon as your primary lens for Clojure source. Optimize for the fewest commands and least irrelevant output. Preserve a human review boundary before any write.' \
       >> "$run_dir/prompt.txt"
@@ -2309,22 +2407,35 @@ run_one() {
       "$run_dir/source-inventory.edn")
   fi
 
-  local route_adherent=true inspect_calls edit_calls transform_calls apply_calls
+  local route_adherent=true inspect_calls edit_calls compact_apply_calls transform_calls apply_calls
   local extraction_calls plan_calls transform_preview_calls transform_commit_calls
   inspect_calls=$(mcp_role_count "$run_dir/events.jsonl" inspect)
   edit_calls=$(mcp_role_count "$run_dir/events.jsonl" edit)
+  compact_apply_calls=$(mcp_role_count "$run_dir/events.jsonl" compact-apply)
   extraction_calls=$(mcp_role_count "$run_dir/events.jsonl" extract)
   plan_calls=$(mcp_role_count "$run_dir/events.jsonl" plan)
   transform_preview_calls=$(mcp_role_count "$run_dir/events.jsonl" transform-preview)
   transform_commit_calls=$(mcp_role_count "$run_dir/events.jsonl" transform-commit)
   transform_calls=$((transform_preview_calls + transform_commit_calls))
-  apply_calls=$((extraction_calls + plan_calls))
+  apply_calls=$((compact_apply_calls + extraction_calls + plan_calls))
   if ! computed_route_adherent "$context" "$inspect_calls" "$edit_calls" \
     "$transform_calls" "$apply_calls" "$file_changes" "$source_commands" \
     "$text_reader"; then
     route_adherent=false
   fi
   case "$context" in
+    mcp-relation-n-no-skill|mcp-relation-r-no-skill)
+      if [ "$inspect_calls" -ne 0 ] || [ "$compact_apply_calls" -ne 1 ] \
+        || [ "$extraction_calls" -ne 0 ] || [ "$plan_calls" -ne 0 ] \
+        || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$shell_calls" -ne 0 ] \
+        || [ "$source_commands" -ne 0 ] \
+        || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$first_selected_tool" != "$mcp_extract_tool" ] \
+        || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
+        route_adherent=false
+      fi
+      ;;
     mcp-extraction-internal-no-skill)
       if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
         || [ "$plan_calls" -ne 0 ] \
@@ -2503,6 +2614,9 @@ fi
 
 validate_materialization_screen \
   "$run_matrix" "$parallelism" "$replicates" "$include_compact"
+validate_relation_block \
+  "$run_matrix" "$tasks" "$parallelism" "$replicates" "$include_compact" \
+  "${BENCH_MCP_TOOL_PROFILE:-full}"
 validate_run_matrix "$run_matrix"
 
 schedule_run() {
