@@ -483,6 +483,20 @@ validate_run_matrix() {
   done
 }
 
+validate_materialization_screen() {
+  local matrix=$1 parallelism=$2 replicates=$3 include_compact=$4
+  local literal='mcp:mcp-extraction-literal-tool-first-no-skill'
+  local control='mcp:mcp-extraction-fused-tool-first-no-skill'
+  [ " $matrix " = *" $literal "* ] || return 0
+  if [ "$matrix" != "$control $literal $literal $control" ] \
+    || [ "$parallelism" -ne 1 ] \
+    || [ "$replicates" -ne 1 ] \
+    || [ "$include_compact" != false ]; then
+    echo 'Literal extraction materialization requires one serial C R R C cohort with no bonus arms' >&2
+    return 2
+  fi
+}
+
 tool_first_extraction_prompt() {
   local catalog=$1
   local verification=$2
@@ -550,6 +564,14 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-extraction-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-fused-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-literal-tool-first-no-skill'
+  materialization_matrix='mcp:mcp-extraction-fused-tool-first-no-skill mcp:mcp-extraction-literal-tool-first-no-skill mcp:mcp-extraction-literal-tool-first-no-skill mcp:mcp-extraction-fused-tool-first-no-skill'
+  validate_materialization_screen "$materialization_matrix" 1 1 false
+  if validate_materialization_screen \
+    'mcp:mcp-extraction-literal-tool-first-no-skill mcp:mcp-extraction-fused-tool-first-no-skill' \
+    1 1 false 2>/dev/null; then
+    echo 'materialization screen accepted the wrong order' >&2
+    exit 1
+  fi
   validate_run_matrix 'mcp:mcp-extraction-internal-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
@@ -1870,11 +1892,21 @@ run_one() {
                 and .tool == $tool)][0].arguments // null' \
       "$run_dir/started-items.json" \
       | jq -S . > "$run_dir/actual-first-call-arguments.json"
-    local expected_args_sha actual_args_sha prompt_sha prompt_bytes
+    jq 'if has("workspace_root") then .workspace_root = "<workspace>" else . end' \
+      "$run_dir/actual-first-call-arguments.json" \
+      | jq -S . > "$run_dir/logical-first-call-arguments.json"
+    jq -S '."tool-projection" | sort_by(.name)' \
+      "$client_registry_receipt" > "$run_dir/client-tool-surface.json"
+    local expected_args_sha actual_args_sha logical_args_sha client_surface_sha
+    local prompt_sha prompt_bytes
     expected_args_sha=$(shasum -a 256 \
       "$run_dir/expected-first-call-arguments.json" | awk '{print $1}')
     actual_args_sha=$(shasum -a 256 \
       "$run_dir/actual-first-call-arguments.json" | awk '{print $1}')
+    logical_args_sha=$(shasum -a 256 \
+      "$run_dir/logical-first-call-arguments.json" | awk '{print $1}')
+    client_surface_sha=$(shasum -a 256 \
+      "$run_dir/client-tool-surface.json" | awk '{print $1}')
     prompt_sha=$(shasum -a 256 "$run_dir/prompt.txt" | awk '{print $1}')
     prompt_bytes=$(wc -c < "$run_dir/prompt.txt" | awk '{$1=$1; print}')
     printf '%s\t%s\n' \
@@ -1883,6 +1915,8 @@ run_one() {
       prompt_bytes "$prompt_bytes" \
       expected_arguments_sha256 "$expected_args_sha" \
       actual_arguments_sha256 "$actual_args_sha" \
+      logical_arguments_sha256 "$logical_args_sha" \
+      client_tool_surface_sha256 "$client_surface_sha" \
       > "$run_dir/call-construction-receipt.tsv"
     if ! cmp -s "$run_dir/expected-first-call-arguments.json" \
       "$run_dir/actual-first-call-arguments.json"; then
@@ -2307,8 +2341,10 @@ run_one() {
       if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
         || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
-        || [ "$file_changes" -ne 0 ] || [ "$source_commands" -ne 0 ] \
+        || [ "$file_changes" -ne 0 ] || [ "$shell_calls" -ne 0 ] \
+        || [ "$source_commands" -ne 0 ] \
         || [ "$mcp_apply_successes" -ne 1 ] || [ "$mcp_failures" -ne 0 ] \
+        || [ "$first_selected_tool" != "$mcp_extract_tool" ] \
         || [ "$verified" != true ] || [ "$single_change_transaction" != true ]; then
         route_adherent=false
       fi
@@ -2442,7 +2478,7 @@ run_one_with_receipt() (
 order=0
 tasks=${BENCH_TASKS:-'named-form semantic-form structural-find case-edit pair-view-expect-edit'}
 contexts=${BENCH_CONTEXTS:-'no-skill matched-skill explicit-no-skill'}
-include_compact=${BENCH_INCLUDE_COMPACT:-true}
+include_compact=${BENCH_INCLUDE_COMPACT:-false}
 replicates=${BENCH_REPLICATES:-1}
 versions=${BENCH_VERSIONS:-'pre post'}
 parallelism=${BENCH_PARALLELISM:-4}
@@ -2456,6 +2492,9 @@ if ! [[ "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
   echo "BENCH_PARALLELISM must be a positive integer: $parallelism" >&2
   exit 2
 fi
+
+validate_materialization_screen \
+  "$run_matrix" "$parallelism" "$replicates" "$include_compact"
 validate_run_matrix "$run_matrix"
 
 schedule_run() {
