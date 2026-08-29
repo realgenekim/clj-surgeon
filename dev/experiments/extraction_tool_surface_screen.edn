@@ -25,6 +25,11 @@
    :candidate "3626078"
    :description {:bytes 611
                  :sha256 "02a45d09681933a1bb8e73bc6816460f54013b346a4bd7100c2c7c22ba3bb7f7"}
+   :client-input-schema {:bytes 7512
+                         :sha256 "a51777b69250ca2c7099fbfe74eb7377ce0321063d2e71e2f838236347d10245"}
+   :client-tool-projection
+   {:bytes 8390
+    :sha256 "d602120b9e3b96d8c136551f5516800674adddbbd06e33a4a94326a35314ffef"}
    :server-tool-projection
    {:bytes 8123
     :sha256 "e29ecae49417c0bb27575763c92a41460b7e2fa8de5178a151d5a5ba7b326180"}}}
