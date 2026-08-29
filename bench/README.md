@@ -140,6 +140,48 @@ three-site semantic capsule currently serves as the regression case for Beads
 issue `clj-surgeon-g08`; do not report its wall time until semantic workspace
 path identity produces a valid Surgeon basis.
 
+### Serial Anvil portfolio pairs
+
+Pin the product candidate independently from the harness commit. The pair
+wrapper records `harness_commit`, the requested `candidate_ref`, and the
+resolved immutable `candidate_commit`; it must not silently replace an
+explicit `BENCH_POST_COMMIT` with the harness checkout.
+
+Run a two-pair AB/BA pilot as two serial one-replica commands:
+
+```bash
+BENCH_POST_COMMIT=<immutable-product-commit> \
+make benchmark-anvil-portfolio-pair \
+  RESULT_DIR=/abs/results/01-compact-first \
+  TASK=submission-row-extraction-cleanup ORDER=compact-first REPLICATES=1
+
+BENCH_POST_COMMIT=<immutable-product-commit> \
+make benchmark-anvil-portfolio-pair \
+  RESULT_DIR=/abs/results/02-native-first \
+  TASK=submission-row-extraction-cleanup ORDER=native-first REPLICATES=1
+```
+
+`REPLICATES=2` under one order repeats that order; it is not the same
+counterbalance. The wrapper fixes Sol/high, serial execution, an isolated
+512 MB MCP, and local evidence retention.
+
+For a supplied-decision `mcp-hint-no-skill` arm, route adherence is a separate
+mechanical score. It requires one successful verified `edit_clojure` call,
+zero other Surgeon operations, zero shell or native file-change actions, zero
+failed mutations, and zero post-decision source reads. Semantic correctness,
+exact bytes, route adherence, and exact source inventory are retained as
+separate result fields. `correct` remains the admission composite used for
+efficiency medians. An unexpected Clojure or EDN source path fails that
+composite even when every declared target matches.
+
+The zero-model benchmark self-test exercises explicit candidate pinning, the
+strict compact-route policy, independent score layers, and stray-source
+detection:
+
+```bash
+make benchmark-edit-portfolio-self-test
+```
+
 ## Bounded clean-agent skill acceptance
 
 Use the six-session acceptance battery to exercise the installed Claude and

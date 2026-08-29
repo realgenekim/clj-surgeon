@@ -36,18 +36,30 @@ if [ "${ANVIL_PAIR_CONFIG_SELF_TEST:-false}" != true ] \
   exit 2
 fi
 
-benchmark_commit=$(git rev-parse --verify HEAD)
-printf 'benchmark_commit\t%s\ntask\t%s\norder\t%s\nreplicates\t%s\n' \
-  "$benchmark_commit" "$task" "$order" "$replicates"
+harness_commit=$(git rev-parse --verify HEAD)
+candidate_ref=${BENCH_POST_COMMIT:-$harness_commit}
+if [ "$candidate_ref" = WORKTREE ]; then
+  candidate_commit=WORKTREE
+else
+  candidate_commit=$(git rev-parse --verify "$candidate_ref^{commit}")
+fi
+printf 'benchmark_commit\t%s\nharness_commit\t%s\ncandidate_ref\t%s\ncandidate_commit\t%s\ntask\t%s\norder\t%s\nreplicates\t%s\n' \
+  "$harness_commit" "$harness_commit" "$candidate_ref" "$candidate_commit" \
+  "$task" "$order" "$replicates"
 
 if [ "${ANVIL_PAIR_CONFIG_SELF_TEST:-false}" = true ]; then
+  if [ -n "${ANVIL_PAIR_EXPECTED_POST_COMMIT:-}" ] \
+    && [ "$candidate_commit" != "$ANVIL_PAIR_EXPECTED_POST_COMMIT" ]; then
+    echo "Candidate commit was not preserved: expected $ANVIL_PAIR_EXPECTED_POST_COMMIT, got $candidate_commit" >&2
+    exit 1
+  fi
   echo "Anvil portfolio-pair configuration self-test passed"
   exit 0
 fi
 
 export BENCH_MODEL=gpt-5.6-sol
 export BENCH_REASONING=high
-export BENCH_POST_COMMIT="$benchmark_commit"
+export BENCH_POST_COMMIT="$candidate_commit"
 export BENCH_RUN_MATRIX="$run_matrix"
 export BENCH_TASKS="$task"
 export BENCH_INCLUDE_COMPACT=false

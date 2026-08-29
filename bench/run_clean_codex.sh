@@ -738,6 +738,37 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_workspace" >/dev/null
   test "$(git -C "$self_test_workspace" rev-list --count HEAD)" -eq 1
   test -z "$(git -C "$self_test_workspace" status --short)"
+  bb -cp "$repo_root/bench" \
+    "$repo_root/bench/edit_portfolio_run_score_test.clj" >/dev/null
+  mkdir -p "$self_test_root/source-expected/src" \
+    "$self_test_root/source-actual/src"
+  printf '%s\n' '(ns fixture)' > "$self_test_root/source-expected/src/fixture.clj"
+  cp "$self_test_root/source-expected/src/fixture.clj" \
+    "$self_test_root/source-actual/src/fixture.clj"
+  bb "$repo_root/bench/edit_portfolio_run_score.clj" --source-inventory \
+    "$self_test_root/source-expected" "$self_test_root/source-actual" \
+    > "$self_test_root/source-inventory.edn"
+  test "$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :source-set-exact println)' \
+    "$self_test_root/source-inventory.edn")" = true
+  printf '%s\n' '(ns stray)' > "$self_test_root/source-actual/src/stray.clj"
+  bb "$repo_root/bench/edit_portfolio_run_score.clj" --source-inventory \
+    "$self_test_root/source-expected" "$self_test_root/source-actual" \
+    > "$self_test_root/source-inventory-with-stray.edn"
+  test "$(bb -e '(-> *command-line-args* first slurp clojure.edn/read-string :source-set-exact println)' \
+    "$self_test_root/source-inventory-with-stray.edn")" = false
+  grep -q 'src/stray.clj' "$self_test_root/source-inventory-with-stray.edn"
+  self_test_harness_commit=$(git -C "$repo_root" rev-parse HEAD)
+  self_test_candidate_commit=$(git -C "$repo_root" rev-parse HEAD^)
+  ANVIL_PAIR_CONFIG_SELF_TEST=true \
+    ANVIL_PAIR_EXPECTED_POST_COMMIT="$self_test_candidate_commit" \
+    BENCH_POST_COMMIT="$self_test_candidate_commit" \
+    bash "$repo_root/bench/run_anvil_portfolio_pair.sh" \
+      "$self_test_root/anvil-pair" decision-batch-edit compact-first 1 \
+      > "$self_test_root/anvil-pair-config.tsv"
+  grep -q $'harness_commit\t'"$self_test_harness_commit" \
+    "$self_test_root/anvil-pair-config.tsv"
+  grep -q $'candidate_commit\t'"$self_test_candidate_commit" \
+    "$self_test_root/anvil-pair-config.tsv"
   bb "$repo_root/bench/score_source_fidelity.clj" --self-test >/dev/null
   bb "$repo_root/bench/score_format_extraction.clj" --self-test >/dev/null
   bb "$repo_root/bench/event_timing.clj" --self-test >/dev/null
@@ -1043,7 +1074,7 @@ if [ "${BENCH_RESUME:-false}" != true ] && [ -f "$result_dir/runs.tsv" ]; then
 fi
 if [ ! -f "$result_dir/runs.tsv" ]; then
   printf '%b\n' \
-    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route\tdecision_supplied\tpost_decision_source_commands\tchange_used\tchange_apply_used\tchange_apply_successes\tfailed_mutation_actions\ttemp_manifest_patch\tsingle_change_transaction\tmcp_calls\tmcp_successes\tmcp_failures\tmcp_tool_output_bytes\tmcp_first_mutation\tuser_turns\ttool_round_trips\tdiscovery_round_trips\tpost_decision_round_trips\tfirst_selected_tool\tresolved_catalog_role' \
+    'run_id\tversion\tcontext\ttask\torder\tstart_sha\tfinal_sha\twall_ms\texit_code\tinput_tokens\tcached_input_tokens\tuncached_input_tokens\toutput_tokens\treasoning_output_tokens\tshell_calls\tfile_changes\tatomic_commands\tclj_invocations\tsource_commands\tsource_output_bytes\ttotal_tool_output_bytes\tskill_read\tshow_form\tgrep_form\tls_used\thelp_used\ttext_reader\tq_used\txray_used\tpartition_all_used\tedit_used\texpr_used\tfirst_source_edit\tplan_generated\tplan_applied\tplan_apply_separate\tverified\texact_correct\tcorrect\texpect_used\texpect_route\tdecision_supplied\tpost_decision_source_commands\tchange_used\tchange_apply_used\tchange_apply_successes\tfailed_mutation_actions\ttemp_manifest_patch\tsingle_change_transaction\tmcp_calls\tmcp_successes\tmcp_failures\tmcp_tool_output_bytes\tmcp_first_mutation\tuser_turns\ttool_round_trips\tdiscovery_round_trips\tpost_decision_round_trips\tfirst_selected_tool\tresolved_catalog_role\tsemantic_correct\troute_adherent\tsource_set_exact' \
     > "$result_dir/runs.tsv"
 fi
 
@@ -1950,6 +1981,8 @@ run_one() {
   fi
 
   local final_sha exact_correct correct
+  local target_exact_correct target_semantic_correct semantic_correct
+  local source_set_exact treatment_adherent
   final_sha=$(hash_task_targets "$task" "$workspace")
   printf '%s\n' "$final_sha" > "$run_dir/final.sha256"
   exact_correct=false
@@ -2085,6 +2118,18 @@ run_one() {
     correct=false
   fi
 
+  target_exact_correct=$exact_correct
+  target_semantic_correct=$correct
+  source_set_exact=true
+  if is_portfolio_task "$task"; then
+    bb "$repo_root/bench/edit_portfolio_run_score.clj" --source-inventory \
+      "$portfolio_fixture_root/$(portfolio_dir_for_task "$task")/after" \
+      "$workspace" > "$run_dir/source-inventory.edn"
+    source_set_exact=$(bb -e \
+      '(-> *command-line-args* first slurp clojure.edn/read-string :source-set-exact println)' \
+      "$run_dir/source-inventory.edn")
+  fi
+
   local route_adherent=true inspect_calls edit_calls transform_calls apply_calls
   local extraction_calls plan_calls transform_preview_calls transform_commit_calls
   inspect_calls=$(mcp_role_count "$run_dir/events.jsonl" inspect)
@@ -2164,24 +2209,44 @@ run_one() {
       fi
       ;;
   esac
-  printf '%s\n' "$route_adherent" > "$run_dir/route-adherent.txt"
-  if [ "$route_adherent" != true ]; then
-    exact_correct=false
-    correct=false
+  if [ "$context" = mcp-hint-no-skill ] \
+    && [ "$decision_supplied" = true ]; then
+    printf '{:mcp-calls %s :inspect-calls %s :edit-calls %s :extraction-calls %s :plan-calls %s :transform-calls %s :file-changes %s :shell-calls %s :mcp-successes %s :mcp-failures %s :failed-mutation-actions %s :post-decision-source-commands %s :verified %s :single-change-transaction %s}\n' \
+      "$mcp_calls" "$inspect_calls" "$edit_calls" "$extraction_calls" \
+      "$plan_calls" "$transform_calls" "$file_changes" "$shell_calls" \
+      "$mcp_successes" "$mcp_failures" "$failed_mutation_actions" \
+      "$post_decision_source_commands" "$verified" "$single_change_transaction" \
+      > "$run_dir/compact-route-score-input.edn"
+    if [ "$(bb "$repo_root/bench/edit_portfolio_run_score.clj" --compact-route \
+      "$run_dir/compact-route-score-input.edn")" != true ]; then
+      route_adherent=false
+    fi
   fi
+  printf '%s\n' "$route_adherent" > "$run_dir/route-adherent.txt"
 
+  treatment_adherent=true
   if [ -n "$candidate_catalog" ] \
     && [ "$catalog_source_archaeology_commands" -ne 0 ]; then
     echo "Candidate first-selection run used source archaeology: $catalog_source_archaeology_commands" >&2
-    exact_correct=false
-    correct=false
+    treatment_adherent=false
   fi
 
   if [ "$version" = native ] && { [ "$clj_invocations" -ne 0 ] || [ "$skill_read" != false ]; }; then
     echo "Native-tools control invalid for $run_id: clj_invocations=$clj_invocations skill_read=$skill_read" >&2
-    exact_correct=false
-    correct=false
+    treatment_adherent=false
   fi
+
+  printf '{:target-semantic-correct %s :target-exact-correct %s :route-adherent %s :source-set-exact %s :treatment-adherent %s}\n' \
+    "$target_semantic_correct" "$target_exact_correct" "$route_adherent" \
+    "$source_set_exact" "$treatment_adherent" \
+    > "$run_dir/outcome-score-input.edn"
+  IFS=$'\t' read -r semantic_correct exact_correct route_adherent \
+    source_set_exact correct \
+    < <(bb "$repo_root/bench/edit_portfolio_run_score.clj" --outcome-tsv \
+      "$run_dir/outcome-score-input.edn")
+  printf '%s\n' "$semantic_correct" > "$run_dir/semantic-correct.txt"
+  printf '%s\n' "$exact_correct" > "$run_dir/exact-correct.txt"
+  printf '%s\n' "$source_set_exact" > "$run_dir/source-set-exact.txt"
 
   local row
   printf -v row '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
@@ -2197,6 +2262,8 @@ run_one() {
     "$mcp_failures" "$mcp_tool_output_bytes" "$mcp_first_mutation" \
     "$user_turns" "$tool_round_trips" "$discovery_round_trips" "$post_decision_round_trips"
   printf -v row '%s\t%s\t%s' "$row" "$first_selected_tool" "$resolved_catalog_role"
+  printf -v row '%s\t%s\t%s\t%s' "$row" "$semantic_correct" \
+    "$route_adherent" "$source_set_exact"
   append_result_row "$run_id" "$row"
 
   printf '%-58s correct=%-5s wall=%6sms input=%7s commands=%s\n' \
