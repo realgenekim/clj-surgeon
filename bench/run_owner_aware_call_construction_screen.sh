@@ -13,6 +13,8 @@ result_dir=${BENCH_RESULT_DIR:-}
 auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
 timeout_seconds=${BENCH_TIMEOUT_SECONDS:-180}
 self_test=false
+pilot=false
+preflight_only=false
 
 usage() {
   cat <<'EOF'
@@ -23,6 +25,8 @@ Options:
   --auth-file FILE   Codex auth.json for each fresh home
   --timeout SEC      Per-call timeout (default: 180)
   --self-test        Run zero-model scorer/adapter falsifiers only
+  --pilot            Run one fresh control and one fresh candidate
+  --preflight-only   With --pilot, stop after both real client-surface gates
 EOF
 }
 
@@ -32,10 +36,20 @@ while [ "$#" -gt 0 ]; do
     --auth-file) auth_file=${2:?--auth-file requires a file}; shift 2 ;;
     --timeout) timeout_seconds=${2:?--timeout requires seconds}; shift 2 ;;
     --self-test) self_test=true; shift ;;
+    --pilot) pilot=true; shift ;;
+    --preflight-only) preflight_only=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [ "$pilot" = true ]; then
+  arms=(control candidate)
+fi
+if [ "$preflight_only" = true ] && [ "$pilot" != true ]; then
+  echo "--preflight-only requires --pilot" >&2
+  exit 2
+fi
 
 screen_prompt() {
   cat <<'EOF'
@@ -77,9 +91,6 @@ wait_for_pid() {
 }
 
 run_zero_model_tests() {
-  local order
-  order=$(printf '%s\n' "${arms[@]}" | tr '\n' ' ' | sed 's/ $//')
-  [ "$order" = "control candidate candidate control candidate control control candidate" ]
   screen_prompt > "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
   if rg -q 'symbol_migration|target_alias|preserve-name' \
     "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"; then
@@ -89,13 +100,14 @@ run_zero_model_tests() {
   rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
   clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
-    '(load-file "dev/experiments/owner_aware_call_construction_screen_test.clj")
+    '(load-file "dev/experiments/owner_aware_call_construction_prereq_test.clj")
+     (load-file "dev/experiments/owner_aware_call_construction_screen_test.clj")
      (load-file "dev/experiments/owner_aware_call_capture_server_test.clj")
      (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")'
   printf '%s\n' \
     'owner-aware call-construction screen self-test: PASS' \
-    '  cohort: ABBA / BAAB; four runs per arm' \
-    '  scorer: real validator/compiler and nine frozen future hashes' \
+    '  pilot: one fresh control and one fresh candidate' \
+    '  scorer: current field/location normalizers, real compiler, nine frozen future hashes' \
     '  server: one capture-only edit_clojure tool; no product write handler' \
     '  prompt: identical task bytes and no candidate-language leak' \
     '  observer: app-tool cache rejected; only two exact Codex projections normalized'
@@ -124,10 +136,10 @@ done
 mkdir -p "$result_dir"
 result_dir=$(cd "$result_dir" && pwd)
 git_head=$(git -C "$repo_root" rev-parse HEAD)
-integration_base=4f69761968af256d767ac97948f88bfb48cdcf1e
+integration_base=ce05f6ee099ac029d96ecb6db6f5f225e4239b96
 if ! git -C "$repo_root" merge-base --is-ancestor "$integration_base" "$git_head" \
   || ! git -C "$repo_root" diff --quiet "$integration_base" -- src test; then
-  echo "Screen requires product source/test bytes from integration base 4f69761" >&2
+  echo "Screen requires product source/test bytes from integration base ce05f6e" >&2
   exit 2
 fi
 
@@ -135,15 +147,21 @@ jq -n \
   --arg schema clj-surgeon.owner-aware-call-screen-config.v1 \
   --arg head "$git_head" --arg base "$integration_base" \
   --arg model "$model" --arg reasoning "$reasoning" \
+  --arg mode "$(if [ "$pilot" = true ]; then printf pilot; else printf cohort; fi)" \
   --arg harness_sha "$(shasum -a 256 "${BASH_SOURCE[0]}" | awk '{print $1}')" \
-  --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_screen.clj" | awk '{print $1}')" \
+  --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_prereq.clj" | awk '{print $1}')" \
   --arg observer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_mcp_surface_observer.clj" | awk '{print $1}')" \
   --arg fixture_sha "$(shasum -a 256 "$repo_root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt" | awk '{print $1}')" \
-  '{schema:$schema,git_head:$head,integration_base:$base,
+  '{schema:$schema,git_head:$head,integration_base:$base,mode:$mode,
     model:$model,reasoning:$reasoning,
     order:["control","candidate","candidate","control","candidate","control","control","candidate"],
     hashes:{harness:$harness_sha,scorer:$scorer_sha,observer:$observer_sha,task:$fixture_sha}}' \
   > "$result_dir/run-config.json"
+
+clojure -J-Xms64m -J-Xmx512m \
+  -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
+  -M:clj-surgeon/mcp -m owner-aware-call-construction-prereq prerequisites \
+  > "$result_dir/prerequisite-report.edn"
 
 score_paths=()
 run_index=0
@@ -216,6 +234,15 @@ for arm in "${arms[@]}"; do
     > "$run_dir/client-surface-validation.json" \
     2> "$run_dir/client-surface-validation.stderr"
 
+  if [ "$preflight_only" = true ]; then
+    printf '%s\t%s\t%s\n' "$run_id" "$arm" "client-surface-green" \
+      >> "$result_dir/preflight.tsv"
+    cleanup_run
+    mcp_pid=""
+    trap - EXIT INT TERM
+    continue
+  fi
+
   fifo="$run_dir/events.pipe"
   mkfifo "$fifo"
   bb "$repo_root/bench/event_timing.clj" tap "$run_dir/event-clock.tsv" \
@@ -246,7 +273,7 @@ for arm in "${arms[@]}"; do
   [ -s "$capture_file" ] || { echo "No captured call: $run_id" >&2; exit 2; }
 
   clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
-    -M:clj-surgeon/mcp -m owner-aware-call-construction-screen score \
+    -M:clj-surgeon/mcp -m owner-aware-call-construction-prereq score \
     --arm "$arm" --capture "$capture_file" \
     --timing "$run_dir/event-timing.edn" --mcp-calls "$mcp_calls" \
     --shell-calls "$shell_calls" --file-changes "$file_changes" \
@@ -259,12 +286,31 @@ for arm in "${arms[@]}"; do
   trap - EXIT INT TERM
 done
 
-clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
-  -M:clj-surgeon/mcp -e \
-  '(require (quote [clojure.edn :as edn])
-            (quote [owner-aware-call-construction-screen :as screen]))
-   (prn (screen/cohort-report
-          (mapv #(edn/read-string (slurp %)) *command-line-args*)))' \
-  "${score_paths[@]}" > "$result_dir/summary.edn"
+if [ "$preflight_only" = true ]; then
+  jq -n \
+    --arg schema clj-surgeon.owner-aware-call-screen-preflight.v1 \
+    --slurpfile config "$result_dir/run-config.json" \
+    --arg prerequisite_sha "$(shasum -a 256 "$result_dir/prerequisite-report.edn" | awk '{print $1}')" \
+    '{schema:$schema,ok:true,model_calls:0,mutation_actions:0,
+      arms:["control","candidate"],config:$config[0],
+      prerequisite_report_sha256:$prerequisite_sha}' \
+    > "$result_dir/preflight-summary.json"
+  cat "$result_dir/preflight-summary.json"
+  exit 0
+fi
+
+if [ "$pilot" = true ]; then
+  clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
+    -M:clj-surgeon/mcp -m owner-aware-call-construction-prereq pilot \
+    "${score_paths[@]}" > "$result_dir/summary.edn"
+else
+  clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
+    -M:clj-surgeon/mcp -e \
+    '(require (quote [clojure.edn :as edn])
+              (quote [owner-aware-call-construction-screen :as screen]))
+     (prn (screen/cohort-report
+            (mapv #(edn/read-string (slurp %)) *command-line-args*)))' \
+    "${score_paths[@]}" > "$result_dir/summary.edn"
+fi
 
 cat "$result_dir/summary.edn"
