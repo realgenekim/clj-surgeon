@@ -41,13 +41,29 @@ for cell in $BENCH_RUN_MATRIX; do
   context=${cell#*:}
   run_id=$(printf '%02d-r01-%s-%s-mcp' "$position" "$BENCH_TASKS" "$context")
   run_dir="$BENCH_RESULT_DIR/$run_id"
-  mkdir -p "$run_dir"
+  workspace="$run_dir/workspace"
+  if [ "${FAKE_WORKSPACE_MODE:-}" = reused ]; then
+    workspace="$BENCH_RESULT_DIR/reused-workspace"
+  fi
+  mkdir -p "$run_dir" "$workspace"
   printf '%s\n' \
     '{"type":"item.started","item":{"id":"call","type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"workspace_root":"/private/tmp/fake","verify":"exact"}}}' \
     '{"type":"item.completed","item":{"id":"call","type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","status":"completed","result":{"structured_content":{"verification_complete":true,"next_action":"none"}}}}' \
     > "$run_dir/events.jsonl"
   printf '0\t1000000\t1000\t100\n1\t2000000\t2000\t100\n' > "$run_dir/event-clock.tsv"
   printf 'run_id\t%s\nstate\tcompleted\nexit_code\t0\n' "$run_id" > "$run_dir/terminal.tsv"
+  case "${FAKE_WORKSPACE_MODE:-}" in
+    missing)
+      [ "$position" -ne 1 ] && (cd "$workspace" && pwd -P) > "$run_dir/workspace-root.txt"
+      ;;
+    noncanonical)
+      printf '%s/../%s\n' "$(dirname "$workspace")" "$(basename "$workspace")" \
+        > "$run_dir/workspace-root.txt"
+      ;;
+    *)
+      (cd "$workspace" && pwd -P) > "$run_dir/workspace-root.txt"
+      ;;
+  esac
 done
 printf 'retained\tcomplete\n' >> "$BENCH_RESULT_DIR/runs.tsv"
 WORKER
@@ -203,6 +219,23 @@ test_block1_gate_stops_and_retains() {
   assert_contains "$output/coordinator-receipt.edn" ':stage :block1-score'
 }
 
+test_workspace_identity_refuses() {
+  local root mode output status
+  root=$(new_repo workspace-identity)
+  for mode in missing noncanonical reused; do
+    output="$test_root/workspace-$mode-output"
+    status=0
+    invoke "$root" "$output" FAKE_WORKSPACE_MODE="$mode" \
+      >"$root/workspace-$mode.out" 2>&1 || status=$?
+    [ "$status" -eq 3 ] || fail "$mode workspace exit was $status, expected 3"
+    [ -f "$output/block1/runs.tsv" ] || fail "$mode workspace dropped worker rows"
+    [ ! -e "$output/block2" ] || fail "$mode workspace allowed block two"
+  done
+  assert_contains "$root/workspace-missing.out" 'missing its workspace identity'
+  assert_contains "$root/workspace-noncanonical.out" 'workspace identity is not canonical'
+  assert_contains "$root/workspace-reused.out" 'workspace identity was reused'
+}
+
 test_passing_boundary_executes_both_blocks_once() {
   local root output expected_block1 expected_block2
   root=$(new_repo passing)
@@ -211,6 +244,8 @@ test_passing_boundary_executes_both_blocks_once() {
   [ -f "$output/block1/runs.tsv" ] || fail 'block-one rows are missing'
   [ -f "$output/block2/runs.tsv" ] || fail 'block-two rows are missing'
   [ -f "$output/final-report.edn" ] || fail 'final aggregate is missing'
+  assert_contains "$output/block1-run-manifest.edn" ':workspace-root'
+  assert_contains "$output/block2-run-manifest.edn" ':workspace-root'
   [ "$(wc -l < "$root/calls.log" | tr -d ' ')" -eq 2 ] || fail 'worker did not run exactly twice'
   [ "$(grep -c '^block1$' "$root/scorer.log")" -eq 1 ] || fail 'block-one scorer call count differs'
   [ "$(grep -c '^final$' "$root/scorer.log")" -eq 1 ] || fail 'aggregate did not run exactly once'
@@ -233,6 +268,7 @@ test_wrong_and_dirty_identity_refuse
 test_output_and_settings_refuse
 test_child_failure_is_retained_without_retry
 test_block1_gate_stops_and_retains
+test_workspace_identity_refuses
 test_passing_boundary_executes_both_blocks_once
 
 printf 'relation causal cohort runner boundary tests passed\n'

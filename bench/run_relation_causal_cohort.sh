@@ -200,6 +200,8 @@ validate_raw_run() {
     || die "Run is missing observer clocks: $run_dir" 3
   [ -s "$run_dir/terminal.tsv" ] \
     || die "Run is missing its terminal receipt: $run_dir" 3
+  [ -s "$run_dir/workspace-root.txt" ] \
+    || die "Run is missing its workspace identity: $run_dir" 3
   [ "$(awk -F '\t' '$1 == "state" {print $2}' "$run_dir/terminal.tsv")" = completed ] \
     || die "Run terminal state is not completed: $run_dir" 3
   [ "$(awk -F '\t' '$1 == "exit_code" {print $2}' "$run_dir/terminal.tsv")" = 0 ] \
@@ -221,6 +223,25 @@ validate_raw_run() {
        | select(type == "object")]
      | length) == 1' "$run_dir/events.jsonl" >/dev/null \
     || die "Run lacks one raw apply call and structured MCP receipt: $run_dir" 3
+  [ "$(wc -l < "$run_dir/workspace-root.txt" | tr -d ' ')" -eq 1 ] \
+    || die "Run workspace identity must contain exactly one line: $run_dir" 3
+  validated_workspace_root=$(cat "$run_dir/workspace-root.txt")
+  case "$validated_workspace_root" in
+    ''|/|*'//'|*/.|*/..|*/./*|*/../*|*/) \
+      die "Run workspace identity is not canonical: $run_dir" 3 ;;
+    /*) ;;
+    *) die "Run workspace identity is not absolute: $run_dir" 3 ;;
+  esac
+  [ -d "$validated_workspace_root" ] \
+    || die "Run workspace identity does not name a directory: $run_dir" 3
+  canonical_workspace=$(cd "$validated_workspace_root" && pwd -P)
+  [ "$canonical_workspace" = "$validated_workspace_root" ] \
+    || die "Run workspace identity is not canonical: $run_dir" 3
+  for seen_workspace in "${cohort_workspace_roots[@]}"; do
+    [ "$seen_workspace" != "$validated_workspace_root" ] \
+      || die "Run workspace identity was reused: $validated_workspace_root" 3
+  done
+  cohort_workspace_roots+=("$validated_workspace_root")
 }
 
 write_block_manifest() {
@@ -244,20 +265,22 @@ write_block_manifest() {
     run_dir=$(printf '%s/%02d-r01-%s-%s-mcp' \
       "$block_dir" "$position" "$task" "${contexts[$index]}")
     validate_raw_run "$run_dir"
-    scorer_args+=("${ids[$index]}" "${arms[$index]}" "$run_dir")
+    scorer_args+=("${ids[$index]}" "${arms[$index]}" \
+      "$validated_workspace_root" "$run_dir")
   done
   bb -e '
-    (let [[block output & triples] *command-line-args*
-          runs (mapv (fn [[run-id arm run-dir] position]
+    (let [[block output & fields] *command-line-args*
+          runs (mapv (fn [[run-id arm workspace-root run-dir] position]
                        {:run-id run-id
                         :block (parse-long block)
                         :position position
                         :arm (keyword arm)
+                        :workspace-root workspace-root
                         :artifacts
                         {:events (str run-dir "/events.jsonl")
                          :event-clock (str run-dir "/event-clock.tsv")
                          :terminal (str run-dir "/terminal.tsv")}})
-                     (partition 3 triples)
+                     (partition 4 fields)
                      (range 1 5))]
       (spit output
             (str (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
@@ -295,6 +318,8 @@ report_is_complete() {
          0 1)))' "$report"
 }
 
+cohort_workspace_roots=()
+validated_workspace_root=
 stage=block1
 run_block block1 "$block1_matrix"
 
