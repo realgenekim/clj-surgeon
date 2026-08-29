@@ -156,8 +156,25 @@
          (filter #(= target-fingerprint (lossless-fingerprint %)))
          count)))
 
+(defn direct-fingerprint-count
+  [root target]
+  (let [target-fingerprint (lossless-fingerprint target)]
+    (->> (meaningful-children root)
+         (filter #(= target-fingerprint (lossless-fingerprint %)))
+         count)))
+
+(defn source-fingerprint-count
+  [source target]
+  (try
+    (fingerprint-count (parser/parse-string-all source) target)
+    (catch Exception _ 0)))
+
 (defn lower-law-b
   "Infer the unique namespace owner for matching complete namespace clauses.
+
+   Every equal lossless fingerprint must be a direct namespace child; the
+   declared count must equal that direct-child count, with no equal candidate
+   nested under the namespace or anywhere else in the file.
 
    A singleton files array is losslessly emitted as file only inside the full
    proof. Other file-selector shapes remain untouched for the strict current
@@ -179,9 +196,16 @@
                  (integer? matches)
                  (pos? matches))
         (let [{:keys [namespace-node unique-direct-namespace?]}
-              (namespace-evidence file source)]
+              (namespace-evidence file source)
+              direct-count (when unique-direct-namespace?
+                             (direct-fingerprint-count namespace-node from-node))
+              namespace-count (when unique-direct-namespace?
+                                (fingerprint-count namespace-node from-node))
+              source-count (source-fingerprint-count source from-node)]
           (when (and unique-direct-namespace?
-                     (= matches (fingerprint-count namespace-node from-node)))
+                     (= matches direct-count)
+                     (= direct-count namespace-count)
+                     (= namespace-count source-count))
             (-> (singular-file edit selector)
                 (assoc "within" {"namespace" true}))))))))
 
@@ -369,6 +393,14 @@
       :mismatched-clause-kind
       (refusal sources #{:law-a :law-b}
                (assoc law-b-edit "to" "(:import java.time.Instant)"))
+      :nested-only-clause
+      (refusal
+        {file "(ns sample.app {:probe (:require [old.core :as old])})\n"}
+        #{:law-a :law-b} law-b-edit)
+      :competing-identical-subtree-outside-namespace
+      (refusal
+        {file (str source "(def competing '(:require [old.core :as old]))\n")}
+        #{:law-a :law-b} law-b-edit)
       :empty-files
       (refusal sources #{:law-a :law-b}
                (assoc law-b-edit "files" []))

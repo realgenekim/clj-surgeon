@@ -14,7 +14,9 @@ frozen submission-row before sources.
   unique direct namespace and no competing named owner.
 - Law B fully recovered one call (`05-candidate`). It also safely lowered nine
   namespace clauses in `01-control`, including the lossless singleton
-  `files`-to-`file` shape normalization.
+  `files`-to-`file` shape normalization. Each accepted fingerprint is now
+  proven to be a direct namespace-clause child; the namespace and whole-file
+  counts prove there is no equal nested or outside candidate.
 - `01-control` still refused at `edits[9]`. That edit omitted `within` for a
   complete `detail-controls` defn, so the required non-namespace falsifier
   correctly prevented Law B from guessing an owner.
@@ -38,10 +40,10 @@ A+B+C, all eight calls passed the real validator and compiler, each produced
 
 All required negative cases refused. A/B covered wrong namespace, competing
 owner, multiple and reader-conditional namespaces, non-namespace missing
-scope, stale count, mismatched clause kind, empty or multiple `files`, and
-simultaneous `file` plus `files`. C covered zero or many whole-owner
-occurrences, anonymous owners, different kind or name, nested-only occurrence,
-and stale count.
+scope, stale count, mismatched clause kind, a nested-only clause, an identical
+subtree outside the namespace, empty or multiple `files`, and simultaneous
+`file` plus `files`. C covered zero or many whole-owner occurrences, anonymous
+owners, different kind or name, nested-only occurrence, and stale count.
 
 ## Transaction storyboard
 
@@ -73,7 +75,7 @@ CAPTURED JSON (8 calls)
 
 ## Verification and scope
 
-- Experiment tests: 4 tests, 35 assertions, 0 failures, 0 errors.
+- Experiment tests: 4 tests, 37 assertions, 0 failures, 0 errors.
 - Fast suite: 636 tests, 5,467 assertions, 0 failures, 0 errors.
 - Cold MCP suite rerun: 269 tests, 2,284 assertions, 0 failures, 0 errors.
 - clj-kondo: 0 errors, 0 warnings.

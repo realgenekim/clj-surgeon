@@ -26,7 +26,7 @@
       (testing (name label)
         (is (nil? (replay/lower-law-a candidate-sources candidate-edit)))))))
 
-(deftest law-b-requires-a-single-file-and-an-exact-same-kind-clause-count
+(deftest law-b-requires-direct-uncontested-namespace-clause-children
   (let [edit {"files" [file]
               "from" "(:require [old.core :as old])"
               "to" "(:require [new.core :as new])"
@@ -35,16 +35,25 @@
     (is (= file (get lowered "file")))
     (is (nil? (get lowered "files")))
     (is (= {"namespace" true} (get lowered "within")))
-    (doseq [[label candidate]
-            [[:non-namespace
+    (doseq [[label candidate-sources candidate]
+            [[:non-namespace sources
               (assoc edit "from" "(defn f [] 1)" "to" "(defn f [] 2)")]
-             [:stale-count (assoc edit "matches" 2)]
-             [:kind-mismatch (assoc edit "to" "(:import java.time.Instant)")]
-             [:empty-files (assoc edit "files" [])]
-             [:many-files (assoc edit "files" [file "src/sample/other.clj"])]
-             [:file-and-files (assoc edit "file" file)]]]
+             [:stale-count sources (assoc edit "matches" 2)]
+             [:kind-mismatch sources
+              (assoc edit "to" "(:import java.time.Instant)")]
+             [:nested-only
+              {file "(ns sample.app {:probe (:require [old.core :as old])})\n"}
+              edit]
+             [:competing-outside
+              {file (str source
+                         "(def competing '(:require [old.core :as old]))\n")}
+              edit]
+             [:empty-files sources (assoc edit "files" [])]
+             [:many-files sources
+              (assoc edit "files" [file "src/sample/other.clj"])]
+             [:file-and-files sources (assoc edit "file" file)]]]
       (testing (name label)
-        (is (nil? (replay/lower-law-b sources candidate)))))))
+        (is (nil? (replay/lower-law-b candidate-sources candidate)))))))
 
 (deftest optional-law-c-requires-the-same-unique-complete-named-owner
   (let [edit {"files" [file]
