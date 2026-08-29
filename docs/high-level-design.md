@@ -95,6 +95,9 @@ cross-cutting result evidence and concise human presentation.
   observability discipline as a successful mutation.
 - **Bookkeeping over judgment.** The kernel performs exact mechanics while the
   model and human decide meaning.
+- **Structural identity over positional authority.** A direct mutation names
+  its owner. Lines, ordinals, indexes, and other positional coordinates may
+  describe or inspect code, but they never select the subject of a write.
 - **Common truth over common facade.** Entrances share compiled facts and
   terminal outcomes while retaining the public contracts and policies that fit
   their callers.
@@ -612,6 +615,24 @@ differences between synchronous results and asynchronous verification.
 Independent instrumentation was rejected because a future tool could silently
 omit the contract.
 
+### Keep positional evidence out of mutation authority
+
+The CLI structural lens may use a line or relative position for a read-only
+query or to produce a concrete, reviewable, hash-fenced plan. A direct
+`:expect`-guarded edit must start with a caller-visible named top-level owner.
+The direct-write decoder refuses any query whose first step is not
+`[:form NAME]` and tells the caller to name the owner or use the existing
+plan-review route.
+
+This boundary is stronger than checking that the selected line is valid, that
+the selected subtree equals `:expect`, or that the result parses. Duplicate
+content can make all those checks pass for the wrong owner. Internal addresses
+inside a reviewed plan remain implementation evidence bound to exact source
+and result hashes; callers cannot submit them as direct mutation authority.
+
+The detailed contract and falsifiers are in
+[Positional mutation authority](intent/positional-mutation-authority/positional-mutation-authority-design.md).
+
 ### Keep elapsed time additive and observational
 
 Elapsed measurement may enrich structured results and summaries but must not
@@ -694,3 +715,4 @@ Any of these conditions falsifies the design:
 - [Clojure agent tool stack](architecture-stack.md)
 - [Testing guidelines](testing-guidelines.md)
 - [Uniform MCP elapsed-time plan](plans/uniform-mcp-elapsed-time.md)
+- [Positional mutation authority](intent/positional-mutation-authority/positional-mutation-authority-design.md)
