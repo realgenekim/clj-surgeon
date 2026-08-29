@@ -535,9 +535,6 @@
           verification (value structured :verification)]
       (when-not (and (canonical-workspace? receipt-path)
                      (canonical-workspace? workspace)
-                     (str/starts-with?
-                       receipt-path
-                       (str workspace java.io.File/separator))
                      (true? (value structured :ok))
                      (true? (value structured :committed))
                      (= "apply_clojure_changes"
