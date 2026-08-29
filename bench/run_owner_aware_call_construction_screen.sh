@@ -13,6 +13,7 @@ preflight_arms=(flat file-groups closed-relations)
 arms=("${cohort_arms[@]}")
 result_dir=${BENCH_RESULT_DIR:-}
 auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
+expected_head=${BENCH_EXPECTED_HEAD:-}
 timeout_seconds=${BENCH_TIMEOUT_SECONDS:-180}
 self_test=false
 preflight_only=false
@@ -24,6 +25,8 @@ Usage: bench/run_owner_aware_call_construction_screen.sh [OPTIONS]
 Options:
   --output DIR       Result directory (required outside --self-test)
   --auth-file FILE   Codex auth.json for each fresh home
+  --expected-head SHA
+                     Exact approved candidate commit (required outside self-test)
   --timeout SEC      Per-call timeout (default: 180)
   --self-test        Run zero-model scorer/adapter falsifiers only
   --preflight-only   Stop after all three real client-surface gates
@@ -34,6 +37,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --output) result_dir=${2:?--output requires a directory}; shift 2 ;;
     --auth-file) auth_file=${2:?--auth-file requires a file}; shift 2 ;;
+    --expected-head) expected_head=${2:?--expected-head requires a SHA}; shift 2 ;;
     --timeout) timeout_seconds=${2:?--timeout requires seconds}; shift 2 ;;
     --self-test) self_test=true; shift ;;
     --preflight-only) preflight_only=true; shift ;;
@@ -96,8 +100,27 @@ assert_declared_orders() {
     '["flat","file-groups","closed-relations","closed-relations","file-groups","flat"]' ]
 }
 
+assert_expected_head() {
+  local expected=$1 actual=$2
+  if ! [[ "$expected" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "An exact 40-character --expected-head is required" >&2
+    return 1
+  fi
+  if [ "$expected" != "$actual" ]; then
+    echo "Approved candidate head mismatch: expected $expected, actual $actual" >&2
+    return 1
+  fi
+}
+
 run_zero_model_tests() {
   assert_declared_orders
+  assert_expected_head 0123456789012345678901234567890123456789 \
+    0123456789012345678901234567890123456789
+  if assert_expected_head 0123456789012345678901234567890123456789 \
+      fedcba9876543210fedcba9876543210fedcba98 2>/dev/null; then
+    echo "Expected-head mismatch falsifier was admitted" >&2
+    return 1
+  fi
   screen_prompt > "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
   if rg -q 'file_groups|symbol_migration|target_alias|preserve-name|require_change' \
     "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"; then
@@ -149,6 +172,7 @@ done
 mkdir -p "$result_dir"
 result_dir=$(cd "$result_dir" && pwd)
 git_head=$(git -C "$repo_root" rev-parse HEAD)
+assert_expected_head "$expected_head" "$git_head" || exit 2
 integration_base=54aae16f340033dc6d9452043b335c6bb98dea04
 if ! git -C "$repo_root" merge-base --is-ancestor "$integration_base" "$git_head" \
   || ! git -C "$repo_root" diff --quiet "$integration_base" -- src test; then
@@ -158,7 +182,8 @@ fi
 
 jq -n \
   --arg schema clj-surgeon.three-arm-request-shape-config.v1 \
-  --arg head "$git_head" --arg base "$integration_base" \
+  --arg head "$git_head" --arg expected_head "$expected_head" \
+  --arg base "$integration_base" \
   --arg model "$model" --arg reasoning "$reasoning" \
   --arg mode "$(if [ "$preflight_only" = true ]; then printf preflight; else printf cohort; fi)" \
   --arg harness_sha "$(shasum -a 256 "${BASH_SOURCE[0]}" | awk '{print $1}')" \
@@ -166,7 +191,8 @@ jq -n \
   --arg observer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_mcp_surface_observer.clj" | awk '{print $1}')" \
   --arg fixture_sha "$(shasum -a 256 "$repo_root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt" | awk '{print $1}')" \
   --argjson order "$(arms_json "${arms[@]}")" \
-  '{schema:$schema,git_head:$head,integration_base:$base,mode:$mode,
+  '{schema:$schema,git_head:$head,expected_git_head:$expected_head,
+    integration_base:$base,mode:$mode,
     model:$model,reasoning:$reasoning,
     order:$order,
     hashes:{harness:$harness_sha,scorer:$scorer_sha,observer:$observer_sha,task:$fixture_sha}}' \
