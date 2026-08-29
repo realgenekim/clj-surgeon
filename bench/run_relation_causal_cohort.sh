@@ -189,7 +189,14 @@ run_block() {
 }
 
 run_scorer() {
-  "$scorer_launcher" "$repo_root/$scorer_rel" "$@"
+  if [ "$scorer_launcher" = bb ]; then
+    (
+      cd "$repo_root"
+      bb -cp src:test:bench "$repo_root/$scorer_rel" "$@"
+    )
+  else
+    "$scorer_launcher" "$repo_root/$scorer_rel" "$@"
+  fi
 }
 
 validate_raw_run() {
