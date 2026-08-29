@@ -43,16 +43,32 @@
     :output-schema {:type "object"}
     :annotations {:readOnlyHint false}}])
 
+(def test-client-tool-projection-sha256
+  (score/canonical-sha256 tool-projection))
+
 (def provenance
   {:prompt-sha256 sha-a
-   :prompt-template-sha256 sha-b
-   :client-tool-projection-sha256 (score/canonical-sha256 tool-projection)
+   :prompt-template-sha256 score/expected-prompt-template-sha256
+   :client-tool-projection-sha256
+   score/expected-client-tool-projection-sha256
    :environment-sha256 (score/canonical-sha256 environment-evidence)})
 
 (defn- sha256 [text]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
                         (.getBytes ^String text "UTF-8"))]
     (apply str (map #(format "%02x" (bit-and 0xff %)) digest))))
+
+(def frozen-task-prompt
+  (slurp "bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt"))
+
+(def test-prompt-template-sha256
+  (sha256
+    (str frozen-task-prompt
+         "\n"
+         corpus/common-prompt-prefix
+         "<ARM>"
+         corpus/common-prompt-suffix
+         "\n")))
 
 (def expected-evidence
   {:canonical-effect-identity canonical-effect-identity
@@ -290,6 +306,7 @@
 (deftest score-run-derives-positive-finite-clocks
   (let [result (score/score-run (first passing))]
     (is (= 100.0 (get-in result [:metrics :t-emit-ms])))
+    (is (= 101.0 (get-in result [:metrics :t-apply-verified-ms])))
     (is (= 1000.0 (get-in result [:metrics :t-verified-ms]))))
   (doseq [[label candidate]
           [[:zero-emit
@@ -338,7 +355,7 @@
         (is (false? (get-in report [:gate :promote])) (name label))
         (when (= label :shared-workspace)
           (is (some #{:workspace-reused} (:errors report)))))))
-  (testing "block one stops unless verified improves 15% and R emits sooner"
+  (testing "block one stops unless verified improves 15% and emit improves 20%"
     (doseq [rows [(mapv #(if (= :R (:arm %))
                            (assoc-in % [:clocks :turn-completed-ns]
                                      1900000000)
@@ -352,6 +369,29 @@
       (let [report (score/cohort-report rows)]
         (is (false? (get-in report [:gate :block-2-authorized])))
         (is (false? (get-in report [:gate :promote]))))))
+  (testing "block-one emit admits 20% exactly and refuses 19.999%"
+    (let [block-1 (subvec passing 0 4)
+          at-boundary
+          (mapv #(if (= :R (:arm %))
+                   (row (:run-id %) (:block %) (:position %) (:arm %)
+                        80.0 700.0)
+                   %)
+                block-1)
+          below-boundary
+          (mapv #(if (= :R (:arm %))
+                   (row (:run-id %) (:block %) (:position %) (:arm %)
+                        80.001 700.0)
+                   %)
+                block-1)]
+      (is (= 0.2 (get-in (score/cohort-report at-boundary)
+                         [:blocks 1 :t-emit-improvement])))
+      (is (get-in (score/cohort-report at-boundary)
+                  [:gate :block-2-authorized]))
+      (is (< (get-in (score/cohort-report below-boundary)
+                     [:blocks 1 :t-emit-improvement])
+             0.2))
+      (is (false? (get-in (score/cohort-report below-boundary)
+                          [:gate :block-2-authorized])))))
   (testing "promotion needs 20% emit in each block and pooled"
     (let [weak-block-2
           (mapv #(if (and (= 2 (:block %)) (= :R (:arm %)))
@@ -362,6 +402,16 @@
           report (score/cohort-report weak-block-2)]
       (is (false? (get-in report [:gate :promote])))
       (is (< (get-in report [:blocks 2 :t-emit-improvement]) 0.2))))
+  (testing "apply-verified time is emitted but never substitutes for the gates"
+    (let [slow-r-apply
+          (mapv #(if (= :R (:arm %))
+                   (assoc-in % [:events 2 :observer-monotonic-ns]
+                             1650000000)
+                   %)
+                passing)
+          report (score/cohort-report slow-r-apply)]
+      (is (neg? (get-in report [:pooled :t-apply-verified-improvement])))
+      (is (get-in report [:gate :promote]))))
   (testing "verified wall must favor R in each block and improve 20% pooled"
     (let [block-2-loss
           (mapv #(if (and (= 2 (:block %)) (= :R (:arm %)))
@@ -406,6 +456,15 @@
               (assoc-in passing [1 :provenance
                                  :client-tool-projection-sha256]
                         sha-f)]
+             [:stable-forged-client-surface
+              (mapv #(assoc-in % [:provenance
+                                  :client-tool-projection-sha256]
+                               sha-f)
+                    passing)]
+             [:stable-forged-full-prompt
+              (mapv #(assoc-in % [:provenance :prompt-template-sha256]
+                               sha-f)
+                    passing)]
              [:environment-drift
               (assoc-in passing [1 :provenance :environment-sha256]
                         sha-f)]]]
@@ -513,7 +572,8 @@
         _ (.mkdirs run-directory)
         prompt-file (io/file run-directory "prompt.txt")
         _ (spit prompt-file
-                (str "Apply the frozen task.\n"
+                (str frozen-task-prompt
+                     "\n"
                      (:prompt (corpus/prompt-material arm workspace-path))
                      "\n"))
         registry-file (io/file run-directory "codex-mcp-registry.json")
@@ -562,189 +622,234 @@
           descriptors)))
 
 (deftest raw-event-clock-adapter-is-exact-and-fail-closed
-  (let [root (temp-dir)]
-    (try
-      (let [entry (first (raw-cohort! root))
-            joined (score/join-event-clock-files
-                     (get-in entry [:artifacts :events])
-                     (get-in entry [:artifacts :event-clock]))
-            mapped (score/manifest-entry->row entry nil)]
-        (is (not (contains? entry :expected-arguments)))
-        (is (not (contains? entry :expected-evidence)))
-        (is (:ok joined))
-        (is (= 6 (count (:events joined))))
-        (is (:ok mapped))
-        (is (:ok (score/score-run (:row mapped))))
-        (testing "post-run workspace deletion does not erase frozen identity"
-          (delete-tree! (io/file (:workspace-root entry)))
-          (let [deleted-workspace (score/manifest-entry->row entry nil)]
-            (is (:ok deleted-workspace))
-            (is (:ok (score/score-run (:row deleted-workspace))))))
-        (testing "manifest workspace must be its canonical directory spelling"
-          (let [noncanonical (str (:workspace-root entry) "/.")
-                result (score/manifest-entry->row
-                         (assoc entry :workspace-root noncanonical)
-                         nil)]
-            (is (false? (:ok result)))
-            (is (= [:workspace-not-canonical] (:errors result)))))
-        (testing "terminal completion is an exact retained boundary"
-          (let [terminal (get-in entry [:artifacts :terminal])
-                original (slurp terminal)]
-            (spit terminal (str/replace original
-                                        "state\tcompleted"
-                                        "state\tfailed"))
-            (let [result (score/manifest-entry->row entry nil)]
+  (with-redefs [score/expected-client-tool-projection-sha256
+                test-client-tool-projection-sha256
+                score/expected-prompt-template-sha256
+                test-prompt-template-sha256]
+    (let [root (temp-dir)]
+      (try
+        (let [entry (first (raw-cohort! root))
+              joined (score/join-event-clock-files
+                       (get-in entry [:artifacts :events])
+                       (get-in entry [:artifacts :event-clock]))
+              mapped (score/manifest-entry->row entry nil)]
+          (is (not (contains? entry :expected-arguments)))
+          (is (not (contains? entry :expected-evidence)))
+          (is (:ok joined))
+          (is (= 6 (count (:events joined))))
+          (is (:ok mapped))
+          (is (:ok (score/score-run (:row mapped))))
+          (testing "post-run workspace deletion does not erase frozen identity"
+            (delete-tree! (io/file (:workspace-root entry)))
+            (let [deleted-workspace (score/manifest-entry->row entry nil)]
+              (is (:ok deleted-workspace))
+              (is (:ok (score/score-run (:row deleted-workspace))))))
+          (testing "manifest workspace must be its canonical directory spelling"
+            (let [noncanonical (str (:workspace-root entry) "/.")
+                  result (score/manifest-entry->row
+                           (assoc entry :workspace-root noncanonical)
+                           nil)]
               (is (false? (:ok result)))
-              (is (= [:terminal-receipt-invalid] (:errors result))))
-            (spit terminal original)))
-        (testing "missing clock rows and byte-count drift refuse"
-          (let [clock (get-in entry [:artifacts :event-clock])
-                original (slurp clock)
-                lines (str/split-lines original)]
-            (spit clock (str (str/join "\n" (butlast lines)) "\n"))
-            (is (false? (:ok (score/join-event-clock-files
-                               (get-in entry [:artifacts :events]) clock))))
-            (spit clock (str/replace-first original #"\t[0-9]+\n"
-                                           "\t999999\n"))
-            (is (false? (:ok (score/join-event-clock-files
-                               (get-in entry [:artifacts :events]) clock))))))
-        (testing "completion IDs and structured receipt evidence cannot drift"
-          (let [raw-lines (str/split-lines
-                            (slurp (get-in entry [:artifacts :events])))
-                parsed (mapv #(json/parse-string % true) raw-lines)
-                wrong-id (assoc-in parsed [3 :item :id] "different")
-                wrong-receipt (assoc-in parsed
-                                        [3 :item :result :structured_content
-                                         :receipt_hash]
-                                        "not-a-sha256")
-                noncanonical-receipt
-                (assoc-in parsed
-                          [3 :item :result :structured_content :undo_receipt]
-                          "/home/dev-a/.local/state/clj-surgeon/workspaces/key/receipts/../receipts/receipt.edn")]
-            (doseq [[label events expected-error]
-                    [[:id wrong-id :call-id-mismatch]
-                     [:receipt wrong-receipt :evidence-incomplete]
-                     [:receipt-path noncanonical-receipt :evidence-incomplete]]]
-              (let [artifacts (write-event-artifacts!
-                                (io/file root (str "bad-" (name label)))
-                                events
-                                [900000000 1000000000 1100000000
-                                 1101000000 1999000000 2000000000])
-                    result (-> (assoc entry :artifacts
-                                      (merge (:artifacts entry)
-                                             {:events (:events-path artifacts)
-                                              :event-clock
-                                              (:event-clock-path artifacts)}))
-                               (score/manifest-entry->row nil)
-                               :row
-                               score/score-run)]
-                (is (false? (:ok result)) (name label))
-                (is (some #{expected-error} (:errors result))
-                    (name label))))))
-        (testing "public identity, prompt, registry, and environment fail closed"
-          (let [events-path (get-in entry [:artifacts :events])
-                raw-lines (str/split-lines (slurp events-path))
-                parsed (mapv #(json/parse-string % true) raw-lines)
-                without-identity
-                (update-in parsed
-                           [3 :item :result :structured_content]
-                           dissoc :canonical_effect_identity)
-                artifacts (write-event-artifacts!
-                            (io/file root "missing-identity")
-                            without-identity
-                            [900000000 1000000000 1100000000
-                             1101000000 1999000000 2000000000])]
-            (is (false?
-                  (:ok
-                    (-> (score/manifest-entry->row
-                          (assoc entry :artifacts
-                                 (merge (:artifacts entry)
-                                        {:events (:events-path artifacts)
-                                         :event-clock
-                                         (:event-clock-path artifacts)}))
-                          nil)
-                        :row
-                        score/score-run))))
-            (doseq [[label artifact replacement]
-                    [[:prompt :prompt "Assignment: wrong\n"]
-                     [:wrong-tool :client-registry
-                      (json/generate-string
-                        {:schema "clj-surgeon.codex-mcp-registry.v1"
-                         :ok true
-                         :server "clj-surgeon"
-                         :codex-executable
-                         (:codex-executable environment-evidence)
-                         :tool-names ["inspect_clojure"]
-                         :tool-projection
-                         [(assoc (first tool-projection)
-                                 :name "inspect_clojure")]})]
-                     [:extra-tool :client-registry
-                      (json/generate-string
-                        {:schema "clj-surgeon.codex-mcp-registry.v1"
-                         :ok true
-                         :server "clj-surgeon"
-                         :codex-executable
-                         (:codex-executable environment-evidence)
-                         :tool-names ["apply_clojure_changes"
-                                      "inspect_clojure"]
-                         :tool-projection
-                         (conj tool-projection
-                               (assoc (first tool-projection)
-                                      :name "inspect_clojure"))})]
-                     [:reasoning :environment
-                      (pr-str (assoc environment-evidence
-                                     :reasoning "low"))]
-                     [:model :environment
-                      (pr-str (assoc environment-evidence
-                                     :model "gpt-5.6-terra"))]]]
-              (let [path (get-in entry [:artifacts artifact])
-                    original (slurp path)]
-                (spit path replacement)
-                (is (false? (:ok (score/manifest-entry->row entry nil)))
-                    (name label))
-                (spit path original))))))
-      (finally
-        (delete-tree! root)))))
+              (is (= [:workspace-not-canonical] (:errors result)))))
+          (testing "terminal completion is an exact retained boundary"
+            (let [terminal (get-in entry [:artifacts :terminal])
+                  original (slurp terminal)]
+              (spit terminal (str/replace original
+                                          "state\tcompleted"
+                                          "state\tfailed"))
+              (let [result (score/manifest-entry->row entry nil)]
+                (is (false? (:ok result)))
+                (is (= [:terminal-receipt-invalid] (:errors result))))
+              (spit terminal original)))
+          (testing "missing clock rows and byte-count drift refuse"
+            (let [clock (get-in entry [:artifacts :event-clock])
+                  original (slurp clock)
+                  lines (str/split-lines original)]
+              (spit clock (str (str/join "\n" (butlast lines)) "\n"))
+              (is (false? (:ok (score/join-event-clock-files
+                                 (get-in entry [:artifacts :events]) clock))))
+              (spit clock (str/replace-first original #"\t[0-9]+\n"
+                                             "\t999999\n"))
+              (is (false? (:ok (score/join-event-clock-files
+                                 (get-in entry [:artifacts :events]) clock))))))
+          (testing "completion IDs and structured receipt evidence cannot drift"
+            (let [raw-lines (str/split-lines
+                              (slurp (get-in entry [:artifacts :events])))
+                  parsed (mapv #(json/parse-string % true) raw-lines)
+                  wrong-id (assoc-in parsed [3 :item :id] "different")
+                  wrong-receipt (assoc-in parsed
+                                          [3 :item :result :structured_content
+                                           :receipt_hash]
+                                          "not-a-sha256")
+                  noncanonical-receipt
+                  (assoc-in parsed
+                            [3 :item :result :structured_content :undo_receipt]
+                            "/home/dev-a/.local/state/clj-surgeon/workspaces/key/receipts/../receipts/receipt.edn")]
+              (doseq [[label events expected-error]
+                      [[:id wrong-id :call-id-mismatch]
+                       [:receipt wrong-receipt :evidence-incomplete]
+                       [:receipt-path noncanonical-receipt :evidence-incomplete]]]
+                (let [artifacts (write-event-artifacts!
+                                  (io/file root (str "bad-" (name label)))
+                                  events
+                                  [900000000 1000000000 1100000000
+                                   1101000000 1999000000 2000000000])
+                      result (-> (assoc entry :artifacts
+                                        (merge (:artifacts entry)
+                                               {:events (:events-path artifacts)
+                                                :event-clock
+                                                (:event-clock-path artifacts)}))
+                                 (score/manifest-entry->row nil)
+                                 :row
+                                 score/score-run)]
+                  (is (false? (:ok result)) (name label))
+                  (is (some #{expected-error} (:errors result))
+                      (name label))))))
+          (testing "public identity, prompt, registry, and environment fail closed"
+            (let [events-path (get-in entry [:artifacts :events])
+                  raw-lines (str/split-lines (slurp events-path))
+                  parsed (mapv #(json/parse-string % true) raw-lines)
+                  without-identity
+                  (update-in parsed
+                             [3 :item :result :structured_content]
+                             dissoc :canonical_effect_identity)
+                  artifacts (write-event-artifacts!
+                              (io/file root "missing-identity")
+                              without-identity
+                              [900000000 1000000000 1100000000
+                               1101000000 1999000000 2000000000])]
+              (is (false?
+                    (:ok
+                      (-> (score/manifest-entry->row
+                            (assoc entry :artifacts
+                                   (merge (:artifacts entry)
+                                          {:events (:events-path artifacts)
+                                           :event-clock
+                                           (:event-clock-path artifacts)}))
+                            nil)
+                          :row
+                          score/score-run))))
+              (doseq [[label artifact replacement]
+                      [[:prompt :prompt "Assignment: wrong\n"]
+                       [:missing-separator :prompt
+                        (str frozen-task-prompt
+                             (:prompt
+                               (corpus/prompt-material
+                                 (:arm entry) (:workspace-root entry)))
+                             "\n")]
+                       [:double-separator :prompt
+                        (str frozen-task-prompt
+                             "\n\n"
+                             (:prompt
+                               (corpus/prompt-material
+                                 (:arm entry) (:workspace-root entry)))
+                             "\n")]
+                       [:task-byte-drift :prompt
+                        (str "X" (subs frozen-task-prompt 1)
+                             "\n"
+                             (:prompt
+                               (corpus/prompt-material
+                                 (:arm entry) (:workspace-root entry)))
+                             "\n")]
+                       [:forged-full-task :prompt
+                        (str "Perform a different task.\n"
+                             (:prompt
+                               (corpus/prompt-material
+                                 (:arm entry) (:workspace-root entry)))
+                             "\n")]
+                       [:forged-apply-surface :client-registry
+                        (json/generate-string
+                          {:schema "clj-surgeon.codex-mcp-registry.v1"
+                           :ok true
+                           :server "clj-surgeon"
+                           :codex-executable
+                           (:codex-executable environment-evidence)
+                           :tool-names ["apply_clojure_changes"]
+                           :tool-projection
+                           [(assoc (first tool-projection)
+                                   :description "Forged stable surface.")]})]
+                       [:wrong-tool :client-registry
+                        (json/generate-string
+                          {:schema "clj-surgeon.codex-mcp-registry.v1"
+                           :ok true
+                           :server "clj-surgeon"
+                           :codex-executable
+                           (:codex-executable environment-evidence)
+                           :tool-names ["inspect_clojure"]
+                           :tool-projection
+                           [(assoc (first tool-projection)
+                                   :name "inspect_clojure")]})]
+                       [:extra-tool :client-registry
+                        (json/generate-string
+                          {:schema "clj-surgeon.codex-mcp-registry.v1"
+                           :ok true
+                           :server "clj-surgeon"
+                           :codex-executable
+                           (:codex-executable environment-evidence)
+                           :tool-names ["apply_clojure_changes"
+                                        "inspect_clojure"]
+                           :tool-projection
+                           (conj tool-projection
+                                 (assoc (first tool-projection)
+                                        :name "inspect_clojure"))})]
+                       [:reasoning :environment
+                        (pr-str (assoc environment-evidence
+                                       :reasoning "low"))]
+                       [:model :environment
+                        (pr-str (assoc environment-evidence
+                                       :model "gpt-5.6-terra"))]]]
+                (let [path (get-in entry [:artifacts artifact])
+                      original (slurp path)]
+                  (spit path replacement)
+                  (is (false? (:ok (score/manifest-entry->row entry nil)))
+                      (name label))
+                  (spit path original))))))
+        (finally
+          (delete-tree! root))))))
 
 (deftest coordinator-cli-scores-block-one-and-final-manifests
-  (let [root (temp-dir)]
-    (try
-      (let [runs (raw-cohort! root)
-            block-1-file (io/file root "block1.edn")
-            block-2-file (io/file root "block2.edn")
-            block-1-output (io/file root "block1-report.edn")
-            final-output (io/file root "final-report.edn")]
-        (spit block-1-file
-              (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
-                       :block 1
-                       :runs (subvec runs 0 4)}))
-        (spit block-2-file
-              (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
-                       :block 2
-                       :runs (subvec runs 4 8)}))
-        (let [block-result
-              (score/run-cli!
-                ["--phase" "block1"
-                 "--manifest" (.getPath block-1-file)
-                 "--output" (.getPath block-1-output)])
-              final-result
-              (score/run-cli!
-                ["--phase" "final"
-                 "--block1-manifest" (.getPath block-1-file)
-                 "--block2-manifest" (.getPath block-2-file)
-                 "--output" (.getPath final-output)])]
-          (is (zero? (:exit block-result)))
-          (is (get-in (edn/read-string (slurp block-1-output))
-                      [:gate :block-2-authorized]))
-          (is (zero? (:exit final-result)))
-          (is (get-in (edn/read-string (slurp final-output))
-                      [:gate :promote]))
-          (is (= 2 (:exit (score/run-cli!
-                            ["--phase" "final"
-                             "--block1-manifest" (.getPath block-1-file)
-                             "--output" (.getPath final-output)]))))))
-      (finally
-        (delete-tree! root)))))
+  (with-redefs [score/expected-client-tool-projection-sha256
+                test-client-tool-projection-sha256
+                score/expected-prompt-template-sha256
+                test-prompt-template-sha256]
+    (let [root (temp-dir)]
+      (try
+        (let [runs (raw-cohort! root)
+              block-1-file (io/file root "block1.edn")
+              block-2-file (io/file root "block2.edn")
+              block-1-output (io/file root "block1-report.edn")
+              final-output (io/file root "final-report.edn")]
+          (spit block-1-file
+                (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
+                         :block 1
+                         :runs (subvec runs 0 4)}))
+          (spit block-2-file
+                (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
+                         :block 2
+                         :runs (subvec runs 4 8)}))
+          (let [block-result
+                (score/run-cli!
+                  ["--phase" "block1"
+                   "--manifest" (.getPath block-1-file)
+                   "--output" (.getPath block-1-output)])
+                final-result
+                (score/run-cli!
+                  ["--phase" "final"
+                   "--block1-manifest" (.getPath block-1-file)
+                   "--block2-manifest" (.getPath block-2-file)
+                   "--output" (.getPath final-output)])]
+            (is (zero? (:exit block-result)))
+            (is (get-in (edn/read-string (slurp block-1-output))
+                        [:gate :block-2-authorized]))
+            (is (zero? (:exit final-result)))
+            (is (get-in (edn/read-string (slurp final-output))
+                        [:gate :promote]))
+            (is (= 2 (:exit (score/run-cli!
+                              ["--phase" "final"
+                               "--block1-manifest" (.getPath block-1-file)
+                               "--output" (.getPath final-output)]))))))
+        (finally
+          (delete-tree! root))))))
 
 (defn -main [& _]
   (let [{:keys [fail error]}

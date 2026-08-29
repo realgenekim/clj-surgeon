@@ -27,6 +27,13 @@ require_exact_setting() {
   fi
 }
 
+canonical_file_path() {
+  local path=$1
+  command -v realpath >/dev/null 2>&1 \
+    || die "realpath is required to freeze executable identity"
+  realpath "$path"
+}
+
 repo_relative_path() {
   local path=$1 absolute
   case "$path" in
@@ -43,8 +50,9 @@ repo_relative_path() {
 }
 
 manifest_contains() {
-  local wanted=$1 item
-  for item in "${manifest_paths[@]}"; do
+  local wanted=$1 item index
+  for ((index=0; index<manifest_count; index++)); do
+    item=${manifest_paths[$index]}
     [ "$item" = "$wanted" ] && return 0
   done
   return 1
@@ -62,7 +70,7 @@ write_receipt() {
 }
 
 cleanup() {
-  local exit_code=$?
+  local exit_code=$1
   trap - EXIT INT TERM
   write_receipt "$exit_code" || true
   if [ -n "${owner_dir:-}" ] && [ -d "$owner_dir" ]; then
@@ -77,7 +85,7 @@ result_root_ready=
 actual_head=
 actual_tree=
 owner_dir=
-trap cleanup EXIT
+trap 'cleanup "$?"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -85,6 +93,18 @@ expected_head=${BENCH_RELATION_EXPECTED_HEAD:?BENCH_RELATION_EXPECTED_HEAD is re
 expected_tree=${BENCH_RELATION_EXPECTED_TREE:?BENCH_RELATION_EXPECTED_TREE is required}
 manifest=${BENCH_RELATION_ARTIFACT_MANIFEST:?BENCH_RELATION_ARTIFACT_MANIFEST is required}
 expected_manifest_sha=${BENCH_RELATION_EXPECTED_MANIFEST_SHA256:?BENCH_RELATION_EXPECTED_MANIFEST_SHA256 is required}
+expected_codex_executable=${BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE:?BENCH_RELATION_EXPECTED_CODEX_EXECUTABLE is required}
+expected_codex_sha256=${BENCH_RELATION_EXPECTED_CODEX_SHA256:?BENCH_RELATION_EXPECTED_CODEX_SHA256 is required}
+expected_codex_version=${BENCH_RELATION_EXPECTED_CODEX_VERSION:?BENCH_RELATION_EXPECTED_CODEX_VERSION is required}
+expected_platform_os=${BENCH_RELATION_EXPECTED_PLATFORM_OS:?BENCH_RELATION_EXPECTED_PLATFORM_OS is required}
+expected_platform_arch=${BENCH_RELATION_EXPECTED_PLATFORM_ARCH:?BENCH_RELATION_EXPECTED_PLATFORM_ARCH is required}
+expected_codex_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_PACKAGE_SHA256 is required}
+expected_codex_platform_package_sha256=${BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_PLATFORM_PACKAGE_SHA256 is required}
+expected_codex_native_executable=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE:?BENCH_RELATION_EXPECTED_CODEX_NATIVE_EXECUTABLE is required}
+expected_codex_native_sha256=${BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256:?BENCH_RELATION_EXPECTED_CODEX_NATIVE_SHA256 is required}
+expected_node_executable=${BENCH_RELATION_EXPECTED_NODE_EXECUTABLE:?BENCH_RELATION_EXPECTED_NODE_EXECUTABLE is required}
+expected_node_sha256=${BENCH_RELATION_EXPECTED_NODE_SHA256:?BENCH_RELATION_EXPECTED_NODE_SHA256 is required}
+expected_node_version=${BENCH_RELATION_EXPECTED_NODE_VERSION:?BENCH_RELATION_EXPECTED_NODE_VERSION is required}
 result_root=${BENCH_RELATION_RESULT_DIR:?BENCH_RELATION_RESULT_DIR is required}
 worker=${BENCH_RELATION_WORKER:-$repo_root/bench/run_clean_codex.sh}
 scorer=${BENCH_RELATION_SCORER:-$repo_root/bench/relation_causal_score.clj}
@@ -93,6 +113,32 @@ scorer_launcher=${BENCH_RELATION_SCORER_LAUNCHER:-bb}
 [[ "$expected_head" =~ ^[0-9a-f]{40}$ ]] || die "Expected head must be one full lowercase Git commit hash"
 [[ "$expected_tree" =~ ^[0-9a-f]{40}$ ]] || die "Expected tree must be one full lowercase Git tree hash"
 [[ "$expected_manifest_sha" =~ ^[0-9a-f]{64}$ ]] || die "Expected manifest SHA must be one lowercase SHA-256"
+case "$expected_codex_executable" in
+  /*) ;;
+  *) die "Expected Codex executable must be an absolute canonical path" ;;
+esac
+case "$expected_codex_native_executable" in
+  /*) ;;
+  *) die "Expected Codex native executable must be an absolute canonical path" ;;
+esac
+case "$expected_node_executable" in
+  /*) ;;
+  *) die "Expected Node executable must be an absolute canonical path" ;;
+esac
+[[ "$expected_codex_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "Expected Codex SHA must be one lowercase SHA-256"
+[ -n "$expected_codex_version" ] || die "Expected Codex version cannot be empty"
+[ -n "$expected_platform_os" ] || die "Expected platform OS cannot be empty"
+[ -n "$expected_platform_arch" ] || die "Expected platform architecture cannot be empty"
+[[ "$expected_codex_package_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "Expected Codex package SHA must be one lowercase SHA-256"
+[[ "$expected_codex_platform_package_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "Expected Codex platform package SHA must be one lowercase SHA-256"
+[[ "$expected_codex_native_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "Expected Codex native SHA must be one lowercase SHA-256"
+[[ "$expected_node_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || die "Expected Node SHA must be one lowercase SHA-256"
+[ -n "$expected_node_version" ] || die "Expected Node version cannot be empty"
 [ -f "$manifest" ] || die "Artifact manifest does not exist: $manifest"
 
 require_exact_setting BENCH_RUN_MATRIX "$block1_matrix"
@@ -137,6 +183,9 @@ actual_manifest_sha=$(shasum -a 256 "$manifest" | awk '{print $1}')
 
 manifest_paths=()
 manifest_hashes=()
+manifest_count=0
+approved_manifest_count=39
+approved_manifest_path_set_sha=bcf008d42930236816053f5e7cdf6dd40f5bd91d24ce5352313d85cd9b1546c8
 while read -r artifact_sha artifact_path extra; do
   [ -n "${artifact_sha:-}" ] || continue
   [ -z "${extra:-}" ] || die "Artifact manifest rows must contain exactly SHA-256 and path"
@@ -145,15 +194,26 @@ while read -r artifact_sha artifact_path extra; do
   case "$artifact_path" in
     ''|/*|..|../*|*/..|*/../*) die "Artifact manifest path escapes the repository: $artifact_path" ;;
   esac
-  for seen in "${manifest_paths[@]}"; do
-    [ "$seen" != "$artifact_path" ] || die "Artifact manifest repeats path: $artifact_path"
+  for ((index=0; index<manifest_count; index++)); do
+    [ "${manifest_paths[$index]}" != "$artifact_path" ] \
+      || die "Artifact manifest repeats path: $artifact_path"
   done
   [ -f "$repo_root/$artifact_path" ] \
     || die "Artifact manifest path is not a file: $artifact_path"
-  manifest_paths+=("$artifact_path")
-  manifest_hashes+=("$artifact_sha")
+  manifest_paths[$manifest_count]=$artifact_path
+  manifest_hashes[$manifest_count]=$artifact_sha
+  manifest_count=$((manifest_count + 1))
 done < "$manifest"
-[ "${#manifest_paths[@]}" -gt 0 ] || die "Artifact manifest is empty"
+[ "$manifest_count" -gt 0 ] || die "Artifact manifest is empty"
+[ "$manifest_count" -eq "$approved_manifest_count" ] \
+  || die "Artifact manifest must contain exactly $approved_manifest_count paths"
+actual_manifest_path_set_sha=$(
+  for ((index=0; index<manifest_count; index++)); do
+    printf '%s\n' "${manifest_paths[$index]}"
+  done | LC_ALL=C sort | shasum -a 256 | awk '{print $1}'
+)
+[ "$actual_manifest_path_set_sha" = "$approved_manifest_path_set_sha" ] \
+  || die "Artifact manifest path set differs from the approved cohort"
 
 worker_rel=$(repo_relative_path "$worker")
 scorer_rel=$(repo_relative_path "$scorer")
@@ -191,25 +251,125 @@ for fixture_file in "${fixture_paths[@]}"; do
     || die "Artifact manifest omits fixture path: $fixture_file"
 done
 
-dirty=$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all -- "${manifest_paths[@]}")
-[ -z "$dirty" ] || die "Candidate has dirty cohort artifacts: $dirty"
+assert_candidate_identity() {
+  local current_head current_tree current_manifest_sha dirty runtime_dirty
+  local index artifact_path artifact_sha actual_sha
+  current_head=$(git -C "$repo_root" rev-parse 'HEAD^{commit}')
+  current_tree=$(git -C "$repo_root" rev-parse 'HEAD^{tree}')
+  [ "$current_head" = "$expected_head" ] \
+    || die "Candidate HEAD mismatch: expected $expected_head, got $current_head"
+  [ "$current_tree" = "$expected_tree" ] \
+    || die "Candidate tree mismatch: expected $expected_tree, got $current_tree"
+  current_manifest_sha=$(shasum -a 256 "$manifest" | awk '{print $1}')
+  [ "$current_manifest_sha" = "$expected_manifest_sha" ] \
+    || die "Artifact manifest SHA mismatch"
+  dirty=$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all -- "${manifest_paths[@]}")
+  [ -z "$dirty" ] || die "Candidate has dirty cohort artifacts: $dirty"
+  runtime_dirty=$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all)
+  [ -z "$runtime_dirty" ] \
+    || die "Candidate has dirty runtime closure: $runtime_dirty"
+  for ((index=0; index<manifest_count; index++)); do
+    artifact_path=${manifest_paths[$index]}
+    artifact_sha=${manifest_hashes[$index]}
+    actual_sha=$(shasum -a 256 "$repo_root/$artifact_path" | awk '{print $1}')
+    [ "$actual_sha" = "$artifact_sha" ] \
+      || die "Artifact SHA mismatch: $artifact_path"
+  done
+  actual_head=$current_head
+  actual_tree=$current_tree
+}
 
-for index in "${!manifest_paths[@]}"; do
-  artifact_path=${manifest_paths[$index]}
-  artifact_sha=${manifest_hashes[$index]}
-  actual_sha=$(shasum -a 256 "$repo_root/$artifact_path" | awk '{print $1}')
-  [ "$actual_sha" = "$artifact_sha" ] \
-    || die "Artifact SHA mismatch: $artifact_path"
-done
+assert_candidate_identity
 
-codex_executable=$(command -v codex)
-codex_executable=$(cd "$(dirname "$codex_executable")" && pwd -P)/$(basename "$codex_executable")
-codex_sha256=$(shasum -a 256 "$codex_executable" | awk '{print $1}')
-codex_version=$("$codex_executable" --version)
-[ -n "$codex_version" ] || die "Codex version is empty"
+assert_codex_identity() {
+  local entry executable sha version package_root package_file package_sha
+  local platform_package_name platform_target platform_package_file platform_package_sha
+  local native_executable native_sha node_entry actual_node_executable actual_node_sha
+  local actual_node_version actual_platform_os actual_platform_arch
+  entry=$(command -v codex) || die "Codex executable is unavailable"
+  executable=$(canonical_file_path "$entry")
+  sha=$(shasum -a 256 "$executable" | awk '{print $1}')
+  version=$("$executable" --version)
+  package_root=$(dirname "$(dirname "$executable")")
+  package_file="$package_root/package.json"
+  [ -f "$package_file" ] || die "Codex package identity is unavailable: $package_file"
+  package_sha=$(shasum -a 256 "$package_file" | awk '{print $1}')
+  actual_platform_os=$(uname -s)
+  actual_platform_arch=$(uname -m)
+  case "$actual_platform_os:$actual_platform_arch" in
+    Darwin:arm64)
+      platform_package_name=codex-darwin-arm64
+      platform_target=aarch64-apple-darwin
+      ;;
+    Darwin:x86_64)
+      platform_package_name=codex-darwin-x64
+      platform_target=x86_64-apple-darwin
+      ;;
+    Linux:aarch64|Linux:arm64)
+      platform_package_name=codex-linux-arm64
+      platform_target=aarch64-unknown-linux-musl
+      ;;
+    Linux:x86_64)
+      platform_package_name=codex-linux-x64
+      platform_target=x86_64-unknown-linux-musl
+      ;;
+    *) die "Unsupported Codex platform: $actual_platform_os/$actual_platform_arch" ;;
+  esac
+  platform_package_file="$package_root/node_modules/@openai/$platform_package_name/package.json"
+  [ -f "$platform_package_file" ] \
+    || die "Codex platform package identity is unavailable: $platform_package_file"
+  platform_package_sha=$(shasum -a 256 "$platform_package_file" | awk '{print $1}')
+  native_executable=$(canonical_file_path \
+    "$package_root/node_modules/@openai/$platform_package_name/vendor/$platform_target/bin/codex")
+  native_sha=$(shasum -a 256 "$native_executable" | awk '{print $1}')
+  node_entry=$(command -v node) || die "Node executable is unavailable"
+  actual_node_executable=$(canonical_file_path "$node_entry")
+  actual_node_sha=$(shasum -a 256 "$actual_node_executable" | awk '{print $1}')
+  actual_node_version=$("$actual_node_executable" --version)
+  [ "$executable" = "$expected_codex_executable" ] \
+    || die "Codex executable identity mismatch: expected $expected_codex_executable, got $executable"
+  [ "$sha" = "$expected_codex_sha256" ] \
+    || die "Codex SHA mismatch: expected $expected_codex_sha256, got $sha"
+  [ "$version" = "$expected_codex_version" ] \
+    || die "Codex version mismatch: expected $expected_codex_version, got $version"
+  [ "$package_sha" = "$expected_codex_package_sha256" ] \
+    || die "Codex package SHA mismatch: expected $expected_codex_package_sha256, got $package_sha"
+  [ "$platform_package_sha" = "$expected_codex_platform_package_sha256" ] \
+    || die "Codex platform package SHA mismatch: expected $expected_codex_platform_package_sha256, got $platform_package_sha"
+  [ "$native_executable" = "$expected_codex_native_executable" ] \
+    || die "Codex native executable identity mismatch"
+  [ "$native_sha" = "$expected_codex_native_sha256" ] \
+    || die "Codex native SHA mismatch: expected $expected_codex_native_sha256, got $native_sha"
+  [ "$actual_node_executable" = "$expected_node_executable" ] \
+    || die "Node executable identity mismatch: expected $expected_node_executable, got $actual_node_executable"
+  [ "$actual_node_sha" = "$expected_node_sha256" ] \
+    || die "Node SHA mismatch: expected $expected_node_sha256, got $actual_node_sha"
+  [ "$actual_node_version" = "$expected_node_version" ] \
+    || die "Node version mismatch: expected $expected_node_version, got $actual_node_version"
+  [ "$actual_platform_os" = "$expected_platform_os" ] \
+    || die "Platform OS mismatch: expected $expected_platform_os, got $actual_platform_os"
+  [ "$actual_platform_arch" = "$expected_platform_arch" ] \
+    || die "Platform architecture mismatch: expected $expected_platform_arch, got $actual_platform_arch"
+  codex_executable=$executable
+  codex_sha256=$sha
+  codex_version=$version
+  codex_package_sha256=$package_sha
+  codex_platform_package_sha256=$platform_package_sha
+  codex_native_executable=$native_executable
+  codex_native_sha256=$native_sha
+  node_executable=$actual_node_executable
+  node_sha256=$actual_node_sha
+  node_version=$actual_node_version
+  platform_os=$actual_platform_os
+  platform_arch=$actual_platform_arch
+}
+
+assert_codex_identity
 environment_receipt="$result_root/environment.edn"
 bb -e '
-  (let [[output model reasoning executable executable-sha version]
+  (let [[output model reasoning executable executable-sha version
+         package-sha platform-package-sha native-executable native-sha node-executable node-sha
+         node-version platform-os platform-arch]
         *command-line-args*]
     (spit output
           (str
@@ -219,10 +379,22 @@ bb -e '
                :reasoning reasoning
                :codex-executable executable
                :codex-sha256 executable-sha
-               :codex-version version})
+               :codex-version version
+               :codex-package-sha256 package-sha
+               :codex-platform-package-sha256 platform-package-sha
+               :codex-native-executable native-executable
+               :codex-native-sha256 native-sha
+               :node-executable node-executable
+               :node-sha256 node-sha
+               :node-version node-version
+               :platform-os platform-os
+               :platform-arch platform-arch})
             "\\n")))' \
   "$environment_receipt" "$model" "$reasoning" "$codex_executable" \
-  "$codex_sha256" "$codex_version"
+  "$codex_sha256" "$codex_version" "$codex_package_sha256" \
+  "$codex_platform_package_sha256" "$codex_native_executable" \
+  "$codex_native_sha256" "$node_executable" \
+  "$node_sha256" "$node_version" "$platform_os" "$platform_arch"
 
 [ -f "$repo_root/$worker_rel" ] || die "Worker is not a file: $worker_rel"
 [ -f "$repo_root/$scorer_rel" ] || die "Scorer is not a file: $scorer_rel"
@@ -231,6 +403,8 @@ command -v "$scorer_launcher" >/dev/null 2>&1 \
 
 run_block() {
   local name=$1 matrix=$2 destination
+  assert_candidate_identity
+  assert_codex_identity
   destination="$result_root/$name"
   BENCH_RESULT_DIR="$destination" \
   BENCH_TASKS="$task" \
@@ -242,6 +416,8 @@ run_block() {
   BENCH_REASONING="$reasoning" \
   BENCH_RETENTION=local \
     bash "$repo_root/$worker_rel"
+  assert_candidate_identity
+  assert_codex_identity
 }
 
 run_scorer() {
