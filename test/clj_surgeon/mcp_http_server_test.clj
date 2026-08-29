@@ -278,7 +278,8 @@
         (is (= false (get-in tools [0 :inputSchema :additionalProperties])))
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
         (is (= #{:basis :decisions :verify :changes :expect :edits :programs
-                 :delete_owners :extraction :workspace_root}
+                 :delete_owners :extraction :workspace_root
+                 :symbol_migration :require_change}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?
               (get-in tools [1 :inputSchema :properties :verify :description])
@@ -493,7 +494,7 @@
         receipt-dir (io/file project "receipts")
         _created-source-dir (.mkdirs (.getParentFile source-file))
         _wrote-source (spit source-file "(ns demo)\n\n(defn shell []\n  [:body])\n")
-        original @#'tool/handle-clj-change
+        original @#'tool/handle-apply-clojure-changes
         original-inspect @#'inspect-tool/handle-inspect
         running (http-server/start-http-server!
                   {:project-dir (.getPath project)
@@ -553,7 +554,7 @@
                 code
                 (str "(do "
                      "(alter-var-root "
-                     "#'clj-surgeon.mcp-tool/handle-clj-change "
+                     "#'clj-surgeon.mcp-tool/handle-apply-clojure-changes "
                      "(constantly (fn [_ _ callback] "
                      "(callback [\"HOT_RELOAD_OK\"] false "
                      "{:ok true :operation \"apply_clojure_changes\" "
@@ -592,7 +593,8 @@
         ;; late nREPL eval can overwrite the restored roots and contaminate the
         ;; tests that follow this one.
         (http-server/stop-http-server! running)
-        (alter-var-root #'tool/handle-clj-change (constantly original))
+        (alter-var-root #'tool/handle-apply-clojure-changes
+                        (constantly original))
         (alter-var-root #'inspect-tool/handle-inspect
                         (constantly original-inspect))
         (delete-tree! project)))))

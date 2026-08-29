@@ -1023,7 +1023,8 @@
 (defn normalize-refusal
   "Return the stable, compact refusal surface used by the MCP callback."
   [result]
-  (let [error-type (:error-type result)
+  (let [error-type (or (:error-type result)
+                       (some-> (:error_type result) keyword))
         change-index (if (contains? result :change-index)
                        (:change-index result)
                        (:intent-index result))
@@ -1055,8 +1056,14 @@
          :error_type (if (keyword? error-type) (name error-type) (str error-type))
          :error (or (:error result) "apply_clojure_changes refused")
          :source_unchanged
-         (if (contains? result :source-unchanged)
+         (cond
+           (contains? result :source-unchanged)
            (boolean (:source-unchanged result))
+
+           (contains? result :source_unchanged)
+           (boolean (:source_unchanged result))
+
+           :else
            (boolean
              (or (:rolled-back result)
                  (contains? prewrite-error-types error-type))))

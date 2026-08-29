@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-compact-relations-test
   (:require
    [clj-surgeon.core :as core]
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-compact-location :as compact-location]
@@ -307,7 +308,29 @@
     (is (contains? (get-in schema/clj-change-schema [:properties])
                    "symbol_migration"))
     (is (contains? (get-in schema/clj-change-schema [:properties])
-                   "require_change")))
+                   "require_change"))
+    (is (= [{:const "owner"} {:const "from"} {:const "matches"}]
+           (get-in schema/symbol-migration-schema
+                   [:properties "columns" :prefixItems])))
+    (is (= [{:type "string" :minLength 1}
+            {:type "string" :minLength 1}
+            {:type "integer" :minimum 1 :maximum 128}]
+           (get-in schema/symbol-migration-schema
+                   [:properties "files" :items :prefixItems 1
+                    :items :prefixItems])))
+    (is (= (:allOf schema/editor-hybrid-schema)
+           (:allOf schema/clj-change-schema)))
+    (is (= [{:not
+             {:oneOf
+              [{:required ["symbol_migration"]
+                :not {:required ["require_change"]}}
+               {:required ["require_change"]
+                :not {:required ["symbol_migration"]}}]}}]
+           (:allOf schema/editor-hybrid-schema)))
+    (doseq [description [mcp-tool/edit-tool-description
+                         mcp-tool/tool-description]]
+      (is (str/includes? description "symbol_migration"))
+      (is (str/includes? description "require_change"))))
   (doseq [[label request path]
           [[:missing-pair (dissoc relation-request "require_change")
             ["require_change"]]
@@ -350,6 +373,24 @@
         (is (false? (:mutation-attempted result)))
         (is (false? (:write-authority result)))
         (is (not (contains? result :request))))))
+  (testing "the advertised schema denies malformed or partial relations"
+    (is (:ok (admission/authorize schema/editor-tool-schema
+                                  relation-request)))
+    (doseq [request
+            [(dissoc relation-request "require_change")
+             (assoc-in relation-request
+                       ["symbol_migration" "columns"] ["x" "y" "z"])
+             (assoc-in relation-request
+                       ["symbol_migration" "files" 0 1 0] [42])
+             (assoc-in relation-request
+                       ["symbol_migration" "files" 0 1 0 0] 42)
+             (assoc-in relation-request
+                       ["symbol_migration" "files" 0 1 0 1] 42)
+             (assoc-in relation-request
+                       ["symbol_migration" "files" 0 1 0 2] 0)]]
+      (is (false? (:ok (admission/authorize
+                         schema/editor-tool-schema request)))
+          (pr-str request))))
   (testing "public reader forms refuse without evaluation"
     (doseq [request
             (concat
@@ -426,6 +467,24 @@
              (get-in result [:request "edits" 1 "file"])))
       (is (= deletion-file
              (get-in result [:request "delete_owners" 1 "file"]))))))
+(testing "grouped literal edits contribute matches for every declared file"
+  (let [{:keys [sources]} (fixture)
+        request
+        (update relation-request "edits" conj
+                {"files" ["src/extra/a.clj" "src/extra/b.clj"]
+                 "within" {"root" true}
+                 "from" ":old"
+                 "to" ":new"
+                 "matches" 2})
+        result (relations/compile-frozen
+                 sources (relations/compile-source-blind request))]
+    (is (:ok result) (pr-str result))
+    (is (= 55
+           (get-in result
+                   [:relation-normalization :declared_matches])))
+    (is (= 48
+           (get-in result
+                   [:relation-normalization :expanded_edits])))))
 
 (deftest require-delta-lowers-from-one-frozen-map
   ;; @spec MCP-OP-EDIT-022
@@ -562,7 +621,28 @@
                                  :next_call :terminal_response]]
                 (is (not (contains? result forbidden)) (name forbidden)))
               (is (empty? (or (seq (.listFiles receipt-dir)) []))))))
+        (testing "one symlink spelling publishes only canonical relation evidence"
+          (let [request (-> relation-request
+                            (assoc-in ["symbol_migration" "files" 0 0]
+                                      symlink-path)
+                            (assoc-in ["require_change" "files" 0 "file"]
+                                      symlink-path))
+                {:keys [error? structured] :as public-result}
+                (invoke-public-tool!
+                  mcp-tool/edit-clojure-tool
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath receipt-dir)}
+                  request)]
+            (is (false? error?) (pr-str public-result))
+            (is (= relation-files
+                   (get-in structured
+                           [:compact_relation_normalization :files])))
+            (is (= (set relation-files)
+                   (set (keys (:read_back_hashes structured)))))
+            (is (:ok (transaction/execute-undo!
+                       {:receipt (:undo_receipt structured)})))))
         (finally
+          (mcp-tool/init! nil)
           (delete-tree! workspace))))))
 
 (deftest closed-relations-compose-to-frozen-future
@@ -638,9 +718,11 @@
   ;; @spec MCP-OP-EDIT-024
   (let [{:keys [expected-after-hashes expected-before-hashes]} (fixture)
         normalizations (atom [])]
-    (doseq [[label tool request exact?]
-            [[:edit-clojure mcp-tool/edit-clojure-tool relation-request false]
+    (doseq [[label tool operation request exact?]
+            [[:edit-clojure mcp-tool/edit-clojure-tool "edit_clojure"
+              relation-request false]
              [:compact-apply mcp-tool/clj-change-tool
+              "apply_clojure_changes"
               (assoc relation-request "verify" "exact") true]]]
       (testing (name label)
         (let [workspace (temp-dir)
@@ -672,6 +754,7 @@
                             (edn/read-string (slurp receipt-file)))]
               (is (false? error?) (pr-str public-result))
               (is (:ok structured) (pr-str structured))
+              (is (= operation (:operation structured)))
               (is (:verification_complete structured))
               (is (= "none" (:next_action structured)))
               (is (= (set (keys expected-relation-normalization))
@@ -748,6 +831,32 @@
               (delete-tree! workspace))))))
     (is (= 2 (count @normalizations)))
     (is (apply = @normalizations)))
+  (testing "edit_clojure refuses verification before capture"
+    (let [workspace (temp-dir)
+          receipt-dir (io/file workspace "receipts")
+          calls (atom 0)]
+      (try
+        (copy-tree! (io/file fixture-root "before") workspace)
+        (let [{:keys [error? structured]}
+              (with-redefs [relations/compile-source-blind
+                            (fn [& _]
+                              (swap! calls inc)
+                              (throw (ex-info "must not lower" {})))]
+                (invoke-public-tool!
+                  mcp-tool/edit-clojure-tool
+                  {:project-root (.getPath workspace)
+                   :receipt-dir (.getPath receipt-dir)}
+                  (assoc relation-request "verify" "exact")))]
+          (is error?)
+          (is (= "edit_clojure" (:operation structured)))
+          (is (= "invalid-mcp-request" (:error_type structured)))
+          (is (false? (:mutation_attempted structured)))
+          (is (false? (:write_authority structured)))
+          (is (zero? @calls))
+          (is (empty? (or (seq (.listFiles receipt-dir)) []))))
+        (finally
+          (mcp-tool/init! nil)
+          (delete-tree! workspace)))))
   (testing "a verifier failure rolls back and keeps verifier authority"
     (let [workspace (temp-dir)
           receipt-dir (io/file workspace "receipts")]

@@ -184,6 +184,7 @@
                        "clj-surgeon.mcp-workspace"
                        "clj-surgeon.mcp-schema"
                        "clj-surgeon.mcp-compact-edit-fields"
+                       "clj-surgeon.mcp-compact-relations"
                        "clj-surgeon.mcp-contract"
                        "clj-surgeon.mcp-semantic-client"
                        "clj-surgeon.mcp-source-anchor"

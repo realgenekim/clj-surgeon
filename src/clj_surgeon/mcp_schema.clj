@@ -319,21 +319,46 @@
 (def symbol-migration-schema
   {:type "object"
    :additionalProperties false
+   :description
+   (str "Grouped exact owner-scoped symbol replacements. target_alias replaces "
+        "the qualifier while preserve-name retains each from symbol's name. "
+        "Each files entry is [file, sites]; each site is [owner, from, matches]. "
+        "Owners, old symbols, and positive counts are authority, not discovery.")
    :properties
    {"target_alias" {:type "string" :minLength 1}
     "target_rule" {:type "string" :enum ["preserve-name"]}
     "columns" {:type "array"
                :minItems 3
                :maxItems 3
-               :items {:type "string"}}
+               :prefixItems [{:const "owner"}
+                             {:const "from"}
+                             {:const "matches"}]}
     "files" {:type "array"
              :minItems 1
-             :items {:type "array" :minItems 2 :maxItems 2}}}
+             :items
+             {:type "array"
+              :minItems 2
+              :maxItems 2
+              :prefixItems
+              [{:type "string" :minLength 1}
+               {:type "array"
+                :minItems 1
+                :items
+                {:type "array"
+                 :minItems 3
+                 :maxItems 3
+                 :prefixItems [{:type "string" :minLength 1}
+                               {:type "string" :minLength 1}
+                               {:type "integer" :minimum 1 :maximum 128}]}}]}}}
    :required ["target_alias" "target_rule" "columns" "files"]})
 
 (def require-change-schema
   {:type "object"
    :additionalProperties false
+   :description
+   (str "One explicit require migration paired with symbol_migration. add names "
+        "the exact target lib and alias. files repeats the same ordered file "
+        "vector and may name one exact old lib/alias to remove per file.")
    :properties
    {"add" compact-relation-lib-alias-schema
     "files"
@@ -356,7 +381,14 @@
       (assoc :anyOf [{:required ["edits"]}
                      {:required ["programs"]}
                      {:required ["delete_owners"]}
-                     {:required ["symbol_migration" "require_change"]}])))
+                     {:required ["symbol_migration" "require_change"]}])
+      (assoc :allOf
+             [{:not
+               {:oneOf
+                [{:required ["symbol_migration"]
+                  :not {:required ["require_change"]}}
+                 {:required ["require_change"]
+                  :not {:required ["symbol_migration"]}}]}}])))
 
 (def editor-tool-schema
   (-> editor-hybrid-schema
@@ -412,6 +444,7 @@
                       (:properties explicit-change-schema)
                       (:properties editor-hybrid-schema)
                       (:properties extraction-schema))
+   :allOf (:allOf editor-hybrid-schema)
    :oneOf
    [{:required ["basis" "decisions"]
      :not {:anyOf [{:required ["changes"]} {:required ["expect"]}
