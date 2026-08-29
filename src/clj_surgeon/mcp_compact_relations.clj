@@ -41,6 +41,8 @@
 
 (def reserved-reader-tokens #{"nil" "true" "false"})
 
+;; @spec MCP-OP-EDIT-026
+;; @spec MCP-OP-EDIT-027
 (defn- simple-symbol-token? [value]
   (and (string? value)
        (not (contains? reserved-reader-tokens value))
