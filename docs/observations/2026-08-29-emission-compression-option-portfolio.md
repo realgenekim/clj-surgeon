@@ -1,5 +1,10 @@
 # Emission Compression Is the Next General Hill
 
+Safety falsifier: [A Wrong In-Range Index Ended the Composition Hill](2026-08-29-wrong-index-ended-emission-composition.md).
+Numeric file indexes are identity replacement, not repetition removal, and are
+permanently ineligible for product promotion under the observed silent
+wrong-file mutation.
+
 Date: 2026-08-29
 
 Lane: SURGEON2, isolated analysis and zero-model experiment

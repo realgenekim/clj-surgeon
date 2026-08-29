@@ -6,7 +6,8 @@ Lane: SURGEON2, deterministic adversarial probe
 
 Candidate receipt: fbe65efe503444f517eb48e5c05919ca58f810de
 
-Status: NO-GO; model cohort cancelled before launch
+Status: permanently NO-GO for product promotion; a non-promotable predictor
+validation cohort was later authorized
 
 ## Question
 
@@ -93,8 +94,8 @@ meant to index.
 ## Decision
 
 file_index is NO-GO for this compression hill regardless of its 23.67% payload
-reduction. The authorized F C C F / C F F C dev-a cohort is cancelled. No model
-tokens were spent.
+reduction. The original promotion cohort was cancelled. No model token had
+been spent when this decision was made.
 
 The other threshold-crossing pair remains ineligible:
 
@@ -123,3 +124,43 @@ requires all of these facts at once:
 
 No product code, install, reload, shared port, Anvil worker, or pre-existing
 process was changed.
+
+## Later predictor-validation authorization
+
+Gene later authorized the same frozen F C C F / C F F C calls on dev-a for a
+different question: does emitted payload size predict T_emit? This cohort can
+never rehabilitate file_index. It is mechanism validation only, not a product
+candidate or promotion gate. Correct indices in a passing model call also
+cannot falsify the wrong-index defect; that is why the deterministic probe is
+permanent and must travel with the timing receipt.
+
+The prediction is frozen here before the first model call.
+
+~~~text
+flat compact arguments        6,409 characters
+candidate compact arguments   4,892 characters
+saved                         1,517 characters (23.67%)
+relation calibration          3,638 characters -> 1,174.5 output tokens
+predicted token reduction       489.566 tokens
+emission model slope            0.018735811 seconds/token
+primary predicted T_emit delta  9.173 seconds
+~~~
+
+The independently retained emission model is:
+
+~~~text
+T_emit_s = -0.134586 + 0.018735811 * total_output_tokens
+~~~
+
+The intercept cancels in an arm-to-arm delta. A secondary character-only
+projection, retained before this authorization, predicts 8.931 seconds:
+
+~~~text
+1,517 / 3,638 * 21.417 seconds = 8.931 seconds
+~~~
+
+The cohort must report both predictions, the observed control-minus-candidate
+T_emit delta, and both signed residuals. It must retain every position and
+report route adherence separately from correctness. A fast result remains
+unsafe; a slow result falsifies or qualifies the predictor but does not make
+file_index more or less safe.
