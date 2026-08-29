@@ -1,7 +1,15 @@
 (ns relation-causal-score-test
   (:require
+   [cheshire.core :as json]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [relation-causal-score :as score]))
+   [relation-causal-corpus :as corpus]
+   [relation-causal-score :as score])
+  (:import
+   (java.nio.file Files)
+   (java.security MessageDigest)))
 
 (def sha-a (apply str (repeat 64 "a")))
 (def sha-b (apply str (repeat 64 "b")))
@@ -9,6 +17,11 @@
 (def sha-d (apply str (repeat 64 "d")))
 (def sha-e (apply str (repeat 64 "e")))
 (def sha-f (apply str (repeat 64 "f")))
+
+(defn- sha256 [text]
+  (let [digest (.digest (MessageDigest/getInstance "SHA-256")
+                        (.getBytes ^String text "UTF-8"))]
+    (apply str (map #(format "%02x" (bit-and 0xff %)) digest))))
 
 (def expected-evidence
   {:canonical-transaction-sha256 sha-a
@@ -55,6 +68,7 @@
                :position position
                :arm arm
                :workspace-root workspace
+               :expected-arguments (arguments arm workspace)
                :expected-evidence expected-evidence
                :clocks {:turn-start-ns start-ns
                         :turn-completed-ns turn-complete-ns}
@@ -264,6 +278,8 @@
                 (-> passing
                     (assoc-in [7 :workspace-root] shared)
                     (assoc-in [7 :events 1 :item :arguments "workspace_root"]
+                              shared)
+                    (assoc-in [7 :expected-arguments "workspace_root"]
                               shared)))]
              [:wrong-order (assoc passing 1 (nth passing 2)
                                   2 (nth passing 1))]]]
@@ -304,6 +320,221 @@
                 passing)]
       (is (false? (get-in (score/cohort-report block-2-loss)
                           [:gate :promote]))))))
+
+(defn- temp-dir []
+  (.toFile (Files/createTempDirectory "relation-score-"
+                                      (make-array
+                                        java.nio.file.attribute.FileAttribute
+                                        0))))
+
+(defn- delete-tree! [file]
+  (when (.exists file)
+    (doseq [child (reverse (file-seq file))]
+      (.delete child))))
+
+(defn- write-event-artifacts! [directory events clocks]
+  (.mkdirs directory)
+  (let [events-file (io/file directory "events.jsonl")
+        clock-file (io/file directory "event-clock.tsv")
+        lines (mapv #(str (json/generate-string %) "\n") events)]
+    (spit events-file (apply str lines))
+    (spit clock-file
+          (apply str
+                 (map-indexed
+                   (fn [index [monotonic line]]
+                     (str (inc index) "\t" monotonic "\t" (+ 1000 index)
+                          "\t" (alength (.getBytes ^String line "UTF-8"))
+                          "\n"))
+                   (map vector clocks lines))))
+    {:events-path (.getPath events-file)
+     :event-clock-path (.getPath clock-file)}))
+
+(defn- raw-run! [root run-id block position arm t-emit-ms t-verified-ms]
+  (let [workspace (io/file root (str "workspace-" run-id))
+        _ (.mkdirs workspace)
+        workspace-path (.getCanonicalPath workspace)
+        receipt-file (io/file workspace "receipt.edn")
+        request (case arm
+                  :N (corpus/normalized-flat-request workspace-path)
+                  :R (corpus/closed-relation-request workspace-path))
+        {:keys [sources]} (corpus/load-fixture)
+        compiled-request (corpus/compile-request sources request)
+        canonical-transaction (:canonical-transaction compiled-request)
+        result-hashes (:future-hashes compiled-request)
+        receipt-base {:receipt-version 2
+                      :transaction-version 1
+                      :operation :change!
+                      :intent-count 1
+                      :match-count 51
+                      :changed-file-count 9
+                      :files (mapv (fn [[file result-hash]]
+                                     {:file (str workspace-path "/" file)
+                                      :source-hash sha-f
+                                      :result-hash result-hash
+                                      :inverse-edits []})
+                                   result-hashes)
+                      :intents (:changes canonical-transaction)
+                      :diff []
+                      :inverse {:operation :undo-change!
+                                :guarded-file-count 9}}
+        receipt-hash (sha256 (pr-str receipt-base))
+        receipt (assoc receipt-base :receipt-hash receipt-hash)
+        _ (spit receipt-file (pr-str receipt))
+        call-id (str "call-" run-id)
+        structured {:ok true
+                    :operation "apply_clojure_changes"
+                    :committed true
+                    :edits 51
+                    :files 9
+                    :verification_complete true
+                    :read_back_hashes result-hashes
+                    :undo_receipt (.getPath receipt-file)
+                    :receipt_hash receipt-hash
+                    :next_action "none"
+                    :verification {:profile-sha256 sha-e
+                                   :output-sha256 sha-f
+                                   :exit 0}}
+        events [{:type "thread.started" :thread_id (str "thread-" run-id)}
+                {:type "turn.started"}
+                {:type "item.started"
+                 :item {:id call-id :type "mcp_tool_call"
+                        :server "clj-surgeon"
+                        :tool "apply_clojure_changes"
+                        :arguments request}}
+                {:type "item.completed"
+                 :item {:id call-id :type "mcp_tool_call"
+                        :status "completed"
+                        :result {:structured_content structured}}}
+                {:type "item.completed"
+                 :item {:id (str "message-" run-id)
+                        :type "agent_message" :text "Done."}}
+                {:type "turn.completed"}]
+        start 1000000000
+        clocks [900000000
+                start
+                (+ start (long (* t-emit-ms 1000000)))
+                (+ start (long (* (+ t-emit-ms 1.0) 1000000)))
+                (+ start (long (* (- t-verified-ms 1.0) 1000000)))
+                (+ start (long (* t-verified-ms 1000000)))]
+        artifacts (write-event-artifacts! (io/file root run-id) events clocks)
+        future-sha (score/canonical-sha256 result-hashes)
+        expected {:canonical-transaction-sha256
+                  (score/canonical-sha256 canonical-transaction)
+                  :future-hashes-sha256 future-sha
+                  :read-back-sha256 future-sha
+                  :verifier {:profile-sha256 sha-e}}]
+    (merge {:run-id run-id
+            :block block
+            :position position
+            :arm arm
+            :workspace-root workspace-path
+            :expected-arguments request
+            :expected-evidence expected}
+           artifacts)))
+
+(defn- raw-cohort! [root]
+  (let [descriptors [["b1-n1" 1 1 :N]
+                     ["b1-r1" 1 2 :R]
+                     ["b1-r2" 1 3 :R]
+                     ["b1-n2" 1 4 :N]
+                     ["b2-r1" 2 1 :R]
+                     ["b2-n1" 2 2 :N]
+                     ["b2-n2" 2 3 :N]
+                     ["b2-r2" 2 4 :R]]]
+    (mapv (fn [[run-id block position arm]]
+            (raw-run! root run-id block position arm
+                      (if (= :R arm) 70.0 100.0)
+                      (if (= :R arm) 700.0 1000.0)))
+          descriptors)))
+
+(deftest raw-event-clock-adapter-is-exact-and-fail-closed
+  (let [root (temp-dir)]
+    (try
+      (let [entry (first (raw-cohort! root))
+            joined (score/join-event-clock-files
+                     (:events-path entry) (:event-clock-path entry))
+            mapped (score/manifest-entry->row entry nil)]
+        (is (:ok joined))
+        (is (= 6 (count (:events joined))))
+        (is (:ok mapped))
+        (is (:ok (score/score-run (:row mapped))))
+        (testing "manifest workspace must be its canonical directory spelling"
+          (let [noncanonical (str (:workspace-root entry) "/.")
+                result (score/manifest-entry->row
+                         (assoc entry :workspace-root noncanonical)
+                         nil)]
+            (is (false? (:ok result)))
+            (is (= [:workspace-not-canonical] (:errors result)))))
+        (testing "missing clock rows and byte-count drift refuse"
+          (let [clock (:event-clock-path entry)
+                original (slurp clock)
+                lines (str/split-lines original)]
+            (spit clock (str (str/join "\n" (butlast lines)) "\n"))
+            (is (false? (:ok (score/join-event-clock-files
+                               (:events-path entry) clock))))
+            (spit clock (str/replace-first original #"\t[0-9]+\n"
+                                           "\t999999\n"))
+            (is (false? (:ok (score/join-event-clock-files
+                               (:events-path entry) clock))))))
+        (testing "completion IDs and structured receipt evidence cannot drift"
+          (let [raw-lines (str/split-lines (slurp (:events-path entry)))
+                parsed (mapv #(json/parse-string % true) raw-lines)
+                wrong-id (assoc-in parsed [3 :item :id] "different")
+                wrong-receipt (assoc-in parsed
+                                        [3 :item :result :structured_content
+                                         :receipt_hash]
+                                        sha-a)]
+            (doseq [[label events expected-error]
+                    [[:id wrong-id :call-id-mismatch]
+                     [:receipt wrong-receipt :evidence-incomplete]]]
+              (let [artifacts (write-event-artifacts!
+                                (io/file root (str "bad-" (name label)))
+                                events
+                                [900000000 1000000000 1100000000
+                                 1101000000 1999000000 2000000000])
+                    result (-> (merge entry artifacts)
+                               (score/manifest-entry->row nil)
+                               :row
+                               score/score-run)]
+                (is (false? (:ok result)) (name label))
+                (is (some #{expected-error} (:errors result))
+                    (name label)))))))
+      (finally
+        (delete-tree! root)))))
+
+(deftest coordinator-cli-scores-block-one-and-final-manifests
+  (let [root (temp-dir)]
+    (try
+      (let [runs (raw-cohort! root)
+            block-1-file (io/file root "block1.edn")
+            block-2-file (io/file root "block2.edn")
+            block-1-output (io/file root "block1-report.edn")
+            final-output (io/file root "final-report.edn")]
+        (spit block-1-file (pr-str {:runs (subvec runs 0 4)}))
+        (spit block-2-file (pr-str {:runs (subvec runs 4 8)}))
+        (let [block-result
+              (score/run-cli!
+                ["--phase" "block1"
+                 "--manifest" (.getPath block-1-file)
+                 "--output" (.getPath block-1-output)])
+              final-result
+              (score/run-cli!
+                ["--phase" "final"
+                 "--block1-manifest" (.getPath block-1-file)
+                 "--block2-manifest" (.getPath block-2-file)
+                 "--output" (.getPath final-output)])]
+          (is (zero? (:exit block-result)))
+          (is (get-in (edn/read-string (slurp block-1-output))
+                      [:gate :block-2-authorized]))
+          (is (zero? (:exit final-result)))
+          (is (get-in (edn/read-string (slurp final-output))
+                      [:gate :promote]))
+          (is (= 2 (:exit (score/run-cli!
+                            ["--phase" "final"
+                             "--block1-manifest" (.getPath block-1-file)
+                             "--output" (.getPath final-output)]))))))
+      (finally
+        (delete-tree! root)))))
 
 (defn -main [& _]
   (let [{:keys [fail error]}
