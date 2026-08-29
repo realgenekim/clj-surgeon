@@ -1,0 +1,90 @@
+{:schema :clj-surgeon.three-arm-request-shape-evidence/v2
+ :base {:commit "54aae16f340033dc6d9452043b335c6bb98dea04"
+        :tree "937ee8032c8697594bb1b6b5b7036747b8bb9517"}
+ :candidate
+ {:commit "b298b8b6306bdd3d7d4713234e65f5cbc2bc7aa4"
+  :tree "08bdfc92678b80d869d19f782842d71c263b8a1f"
+  :product-diff-sha256
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  :experiment-diff-sha256
+  "5ca7eeb151c6d1fda13211ad10186c0a5428b14f0a0e3e0c5bc67a3b0fe4d157"}
+ :hashes
+ {:protocol
+  "635bc7e8f9467cf4e03a458d672665d3245e2a2686c9aad9b142192b6e447157"
+  :harness
+  "d9b3e2ec8385d3989de0af241eaac48983e57dd614f80e3ef21ff9350f5692d1"
+  :scorer
+  "69a66bddad9590eaf7be54c03cd42ffa5375af2d9bbf7726d0d5e2f1e1cbb880"
+  :scorer-tests
+  "995e6984206ae5851a37c95d9850f4afabff795a05ff7cc2eedaae5f761776be"
+  :capture-server
+  "aaf9a48e0cc060ac11a52e9b9b8fb90fee55da282519f15eb8bb68e677f58401"
+  :capture-server-tests
+  "db8f26ef3592f1ec52e3160b77419d790375e45241c7412af8f571fdb1b10a4c"
+  :observer
+  "a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18"
+  :schema-validator
+  "fd9e989bce4d00d86de5699071946da66fa48acfbfada3ea95a00a968f13589a"
+  :task
+  "789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1"
+  :capsule
+  "7d985f4d30acdf871f615b174e0f6c37338539253e6591cf898f96c26f39d4b9"}
+ :zero-model
+ {:model-calls 0
+  :mutation-actions 0
+  :bounded-jvm {:xms-mib 64 :xmx-mib 512}
+  :controller-self-test
+  {:tests 18 :assertions 91 :failures 0 :errors 0
+   :includes-candidate-admission {:tests 5 :assertions 23}}
+  :order [:flat :file-groups :closed-relations
+          :closed-relations :file-groups :flat]
+  :arms
+  {:flat {:semantic-exact true
+          :treatment-adherent true
+          :decision-coverage-complete true
+          :argument-bytes 6353
+          :surface-bytes 8442}
+   :file-groups {:semantic-exact true
+                 :treatment-adherent true
+                 :decision-coverage-complete true
+                 :argument-bytes 5189
+                 :surface-bytes 10949}
+   :closed-relations {:semantic-exact true
+                      :treatment-adherent true
+                      :decision-coverage-complete true
+                      :argument-bytes 2703
+                      :surface-bytes 10803}}
+  :terminal-response
+  {:expected "call captured"
+   :source :last-completed-agent-message
+   :retained-in-score true
+   :exact-equality-required true
+   :varied-response-falsifier :incorrect}}
+ :client-preflight
+ {:rerun-required true
+  :reason :candidate-and-harness-identity-changed
+  :model-calls 0
+  :mutation-actions 0
+  :arms [:flat :file-groups :closed-relations]
+  :tool-set ["edit_clojure"]
+  :summary-sha256
+  "8529d17af1f1e59cd849c585a30e7ea49fe24b094c02c09e278382c3c18da084"
+  :run-config-sha256
+  "34bb6455d5da3eef29928c7cc83a1cfec51d4d4f59e34f090500ab9e011913ca"
+  :prerequisites-sha256
+  "f7541e933a2131abb2a255b04430ab0eb1d31d30d86c858f15052d9b21089d01"
+  :flat-registry-sha256
+  "17505b65efc572a05e71cdbeed12100a3495624c9d115a2de23565c364211dbc"
+  :file-groups-registry-sha256
+  "c5419d2c38c276796987cd6d2d8c6f5d103521ea61a67e9cdbe1a1ebad64b2b1"
+  :closed-relations-registry-sha256
+  "7b749872b3d3480525fccb088216c1da032a96ccd30e7305453c918e1d7ed0ad"}
+ :archive
+ {:path
+  "/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-b298b8b-20260829T082259Z.tar.gz"
+  :sha256
+  "d2eba34d2a5b89f6ba9227c16ba7804b4619e7c04a78ef4252f0e8a7b936ffad"}
+ :supersedes
+ {:candidate "a9a9d5dd50f099b8569a86f6c0897898f2d3fbb1"
+  :reason :controller-omitted-candidate-admission-test-file}
+ :verdict :go-f-a-b-b-a-f-capture-only-cohort}

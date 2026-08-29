@@ -13,13 +13,13 @@ fixture mutation occurred.
 
 - Production base: `54aae16f340033dc6d9452043b335c6bb98dea04`
 - Production tree: `937ee8032c8697594bb1b6b5b7036747b8bb9517`
-- Experiment candidate: `a9a9d5dd50f099b8569a86f6c0897898f2d3fbb1`
-- Experiment tree: `766f688e50d63b270543fc3a64eab5994f1df591`
+- Experiment candidate: `b298b8b6306bdd3d7d4713234e65f5cbc2bc7aa4`
+- Experiment tree: `08bdfc92678b80d869d19f782842d71c263b8a1f`
 - Product source/test/design diff SHA-256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
-- Experiment code diff SHA-256: `f521facbbcd84922af2f57cc8725bec6c99970d883f77d678ef63602055a7f6c`
+- Experiment code diff SHA-256: `5ca7eeb151c6d1fda13211ad10186c0a5428b14f0a0e3e0c5bc67a3b0fe4d157`
 - Protocol SHA-256: `635bc7e8f9467cf4e03a458d672665d3245e2a2686c9aad9b142192b6e447157`
-- Harness SHA-256: `4d1b71d6bf4c767fcde1057e2344fff8fb4311a7bf59b5993f85e3a1ace3706d`
-- Scorer SHA-256: `ef833ebc0c533735390a8ce05bed1d69c9dc2c86b1e01a02bc3412399fb0282a`
+- Harness SHA-256: `d9b3e2ec8385d3989de0af241eaac48983e57dd614f80e3ef21ff9350f5692d1`
+- Scorer SHA-256: `69a66bddad9590eaf7be54c03cd42ffa5375af2d9bbf7726d0d5e2f1e1cbb880`
 - Observer SHA-256: `a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18`
 - Frozen task SHA-256: `789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1`
 - Frozen capsule SHA-256: `7d985f4d30acdf871f615b174e0f6c37338539253e6591cf898f96c26f39d4b9`
@@ -113,8 +113,17 @@ The pure gates also reject or disqualify:
 - duplicate symbol rows; and
 - reordered B owner rows.
 
-The complete test gate passed 17 logical tests and 86 assertions with zero
-failures or errors.
+The controller's single bounded-heap `--self-test` invocation passed 18 tests
+and 91 assertions with zero failures or errors. This includes the complete
+5-test, 23-assertion candidate-admission suite. An earlier controller omitted
+that file and therefore ran only 12 tests and 63 assertions; the manually
+combined 17/86 claim was true of two commands but false of the launch artifact.
+The earlier receipt and archive remain immutable superseded evidence.
+
+The scorer also treats the completed agent message as correctness evidence.
+It reads the last completed `agent_message` from `events.jsonl`, retains its
+exact bytes in `score.edn`, and requires the response to equal `call captured`.
+The permanent falsifier proves that a varied terminal response is incorrect.
 
 ## Real client-visible preflight
 
@@ -127,11 +136,17 @@ top-level input-schema `anyOf`.
 The controller stopped before prompt submission. It made zero model calls and
 zero mutation actions.
 
-- Preflight summary SHA-256: `921b367355bfc5423688c364ad6aa4cb817a586d71abe4e77802f4c8a6216693`
-- Run-config SHA-256: `4a0117517f61846a9fef48bf9e40d958dc8254f19026216ab6ed1fd6d975180c`
+- Preflight summary SHA-256: `8529d17af1f1e59cd849c585a30e7ea49fe24b094c02c09e278382c3c18da084`
+- Run-config SHA-256: `34bb6455d5da3eef29928c7cc83a1cfec51d4d4f59e34f090500ab9e011913ca`
 - Prerequisite report SHA-256: `f7541e933a2131abb2a255b04430ab0eb1d31d30d86c858f15052d9b21089d01`
-- Raw archive: `/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-a9a9d5d-20260829T081400Z.tar.gz`
-- Archive SHA-256: `73bdf5c21a3a3d9d19599d02b20aa2efd4a672513bec912aebc486b72f057b60`
+- Raw archive: `/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-b298b8b-20260829T082259Z.tar.gz`
+- Archive SHA-256: `d2eba34d2a5b89f6ba9227c16ba7804b4619e7c04a78ef4252f0e8a7b936ffad`
+
+The real token-free registry preflight was rerun because `run-config.json`
+binds both the exact Git head and the harness SHA. The public surfaces did not
+change, but retaining the old preflight would not prove the repaired launch
+artifact. All three fresh registry projections passed with zero model calls
+and zero mutation actions.
 
 ## Verdict
 
@@ -152,4 +167,4 @@ Passing compiler tests only authorizes the model screen; it does not authorize
 promotion.
 
 Machine-readable evidence is in
-`docs/observations/evidence/three-arm-request-shape-a9a9d5d.edn`.
+`docs/observations/evidence/three-arm-request-shape-b298b8b.edn`.
