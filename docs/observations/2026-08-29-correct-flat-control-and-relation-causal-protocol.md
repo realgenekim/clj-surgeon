@@ -281,3 +281,13 @@ two-arm `--pilot` for call-shape reconnaissance, but it refuses cohort mode
 before authentication or model launch. This protocol requires a new
 real-mutation runner after the HLD, LLD, EARS, red-test, implementation, and
 verification gates approve that boundary.
+
+Workspace-root comparison uses the product's canonical-root semantics. An
+explicit symlink spelling of the same canonical workspace is accepted; only a
+different canonical root refuses. Every run still requires a distinct isolated
+workspace identity and the same frozen starting-tree hash.
+
+The capture pilot's executable post-capture command must invoke
+`owner-aware-call-construction-screen score`. Invoking the retired prerequisite
+scorer is a protocol failure, even when pure tests for the repaired scorer are
+green. The self-test checks this exact shell boundary before any model launch.
