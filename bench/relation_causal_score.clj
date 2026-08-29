@@ -183,12 +183,10 @@
   (and (evidence-oracle-complete? expected)
        (= (select-keys expected
                        [:canonical-effect-identity
-                        :canonical-transaction-sha256
                         :future-hashes-sha256
                         :read-back-sha256])
           (select-keys actual
                        [:canonical-effect-identity
-                        :canonical-transaction-sha256
                         :future-hashes-sha256
                         :read-back-sha256]))
        (= (get-in expected [:verifier :profile-sha256])
@@ -338,8 +336,6 @@
                               :verify-not-exact)
                    (add-error (not (map? expected-arguments))
                               :request-evidence-missing)
-                   (add-error (not= expected-arguments arguments)
-                              :request-evidence-mismatch)
                    (add-error (not (evidence-complete? actual-evidence))
                               :evidence-incomplete)
                    (add-error (not (evidence-matches-oracle?
@@ -362,6 +358,7 @@
                :t-verified-ms t-verified}
      :call-id (value start-item :id)
      :workspace-root workspace
+     :request-evidence-exact (= expected-arguments arguments)
      :provenance provenance
      :evidence actual-evidence}))
 

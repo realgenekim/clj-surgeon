@@ -639,6 +639,67 @@
           (is (= 6 (count (:events joined))))
           (is (:ok mapped))
           (is (:ok (score/score-run (:row mapped))))
+          (testing "proven-disjoint caller order is diagnostic, not authority"
+            (let [events-path (get-in entry [:artifacts :events])
+                  parsed (mapv #(json/parse-string % true)
+                               (str/split-lines (slurp events-path)))
+                  edits (get-in parsed [2 :item :arguments :edits])
+                  detail-edit (nth edits 32)
+                  reordered-edits
+                  (vec (concat (subvec edits 0 9)
+                               [detail-edit]
+                               (subvec edits 9 32)))
+                  reordered-events
+                  (assoc-in parsed [2 :item :arguments :edits]
+                            reordered-edits)
+                  semantic-drift-events
+                  (assoc-in reordered-events
+                            [2 :item :arguments :edits 9 :to]
+                            "semantically-different")
+                  clocks [900000000 1000000000 1100000000
+                          1101000000 1999000000 2000000000]
+                  reordered-artifacts
+                  (write-event-artifacts!
+                    (io/file root "reordered-disjoint-request")
+                    reordered-events
+                    clocks)
+                  drift-artifacts
+                  (write-event-artifacts!
+                    (io/file root "reordered-semantic-drift")
+                    semantic-drift-events
+                    clocks)
+                  score-with
+                  (fn [artifacts]
+                    (-> (assoc entry :artifacts
+                               (merge (:artifacts entry)
+                                      {:events (:events-path artifacts)
+                                       :event-clock
+                                       (:event-clock-path artifacts)}))
+                        (score/manifest-entry->row nil)
+                        :row
+                        score/score-run))
+                  original-score (score/score-run (:row mapped))
+                  reordered-score (score-with reordered-artifacts)
+                  drift-score (score-with drift-artifacts)]
+              (is (= detail-edit (nth reordered-edits 9)))
+              (is (= 33 (count reordered-edits)))
+              (is (:ok reordered-score))
+              (is (false? (:request-evidence-exact reordered-score)))
+              (is (not= (get-in original-score
+                                [:evidence :canonical-transaction-sha256])
+                        (get-in reordered-score
+                                [:evidence :canonical-transaction-sha256])))
+              (is (= (get-in original-score
+                             [:evidence :canonical-effect-identity])
+                     (get-in reordered-score
+                             [:evidence :canonical-effect-identity])))
+              (is (= (get-in original-score
+                             [:evidence :future-hashes-sha256])
+                     (get-in reordered-score
+                             [:evidence :future-hashes-sha256])))
+              (is (false? (:ok drift-score)))
+              (is (some #{:evidence-incomplete :evidence-mismatch}
+                        (:errors drift-score)))))
           (testing "post-run workspace deletion does not erase frozen identity"
             (delete-tree! (io/file (:workspace-root entry)))
             (let [deleted-workspace (score/manifest-entry->row entry nil)]
