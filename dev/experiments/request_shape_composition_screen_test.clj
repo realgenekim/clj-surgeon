@@ -1,7 +1,11 @@
 (ns request-shape-composition-screen-test
   (:require
+   [babashka.fs :as fs]
    [cheshire.core :as json]
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
+   [clojure.walk :as walk]
    [owner-aware-symbol-migration :as migration]
    [request-shape-composition-screen :as composition]))
 
@@ -67,6 +71,45 @@
              (get-in report [:best-new-triple :members])))
       (is (= 4200 (get-in report [:best-new-triple :bytes])))
       (is (= 2209 (get-in report [:best-new-triple :saved-bytes]))))))
+
+(deftest in-range-wrong-index-can-silently-mutate-the-wrong-file
+  (let [workspace
+        (.toFile
+          (java.nio.file.Files/createTempDirectory
+            "clj-surgeon-wrong-index-"
+            (make-array java.nio.file.attribute.FileAttribute 0)))
+        intended (io/file workspace "src/intended.clj")
+        wrong (io/file workspace "src/wrong.clj")
+        intended-before "(ns intended)\n\n(defn shared [] :old)\n"
+        wrong-before "(ns wrong)\n\n(defn shared [] :old)\n"
+        wrong-after "(ns wrong)\n\n(defn shared [] :new)\n"
+        shape
+        {:files ["src/intended.clj" "src/wrong.clj"]
+         :replacement_groups
+         [{:from ":old"
+           :to ":new"
+           :sites [{:file_index 1 :forms ["shared"]}]}]
+         :edits []}
+        selected #{:file-index :replacement-groups}]
+    (try
+      (.mkdirs (.getParentFile intended))
+      (spit intended intended-before)
+      (spit wrong wrong-before)
+      (let [edits (composition/expanded-edits shape selected {})
+            request {"edits" (walk/stringify-keys edits)}
+            result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              request)]
+        (is (= "src/wrong.clj" (:file (first edits))))
+        (is (:ok result) (pr-str result))
+        (is (:committed result))
+        (is (:verification_complete result))
+        (is (= intended-before (slurp intended)))
+        (is (= wrong-after (slurp wrong))))
+      (finally
+        (fs/delete-tree workspace)))))
 
 (defn -main [& _]
   (let [{:keys [fail error]}

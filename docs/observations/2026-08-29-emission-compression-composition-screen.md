@@ -8,6 +8,10 @@ Base receipt: 93dd258b647aad831f7aef69ad7c7358797cfd4a
 
 Product authority: SURGEON1
 
+Status: superseded by the deterministic wrong-index NO-GO in
+`2026-08-29-wrong-index-ended-emission-composition.md`. Do not launch the
+model cohort described below.
+
 ## Result
 
 Two pairs made only from individually sub-20% shapes clear the 20% compact
@@ -18,9 +22,10 @@ argument gate:
 2. file_groups + replacement_groups: 6,409 to 4,894 characters,
    saving 1,515 (23.64%).
 
-The first pair is the launch candidate. The second retains the earlier
-file_groups correctness loss and is not eligible. No model cohort was
-launched.
+The first pair was the conditional launch candidate before its safety probe.
+That probe proved a silent wrong-file commit, so it is no longer eligible. The
+second pair retains the earlier file_groups correctness loss and is also not
+eligible. No model cohort was launched.
 
 The launch candidate is not a free win. replacement_groups alone saves 1,189
 characters. The file table adds only 328 new saved characters, which projects
