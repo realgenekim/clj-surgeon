@@ -756,6 +756,31 @@ native patch, while dispersed mechanical state makes native construction and
 recovery grow. A native-first pair remains the counterbalance before this
 becomes a replicated claim.
 
+The native-first counterbalance strengthened the result. Native completed the
+meaning-preserving change in 372.286 seconds but was not byte-exact; its first
+mutation path tried an unavailable Ruby executable before generating and
+applying one guarded patch. Compact completed in 61.354 seconds and remained
+exact, with the same one-call route and no failed action. Exact presentation
+stays secondary; both arms passed the semantic, route, and source-set gates.
+
+| Order | Compact | Native | Compact advantage |
+|---|---:|---:|---:|
+| compact-first | 55.763s | 206.727s | 3.71x |
+| native-first | 61.354s | 372.286s | 6.07x |
+| two-observation midpoint | 58.559s | 289.507s | 4.944x |
+
+Across the counterbalanced pilot, compact reduced complete wall by 230.948
+seconds, or 79.77 percent. Both compact arms were exact and used one verified
+MCP mutation with zero other tools, refusals, failures, or post-decision reads.
+The two native arms were semantically correct but each retained one failed
+mutation path. Order reversal did not erase the crossover.
+
+The result is 0.056x short of the round-number 5x line and already satisfies
+the underlying objective: complete verified task time. Do not tune the scorer
+or correctness law to cross a slogan. The next experiment asks whether a
+smaller, owner-aware call can remove model construction wall while compiling to
+the identical transaction.
+
 ## A smaller request preserved the complete decision
 
 The 51-change call itself exposed the next cost. Its minified request was 6,409
