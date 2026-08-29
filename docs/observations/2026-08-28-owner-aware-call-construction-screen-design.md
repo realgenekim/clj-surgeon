@@ -1,6 +1,7 @@
 # Owner-aware symbol-migration call-construction screen
 
-**Status:** designed and zero-model scored; no model or Anvil run authorized yet
+**Status:** designed and zero-model scored; first Anvil cohort invalidated before
+model start by an observer-source defect
 
 **Integration base:** `4f69761968af256d767ac97948f88bfb48cdcf1e`
 
@@ -162,3 +163,36 @@ unchanged. The zero-model gate proves:
 
 No model, Anvil, install, reload, shared port, or source mutation belongs to
 this checkpoint.
+
+## Observer falsification and repair
+
+The first prepared Anvil N=8 cohort failed closed before any model started.
+The surrounding observer compared the private server's one-tool receipt with
+the fresh Codex home's `cache/codex_apps_tools` artifact. That cache contained
+49 unrelated application tools. It is not the configured MCP registry and
+cannot show which private MCP tools Codex ingested. The failed cohort remains
+immutable at:
+
+```text
+/srv/fleet/dev-c/clj-surgeon-owner-screen-results/20260829T013230Z-eaf4085-n8
+```
+
+The same failed run retained the correct positive evidence in each
+`codex-mcp-registry.json`. That receipt comes from the Codex app-server
+`mcpServerStatus/list` response, selected by the exact configured server name.
+The projection matched the server's `advertised-surface.json` except for two
+observed Codex projection rules:
+
+1. a null tool `annotations` value became an empty object; and
+2. the input schema's top-level `anyOf` was omitted.
+
+The repaired admission gate now requires the registry receipt schema, exact
+app-server method/detail/response path, exact server selector, exact one-tool
+set, and exact tool projection. It normalizes only those two observed rules.
+Any description, nested schema, output schema, annotation content, tool-set,
+server, or provenance delta still refuses before model launch.
+
+A permanent 49-tool app-cache fixture now proves that `codex_apps_tools`
+cannot satisfy the MCP-registry gate. This repairs measurement, not product.
+No result from the invalidated cohort contributes to candidate correctness or
+performance.
