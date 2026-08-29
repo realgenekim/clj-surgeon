@@ -736,7 +736,8 @@ separate design decision and requires a new cohort.
 Canonical effect identity is approved for implementation as the forward-only
 answer to that decision. This LLD defines it after generic disjointness proof.
 It does not alter the held scorer, authorize the held second block, or mark
-performance promotion complete.
+performance promotion complete. Active requirements `MCP-OP-EDIT-028..030`
+own the pure projection, permutation/refusal law, and bounded public evidence.
 
 ## #Public request shape
 
