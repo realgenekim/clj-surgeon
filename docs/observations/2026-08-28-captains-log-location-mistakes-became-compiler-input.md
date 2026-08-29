@@ -247,3 +247,58 @@ run. The next ratchet is to record and verify explicit immutable
 identity must never be inferred from the number of commits between it and the
 derived experiment ref. A permanent token-free falsifier must cover unequal
 harness depths before another cohort is authorized.
+
+## Live verdict: safe mechanism, wrong active boundary
+
+The explicit-ref controller passed, and a fresh complete A/B, B/A cohort ran.
+It did not promote the location candidate. All four fresh Sol/high callers
+already used the correct `within.namespace=true` location. Every first call
+instead used an invalid edit-field pair: `old`/`new` or `before`/`after`, where
+the public contract requires `from`/`to`. Location normalization therefore
+never became the active causal boundary.
+
+| Run | Arm | Wall | Outcome | Route |
+|---|---|---:|---|---|
+| 01-A | control | 91.914 s | exact | one refusal, then 51 edits / 9 files |
+| 02-B | candidate | 113.770 s | source unchanged, incomplete | two safe refusals |
+| 03-B | candidate | 86.945 s | exact | one refusal, then 51 edits / 9 files |
+| 04-A | control | 99.202 s | exact | one refusal, then 51 edits / 9 files |
+
+Control was 2/2 exact at a 95.558-second midpoint. Candidate was only 1/2 exact
+and 0/2 first-call successful. Its all-attempt midpoint is not a valid
+efficiency estimate because one task did not complete. The experiment stops;
+there is no candidate speed claim and no expansion.
+
+The server remained fast. Refusals took 3.9--10.1 ms, and successful atomic
+51-edit transactions took 1.047--1.140 seconds. The expensive consequence was
+model-side: each schema miss caused another 31--55 seconds of large-request
+materialization. This is precisely the class of cheap, exact mistake that the
+kernel can profitably eliminate.
+
+The closest retained same-workload correct-native midpoint is 346.912 seconds,
+so the exact control remains 3.63x faster. Against the earlier conservative
+202.127-second native midpoint, control remains 2.12x faster. Structural
+batching is still decisively useful; this particular location treatment simply
+did not address what fresh callers got wrong.
+
+The complete immutable result and route analysis are in
+`docs/observations/2026-08-29-captains-log-location-tolerance-met-a-different-schema-cliff.md`.
+Its raw archive SHA-256 is
+`d109fa0bef5c40a9cdb9313bfa5ff9e361258d338e9fd80c5ba92c8d81b5eded`.
+
+## Earned next hill
+
+Test one new injective lowering before any broader tolerance:
+
+```text
+old    -> from
+new    -> to
+before -> from
+after  -> to
+```
+
+Only a complete, internally consistent pair may lower. Mixed, partial,
+duplicated, or conflicting pairs must refuse before reading or writing source.
+The refusal remedy must name the exact mapping and must tell an edit-only caller
+to call `edit_clojure`, never the unadvertised `apply_clojure_changes`. The four
+captured calls from this cohort become the first replay corpus.
