@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source_script=$(cd "$(dirname "$0")/.." && pwd -P)/bench/run_relation_causal_cohort.sh
+source_repo=$(cd "$(dirname "$source_script")/.." && pwd -P)
 test_root=$(mktemp -d /tmp/clj-surgeon-relation-coordinator-test.XXXXXX)
 trap '[ "${KEEP_RELATION_TEST_TMP:-false}" = true ] || rm -rf "$test_root"' EXIT
 
@@ -264,11 +265,24 @@ test_passing_boundary_executes_both_blocks_once() {
   assert_contains "$output/coordinator-receipt.edn" ':stage :complete'
 }
 
+test_real_scorer_loads_with_coordinator_classpath() {
+  local output="$test_root/real-scorer-invalid.out" status=0
+  (
+    cd "$source_repo"
+    bb -cp src:test:bench bench/relation_causal_score.clj --help
+  ) >"$output" 2>&1 || status=$?
+  [ "$status" -eq 2 ] \
+    || fail "controlled-invalid real scorer exit was $status, expected 2"
+  assert_contains "$output" ':clj-surgeon.edit-025-relation-causal-phase/v1'
+  assert_contains "$output" ':invalid-cli-input'
+}
+
 test_wrong_and_dirty_identity_refuse
 test_output_and_settings_refuse
 test_child_failure_is_retained_without_retry
 test_block1_gate_stops_and_retains
 test_workspace_identity_refuses
 test_passing_boundary_executes_both_blocks_once
+test_real_scorer_loads_with_coordinator_classpath
 
 printf 'relation causal cohort runner boundary tests passed\n'
