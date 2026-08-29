@@ -505,10 +505,15 @@
                 wrong-receipt (assoc-in parsed
                                         [3 :item :result :structured_content
                                          :receipt_hash]
-                                        "not-a-sha256")]
+                                        "not-a-sha256")
+                outside-receipt (assoc-in parsed
+                                          [3 :item :result :structured_content
+                                           :undo_receipt]
+                                          "/private/tmp/forged-receipt.edn")]
             (doseq [[label events expected-error]
                     [[:id wrong-id :call-id-mismatch]
-                     [:receipt wrong-receipt :evidence-incomplete]]]
+                     [:receipt wrong-receipt :evidence-incomplete]
+                     [:receipt-path outside-receipt :evidence-incomplete]]]
               (let [artifacts (write-event-artifacts!
                                 (io/file root (str "bad-" (name label)))
                                 events
