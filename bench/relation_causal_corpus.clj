@@ -233,11 +233,21 @@
 
 (def common-prompt-prefix
   (str "Apply the complete frozen submission-row cleanup in exactly one "
-       "apply_clojure_changes call with verify=exact. Make the mutation call "
-       "the first actionable item. Do not inspect, use shell, narrate before "
-       "the call, retry, or make a second tool call. The tool exposes both the "
-       "normalized-flat (N) and paired closed-relation (R) representations. "
-       "Use only the assigned representation. Assignment: "))
+    "apply_clojure_changes call. Send one arguments object directly; do not "
+    "wrap it in changes, representation, relations, route, arm, N, R, or any "
+    "other meta-object. The exact top-level fields for N are workspace_root, "
+    "verify, edits, delete_owners. The exact top-level fields for R are "
+    "workspace_root, verify, symbol_migration, require_change, edits, "
+    "delete_owners. Always include the explicit workspace_root and "
+    "verify=exact. In N, put the repeated require changes, symbol rewrites, "
+    "and the bespoke edit directly in edits; keep the moved-owner deletion "
+    "explicit in delete_owners. In R, symbol_migration and require_change "
+    "replace only the repeated require-change and symbol-rewrite rows; keep "
+    "the same bespoke edit explicit in edits and the same moved-owner "
+    "deletion explicit in delete_owners. Make the mutation call the first "
+    "actionable item. Do not inspect, use shell, narrate before the call, "
+    "retry, or make a second tool call. Use only the assigned representation. "
+    "Assignment: "))
 
 (def common-prompt-suffix
   ". Return exactly the tool's terminal response after success.")
