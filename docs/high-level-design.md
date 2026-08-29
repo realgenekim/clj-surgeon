@@ -262,6 +262,13 @@ sites, choose an alias, infer unused requires, select similar owners, or widen
 the declared file set. A missing or ambiguous decision remains the caller's
 responsibility.
 
+The retained flat and file-group callers did not omit those decisions. They
+supplied all 33 edit rows but addressed each namespace clause as a named form,
+which safely refused `change-owner-mismatch`. The paired relation removes that
+derived address choice: the caller supplies the exact add/remove decision and
+file, while the compiler emits the one exact namespace-scoped edit. This is the
+observed legibility mechanism the first slice must preserve.
+
 The relation boundary is fail-closed:
 
 - relation objects are closed and reject unknown, partial, duplicate, or
