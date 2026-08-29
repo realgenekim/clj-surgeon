@@ -109,6 +109,10 @@ and terminal-response contract. Every run must perform one real
 `edit_clojure` mutation and exact verification. Promotion at `N=8` requires 4/4
 exact per arm, R faster in both blocks, and at least 20 percent lower complete
 verified median, using the ordinary sorted-sample median fixed by the protocol.
+Because the claimed mechanism is cheaper request construction, R must also
+lower request-emission time in both blocks and by at least 20 percent pooled.
+A complete-wall win without that emission result is retained as unexplained
+evidence; it does not promote relation lowering.
 
 ## Method lesson
 
@@ -198,3 +202,27 @@ results remain reconnaissance, never promotion evidence.
 This is the evening's recurring lesson in miniature: make the experiment cheap,
 then spend the saved cycle attacking the measuring instrument. A faster wrong
 answer is bad; a persuasive false positive is worse.
+
+## The promotion gate now tests the mechanism
+
+The later extraction-surface cohort supplied the final adversarial lesson. It
+removed 63.7 percent of the visible schema while leaving the decision and
+emitted request unchanged. All four calls were exact, but the treatment was
+5.2 percent slower before the call and only 5.2 percent faster overall. Schema
+size was not the causal lever.
+
+The relation experiment is different: both arms see the same schema, while R
+shortens the request the model must author. But the HLD originally required
+only a complete verified-wall win. That could have promoted a service-variance
+accident without proving authoring compression. Independent Safe Refactoring
+review caught the mismatch before LLD.
+
+The repaired gate now requires both outcomes independently:
+
+1. R lowers `T_emit` in each counterbalanced block and by at least 20 percent
+   across all retained runs; and
+2. R lowers `T_verified` by at least 20 percent across the same exact cohort.
+
+This is a better hill. It can still deliver the measured user outcome, but it
+must also prove the mechanism that would make the result reusable beyond one
+noisy fixture.
