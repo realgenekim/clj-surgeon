@@ -443,6 +443,33 @@ own only elapsed time. A coding agent may relay the terminal response verbatim
 only when that mutation completes all remaining user-requested work; otherwise
 the agent treats it as terminal evidence for that operation and continues.
 
+### Resolve the default formatter before the transaction
+
+The default formatter is a product-owned, exact-version dependency. Installation
+records its package-lock hash, package version, Node version, resolved executable,
+and command shape. Server readiness resolves that executable once. A transaction
+never invokes `npx`, consults the network, searches an npm cache, or selects a
+different package version.
+
+The first compatibility slice may retain an exact-version `npx` command only
+when the product-owned executable is absent. That fallback is explicit runtime
+evidence, not a silent substitution, and it remains outside any performance
+claim. A missing or mismatched configured executable refuses before mutation.
+Project-owned formatter configuration remains authoritative and can override the
+default with another closed argument vector.
+
+Formatting still receives all staged candidate files in one process and never
+receives live project files. The formatter result remains inside the existing
+atomic transaction: nonzero exit, timeout, launch failure, unreadable staged
+output, parse failure, or later verification failure rolls the complete change
+back. Verifier-profile deduplication compares the resolved direct `fix` command
+with its exact `check` counterpart so changing the executable spelling does not
+accidentally add a second formatter process.
+
+Promotion requires byte-identical frozen outputs and a serial counterbalanced
+integrated transaction cohort. The implementation shall not add a formatter
+daemon until process startup remains material after exact dependency resolution.
+
 ### Compress a coherent read mission without guessing
 
 The read path treats a coherent set of known questions as one immutable
