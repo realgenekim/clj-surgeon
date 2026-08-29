@@ -134,7 +134,10 @@
                         "Always include the explicit workspace_root and verify=exact"
                         "each edits row is {file,within:{namespace:true|form:<owner>},from,to,matches}"
                         "each delete_owners row is {file,forms:[...]}"
-                        "symbol_migration is one object {target_alias,target_rule,columns,files:[[file,[[owner,from,matches]...]]...]}"
+                        "symbol_migration is one object with target_alias derived from the supplied target symbols"
+                        "target_rule exactly \"preserve-name\""
+                        "columns exactly [\"owner\",\"from\",\"matches\"]"
+                        "files shaped [[file,[[owner,from,matches]...]]...]"
                         "require_change is one object {add:{lib,as},files:[{file,optional remove:{lib,as}}...]}"
                         "Never use before/after, a top-level owner in an edit"
                         "owners or include_attached_comments in a deletion"
@@ -144,6 +147,7 @@
                         "same moved-owner deletion explicit in delete_owners"]]
         (is (str/includes? (:prompt flat) required)))
       (doseq [payload-fragment ["push-person-row"
+                                "submission-row cleanup"
                                 "src/sample/review_updates.clj"
                                 "chair-on-event?"]]
         (is (not (str/includes? (:prompt flat) payload-fragment)))))))
