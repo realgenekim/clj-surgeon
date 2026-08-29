@@ -109,6 +109,16 @@
       (is (= :public-schema-denied
              (:error-type (admission/authorize schema invalid)))))))
 
+(deftest positional-array-items-are-authority
+  (let [schema {:type "array"
+                :minItems 2
+                :maxItems 2
+                :prefixItems [{:const "owner"}
+                              {:type "integer" :minimum 1}]}]
+    (is (admission/valid? schema ["owner" 2]))
+    (doseq [invalid [["wrong" 2] ["owner" 0] ["owner"]]]
+      (is (false? (admission/valid? schema invalid))))))
+
 (deftest unknown-schema-authority-fails-closed
   (let [result (admission/authorize {:type "object"
                                      :if {:required ["commit"]}}

@@ -2,11 +2,13 @@
   "Pure catalog projection and scorer for the owner-aware call-construction screen."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [clj-surgeon.mcp-workspace :as workspace]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [owner-aware-symbol-migration :as migration]))
@@ -90,28 +92,66 @@
       :candidate (migration/compile-manifest arguments)
       (throw (ex-info "Unknown screen arm" {:arm arm})))))
 
+(defn- route-workspace-root
+  "Apply the public workspace adapter without constructing a runtime context."
+  [arguments expected-workspace-root]
+  (let [expected (workspace/canonical-root expected-workspace-root)]
+    (if-not (:ok expected)
+      expected
+      (if-let [requested-value (get arguments "workspace_root")]
+        (let [requested (workspace/canonical-root requested-value)]
+          (cond
+            (not (:ok requested)) requested
+
+            (not= (:workspace-root expected) (:workspace-root requested))
+            {:ok false
+             :error "workspace_root does not match the frozen benchmark workspace"
+             :error-type :benchmark-workspace-root-mismatch
+             :expected-workspace-root (:workspace-root expected)
+             :actual-workspace-root (:workspace-root requested)}
+
+            :else
+            {:ok true
+             :workspace-root (:workspace-root requested)
+             :request (dissoc arguments "workspace_root")}))
+        {:ok true
+         :workspace-root (:workspace-root expected)
+         :request arguments}))))
+
 (defn compile-submission
   "Compile captured public arguments through production admission and normalization."
-  [sources arm arguments]
-  (let [expanded (expand-submission arm arguments)]
-    (if-not (:ok expanded)
-      expanded
-      (let [validated (contract/validate-tool-params (:request expanded))]
-        (if-not (:ok validated)
-          (assoc expanded :product validated)
-          (let [spec (contract/tool-params->transaction (:params validated))
-                prepared
-                (compact-location/normalize-spec
-                  sources spec (:compact-location-normalization validated))
-                product
-                (if (:error prepared)
-                  prepared
-                  (assoc prepared
-                         :transaction (:spec prepared)
-                         :compiled
-                         (transaction/compile-transaction
-                           sources (:spec prepared))))]
-            (assoc expanded :product product)))))))
+  ([sources arm arguments]
+   (compile-submission sources arm arguments migration/canonical-workspace))
+  ([sources arm arguments expected-workspace-root]
+   (let [arguments (public-json arguments)
+         public-admission (admission/authorize
+                            (:schema (tool-surface arm)) arguments)]
+     (if-not (:ok public-admission)
+       {:ok false :product public-admission}
+       (let [routed (route-workspace-root arguments expected-workspace-root)]
+         (if-not (:ok routed)
+           {:ok false :product routed}
+           (let [expanded (expand-submission arm (:request routed))]
+             (if-not (:ok expanded)
+               expanded
+               (let [validated (contract/validate-tool-params (:request expanded))]
+                 (if-not (:ok validated)
+                   (assoc expanded :product validated)
+                   (let [spec (contract/tool-params->transaction (:params validated))
+                         prepared
+                         (compact-location/normalize-spec
+                           sources spec (:compact-location-normalization validated))
+                         product
+                         (if (:error prepared)
+                           prepared
+                           (assoc prepared
+                                  :transaction (:spec prepared)
+                                  :compiled
+                                  (transaction/compile-transaction
+                                    sources (:spec prepared))))]
+                     (assoc expanded
+                            :workspace-root (:workspace-root routed)
+                            :product product))))))))))))
 
 (defn- compiled-ok? [product]
   (and (:ok product)
@@ -194,38 +234,122 @@
               (double (nth values middle)))
            2.0)))))
 
+(def expected-run-manifest
+  [{:run-id "b1-n1" :block 1 :position 1 :arm :control}
+   {:run-id "b1-r1" :block 1 :position 2 :arm :candidate}
+   {:run-id "b1-r2" :block 1 :position 3 :arm :candidate}
+   {:run-id "b1-n2" :block 1 :position 4 :arm :control}
+   {:run-id "b2-r1" :block 2 :position 1 :arm :candidate}
+   {:run-id "b2-n1" :block 2 :position 2 :arm :control}
+   {:run-id "b2-n2" :block 2 :position 3 :arm :control}
+   {:run-id "b2-r2" :block 2 :position 4 :arm :candidate}])
+
+(def ^:private sha256-pattern #"[0-9a-f]{64}")
+
+(defn- sha256? [value]
+  (and (string? value) (boolean (re-matches sha256-pattern value))))
+
+(defn- positive-number? [value]
+  (and (number? value) (pos? value)))
+
+(defn- complete-run?
+  [expected run]
+  (and (= expected (select-keys run [:run-id :block :position :arm]))
+       (true? (:correct run))
+       (positive-number? (get-in run [:geometry :prompt-to-call-ms]))
+       (positive-number? (get-in run [:geometry :complete-wall-ms]))
+       (true? (get-in run [:verification :complete]))
+       (every? sha256?
+               (map #(get-in run [:verification %])
+                    [:canonical-transaction-sha256
+                     :future-hashes-sha256
+                     :verifier-profile-sha256]))
+       (every? #(let [value (get-in run [:isolation %])]
+                  (and (string? value) (not (clojure.string/blank? value))))
+               [:workspace-id :codex-home-id :session-id
+                :receipt-dir-id :server-id])
+       (every? sha256?
+               (map #(get-in run [:isolation %])
+                    [:starting-tree-sha256 :lifecycle-policy-sha256]))))
+
+(defn- unique-values? [runs path]
+  (= (count runs) (count (set (map #(get-in % path) runs)))))
+
+(defn- one-value? [runs path]
+  (= 1 (count (set (map #(get-in % path) runs)))))
+
+(defn- arm-median [runs arm]
+  (median (map #(get-in % [:geometry :complete-wall-ms])
+               (filter (comp #{arm} :arm) runs))))
+
+(defn- improvement-ratio [control-ms candidate-ms]
+  (when (and (positive-number? control-ms) (positive-number? candidate-ms))
+    (/ (- control-ms candidate-ms) control-ms)))
+
+(defn- block-report [runs block]
+  (let [block-runs (if block
+                     (filter (comp #{block} :block) runs)
+                     runs)
+        control-ms (arm-median block-runs :control)
+        candidate-ms (arm-median block-runs :candidate)]
+    {:control-median-verified-ms control-ms
+     :candidate-median-verified-ms candidate-ms
+     :candidate-improvement-ratio (improvement-ratio control-ms candidate-ms)}))
+
 (defn cohort-report
-  "Apply the frozen N=8 screen gate: four correct runs per arm and 15% faster
-  candidate median prompt-to-call emission."
+  "Score the manifest-bound N/R protocol. Four runs may authorize block two;
+  all eight are required for promotion."
   [runs]
-  (let [by-arm (group-by :arm runs)
-        arm-report
-        (into {}
-              (map (fn [arm]
-                     (let [arm-runs (get by-arm arm [])]
-                       [arm {:runs (count arm-runs)
-                             :correct (count (filter :correct arm-runs))
-                             :median-prompt-to-call-ms
-                             (median (keep #(get-in % [:geometry
-                                                       :prompt-to-call-ms])
-                                           arm-runs))}]))
-                   [:control :candidate]))
-        control-ms (get-in arm-report [:control :median-prompt-to-call-ms])
-        candidate-ms (get-in arm-report [:candidate :median-prompt-to-call-ms])
-        improvement (when (and (number? control-ms) (pos? control-ms)
-                               (number? candidate-ms))
-                      (/ (- control-ms candidate-ms) control-ms))
-        gate? (and (= 4 (get-in arm-report [:control :runs]))
-                   (= 4 (get-in arm-report [:candidate :runs]))
-                   (= 4 (get-in arm-report [:control :correct]))
-                   (= 4 (get-in arm-report [:candidate :correct]))
-                   (number? improvement)
-                   (>= improvement 0.15))]
-    {:schema :clj-surgeon.owner-aware-call-screen-cohort/v1
-     :arms arm-report
-     :candidate-improvement-ratio improvement
-     :gate {:four-of-four-each-arm true
-            :minimum-improvement-ratio 0.15
+  (let [runs (vec runs)
+        allowed-count? (contains? #{4 8} (count runs))
+        expected (subvec expected-run-manifest 0 (min (count runs) 8))
+        manifest-exact? (and allowed-count?
+                             (= expected
+                                (mapv #(select-keys % [:run-id :block :position :arm])
+                                      runs)))
+        complete? (and manifest-exact?
+                       (every? true? (map complete-run? expected runs)))
+        isolation-paths [[:isolation :workspace-id]
+                         [:isolation :codex-home-id]
+                         [:isolation :session-id]
+                         [:isolation :receipt-dir-id]
+                         [:isolation :server-id]]
+        isolated? (and complete?
+                       (every? #(unique-values? runs %) isolation-paths)
+                       (one-value? runs [:isolation :starting-tree-sha256])
+                       (one-value? runs [:isolation :lifecycle-policy-sha256]))
+        verification-identical?
+        (and complete?
+             (every? #(one-value? runs [:verification %])
+                     [:canonical-transaction-sha256
+                      :future-hashes-sha256
+                      :verifier-profile-sha256]))
+        block-1 (when (and complete? (>= (count runs) 4))
+                  (block-report runs 1))
+        block-1-authorized?
+        (and isolated? verification-identical?
+             (>= (or (:candidate-improvement-ratio block-1) -1.0) 0.15))
+        full? (= 8 (count runs))
+        block-2 (when (and complete? full?) (block-report runs 2))
+        pooled (when (and complete? full?) (block-report runs nil))
+        block-2-win? (and complete? full?
+                          (< (:candidate-median-verified-ms block-2)
+                             (:control-median-verified-ms block-2)))
+        pooled-pass? (and complete? full?
+                          (>= (or (:candidate-improvement-ratio pooled) -1.0)
+                              0.20))
+        gate? (and block-1-authorized? block-2-win? pooled-pass?)]
+    {:schema :clj-surgeon.owner-aware-call-screen-cohort/v2
+     :run-count (count runs)
+     :manifest-exact manifest-exact?
+     :runs-complete complete?
+     :isolation-complete isolated?
+     :verification-identical verification-identical?
+     :blocks {1 block-1 2 block-2}
+     :pooled pooled
+     :gate {:block-2-authorized block-1-authorized?
+            :minimum-block-1-improvement-ratio 0.15
+            :minimum-pooled-improvement-ratio 0.20
             :pass gate?}}))
 
 (defn score-fixture-call [arm arguments geometry]

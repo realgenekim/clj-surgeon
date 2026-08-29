@@ -114,14 +114,24 @@ run_zero_model_tests() {
   rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
   clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
-    '(load-file "dev/experiments/owner_aware_call_construction_prereq_test.clj")
+    '(load-file "dev/experiments/clj_surgeon/experiments/mcp_candidate_admission_test.clj")
+     (load-file "dev/experiments/owner_aware_call_construction_prereq_test.clj")
      (load-file "dev/experiments/owner_aware_call_construction_screen_test.clj")
      (load-file "dev/experiments/owner_aware_call_capture_server_test.clj")
-     (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")'
+     (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")
+     (let [result (clojure.test/run-tests
+                    (quote clj-surgeon.experiments.mcp-candidate-admission-test)
+                    (quote owner-aware-call-construction-prereq-test)
+                    (quote owner-aware-call-construction-screen-test)
+                    (quote owner-aware-call-capture-server-test)
+                    (quote owner-aware-mcp-surface-observer-test))]
+       (when-not (zero? (+ (:fail result) (:error result)))
+         (throw (ex-info "Owner-aware self-test failed" {:result result}))))'
   printf '%s\n' \
     'owner-aware call-construction screen self-test: PASS' \
     '  pilot: one fresh control and one fresh candidate' \
-    '  scorer: current field/location normalizers, real compiler, nine frozen future hashes' \
+    '  scorer: public schema/root admission, current normalizers, real compiler, nine frozen future hashes' \
+    '  cohort: exact NRRN/RNNR manifest, isolated identities, complete verified wall' \
     '  server: one capture-only edit_clojure tool; no product write handler' \
     '  prompt: identical task bytes and no candidate-language leak' \
     '  observer: app-tool cache rejected; only two exact Codex projections normalized'

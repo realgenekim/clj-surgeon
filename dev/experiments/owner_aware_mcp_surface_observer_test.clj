@@ -120,4 +120,8 @@
                (observer/validate-observation
                  advertised receipt "clj-surgeon" "edit_clojure")))))))
 
-(apply clojure.test/run-tests ['owner-aware-mcp-surface-observer-test])
+(defn -main [& _]
+  (let [{:keys [fail error]}
+        (clojure.test/run-tests 'owner-aware-mcp-surface-observer-test)]
+    (when (pos? (+ fail error))
+      (System/exit 1))))

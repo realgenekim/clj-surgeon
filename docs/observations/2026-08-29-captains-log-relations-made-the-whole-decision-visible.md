@@ -108,7 +108,7 @@ same canonical transaction, 51 matches, 9 files, future hashes, exact verifier,
 and terminal-response contract. Every run must perform one real
 `edit_clojure` mutation and exact verification. Promotion at `N=8` requires 4/4
 exact per arm, R faster in both blocks, and at least 20 percent lower complete
-verified midpoint or median.
+verified median, using the ordinary sorted-sample median fixed by the protocol.
 
 ## Method lesson
 
@@ -145,3 +145,33 @@ These repairs prevent the next cohort from reproducing either historical
 confound. They do not retroactively change clock provenance: the retained
 65.841-second and 48.912-second midpoints remain bound to the original
 arm-specific surfaces and are descriptive only.
+
+## The measuring instrument failed a second adversarial review
+
+SURGEON2 independently replayed the hardened scorer against the public product
+boundary. The common compiler path and real editor surface were genuine wins,
+but three executable counterexamples still produced false evidence:
+
+1. top-level `verify` and `expect` were absent from the advertised schema yet
+   passed the internal runtime contract and scored as correct;
+2. an exact public `workspace_root` passed production routing but failed the
+   scorer because the scorer bypassed that adapter; and
+3. the old pooled aggregate passed a wrong-order, shared-workspace cohort whose
+   candidate complete wall was 1,000,000 milliseconds. It also silently
+   discarded three missing candidate timings with `keep`.
+
+Commit `4b3aed4` is therefore retained as an intermediate correction, not a
+model-launch authority. The next ratchet adds public schema admission, a
+frozen expected-root projection, and a protocol-v2 scorer bound to exact
+`N R R N / R N N R` order, unique per-run workspace/home/session/receipt/server
+identities, complete verification hashes, and complete verified wall. Four
+block-one runs may authorize block two; only all eight may promote.
+
+The shell runner had one more false-green defect: Clojure tests could print
+failures while the enclosing `clojure -e` process exited zero. The repaired
+runner aggregates every test namespace and throws on any failure or error. The
+new bounded gate is 20 tests / 115 assertions, zero failures and zero errors.
+
+This is the evening's recurring lesson in miniature: make the experiment cheap,
+then spend the saved cycle attacking the measuring instrument. A faster wrong
+answer is bad; a persuasive false positive is worse.
