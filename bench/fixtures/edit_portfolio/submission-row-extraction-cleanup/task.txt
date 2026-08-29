@@ -1,4 +1,4 @@
-The architecture and move are complete: the submission-row implementation already exists in sample.views.submission-row. Finish the exact source cleanup and direct-caller migration across the nine target files while preserving every unrelated byte.
+The architecture and move are complete: the submission-row implementation already exists outside this minimized fixture in sample.views.submission-row. Finish only the isolated source cleanup and direct-caller migration across the nine target files while preserving every unrelated byte. Destination creation and full extraction functionality are out of scope.
 
 The complete file set, owner set, literal before/after forms, and cardinalities are supplied below. Do not inspect source or search for callers. Apply the 51 exact edits as one coherent mutation action if your available editor supports it. Treat a successful guarded mutation receipt as terminal edit proof. Report the route and whether it succeeded on the first attempt.
 

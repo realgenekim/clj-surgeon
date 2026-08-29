@@ -2,7 +2,8 @@
  :decision-boundary :complete-multi-file-extraction-cleanup-supplied
  :provenance {:kind :real-task-derived
               :source "sessionize-sched-killer commit fc014632a5160b0f199387e0ec48982e0d9be975, review-board/structure: extract submission row renderer"
-              :minimized "anonymized moved bodies; retained the real nine-file cleanup boundary after destination creation, 14 attached-comment owner deletions, namespace rewrites, caller dispersion, and roughly 400-line source-removal scale"}
+              :minimized "anonymized moved bodies; retained the real nine-file cleanup boundary after destination creation, 14 attached-comment owner deletions, namespace rewrites, caller dispersion, and roughly 400-line source-removal scale"
+              :scope "isolated cleanup transformation; destination creation and full extraction functionality are intentionally outside this capsule"}
  :targets ["src/sample/review_updates.clj"
            "src/sample/views/log.clj"
            "src/sample/views/people.clj"
