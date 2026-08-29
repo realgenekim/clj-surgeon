@@ -90,6 +90,49 @@
         (map #(vector file %) edits))
       (:edit_groups shape))))
 
+(defn- replacement-group-key [edit]
+  (when (string? (get-in edit [:within :form]))
+    [(:from edit) (:to edit) (:matches edit)]))
+
+(defn- replacement-group-shape [request]
+  (let [frequencies (frequencies (keep replacement-group-key (:edits request)))
+        grouped? #(> (get frequencies (replacement-group-key %) 0) 1)
+        grouped (filterv grouped? (:edits request))
+        retained (remove grouped? (:edits request))
+        keys (distinct-in-order (map replacement-group-key grouped))]
+    (top-level
+      request
+      {:replacement_groups
+       (mapv
+         (fn [[from to matches :as key]]
+           (let [edits (filterv #(= key (replacement-group-key %)) grouped)
+                 files (distinct-in-order (map :file edits))]
+             (cond-> {:from from
+                      :to to
+                      :sites
+                      (mapv
+                        (fn [file]
+                          {:file file
+                           :forms
+                           (mapv #(get-in % [:within :form])
+                                 (filter #(= file (:file %)) edits))})
+                        files)}
+               (not= 1 matches) (assoc :matches matches))))
+         keys)
+       :edits (mapv without-default-match retained)})))
+
+(defn- expand-replacement-groups [shape]
+  (into
+    (mapv restore-default-match (:edits shape))
+    (for [{:keys [from to matches sites]} (:replacement_groups shape)
+          {:keys [file forms]} sites
+          form forms]
+      {:file file
+       :within {:form form}
+       :from from
+       :to to
+       :matches (or matches 1)})))
+
 (defn- value-prefix [value]
   (let [index (str/last-index-of value "/")]
     (if index (subs value 0 (inc index)) "")))
@@ -284,6 +327,7 @@
         default-shape (omitted-defaults request)
         index-shape (file-index-shape request)
         group-shape (file-group-shape request)
+        replacement-groups (replacement-group-shape request)
         relation (relation-shape request)
         relation-with-require-delta (relation-with-require-delta-shape request)
         tuples (tuple-shape request)
@@ -297,6 +341,9 @@
                         (edit-multiset (expand-file-index index-shape)))
          :file-groups (= original-multiset
                          (edit-multiset (expand-file-groups group-shape)))
+         :replacement-groups
+         (= original-multiset
+            (edit-multiset (expand-replacement-groups replacement-groups)))
          :closed-relations (= original-multiset
                               (edit-multiset (expand-relation relation)))
          :closed-relations-with-require-delta
@@ -336,6 +383,13 @@
                       :local-edit-rows
                       (reduce + (map #(count (:edits %)) (:edit_groups group-shape)))
                       :literal-pairs (count (:edits request))}
+        :replacement-groups
+        {:groups (count (:replacement_groups replacement-groups))
+         :sites (reduce +
+                        (for [group (:replacement_groups replacement-groups)
+                              site (:sites group)]
+                          (count (:forms site))))
+         :retained-edits (count (:edits replacement-groups))}
         :closed-relations-with-require-delta
         {:require-targets 1
          :require-files (count (get-in relation-with-require-delta
@@ -357,9 +411,8 @@
        {:omit-default-matches (metric baseline default-shape)
         :file-index (metric baseline index-shape)
         :file-groups (metric baseline group-shape)
+        :replacement-groups (metric baseline replacement-groups)
         :closed-relations (metric baseline relation)
         :closed-relations-with-require-delta
         (metric baseline relation-with-require-delta)
         :positional-tuples (metric baseline tuples)}})))
-
-(apply -main *command-line-args*)
