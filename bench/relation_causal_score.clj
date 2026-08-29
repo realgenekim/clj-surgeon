@@ -1,3 +1,11 @@
+(when-not (find-ns 'relation-causal-corpus)
+  ;; Direct `bb bench/relation_causal_score.clj` does not add sibling scripts
+  ;; to the classpath. Load the frozen public corpus before declaring this ns.
+  (load-file
+    (.getPath
+      (java.io.File. (.getParentFile (java.io.File. *file*))
+                     "relation_causal_corpus.clj"))))
+
 (ns relation-causal-score
   "Pure, fail-closed scorer for the EDIT-025 N/R causal cohort.
 
