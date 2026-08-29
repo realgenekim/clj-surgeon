@@ -60,16 +60,31 @@
     (do
       (is (false? (:ok (corpus/public-schema-report
                          (assoc flat "expect" {"changes" 51})))))
-      (doseq [invented [{"workspace_root" workspace-root
-                         "changes" [flat]
-                         "representation" "N"}
-                        {"workspace_root" workspace-root
-                         "changes" [relation]
-                         "relations" true}
-                        {"workspace_root" workspace-root "R" relation}
-                        {"workspace_root" workspace-root
-                         "route" "R"
-                         "request" relation}]]
+      (doseq [invented
+              [{"workspace_root" workspace-root
+                "changes" [flat]
+                "representation" "N"}
+               {"workspace_root" workspace-root
+                "changes" [relation]
+                "relations" true}
+               {"workspace_root" workspace-root "R" relation}
+               {"workspace_root" workspace-root
+                "route" "R"
+                "request" relation}
+               (assoc-in flat ["edits" 0]
+                         {"file" "src/example.clj"
+                          "owner" "example-owner"
+                          "before" "old"
+                          "after" "new"
+                          "matches" 1})
+               (assoc-in flat ["edits" 0 "owner"] "example-owner")
+               (assoc-in flat ["delete_owners" 0]
+                         {"file" "src/example.clj"
+                          "owner" "obsolete"
+                          "owners" ["obsolete"]
+                          "include_attached_comments" true})
+               (assoc relation "symbol_migration" [])
+               (assoc relation "require_change" [])]]
         (is (false? (:ok (corpus/public-schema-report invented))))))))
 
 (deftest prompt-assignment-is-the-only-prompt-byte-difference
@@ -97,6 +112,13 @@
                         "exact top-level fields for N are workspace_root, verify, edits, delete_owners"
                         "exact top-level fields for R are workspace_root, verify, symbol_migration, require_change, edits, delete_owners"
                         "Always include the explicit workspace_root and verify=exact"
+                        "each edits row is {file,within:{namespace:true|form:<owner>},from,to,matches}"
+                        "each delete_owners row is {file,forms:[...]}"
+                        "symbol_migration is one object {target_alias,target_rule,columns,files:[[file,[[owner,from,matches]...]]...]}"
+                        "require_change is one object {add:{lib,as},files:[{file,optional remove:{lib,as}}...]}"
+                        "Never use before/after, a top-level owner in an edit"
+                        "owners or include_attached_comments in a deletion"
+                        "arrays for symbol_migration/require_change"
                         "replace only the repeated require-change and symbol-rewrite rows"
                         "same bespoke edit explicit in edits"
                         "same moved-owner deletion explicit in delete_owners"]]
