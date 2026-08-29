@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-# Capture-only A/B screen for the owner-aware symbol-migration request shape.
+# Capture-only pilot for the owner-aware symbol-migration request shape.
 # The model-facing server records arguments and never reads or writes source.
+# Capture-only evidence cannot promote the relation or satisfy the real-mutation
+# cohort protocol.
 
 set -euo pipefail
 
@@ -23,11 +25,11 @@ usage() {
 Usage: bench/run_owner_aware_call_construction_screen.sh [OPTIONS]
 
 Options:
-  --output DIR       Result directory (required outside --self-test)
+  --output DIR       Result directory (required for --pilot)
   --auth-file FILE   Codex auth.json for each fresh home
   --timeout SEC      Per-call timeout (default: 180)
   --self-test        Run zero-model scorer/adapter falsifiers only
-  --pilot            Run one fresh control and one fresh candidate
+  --pilot            Run one fresh capture-only control and candidate
   --preflight-only   With --pilot, stop after both real client-surface gates
 EOF
 }
@@ -112,6 +114,14 @@ run_zero_model_tests() {
     return 1
   fi
   rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
+  local refusal_file="${TMPDIR:-/tmp}/owner-aware-call-screen-refusal.$$"
+  set +e
+  "${BASH_SOURCE[0]}" > "$refusal_file" 2>&1
+  local refusal_status=$?
+  set -e
+  [ "$refusal_status" -eq 2 ]
+  rg -q 'Capture-only cohort execution is retired' "$refusal_file"
+  rm -f "$refusal_file"
   clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
     '(load-file "dev/experiments/clj_surgeon/experiments/mcp_candidate_admission_test.clj")
@@ -140,6 +150,11 @@ run_zero_model_tests() {
 if [ "$self_test" = true ]; then
   run_zero_model_tests
   exit 0
+fi
+
+if [ "$pilot" != true ]; then
+  echo "Capture-only cohort execution is retired; use --pilot only. The N/R promotion cohort must mutate and verify through the Linked-Intent-approved runner." >&2
+  exit 2
 fi
 
 if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then

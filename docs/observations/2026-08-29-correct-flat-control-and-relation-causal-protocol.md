@@ -275,3 +275,9 @@ complete-wall gate at `N=8`. Smaller payload alone is not success.
 No model, Anvil, install, reload, shared runtime, or product mutation is
 authorized by this protocol. Product work remains behind the HLD approval
 gate.
+
+The historical owner-aware shell runner remains capture-only. It may run a
+two-arm `--pilot` for call-shape reconnaissance, but it refuses cohort mode
+before authentication or model launch. This protocol requires a new
+real-mutation runner after the HLD, LLD, EARS, red-test, implementation, and
+verification gates approve that boundary.

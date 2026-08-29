@@ -172,6 +172,16 @@ failures while the enclosing `clojure -e` process exited zero. The repaired
 runner aggregates every test namespace and throws on any failure or error. The
 new bounded gate is 20 tests / 115 assertions, zero failures and zero errors.
 
+Independent re-audit then found an authority mismatch between the pure
+protocol-v2 scorer and the old capture-only shell cohort. Captured calls have
+no mutation receipt, exact verifier, or complete verified-wall evidence, so
+that runner can never honestly satisfy the new promotion contract. The runner
+now refuses all capture-only cohort execution before authentication or model
+launch. `--pilot` remains available for bounded call-shape reconnaissance; the
+future N/R cohort must be a separate Linked-Intent-approved real-mutation
+runner. Synthetic protocol tests no longer lend authority to a weaker process
+boundary.
+
 This is the evening's recurring lesson in miniature: make the experiment cheap,
 then spend the saved cycle attacking the measuring instrument. A faster wrong
 answer is bad; a persuasive false positive is worse.
