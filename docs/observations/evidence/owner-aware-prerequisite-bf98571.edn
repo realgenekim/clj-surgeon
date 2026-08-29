@@ -1,0 +1,67 @@
+{:schema :clj-surgeon.owner-aware-prerequisite-evidence/v1
+ :base {:commit "ce05f6ee099ac029d96ecb6db6f5f225e4239b96"
+        :tree "ecec5aebfa0f8adb6d76eeadaf3113ff8aeb7b3d"}
+ :candidate {:commit "bf985716b0d75c2741dc2bf1e7d3b848fdabc866"
+             :tree "a9ee6497a1aefd373f29b0fd0e38360a5b8fe0d3"
+             :product-diff-sha256
+             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+             :experiment-diff-sha256
+             "f5d41711c350466f41a1d3cd51ed862ec591378a7d2129cdc306c437fdb8ec80"}
+ :inputs {:task-sha256
+          "789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1"
+          :capsule-sha256
+          "7d985f4d30acdf871f615b174e0f6c37338539253e6591cf898f96c26f39d4b9"
+          :retained-manifest-sha256
+          "536a2b882e5ab3cdfd1563d445d3c2919c62cb9e2679ded1899f38be3d5a74ca"
+          :retained-corpus-manifest-sha256
+          "96c2fc32c1cc87d19e4558b54beb91c0590ca3da44d747318a15f303d5f772e1"
+          :symbol-migration-sha256
+          "c86d0876fcce0c9ae2b1e0ec4cc1a133121c3bdddda68ba3533e805225fca60e"
+          :location-normalizer-sha256
+          "6152ff9658fe15ee548a1ef031a12789a62af4414c51cc090d5b696c15255af2"
+          :field-normalizer-sha256
+          "a52897b09a6f4a2e58c36b7622c5a2e86981323f28edce499143702bb5038f69"}
+ :screen {:harness-sha256
+          "bf8b288fc28c4367c779229a747ff36677c0a64f45ca5e2c6343e3b112be05be"
+          :scorer-sha256
+          "15debe3e08a20cad7543afb19dea84b33861cc4c258c1960392b21d1881a2517"
+          :observer-sha256
+          "a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18"
+          :order [:control :candidate]
+          :model "gpt-5.6-sol"
+          :reasoning :high}
+ :zero-model {:model-calls 0
+              :mutation-actions 0
+              :retained-captures 8
+              :compiled-futures {:canonical [8 8]
+                                 :old-new [8 8]
+                                 :before-after [8 8]}
+              :owner-rows 23
+              :declared-matches 27
+              :falsifiers
+              {:partial :refused
+               :mixed :refused
+               :canonical-plus-alias :refused
+               :two-alias-pairs :refused}
+              :arguments-bytes {:control 6353 :candidate 4347}
+              :surface-bytes {:control 8442 :candidate 9778}
+              :tests {:logical 13 :assertions 67 :failures 0 :errors 0}}
+ :client-preflight {:model-calls 0
+                    :mutation-actions 0
+                    :control-tools ["edit_clojure"]
+                    :candidate-tools ["edit_clojure"]
+                    :summary-sha256
+                    "a447892aa5d93b670cfeee76753ace62b20d67974a3f765593bc0e9f6b5ddc5d"
+                    :run-config-sha256
+                    "7a0442f15e1bad53dde643086c26cc4703242f9b1a1effbe05561c5a07976898"
+                    :prerequisites-sha256
+                    "8116ac8f6820dae1c3b9c6a910d5d04046447ba1aa6eb568ce5bd477670735ce"
+                    :control-registry-sha256
+                    "2ec93257ee95f8009171574c757b5f823858a2fb4dc96bb0b32b878322c23270"
+                    :candidate-registry-sha256
+                    "950c6f8b711756db60a97a3bec8cfacca4e487956c8a5d88a2d9be8635b6ceae"}
+ :archive {:path
+           "/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/owner-aware-prereq-bf98571-20260829T075616Z.tar.gz"
+           :sha256
+           "e14fcf6317ba8b49257ecfd57f035b5f9da020b892f26d994c7093fed77b8040"}
+ :verdict :go-one-per-arm-capture-only-pilot}
