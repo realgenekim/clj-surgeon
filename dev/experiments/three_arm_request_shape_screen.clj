@@ -474,6 +474,18 @@
    (get edit "from")
    (get edit "matches")])
 
+(defn- symbol-value-name [value]
+  (last (str/split value #"/")))
+
+(defn- symbol-rewrite-edit? [edit]
+  (and (string? (get-in edit ["within" "form"]))
+       (string? (get edit "from"))
+       (string? (get edit "to"))
+       (re-matches #"[^\s\[\](){}]+" (get edit "from"))
+       (re-matches #"[^\s\[\](){}]+" (get edit "to"))
+       (= (symbol-value-name (get edit "from"))
+          (symbol-value-name (get edit "to")))))
+
 (defn- require-decisions [namespace-edits]
   (let [removals
         (mapcat (fn [edit]
@@ -507,6 +519,29 @@
                     owner (get group "forms")]
                 [(get group "file") owner])))})
 
+(defn- coverage-from-flat-request [request]
+  (let [edits (mapv restore-default-match (get request "edits"))
+        namespace-edits
+        (filterv #(= true (get-in % ["within" "namespace"])) edits)
+        symbol-edits (filterv symbol-rewrite-edit? edits)
+        bespoke-edits
+        (remove (set (concat namespace-edits symbol-edits)) edits)]
+    {:files
+     (vec (sort (distinct
+                  (concat (map #(get % "file") edits)
+                          (map #(get % "file")
+                               (get request "delete_owners"))))))
+     :symbol-sites (mapv symbol-site symbol-edits)
+     :non-default-counts
+     (vec (filter #(not= 1 (last %)) (map symbol-site symbol-edits)))
+     :require (require-decisions namespace-edits)
+     :bespoke (when (= 1 (count bespoke-edits))
+                (row-key (first bespoke-edits)))
+     :deleted
+     (vec (sort (for [group (get request "delete_owners")
+                      owner (get group "forms")]
+                  [(get group "file") owner])))}))
+
 (defn- explicit-symbol-sites [migration-table]
   (vec
     (for [[file sites] (get migration-table "files")
@@ -517,8 +552,8 @@
   (let [arguments (public-json arguments)
         explicit
         (case arm
-          :flat expected-decision-coverage
-          :file-groups expected-decision-coverage
+          :flat (coverage-from-flat-request (:request expanded))
+          :file-groups (coverage-from-flat-request (:request expanded))
           :closed-relations
           (let [require-change (get arguments "require_change")]
             {:files
