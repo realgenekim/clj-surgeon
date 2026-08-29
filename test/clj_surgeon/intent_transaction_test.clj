@@ -1016,6 +1016,48 @@
         (is (every? valid-source? (vals (:future-sources plan))))
         (is (every? valid-source? (vals (:future-sources inverse))))))))
 
+(deftest canonical-effect-identity-is-exact-and-permutation-invariant
+  (let [sources {"src/a.clj"
+                 "(ns app.a)\n(def value [(old x) :body :tail])\n"
+                 "src/b.clj"
+                 "(ns app.b)\n(def view {:status :idle :untouched 42})\n"}
+        intents [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
+                 (intent ["src/a.clj"] ":body" ":body.page" 1)
+                 (intent ["src/b.clj"] ":idle" ":ready" 1)]
+        expected {:intent-count 3 :edit-count 3 :changed-file-count 2}
+        identities
+        (mapv
+          (fn [ordered-intents]
+            (->> (transaction/compile-transaction
+                   sources (spec ordered-intents expected))
+                 (transaction/canonical-effect-identity "/work/project")))
+          (small-permutations intents))
+        expected-projection
+        [:canonical-effect/v1
+         [[:file
+           "src/a.clj"
+           "688cf7aeedceb62b4d0893d499f192196a4e24116e191f268cb5f2a86ff0bfa5"
+           "3d6cb4ed0668c0bb505413bd161120382543783adfda6f04063c0f45a61fd8d1"
+           [[:effect :replace [0 1 2 0] 7 9 nil "(old x)" "(new x)"]
+            [:effect :replace [0 1 2 1] 10 10 nil ":body" ":body.page"]]]
+          [:file
+           "src/b.clj"
+           "3aeebe815e650d182cf9e581d528579b46ba46866f6d0d54b918668d2b21f463"
+           "fd6e367c72326dffcdd3e7b3731725b6b43c18cb0f21409edc07a4a78d55cc70"
+           [[:effect :replace [0 1 2 1] 8 8 nil ":idle" ":ready"]]]]
+         2
+         3]]
+    (is (= 6 (count identities)))
+    (is (apply = identities)
+        "caller order cannot change an already-proven disjoint effect set")
+    (is (= {:version 1
+            :sha256 "83ec6c5417d81d5736dd15799a40a01999a6356b14bff6a1e6e5fe5b2fdc87c2"
+            :files 2
+            :effects 3
+            :projection expected-projection}
+           (first identities))
+        "the private identity retains exact source strings and resolved addresses")))
+
 (deftest intents-match-only-original-snapshots-and-never-cascade
   (let [source "(ns app.a)\n(def values [(old x) (new y)])\n"
         result
