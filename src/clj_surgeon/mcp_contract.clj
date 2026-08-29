@@ -876,17 +876,29 @@
   (let [params (json-containers->clj params)]
     (cond
       (compact-relations/relation-request? params)
-      (let [relation-plan (compact-relations/compile-source-blind params)]
-        (if-not (:ok relation-plan)
-          relation-plan
-          (let [request (update (:request relation-plan) "edits"
-                                #(vec (concat
-                                        (:generated-symbol-edits relation-plan)
-                                        (or % []))))
-                validated (validate-editor-tool-params request)]
-            (cond-> validated
-              (:ok validated)
-              (assoc :compact-relation-plan relation-plan)))))
+      (let [literal-normalized
+            (when (present? params "edits")
+              (compact-edit-fields/normalize-edits (field params "edits")))]
+        (if (and literal-normalized (not (:ok literal-normalized)))
+          literal-normalized
+          (let [params (cond-> params
+                         literal-normalized
+                         (assoc "edits" (:edits literal-normalized)))
+                relation-plan (compact-relations/compile-source-blind params)]
+            (if-not (:ok relation-plan)
+              relation-plan
+              (let [request (update (:request relation-plan) "edits"
+                                    #(vec (concat
+                                            (:generated-symbol-edits relation-plan)
+                                            (or % []))))
+                    validated (validate-editor-tool-params request)]
+                (cond-> validated
+                  (:ok validated)
+                  (assoc :compact-relation-plan relation-plan)
+
+                  (and (:ok validated) (seq (:evidence literal-normalized)))
+                  (assoc :compact-field-normalization
+                         (:evidence literal-normalized))))))))
 
       (present? params "extraction")
       (validate-extraction-tool-params params)
@@ -1165,6 +1177,9 @@
       (:verification result) (assoc :verification (:verification result))
       (:location-normalization result)
       (assoc :location_normalization (:location-normalization result))
+      (:compact-relation-normalization result)
+      (assoc :compact_relation_normalization
+             (:compact-relation-normalization result))
       (and cold (not verification-complete?))
       (assoc :next_call (:next_call cold)))))
 
