@@ -47,24 +47,35 @@ for cell in $BENCH_RUN_MATRIX; do
     workspace="$BENCH_RESULT_DIR/reused-workspace"
   fi
   mkdir -p "$run_dir" "$workspace"
-  printf '%s\n' \
-    '{"type":"item.started","item":{"id":"call","type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"workspace_root":"/private/tmp/fake","verify":"exact"}}}' \
-    '{"type":"item.completed","item":{"id":"call","type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","status":"completed","result":{"structured_content":{"verification_complete":true,"next_action":"none"}}}}' \
-    > "$run_dir/events.jsonl"
-  printf '0\t1000000\t1000\t100\n1\t2000000\t2000\t100\n' > "$run_dir/event-clock.tsv"
-  printf 'run_id\t%s\nstate\tcompleted\nexit_code\t0\n' "$run_id" > "$run_dir/terminal.tsv"
+  workspace_identity=$(cd "$workspace" && pwd -P)
   case "${FAKE_WORKSPACE_MODE:-}" in
     missing)
-      [ "$position" -ne 1 ] && (cd "$workspace" && pwd -P) > "$run_dir/workspace-root.txt"
-      ;;
-    noncanonical)
-      printf '%s/../%s\n' "$(dirname "$workspace")" "$(basename "$workspace")" \
+      [ "$position" -ne 1 ] && printf '%s\n' "$workspace_identity" \
         > "$run_dir/workspace-root.txt"
       ;;
+    noncanonical)
+      workspace_identity="$(dirname "$workspace_identity")/../$(basename "$(dirname "$workspace_identity")")/$(basename "$workspace_identity")"
+      printf '%s\n' "$workspace_identity" > "$run_dir/workspace-root.txt"
+      ;;
     *)
-      (cd "$workspace" && pwd -P) > "$run_dir/workspace-root.txt"
+      printf '%s\n' "$workspace_identity" > "$run_dir/workspace-root.txt"
       ;;
   esac
+  event_workspace_identity=$workspace_identity
+  if [ "${FAKE_WORKSPACE_MODE:-}" = event-mismatch ]; then
+    event_workspace_identity="$workspace_identity-other"
+  fi
+  jq -nc --arg root "$event_workspace_identity" \
+    '{type:"item.started",item:{id:"call",type:"mcp_tool_call",server:"clj-surgeon",tool:"apply_clojure_changes",arguments:{workspace_root:$root,verify:"exact"}}}' \
+    > "$run_dir/events.jsonl"
+  jq -nc \
+    '{type:"item.completed",item:{id:"call",type:"mcp_tool_call",server:"clj-surgeon",tool:"apply_clojure_changes",status:"completed",result:{structured_content:{verification_complete:true,next_action:"none"}}}}' \
+    >> "$run_dir/events.jsonl"
+  printf '0\t1000000\t1000\t100\n1\t2000000\t2000\t100\n' > "$run_dir/event-clock.tsv"
+  printf 'run_id\t%s\nstate\tcompleted\nexit_code\t0\n' "$run_id" > "$run_dir/terminal.tsv"
+  if [ "${FAKE_WORKSPACE_MODE:-}" = deleted ]; then
+    rm -rf "$workspace"
+  fi
 done
 printf 'retained\tcomplete\n' >> "$BENCH_RESULT_DIR/runs.tsv"
 WORKER
@@ -223,7 +234,7 @@ test_block1_gate_stops_and_retains() {
 test_workspace_identity_refuses() {
   local root mode output status
   root=$(new_repo workspace-identity)
-  for mode in missing noncanonical reused; do
+  for mode in missing noncanonical reused event-mismatch; do
     output="$test_root/workspace-$mode-output"
     status=0
     invoke "$root" "$output" FAKE_WORKSPACE_MODE="$mode" \
@@ -235,6 +246,20 @@ test_workspace_identity_refuses() {
   assert_contains "$root/workspace-missing.out" 'missing its workspace identity'
   assert_contains "$root/workspace-noncanonical.out" 'workspace identity is not canonical'
   assert_contains "$root/workspace-reused.out" 'workspace identity was reused'
+  assert_contains "$root/workspace-event-mismatch.out" 'workspace receipt differs from apply arguments'
+}
+
+test_deleted_workspace_after_run_is_valid() {
+  local root output
+  root=$(new_repo deleted-workspace)
+  output="$test_root/deleted-workspace-output"
+  invoke "$root" "$output" FAKE_WORKSPACE_MODE=deleted >"$root/run.out" 2>&1
+  [ -f "$output/final-report.edn" ] \
+    || fail 'deleted workspaces prevented the final aggregate'
+  [ -z "$(find "$output/block1" "$output/block2" -type d -name workspace -print -quit)" ] \
+    || fail 'fake worker did not delete its workspaces'
+  assert_contains "$output/block1-run-manifest.edn" ':workspace-root'
+  assert_contains "$output/coordinator-receipt.edn" ':state :complete'
 }
 
 test_passing_boundary_executes_both_blocks_once() {
@@ -282,6 +307,7 @@ test_output_and_settings_refuse
 test_child_failure_is_retained_without_retry
 test_block1_gate_stops_and_retains
 test_workspace_identity_refuses
+test_deleted_workspace_after_run_is_valid
 test_passing_boundary_executes_both_blocks_once
 test_real_scorer_loads_with_coordinator_classpath
 

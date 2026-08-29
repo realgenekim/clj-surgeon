@@ -239,11 +239,15 @@ validate_raw_run() {
     /*) ;;
     *) die "Run workspace identity is not absolute: $run_dir" 3 ;;
   esac
-  [ -d "$validated_workspace_root" ] \
-    || die "Run workspace identity does not name a directory: $run_dir" 3
-  canonical_workspace=$(cd "$validated_workspace_root" && pwd -P)
-  [ "$canonical_workspace" = "$validated_workspace_root" ] \
-    || die "Run workspace identity is not canonical: $run_dir" 3
+  event_workspace_root=$(jq -er -s '
+    [.[] | select(.type == "item.started"
+                  and .item.type == "mcp_tool_call"
+                  and .item.server == "clj-surgeon"
+                  and .item.tool == "apply_clojure_changes")]
+    | first.item.arguments.workspace_root' "$run_dir/events.jsonl") \
+    || die "Run apply event omits its workspace identity: $run_dir" 3
+  [ "$event_workspace_root" = "$validated_workspace_root" ] \
+    || die "Run workspace receipt differs from apply arguments: $run_dir" 3
   for seen_workspace in "${cohort_workspace_roots[@]}"; do
     [ "$seen_workspace" != "$validated_workspace_root" ] \
       || die "Run workspace identity was reused: $validated_workspace_root" 3
