@@ -245,6 +245,44 @@
                  (str "Invalid insertion form: " (.getMessage error))
                  {:error-type :invalid-intent-form})))))
 
+(defn- malformed-insertion-retry-template
+  [params result]
+  (letfn [(string-keyed [value]
+            (cond
+              (map? value)
+              (into {}
+                    (map (fn [[key child]]
+                           [(field-name key) (string-keyed child)]))
+                    value)
+
+              (vector? value)
+              (mapv string-keyed value)
+
+              (sequential? value)
+              (mapv string-keyed value)
+
+              :else value))]
+    (let [path (:path result)
+          [changes-key change-index action-key item-index] path
+          arguments (string-keyed params)
+          malformed (when (vector? path)
+                      (get-in arguments path))]
+      (when (and (= :invalid-intent-form (:error-type result))
+                 (= 4 (count path))
+                 (= "changes" changes-key)
+                 (nat-int? change-index)
+                 (#{"insert_before" "insert_after"} action-key)
+                 (nat-int? item-index)
+                 (string? malformed))
+        {:operation "apply_clojure_changes"
+         :executable false
+         :selector-authority false
+         :write-authority false
+         :holes [{:path path
+                  :kind :clojure-forms
+                  :authority false}]
+         :arguments (assoc-in arguments path nil)}))))
+
 (defn- validate-change!
   [change index]
   (let [path ["changes" index]
@@ -574,7 +612,11 @@
                 :reason
                 "aggregate counts are derived from exact change guards"})))
     (catch clojure.lang.ExceptionInfo error
-      (ex-data error))))
+      (let [result (ex-data error)
+            retry-template
+            (malformed-insertion-retry-template params result)]
+        (cond-> result
+          retry-template (assoc :retry-template retry-template))))))
 
 (defn- editor-gestures->direct-params
   [params]
@@ -936,16 +978,20 @@
                      (or (:error result) "the input was not exactly one form.")))
                  "Correct the declared scope or count and call apply_clojure_changes once.")]
     (cond->
-      {:ok false
-       :error_type (if (keyword? error-type) (name error-type) (str error-type))
-       :error (or (:error result) "apply_clojure_changes refused")
-       :source_unchanged
-       (if (contains? result :source-unchanged)
-         (boolean (:source-unchanged result))
-         (boolean
-           (or (:rolled-back result)
-               (contains? prewrite-error-types error-type))))
-       :remedy remedy}
+      (cond->
+        {:ok false
+         :error_type (if (keyword? error-type) (name error-type) (str error-type))
+         :error (or (:error result) "apply_clojure_changes refused")
+         :source_unchanged
+         (if (contains? result :source-unchanged)
+           (boolean (:source-unchanged result))
+           (boolean
+             (or (:rolled-back result)
+                 (contains? prewrite-error-types error-type))))
+         :remedy remedy}
+        (contains? result :retry-template)
+        (assoc :retry_template
+               (public-extraction-data (:retry-template result))))
       (contains? result :expected) (assoc :expected (:expected result))
       (contains? result :actual) (assoc :actual (:actual result))
       (contains? result :reason) (assoc :reason (some-> (:reason result) name))
