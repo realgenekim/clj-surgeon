@@ -224,6 +224,27 @@
       (finally
         (delete-tree! workspace)))))
 
+(deftest editor-gesture-field-pair-refuses-before-project-resolution
+  ;; @spec MCP-OP-EDIT-018
+  ;; @spec MCP-OP-EDIT-019
+  (let [result
+        (mcp-tool/execute-request!
+          {:project-root "/definitely/missing"}
+          {"edits"
+           [{"file" "src/demo.clj"
+             "within" {"form" "route-event"}
+             "old" ":done"}]})]
+    (is (false? (:ok result)))
+    (is (= "invalid-mcp-request" (:error_type result)))
+    (is (= "invalid-editor-field-pair" (:reason result)))
+    (is (= ["edits" 0] (:path result)))
+    (is (:source_unchanged result))
+    (is (false? (:mutation_attempted result)))
+    (is (false? (:write_authority result)))
+    (is (re-find #"old/new.*before/after.*from/to" (:remedy result)))
+    (is (re-find #"edit_clojure" (:remedy result)))
+    (is (not (re-find #"apply_clojure_changes" (:remedy result))))))
+
 (deftest grouped-root-edn-edit-is-atomic-lossless-and-undoable
   ;; @spec MCP-OP-EDIT-001
   ;; @spec MCP-OP-EDIT-003
