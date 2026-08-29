@@ -566,6 +566,14 @@ map-entry insertion, or another direct-change operator, the caller expresses
 the complete atomic decision in `changes`. The public schema and tool text make
 that choice explicit before payload construction.
 
+A malformed packed insertion does not grant the compiler authority to repair
+source syntax. The refusal may return a non-executable `retry_template` that
+preserves every valid request field and replaces only the malformed array item
+with a null caller-owned hole. The template names that exact path and publishes
+`selector_authority=false` and `write_authority=false`. It is not a
+`next_call`; after the caller supplies valid syntax, the ordinary request starts
+validation again with no inherited authority.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is

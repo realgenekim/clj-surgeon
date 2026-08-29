@@ -702,12 +702,25 @@
               (dissoc "replace")
               (assoc "insert_after" [malformed]))]
          "expect" {"changes" 1 "edits" 1 "files" 1}}
-        result (contract/validate-tool-params request)]
+        path ["changes" 0 "insert_after" 0]
+        result (contract/validate-tool-params request)
+        template (:retry-template result)]
     (is (false? (:ok result)))
     (is (= :invalid-intent-form (:error-type result)))
     (is (= :invalid-intent-form (:reason result)))
-    (is (= ["changes" 0 "insert_after" 0] (:path result)))
-    (is (re-find #"Unmatched delimiter" (:error result)))))
+    (is (= path (:path result)))
+    (is (re-find #"Unmatched delimiter" (:error result)))
+    (is (= "apply_clojure_changes" (:operation template)))
+    (is (false? (:executable template)))
+    (is (false? (:selector-authority template)))
+    (is (false? (:write-authority template)))
+    (is (= [{:path path
+             :kind :clojure-forms
+             :authority false}]
+           (:holes template)))
+    (is (= (assoc-in request path nil)
+           (:arguments template)))
+    (is (not (contains? result :next-call)))))
 
 (deftest validates-top-level-insertion-without-repeating-owner-source
   (let [change (-> (get-in valid-request ["changes" 0])

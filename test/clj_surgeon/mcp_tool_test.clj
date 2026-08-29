@@ -348,17 +348,29 @@
       (io/make-parents test-file)
       (spit source-file source-before)
       (spit test-file test-before)
-      (let [malformed
+      (let [path ["changes" 2 "insert_after" 0]
+            malformed
             (assoc-in request ["changes" 2 "insert_after"]
                       [(str packed ")")])
             refused
             (mcp-tool/execute-request!
               {:project-root (.getPath workspace)
                :receipt-dir (.getPath receipt-dir)}
-              malformed)]
+              malformed)
+            template (:retry_template refused)]
         (is (false? (:ok refused)))
         (is (= "invalid-intent-form" (:error_type refused)))
         (is (:source_unchanged refused))
+        (is (= "apply_clojure_changes" (:operation template)))
+        (is (false? (:executable template)))
+        (is (false? (:selector_authority template)))
+        (is (false? (:write_authority template)))
+        (is (= path (get-in template [:holes 0 :path])))
+        (is (= "clojure-forms" (get-in template [:holes 0 :kind])))
+        (is (false? (get-in template [:holes 0 :authority])))
+        (is (= (assoc-in malformed path nil)
+               (:arguments template)))
+        (is (not (contains? refused :next_call)))
         (is (= source-before (slurp source-file)))
         (is (= test-before (slurp test-file))))
       (let [result
