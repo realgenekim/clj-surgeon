@@ -149,10 +149,11 @@
           legacy-authority (:anyOf base)
           candidate-authority
           {:required ["symbol_migration" "require_change"]}
+          candidate-field-present
+          {:anyOf [{:required ["symbol_migration"]}
+                   {:required ["require_change"]}]}
           legacy-only-authority
-          {:anyOf legacy-authority
-           :not {:anyOf [{:required ["symbol_migration"]}
-                         {:required ["require_change"]}]}}]
+          (mapv #(assoc % :not candidate-field-present) legacy-authority)]
       {:name "edit_clojure"
        :description closed-relations-description
        :schema (-> base
@@ -160,13 +161,12 @@
                              owner-screen/candidate-field-schema)
                    (assoc-in [:properties "require_change"]
                              require-change-field-schema)
-                   (update :anyOf conj candidate-authority)
-                   ;; The Codex SDK drops only the historical top-level anyOf.
-                   ;; Keep candidate closure in a preserved oneOf: either the
-                   ;; complete pair is used, or a legacy branch is used with
-                   ;; neither candidate field present.
-                   (assoc :oneOf [candidate-authority
-                                  legacy-only-authority]))})
+                   ;; The Codex SDK drops the historical top-level authority
+                   ;; envelope. The advertised server schema still owns it:
+                   ;; either both candidate fields are present, or one legacy
+                   ;; branch is present with neither candidate field.
+                   (assoc :anyOf (conj legacy-only-authority
+                                       candidate-authority)))})
 
     (throw (ex-info "Unknown three-arm screen arm" {:arm arm}))))
 
