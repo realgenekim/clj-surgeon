@@ -24,6 +24,8 @@
    (java.nio.file Files Path)
    (java.util UUID)))
 
+;; @spec MCP-OP-EDIT-008
+;; @spec MCP-OP-EDIT-009
 (def tool-description
   (str
     "Apply one failure-atomic Clojure transaction. For exact nested replacements, "
@@ -52,7 +54,7 @@
     "items contain find, except guarded top-level insertion: omit find and name exactly one forms owner. To delete two or more known named owners, use forms "
     "with delete: true once; do not create marker forms or wait for semantic preparation. "
     "Insertion actions use an array of nonblank strings; one array item may contain several complete forms, "
-    "which Surgeon splits in order. They refuse malformed forms and comment-bearing gaps. For named top-level "
+   "which Surgeon splits in order. Insertion strings refuse malformed forms and refuse comment-bearing gaps. For named top-level "
     "def or defn owners, use forms: [name]. owner is only for the namespace form "
     "and must be {kind: namespace, name: ns-name}; never pass owner as a string. "
     "For one multimethod implementation, use forms: [{kind: defmethod, name: render, dispatch: :card}]. "

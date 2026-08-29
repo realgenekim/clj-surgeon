@@ -666,6 +666,9 @@
         (is (= path (:path result)))))))
 
 (deftest normalizes-only-provable-editor-bookkeeping
+  ;; @spec MCP-OP-EDIT-006
+  ;; @spec MCP-OP-EDIT-007
+  ;; @spec MCP-OP-EDIT-010
   (let [packed
         (str "(deftest renders-a-button (is true))\n"
              "(deftest renders-a-link (is true))")

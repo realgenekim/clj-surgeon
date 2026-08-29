@@ -218,6 +218,7 @@
     {}
     (sort allowed)))
 
+;; @spec MCP-OP-EDIT-007
 (defn- complete-insertion-forms
   [source path]
   (let [source (nonblank-string! source path)]
@@ -245,6 +246,7 @@
                  (str "Invalid insertion form: " (.getMessage error))
                  {:error-type :invalid-intent-form})))))
 
+;; @spec MCP-OP-EDIT-010
 (defn- malformed-insertion-retry-template
   [params result]
   (letfn [(string-keyed [value]
@@ -575,6 +577,7 @@
    :edits (reduce + (map #(get-in % [:expect :matches]) changes))
    :files (count (set (mapcat :files changes)))})
 
+;; @spec MCP-OP-EDIT-006
 (defn- validate-direct-tool-params
   [params]
   (try
