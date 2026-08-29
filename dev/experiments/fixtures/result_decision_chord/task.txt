@@ -1,0 +1,3 @@
+In src/sample/core.clj, change the greet function so that it says `Welcome, ` instead of `Hello, `.
+
+Use only the advertised clj-surgeon tools. Your first actionable item must inspect exactly the named greet owner in src/sample/core.clj. After that result, make exactly one guarded edit_clojure call. Do not use shell commands, native file reads, file-change tools, or an additional inspection. After the no-effect edit receipt, reply with exactly `Captured.` and no other text.
