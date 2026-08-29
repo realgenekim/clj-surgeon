@@ -69,7 +69,7 @@ removable time:
 | Receipt interpretation | 2.870 s |
 | Complete wall | 19.216 s |
 
-The next capture screen asks whether the initial interval is request
+The next isolated verified-mutation screen asks whether the initial interval is request
 construction or mostly fixed model/service latency. It keeps the same frozen
 task, model, reasoning, product tool surface, and exact extraction call:
 
