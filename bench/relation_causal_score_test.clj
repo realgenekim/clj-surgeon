@@ -17,6 +17,8 @@
 (def sha-d (apply str (repeat 64 "d")))
 (def sha-e (apply str (repeat 64 "e")))
 (def sha-f (apply str (repeat 64 "f")))
+(def exact-profile-runtime-sha
+  "445a770f901066e2c41b7eebfe2e90653e5ee3a60ab4406d1ee41a0535ae3d97")
 
 (defn- sha256 [text]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256")
@@ -391,7 +393,7 @@
                     :undo_receipt (.getPath receipt-file)
                     :receipt_hash receipt-hash
                     :next_action "none"
-                    :verification {:profile-sha256 sha-e
+                    :verification {:profile-sha256 exact-profile-runtime-sha
                                    :output-sha256 sha-f
                                    :exit 0}}
         events [{:type "thread.started" :thread_id (str "thread-" run-id)}
@@ -416,21 +418,22 @@
                 (+ start (long (* (+ t-emit-ms 1.0) 1000000)))
                 (+ start (long (* (- t-verified-ms 1.0) 1000000)))
                 (+ start (long (* t-verified-ms 1000000)))]
-        artifacts (write-event-artifacts! (io/file root run-id) events clocks)
-        future-sha (score/canonical-sha256 result-hashes)
-        expected {:canonical-transaction-sha256
-                  (score/canonical-sha256 canonical-transaction)
-                  :future-hashes-sha256 future-sha
-                  :read-back-sha256 future-sha
-                  :verifier {:profile-sha256 sha-e}}]
-    (merge {:run-id run-id
-            :block block
-            :position position
-            :arm arm
-            :workspace-root workspace-path
-            :expected-arguments request
-            :expected-evidence expected}
-           artifacts)))
+        run-directory (io/file root run-id)
+        artifacts (write-event-artifacts! run-directory events clocks)
+        terminal-file (io/file run-directory "terminal.tsv")
+        _ (spit terminal-file
+                (str "run_id\t" run-id "\n"
+                     "state\tcompleted\n"
+                     "exit_code\t0\n"
+                     "finished_utc\t2026-08-29T12:00:00Z\n"))]
+    {:run-id run-id
+     :block block
+     :position position
+     :arm arm
+     :workspace-root workspace-path
+     :artifacts {:events (:events-path artifacts)
+                 :event-clock (:event-clock-path artifacts)
+                 :terminal (.getPath terminal-file)}}))
 
 (defn- raw-cohort! [root]
   (let [descriptors [["b1-n1" 1 1 :N]
@@ -452,8 +455,11 @@
     (try
       (let [entry (first (raw-cohort! root))
             joined (score/join-event-clock-files
-                     (:events-path entry) (:event-clock-path entry))
+                     (get-in entry [:artifacts :events])
+                     (get-in entry [:artifacts :event-clock]))
             mapped (score/manifest-entry->row entry nil)]
+        (is (not (contains? entry :expected-arguments)))
+        (is (not (contains? entry :expected-evidence)))
         (is (:ok joined))
         (is (= 6 (count (:events joined))))
         (is (:ok mapped))
@@ -465,19 +471,30 @@
                          nil)]
             (is (false? (:ok result)))
             (is (= [:workspace-not-canonical] (:errors result)))))
+        (testing "terminal completion is an exact retained boundary"
+          (let [terminal (get-in entry [:artifacts :terminal])
+                original (slurp terminal)]
+            (spit terminal (str/replace original
+                                        "state\tcompleted"
+                                        "state\tfailed"))
+            (let [result (score/manifest-entry->row entry nil)]
+              (is (false? (:ok result)))
+              (is (= [:terminal-receipt-invalid] (:errors result))))
+            (spit terminal original)))
         (testing "missing clock rows and byte-count drift refuse"
-          (let [clock (:event-clock-path entry)
+          (let [clock (get-in entry [:artifacts :event-clock])
                 original (slurp clock)
                 lines (str/split-lines original)]
             (spit clock (str (str/join "\n" (butlast lines)) "\n"))
             (is (false? (:ok (score/join-event-clock-files
-                               (:events-path entry) clock))))
+                               (get-in entry [:artifacts :events]) clock))))
             (spit clock (str/replace-first original #"\t[0-9]+\n"
                                            "\t999999\n"))
             (is (false? (:ok (score/join-event-clock-files
-                               (:events-path entry) clock))))))
+                               (get-in entry [:artifacts :events]) clock))))))
         (testing "completion IDs and structured receipt evidence cannot drift"
-          (let [raw-lines (str/split-lines (slurp (:events-path entry)))
+          (let [raw-lines (str/split-lines
+                            (slurp (get-in entry [:artifacts :events])))
                 parsed (mapv #(json/parse-string % true) raw-lines)
                 wrong-id (assoc-in parsed [3 :item :id] "different")
                 wrong-receipt (assoc-in parsed
@@ -492,7 +509,11 @@
                                 events
                                 [900000000 1000000000 1100000000
                                  1101000000 1999000000 2000000000])
-                    result (-> (merge entry artifacts)
+                    result (-> (assoc entry :artifacts
+                                      (merge (:artifacts entry)
+                                             {:events (:events-path artifacts)
+                                              :event-clock
+                                              (:event-clock-path artifacts)}))
                                (score/manifest-entry->row nil)
                                :row
                                score/score-run)]
@@ -510,8 +531,14 @@
             block-2-file (io/file root "block2.edn")
             block-1-output (io/file root "block1-report.edn")
             final-output (io/file root "final-report.edn")]
-        (spit block-1-file (pr-str {:runs (subvec runs 0 4)}))
-        (spit block-2-file (pr-str {:runs (subvec runs 4 8)}))
+        (spit block-1-file
+              (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
+                       :block 1
+                       :runs (subvec runs 0 4)}))
+        (spit block-2-file
+              (pr-str {:schema :clj-surgeon.edit-025-run-manifest/v1
+                       :block 2
+                       :runs (subvec runs 4 8)}))
         (let [block-result
               (score/run-cli!
                 ["--phase" "block1"

@@ -611,31 +611,82 @@
        :message (.getMessage error)
        :data (ex-data error)})))
 
+(defn- expected-arguments [arm workspace]
+  (case arm
+    :N (corpus/normalized-flat-request workspace)
+    :R (corpus/closed-relation-request workspace)
+    nil))
+
+(defn- exact-profile-runtime-sha256 []
+  (let [definition (get-in corpus/exact-profile
+                           [:verification-profiles "exact"])]
+    (sha256 (pr-str (into (sorted-map) definition)))))
+
+(def ^:private expected-evidence-by-arm
+  (delay
+    (into {}
+          (map (fn [arm]
+                 (let [compiled
+                       (compiled-request-evidence
+                         (expected-arguments arm "/workspace"))]
+                   [arm
+                    (when-not (:error compiled)
+                      {:canonical-transaction-sha256
+                       (:canonical-transaction-sha256 compiled)
+                       :future-hashes-sha256
+                       (:future-hashes-sha256 compiled)
+                       :read-back-sha256
+                       (:future-hashes-sha256 compiled)
+                       :verifier
+                       {:profile-sha256
+                        (exact-profile-runtime-sha256)}})])))
+          [:N :R])))
+
+(defn- expected-run-evidence [arm]
+  (get @expected-evidence-by-arm arm))
+
 (defn- structured-content [completion]
   (let [result (get-in completion [:item :result])]
     (or (value result :structured_content)
         (value result :structuredContent))))
 
-(defn- read-data-file [path]
-  (let [text (slurp path)]
-    (if (str/ends-with? path ".json")
-      (json/parse-string text)
-      (edn/read-string text))))
-
-(defn- expected-arguments [entry]
-  (or (:expected-arguments entry)
-      (some-> (:expected-arguments-path entry) read-data-file)))
+(defn- terminal-receipt [path]
+  (try
+    (let [rows (with-open [reader (io/reader path)]
+                 (mapv #(str/split % #"\t" -1) (line-seq reader)))
+          pairs? (every? #(= 2 (count %)) rows)
+          values (when pairs? (into {} rows))
+          run-directory (some-> path io/file .getParentFile .getName)]
+      (if (and pairs?
+               (= 4 (count rows))
+               (= 4 (count values))
+               (= run-directory (get values "run_id"))
+               (= "completed" (get values "state"))
+               (= "0" (get values "exit_code"))
+               (boolean (re-matches
+                          #"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z"
+                          (or (get values "finished_utc") ""))))
+        {:ok true :values values}
+        {:ok false :errors [:terminal-receipt-invalid] :values values}))
+    (catch Exception error
+      {:ok false
+       :errors [:terminal-receipt-invalid]
+       :error (.getMessage error)})))
 
 (defn manifest-entry->row
   "Build one score-run row from a manifest entry and raw retained artifacts."
-  [entry default-expected-evidence]
+  [entry _default-expected-evidence]
   (let [declared-workspace (:workspace-root entry)
         workspace-file (io/file (or declared-workspace ""))
         canonical-workspace (when (.isDirectory workspace-file)
                               (.getCanonicalPath workspace-file))
+        artifacts (:artifacts entry)
+        terminal (terminal-receipt (:terminal artifacts))
         joined (if (= declared-workspace canonical-workspace)
-                 (join-event-clock-files (:events-path entry)
-                                         (:event-clock-path entry))
+                 (if (:ok terminal)
+                   (join-event-clock-files (:events artifacts)
+                                           (:event-clock artifacts))
+                   terminal)
                  {:ok false
                   :errors [:workspace-not-canonical]
                   :workspace-root declared-workspace
@@ -655,6 +706,8 @@
             structured (structured-content completion)
             arguments (some-> (get-in start [:item :arguments])
                               json-object-keys)
+            expected-arguments (expected-arguments (:arm entry)
+                                                   declared-workspace)
             request-evidence (compiled-request-evidence arguments)
             commit-evidence (receipt-evidence (:workspace-root entry)
                                               structured)
@@ -682,9 +735,8 @@
                :position (:position entry)
                :arm (:arm entry)
                :workspace-root (:workspace-root entry)
-               :expected-arguments (expected-arguments entry)
-               :expected-evidence (or (:expected-evidence entry)
-                                      default-expected-evidence)
+               :expected-arguments expected-arguments
+               :expected-evidence (expected-run-evidence (:arm entry))
                :clocks {:turn-start-ns (:observer-monotonic-ns turn-start)
                         :turn-completed-ns
                         (:observer-monotonic-ns turn-completed)}
@@ -696,8 +748,7 @@
 
 (defn manifest->rows [manifest]
   (let [entries (:runs manifest)
-        mapped (mapv #(manifest-entry->row % (:expected-evidence manifest))
-                     entries)
+        mapped (mapv #(manifest-entry->row % nil) entries)
         failures (filterv (comp not :ok) mapped)]
     (if (seq failures)
       {:ok false
