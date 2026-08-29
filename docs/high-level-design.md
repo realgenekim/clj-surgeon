@@ -221,11 +221,20 @@ The first product slice admits one paired relation mode that a retained
 
 Both fields are required in this mode. Their ordered file sets must be
 identical, and the symbol migration's target alias must equal the alias added by
-the require change. A standalone symbol migration, standalone require change,
-or mismatched file set is outside the first slice and refuses before source
-capture. This preserves the exact model-visible checklist that earned 2/2
-first-call correctness and ensures the source-blind symbol rows establish every
-file needed by source-aware require compilation.
+the require change. The require change's exact add namespace is therefore the
+target namespace for every generated qualified symbol; the compiler never
+derives that namespace from an alias alone. A standalone symbol migration,
+standalone require change, or mismatched file set is outside the first slice and
+refuses before source capture. This preserves the exact model-visible checklist
+that earned 2/2 first-call correctness and ensures the source-blind symbol rows
+establish every file needed by source-aware require compilation.
+
+Those generated symbol edits are real guarded edits, not sentinel or fake
+capture rows. Because the relation pair and identical file universe are
+mandatory, the existing generic spec can name every capture file before
+`compile-change-spec` reads sources. The existing `prepare-spec` hook can then
+lower the require relation from that same map; this slice needs no private
+`capture-files` protocol or prepared-request branch in the transaction engine.
 
 Ordinary compact `edits` remain available for exceptions that do not fit either
 relation, and `delete_owners` remains the exact top-level deletion surface. One
@@ -257,27 +266,49 @@ The relation boundary is fail-closed:
 
 - relation objects are closed and reject unknown, partial, duplicate, or
   conflicting fields before mutation;
+- duplicate decoded fields or relation entries refuse. The application does
+  not claim authority over duplicate raw JSON keys already collapsed by an
+  upstream transport decoder;
 - before source capture, symbol migration lowers to ordinary guarded edits and
   the existing literal/deletion actions establish the complete source file
   set; in the first slice, every require-change file must already occur in that
   set, so relation compilation needs no second read or transaction-engine
   change;
-- ordered file and owner rows must be unique, non-empty, and carry positive
-  exact match counts;
+- the capture universe is the canonical, root-confined union of relation,
+  literal-edit, and owner-deletion files; aliases of the same canonical path
+  refuse, and the existing transaction captures that union exactly once;
+- ordered migration files are unique after canonicalization; rows are unique
+  by canonical file, owner, and old symbol, non-empty, and carry positive exact
+  match counts; require entries are unique by canonical file and exact
+  namespace/alias identity;
 - the symbol relation supports only the declared `preserve-name` rule and
   accepts only one exact symbol token per row; it produces no replacement other
   than the stated alias plus that symbol's exact unqualified name;
 - the target alias must be absent from every frozen migration namespace and
-  must be established in every one by the paired require change; an existing,
-  missing, or differently bound alias refuses before write;
+  must be established in every one by the paired require change with the exact
+  declared target namespace; an existing, missing, or differently bound alias
+  refuses before write;
 - each require addition must be absent from the frozen namespace, and each
   declared removal must identify exactly one direct require entry;
 - alias, namespace, reader-conditional, comment, or platform ambiguity refuses
   the complete request before write;
+- require lowering is deterministic and injective: one admitted closed request
+  plus one frozen source map yields one byte result, preserves every unrelated
+  byte and comment, and otherwise refuses instead of choosing a layout;
+- generated and literal edits plus owner deletions must be disjoint after
+  canonical addressing; a duplicate, overlap, or deletion of a generated edit
+  owner refuses the whole request;
+- existing request, file, edit, match, source-byte, and output-byte limits are
+  enforced against both declared and expanded rows before mutation;
 - every expanded edit is revalidated by the generic compiler against the same
   frozen source map, so relation compilation grants no independent write
   authority; and
-- one failed relation or expanded edit refuses the complete mixed request.
+- one failed relation or expanded edit refuses the complete mixed request. A
+  stale mismatch never triggers recapture or recompilation against newer bytes.
+  Pre-write staleness refuses before the first write; a race or later failure
+  discovered after writing begins invokes the existing failure-atomic rollback
+  and read-back proof. The design promises failure atomicity with rollback, not
+  simultaneous multi-file isolation.
 
 Successful results report bounded relation identity, input and expanded row
 counts, declared match totals, affected files, and the existing transaction
@@ -291,6 +322,15 @@ existing transaction algebra, not another plan representation or executor.
 CLI projection is deferred: the first public slice changes only the compact MCP
 entrance whose model-side construction cost and omission pattern were directly
 measured, while leaving the compiler reusable by a later CLI adapter.
+
+This relation is promoted only if a fresh, correct-control mutation cohort
+proves exact future bytes or the approved meaning-preserving equivalent,
+configured verification, first-call correctness, and lower complete verified
+wall time after charging the larger schema surface. Capture-only evidence does
+not satisfy that gate. A relation whose independent omission pattern does not
+recur, whose callers route around it, or whose complete-task time fails to beat
+the flat route remains experimental or is retired. New relations require new
+repeated evidence; this first slice is not precedent for a refactoring catalog.
 
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
