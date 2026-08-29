@@ -722,6 +722,17 @@ ordinary compact data, bounded normalization evidence, or one typed refusal.
 The existing transaction remains the only component that captures source
 authorizes mutation, writes, reads back, verifies, receipts, and rolls back.
 
+Implementation status on 2026-08-29: the pure facade, paired admission,
+single-capture lowering, atomic apply path, and non-relation isolation are
+implemented under `MCP-OP-EDIT-020..024` and `MCP-OP-EDIT-026..027`.
+Performance promotion remains on **HOLD** under `MCP-OP-EDIT-025`. In the first
+real-mutation block, all four calls were semantically correct and exact
+verified, and the relation midpoint was descriptively lower. One normalized-flat
+call expressed the same request edit multiset in a different order and therefore
+failed the predeclared exact canonical-transaction identity gate. Block 2 did
+not run. The gate remains unchanged; any order-invariant canonicalization is a
+separate design decision and requires a new cohort.
+
 ## #Public request shape
 
 The first slice admits `symbol_migration` and `require_change` only as a pair.
