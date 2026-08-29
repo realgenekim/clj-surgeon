@@ -52,6 +52,8 @@
    :non-namespace-missing-within true
    :stale-count true
    :mismatched-clause-kind true
+   :nested-only-clause true
+   :competing-identical-subtree-outside-namespace true
    :empty-files true
    :multiple-files true
    :file-and-files true}
@@ -65,11 +67,11 @@
    :stale-count true}}
  :artifact-sha256
  {"dev/experiments/namespace_tolerance_replay.clj"
-  "6eb613bea2be485538c0e9ac55eb9e15f073fdaa59526c929a6a0e71ec9f9f73"
+  "75a3c0f45ca38759b331dd316ce558ab49e61f91800db3c26cc261353cac28ad"
   "dev/experiments/namespace_tolerance_replay_test.clj"
-  "0649ba42cadc07a2f92876775a3e69fb94116b7e1f573dbbec6a8289c31f5552"}
+  "dc7e0d2314289a3484e5cb3ee4348e056a04939d84870d0600af7e4da6987fa1"}
  :verification
- {:targeted {:tests 4 :assertions 35 :failures 0 :errors 0}
+ {:targeted {:tests 4 :assertions 37 :failures 0 :errors 0}
   :test-fast {:tests 636 :assertions 5467 :failures 0 :errors 0}
   :mcp-test-cold-rerun {:tests 269 :assertions 2284 :failures 0 :errors 0}
   :clj-kondo {:errors 0 :warnings 0}
