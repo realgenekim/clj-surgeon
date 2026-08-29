@@ -48,6 +48,10 @@
   {:control "9fd5471d4bc47eb9bf37b4cd0eefca352238fff7319872258d4f38d0a3a465e0"
    :treatment "e29ecae49417c0bb27575763c92a41460b7e2fa8de5178a151d5a5ba7b326180"})
 
+(def expected-client-target-surface-sha256
+  {:control "91d7b6c61b16ead67f3f3cae47eb1a8ba53d266b480b19f0697f50a50dc8a508"
+   :treatment "d602120b9e3b96d8c136551f5516800674adddbbd06e33a4a94326a35314ffef"})
+
 (defn- sha256-bytes [^bytes bytes]
   (let [digest (doto (MessageDigest/getInstance "SHA-256") (.update bytes))]
     (format "%064x" (BigInteger. 1 (.digest digest)))))
@@ -159,13 +163,19 @@
   (let [advertised (read-json advertised-path)
         registry (read-json registry-path)
         expected-tools (mapv public-tool
-                             (capture-server/capture-tools arm "/dev/null"))]
+                             (capture-server/capture-tools arm "/dev/null"))
+        client-target (first (filter #(= "apply_clojure_changes" (:name %))
+                                     (:tool-projection registry)))
+        client-target-sha (some-> client-target surface/sha256)]
     {:ok (and (= (name arm) (:arm advertised))
               (= production-instructions (:instructions advertised))
               (= expected-tools (:tools advertised))
-              (:ok (validate-client-catalog advertised registry expected-server)))
+              (:ok (validate-client-catalog advertised registry expected-server))
+              (= (expected-client-target-surface-sha256 arm)
+                 client-target-sha))
      :server-surface-exact (= expected-tools (:tools advertised))
      :client (validate-client-catalog advertised registry expected-server)
+     :client-target-surface-sha256 client-target-sha
      :advertised-catalog-sha256 (surface/sha256 (:tools advertised))
      :client-catalog-sha256 (surface/sha256 (:tool-projection registry))}))
 
@@ -181,7 +191,7 @@
         manifest-value (read-json workspace-manifest)
         arguments (get-in capture-value [:calls 0 :params])
         surface-result (surface-evidence advertised registry arm expected-server)
-        surface-ok (:server-surface-exact surface-result)
+        surface-ok (:ok surface-result)
         client (:client surface-result)
         public (admission/authorize (:schema (surface/tool-surface arm)) arguments)
         route (route-evidence events-value)
@@ -208,6 +218,8 @@
      :isolation {:workspace workspace :codex-home codex-home
                  :server-pid (some-> server-pid parse-long)}
      :identity {:target-surface-sha256 target-surface-sha
+                :client-target-surface-sha256
+                (:client-target-surface-sha256 surface-result)
                 :advertised-catalog-sha256 (surface/sha256 (:tools advertised-value))
                 :client-catalog-sha256
                 (surface/sha256 (:tool-projection registry-value))
