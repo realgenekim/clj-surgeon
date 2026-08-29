@@ -30,7 +30,9 @@
   :clj-surgeon/mcp-test
   {:extra-paths ["test"]
    :extra-deps
-   {io.github.bhauman/clojure-mcp
+   {babashka/fs {:mvn/version "0.5.30"}
+    babashka/process {:mvn/version "0.6.23"}
+    io.github.bhauman/clojure-mcp
     {:git/tag "v0.2.6"
      :git/sha "35a660b"}
     nrepl/nrepl {:mvn/version "1.3.1"}
