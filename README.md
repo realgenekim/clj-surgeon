@@ -53,6 +53,16 @@ native:   discover spans → assemble script/patch → repair → lint → narra
 Surgeon:  [Claude may discover tool] → one compiled verified transaction
 ```
 
+The compact editor shows the same crossover without extraction planning. A
+counterbalanced Sol/high Anvil pilot replayed a real nine-file cleanup with 51
+supplied guarded changes. `edit_clojure` completed in 55.763 and 61.354 seconds,
+one exact atomic call each. The matched native arms completed in 206.727 and
+372.286 seconds and each paid one failed mutation path. The two-observation
+midpoints are 58.559 versus 289.507 seconds: **4.944x faster and 79.77 percent
+lower wall time** for compact Surgeon. On a small two-file, three-change control,
+native remains faster. The tool earns its ceremony when exact mechanical state
+spans enough owners and files to collapse many fragile actions into one chord.
+
 Why make structure a product primitive? In an additive Terra/high screen, the
 native caller generated a Perl program to perform this extraction and to
 balance the Clojure delimiters. That script replaced a complete
