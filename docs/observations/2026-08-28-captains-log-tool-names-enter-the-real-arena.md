@@ -676,3 +676,50 @@ This closes the production incident without weakening safety:
 - heterogeneous decisions use one request language;
 - malformed syntax produces one caller-owned hole; and
 - exact guards, atomicity, parse, read-back, and receipts remain authoritative.
+
+## The refusal-cost firewall went live
+
+The next bounded usage receipt covered 2026-08-28 14:52:11Z through
+2026-08-29 00:36:29Z. It found 64 shared MCP calls: 45 succeeded and 19
+refused. The direct service spent only 31.654 seconds across all calls, while
+69 post-Surgeon boundaries consumed 937.619 seconds. Median direct tool wall
+was 222 milliseconds; median wall before the next agent action was 9.331
+seconds. A safe refusal is cheap for the kernel and expensive for the complete
+task.
+
+The refusal mix was 14 `batch-form-selection-failed`, two
+`invalid-intent-form`, two `invalid-mcp-request`, and one
+`expect-count-mismatch`. This receipt overlaps development and benchmark
+sessions and predates publication of the tolerant compiler. It is a baseline,
+not evidence that all 19 refusals are safely repairable. Owner ambiguity stays
+fail-closed; ranking and similarity never gain write authority. The first
+firewall targets only injective mechanics: derived bookkeeping, several
+independently complete insertion forms, and non-executable caller-owned holes
+for malformed syntax.
+
+The completed compiler was hot-published once through the existing shared
+runtime. `make mcp-reload` returned `:status :synchronized`, `:ok true`, and
+`server-restart-required false`. Java PID 65458, CWD
+`/Users/genekim/src.local/clj-surgeon`, remained unchanged. A real call from
+the pre-existing Codex session used an isolated temporary workspace, supplied
+two complete forms in one insertion string, and deliberately supplied
+incorrect aggregate counts. It committed atomically in 1,879.989 ms, returned
+`verification_complete=true`, and reported:
+
+```clojure
+{:ignored ["expect"]
+ :reason "aggregate counts are derived from exact change guards"}
+```
+
+The successful call proves the running server has the new contract; it does
+not weaken exact per-change guards. Rollback anchor
+`stable-operation-algebra-verified-20260827` was not needed. The publication
+window closed with PID and CWD continuity.
+
+The next hill is `clj-surgeon-tmr.7`: the frozen historical submission-row
+cleanup, with 51 supplied edit intents across nine files and roughly 429
+deleted lines. The small tolerant fixture remains a reliability regression and
+a native-positive routing control. The historical fixture tests the actual
+crossover hypothesis: once mechanical state grows, one guarded owner-level
+transaction should stay close to one model action while native patch
+materialization grows with the source surface.
