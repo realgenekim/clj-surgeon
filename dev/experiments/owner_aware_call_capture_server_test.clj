@@ -48,4 +48,8 @@
       (finally
         (.delete (io/file path))))))
 
-(apply clojure.test/run-tests ['owner-aware-call-capture-server-test])
+(defn -main [& _]
+  (let [{:keys [fail error]}
+        (clojure.test/run-tests 'owner-aware-call-capture-server-test)]
+    (when (pos? (+ fail error))
+      (System/exit 1))))

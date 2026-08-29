@@ -27,7 +27,7 @@
 
 (def supported-schema-keywords
   #{:type :description :title :additionalProperties :properties :required
-    :items :minItems :maxItems :uniqueItems :minLength :pattern :minimum
+    :items :prefixItems :minItems :maxItems :uniqueItems :minLength :pattern :minimum
     :maximum :const :enum :allOf :anyOf :oneOf :not :default
     :minProperties :maxProperties})
 
@@ -37,10 +37,11 @@
         direct-children (remove nil? [(:items schema) (:not schema)
                                       (when (map? (:additionalProperties schema))
                                         (:additionalProperties schema))])
+        prefix-children (or (:prefixItems schema) [])
         branch-children (mapcat #(or (% schema) []) [:allOf :anyOf :oneOf])]
     (into (set local)
           (mapcat unsupported-schema-keywords)
-          (concat property-children direct-children branch-children))))
+          (concat property-children direct-children prefix-children branch-children))))
 
 (defn- object-valid? [schema value]
   (if-not (object-value? value)
@@ -69,15 +70,22 @@
 (defn- array-valid? [schema value]
   (if-not (array-value? value)
     true
-    (and
-      (or (not (:minItems schema))
-          (<= (:minItems schema) (count value)))
-      (or (not (:maxItems schema))
-          (<= (count value) (:maxItems schema)))
-      (or (not (:uniqueItems schema))
-          (= (count value) (count (distinct value))))
-      (or (not (:items schema))
-          (every? #(valid? (:items schema) %) value)))))
+    (let [value (vec value)
+          prefix-items (vec (or (:prefixItems schema) []))
+          remaining (if (seq prefix-items)
+                      (subvec value (min (count value) (count prefix-items)))
+                      value)]
+      (and
+        (or (not (:minItems schema))
+            (<= (:minItems schema) (count value)))
+        (or (not (:maxItems schema))
+            (<= (count value) (:maxItems schema)))
+        (or (not (:uniqueItems schema))
+            (= (count value) (count (distinct value))))
+        (every? true?
+                (map valid? prefix-items value))
+        (or (not (:items schema))
+            (every? #(valid? (:items schema) %) remaining))))))
 
 (defn- scalar-valid? [schema value]
   (and

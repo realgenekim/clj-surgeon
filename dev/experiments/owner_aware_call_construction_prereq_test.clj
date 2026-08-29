@@ -39,6 +39,7 @@
                           [(run :control true) (run :candidate false)])
                         [:gate :both-correct])))))
 
-(let [{:keys [fail error]} (run-tests)]
-  (when (pos? (+ fail error))
-    (System/exit 1)))
+(defn -main [& _]
+  (let [{:keys [fail error]} (run-tests)]
+    (when (pos? (+ fail error))
+      (System/exit 1))))
