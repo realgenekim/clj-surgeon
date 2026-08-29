@@ -739,6 +739,13 @@ if [ "${BENCH_HARNESS_SELF_TEST:-false}" = true ]; then
     "$self_test_root/no-mcp-first-selected-tool.tsv")" = none
 
   configure_canonical_mcp_roles
+  test "$(canonical_profile_tool_names_json edit)" = '["edit_clojure"]'
+  test "$(canonical_profile_tool_names_json full)" = \
+    '["apply_clojure_changes","edit_clojure","inspect_clojure","transform_clojure"]'
+  if canonical_profile_tool_names_json unknown >/dev/null 2>&1; then
+    echo "canonical profile self-test accepted an unknown profile" >&2
+    exit 1
+  fi
   printf '%s\n' \
     '{"type":"item.started","item":{"type":"mcp_tool_call","server":"clj-surgeon","tool":"apply_clojure_changes","arguments":{"extraction":{"file":"src/sample.clj"}}}}' \
     > "$self_test_root/catalog-A-extraction.jsonl"
@@ -1581,7 +1588,7 @@ run_one() {
     exit 2
   fi
 
-  if [ "$version" = mcp ] && [ -n "$candidate_catalog" ]; then
+  if [ "$version" = mcp ]; then
     local client_registry_receipt="$run_dir/codex-mcp-registry.json"
     local preflight_codex
     preflight_codex=$(PATH="$run_path" command -v codex)
@@ -1596,36 +1603,43 @@ run_one() {
     ) > "$run_dir/codex-mcp-registry.stdout" \
       2> "$run_dir/codex-mcp-registry.stderr"
     local expected_catalog_tools actual_catalog_tools
-    local expected_catalog_surface actual_catalog_surface
-    expected_catalog_tools=$(jq -c '[.roles[]] | unique | sort' \
-      "$catalog_role_receipt")
     actual_catalog_tools=$(jq -c '."tool-names" | sort' \
       "$client_registry_receipt")
+    if [ -n "$candidate_catalog" ]; then
+      expected_catalog_tools=$(jq -c '[.roles[]] | unique | sort' \
+        "$catalog_role_receipt")
+    else
+      expected_catalog_tools=$(canonical_profile_tool_names_json \
+        "${BENCH_MCP_TOOL_PROFILE:-full}")
+    fi
     if [ "$actual_catalog_tools" != "$expected_catalog_tools" ]; then
-      echo "Codex client registry differs from candidate catalog for $run_id" >&2
+      echo "Codex client registry differs from the exact MCP tool profile for $run_id" >&2
       printf 'expected=%s\nactual=%s\n' \
         "$expected_catalog_tools" "$actual_catalog_tools" >&2
       exit 2
     fi
-    expected_catalog_surface=$(jq -S -c '
-      .tools
-      | map(
-          .["input-schema"] |= del(.oneOf)
-          | if .annotations == null then .annotations = {}
-            else .annotations = {
-              title: .annotations.title,
-              readOnlyHint: .annotations["read-only"],
-              destructiveHint: .annotations.destructive,
-              idempotentHint: .annotations.idempotent,
-              openWorldHint: .annotations["open-world"]
-            }
-            end)
-      | sort_by(.name)' "$catalog_role_receipt")
-    actual_catalog_surface=$(jq -S -c '."tool-projection" | sort_by(.name)' \
-      "$client_registry_receipt")
-    if [ "$actual_catalog_surface" != "$expected_catalog_surface" ]; then
-      echo "Codex client registry exceeded the admitted transport projection for $run_id" >&2
-      exit 2
+    if [ -n "$candidate_catalog" ]; then
+      local expected_catalog_surface actual_catalog_surface
+      expected_catalog_surface=$(jq -S -c '
+        .tools
+        | map(
+            .["input-schema"] |= del(.oneOf)
+            | if .annotations == null then .annotations = {}
+              else .annotations = {
+                title: .annotations.title,
+                readOnlyHint: .annotations["read-only"],
+                destructiveHint: .annotations.destructive,
+                idempotentHint: .annotations.idempotent,
+                openWorldHint: .annotations["open-world"]
+              }
+              end)
+        | sort_by(.name)' "$catalog_role_receipt")
+      actual_catalog_surface=$(jq -S -c '."tool-projection" | sort_by(.name)' \
+        "$client_registry_receipt")
+      if [ "$actual_catalog_surface" != "$expected_catalog_surface" ]; then
+        echo "Codex client registry exceeded the admitted transport projection for $run_id" >&2
+        exit 2
+      fi
     fi
     # This is an independent same-binary/same-home Codex client preflight.
     # The measured turn's first tool call remains the behavioral authority.
