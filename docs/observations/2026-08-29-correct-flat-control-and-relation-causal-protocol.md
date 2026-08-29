@@ -195,14 +195,16 @@ followed by that same normalizer and generic compiler.
 Every attempt is retained after model launch. Do not replace an incorrect,
 slow, or treatment-nonadherent run. For an arm, `median` means the ordinary
 sorted-sample median; with two observations it is the arithmetic mean of the
-two central values. Block improvement is
-`(median(T_verified_N) - median(T_verified_R)) / median(T_verified_N)`.
+two central values. Compute block improvement independently for `T_verified`
+and `T_emit` as
+`(median(T_metric_N) - median(T_metric_R)) / median(T_metric_N)`.
 The screen stops if either N is incorrect, either R is incorrect, or block-one
-improvement is less than 15 percent. A stopped screen is evidence against
+`T_verified` improvement is less than 15 percent, or the R `T_emit` median is
+not lower than the N `T_emit` median. A stopped screen is evidence against
 promotion, not permission to tune the prompt under the same protocol identity.
 
-If all four calls are exact and the signal is at least 15 percent, run the
-predeclared complementary block:
+If all four calls are exact, `T_verified` improves by at least 15 percent, and
+the R `T_emit` median is lower, run the predeclared complementary block:
 
 ```text
 Block 2: R N N R
@@ -214,9 +216,12 @@ At `N=8`, promotion requires:
 - one `edit_clojure` call per run and no other action;
 - identical canonical transaction and future hashes;
 - exact verification inside the transaction;
-- the R median lower than the N median in each counterbalanced block; and
-- pooled improvement of at least 20 percent, using the same formula over all
-  four `T_verified` observations per arm.
+- the R `T_verified` median lower than the N median in each counterbalanced
+  block;
+- the R `T_emit` median lower than the N median in each counterbalanced block;
+- pooled `T_verified` improvement of at least 20 percent; and
+- pooled `T_emit` improvement of at least 20 percent, using the same formula
+  over all four observations per arm.
 
 The cohort is capped at eight. A borderline result is not promoted.
 
@@ -254,9 +259,10 @@ Retain raw events and report these clocks separately:
 | `T_verified` | turn start to final completion, only for an exact first-call verified run |
 
 The primary product metric is `T_verified`. Do not subtract server time from
-it. `T_emit` tests the materialization mechanism. If R wins complete wall but
-does not reduce `T_emit`, the proposed explanation is falsified even if the
-product result remains useful.
+it. `T_emit` tests the materialization mechanism and is an independent
+promotion gate. If R wins complete wall but does not clear the predeclared
+`T_emit` gates, the proposed explanation is falsified; retain the result as
+unexplained product evidence, not promotion of relation lowering.
 
 ## Optional serialization ablation
 
@@ -269,8 +275,9 @@ spontaneous usability.
 ## Claim boundary
 
 The relation hypothesis fails if it loses any first-call correctness, changes
-transaction or verifier semantics, needs a second turn, or fails the 20 percent
-complete-wall gate at `N=8`. Smaller payload alone is not success.
+transaction or verifier semantics, needs a second turn, or fails either the 20
+percent `T_emit` gate or the 20 percent complete-wall gate at `N=8`. Smaller
+payload alone is not success.
 
 No model, Anvil, install, reload, shared runtime, or product mutation is
 authorized by this protocol. Product work remains behind the HLD approval

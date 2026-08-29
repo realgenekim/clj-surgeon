@@ -356,12 +356,17 @@ measured, while leaving the compiler reusable by a later CLI adapter.
 
 This relation is promoted only if a fresh, correct-control mutation cohort
 proves a byte-identical canonical transaction and exact future bytes,
-configured verification, first-call correctness, and lower complete verified
-wall time after charging the larger schema surface. Meaning-preserving but
-byte-different outcomes may be recorded separately; they cannot promote this
-request-shape experiment. The control must traverse the same candidate and the
-same source-proved compact-location normalizer; the treatment adds only
-closed-relation lowering before that common path.
+configured verification, first-call correctness, lower request-emission time,
+and lower complete verified wall time after charging the larger schema surface.
+The relation arm must lower median request-emission time in both
+counterbalanced blocks and by at least 20 percent across the pooled cohort; it
+must independently lower complete verified wall time by at least 20 percent.
+A complete-wall win without the emission-time result is unexplained evidence,
+not promotion of the proposed authoring-compression mechanism.
+Meaning-preserving but byte-different outcomes may be recorded separately;
+they cannot promote this request-shape experiment. The control must traverse
+the same candidate and the same source-proved compact-location normalizer; the
+treatment adds only closed-relation lowering before that common path.
 Capture-only evidence does not satisfy that gate. A relation whose construction
 advantage does not recur, whose callers route around it, or whose complete-task
 time fails to beat the normalized flat route remains experimental or is
