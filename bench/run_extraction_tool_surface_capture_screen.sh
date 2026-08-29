@@ -11,14 +11,18 @@ model=gpt-5.6-sol
 reasoning=high
 arms=(control treatment treatment control)
 run_ids=(01-control 02-treatment 03-treatment 04-control)
-expected_prompt_sha=70ab6dc2ad07b04dc3930c277f8eac7185a19a5bb21c2a619c2f6bf0db6742a0
-expected_prompt_bytes=2097
+expected_prompt_sha=101af5af476bc6f3e477e1170254cb30f7673e8857feeac157d0d402a343f139
+expected_prompt_bytes=2053
 surface_source_sha=8e86b9b6f6e5a73a82af7322a796670a832371cc2c7c3a065f5879f22d8d2de4
 capture_server_sha=f41bff100c0930bcf12445c511da8fbd9004f026087c1edb4ad5288082696dd0
-protocol_sha=77fc32201c7b9f1abf90f015130514405a1100ef6f7aae7e606e0b3bce66fde1
+protocol_sha=950b97e1d403a814b94deb00d221527366adb839d0524f7b50adbe73850d2ddb
 result_dir=${BENCH_RESULT_DIR:-}
 auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
 timeout_seconds=${BENCH_TIMEOUT_SECONDS:-180}
+expected_head=""
+expected_tree=""
+expected_runner_sha=""
+expected_scorer_sha=""
 self_test=false
 run=false
 
@@ -30,6 +34,10 @@ Usage: bench/run_extraction_tool_surface_capture_screen.sh OPTIONS
   --run              Run the exact capture-only C-T-T-C cohort
   --output DIR       Required for --run
   --auth-file FILE   Codex auth.json (default: current CODEX_HOME)
+  --expected-head SHA Exact clean checkout required for --run
+  --expected-tree SHA Exact checkout tree required for --run
+  --expected-runner-sha SHA Exact runner bytes required for --run
+  --expected-scorer-sha SHA Exact scorer bytes required for --run
   --timeout SEC      Per-run timeout (default: 180)
 
 Capture-only results measure request construction. They cannot promote product code.
@@ -42,6 +50,10 @@ while [ "$#" -gt 0 ]; do
     --run) run=true; shift ;;
     --output) result_dir=${2:?--output requires a value}; shift 2 ;;
     --auth-file) auth_file=${2:?--auth-file requires a value}; shift 2 ;;
+    --expected-head) expected_head=${2:?--expected-head requires a value}; shift 2 ;;
+    --expected-tree) expected_tree=${2:?--expected-tree requires a value}; shift 2 ;;
+    --expected-runner-sha) expected_runner_sha=${2:?--expected-runner-sha requires a value}; shift 2 ;;
+    --expected-scorer-sha) expected_scorer_sha=${2:?--expected-scorer-sha requires a value}; shift 2 ;;
     --timeout) timeout_seconds=${2:?--timeout requires a value}; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -52,7 +64,7 @@ screen_prompt() {
   cat "$repo_root/bench/fixtures/edit_portfolio/sessionize-format-extraction/task.txt"
   printf '%s\n' '' \
     'Your first emitted item must be the apply_clojure_changes tool call. Emit no preamble, status narration, or explanation before it. Use exactly this object shape: {"workspace_root":"<current workspace>","extraction":{"file":"<supplied source>","to":"<supplied destination>","forms":["<all supplied forms in order>"],"require_policy":"minimal","public_forms":["<task-declared public form>"],"caller_changes":[],"ignored_caller_files":[]},"verify":"exact"}. Every extraction field is nested inside extraction; verify is top-level. The project-owned exact profile runs the task-declared clj-kondo command against staged bytes inside the atomic transaction. Do not run clj-kondo or any other shell verifier. Treat verification_complete=true and the exact-exit evidence as terminal mutation and verification proof.' \
-    'After a successful terminal receipt, reply with exactly this text and no additional analysis: Done — extraction and exact verification completed.'
+    'After the no-effect capture receipt, reply with exactly this text and no additional analysis: Captured.'
 }
 
 clojure_screen() {
@@ -93,6 +105,10 @@ run_zero_model_tests() {
   [ "$(shasum -a 256 "$repo_root/dev/experiments/extraction_tool_surface.clj" | awk '{print $1}')" = "$surface_source_sha" ]
   [ "$(shasum -a 256 "$repo_root/dev/experiments/extraction_call_capture_server.clj" | awk '{print $1}')" = "$capture_server_sha" ]
   [ "$(shasum -a 256 "$repo_root/dev/experiments/extraction_tool_surface_screen.edn" | awk '{print $1}')" = "$protocol_sha" ]
+  [ "$(jq -cS 'if has("workspace_root") then .workspace_root = "<workspace>" else . end' \
+       "$repo_root/dev/experiments/fixtures/extraction_tool_surface_retained_arguments.json" | \
+       shasum -a 256 | awk '{print $1}')" = \
+    '01d502300c9e6af22e22e69f5680a4ed767ecc7fa64e4c9bce1d91b78bdfba47' ]
   [ "${arms[*]}" = 'control treatment treatment control' ]
   [ "${run_ids[*]}" = '01-control 02-treatment 03-treatment 04-control' ]
 
@@ -139,8 +155,29 @@ if [ "$run" != true ]; then
   echo 'No action selected. Use --self-test or --run.' >&2
   exit 2
 fi
-if [ -z "$result_dir" ] || [ ! -f "$auth_file" ]; then
-  echo '--output and an existing --auth-file are required for --run' >&2
+if [ -z "$result_dir" ]; then
+  echo '--output is required for --run' >&2
+  exit 2
+fi
+if [ -e "$result_dir" ] && [ -n "$(find "$result_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+  echo '--output must not contain any prior run artifacts' >&2
+  exit 2
+fi
+if [ -z "$expected_head" ] || [ -z "$expected_tree" ] || \
+   [ -z "$expected_runner_sha" ] || [ -z "$expected_scorer_sha" ]; then
+  echo '--run requires exact head, tree, runner, and scorer identities' >&2
+  exit 2
+fi
+if [ "$(git -C "$repo_root" rev-parse HEAD)" != "$expected_head" ] || \
+   [ "$(git -C "$repo_root" rev-parse 'HEAD^{tree}')" != "$expected_tree" ] || \
+   [ "$(shasum -a 256 "$repo_root/bench/run_extraction_tool_surface_capture_screen.sh" | awk '{print $1}')" != "$expected_runner_sha" ] || \
+   [ "$(shasum -a 256 "$repo_root/dev/experiments/extraction_tool_surface_capture_screen.clj" | awk '{print $1}')" != "$expected_scorer_sha" ] || \
+   [ -n "$(git -C "$repo_root" status --porcelain)" ]; then
+  echo '--run checkout or executable evidence does not match the approved immutable candidate' >&2
+  exit 2
+fi
+if [ ! -f "$auth_file" ]; then
+  echo '--auth-file must exist for --run' >&2
   exit 2
 fi
 if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
@@ -253,10 +290,10 @@ for index in 0 1 2 3; do
     continue
   fi
 
-  jq -S '.calls[0].params // null' "$capture_file" \
+  jq -cS '.calls[0].params // null' "$capture_file" \
     > "$run_dir/actual-arguments.json"
-  jq 'if has("workspace_root") then .workspace_root = "<workspace>" else . end' \
-    "$run_dir/actual-arguments.json" | jq -S . \
+  jq -cS 'if has("workspace_root") then .workspace_root = "<workspace>" else . end' \
+    "$run_dir/actual-arguments.json" \
     > "$run_dir/logical-arguments.json"
 
   set +e
