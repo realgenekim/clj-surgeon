@@ -301,6 +301,8 @@
 
 (deftest paired-relation-schema-is-closed
   ;; @spec MCP-OP-EDIT-020
+  ;; @spec MCP-OP-EDIT-026
+  ;; @spec MCP-OP-EDIT-027
   (let [valid (relations/compile-source-blind relation-request)]
     (is (:ok valid) (pr-str valid))
     (is (contains? (:properties schema/editor-tool-schema) "symbol_migration"))

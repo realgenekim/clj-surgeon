@@ -1135,6 +1135,7 @@
       (assoc :change_indexes (:intent-indexes result))
       (contains? result :remedies) (assoc :remedies (:remedies result)))))
 
+;; @spec MCP-OP-EDIT-024
 (defn normalize-success-receipt
   "Reduce a complete kernel result to terminal verification evidence. Requires read-back hashes and an inverse receipt."
   [project-root result]
