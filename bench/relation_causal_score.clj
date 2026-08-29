@@ -5,7 +5,15 @@
   namespace accepts only explicit row data, validates its joins and identities,
   derives both clocks, and applies the frozen counterbalanced gates."
   (:require
-   [clojure.string :as str]))
+   [cheshire.core :as json]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [relation-causal-corpus :as corpus])
+  (:import
+   (java.nio.charset StandardCharsets)
+   (java.nio.file Files Paths)
+   (java.security MessageDigest)))
 
 (def expected-run-manifest
   [{:run-id "b1-n1" :block 1 :position 1 :arm :N}
@@ -22,6 +30,25 @@
 (defn- sha256? [value]
   (and (string? value)
        (boolean (re-matches sha256-pattern value))))
+
+(defn- sha256 [text]
+  (let [digest (MessageDigest/getInstance "SHA-256")]
+    (.update digest (.getBytes ^String text StandardCharsets/UTF_8))
+    (apply str (map #(format "%02x" (bit-and 0xff %)) (.digest digest)))))
+
+(defn- canonical-data [x]
+  (cond
+    (map? x) (into (sorted-map-by #(compare (str %1) (str %2)))
+                   (map (fn [[key child]] [key (canonical-data child)]))
+                   x)
+    (vector? x) (mapv canonical-data x)
+    (sequential? x) (mapv canonical-data x)
+    :else x))
+
+(defn canonical-sha256
+  "Hash one EDN value after recursive deterministic map ordering."
+  [x]
+  (sha256 (pr-str (canonical-data x))))
 
 (defn- value
   "Read one field from a keyword- or JSON-string-keyed map."
@@ -76,6 +103,34 @@
               (sha256? (value verifier :profile-sha256))
               (sha256? (value verifier :output-sha256))
               (= 0 (value verifier :exit))))))
+
+(defn- evidence-oracle-complete? [evidence]
+  (and (map? evidence)
+       (every? #(sha256? (value evidence %))
+               [:canonical-transaction-sha256
+                :future-hashes-sha256
+                :read-back-sha256])
+       (sha256? (get-in evidence [:verifier :profile-sha256]))))
+
+(defn- evidence-matches-oracle? [expected actual]
+  (and (evidence-oracle-complete? expected)
+       (= (select-keys expected
+                       [:canonical-transaction-sha256
+                        :future-hashes-sha256
+                        :read-back-sha256])
+          (select-keys actual
+                       [:canonical-transaction-sha256
+                        :future-hashes-sha256
+                        :read-back-sha256]))
+       (= (get-in expected [:verifier :profile-sha256])
+          (get-in actual [:verifier :profile-sha256]))))
+
+(defn- stable-evidence [evidence]
+  {:canonical-transaction-sha256
+   (:canonical-transaction-sha256 evidence)
+   :future-hashes-sha256 (:future-hashes-sha256 evidence)
+   :read-back-sha256 (:read-back-sha256 evidence)
+   :verifier-profile-sha256 (get-in evidence [:verifier :profile-sha256])})
 
 (defn- event-kind [event]
   (token (value event :event)))
@@ -145,6 +200,7 @@
         arguments (value start-item :arguments)
         actual-evidence (value completion-item :evidence)
         expected-evidence (:expected-evidence row)
+        expected-arguments (:expected-arguments row)
         workspace (:workspace-root row)
         turn-start (get-in row [:clocks :turn-start-ns])
         turn-completed (get-in row [:clocks :turn-completed-ns])
@@ -169,8 +225,8 @@
              (= 1 (count turn-complete-events))
              (= turn-start (event-time (first turn-start-events)))
              (= turn-completed (event-time (first turn-complete-events)))
-             (= :turn-started (event-kind (first events)))
-             (= :turn-completed (event-kind (last events))))
+             (< (.indexOf events (first turn-start-events))
+                (.indexOf events (first turn-complete-events))))
         first-action (first actions)
         errors (-> []
                    (add-error (not turn-events-valid?)
@@ -207,9 +263,14 @@
                               :workspace-mismatch)
                    (add-error (not= "exact" (value arguments :verify))
                               :verify-not-exact)
+                   (add-error (not (map? expected-arguments))
+                              :request-evidence-missing)
+                   (add-error (not= expected-arguments arguments)
+                              :request-evidence-mismatch)
                    (add-error (not (evidence-complete? actual-evidence))
                               :evidence-incomplete)
-                   (add-error (not= expected-evidence actual-evidence)
+                   (add-error (not (evidence-matches-oracle?
+                                     expected-evidence actual-evidence))
                               :evidence-mismatch)
                    (add-error (or (not clock-order?)
                                   (not (positive-finite? t-emit))
@@ -278,7 +339,8 @@
         runs-valid? (and manifest-exact? unique-run-ids?
                          (every? :ok scores))
         same-evidence? (and runs-valid?
-                            (= 1 (count (set (map :expected-evidence rows)))))
+                            (= 1 (count (set (map (comp stable-evidence :evidence)
+                                                  scores)))))
         unique-workspaces? (and runs-valid?
                                 (= (count rows)
                                    (count (set (map :workspace-root rows)))))
@@ -323,3 +385,397 @@
             :minimum-block-1-verified-improvement 0.15
             :minimum-final-emit-improvement 0.20
             :minimum-pooled-verified-improvement 0.20}}))
+
+(defn- read-record-bytes [path]
+  (let [bytes (Files/readAllBytes (Paths/get path (make-array String 0)))
+        length (alength bytes)]
+    (loop [start 0 index 0 records []]
+      (cond
+        (= index length)
+        (cond-> records (< start length)
+                (conj (java.util.Arrays/copyOfRange bytes start length)))
+
+        (= 10 (bit-and 0xff (aget bytes index)))
+        (recur (inc index) (inc index)
+               (conj records
+                     (java.util.Arrays/copyOfRange bytes start (inc index))))
+
+        :else
+        (recur start (inc index) records)))))
+
+(defn- record-text [record]
+  (let [length (alength record)
+        without-lf (if (and (pos? length)
+                            (= 10 (bit-and 0xff (aget record (dec length)))))
+                     (dec length)
+                     length)
+        without-cr (if (and (pos? without-lf)
+                            (= 13 (bit-and 0xff
+                                           (aget record (dec without-lf)))))
+                     (dec without-lf)
+                     without-lf)]
+    (String. record 0 without-cr StandardCharsets/UTF_8)))
+
+(defn- parse-long! [text field]
+  (try
+    (Long/parseLong text)
+    (catch Exception _
+      (throw (ex-info "Invalid event-clock integer"
+                      {:field field :value text})))))
+
+(defn- read-clock-rows [path]
+  (with-open [reader (io/reader path)]
+    (mapv (fn [line]
+            (let [parts (str/split line #"\t" -1)]
+              (when-not (= 4 (count parts))
+                (throw (ex-info "Invalid event-clock row" {:line line})))
+              (let [[sequence monotonic utc bytes] parts]
+                {:sequence (parse-long! sequence :sequence)
+                 :observer-monotonic-ns (parse-long! monotonic :monotonic)
+                 :observer-utc-ms (parse-long! utc :utc)
+                 :line-byte-count (parse-long! bytes :bytes)})))
+          (line-seq reader))))
+
+(defn- raw-event-kind [event]
+  (case (:type event)
+    "thread.started" :thread-started
+    "turn.started" :turn-started
+    "turn.completed" :turn-completed
+    "item.started" :item-started
+    "item.completed" :item-completed
+    "item.updated" :item-updated
+    :unknown-event))
+
+(defn join-event-clock-files
+  "Join raw Codex JSONL to the observer clock by sequence and exact line bytes."
+  [events-path clock-path]
+  (try
+    (let [records (read-record-bytes events-path)
+          clocks (read-clock-rows clock-path)]
+      (when-not (= (count records) (count clocks))
+        (throw (ex-info "Event and clock counts differ"
+                        {:event-count (count records)
+                         :clock-count (count clocks)})))
+      {:ok true
+       :events
+       (mapv
+         (fn [index record clock]
+           (let [expected-sequence (inc index)]
+             (when-not (= expected-sequence (:sequence clock))
+               (throw (ex-info "Event clock sequence is not contiguous"
+                               {:expected expected-sequence
+                                :actual (:sequence clock)})))
+             (when-not (= (alength record) (:line-byte-count clock))
+               (throw (ex-info "Event and clock byte counts differ"
+                               {:sequence expected-sequence
+                                :event-bytes (alength record)
+                                :clock-bytes (:line-byte-count clock)})))
+             (let [raw (try
+                         (json/parse-string (record-text record) true)
+                         (catch Exception error
+                           (throw (ex-info "Invalid JSON event"
+                                           {:sequence expected-sequence}
+                                           error))))]
+               {:event (raw-event-kind raw)
+                :observer-monotonic-ns (:observer-monotonic-ns clock)
+                :observer-utc-ms (:observer-utc-ms clock)
+                :sequence expected-sequence
+                :item (:item raw)})))
+         (range) records clocks)})
+    (catch Exception error
+      {:ok false
+       :errors [:artifact-join-failed]
+       :error (.getMessage error)
+       :data (ex-data error)})))
+
+(defn- confined-file [workspace path]
+  (let [workspace (.getCanonicalPath (io/file workspace))
+        file (.getCanonicalFile (io/file path))
+        file-path (.getPath file)
+        prefix (str workspace java.io.File/separator)]
+    (when (and (.isFile file) (str/starts-with? file-path prefix))
+      file)))
+
+(defn- normalize-workspace-paths [workspace value]
+  (let [prefix (str workspace java.io.File/separator)]
+    (cond
+      (map? value) (into {} (map (fn [[key child]]
+                                   [key (normalize-workspace-paths workspace child)]))
+                         value)
+      (vector? value) (mapv #(normalize-workspace-paths workspace %) value)
+      (sequential? value) (mapv #(normalize-workspace-paths workspace %) value)
+      (and (string? value) (str/starts-with? value prefix))
+      (subs value (count prefix))
+      :else value)))
+
+(defn- json-key [key]
+  (if (keyword? key)
+    (if-let [namespace (namespace key)]
+      (str namespace "/" (name key))
+      (name key))
+    key))
+
+(defn- json-object-keys [value]
+  (cond
+    (map? value) (into {} (map (fn [[key child]]
+                                 [(json-key key) (json-object-keys child)]))
+                       value)
+    (vector? value) (mapv json-object-keys value)
+    (sequential? value) (mapv json-object-keys value)
+    :else value))
+
+(defn- receipt-evidence [workspace structured]
+  (try
+    (let [receipt-path (value structured :undo_receipt)
+          receipt-file (and (string? receipt-path)
+                            (confined-file workspace receipt-path))]
+      (when-not receipt-file
+        (throw (ex-info "Receipt is absent or outside the run workspace"
+                        {:receipt receipt-path})))
+      (let [receipt (edn/read-string (slurp receipt-file))
+            receipt-hash (value receipt :receipt-hash)
+            computed-receipt-hash
+            (sha256 (pr-str (dissoc receipt :receipt-hash)))
+            public-receipt-hash (value structured :receipt_hash)
+            receipt-files (value receipt :files)
+            result-hashes
+            (into {}
+                  (map (fn [file-evidence]
+                         (let [file (value file-evidence :file)
+                               relative
+                               (normalize-workspace-paths workspace file)]
+                           [relative (value file-evidence :result-hash)])))
+                  receipt-files)
+            public-read-back
+            (->> (value structured :read_back_hashes)
+                 json-object-keys
+                 (normalize-workspace-paths workspace))
+            verification (value structured :verification)]
+        (when-not (and (true? (value structured :ok))
+                       (true? (value structured :committed))
+                       (= "apply_clojure_changes"
+                          (value structured :operation))
+                       (= 51 (value receipt :match-count))
+                       (= 9 (value receipt :changed-file-count))
+                       (= 9 (count receipt-files))
+                       (= 9 (count result-hashes))
+                       (= 9 (count public-read-back))
+                       (sha256? receipt-hash)
+                       (= receipt-hash computed-receipt-hash public-receipt-hash)
+                       (= result-hashes public-read-back))
+          (throw (ex-info "Receipt, read-back, or public hash evidence differs"
+                          {:receipt-hash receipt-hash
+                           :computed-receipt-hash computed-receipt-hash
+                           :public-receipt-hash public-receipt-hash})))
+        {:receipt-sha256 receipt-hash
+         :read-back-sha256 (canonical-sha256 public-read-back)
+         :read-back-hashes public-read-back
+         :edit-count (value structured :edits)
+         :file-count (value structured :files)
+         :verification-complete (value structured :verification_complete)
+         :next-action (token (value structured :next_action))
+         :verifier {:profile-sha256 (value verification :profile-sha256)
+                    :output-sha256 (value verification :output-sha256)
+                    :exit (value verification :exit)}}))
+    (catch Exception error
+      {:error :receipt-evidence-invalid
+       :message (.getMessage error)
+       :data (ex-data error)})))
+
+(defn- compiled-request-evidence [arguments]
+  (try
+    (let [{:keys [sources]} (corpus/load-fixture)
+          result (corpus/compile-request sources arguments)
+          product (:compiled result)
+          future-hashes (:future-hashes result)]
+      (when-not (and (true? (get-in result [:public-schema :ok]))
+                     (true? (get-in result [:runtime-contract :ok]))
+                     (map? product)
+                     (nil? (:error product))
+                     (= 51 (:match-count product))
+                     (= 9 (:changed-file-count product))
+                     (= 9 (count future-hashes)))
+        (throw (ex-info "Actual arguments do not compile to the frozen corpus"
+                        {:public-schema (:public-schema result)
+                         :runtime-contract (:runtime-contract result)
+                         :compiled (select-keys product
+                                                [:error :error-type
+                                                 :match-count
+                                                 :changed-file-count])})))
+      {:canonical-transaction-sha256
+       (canonical-sha256 (:canonical-transaction result))
+       :future-hashes-sha256 (canonical-sha256 future-hashes)
+       :future-hashes future-hashes})
+    (catch Exception error
+      {:error :request-compilation-invalid
+       :message (.getMessage error)
+       :data (ex-data error)})))
+
+(defn- structured-content [completion]
+  (let [result (get-in completion [:item :result])]
+    (or (value result :structured_content)
+        (value result :structuredContent))))
+
+(defn- read-data-file [path]
+  (let [text (slurp path)]
+    (if (str/ends-with? path ".json")
+      (json/parse-string text)
+      (edn/read-string text))))
+
+(defn- expected-arguments [entry]
+  (or (:expected-arguments entry)
+      (some-> (:expected-arguments-path entry) read-data-file)))
+
+(defn manifest-entry->row
+  "Build one score-run row from a manifest entry and raw retained artifacts."
+  [entry default-expected-evidence]
+  (let [declared-workspace (:workspace-root entry)
+        workspace-file (io/file (or declared-workspace ""))
+        canonical-workspace (when (.isDirectory workspace-file)
+                              (.getCanonicalPath workspace-file))
+        joined (if (= declared-workspace canonical-workspace)
+                 (join-event-clock-files (:events-path entry)
+                                         (:event-clock-path entry))
+                 {:ok false
+                  :errors [:workspace-not-canonical]
+                  :workspace-root declared-workspace
+                  :canonical-workspace-root canonical-workspace})]
+    (if-not (:ok joined)
+      joined
+      (let [events (:events joined)
+            starts (filterv #(and (= :item-started (:event %))
+                                  (= :mcp-tool-call
+                                     (token (get-in % [:item :type]))))
+                            events)
+            start (first starts)
+            call-id (get-in start [:item :id])
+            completion (first (filter #(and (= :item-completed (:event %))
+                                            (= call-id (get-in % [:item :id])))
+                                      events))
+            structured (structured-content completion)
+            arguments (some-> (get-in start [:item :arguments])
+                              json-object-keys)
+            request-evidence (compiled-request-evidence arguments)
+            commit-evidence (receipt-evidence (:workspace-root entry)
+                                              structured)
+            evidence
+            (if (or (:error request-evidence)
+                    (:error commit-evidence)
+                    (not= (:future-hashes request-evidence)
+                          (:read-back-hashes commit-evidence)))
+              {:error :combined-evidence-invalid
+               :request request-evidence
+               :commit commit-evidence}
+              (merge (dissoc request-evidence :future-hashes)
+                     (dissoc commit-evidence :read-back-hashes)))
+            enriched-events
+            (mapv #(if (and (= :item-completed (:event %))
+                            (= call-id (get-in % [:item :id])))
+                     (assoc-in % [:item :evidence] evidence)
+                     %)
+                  events)
+            turn-start (first (filter #(= :turn-started (:event %)) events))
+            turn-completed (first (filter #(= :turn-completed (:event %)) events))]
+        {:ok true
+         :row {:run-id (:run-id entry)
+               :block (:block entry)
+               :position (:position entry)
+               :arm (:arm entry)
+               :workspace-root (:workspace-root entry)
+               :expected-arguments (expected-arguments entry)
+               :expected-evidence (or (:expected-evidence entry)
+                                      default-expected-evidence)
+               :clocks {:turn-start-ns (:observer-monotonic-ns turn-start)
+                        :turn-completed-ns
+                        (:observer-monotonic-ns turn-completed)}
+               :events (mapv #(if (and (= :item-started (:event %))
+                                       (= call-id (get-in % [:item :id])))
+                                (assoc-in % [:item :arguments] arguments)
+                                %)
+                             enriched-events)}}))))
+
+(defn manifest->rows [manifest]
+  (let [entries (:runs manifest)
+        mapped (mapv #(manifest-entry->row % (:expected-evidence manifest))
+                     entries)
+        failures (filterv (comp not :ok) mapped)]
+    (if (seq failures)
+      {:ok false
+       :errors [:manifest-artifact-invalid]
+       :failures failures}
+      {:ok true :rows (mapv :row mapped)})))
+
+(defn phase-report
+  "Load one frozen phase from manifest data and apply its exact stop gate."
+  [phase manifests]
+  (let [mapped (mapv manifest->rows manifests)
+        failures (filterv (comp not :ok) mapped)]
+    (if (seq failures)
+      {:schema :clj-surgeon.edit-025-relation-causal-phase/v1
+       :phase phase
+       :ok false
+       :errors [:manifest-artifact-invalid]
+       :failures failures}
+      (let [rows (vec (mapcat :rows mapped))
+            cohort (cohort-report rows)
+            gate-passed (case phase
+                          :block1 (get-in cohort [:gate :block-2-authorized])
+                          :final (get-in cohort [:gate :promote])
+                          false)]
+        (assoc cohort
+               :phase phase
+               :cohort-valid (:ok cohort)
+               :ok (boolean (and (:ok cohort) gate-passed)))))))
+
+(defn- parse-options [args]
+  (when (odd? (count args))
+    (throw (ex-info "Expected --key value pairs" {:args args})))
+  (into {}
+        (map (fn [[key value]]
+               (when-not (str/starts-with? key "--")
+                 (throw (ex-info "Expected --key value pair" {:key key})))
+               [(keyword (subs key 2)) value]))
+        (partition 2 args)))
+
+(defn run-cli! [args]
+  (try
+    (let [options (parse-options args)
+          phase (keyword (:phase options))
+          expected-keys (case phase
+                          :block1 #{:phase :manifest :output}
+                          :final #{:phase :block1-manifest
+                                   :block2-manifest :output}
+                          #{})]
+      (when-not (= expected-keys (set (keys options)))
+        (throw (ex-info "Invalid phase options"
+                        {:phase phase :keys (set (keys options))})))
+      (let [manifests (case phase
+                        :block1 [(edn/read-string (slurp (:manifest options)))]
+                        :final [(edn/read-string
+                                  (slurp (:block1-manifest options)))
+                                (edn/read-string
+                                  (slurp (:block2-manifest options)))])
+            report (phase-report phase manifests)]
+        (spit (:output options) (str (pr-str report) "\n"))
+        {:exit (if (:ok report) 0 1) :report report}))
+    (catch Exception error
+      {:exit 2
+       :report {:schema :clj-surgeon.edit-025-relation-causal-phase/v1
+                :ok false
+                :errors [:invalid-cli-input]
+                :error (.getMessage error)
+                :data (ex-data error)}})))
+
+(defn -main [& args]
+  (let [{:keys [exit report]} (run-cli! args)]
+    (when (and (pos? exit)
+               (not (some #{"--output"} args)))
+      (binding [*out* *err*]
+        (println (pr-str report))))
+    (when (pos? exit)
+      (System/exit exit))))
+
+(when-let [entry-file (System/getProperty "babashka.file")]
+  (when (= (.getCanonicalPath (io/file *file*))
+           (.getCanonicalPath (io/file entry-file)))
+    (apply -main *command-line-args*)))
