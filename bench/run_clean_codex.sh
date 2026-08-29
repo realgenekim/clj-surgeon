@@ -35,6 +35,32 @@ configure_canonical_mcp_roles() {
   mcp_legacy_transform_is_mutation=true
 }
 
+canonical_profile_tool_names_json() {
+  case "$1" in
+    full)
+      jq -cn '["inspect_clojure","apply_clojure_changes","edit_clojure","transform_clojure"] | sort'
+      ;;
+    edit)
+      jq -cn '["edit_clojure"]'
+      ;;
+    *)
+      echo "Unsupported canonical MCP tool profile: $1" >&2
+      return 2
+      ;;
+  esac
+}
+
+write_canonical_mcp_config() {
+  local config_file=$1
+  local mcp_url=$2
+  local profile=$3
+  local enabled_tools
+  enabled_tools=$(canonical_profile_tool_names_json "$profile")
+  bb "$repo_root/bench/write_mcp_config.clj" \
+    "$config_file" --url "$mcp_url" \
+    --enabled-tools-edn "$enabled_tools" >/dev/null
+}
+
 configure_candidate_mcp_roles() {
   local receipt=$1
   test -s "$receipt"
@@ -1355,6 +1381,11 @@ run_one() {
   local replicate=${5:-1}
   local run_id
   run_id=$(printf '%02d-r%02d-%s-%s-%s' "$order" "$replicate" "$task" "$context" "$version")
+  if [ "${BENCH_MCP_REGISTRY_PREFLIGHT_ONLY:-false}" = true ] \
+    && [ "$version" != mcp ]; then
+    echo "MCP registry preflight accepts only the mcp version: $run_id" >&2
+    exit 2
+  fi
   if { [ "$context" = mcp-extraction-internal-no-skill ] \
       || [ "$context" = mcp-extraction-plan-no-skill ] \
       || [ "$context" = mcp-extraction-discover-no-skill ]; } \
@@ -1519,8 +1550,9 @@ run_one() {
         "$codex_home/config.toml" --url "$mcp_url" \
         --enabled-tools-edn "$candidate_enabled_tools" >/dev/null
     else
-      bb "$repo_root/bench/write_mcp_config.clj" \
-        "$codex_home/config.toml" --url "$mcp_url" >/dev/null
+      write_canonical_mcp_config \
+        "$codex_home/config.toml" "$mcp_url" \
+        "${BENCH_MCP_TOOL_PROFILE:-full}"
     fi
   fi
   local run_path
@@ -1598,6 +1630,9 @@ run_one() {
     # This is an independent same-binary/same-home Codex client preflight.
     # The measured turn's first tool call remains the behavioral authority.
     printf '%s\n' true > "$run_dir/codex-client-surface-preflight.txt"
+    if [ "${BENCH_MCP_REGISTRY_PREFLIGHT_ONLY:-false}" = true ]; then
+      return 0
+    fi
   fi
 
   task_prompt "$task" "$context" > "$run_dir/prompt.txt"
@@ -2413,6 +2448,11 @@ done
 if [ "$benchmark_failed" -ne 0 ]; then
   echo "One or more benchmark children failed; all children were reaped and summary generation was skipped." >&2
   exit 1
+fi
+
+if [ "${BENCH_MCP_REGISTRY_PREFLIGHT_ONLY:-false}" = true ]; then
+  printf '\nRegistry preflight results: %s\n' "$result_dir"
+  exit 0
 fi
 
 summary_tmp="$result_dir/.summary.md.tmp.$$"
