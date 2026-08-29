@@ -29,13 +29,13 @@ client-visible `apply_clojure_changes` surface:
 
 | Surface component | Full control | Extraction-only | Reduction |
 |---|---:|---:|---:|
-| Description | 4,189 bytes | 424 bytes | 89.9% |
-| Input schema | 18,640 bytes | 7,512 bytes | 59.7% |
-| Complete tool projection | 23,096 bytes | 8,203 bytes | 64.5% |
+| Description | 4,189 bytes | 611 bytes | 85.4% |
+| Input schema | 19,532 bytes | 7,512 bytes | 61.5% |
+| Description + input schema | 23,721 bytes | 8,123 bytes | 65.8% |
 
 The extraction-only schema is not new product machinery. It is the existing
-closed `mcp-schema/extraction-schema`. The 424-byte description is the retained
-strict extraction description from catalog U. The public name remains
+closed `mcp-schema/extraction-schema`. The 611-byte candidate description
+preserves the current terminal, rollback, and refusal laws. The public name remains
 `apply_clojure_changes`, which won the prior name-only tournament. Thus the
 treatment removes unrelated ontology without paying a novel-name migration
 cost.

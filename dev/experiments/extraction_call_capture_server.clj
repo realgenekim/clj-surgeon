@@ -7,9 +7,6 @@
    [clojure.java.io :as io]
    [extraction-tool-surface :as surface]))
 
-(def instructions
-  "One capture-only clj-surgeon tool is available. It records arguments and never reads or writes project source.")
-
 (defn- write-json-atomically! [path value]
   (let [target (io/file path)
         parent (.getParentFile target)
@@ -23,34 +20,51 @@
                   [java.nio.file.StandardCopyOption/ATOMIC_MOVE
                    java.nio.file.StandardCopyOption/REPLACE_EXISTING]))))
 
-(defn capture-handler [capture-file]
-  (let [calls (atom [])]
-    (fn [_exchange params callback]
-      (let [started (System/nanoTime)
-            call {:index (inc (count @calls))
-                  :params params}
-            observed (swap! calls conj call)]
-        (write-json-atomically!
-          capture-file
-          {:schema "clj-surgeon.extraction-call-capture.v1"
-           :calls observed})
-        (callback
-          ["apply_clojure_changes\n  captured · no mutation\n✓ offline scorer owns validation"]
-          false
-          {:ok true
-           :captured true
-           :call_count (count observed)
-           :source_unchanged true
-           :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
-           :next_action "none"})))))
+(defn capture-handler [calls capture-file tool]
+  (fn [_exchange params callback]
+    (let [started (System/nanoTime)
+          call {:index (inc (count @calls))
+                :tool_id (:id tool)
+                :tool_name (:name tool)
+                :params params}
+          observed (swap! calls conj call)]
+      (write-json-atomically!
+        capture-file
+        {:schema "clj-surgeon.extraction-call-capture.v1"
+         :calls observed})
+      (callback
+        [(str (:name tool)
+              "\n  captured · no mutation\n"
+              "✓ offline scorer owns validation")]
+        false
+        {:ok true
+         :captured true
+         :call_count (count observed)
+         :selected_tool (:name tool)
+         :source_unchanged true
+         :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
+         :next_action "none"}))))
 
-(defn capture-tool [arm capture-file]
+(defn capture-tool [arm calls capture-file tool]
   (let [base (surface/production-tool)
         projected (surface/tool-surface arm)]
-    (assoc base
-           :description (:description projected)
-           :schema (:schema projected)
-           :tool-fn (capture-handler capture-file))))
+    (cond-> (assoc tool :tool-fn (capture-handler calls capture-file tool))
+      (= (:id tool) (:id base))
+      (assoc :description (:description projected)
+             :schema (:schema projected)))))
+
+(defn capture-tools
+  "Project the full production catalog with no-effect handlers.
+
+  Only the apply_clojure_changes description and schema vary by arm."
+  [arm capture-file]
+  (let [calls (atom [])]
+    (mapv #(capture-tool arm calls capture-file %)
+          (mcp-tool/tools-for-profile :full))))
+
+(defn- public-surface [tool]
+  (select-keys tool [:id :name :description :schema :output-schema
+                     :annotations :structured?]))
 
 (defn start
   "Start one isolated extraction capture server. No production registry changes."
@@ -59,19 +73,14 @@
     (throw (ex-info "arm must be :control or :treatment" {:arm arm})))
   (when-not capture-file
     (throw (ex-info "capture-file is required" {})))
-  (let [tool (capture-tool arm capture-file)
+  (let [tools (capture-tools arm capture-file)
         server-opts (dissoc opts :arm :capture-file :surface-receipt-file)]
     (when surface-receipt-file
       (write-json-atomically!
         surface-receipt-file
         {:schema "clj-surgeon.extraction-call-surface.v1"
          :arm (name arm)
-         :instructions instructions
-         :tool {:name (:name tool)
-                :description (:description tool)
-                :input-schema (:schema tool)
-                :output-schema (:output-schema tool)
-                :annotations (:annotations tool)}}))
-    (with-redefs [mcp-tool/all-tools (constantly [tool])
-                  mcp-server/server-instructions instructions]
+         :instructions mcp-server/server-instructions
+         :tools (mapv public-surface tools)}))
+    (with-redefs [mcp-tool/all-tools (constantly tools)]
       (http-server/start server-opts))))
