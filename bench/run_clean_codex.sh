@@ -442,7 +442,7 @@ validate_run_matrix() {
       *) echo "Unknown BENCH_RUN_MATRIX version: $version" >&2; return 2 ;;
     esac
     case "$context" in
-      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+      no-skill|matched-skill|compact-skill|compact-v2-skill|pipeline-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
       *) echo "Unknown BENCH_RUN_MATRIX context: $context" >&2; return 2 ;;
     esac
     case "$context" in
@@ -468,6 +468,7 @@ validate_run_matrix() {
       && [ "$context" != mcp-extraction-hint-no-skill ] \
       && [ "$context" != mcp-extraction-tool-first-no-skill ] \
       && [ "$context" != mcp-extraction-fused-tool-first-no-skill ] \
+      && [ "$context" != mcp-extraction-literal-tool-first-no-skill ] \
       && [ "$context" != mcp-extraction-internal-no-skill ] \
       && [ "$context" != mcp-extraction-plan-no-skill ] \
       && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -498,6 +499,33 @@ tool_first_extraction_prompt() {
   fi
 }
 
+literal_format_extraction_args() {
+  local workspace=$1
+  jq -cn --arg workspace "$workspace" '
+    {workspace_root:$workspace,
+     extraction:
+       {file:"src/cfp_scheduler_killer/views.clj",
+        to:"src/cfp_scheduler_killer/views/format.clj",
+        forms:["date-fmt","datetime-fmt","->local-date","fmt-date",
+               "fmt-date-range","fmt-instant","->instant","when-fmt",
+               "relative-when","fmt-when","fmt-cfp-window","iso-date-fmt",
+               "fmt-close-date","cfp-public-url","not-blank"],
+        require_policy:"minimal",
+        public_forms:["not-blank"],
+        caller_changes:[],
+        ignored_caller_files:[]},
+     verify:"exact"}'
+}
+
+literal_format_extraction_call_prompt() {
+  local workspace=$1
+  local arguments
+  arguments=$(literal_format_extraction_args "$workspace")
+  printf '%s\n%s\n' \
+    'The complete call arguments are already compiled below. Use this object as the arguments of your first apply_clojure_changes call. Preserve every field, value, and array order. Do not reconstruct, summarize, or alter it.' \
+    "$arguments"
+}
+
 if [ "${BENCH_OWNER_PROBE_SELF_TEST:-false}" = true ]; then
   acquire_result_owner
   release_result_owner
@@ -521,6 +549,7 @@ if [ "${BENCH_SCHEDULE_SELF_TEST:-false}" = true ]; then
   validate_run_matrix 'mcp:mcp-extraction-hint-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-fused-tool-first-no-skill'
+  validate_run_matrix 'mcp:mcp-extraction-literal-tool-first-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-internal-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-plan-no-skill'
   validate_run_matrix 'mcp:mcp-extraction-discover-no-skill'
@@ -1221,6 +1250,21 @@ if [ "${BENCH_PROMPT_SELF_TEST:-false}" = true ]; then
     echo 'discover prompt leaked the withheld root set' >&2
     exit 1
   fi
+  literal_prompt=$(literal_format_extraction_call_prompt /tmp/example-workspace)
+  literal_args=$(printf '%s\n' "$literal_prompt" | tail -n 1)
+  printf '%s\n' "$literal_prompt" | grep -q 'Preserve every field, value, and array order'
+  jq -e '
+    .workspace_root == "/tmp/example-workspace"
+    and .verify == "exact"
+    and .extraction.file == "src/cfp_scheduler_killer/views.clj"
+    and .extraction.to == "src/cfp_scheduler_killer/views/format.clj"
+    and (.extraction.forms | length) == 15
+    and .extraction.forms[0] == "date-fmt"
+    and .extraction.forms[14] == "not-blank"
+    and .extraction.public_forms == ["not-blank"]
+    and .extraction.caller_changes == []
+    and .extraction.ignored_caller_files == []' \
+    >/dev/null <<< "$literal_args"
   echo 'benchmark prompt self-test passed'
   exit 0
 fi
@@ -1366,7 +1410,7 @@ install_treatment_skill() {
       cp "$repo_root/bench/q-bb-skill/SKILL.md" \
         "$codex_home/skills/clj-surgeon-q-bb/SKILL.md"
       ;;
-    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
+    no-skill|explicit-no-skill|choice-no-skill|aware-no-skill|partition-hint-no-skill|native-hint-no-skill|native-read-hint-no-skill|native-champion-extraction-no-skill|mcp-hint-no-skill|mcp-extraction-hint-no-skill|mcp-extraction-tool-first-no-skill|mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill|mcp-extraction-internal-no-skill|mcp-extraction-plan-no-skill|mcp-extraction-discover-no-skill|native-computed-hint-no-skill|edit-computed-hint-no-skill|mcp-transform-hint-no-skill|mcp-rule-no-skill|mcp-exploratory-rule-no-skill) ;;
     *)
       echo "Unknown context: $context" >&2
       exit 2
@@ -1415,6 +1459,7 @@ run_one() {
     && [ "$context" != mcp-extraction-hint-no-skill ] \
     && [ "$context" != mcp-extraction-tool-first-no-skill ] \
     && [ "$context" != mcp-extraction-fused-tool-first-no-skill ] \
+    && [ "$context" != mcp-extraction-literal-tool-first-no-skill ] \
     && [ "$context" != mcp-extraction-internal-no-skill ] \
     && [ "$context" != mcp-extraction-plan-no-skill ] \
     && [ "$context" != mcp-extraction-discover-no-skill ] \
@@ -1678,13 +1723,18 @@ run_one() {
     printf '%s\n' '' "$(tool_first_extraction_prompt "$candidate_catalog" separate)" \
       >> "$run_dir/prompt.txt"
   fi
-  if [ "$context" = 'mcp-extraction-fused-tool-first-no-skill' ]; then
+  if [ "$context" = 'mcp-extraction-fused-tool-first-no-skill' ] \
+    || [ "$context" = 'mcp-extraction-literal-tool-first-no-skill' ]; then
     printf '%s\n' '' "$(tool_first_extraction_prompt "$candidate_catalog" fused)" \
       >> "$run_dir/prompt.txt"
     if [ -n "${BENCH_FUSED_SUCCESS_RESPONSE:-}" ]; then
       printf '%s\n' "After a successful terminal receipt, reply with exactly this text and no additional analysis: ${BENCH_FUSED_SUCCESS_RESPONSE}" \
         >> "$run_dir/prompt.txt"
     fi
+  fi
+  if [ "$context" = 'mcp-extraction-literal-tool-first-no-skill' ]; then
+    printf '%s\n' '' "$(literal_format_extraction_call_prompt "$workspace")" \
+      >> "$run_dir/prompt.txt"
   fi
   if [ "$context" = 'mcp-extraction-internal-no-skill' ]; then
     printf '%s\n' '' 'The task supplies the exact source, destination, complete forms list, and require policy. Call apply_clojure_changes exactly once with only those extraction fields; deliberately omit public_forms, caller_changes, ignored_caller_files, and expect so the kernel derives every mechanically provable field from its frozen workspace snapshot. Do not preflight with inspect_clojure, read source, use edit_clojure, or use apply_patch. If the kernel commits, treat its successful atomic response as terminal mutation evidence, then run the requested clj-kondo command exactly once.' \
@@ -1804,6 +1854,44 @@ run_one() {
     "$run_dir/events.jsonl" > "$run_dir/commands.json"
   jq -s '[.[] | select(.type == "item.started") | .item]' \
     "$run_dir/events.jsonl" > "$run_dir/started-items.json"
+  if [ "$context" = mcp-extraction-fused-tool-first-no-skill ] \
+    || [ "$context" = mcp-extraction-literal-tool-first-no-skill ]; then
+    local construction_arm
+    construction_arm=control
+    if [ "$context" = mcp-extraction-literal-tool-first-no-skill ]; then
+      construction_arm=literal-relay
+    fi
+    literal_format_extraction_args "$workspace" \
+      | jq -S . > "$run_dir/expected-first-call-arguments.json"
+    jq --arg tool "$mcp_extract_tool" '
+      [.[]
+       | select(.type == "mcp_tool_call"
+                and .server == "clj-surgeon"
+                and .tool == $tool)][0].arguments // null' \
+      "$run_dir/started-items.json" \
+      | jq -S . > "$run_dir/actual-first-call-arguments.json"
+    local expected_args_sha actual_args_sha prompt_sha prompt_bytes
+    expected_args_sha=$(shasum -a 256 \
+      "$run_dir/expected-first-call-arguments.json" | awk '{print $1}')
+    actual_args_sha=$(shasum -a 256 \
+      "$run_dir/actual-first-call-arguments.json" | awk '{print $1}')
+    prompt_sha=$(shasum -a 256 "$run_dir/prompt.txt" | awk '{print $1}')
+    prompt_bytes=$(wc -c < "$run_dir/prompt.txt" | awk '{$1=$1; print}')
+    printf '%s\t%s\n' \
+      arm "$construction_arm" \
+      prompt_sha256 "$prompt_sha" \
+      prompt_bytes "$prompt_bytes" \
+      expected_arguments_sha256 "$expected_args_sha" \
+      actual_arguments_sha256 "$actual_args_sha" \
+      > "$run_dir/call-construction-receipt.tsv"
+    if ! cmp -s "$run_dir/expected-first-call-arguments.json" \
+      "$run_dir/actual-first-call-arguments.json"; then
+      echo "First extraction call differs from the frozen arguments: $run_id" >&2
+      diff -u "$run_dir/expected-first-call-arguments.json" \
+        "$run_dir/actual-first-call-arguments.json" >&2 || true
+      exit 2
+    fi
+  fi
   first_selected_tool_evidence "$run_dir/started-items.json" \
     > "$run_dir/first-selected-tool.tsv"
   local first_selected_tool resolved_catalog_role
@@ -2215,7 +2303,7 @@ run_one() {
         route_adherent=false
       fi
       ;;
-    mcp-extraction-fused-tool-first-no-skill)
+    mcp-extraction-fused-tool-first-no-skill|mcp-extraction-literal-tool-first-no-skill)
       if [ "$inspect_calls" -ne 0 ] || [ "$extraction_calls" -ne 1 ] \
         || [ "$plan_calls" -ne 0 ] \
         || [ "$edit_calls" -ne 0 ] || [ "$transform_calls" -ne 0 ] \
