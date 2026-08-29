@@ -4,7 +4,8 @@
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is]]
    [owner-aware-call-capture-server :as server]
-   [owner-aware-call-construction-screen :as screen]))
+   [owner-aware-call-construction-screen :as screen]
+   [three-arm-request-shape-screen :as three-arm]))
 
 (deftest projected-server-surface-is-arm-exact
   (let [control (server/capture-tool :control "/tmp/control.json")
@@ -16,6 +17,14 @@
            (:description control)))
     (is (= (:description (screen/tool-surface :candidate))
            (:description candidate)))))
+
+(deftest three-arm-surfaces-reuse-the-same-capture-tool
+  (doseq [arm three-arm/arms]
+    (let [tool (server/capture-tool arm (str "/tmp/" (name arm) ".json"))
+          surface (three-arm/tool-surface arm)]
+      (is (= "edit_clojure" (:name tool)))
+      (is (= (:description surface) (:description tool)))
+      (is (= (:schema surface) (:schema tool))))))
 
 (deftest capture-handler-records-every-call-without-invoking-product-writes
   (let [path (str (java.nio.file.Files/createTempFile

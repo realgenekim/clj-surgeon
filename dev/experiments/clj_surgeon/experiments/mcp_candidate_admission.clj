@@ -29,7 +29,7 @@
   #{:type :description :title :additionalProperties :properties :required
     :items :minItems :maxItems :uniqueItems :minLength :pattern :minimum
     :maximum :const :enum :allOf :anyOf :oneOf :not :default
-    :minProperties :maxProperties})
+    :minProperties :maxProperties :prefixItems})
 
 (defn- unsupported-schema-keywords [schema]
   (let [local (remove supported-schema-keywords (keys schema))
@@ -37,7 +37,8 @@
         direct-children (remove nil? [(:items schema) (:not schema)
                                       (when (map? (:additionalProperties schema))
                                         (:additionalProperties schema))])
-        branch-children (mapcat #(or (% schema) []) [:allOf :anyOf :oneOf])]
+        branch-children (mapcat #(or (% schema) [])
+                                [:allOf :anyOf :oneOf :prefixItems])]
     (into (set local)
           (mapcat unsupported-schema-keywords)
           (concat property-children direct-children branch-children))))
@@ -69,15 +70,26 @@
 (defn- array-valid? [schema value]
   (if-not (array-value? value)
     true
-    (and
-      (or (not (:minItems schema))
-          (<= (:minItems schema) (count value)))
-      (or (not (:maxItems schema))
-          (<= (count value) (:maxItems schema)))
-      (or (not (:uniqueItems schema))
-          (= (count value) (count (distinct value))))
-      (or (not (:items schema))
-          (every? #(valid? (:items schema) %) value)))))
+    (let [value (vec value)
+          prefixes (vec (:prefixItems schema))
+          remaining (if (seq prefixes)
+                      (subvec value (min (count prefixes) (count value)))
+                      value)]
+      (and
+        (or (not (:minItems schema))
+            (<= (:minItems schema) (count value)))
+        (or (not (:maxItems schema))
+            (<= (count value) (:maxItems schema)))
+        (or (not (:uniqueItems schema))
+            (= (count value) (count (distinct value))))
+        (every? true?
+                (map-indexed
+                  (fn [index child-schema]
+                    (or (>= index (count value))
+                        (valid? child-schema (nth value index))))
+                  prefixes))
+        (or (not (:items schema))
+            (every? #(valid? (:items schema) %) remaining))))))
 
 (defn- scalar-valid? [schema value]
   (and

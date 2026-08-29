@@ -5,7 +5,8 @@
    [clj-surgeon.mcp-http-server :as http-server]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-tool :as mcp-tool]
-   [owner-aware-call-construction-screen :as screen])
+   [owner-aware-call-construction-screen :as screen]
+   [three-arm-request-shape-screen :as three-arm])
   (:import
    (java.nio.file Files StandardCopyOption)))
 
@@ -52,7 +53,9 @@
   (let [base (or (first (filter #(= :edit-clojure (:id %))
                                 (mcp-server/public-tool-registry)))
                  (throw (ex-info "edit_clojure is absent from the registry" {})))
-        surface (screen/tool-surface arm)]
+        surface (if (contains? (set three-arm/arms) arm)
+                  (three-arm/tool-surface arm)
+                  (screen/tool-surface arm))]
     (assoc base
            :name (:name surface)
            :description (:description surface)
@@ -62,8 +65,10 @@
 (defn start
   "Start one isolated, capture-only server. No production registry is changed."
   [{:keys [arm capture-file surface-receipt-file] :as opts}]
-  (when-not (#{:control :candidate} arm)
-    (throw (ex-info "arm must be :control or :candidate" {:arm arm})))
+  (when-not (contains? #{:control :candidate :flat :file-groups
+                         :closed-relations}
+                       arm)
+    (throw (ex-info "Unknown capture-only screen arm" {:arm arm})))
   (when-not capture-file
     (throw (ex-info "capture-file is required" {})))
   (let [tool (capture-tool arm capture-file)
