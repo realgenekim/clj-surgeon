@@ -65,6 +65,66 @@
             :expect {:changes 1 :edits 1 :files 1}}
            (contract/tool-params->transaction (:params validated))))))
 
+(deftest editor-gesture-normalizes-injective-value-field-pairs
+  ;; @spec MCP-OP-EDIT-017
+  ;; @spec MCP-OP-EDIT-019
+  (doseq [[source-field target-field relation]
+          [["old" "new" "old-new"]
+           ["before" "after" "before-after"]]]
+    (testing relation
+      (let [edit (-> (get-in gesture-request ["edits" 0])
+                     (dissoc "from" "to")
+                     (assoc source-field ":done"
+                            target-field ":complete"))
+            result (contract/validate-tool-params
+                     (assoc-in gesture-request ["edits" 0] edit))]
+        (is (:ok result))
+        (is (= ":done" (get-in result [:params :changes 0 "find"])))
+        (is (= ":complete" (get-in result [:params :changes 0 "replace"])))
+        (is (= [{:edit_index 0
+                 :relation relation
+                 :requested_fields [source-field target-field]
+                 :emitted_fields ["from" "to"]}]
+               (:compact-field-normalization result)))))))
+
+(deftest editor-gesture-refuses-ambiguous-value-field-pairs
+  ;; @spec MCP-OP-EDIT-018
+  ;; @spec MCP-OP-EDIT-019
+  (doseq [[label edit supplied]
+          [[:partial-old
+            (-> (get-in gesture-request ["edits" 0])
+                (dissoc "from" "to")
+                (assoc "old" ":done"))
+            ["old"]]
+           [:cross-pair
+            (-> (get-in gesture-request ["edits" 0])
+                (dissoc "from" "to")
+                (assoc "old" ":done" "after" ":complete"))
+            ["after" "old"]]
+           [:canonical-plus-alias
+            (assoc (get-in gesture-request ["edits" 0])
+                   "old" ":done" "new" ":complete")
+            ["from" "new" "old" "to"]]
+           [:two-alias-pairs
+            (-> (get-in gesture-request ["edits" 0])
+                (dissoc "from" "to")
+                (assoc "old" ":done" "new" ":complete"
+                       "before" ":done" "after" ":complete"))
+            ["after" "before" "new" "old"]]]]
+    (testing (name label)
+      (let [result (contract/validate-tool-params
+                     (assoc-in gesture-request ["edits" 0] edit))]
+        (is (false? (:ok result)))
+        (is (= :invalid-editor-field-pair (:reason result)))
+        (is (= ["edits" 0] (:path result)))
+        (is (= supplied (:supplied-fields result)))
+        (is (:source-unchanged result))
+        (is (false? (:mutation-attempted result)))
+        (is (false? (:write-authority result)))
+        (is (re-find #"old/new.*before/after.*from/to" (:remedy result)))
+        (is (re-find #"edit_clojure" (:remedy result)))
+        (is (not (re-find #"apply_clojure_changes" (:remedy result))))))))
+
 (deftest editor-gesture-compiles-a-namespace-location
   (let [request (assoc-in gesture-request ["edits" 0 "within"]
                           {"namespace" "sample.server"})
