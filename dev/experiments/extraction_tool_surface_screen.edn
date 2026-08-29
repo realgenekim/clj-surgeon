@@ -22,13 +22,12 @@
                             :sha256 "91d7b6c61b16ead67f3f3cae47eb1a8ba53d266b480b19f0697f50a50dc8a508"}}
   :extraction-only
   {:tool-name "apply_clojure_changes"
-   :description {:bytes 424
-                 :sha256 "406caee24dbd2c6aab3a2389431965782d6c421f5bd7ff18bcda7beedea5add1"}
-   :input-schema {:bytes 7512
-                  :sha256 "6e8ab91de5cfe973bd14d784c6a7ed209a0d8c1abdac287087b1fe449106b0be"}
-   :expected-server-tool-projection
-   {:bytes 8203
-    :sha256 "193e0518cafdf1b72fcef65f903529cad9a58ae38e084d27d03b480141cbc393"}}}
+   :candidate "3626078"
+   :description {:bytes 611
+                 :sha256 "02a45d09681933a1bb8e73bc6816460f54013b346a4bd7100c2c7c22ba3bb7f7"}
+   :server-tool-projection
+   {:bytes 8123
+    :sha256 "e29ecae49417c0bb27575763c92a41460b7e2fa8de5178a151d5a5ba7b326180"}}}
  :surface-law
  {:catalog :full-production-order
   :unchanged [:server-instructions :peer-tools :tool-name :output-schema
