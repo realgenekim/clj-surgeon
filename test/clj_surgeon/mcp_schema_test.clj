@@ -76,10 +76,16 @@
                    {:required ["delete_owners"]}]
                   (:anyOf %))
               routes))
-    (is (= #{"file" "files" "within" "from" "to" "matches"}
+    (is (= #{"file" "files" "within" "from" "to"
+             "old" "new" "before" "after" "matches"}
            (set (keys (:properties gesture)))))
-    (is (= ["from" "to"]
-           (:required gesture)))
+    (is (nil? (:required gesture)))
+    (is (= [["from" "to"] ["old" "new"] ["before" "after"]]
+           (->> (:allOf gesture)
+                (mapcat :oneOf)
+                (keep :required)
+                (filter #(= 2 (count %)))
+                vec)))
     (is (false? (:additionalProperties gesture)))
     (is (= #{"form" "namespace" "root"}
            (set (keys (get-in gesture [:properties "within" :properties])))))
