@@ -8,6 +8,12 @@
 
 (def ^:private total-timeout-ms 45000)
 
+(def mcp-registry-observation-source
+  {:kind "codex-app-server-json-rpc"
+   :method "mcpServerStatus/list"
+   :detail "toolsAndAuthOnly"
+   :response-path ["result" "data"]})
+
 (defn- parse-args [args]
   (when (odd? (count args))
     (throw (ex-info "Expected --key value pairs" {:args args})))
@@ -156,6 +162,10 @@
                      {:schema "clj-surgeon.codex-mcp-registry.v1"
                       :ok true
                       :server server
+                      :observation-source
+                      (assoc mcp-registry-observation-source
+                             :server-selector {:field "name"
+                                               :value server})
                       :codex-executable codex-executable
                       :expected-codex-home expected-codex-home
                       :actual-codex-home actual-codex-home

@@ -87,16 +87,18 @@ run_zero_model_tests() {
     return 1
   fi
   rm -f "${TMPDIR:-/tmp}/owner-aware-call-screen-prompt.$$"
-  clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
+  clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
     '(load-file "dev/experiments/owner_aware_call_construction_screen_test.clj")
-     (load-file "dev/experiments/owner_aware_call_capture_server_test.clj")'
+     (load-file "dev/experiments/owner_aware_call_capture_server_test.clj")
+     (load-file "dev/experiments/owner_aware_mcp_surface_observer_test.clj")'
   printf '%s\n' \
     'owner-aware call-construction screen self-test: PASS' \
     '  cohort: ABBA / BAAB; four runs per arm' \
     '  scorer: real validator/compiler and nine frozen future hashes' \
     '  server: one capture-only edit_clojure tool; no product write handler' \
-    '  prompt: identical task bytes and no candidate-language leak'
+    '  prompt: identical task bytes and no candidate-language leak' \
+    '  observer: app-tool cache rejected; only two exact Codex projections normalized'
 }
 
 if [ "$self_test" = true ]; then
@@ -135,11 +137,12 @@ jq -n \
   --arg model "$model" --arg reasoning "$reasoning" \
   --arg harness_sha "$(shasum -a 256 "${BASH_SOURCE[0]}" | awk '{print $1}')" \
   --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_screen.clj" | awk '{print $1}')" \
+  --arg observer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_mcp_surface_observer.clj" | awk '{print $1}')" \
   --arg fixture_sha "$(shasum -a 256 "$repo_root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt" | awk '{print $1}')" \
   '{schema:$schema,git_head:$head,integration_base:$base,
     model:$model,reasoning:$reasoning,
     order:["control","candidate","candidate","control","candidate","control","control","candidate"],
-    hashes:{harness:$harness_sha,scorer:$scorer_sha,task:$fixture_sha}}' \
+    hashes:{harness:$harness_sha,scorer:$scorer_sha,observer:$observer_sha,task:$fixture_sha}}' \
   > "$result_dir/run-config.json"
 
 score_paths=()
@@ -205,14 +208,13 @@ for arm in "${arms[@]}"; do
     -m capture-codex-mcp-registry --codex "$(command -v codex)" \
     --output "$registry_file" --server clj-surgeon \
     > "$run_dir/registry.stdout" 2> "$run_dir/registry.stderr"
-  [ "$(jq -r '.ok' "$registry_file")" = true ]
-  [ "$(jq -r '."tool-names" | @json' "$registry_file")" = '["edit_clojure"]' ]
-  expected_surface=$(jq -S -c '.tool' "$surface_file")
-  actual_surface=$(jq -S -c '."tool-projection"[0]' "$registry_file")
-  [ "$expected_surface" = "$actual_surface" ] || {
-    echo "Codex-observed tool surface differs from the server receipt: $run_id" >&2
-    exit 2
-  }
+  clojure -J-Xms32m -J-Xmx256m \
+    -Sdeps '{:paths ["bench" "dev/experiments"] :deps {cheshire/cheshire {:mvn/version "5.13.0"}}}' \
+    -M -m owner-aware-mcp-surface-observer \
+    --advertised "$surface_file" --registry "$registry_file" \
+    --server clj-surgeon --tool edit_clojure \
+    > "$run_dir/client-surface-validation.json" \
+    2> "$run_dir/client-surface-validation.stderr"
 
   fifo="$run_dir/events.pipe"
   mkfifo "$fifo"
