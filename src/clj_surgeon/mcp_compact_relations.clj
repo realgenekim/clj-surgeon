@@ -264,6 +264,7 @@
     (seq (set/intersection (set (map address literal))
                            (set (map address generated))))))
 
+;; @spec MCP-OP-EDIT-025
 (defn compile-source-blind
   "Validate and lower the paired relation without reading or resolving files."
   [raw-request]
