@@ -44,10 +44,10 @@
 
 (deftest edit-requires-an-existing-terminal-transform
   (let [result (lens/evaluate-edit
-                 edit-source
-                 {:file "src/bench/edit.clj"
-                  :query [[:form 'transition] [:find :finish] :right]
-                  :plan-out "review.edn"})]
+                edit-source
+                {:file "src/bench/edit.clj"
+                 :query [[:form 'transition] [:find :finish] :right]
+                 :plan-out "review.edn"})]
     (is (= :edit (:operation result)))
     (is (= :edit-requires-transform (:error-type result)))
     (is (= :xray (get-in result [:remedy :read-operation])))
@@ -124,20 +124,20 @@
   (let [help (core/format-op-help :edit (get core/ops-registry :edit))
         operational {"README" (slurp "README.md")
                      "installed skill" (str (slurp "skills/clj-surgeon/SKILL.md")
+                                            "\n"
+                                            (slurp "skills/clj-surgeon/references/cli-fallback.md"))
+                     "Claude skill" (str (slurp ".claude/skills/clj-surgeon/SKILL.md")
+                                         "\n"
+                                         (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md"))
+                     "legacy skill" (str (slurp "skill.md")
                                          "\n"
                                          (slurp "skills/clj-surgeon/references/cli-fallback.md"))
-                     "Claude skill" (str (slurp ".claude/skills/clj-surgeon/SKILL.md")
-                                      "\n"
-                                      (slurp ".claude/skills/clj-surgeon/references/cli-fallback.md"))
-                     "legacy skill" (str (slurp "skill.md")
-                                      "\n"
-                                      (slurp "skills/clj-surgeon/references/cli-fallback.md"))
                      "edit help" help}
         durable (assoc operational
                        "vision" (slurp "docs/vision.md")
                        "changelog" (slurp "CHANGELOG.md"))]
     (is (<= (count (str/split-lines
-                     (slurp "skills/clj-surgeon/SKILL.md")))
+                    (slurp "skills/clj-surgeon/SKILL.md")))
             70)
         "The default skill entrance must fit in one compact 1-70 line read")
     (doseq [[surface text] durable]
@@ -168,8 +168,8 @@
 
 (defn- run-cli [& args]
   @(proc/process
-     (into ["bb" "-m" "clj-surgeon.core"] args)
-     {:dir project-root :err :string :out :string}))
+    (into ["bb" "-m" "clj-surgeon.core"] args)
+    {:dir project-root :err :string :out :string}))
 
 (deftest cli-edit-plans-separately-and-existing-executor-applies
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon edit "})
@@ -311,10 +311,10 @@
            (:expr (core/parse-args [":op" ":edit" ":expr" expression]))))
     (is (= (edit-dsl/compile-query expression)
            (:query (edit-dsl/prepare-edit-options
-                     (core/parse-args [":op" ":edit"
-                                       ":file" "src/state.clj"
-                                       ":expr" expression
-                                       ":plan-out" "plan.edn"])))))))
+                    (core/parse-args [":op" ":edit"
+                                      ":file" "src/state.clj"
+                                      ":expr" expression
+                                      ":plan-out" "plan.edn"])))))))
 
 (deftest cli-edit-refuses-unsafe-or-incomplete-requests-without-changing-bytes
   (let [tmp-dir (fs/create-temp-dir {:prefix "clj surgeon edit refusal "})
@@ -448,8 +448,8 @@
               (is (= 1 (count (re-seq #"status :done" source)))
                   "the unrelated duplicate is untouched")
               (is (str/includes?
-                    source
-                    ";; Keep this audit comment attached to the result.")))
+                   source
+                   ";; Keep this audit comment attached to the result.")))
             (testing "the saved plan remains the audit artifact"
               (is (= :replace-subform (:operation saved)))
               (is (= (:result-hash result) (:result-hash saved)))
@@ -493,22 +493,22 @@
 (deftest expect-with-line-root-is-a-one-call-exact-edit-in-an-unnamed-owner
   (let [source (slurp "test/fixtures/containing_line_owner.clj")
         expected (str/replace-first
-                   source
-                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (old-reader account-id)]"
-                   "(defcache 'selected-cache '[account-id]\n  '(let [reader (new-reader account-id)]")
+                  source
+                  "(defcache 'selected-cache '[account-id]\n  '(let [reader (old-reader account-id)]"
+                  "(defcache 'selected-cache '[account-id]\n  '(let [reader (new-reader account-id)]")
         tmp-dir (fs/create-temp-dir {:prefix "clj surgeon line expect "})
         source-file (str (fs/path tmp-dir "containing_line_owner.clj"))
         plan-file (str (fs/path tmp-dir "line-plan.edn"))]
     (try
       (spit source-file source)
       (let [result (run-cli
-                     ":op" ":edit"
-                     ":file" source-file
-                     ":expr" (str "(-> (line 14)"
-                                  " (match '(old-reader account-id))"
-                                  " (replace '(new-reader account-id)))")
-                     ":expect" "(old-reader account-id)"
-                     ":plan-out" plan-file)
+                    ":op" ":edit"
+                    ":file" source-file
+                    ":expr" (str "(-> (line 14)"
+                                 " (match '(old-reader account-id))"
+                                 " (replace '(new-reader account-id)))")
+                    ":expect" "(old-reader account-id)"
+                    ":plan-out" plan-file)
             receipt (edn/read-string (:out result))]
         (is (zero? (:exit result)) (:err result))
         (is (true? (:ok receipt)))
@@ -522,6 +522,37 @@
                (get-in receipt [:verified :read-back-hash])))
         (is (= (:result-hash receipt)
                (:result-hash (edn/read-string (slurp plan-file))))))
+      (finally
+        (fs/delete-tree tmp-dir)))))
+
+(deftest direct-edit-refuses-wrong-but-in-range-line-before-mutation
+  ;; @spec POS-AUTH-001 POS-AUTH-002 POS-AUTH-003
+  (let [source (str "(ns demo.duplicate)\n"
+                    "\n"
+                    "(defn intended [] :old)\n"
+                    "\n"
+                    "(defn wrong [] :old)\n")
+        tmp-dir (fs/create-temp-dir {:prefix "clj surgeon positional authority "})
+        source-file (str (fs/path tmp-dir "duplicate.clj"))
+        plan-file (str (fs/path tmp-dir "existing-plan.edn"))]
+    (try
+      (spit source-file source)
+      (spit plan-file pre-existing-plan)
+      (let [refusal (core/run-edit
+                     {:file source-file
+                      :expr "(-> (line 5) (match :old) (replace :new))"
+                      :expect :old
+                      :plan-out plan-file})]
+        (is (= :positional-mutation-authority-refused
+               (:error-type refusal)))
+        (is (= :unchanged (:source-state refusal)))
+        (is (true? (:source-unchanged refusal)))
+        (is (= [:line 5] (:first-step refusal)))
+        (is (= [:form 'OWNER] (:required-root refusal)))
+        (is (= "Name the top-level owner with (form 'OWNER) before a direct :expect-guarded edit."
+               (get-in refusal [:remedies :named-owner :instruction])))
+        (is (= source (slurp source-file)))
+        (is (= pre-existing-plan (slurp plan-file))))
       (finally
         (fs/delete-tree tmp-dir)))))
 
@@ -551,10 +582,10 @@
       (testing "a wrong leaf declaration preserves source and the existing plan"
         (spit plan-file pre-existing-plan)
         (let [refusal (core/run-edit
-                        {:file source-file
-                         :expr expression
-                         :expect "(old-reader different-account)"
-                         :plan-out plan-file})]
+                       {:file source-file
+                        :expr expression
+                        :expect "(old-reader different-account)"
+                        :plan-out plan-file})]
           (is (= :expect-mismatch (:error-type refusal)))
           (is (= '(old-reader account-id) (:actual refusal)))
           (is (= '(old-reader different-account) (:expected refusal)))
@@ -660,10 +691,10 @@
           (is (= comment-laden-source source))
           (is (= pre-existing-plan (slurp plan-file))))
         (let [result (core/run-edit
-                       {:file source-file
-                        :expr "(-> (form 'transition) (match :done) (replace :complete))"
-                        :plan-out plan-file
-                        :expect ":done"})
+                      {:file source-file
+                       :expr "(-> (form 'transition) (match :done) (replace :complete))"
+                       :plan-out plan-file
+                       :expect ":done"})
               source (slurp source-file)]
           (is (true? (:ok result)))
           (is (str/includes? source
@@ -702,10 +733,10 @@
     (fn [{:keys [source-file plan-file]}]
       (let [result
             (core/run-edit
-              {:file source-file
-               :expr "(-> (form 'transition) (match :finish) right (transform (constantly :destroyed)))"
-               :plan-out plan-file
-               :expect true-expect})]
+             {:file source-file
+              :expr "(-> (form 'transition) (match :finish) right (transform (constantly :destroyed)))"
+              :plan-out plan-file
+              :expect true-expect})]
         (is (= :expect-requires-literal-replacement (:error-type result)))
         (is (= :plan-and-review (get-in result [:remedy :mode])))
         (is (= edit-source (slurp source-file)))
@@ -731,10 +762,10 @@
       (let [original-executor lens/execute-plan!
             result
             (with-redefs
-              [lens/execute-plan!
-               (fn [{:keys [plan] :as request}]
-                 (spit (:plan-out plan) "{:concurrent-writer :won}\n")
-                 (original-executor request))]
+             [lens/execute-plan!
+              (fn [{:keys [plan] :as request}]
+                (spit (:plan-out plan) "{:concurrent-writer :won}\n")
+                (original-executor request))]
               (core/run-edit {:file source-file
                               :expr expect-replacement-expr
                               :plan-out plan-file
@@ -779,8 +810,8 @@
     (is (str/includes? help "PLAN ONLY"))
     (is (str/includes? help "Without :expect"))
     (is (str/includes?
-          help
-          ":expect is optional; without it the default flow is unchanged"))
+         help
+         ":expect is optional; without it the default flow is unchanged"))
     (is (str/includes? help ":expect-mismatch"))
     (is (str/includes? help "(line N)"))
     (is (str/includes? help ":actual-source"))
@@ -959,9 +990,9 @@
                         edit-dsl/prepare-edit-options
                         (edit-dsl/evaluate-edit source)))
         explicit (plan-for
-                   "(-> (form 'handler) (match 'identity) (replace '(fn* [value] (handle value))))")
+                  "(-> (form 'handler) (match 'identity) (replace '(fn* [value] (handle value))))")
         computed (plan-for
-                   "(let [after (list 'handle 'value)] (-> (form 'handler) (match 'identity) (replace after)))")
+                  "(let [after (list 'handle 'value)] (-> (form 'handler) (match 'identity) (replace after)))")
         forged-query (with-meta [[:form 'handler]
                                  [:find 'identity]
                                  [:replace '(handle value)]]
