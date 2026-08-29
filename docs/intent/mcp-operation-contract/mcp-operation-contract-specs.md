@@ -58,6 +58,7 @@ tests witness the requirement.
 - [x] **MCP-OP-EDIT-007**: When one `insert_before` or `insert_after` array item contains several complete Clojure forms, clj-surgeon shall deterministically split and insert them in source order; malformed syntax or detached comments shall still refuse before write at the exact array-item path.
 - [x] **MCP-OP-EDIT-008**: The public direct-change description shall state that packed complete forms are accepted, aggregate expectations are optional derived bookkeeping, and callers shall omit `verify` unless the user or repository explicitly requests a configured transaction profile.
 - [x] **MCP-OP-EDIT-009**: The public contract shall state that top-level `edits` and `changes` are mutually exclusive; when one atomic decision contains any insertion, deletion, rename, map-entry insertion, or heterogeneous action, the caller shall encode every action in one `changes` array rather than combine routes.
+- [ ] **MCP-OP-EDIT-010**: When one packed insertion item is malformed, clj-surgeon shall refuse before write and may return a non-executable `retry_template` that preserves every other request field, replaces only the exact malformed item with a null caller-owned hole, names the hole path, publishes selector and write authority as false, and publishes no executable `next_call`; the caller-supplied replacement shall pass ordinary validation from zero authority.
 
 ## Extraction Planning
 
