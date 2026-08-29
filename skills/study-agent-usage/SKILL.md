@@ -53,7 +53,7 @@ a completed Reasoning item; it does not expose hidden chain of thought.
 include inference, scheduling, prompt ingestion, serialization, transport,
 logging, or UI delay. Never relabel all unattributed wall as model thinking.
 
-Receipt schema v5 gives each completed clock item a privacy-safe action
+Receipt schema v6 gives each completed clock item a privacy-safe action
 ordinal. An `inspect_clojure` item also carries its request batch cardinality,
 file and selector counts, operation counts, typed result outcome, a SHA-256
 identity for the structural target with workspace paths and request bookkeeping
@@ -64,6 +64,18 @@ never emits the target, workspace path, source, original source hash, request
 ID, or expectation. Use these identities to shortlist repeated-read chains,
 then inspect only the bounded receipt-named transcript region needed to judge
 whether a later read was mechanically knowable earlier.
+
+For structured MCP actions, schema v6 also retains canonical UTF-8 argument
+byte count and a SHA-256 over the same arguments after replacing only the
+top-level `workspace_root` with `<workspace>`. Surgeon results retain only
+their canonical byte count. A post-Surgeon boundary copies those scalars and,
+when the client recorded completed reasoning, measures the last completed
+reasoning end to the next action start. It also records the clipped union of
+background actions already overlapping the boundary. The digest is equality
+evidence, not secret storage; the receipt never contains argument, result,
+root, source, or reasoning content. Missing evidence is omitted, never
+reported as zero. CLI arguments remain outside this byte law because their
+quoting and truncation semantics are not comparable to structured MCP JSON.
 
 Use the clock as a product microscope. Look for a repeated transition such as:
 

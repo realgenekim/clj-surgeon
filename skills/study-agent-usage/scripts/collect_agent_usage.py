@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA = "clj-surgeon.agent-usage-ethnography.v5"
+SCHEMA = "clj-surgeon.agent-usage-ethnography.v6"
+LOGICAL_ARGUMENT_DOMAIN = b"clj-surgeon.logical-tool-arguments.v1\0"
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
@@ -52,6 +53,11 @@ SURGEON_APPLY_OPS = {
     ":change!", ":extract!", ":fix-declares!", ":mv-with-deps",
     ":rename-ns!", ":replace-subform!", ":undo-change!",
 }
+BACKGROUND_ACTION_KINDS = {
+    "collaboration", "context-compaction", "coordination", "native-patch",
+    "native-read", "other-tool", "semantic-read", "shell", "surgeon-apply",
+    "surgeon-plan", "surgeon-read", "verify",
+}
 
 
 def parse_time(value: str) -> datetime:
@@ -71,10 +77,42 @@ def stable_key(value: str) -> str:
 
 
 def canonical_sha256(value: object) -> str:
+    return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def canonical_json_bytes(value: object) -> bytes:
     rendered = json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
-    return hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+    return rendered.encode("utf-8")
+
+
+def root_normalized_tool_arguments(arguments: dict) -> dict:
+    """Normalize only the public routing root; preserve every decision field."""
+    normalized = dict(arguments)
+    if "workspace_root" in normalized:
+        normalized["workspace_root"] = "<workspace>"
+    return normalized
+
+
+def compile_mcp_action_evidence(item: dict) -> dict:
+    """Compile byte/hash scalars while private arguments and results are in scope."""
+    evidence = {}
+    arguments = item.get("arguments")
+    if isinstance(arguments, dict):
+        argument_bytes = canonical_json_bytes(arguments)
+        logical_bytes = canonical_json_bytes(
+            root_normalized_tool_arguments(arguments)
+        )
+        evidence["argument_canonical_bytes"] = len(argument_bytes)
+        evidence["logical_argument_sha256"] = hashlib.sha256(
+            LOGICAL_ARGUMENT_DOMAIN + logical_bytes
+        ).hexdigest()
+    if item.get("server") == "clj-surgeon" and "result" in item:
+        evidence["result_canonical_bytes"] = len(
+            canonical_json_bytes(item.get("result"))
+        )
+    return evidence
 
 
 def structural_target(value: object) -> object:
@@ -413,6 +451,9 @@ def completed_item_clock_sample(payload: dict) -> dict | None:
         server = str(item.get("server") or "")
         tool = str(item.get("tool") or "")
         sample["transport"] = "mcp"
+        action_evidence = compile_mcp_action_evidence(item)
+        if action_evidence:
+            sample["action_evidence"] = action_evidence
         if server == "clj-surgeon":
             if tool == "inspect_clojure":
                 sample["kind"] = "surgeon-read"
@@ -500,6 +541,57 @@ def clipped_kind_coverage(items: list[dict], kind: str, start: int, end: int) ->
     ])
 
 
+def compile_action_emission_evidence(
+    source: dict,
+    endpoint: dict | None,
+    items: list[dict],
+    boundary_start: int,
+    boundary_end: int,
+) -> dict:
+    """Compile safe action-size and post-reasoning wall evidence for one boundary."""
+    result = {}
+    source_evidence = source.get("action_evidence")
+    source_evidence = source_evidence if isinstance(source_evidence, dict) else {}
+    previous_result_bytes = source_evidence.get("result_canonical_bytes")
+    if isinstance(previous_result_bytes, int) and not isinstance(previous_result_bytes, bool):
+        result["previous_surgeon_result_canonical_bytes"] = previous_result_bytes
+
+    endpoint_evidence = endpoint.get("action_evidence") if endpoint else None
+    endpoint_evidence = endpoint_evidence if isinstance(endpoint_evidence, dict) else {}
+    next_argument_bytes = endpoint_evidence.get("argument_canonical_bytes")
+    if isinstance(next_argument_bytes, int) and not isinstance(next_argument_bytes, bool):
+        result["next_argument_canonical_bytes"] = next_argument_bytes
+    next_logical_hash = endpoint_evidence.get("logical_argument_sha256")
+    if isinstance(next_logical_hash, str) and re.fullmatch(r"[0-9a-f]{64}", next_logical_hash):
+        result["next_logical_argument_sha256"] = next_logical_hash
+
+    completed_reasoning_ends = [
+        item["_end_ms"]
+        for item in items
+        if item["kind"] == "model-reasoning"
+        and item["_end_ms"] > boundary_start
+        and item["_end_ms"] <= boundary_end
+    ]
+    if completed_reasoning_ends:
+        result["last_reasoning_end_to_next_action_start_ms"] = max(
+            0, boundary_end - max(completed_reasoning_ends)
+        )
+
+    background_intervals = [
+        (max(boundary_start, item["_start_ms"]), min(boundary_end, item["_end_ms"]))
+        for item in items
+        if item is not source
+        and item is not endpoint
+        and item["kind"] in BACKGROUND_ACTION_KINDS
+        and item["_end_ms"] > boundary_start
+        and item["_start_ms"] < boundary_end
+    ]
+    result["overlapping_background_wall_ms"] = interval_coverage(
+        background_intervals
+    )
+    return result
+
+
 def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_end_ms: int) -> list[dict]:
     """Measure Surgeon completion to the caller's next externally visible act."""
     endpoint_kinds = {
@@ -534,6 +626,9 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
             ),
             "next_kind": endpoint["kind"] if endpoint else "turn-end",
         }
+        result["action_emission"] = compile_action_emission_evidence(
+            item, endpoint, items, boundary_start, boundary_end
+        )
         for key in (
             "action_ordinal", "batch_cardinality", "file_cardinality",
             "request_operations", "result_outcome", "selector_cardinality",
@@ -1400,6 +1495,9 @@ def collect(args) -> dict:
             "raw_service_events_emitted": False,
             "structural_targets_hashed": True,
             "source_hashes_rehashed": True,
+            "tool_argument_content_emitted": False,
+            "tool_result_content_emitted": False,
+            "tool_logical_arguments_hashed": True,
         },
         "providers": {
             "codex": provider_summary("codex", codex_sessions),
@@ -1938,6 +2036,15 @@ def self_test() -> int:
         assert clock["items"][3]["batch_cardinality"] == 1
         assert len(clock["items"][3]["structural_target_sha256"]) == 64
         assert len(clock["items"][3]["snapshot_sha256"]) == 64
+        assert clock["items"][3]["action_evidence"][
+            "argument_canonical_bytes"
+        ] > 0
+        assert len(clock["items"][3]["action_evidence"][
+            "logical_argument_sha256"
+        ]) == 64
+        assert clock["items"][3]["action_evidence"][
+            "result_canonical_bytes"
+        ] > 0
         assert clock["by_kind_ms"]["model-reasoning"] == 5000
         assert clock["by_kind_ms"]["surgeon-read"] == 200
         assert clock["measured_coverage_ms"] == 6200
@@ -1953,6 +2060,12 @@ def self_test() -> int:
             "model_reasoning_ms": 0,
             "model_message_ms": 0,
             "next_kind": "model-message",
+            "action_emission": {
+                "previous_surgeon_result_canonical_bytes": clock[
+                    "items"
+                ][3]["action_evidence"]["result_canonical_bytes"],
+                "overlapping_background_wall_ms": 0,
+            },
             "action_ordinal": 2,
             "batch_cardinality": 1,
             "file_cardinality": 1,
@@ -1987,6 +2100,9 @@ def self_test() -> int:
         assert receipt["privacy"]["transcript_prose_emitted"] is False
         assert receipt["privacy"]["structural_targets_hashed"] is True
         assert receipt["privacy"]["source_hashes_rehashed"] is True
+        assert receipt["privacy"]["tool_argument_content_emitted"] is False
+        assert receipt["privacy"]["tool_result_content_emitted"] is False
+        assert receipt["privacy"]["tool_logical_arguments_hashed"] is True
         assert receipt["services"]["clj_surgeon_mcp"]["mcp_tool_calls"] == 2
         assert receipt["services"]["clj_surgeon_mcp"]["error_types"] == {
             "match-count-mismatch": 1
