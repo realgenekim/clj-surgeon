@@ -340,6 +340,21 @@ test_admission_shell_error_propagates() {
   [ ! -e "$root/calls.log" ] || fail 'worker ran after admission shell error'
 }
 
+test_first_required_setting_error_propagates() {
+  local root output status=0
+  root=$(new_repo first-admission-shell-error)
+  output="$test_root/first-admission-shell-error-output"
+  (
+    unset BENCH_RELATION_EXPECTED_HEAD
+    env PATH="$test_path" \
+      BENCH_RELATION_RESULT_DIR="$output" \
+      bash "$root/bench/run_relation_causal_cohort.sh"
+  ) >"$root/run.out" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || fail 'first admission shell error was reported as success'
+  assert_contains "$root/run.out" 'BENCH_RELATION_EXPECTED_HEAD is required'
+  [ ! -e "$root/calls.log" ] || fail 'worker ran after first admission shell error'
+}
+
 test_output_and_settings_refuse() {
   local root nonempty link
   root=$(new_repo admission)
@@ -559,6 +574,7 @@ test_worker_drift_after_block_one_stops_block_two() {
     || fail 'block two ran after worker runtime drift'
   [ ! -e "$output/block2" ] || fail 'block two output exists after worker runtime drift'
   assert_contains "$output/coordinator-receipt.edn" ':stage :block1'
+  assert_contains "$output/coordinator-receipt.edn" ':state :failed'
 }
 
 test_incomplete_fixture_manifest_refuses() {
@@ -593,6 +609,7 @@ test_child_failure_is_retained_without_retry() {
   [ ! -e "$output/block2" ] || fail 'block two ran after a child failure'
   [ ! -e "$root/scorer.log" ] || fail 'scorer ran after a child failure'
   assert_contains "$output/coordinator-receipt.edn" ':stage :block1'
+  assert_contains "$output/coordinator-receipt.edn" ':state :failed'
   [ "$(wc -l < "$root/calls.log" | tr -d ' ')" -eq 1 ] || fail 'child failure was retried'
 }
 
@@ -608,6 +625,7 @@ test_block1_gate_stops_and_retains() {
   [ ! -e "$output/block2" ] || fail 'block two ran after a failed gate'
   [ "$(wc -l < "$root/scorer.log" | tr -d ' ')" -eq 1 ] || fail 'aggregate ran after a failed gate'
   assert_contains "$output/coordinator-receipt.edn" ':stage :block1-score'
+  assert_contains "$output/coordinator-receipt.edn" ':state :failed'
 }
 
 test_workspace_identity_refuses() {
@@ -714,6 +732,7 @@ test_real_scorer_loads_with_coordinator_classpath() {
 
 test_wrong_and_dirty_identity_refuse
 test_admission_shell_error_propagates
+test_first_required_setting_error_propagates
 test_output_and_settings_refuse
 test_dirty_runtime_closure_refuses
 test_empty_manifest_refuses_without_masking_exit
