@@ -358,6 +358,10 @@ This relation is promoted only if a fresh, correct-control mutation cohort
 proves a byte-identical canonical transaction and exact future bytes,
 configured verification, first-call correctness, lower request-emission time,
 and lower complete verified wall time after charging the larger schema surface.
+Both arms shall use exactly one compact `apply_clojure_changes` call with the
+same project-owned `verify="exact"` profile. The cohort shall not grant verifier
+selection to `edit_clojure`; that lighter entrance retains its existing
+mutation-only authority.
 The relation arm must lower median request-emission time in both
 counterbalanced blocks and by at least 20 percent across the pooled cohort; it
 must independently lower complete verified wall time by at least 20 percent.
