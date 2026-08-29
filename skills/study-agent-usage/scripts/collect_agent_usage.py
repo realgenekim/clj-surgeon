@@ -1924,6 +1924,23 @@ def self_test() -> int:
     ])
     v5_emission = v5_clock["post_surgeon_boundaries"][0]["action_emission"]
     assert v5_emission == {"overlapping_background_wall_ms": 0}
+    turn_end_clock = compile_event_clock(clock_start, 400, [
+        {
+            "kind": "surgeon-read",
+            "action_ordinal": 1,
+            "started_at_ms": clock_start_ms,
+            "completed_at_ms": clock_start_ms + 100,
+        },
+        {
+            "kind": "model-reasoning",
+            "action_ordinal": 2,
+            "started_at_ms": clock_start_ms + 150,
+            "completed_at_ms": clock_start_ms + 250,
+        },
+    ])
+    assert "last_reasoning_end_to_next_action_start_ms" not in (
+        turn_end_clock["post_surgeon_boundaries"][0]["action_emission"]
+    )
     for canary in [
         "PRIVATE_MALFORMED_ARGUMENTS", "PRIVATE_MESSAGE", "PRIVATE_PATCH",
         "PRIVATE_COMMAND",
