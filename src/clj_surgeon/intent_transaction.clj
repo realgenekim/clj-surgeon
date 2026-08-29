@@ -1899,18 +1899,30 @@
    :lifecycle :commit})
 
 (defn- compile-change-spec
-  [context spec]
+  [context spec prepare-spec]
   (validate-spec! spec)
   (let [canonical-spec (canonicalize-spec spec)
         sources (read-sources (spec-files canonical-spec))
+        prepared (if prepare-spec
+                   (prepare-spec sources canonical-spec)
+                   {:ok true :spec canonical-spec})
+        _ (when (:error prepared)
+            (refuse! (:error-type prepared)
+                     (:error prepared)
+                     (dissoc prepared :error :error-type)))
+        prepared-spec (:spec prepared)
+        _ (validate-spec! prepared-spec)
         algebra-result
         (operation-algebra/compile-change
           (operation-algebra/change-entry compile-transaction)
           context
           sources
-          canonical-spec)]
-    {:spec canonical-spec
-     :compiled (:compiled algebra-result)
+          prepared-spec)]
+    {:spec prepared-spec
+     :compiled (cond-> (:compiled algebra-result)
+                 (:location-normalization prepared)
+                 (assoc :location-normalization
+                        (:location-normalization prepared)))
      :capabilities (:capabilities algebra-result)
      :authority-error (when (:error algebra-result) algebra-result)}))
 
@@ -1919,9 +1931,9 @@
   ;; @spec OP-ALG-CONTEXT-002, OP-ALG-IDENTITY-001, OP-ALG-RECEIPT-003,
   ;; @spec OP-ALG-RUNTIME-001
   "Compile, commit, verify, and publish one durable inverse receipt."
-  [context {:keys [spec receipt-out prepare-compiled!] :as opts}]
+  [context {:keys [spec receipt-out prepare-compiled! prepare-spec] :as opts}]
   (try
-    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled!}
+    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec}
                                      (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
@@ -1930,7 +1942,7 @@
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
     (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled capabilities authority-error]} (compile-change-spec context spec)
+          {:keys [spec compiled capabilities authority-error]} (compile-change-spec context spec prepare-spec)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
                      compiled)]
@@ -1994,7 +2006,11 @@
                                              (:change-count compiled))
 
                                       (:format compiled)
-                                      (assoc :format (:format compiled))))]
+                                      (assoc :format (:format compiled))
+
+                                      (:location-normalization compiled)
+                                      (assoc :location-normalization
+                                             (:location-normalization compiled))))]
                               (observe-change-result
                                 :success capabilities compiled
                                 {:path receipt-path

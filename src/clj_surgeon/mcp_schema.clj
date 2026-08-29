@@ -221,7 +221,7 @@
                 :description "Explicit project-relative paths for one grouped root-scoped edit. Every file must match independently."}
        "within" {:type "object"
                  :additionalProperties false
-                 :description "Exactly one named Clojure owner or the complete syntax-tree root. EDN requires root scope."
+                 :description "Optional exact Clojure owner. Omit only when source can prove one injective owner; EDN requires root scope."
                  :properties
                  {"form" {:type "string" :minLength 1
                           :description "One exact named top-level form."}
@@ -238,7 +238,7 @@
        "to" {:type "string" :minLength 1
              :description "The replacement Clojure subtree."}
        "matches" positive-integer-schema}
-      :required ["within" "from" "to"]
+      :required ["from" "to"]
       :oneOf [{:required ["file"]
                :not {:required ["files"]}}
               {:required ["files"]

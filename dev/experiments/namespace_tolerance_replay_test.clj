@@ -91,6 +91,27 @@
     (is (zero? (:model-calls result)))
     (is (zero? (:mutation-actions result)))))
 
+(deftest product-normalizer-replays-all-eight-retained-calls
+  ;; @spec MCP-OP-EDIT-016
+  (let [result (replay/product-report)]
+    (is (= 8 (:capture-count result)))
+    (is (= 4 (:unique-request-count result)))
+    (is (:request-hashes-equal result))
+    (is (= 8 (:exact-run-count result)))
+    (is (:all-eight-exact result))
+    (doseq [run (:runs result)]
+      (is (:ok run) (pr-str run))
+      (if (= :candidate (:base run))
+        (do
+          (is (= 23 (:owner-row-count run)))
+          (is (= 27 (:declared-match-count run))))
+        (do
+          (is (zero? (:owner-row-count run)))
+          (is (zero? (:declared-match-count run)))))
+      (is (= 51 (:match-count run)))
+      (is (= 9 (:changed-file-count run)))
+      (is (:future-hashes-equal run)))))
+
 (let [{:keys [fail error]} (run-tests)]
   (when (pos? (+ fail error))
     (System/exit 1)))
