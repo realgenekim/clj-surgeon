@@ -5,7 +5,6 @@
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-contract :as contract]
-   [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -28,11 +27,13 @@
       (Files/deleteIfExists (.toPath child)))))
 
 (defn- write-source!
-  [workspace source]
-  (let [source-file (io/file workspace "src/sample/app.clj")]
-    (.mkdirs (.getParentFile source-file))
-    (spit source-file source)
-    source-file))
+  ([workspace source]
+   (write-source! workspace "src/sample/app.clj" source))
+  ([workspace file source]
+   (let [source-file (io/file workspace file)]
+     (.mkdirs (.getParentFile source-file))
+     (spit source-file source)
+     source-file)))
 
 (defn- normalize-request
   ([source request]
@@ -306,6 +307,30 @@
           (swap! normalizer-calls conj args)
           (throw (ex-info "compact normalizer must not run" {})))]
     (with-redefs [compact-location/normalize-spec normalizer-spy]
+      (testing "generic direct changes"
+        (let [workspace (temp-dir)
+              receipt-dir (io/file workspace "receipts")
+              source-file
+              (write-source! workspace
+                             "(ns sample.app)\n(def settings {:state :old})\n")]
+          (try
+            (let [result
+                  (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath receipt-dir)}
+                    {"changes"
+                     [{"id" "root-edit"
+                       "files" ["src/sample/app.clj"]
+                       "find" ":old"
+                       "replace" ":new"
+                       "expect" {"matches" 1 "each_file" 1}}]
+                     "expect" {"changes" 1 "edits" 1 "files" 1}})]
+              (is (:ok result) (pr-str result))
+              (is (= "(ns sample.app)\n(def settings {:state :new})\n"
+                     (slurp source-file))))
+            (finally
+              (delete-tree! workspace)))))
+
       (testing "retained basis"
         (let [workspace (temp-dir)
               receipt-dir (io/file workspace "receipts")
@@ -361,21 +386,27 @@
             (finally
               (delete-tree! workspace)))))
 
-      (testing "standalone programs"
+      (testing "public edit programs"
         (let [workspace (temp-dir)
+              receipt-dir (io/file workspace "receipts")
               source-file
               (write-source! workspace "(ns sample.app)\n(defn f [] :old)\n")]
           (try
             (let [result
-                  (program-tool/execute-request!
-                    {:project-root (.getPath workspace)}
-                    {:file "src/sample/app.clj"
-                     :expression
-                     "(-> (form 'f) (match :old) (transform (constantly :new)))"
-                     :expect {:matches 1
-                              :max_changed_characters 8}})]
-              (is (:ok result) (pr-str result))
-              (is (= :transform-preview (:operation result)))
+                  (mcp-tool/execute-request!
+                    {:project-root (.getPath workspace)
+                     :receipt-dir (.getPath receipt-dir)}
+                    {"programs"
+                     [{"file" "src/sample/app.clj"
+                       "expression"
+                       "(-> (form 'f) (match :old) (transform (constantly :new)))"
+                       "expect" {"matches" 1
+                                 "max_changed_characters" 8}}]})]
+              (is (false? (:ok result)) (pr-str result))
+              (is (= "invalid-mcp-request" (:error_type result))
+                  (pr-str result))
+              (is (= ["changes"] (:path result)) (pr-str result))
+              (is (:source_unchanged result) (pr-str result))
               (is (= "(ns sample.app)\n(defn f [] :old)\n"
                      (slurp source-file))))
             (finally
@@ -406,10 +437,10 @@
               (delete-tree! workspace))))))
 
     (is (empty? @normalizer-calls)
-        "retained-basis, extraction, standalone-program, and CLI routes bypass compact normalization")))
+        "generic-change, retained-basis, extraction, public-program, and CLI routes bypass compact normalization")))
 
 (deftest cljc-platform-conditional-owner-does-not-authorize-a-location
-  ;; @spec MCP-OP-EDIT-012
+  ;; @spec MCP-OP-EDIT-014
   (let [file "src/sample/app.cljc"
         source (str "(ns sample.app)\n"
                     "#?(:clj (defn f [] :old)\n"
@@ -423,6 +454,33 @@
     (is (not (:ok result)) (pr-str result))
     (is (= :compact-location-unresolved (:error-type result))
         (pr-str result))))
+
+(deftest cljc-platform-conditional-namespace-clause-refuses-before-write
+  ;; @spec MCP-OP-EDIT-013
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source (str "(ns sample.app\n"
+                    "  #?(:clj (:require [old.core :as old])\n"
+                    "     :cljs (:require [old.core :as old])))\n"
+                    "(defn f [] 1)\n")
+        file "src/sample/app.cljc"
+        source-file (write-source! workspace file source)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)}
+              {"edits"
+               [{"file" file
+                 "from" "(:require [old.core :as old])"
+                 "to" "(:require [new.core :as new])"}]})]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "compact-location-unresolved" (:error_type result))
+            (pr-str result))
+        (is (:source_unchanged result) (pr-str result))
+        (is (= source (slurp source-file))))
+      (finally
+        (delete-tree! workspace)))))
 
 (deftest duplicate-namespace-named-owners-block-namespace-fallback
   ;; @spec MCP-OP-EDIT-012
