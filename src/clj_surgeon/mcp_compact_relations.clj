@@ -119,8 +119,11 @@
                    (or (get request "delete_owners") []))))
 
 (defn- literal-match-count [request]
-  (reduce + 0 (map #(or (get % "matches") 1)
-                   (or (get request "edits") []))))
+  (reduce + 0
+          (map (fn [edit]
+                 (* (or (get edit "matches") 1)
+                    (max 1 (count (get edit "files")))))
+               (or (get request "edits") []))))
 
 (defn- validate-migration! [migration]
   (closed-map! migration

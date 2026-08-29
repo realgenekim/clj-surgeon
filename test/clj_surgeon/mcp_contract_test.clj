@@ -602,7 +602,15 @@
     (is (= ["namespace" "render"] (:change_ids result)))
     (is (= [0 2] (:change_indexes result)))
     (is (str/includes? (:remedy result) "namespace and render"))
-    (is (:source_unchanged result))))
+    (is (:source_unchanged result)))
+  (testing "public path refusals retain their error and unchanged-source evidence"
+    (let [result (contract/normalize-refusal
+                   {:ok false
+                    :error_type "path-outside-project"
+                    :error "Source symlink resolves outside the configured project root"
+                    :source_unchanged true})]
+      (is (= "path-outside-project" (:error_type result)))
+      (is (true? (:source_unchanged result))))))
 
 (deftest verification-refusal-names-the-failed-check-and-bounds-its-output
   (let [long-output (apply str (repeat 3000 "x"))

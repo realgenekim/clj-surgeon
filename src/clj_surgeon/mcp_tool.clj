@@ -80,7 +80,12 @@
     "check whether this mutation completes all remaining user-requested work. "
     "If it does, return terminal_response exactly. Do not add text. If work "
     "remains, do not return terminal_response; continue from the terminal evidence. Use native "
-    "patching for prose or one arbitrary text edit."))
+    "patching for prose or one arbitrary text edit. For a repeated exact symbol "
+    "migration across named owners, use the paired symbol_migration and "
+    "require_change fields. symbol_migration groups [owner, from, matches] rows "
+    "by file and preserve-name changes only the qualifier. require_change names "
+    "the exact target lib/alias and per-file old lib/alias removals. Both tables "
+    "are complete authority: Surgeon discovers or chooses none of their values."))
 
 ;; @spec MCP-OP-SCHEMA-001
 ;; @spec MCP-OP-RELAY-003
@@ -486,7 +491,7 @@
        :next-action "correct_request"})))
 
 (defn- prepare-relation-spec
-  [sources relation-plan path-map]
+  [root sources relation-plan path-map]
   (let [raw-sources
         (into {}
               (map (fn [[raw canonical]] [raw (get sources canonical)]))
@@ -503,14 +508,21 @@
                   path-map)]
             (if-not (:ok resolved)
               resolved
-              (let [prepared
+              (let [canonical-files
+                    (mapv (fn [raw]
+                            (str (.relativize
+                                   root
+                                   (.toPath (io/file (get path-map raw))))))
+                          (:relation-files relation-plan))
+                    prepared
                     (compact-location/normalize-spec
                       sources (:spec resolved)
                       (:compact-location-normalization validated))]
                 (cond-> prepared
                   (not (:error prepared))
                   (assoc :compact-relation-normalization
-                         (:relation-normalization frozen)))))))))))
+                         (assoc (:relation-normalization frozen)
+                                :files canonical-files)))))))))))
 
 (defn- execute-explicit-change!
   ;; @spec OP-ALG-MCP-001
@@ -563,7 +575,8 @@
               (fn [sources _spec]
                 (let [prepared
                       (prepare-relation-spec
-                        sources relation-plan (:relation-path-map resolved))]
+                        root sources relation-plan
+                        (:relation-path-map resolved))]
                   (when-let [evidence (:compact-relation-normalization prepared)]
                     (reset! relation-evidence evidence))
                   prepared)))
@@ -875,28 +888,51 @@
     "apply_clojure_changes"))
 
 (defn- handle-operation
-  [params callback]
+  [operation params callback]
   (mcp-operation/invoke!
     {:execute
      (fn []
-       (let [operation (request-operation params)]
-         (with-exact-terminal-response
-           (assoc
-             (if-let [config @runtime-config]
-               (execute-request! config params)
-               {:ok false
-                :error_type "server-not-initialized"
-                :error (str operation " server is not initialized")
-                :source_unchanged true
-                :remedy "Restart the configured clj-surgeon MCP server."})
-             :operation operation))))
+       (with-exact-terminal-response
+         (assoc
+           (cond
+             (and (= "edit_clojure" operation)
+                  (or (contains? params :verify)
+                      (contains? params "verify")))
+             {:ok false
+              :error_type "invalid-mcp-request"
+              :error "edit_clojure does not authorize transaction verification"
+              :source_unchanged true
+              :mutation_attempted false
+              :write_authority false
+              :remedy "Use apply_clojure_changes when verification must share rollback authority."}
+
+             @runtime-config
+             (execute-request! @runtime-config params)
+
+             :else
+             {:ok false
+              :error_type "server-not-initialized"
+              :error (str operation " server is not initialized")
+              :source_unchanged true
+              :remedy "Restart the configured clj-surgeon MCP server."})
+           :operation operation)))
      :summarize concise-summary
      :callback callback}))
 
 (defn handle-clj-change
-  "Shared callback whose stable Var keeps both public routes hot-reloadable."
+  "Legacy inferred callback retained for compatibility with installed callers."
   [_exchange params callback]
-  (handle-operation params callback))
+  (handle-operation (request-operation params) params callback))
+
+(defn handle-edit-clojure
+  "Stable callback that preserves edit_clojure entrance authority and identity."
+  [_exchange params callback]
+  (handle-operation "edit_clojure" params callback))
+
+(defn handle-apply-clojure-changes
+  "Stable callback that preserves apply_clojure_changes entrance authority and identity."
+  [_exchange params callback]
+  (handle-operation "apply_clojure_changes" params callback))
 
 (def edit-tool-description
   (str
@@ -916,7 +952,11 @@
     "Any stale count, overlap, budget, comment-bearing computed selection, parse, "
     "or write failure refuses or rolls back the whole batch. Exact spelling and "
     "comments belong in edits; computed values belong in programs. Success returns "
-    "terminal read-back and undo evidence."))
+    "terminal read-back and undo evidence. For a repeated exact symbol migration "
+    "across named owners, use paired symbol_migration and require_change. Group "
+    "[owner, from, matches] rows by file; preserve-name changes only the qualifier. "
+    "Declare the exact target lib/alias and per-file old lib/alias removals. Surgeon "
+    "discovers or chooses none of these authoritative values."))
 
 (def edit-clojure-tool
   {:id :edit-clojure
@@ -925,7 +965,7 @@
    :schema mcp-schema/editor-tool-schema
    :output-schema clj-change-output-schema
    :structured? true
-   :tool-fn #'handle-clj-change})
+   :tool-fn #'handle-edit-clojure})
 
 (def clj-change-tool
   {:id :clj-change
@@ -934,7 +974,7 @@
    :schema mcp-schema/clj-change-schema
    :output-schema clj-change-output-schema
    :structured? true
-   :tool-fn #'handle-clj-change})
+   :tool-fn #'handle-apply-clojure-changes})
 
 (defn tools-for-profile
   "Return the exact public tool catalog for one startup profile."

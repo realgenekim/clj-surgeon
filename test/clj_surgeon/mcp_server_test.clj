@@ -49,8 +49,10 @@
              (get-in output-schema [:properties "elapsed_ms"])))
       (is (some #{"elapsed_ms"} (:required output-schema))))
     (is (= #'inspect-tool/handle-inspect (:tool-fn (first tools))))
-    (is (= #'tool/handle-clj-change (:tool-fn (second tools))))
-    (is (= #'tool/handle-clj-change (:tool-fn (nth tools 2))))
+    (is (= #'tool/handle-apply-clojure-changes
+           (:tool-fn (second tools))))
+    (is (= #'tool/handle-edit-clojure
+           (:tool-fn (nth tools 2))))
     (is (= #'program-tool/handle-transform-clojure
            (:tool-fn (nth tools 3))))
     (is (= false (get-in tools [3 :schema :additionalProperties])))
@@ -222,10 +224,11 @@
         (when embedded (nrepl-server/stop-server embedded))
         (delete-tree! directory)))))
 
-(deftest embedded-nrepl-redefines-the-live-handler-var
+(deftest embedded-nrepl-redefines-each-live-mutation-handler-var
   (let [directory (temp-dir)
         port-file (io/file directory ".nrepl-port")
-        original @#'tool/handle-clj-change
+        original-edit @#'tool/handle-edit-clojure
+        original-apply @#'tool/handle-apply-clojure-changes
         embedded (server/start-embedded-nrepl! 0 (.getPath port-file))]
     (try
       (is (some? embedded))
@@ -233,19 +236,31 @@
       (with-open [connection (nrepl/connect :port (:port embedded))]
         (let [client (nrepl/client connection 5000)
               code
-              (str "(alter-var-root #'clj-surgeon.mcp-tool/handle-clj-change "
+              (str "(do "
+                   "(alter-var-root #'clj-surgeon.mcp-tool/handle-edit-clojure "
                    "(constantly (fn [_ _ callback] "
-                   "(callback [\"hot-handler\"] false))))")
+                   "(callback [\"hot-edit\"] false)))) "
+                   "(alter-var-root #'clj-surgeon.mcp-tool/handle-apply-clojure-changes "
+                   "(constantly (fn [_ _ callback] "
+                   "(callback [\"hot-apply\"] false)))))")
               replies (doall (nrepl/message client {:op "eval" :code code}))]
           (is (some #(contains? (set (:status %)) "done") replies))))
-      (let [callback-result (atom nil)]
+      (let [callback-result (atom [])]
+        ((:tool-fn tool/edit-clojure-tool)
+         nil {} (fn [content error?]
+                  (swap! callback-result conj
+                         {:content content :error? error?})))
         ((:tool-fn tool/clj-change-tool)
          nil {} (fn [content error?]
-                  (reset! callback-result {:content content :error? error?})))
-        (is (= {:content ["hot-handler"] :error? false}
+                  (swap! callback-result conj
+                         {:content content :error? error?})))
+        (is (= [{:content ["hot-edit"] :error? false}
+                {:content ["hot-apply"] :error? false}]
                @callback-result)))
       (finally
-        (alter-var-root #'tool/handle-clj-change (constantly original))
+        (alter-var-root #'tool/handle-edit-clojure (constantly original-edit))
+        (alter-var-root #'tool/handle-apply-clojure-changes
+                        (constantly original-apply))
         (when embedded (nrepl-server/stop-server embedded))
         (delete-tree! directory)))))
 

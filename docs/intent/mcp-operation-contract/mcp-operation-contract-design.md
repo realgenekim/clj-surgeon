@@ -750,11 +750,12 @@ exact unqualified name is preserved. The relation does not rename the local
 name, resolve Vars, discover references, select owners, or choose a target
 namespace.
 
-Alias, owner, namespace, and symbol fields use the same Clojure reader and
-symbol predicates as the existing compact contract. `from` must parse as one
-plain symbol node with exactly one nonblank qualifier and one nonblank name.
-Keywords, strings, quoted forms, metadata-bearing forms, reader forms, and
-multiply qualified spellings are outside this slice. The
+Alias, owner, namespace, and symbol fields use closed lexical symbol predicates;
+public relation data never enters the Clojure reader. `from` must be one exact
+unqualified or singly qualified symbol spelling with a nonblank name. The
+reader literals `nil`, `true`, and `false`, keywords, strings, quoted forms,
+metadata-bearing forms, reader forms, and multiply qualified spellings are
+outside this slice. The
 generated target must differ from `from` ; a target alias equal to the source
 qualifier is a no-op refusal.
 
