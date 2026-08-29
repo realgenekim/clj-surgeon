@@ -355,7 +355,7 @@ entrance whose model-side construction cost and omission pattern were directly
 measured, while leaving the compiler reusable by a later CLI adapter.
 
 This relation is promoted only if a fresh, correct-control mutation cohort
-proves a byte-identical canonical transaction and exact future bytes,
+proves a byte-identical canonical effect identity and exact future bytes,
 configured verification, first-call correctness, lower request-emission time,
 and lower complete verified wall time after charging the larger schema surface.
 Both arms shall use exactly one compact `apply_clojure_changes` call with the
@@ -376,6 +376,43 @@ advantage does not recur, whose callers route around it, or whose complete-task
 time fails to beat the normalized flat route remains experimental or is
 retired. New relations require new repeated evidence; this first slice is not
 precedent for a refactoring catalog.
+
+### Canonical effect identity follows disjointness proof
+
+Caller order is provenance, not mutation authority, for compact edits that the
+generic compiler resolves against one frozen source map and proves disjoint.
+The compiler already resolves every edit against the original snapshot,
+refuses overlapping source spans, and applies accepted edits in descending
+source-address order. A permutation of the same resolved disjoint effects must
+therefore describe the same successful mutation even when positional request
+IDs, diagnostic indexes, intent vectors, or diff presentation differ.
+
+The system retains submitted order and positional identity for request
+diagnostics and audit provenance. After path confinement, relation and compact
+location lowering, exact guard resolution, and complete overlap proof, it also
+derives one canonical effect projection. That projection orders effects by
+canonical project-relative file, resolved original-source span, operator,
+lossless before identity, and lossless after identity. It retains source and
+result hashes plus logical counts. It omits synthetic request IDs, request and
+relation indexes, diff concatenation order, receipt location, and receipt hash.
+The projection changes no execution, formatting, commit, verification,
+rollback, receipt, or diagnostic behavior.
+
+This authority is deliberately narrow. The first slice covers only compact
+edits and generated relation edits after they enter the common generic
+compiler. It does not reorder generic caller-ID-bearing `changes`, programs,
+extraction, retained-basis decisions, or one insertion payload's ordered form
+vector. Two edits at the same insertion point, duplicate or intersecting
+spans, whole-owner edits containing nested edits, deletion of an edited owner,
+or a transformation that would need to observe another edit's result remain a
+complete refusal under every permutation. True sequential work is one composed
+replacement or more than one transaction; ordering cannot turn it into one
+snapshot-compiled batch.
+
+The canonical effect identity is a new forward contract. It cannot retroactively
+admit or rescore an observed cohort whose frozen oracle compared ordered request
+specifications. If this design is approved and implemented, relation promotion
+starts with a new immutable candidate and a fresh complete first block.
 
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
