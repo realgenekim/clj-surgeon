@@ -520,3 +520,122 @@ split several complete inserted forms when their syntax is independently
 valid, derive redundant aggregate counts from compiled intents, and continue to
 refuse the malformed extra parenthesis before any write. This attacks repeated
 model boundaries while keeping the model's architectural judgment intact.
+
+## Tolerant compilation deleted four retry boundaries
+
+The first fresh Sol/high replay proved that the product mechanism existed but
+the public contract still contradicted it. The model supplied the complete
+three-change/two-file decision, including the packed two-form insertion and the
+legacy aggregate estimate. It eventually produced the correct bytes, but paid
+five `apply_clojure_changes` calls:
+
+1. aggregate `expect` omitted, schema refusal;
+2. insertion array corrected, aggregate `expect` still omitted, same refusal;
+3. redundant aggregate counts supplied, but the model invented `verify=fast`;
+4. the host-pressure gate safely refused clj-kondo twice; and
+5. the same guarded request without invented verification committed.
+
+The kernel spent only 2.16 seconds across all five calls. Complete wall was
+92.171 seconds. The delay was contract repair and model boundaries, not source
+transformation.
+
+The earned change made the contract match the compiler:
+
+- top-level aggregate `expect` is optional and derived from authoritative
+  per-change guards;
+- a supplied disagreement is reported as ignored normalization;
+- an insertion array item may contain several complete forms, which are split
+  in source order;
+- malformed syntax and detached comments still refuse before write; and
+- `verify` is omitted unless the user or repository explicitly requests a
+  configured transaction profile.
+
+The identical fresh-caller POST completed correctly in one mutation call with
+zero refusals:
+
+| Route | Correct | Complete wall | Mutation calls | Failed calls | Input tokens | Server mutation |
+|---|---:|---:|---:|---:|---:|---:|
+| PRE contradictory contract | yes | 92.171s | 5 | 4 | 167,578 | 1.693s final call |
+| POST tolerant contract | yes | 30.098s | 1 | 0 | 60,249 | 1.807s |
+
+POST removed 62.073 seconds, a 67.3 percent reduction or 3.06x faster complete
+task time. Input tokens fell 64.0 percent. The model still made the semantic
+decision and supplied every exact guard. Surgeon removed only mechanical
+bookkeeping and an invitation to over-verify.
+
+Retained POST evidence:
+
+- events: `544ce611d357df782bcac27ea94420b2f282a8c88c41f26f1fdea69dfd740d67`;
+- phase timing: `d114ba2231cd8e1ac9c49015eccd3a25e54d0408fe40f1d4909c506d225463e7`;
+- source fidelity: `9ccc634279d96fc230bd9e05bbede616029e56bf498aa94d7b2d58ae74cd76f1`;
+- run row: `8e4c81c2b1813aaa435a51135f6f1ca0387c11d877419506f1fdd2de9da2fa80`.
+
+This is the desired mechanism: think once, bang once. The speedup did not come
+from making the parser faster. It came from making semantically complete input
+compile without caller-maintained ceremony.
+
+## One-shot replicated; native still owns this small fixture
+
+A second fresh caller exposed a distinct public-contract ambiguity. The task
+contained two exact replacements and one insertion. The model naturally put
+the replacements in top-level `edits`, put the insertion in `changes`, and
+combined both request languages. The schema refused before write. A second
+all-`changes` call succeeded, but complete wall rose to 121.066 seconds.
+
+The smallest ratchet did not add a hybrid transaction engine. The public
+contract now says that `edits` and `changes` are alternative request
+languages. If any action requires insertion, deletion, rename, map-entry
+insertion, or another heterogeneous operator, every action belongs in one
+`changes` array. The exact per-change guards remain unchanged.
+
+Two fresh Sol/high callers against that contract both compiled the complete
+decision into one successful call:
+
+| Current Surgeon replica | Correct | Wall | MCP calls | Refusals | Shell reads |
+|---|---:|---:|---:|---:|---:|
+| 1 | yes | 36.415s | 1 | 0 | 0 |
+| 2 | yes | 36.782s | 1 | 0 | 0 |
+| Median | 100% | 36.599s | 1 | 0 | 0 |
+
+The matched native control used the established native-read lane: one bounded
+source read followed by one `apply_patch`. Both replicas produced exact,
+parseable, meaning-preserving files on their first mutation attempt:
+
+| Native replica | Correct | Wall | Source reads | Patch calls | Failed mutations |
+|---|---:|---:|---:|---:|---:|
+| 1 | yes | 18.409s | 1 | 1 | 0 |
+| 2 | yes | 16.899s | 1 | 1 | 0 |
+| Median | 100% | 17.654s | 1 | 1 | 0 |
+
+On this small two-file, three-change fixture, native is the winner. Current
+Surgeon is 18.945 seconds slower and takes 2.07 times native wall. That result
+does not erase the compiler win: compared with its contradictory PRE contract,
+Surgeon removed four retry boundaries and cut 92.171 seconds to a replicated
+36.599-second one-shot route. It does locate the crossover. A small patch whose
+complete context fits in one bounded read does not repay the MCP schema and
+argument-materialization cost.
+
+Two earlier nominal native runs are excluded from the denominator. The generic
+no-skill prompt caused both callers to hunt for hidden Surgeon binaries; they
+eventually produced exact files in 140.860 and 260.445 seconds, but violated
+native isolation and used two patch attempts. The native-read lane is the
+credible control.
+
+The next performance claim must come from a decision where native mechanical
+state grows materially: more owners, more files, repeated exact structure, or
+an atomic semantic operation. Tolerant compilation remains valuable because it
+turns such a decision into one call, but this fixture is now a routing and
+safety regression, not a benchmark on which Surgeon should beat native.
+
+Retained evidence:
+
+- current Surgeon replica 1 events:
+  `26b9349737d20a4673e0684b80655eb95eb3eae165ec17686f8ee3d8487f2fc9`;
+- current Surgeon replica 2 events:
+  `8a3c77b9823918d22e90b49687a1c46f36ab886b8c45514996fd60eec6955ca5`;
+- native runs table:
+  `74d1f4aeeb6d4cb9ab2de14e73f1757edcc2c5ec85b8a46716be60b333d36855`;
+- native replica events:
+  `50ed15eb285eaa9d5e16e6d4817203086e5c5f242de9ba010e140f5962556c44`
+  and
+  `a19943f90b5d43b81a8ffe36eb6cc17d8ebb07b75b405e6cedcfed9c735ae58a`.
