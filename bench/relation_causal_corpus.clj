@@ -399,7 +399,7 @@
     (catch Exception error
       {:ok false :error (.getMessage error)})))
 
-(defn- compile-request [sources request]
+(defn compile-request [sources request]
   (let [public (public-schema-report request)
         routed-request (dissoc request "workspace_root")
         runtime (contract/validate-tool-params routed-request)
@@ -477,7 +477,7 @@
                     (:future-hashes-equal parity)
                     (:expected-future-hashes-equal parity)]))))
 
-(defn- load-fixture []
+(defn load-fixture []
   {:sources
    (into {}
          (map (fn [file]
