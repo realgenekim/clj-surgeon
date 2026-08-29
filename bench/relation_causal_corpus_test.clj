@@ -5,6 +5,7 @@
    [cheshire.core :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is run-tests testing]]
    [relation-causal-corpus :as corpus]))
 
@@ -56,8 +57,20 @@
                        (assoc flat "unexpected" true)))))
     (is (false? (:ok (corpus/public-schema-report
                        (dissoc relation "require_change")))))
-    (is (false? (:ok (corpus/public-schema-report
-                       (assoc flat "expect" {"changes" 51})))))))
+    (do
+      (is (false? (:ok (corpus/public-schema-report
+                         (assoc flat "expect" {"changes" 51})))))
+      (doseq [invented [{"workspace_root" workspace-root
+                         "changes" [flat]
+                         "representation" "N"}
+                        {"workspace_root" workspace-root
+                         "changes" [relation]
+                         "relations" true}
+                        {"workspace_root" workspace-root "R" relation}
+                        {"workspace_root" workspace-root
+                         "route" "R"
+                         "request" relation}]]
+        (is (false? (:ok (corpus/public-schema-report invented))))))))
 
 (deftest prompt-assignment-is-the-only-prompt-byte-difference
   (let [flat (corpus/prompt-material :N workspace-root)
@@ -77,7 +90,21 @@
     (is (= (:request flat) (edn/read-string (:request-edn flat))))
     (is (= (:request relation) (edn/read-string (:request-edn relation))))
     (is (= (:request flat) (json/parse-string (:request-json flat))))
-    (is (= (:request relation) (json/parse-string (:request-json relation))))))
+    (do
+      (is (= (:request relation) (json/parse-string (:request-json relation))))
+      (doseq [required ["Send one arguments object directly"
+                        "do not wrap it in changes, representation, relations, route, arm, N, R"
+                        "exact top-level fields for N are workspace_root, verify, edits, delete_owners"
+                        "exact top-level fields for R are workspace_root, verify, symbol_migration, require_change, edits, delete_owners"
+                        "Always include the explicit workspace_root and verify=exact"
+                        "replace only the repeated require-change and symbol-rewrite rows"
+                        "same bespoke edit explicit in edits"
+                        "same moved-owner deletion explicit in delete_owners"]]
+        (is (str/includes? (:prompt flat) required)))
+      (doseq [payload-fragment ["push-person-row"
+                                "src/sample/review_updates.clj"
+                                "chair-on-event?"]]
+        (is (not (str/includes? (:prompt flat) payload-fragment)))))))
 
 (deftest exact-profile-is-closed-and-bound-to-the-corpus
   (let [{:keys [profile-text]} (fixture)
