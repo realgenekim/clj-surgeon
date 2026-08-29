@@ -208,8 +208,8 @@ easy to omit. The compact editor may therefore accept a small closed set of
 explicit edit relations when each relation lowers mechanically into ordinary
 exact edits against the same frozen source snapshot.
 
-The first product slice admits two relations that a retained 51-edit/9-file
-cohort exercised independently:
+The first product slice admits one paired relation mode that a retained
+51-edit/9-file cohort exercised as one complete request:
 
 1. A symbol migration names one target alias, the fixed `preserve-name` rule,
    and ordered file groups of exact owner, old symbol, and match count rows. It
@@ -218,6 +218,14 @@ cohort exercised independently:
 2. A require change names one exact namespace/alias pair to add and an ordered
    file set whose entries may name one exact namespace/alias pair to remove. It
    derives the complete namespace-clause replacement from each frozen file.
+
+Both fields are required in this mode. Their ordered file sets must be
+identical, and the symbol migration's target alias must equal the alias added by
+the require change. A standalone symbol migration, standalone require change,
+or mismatched file set is outside the first slice and refuses before source
+capture. This preserves the exact model-visible checklist that earned 2/2
+first-call correctness and ensures the source-blind symbol rows establish every
+file needed by source-aware require compilation.
 
 Ordinary compact `edits` remain available for exceptions that do not fit either
 relation, and `delete_owners` remains the exact top-level deletion surface. One
@@ -259,10 +267,9 @@ The relation boundary is fail-closed:
 - the symbol relation supports only the declared `preserve-name` rule and
   accepts only one exact symbol token per row; it produces no replacement other
   than the stated alias plus that symbol's exact unqualified name;
-- in every migration file, the target alias must already name one direct
-  require entry in the frozen namespace or must be established by the same
-  request's require change; an absent alias or an alias bound to another
-  namespace refuses before write;
+- the target alias must be absent from every frozen migration namespace and
+  must be established in every one by the paired require change; an existing,
+  missing, or differently bound alias refuses before write;
 - each require addition must be absent from the frozen namespace, and each
   declared removal must identify exactly one direct require entry;
 - alias, namespace, reader-conditional, comment, or platform ambiguity refuses
