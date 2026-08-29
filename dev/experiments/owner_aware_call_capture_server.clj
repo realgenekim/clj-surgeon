@@ -30,7 +30,8 @@
 (defn capture-handler [capture-file]
   (let [calls (atom [])]
     (fn [_exchange params callback]
-      (let [call {:index (inc (count @calls))
+      (let [started (System/nanoTime)
+            call {:index (inc (count @calls))
                   :params params}
             observed (swap! calls conj call)]
         (write-json-atomically!
@@ -44,6 +45,7 @@
            :captured true
            :call_count (count observed)
            :source_unchanged true
+           :elapsed_ms (/ (- (System/nanoTime) started) 1000000.0)
            :next_action "none"})))))
 
 (defn capture-tool [arm capture-file]

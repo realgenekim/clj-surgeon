@@ -33,7 +33,9 @@
         (is (= 2 (count (get receipt "calls"))))
         (is (= 2 (get-in @callbacks [1 2 :call_count])))
         (is (false? (get-in @callbacks [0 1])))
-        (is (true? (get-in @callbacks [0 2 :source_unchanged]))))
+        (is (true? (get-in @callbacks [0 2 :source_unchanged])))
+        (is (number? (get-in @callbacks [0 2 :elapsed_ms])))
+        (is (not (neg? (get-in @callbacks [0 2 :elapsed_ms])))))
       (finally
         (.delete (io/file path))))))
 
