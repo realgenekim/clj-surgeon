@@ -105,7 +105,15 @@
           (is (false? (:ok (corpus/public-schema-report invented)))
               (name label))
           (is (false? (get-in compiled [:runtime-contract :ok]))
-              (name label)))))))
+              (name label)))))
+    (let [mis-scoped
+          (assoc-in relation ["edits" 0 "within"] {"namespace" true})
+          compiled (corpus/compile-request sources mis-scoped)]
+      (is (:ok (corpus/public-schema-report mis-scoped)))
+      (is (:ok (:runtime-contract compiled)))
+      (is (= :expect-count-mismatch
+             (get-in compiled [:compiled :error-type])))
+      (is (= 0 (get-in compiled [:compiled :actual-count]))))))
 
 (deftest prompt-assignment-is-the-only-prompt-byte-difference
   (let [flat (corpus/prompt-material :N workspace-root)
@@ -132,7 +140,10 @@
                         "exact top-level fields for N are workspace_root, verify, edits, delete_owners"
                         "exact top-level fields for R are workspace_root, verify, symbol_migration, require_change, edits, delete_owners"
                         "Always include the explicit workspace_root and verify=exact"
-                        "each edits row is {file,within:{namespace:true|form:<owner>},from,to,matches}"
+                        "each edits row is {file,within,from,to,matches}"
+                        "Use within:{namespace:true} only for namespace require-clause edits in N"
+                        "Use within:{form:<owner>} for every owner-scoped symbol or complete-form edit"
+                        "supplied bespoke owner-form replacement, in both N and R"
                         "each delete_owners row is {file,forms:[...]}"
                         "symbol_migration is one object with target_alias derived from the supplied target symbols"
                         "target_rule exactly \"preserve-name\""
