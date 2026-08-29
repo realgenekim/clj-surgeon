@@ -143,6 +143,7 @@
 (defn- validate-client-catalog [advertised registry expected-server]
   (let [advertised-tools (:tools advertised)
         client-tools (:tool-projection registry)
+        client-names (mapv :name client-tools)
         client-by-name (into {} (map (juxt :name identity)) client-tools)
         client-peer-tools (filterv #(not= "apply_clojure_changes" (:name %))
                                    client-tools)
@@ -155,7 +156,11 @@
               (= expected-server (:server registry))
               (= (vec (sort (map :name advertised-tools)))
                  (:tool-names registry))
+              (= client-names (:tool-names registry))
               (= (set (map :name advertised-tools)) (set (keys client-by-name)))
+              (= (count advertised-tools)
+                 (count client-tools)
+                 (count client-by-name))
               (= expected-client-peer-surface-sha256 peer-sha))
      :catalog-count (count client-tools)
      :client-peer-surface-sha256 peer-sha}))
@@ -362,7 +367,19 @@
                   :tool-projection client-tools}]
     (is (not= (mapv :name advertised-tools) (mapv :name client-tools)))
     (with-redefs [expected-client-peer-surface-sha256 peer-sha]
-      (is (:ok (validate-client-catalog advertised registry "clj-surgeon"))))))
+      (is (:ok (validate-client-catalog advertised registry "clj-surgeon")))
+      (is (false?
+            (:ok (validate-client-catalog
+                   advertised
+                   (assoc registry :tool-projection
+                          (vec (concat (rest client-tools)
+                                       [(first client-tools)])))
+                   "clj-surgeon"))))
+      (is (false?
+            (:ok (validate-client-catalog
+                   advertised
+                   (update registry :tool-projection conj (first client-tools))
+                   "clj-surgeon")))))))
 
 (deftest first-action-and-no-effect-falsifiers
   (is (:ok (route-evidence (synthetic-events []))))
