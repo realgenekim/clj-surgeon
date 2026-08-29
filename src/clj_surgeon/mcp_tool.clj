@@ -7,6 +7,7 @@
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-compact-location :as compact-location]
+   [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-formatter :as formatter]
@@ -182,16 +183,25 @@
 (defn- resolve-transaction-paths
   [project-root spec]
   (loop [changes (:changes spec)
-         resolved []]
+         resolved []
+         path-facts []]
     (if-let [change (first changes)]
-      (let [paths (mapv #(resolve-source-path project-root %) (:in change))
+      (let [raw-paths (:in change)
+            paths (mapv #(resolve-source-path project-root %) raw-paths)
             refusal (first (remove :ok paths))]
         (if refusal
-          refusal
+          (let [index (.indexOf paths refusal)]
+            (assoc refusal :raw-path (nth raw-paths index)))
           (recur (next changes)
                  (conj resolved
-                       (assoc change :in (mapv :path paths))))))
-      {:ok true :spec (assoc spec :changes resolved)})))
+                       (assoc change :in (mapv :path paths)))
+                 (into path-facts
+                       (map (fn [raw path]
+                              {:raw raw :path (:path path)})
+                            raw-paths paths)))))
+      {:ok true
+       :spec (assoc spec :changes resolved)
+       :path-facts path-facts})))
 
 (defn- resolve-extraction-paths
   [root {:keys [file to caller-changes ignored-caller-files expect] :as request}]
@@ -448,9 +458,63 @@
                  :program-changed-characters
                  (:changed-characters program-result)))))))
 
+(defn- resolve-spec-from-path-map [spec path-map]
+  (try
+    {:ok true
+     :spec
+     (update spec :changes
+             (fn [changes]
+               (mapv (fn [change]
+                       (update change :in
+                               (fn [paths]
+                                 (mapv (fn [path]
+                                         (or (get path-map path)
+                                             (throw
+                                               (ex-info
+                                                 "Final relation path widened beyond the captured universe"
+                                                 {:path path}))))
+                                       paths))))
+                     changes)))}
+    (catch clojure.lang.ExceptionInfo error
+      {:error (.getMessage error)
+       :error-type :compact-relation-path-conflict
+       :failed-stage :path-resolution
+       :path (:path (ex-data error))
+       :mutation-attempted false
+       :write-authority false
+       :source-unchanged true
+       :next-action "correct_request"})))
+
+(defn- prepare-relation-spec
+  [sources relation-plan path-map]
+  (let [raw-sources
+        (into {}
+              (map (fn [[raw canonical]] [raw (get sources canonical)]))
+              path-map)
+        frozen (compact-relations/compile-frozen raw-sources relation-plan)]
+    (if-not (:ok frozen)
+      frozen
+      (let [validated (contract/validate-tool-params (:request frozen))]
+        (if-not (:ok validated)
+          validated
+          (let [resolved
+                (resolve-spec-from-path-map
+                  (contract/tool-params->transaction (:params validated))
+                  path-map)]
+            (if-not (:ok resolved)
+              resolved
+              (let [prepared
+                    (compact-location/normalize-spec
+                      sources (:spec resolved)
+                      (:compact-location-normalization validated))]
+                (cond-> prepared
+                  (not (:error prepared))
+                  (assoc :compact-relation-normalization
+                         (:relation-normalization frozen)))))))))))
+
 (defn- execute-explicit-change!
   ;; @spec OP-ALG-MCP-001
-  [config root resolved receipt verify compact-location-plan]
+  [config root resolved receipt verify compact-location-plan relation-plan]
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
                           verify (:verification-profiles config)
@@ -482,6 +546,7 @@
        :source-unchanged true}
       (let [base-prepare! (:prepare-compiled! config)
             programs (:programs resolved)
+            relation-evidence (atom nil)
             prepare-compiled!
             (cond
               (seq programs)
@@ -493,15 +558,30 @@
                     with-programs)))
 
               :else base-prepare!)
+            relation-prepare
+            (when relation-plan
+              (fn [sources _spec]
+                (let [prepared
+                      (prepare-relation-spec
+                        sources relation-plan (:relation-path-map resolved))]
+                  (when-let [evidence (:compact-relation-normalization prepared)]
+                    (reset! relation-evidence evidence))
+                  prepared)))
             result (transaction/execute-mcp-change!
                      (cond-> {:spec (:spec resolved) :receipt-out receipt}
                        prepare-compiled!
                        (assoc :prepare-compiled!
                               #(prepare-compiled! project-root %))
 
-                       compact-location-plan
+                       relation-prepare
+                       (assoc :prepare-spec relation-prepare)
+
+                       (and compact-location-plan (nil? relation-prepare))
                        (assoc :prepare-spec
-                              #(compact-location/normalize-spec %1 %2 compact-location-plan))))]
+                              #(compact-location/normalize-spec %1 %2 compact-location-plan))))
+            result (cond-> result
+                     @relation-evidence
+                     (assoc :compact-relation-normalization @relation-evidence))]
         (if (or (:error result) (nil? verify))
           result
           (let [verification (cond
@@ -548,7 +628,8 @@
   [{:keys [project-root receipt-dir telemetry] :as config} params]
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
-                              [:edits :programs :delete_owners])
+                              [:edits :programs :delete_owners
+                               :symbol_migration :require_change])
         config (cond
                  (:verification-profile-selection-fn config)
                  (let [{:keys [profiles source]}
@@ -626,6 +707,11 @@
                              root
                              (contract/tool-params->transaction
                                (:params validated))))
+                         resolved
+                         (if-let [relation-plan (:compact-relation-plan validated)]
+                           (compact-relations/validate-path-resolution
+                             relation-plan resolved)
+                           resolved)
                          programs (get-in validated [:params :programs])]
                      {:root root
                       :resolved
@@ -639,7 +725,9 @@
                         resolved)}))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
-              (record-result! telemetry params resolved total-start
+              (record-result! telemetry params
+                              (contract/normalize-refusal resolved)
+                              total-start
                               {:validation_ms validation-ms
                                :confinement_ms confinement-ms})
               (let [directory (str (or receipt-dir (default-receipt-dir project-root)))
@@ -656,7 +744,8 @@
                               (execute-explicit-change!
                                 config root resolved receipt
                                 (get-in validated [:params :verify])
-                                (:compact-location-normalization validated))))
+                                (:compact-location-normalization validated)
+                                (:compact-relation-plan validated))))
                     classified (cond->
                                  (contract/classify-kernel-result
                                    (.toString root) result)

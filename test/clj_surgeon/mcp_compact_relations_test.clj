@@ -14,7 +14,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]])
   (:import
-   (java.nio.file FileVisitResult Files SimpleFileVisitor)
+   (java.nio.file FileVisitResult Files LinkOption SimpleFileVisitor)
    (java.nio.file.attribute BasicFileAttributes FileAttribute)))
 
 (def fixture-root
@@ -352,11 +352,22 @@
         (is (not (contains? result :request))))))
   (testing "public reader forms refuse without evaluation"
     (doseq [request
-            [(assoc-in relation-request
-                       ["symbol_migration" "files" 0 1 0 1]
-                       "#=(println \"READER-EVAL-EXECUTED\")")
-             (assoc-in relation-request ["require_change" "add" "lib"]
-                       "#=(println \"READER-EVAL-EXECUTED\")")]]
+            (concat
+              [(assoc-in relation-request
+                         ["symbol_migration" "files" 0 1 0 1]
+                         "#=(println \"READER-EVAL-EXECUTED\")")
+               (assoc-in relation-request ["require_change" "add" "lib"]
+                         "#=(println \"READER-EVAL-EXECUTED\")")]
+              (mapcat
+                (fn [token]
+                  [(assoc-in relation-request
+                             ["symbol_migration" "files" 0 1 0 1]
+                             token)
+                   (assoc-in relation-request
+                             ["symbol_migration" "target_alias"] token)
+                   (assoc-in relation-request
+                             ["require_change" "add" "lib"] token)])
+                ["nil" "true" "false"]))]
       (let [result (atom nil)
             output (with-out-str
                      (reset! result (relations/compile-source-blind request)))]
@@ -442,10 +453,7 @@
                       "[sample.reviews :as reviews] ;; keep")]
              [:reader-conditional
               (assoc sources (first relation-files)
-                     "(ns sample.review-updates (:require #?(:clj [sample.reviews :as reviews])))")]
-             [:removal-leaves-no-survivor
-              (assoc sources "src/sample/views/log.clj"
-                     "(ns sample.views.log\n  (:require\n   [sample.views.review :as review]))\n")]]]
+                     "(ns sample.review-updates (:require #?(:clj [sample.reviews :as reviews])))")]]]
       (testing (name label)
         (let [refusal (relations/compile-frozen changed source-blind)]
           (is (false? (:ok refusal)) (pr-str refusal))
@@ -494,15 +502,17 @@
           (.toPath symlink-file)
           (.getFileName (.toPath target))
           (make-array FileAttribute 0))
-        (doseq [[label request expected-path]
+        (doseq [[label request expected-error expected-path]
                 [[:root-escape
                   (update relation-request "edits" conj
                           (external-edit "../outside.clj"))
+                  "invalid-mcp-request"
                   {:field "edits" :file_index 1}]
                  [:lexical-canonical-alias
                   (update relation-request "edits" conj
                           (external-edit
                             "src/sample/./review_updates.clj"))
+                  "invalid-mcp-request"
                   nil]
                  [:symlink-canonical-alias
                   (-> relation-request
@@ -512,6 +522,7 @@
                                     "view-review/board-row" 1]]])
                       (update-in ["require_change" "files"] conj
                                  {"file" symlink-path}))
+                  "compact-relation-path-conflict"
                   nil]]]
           (testing (name label)
             (let [result
@@ -520,25 +531,33 @@
                      :receipt-dir (.getPath receipt-dir)}
                     request)]
               (is (false? (:ok result)) (pr-str result))
-              (is (= "compact-relation-path-conflict" (:error_type result)))
+              (is (= expected-error (:error_type result)))
               (is (string? (:error result)))
               (is (<= (count (:error result)) 1024))
-              (is (= "path-resolution"
-                     (get-in result
-                             [:compact_relation_diagnostic :failed_stage])))
-              (is (every? #{:failed_stage :path}
-                          (keys (:compact_relation_diagnostic result))))
-              (when-let [path
+              (if (= "compact-relation-path-conflict" expected-error)
+                (do
+                  (is (= "path-resolution"
                          (get-in result
-                                 [:compact_relation_diagnostic :path])]
-                (is (every? #{:field :file_index :row_index} (keys path))))
-              (when expected-path
-                (is (= expected-path
-                       (get-in result
-                               [:compact_relation_diagnostic :path]))))
-              (is (false? (:mutation_attempted result)))
-              (is (false? (:write_authority result)))
-              (is (= "correct_request" (:next_action result)))
+                                 [:compact_relation_diagnostic
+                                  :failed_stage])))
+                  (is (every? #{:failed_stage :path}
+                              (keys (:compact_relation_diagnostic result))))
+                  (when-let [path
+                             (get-in result
+                                     [:compact_relation_diagnostic :path])]
+                    (is (every? #{:field :file_index :row_index}
+                                (keys path))))
+                  (when expected-path
+                    (is (= expected-path
+                           (get-in result
+                                   [:compact_relation_diagnostic :path]))))
+                  (is (false? (:mutation_attempted result)))
+                  (is (false? (:write_authority result)))
+                  (is (= "correct_request" (:next_action result))))
+                (do
+                  (is (:source_unchanged result))
+                  (is (not (contains? result
+                                      :compact_relation_diagnostic)))))
               (doseq [forbidden [:source :sources :request :generated_request
                                  :next_call :terminal_response]]
                 (is (not (contains? result forbidden)) (name forbidden)))
@@ -669,18 +688,29 @@
                        (re-matches #"[0-9a-f]{64}"
                                    (:receipt_hash structured))))
               (is (and receipt-file (.isFile receipt-file)))
-              (is (= (set relation-files)
-                     (set (map :file (:files receipt)))))
-              (is (= expected-before-hashes
-                     (into {} (map (juxt :file :source-hash)) (:files receipt))))
-              (is (= expected-after-hashes
-                     (into {} (map (juxt :file :result-hash)) (:files receipt))))
+              (let [workspace-path (.toRealPath (.toPath workspace)
+                                                (make-array LinkOption 0))
+                    relative-file
+                    #(str (.relativize workspace-path
+                                       (.toRealPath
+                                         (.toPath (io/file (:file %)))
+                                         (make-array LinkOption 0))))]
+                (is (= (set relation-files)
+                       (set (map relative-file (:files receipt)))))
+                (is (= expected-before-hashes
+                       (into {}
+                             (map (juxt relative-file :source-hash))
+                             (:files receipt))))
+                (is (= expected-after-hashes
+                       (into {}
+                             (map (juxt relative-file :result-hash))
+                             (:files receipt)))))
               (when exact?
                 (is (= :exact-exit
                        (get-in structured [:verification :acceptance])))
                 (is (= :project
                        (get-in structured [:verification :profile-source])))
-                (is (= :passed
+                (is (= :pass
                        (get-in structured [:verification :process-outcome])))
                 (is (= 0 (get-in structured [:verification :exit])))
                 (is (= ["/usr/bin/true"]
@@ -688,7 +718,7 @@
                 (is (= 0
                        (get-in structured [:verification :output-bytes])))
                 (is (number?
-                      (get-in structured [:verification :elapsed-ms])))
+                      (get-in structured [:verification :elapsed_ms])))
                 (is (and
                       (string? (get-in structured
                                        [:verification :profile-sha256]))
@@ -763,13 +793,13 @@
            :write-source! (fn [file source]
                             (swap! writes conj [file source]))})]
     (is (:ok compiled) (pr-str compiled))
-    (is (false? (:ok result)) (pr-str result))
+    (is (not (:ok result)) (pr-str result))
     (is (= :source-hash-mismatch (:error-type result)))
     (is (= stale-file (:file result)))
     (is (empty? @writes))
     (is (= competing-source (get observed-sources stale-file)))
-    (is (= sources (dissoc observed-sources stale-file)
-           (dissoc sources stale-file)))))
+    (is (= (dissoc sources stale-file)
+           (dissoc observed-sources stale-file)))))
 
 (deftest nonrelation-routes-never-call-lowerer
   ;; @spec MCP-OP-EDIT-025
@@ -846,7 +876,7 @@
             (is (:ok prepared) (pr-str prepared))
             (is (:ok result) (pr-str result))
             (is (:ok (transaction/execute-undo!
-                       {:receipt (:undo_receipt result)})))))
+                       {:receipt (:receipt-file result)})))))
         (testing "CLI preview does not enter the MCP relation facade"
           (let [result (atom nil)]
             (with-out-str

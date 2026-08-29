@@ -39,22 +39,27 @@
 
 (def simple-symbol-pattern #"^[A-Za-z*+!_?<>=$%&.-][A-Za-z0-9*+!_?<>=$%&.-]*$")
 
+(def reserved-reader-tokens #{"nil" "true" "false"})
+
+(defn- simple-symbol-token? [value]
+  (and (string? value)
+       (not (contains? reserved-reader-tokens value))
+       (re-matches simple-symbol-pattern value)))
+
 (defn- simple-symbol! [value path]
-  (when-not (and (string? value)
-                 (re-matches simple-symbol-pattern value))
+  (when-not (simple-symbol-token? value)
     (fail! "Expected one nonblank unqualified Clojure symbol" path))
   value)
 
 (defn- namespace-symbol! [value path]
-  (when-not (and (string? value)
-                 (re-matches simple-symbol-pattern value))
+  (when-not (simple-symbol-token? value)
     (fail! "Expected one exact namespace symbol" path))
   value)
 
 (defn- migration-symbol! [value path]
   (let [parts (when (string? value) (str/split value #"/" -1))]
     (when-not (and (#{1 2} (count parts))
-                   (every? #(re-matches simple-symbol-pattern %) parts))
+                   (every? simple-symbol-token? parts))
       (fail! "Expected one exact Clojure symbol" path))
     (symbol value)))
 
@@ -80,9 +85,34 @@
     path (assoc :path path)))
 
 (defn- request-files [request]
-  (let [literal (mapv #(get % "file") (or (get request "edits") []))
+  (let [literal (mapcat #(if-let [file (get % "file")]
+                           [file]
+                           (or (get % "files") []))
+                        (or (get request "edits") []))
         deletions (mapv #(get % "file") (or (get request "delete_owners") []))]
     (vec (distinct (concat literal deletions)))))
+
+(defn- request-file-origins [request migration-files]
+  (vec
+    (concat
+      (map-indexed (fn [index {:keys [file]}]
+                     {:raw file
+                      :path ["symbol_migration" "files" index 0]})
+                   migration-files)
+      (mapcat
+        (fn [index edit]
+          (if-let [file (get edit "file")]
+            [{:raw file :path ["edits" index "file"]}]
+            (map-indexed
+              (fn [file-index file]
+                {:raw file :path ["edits" index "files" file-index]})
+              (or (get edit "files") []))))
+        (range) (or (get request "edits") []))
+      (map-indexed
+        (fn [index deletion]
+          {:raw (get deletion "file")
+           :path ["delete_owners" index "file"]})
+        (or (get request "delete_owners") [])))))
 
 (defn- deletion-count [request]
   (reduce + 0 (map #(count (get % "forms"))
@@ -262,8 +292,8 @@
                                 {:relation-error-type :compact-relation-overlap
                                  :failed-stage :relation-composition})))
             ordinary-request (dissoc request "symbol_migration" "require_change")
-            declared-files (vec (distinct (concat relation-file-vector
-                                                  (request-files ordinary-request))))
+            origins (request-file-origins request (:files migration))
+            declared-files (vec (distinct (map :raw origins)))
             migration-rows (count generated)
             symbol-matches (reduce + 0 (map #(get % "matches") generated))]
         {:ok true
@@ -273,6 +303,7 @@
          :generated-symbol-edits generated
          :relation-files relation-file-vector
          :declared-files declared-files
+         :file-origins origins
          :relation-normalization
          {:version 1
           :relations ["symbol_migration" "require_change"]
@@ -289,6 +320,55 @@
             (or (:relation-error-type data) :invalid-compact-relation)
             (or (:failed-stage data) :relation-admission)
             (.getMessage error) (:path data)))))))
+
+(defn validate-path-resolution
+  "Prove that one existing resolver result gives each raw relation path one canonical identity."
+  [source-blind resolution]
+  ;; @spec MCP-OP-EDIT-022
+  (if-not (:ok resolution)
+    (let [raw (:raw-path resolution)
+          path (some #(when (= raw (:raw %)) (:path %))
+                     (:file-origins source-blind))]
+      (relation-refusal :compact-relation-path-conflict :path-resolution
+                        (or (:error resolution)
+                            "A relation path is outside the workspace")
+                        path))
+    (let [facts (:path-facts resolution)
+          declared (set (map :raw (:file-origins source-blind)))
+          observed (set (map :raw facts))
+          bad-path (some #(when (or (nil? (:path %))
+                                    (str/blank? (str (:path %))))
+                            %)
+                         facts)
+          raw-collision
+          (some (fn [[raw grouped]]
+                  (let [paths (vec (distinct (map :path grouped)))]
+                    (when (< 1 (count paths))
+                      {:raw raw :paths paths})))
+                (group-by :raw facts))
+          canonical-collision
+          (some (fn [[canonical grouped]]
+                  (let [raws (vec (distinct (map :raw grouped)))]
+                    (when (< 1 (count raws))
+                      {:canonical canonical :raws raws})))
+                (group-by :path facts))
+          problem (cond
+                    (not= declared observed)
+                    {:raw (or (first (set/difference declared observed))
+                              (first (set/difference observed declared)))}
+                    bad-path {:raw (:raw bad-path)}
+                    raw-collision raw-collision
+                    canonical-collision {:raw (second (:raws canonical-collision))})]
+      (if problem
+        (let [raw (:raw problem)
+              path (some #(when (= raw (:raw %)) (:path %))
+                         (:file-origins source-blind))]
+          (relation-refusal :compact-relation-path-conflict :path-resolution
+                            "Relation path evidence is incomplete or non-injective"
+                            path))
+        (assoc resolution
+               :relation-path-map
+               (into {} (map (juxt :raw :path)) facts))))))
 
 (defn- node-contains-comment? [node]
   (boolean (some #(= :comment (n/tag %))
@@ -374,35 +454,35 @@
             _ (when (and remove (not= 1 (count remove-positions)))
                 (fail! "Declared removal must match exactly one direct libspec"
                        ["require_change" "files" file-index "remove"]))
-            _ (when (and remove (= 1 (count entries)))
-                (fail! "One direct libspec must survive a declared removal"
-                       ["require_change" "files" file-index "remove"]))
+            only-removed? (and remove (= 1 (count entries)))
             target (target-node add)
             changed-children
-            (let [without-removal
-                  (if-not remove
-                    children
-                    (let [position (first remove-positions)
-                          entry-index (get entry-indexes position)
-                          [start end]
-                          (if (zero? position)
-                            [entry-index (dec (get entry-indexes 1))]
-                            [(inc (get entry-indexes (dec position))) entry-index])]
-                      (remove-range children start end)))
-                  remaining-entry-indexes
-                  (vec (keep-indexed
-                         (fn [index node]
-                           (when (entry-facts node) index))
-                         without-removal))
-                  last-index (last remaining-entry-indexes)
-                  previous-index (or (last (butlast remaining-entry-indexes)) 0)
-                  separator (subvec without-removal
-                                    (inc previous-index) last-index)]
-              (when (empty? separator)
-                (fail! "A unique whitespace separator is required"
-                       ["require_change" "files" file-index]))
-              (insert-after without-removal last-index
-                            (conj (vec separator) target)))
+            (if only-removed?
+              (assoc children (first entry-indexes) target)
+              (let [without-removal
+                    (if-not remove
+                      children
+                      (let [position (first remove-positions)
+                            entry-index (get entry-indexes position)
+                            [start end]
+                            (if (zero? position)
+                              [entry-index (dec (get entry-indexes 1))]
+                              [(inc (get entry-indexes (dec position))) entry-index])]
+                        (remove-range children start end)))
+                    remaining-entry-indexes
+                    (vec (keep-indexed
+                           (fn [index node]
+                             (when (entry-facts node) index))
+                           without-removal))
+                    last-index (last remaining-entry-indexes)
+                    previous-index (or (last (butlast remaining-entry-indexes)) 0)
+                    separator (subvec without-removal
+                                      (inc previous-index) last-index)]
+                (when (empty? separator)
+                  (fail! "A unique whitespace separator is required"
+                         ["require_change" "files" file-index]))
+                (insert-after without-removal last-index
+                              (conj (vec separator) target))))
             from (z/string require-loc)
             to (n/string (n/list-node changed-children))]
         {"file" (:file file-spec)
