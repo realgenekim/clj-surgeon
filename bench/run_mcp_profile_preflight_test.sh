@@ -3,7 +3,17 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 test_root=$(mktemp -d /tmp/clj-surgeon-mcp-profile-preflight.XXXXXX)
-trap 'rm -rf "$test_root"' EXIT
+
+cleanup() {
+  local status=$?
+  if [ "$status" -eq 0 ]; then
+    rm -rf "$test_root"
+  else
+    printf 'MCP profile preflight evidence retained after failure: %s\n' \
+      "$test_root" >&2
+  fi
+}
+trap cleanup EXIT
 
 commit=$(git -C "$repo_root" rev-parse HEAD)
 
