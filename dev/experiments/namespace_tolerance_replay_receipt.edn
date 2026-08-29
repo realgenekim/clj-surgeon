@@ -1,0 +1,95 @@
+{:schema :clj-surgeon.namespace-tolerance-replay-receipt/v1
+ :integration-head "3e4a05e77c3abb523437e9430d73b524320e2780"
+ :capture-root "/tmp/clj-surgeon-namespace-replay.1Uggqs"
+ :capture-count 8
+ :capture-sha256
+ {"01-control" "2942a32a06d68c45d436ce8cc47159434fde2908d9c5f19a8e046c297fafc3b9"
+  "02-candidate" "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"
+  "03-candidate" "e3e487cfce6bed40cbd59793c9cae35144044335bfef9d5d44f8019fef994c9b"
+  "04-control" "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
+  "05-candidate" "7e627736baffed2c04fe4c1a8cd7f8edb2cf6be15493a1e0c67abf0b57152506"
+  "06-control" "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
+  "07-control" "368cae1fe8895356965e86a127625338d706aa8c32b6fa7e404ff421643965e9"
+  "08-candidate" "4934cb85fc74c161ae321bd55d5ee0134c1647d2cefc6fa00bb38e524628ce31"}
+ :candidate-symbol-migration
+ {:expanded-before-tolerance true
+  :candidate-runs 4
+  :owner-rows-each 23
+  :declared-matches-each 27
+  :preserved true}
+ :original-two-law-claim
+ {:exact-futures 7
+  :run-count 8
+  :all-eight-exact false
+  :recovered-by-law {:law-a 6 :law-b 1}
+  :law-a-lowered-edits 54
+  :law-b-lowered-edits 18
+  :residual
+  {:run "01-control"
+   :lowered {:law-b 9 :unchanged 24}
+   :validator-ok false
+   :error-type :invalid-mcp-request
+   :error-path ["edits" 9]
+   :reason :non-namespace-missing-within}}
+ :optional-law-c-claim
+ {:classification :separate-new-injective-law
+  :exact-futures 8
+  :run-count 8
+  :all-eight-exact true
+  :rescued-run "01-control"
+  :lowered-on-rescued-run {:law-b 9 :law-c 1 :unchanged 23}
+  :each-green-run {:validator-ok true
+                   :compiler-ok true
+                   :match-count 51
+                   :changed-file-count 9
+                   :future-hashes-equal-capsule true}}
+ :falsifiers
+ {:two-law
+  {:wrong-namespace true
+   :competing-owner true
+   :multiple-namespaces true
+   :reader-conditional-namespace true
+   :non-namespace-missing-within true
+   :stale-count true
+   :mismatched-clause-kind true
+   :empty-files true
+   :multiple-files true
+   :file-and-files true}
+  :law-c
+  {:zero-occurrences true
+   :many-occurrences true
+   :anonymous-owner true
+   :different-kind true
+   :different-name true
+   :nested-only-occurrence true
+   :stale-count true}}
+ :artifact-sha256
+ {"dev/experiments/namespace_tolerance_replay.clj"
+  "6eb613bea2be485538c0e9ac55eb9e15f073fdaa59526c929a6a0e71ec9f9f73"
+  "dev/experiments/namespace_tolerance_replay_test.clj"
+  "0649ba42cadc07a2f92876775a3e69fb94116b7e1f573dbbec6a8289c31f5552"}
+ :verification
+ {:targeted {:tests 4 :assertions 35 :failures 0 :errors 0}
+  :test-fast {:tests 636 :assertions 5467 :failures 0 :errors 0}
+  :mcp-test-cold-rerun {:tests 269 :assertions 2284 :failures 0 :errors 0}
+  :clj-kondo {:errors 0 :warnings 0}
+  :standalone-nrepl
+  {:user-dir "/private/tmp/clj-surgeon-namespace-tolerance.GJqo78/worktree"
+   :capture-count 8
+   :two-law-exact 7
+   :law-c-exact 8
+   :all-falsifiers-refuse true
+   :green true}
+  :first-mcp-test
+  {:status :environmentally-invalid
+   :reason :experiment-standalone-nrepl-was-still-running
+   :failures 2
+   :corrective-action :stopped-standalone-nrepl-and-reran-cold}}
+ :scope
+ {:model-calls 0
+  :mutation-actions 0
+  :fixture-source-mutations 0
+  :product-code-changes 0
+  :schema-changes 0
+  :install-reload-or-shared-mcp-actions 0}
+ :green true}
