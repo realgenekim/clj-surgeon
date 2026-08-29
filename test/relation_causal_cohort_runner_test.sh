@@ -22,14 +22,36 @@ new_repo() {
   root="$test_root/$name"
   mkdir -p "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup"
   cp "$source_script" "$root/bench/run_relation_causal_cohort.sh"
+  printf '{}\n' > "$root/deps.edn"
+  printf '{}\n' > "$root/bb.edn"
+  printf '{}\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/capsule.edn"
+  printf 'task\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt"
   printf 'profile\n' > "$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/exact-profile.edn"
+  local phase relative fixture_file
+  for phase in before after; do
+    for relative in \
+      src/sample/review_updates.clj \
+      src/sample/views/log.clj \
+      src/sample/views/people.clj \
+      src/sample/views/review.clj \
+      test/sample/board_test.clj \
+      test/sample/reviews_test.clj \
+      test/sample/status_workflow_test.clj \
+      test/sample/views_test.clj \
+      test/sample/voting_policy_test.clj; do
+      fixture_file="$root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/$phase/$relative"
+      mkdir -p "$(dirname "$fixture_file")"
+      printf '%s %s\n' "$phase" "$relative" > "$fixture_file"
+    done
+  done
   cat > "$root/bench/run_clean_codex.sh" <<'WORKER'
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p "$BENCH_RESULT_DIR"
-printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
   "$BENCH_RESULT_DIR" "$BENCH_RUN_MATRIX" "$BENCH_TASKS" \
   "$BENCH_REPLICATES" "$BENCH_PARALLELISM" "$BENCH_MCP_TOOL_PROFILE" \
+  "$BENCH_MODEL" "$BENCH_REASONING" \
   >> "$FAKE_CALL_LOG"
 printf 'run_id\tstate\nretained\tstarted\n' > "$BENCH_RESULT_DIR/runs.tsv"
 if [ "${FAKE_FAIL_BLOCK:-}" = "$(basename "$BENCH_RESULT_DIR")" ]; then
@@ -71,6 +93,10 @@ for cell in $BENCH_RUN_MATRIX; do
   jq -nc \
     '{type:"item.completed",item:{id:"call",type:"mcp_tool_call",server:"clj-surgeon",tool:"apply_clojure_changes",status:"completed",result:{structured_content:{verification_complete:true,next_action:"none"}}}}' \
     >> "$run_dir/events.jsonl"
+  printf 'frozen prompt\n' > "$run_dir/prompt.txt"
+  jq -nc \
+    '{ok:true,"tool-names":["apply_clojure_changes"],"tool-projection":[{name:"apply_clojure_changes"}],"codex-executable":"/usr/bin/false"}' \
+    > "$run_dir/codex-mcp-registry.json"
   printf '0\t1000000\t1000\t100\n1\t2000000\t2000\t100\n' > "$run_dir/event-clock.tsv"
   printf 'run_id\t%s\nstate\tcompleted\nexit_code\t0\n' "$run_id" > "$run_dir/terminal.tsv"
   if [ "${FAKE_WORKSPACE_MODE:-}" = deleted ]; then
@@ -120,7 +146,12 @@ SCORER
       shasum -a 256 bench/run_relation_causal_cohort.sh
       shasum -a 256 bench/run_clean_codex.sh
       shasum -a 256 bench/fake_scorer.sh
-      shasum -a 256 bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/exact-profile.edn
+      shasum -a 256 deps.edn
+      shasum -a 256 bb.edn
+      while IFS= read -r fixture_file; do
+        shasum -a 256 "$fixture_file"
+      done < <(find bench/fixtures/edit_portfolio/submission-row-extraction-cleanup \
+        -type f -print | sort)
     } > artifacts.sha256
     git add artifacts.sha256
     git commit -qm manifest
@@ -200,6 +231,36 @@ test_output_and_settings_refuse() {
     fail 'parallel execution was accepted'
   fi
   assert_contains "$root/parallel.out" 'BENCH_PARALLELISM must be exactly: 1'
+  if invoke "$root" "$test_root/wrong-model" \
+      BENCH_MODEL=gpt-5.6-terra >"$root/model.out" 2>&1; then
+    fail 'wrong model was accepted'
+  fi
+  assert_contains "$root/model.out" 'BENCH_MODEL must be exactly: gpt-5.6-sol'
+  if invoke "$root" "$test_root/wrong-reasoning" \
+      BENCH_REASONING=medium >"$root/reasoning.out" 2>&1; then
+    fail 'wrong reasoning was accepted'
+  fi
+  assert_contains "$root/reasoning.out" 'BENCH_REASONING must be exactly: high'
+}
+
+test_incomplete_fixture_manifest_refuses() {
+  local root output
+  root=$(new_repo incomplete-fixture-manifest)
+  output="$test_root/incomplete-fixture-manifest-output"
+  grep -v 'submission-row-extraction-cleanup/task.txt$' \
+    "$root/artifacts.sha256" > "$root/artifacts.sha256.next"
+  mv "$root/artifacts.sha256.next" "$root/artifacts.sha256"
+  (
+    cd "$root"
+    git add artifacts.sha256
+    git commit -qm 'omit task fixture'
+  )
+  if invoke "$root" "$output" >"$root/run.out" 2>&1; then
+    fail 'incomplete fixture manifest was accepted'
+  fi
+  assert_contains "$root/run.out" \
+    'Artifact manifest omits fixture path: bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt'
+  [ ! -e "$root/calls.log" ] || fail 'worker ran after incomplete fixture manifest'
 }
 
 test_child_failure_is_retained_without_retry() {
@@ -286,6 +347,13 @@ test_passing_boundary_executes_both_blocks_once() {
   [ "$(cut -f4 "$root/calls.log" | sort -u)" = 1 ] || fail 'replicates differ'
   [ "$(cut -f5 "$root/calls.log" | sort -u)" = 1 ] || fail 'parallelism differs'
   [ "$(cut -f6 "$root/calls.log" | sort -u)" = apply ] || fail 'tool profile differs'
+  [ "$(cut -f7 "$root/calls.log" | sort -u)" = gpt-5.6-sol ] \
+    || fail 'model differs'
+  [ "$(cut -f8 "$root/calls.log" | sort -u)" = high ] \
+    || fail 'reasoning differs'
+  [ -s "$output/environment.edn" ] || fail 'environment receipt is missing'
+  assert_contains "$output/environment.edn" ':model "gpt-5.6-sol"'
+  assert_contains "$output/environment.edn" ':reasoning "high"'
   assert_contains "$output/coordinator-receipt.edn" ':state :complete'
   assert_contains "$output/coordinator-receipt.edn" ':stage :complete'
 }
@@ -304,6 +372,7 @@ test_real_scorer_loads_with_coordinator_classpath() {
 
 test_wrong_and_dirty_identity_refuse
 test_output_and_settings_refuse
+test_incomplete_fixture_manifest_refuses
 test_child_failure_is_retained_without_retry
 test_block1_gate_stops_and_retains
 test_workspace_identity_refuses
