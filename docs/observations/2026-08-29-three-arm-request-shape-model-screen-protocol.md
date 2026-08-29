@@ -16,8 +16,8 @@ The three arms are:
 
 - **F, flat control:** current canonical `edits` plus `delete_owners`;
 - **A, file groups:** current tool plus closed `file_groups` expansion;
-- **B, closed relations:** current tool plus owner-aware symbol relations and
-  one frozen-source require delta.
+- **B, closed relations:** current tool plus Faraday's accepted
+  `symbol_migration` rows verbatim and one frozen-source `require_change`.
 
 This is a call-construction screen. The capture server records the first
 arguments and writes no project source. The real offline compiler remains the
@@ -39,11 +39,17 @@ Retained 03-B payload measurements:
 |---|---:|---:|
 | F, flat | 6,353 | baseline |
 | A, file groups | 5,189 | 18.3% |
-| B, closed relations plus require delta | 3,600 | 43.3% |
+| provisional B screen, alternative relation spelling plus require delta | 3,600 | 43.3% |
 
 Every materialized shape re-expanded to the exact retained multiset of 33 edit
 rows. That is 37 edit matches plus 14 exact owner deletions: 51 matches across
 9 files.
+
+The 3,600-byte result is a conservative shape-screen datum, not the byte count
+for the candidate that may run. The exact B candidate reuses Faraday's smaller,
+already-accepted `symbol_migration` language and adds only `require_change`.
+Its fresh serialized byte count must be measured and retained when that
+candidate becomes immutable; do not copy 3,600 into its result.
 
 ## Faraday dependency and non-overlap law
 
@@ -113,7 +119,7 @@ provenance difference invalidates the run before model launch.
 
 The prompt is identical across arms. It names the complete semantic decision
 and says to call the single tool exactly once. It must not contain
-`file_groups`, `symbol_rewrites`, `require_change`, or candidate examples.
+`file_groups`, `symbol_migration`, `require_change`, or candidate examples.
 
 ### F: flat control surface
 
@@ -169,33 +175,32 @@ Add only these two closed properties to the control tool:
       }
     ]
   },
-  "symbol_rewrites": [
-    {
-      "file": "src/sample/review_updates.clj",
-      "from_prefix": "review/",
-      "to_prefix": "submission-row/",
-      "owners": [
-        {
-          "form": "record-submission-row",
-          "symbols": [{"name": "row-controls*"}]
-        }
-      ]
-    }
-  ]
+  "symbol_migration": {
+    "target_alias": "submission-row",
+    "target_rule": "preserve-name",
+    "columns": ["owner", "from", "matches"],
+    "files": [
+      ["src/sample/views/log.clj", [
+        ["describe-rating", "review/fmt-stars", 3]
+      ]]
+    ]
+  }
 }
 ```
 
 The public-realistic candidate retains flat `edits` for the one bespoke owner
 replacement and retains the existing exact deletion group. It exposes B, but
-does not expose A. It must reuse Faraday's accepted owner-aware row language
-instead of inventing another owner table.
+does not expose A. It reuses Faraday's accepted `symbol_migration` row language
+verbatim. A second `symbol_rewrites` property or alternative owner table is a
+protocol violation.
 
 The run is treatment-adherent only when the first call contains:
 
 - one add target;
 - nine require files and exactly three declared removals;
-- nine symbol file groups;
-- twenty owner groups and twenty-three symbol names;
+- nine `symbol_migration` file groups;
+- twenty-three ordered owner/from/count rows and twenty-seven declared symbol
+  matches;
 - one retained complete owner edit;
 - the exact fourteen-owner deletion group.
 
@@ -209,7 +214,7 @@ choice that the flat oracle supplied:
 | Decision | Must remain model-authored | May be compiled mechanically |
 |---|---|---|
 | changed files | all 9 exact paths | repeated file fields |
-| symbol sites | all 20 owners and 23 old names | repeated prefixes and complete from/to strings |
+| symbol sites | all 23 ordered owner/from/count rows and 27 declared matches | target alias and complete to strings under exact `preserve-name` |
 | cardinality | all 3 non-default counts; defaults are exactly 1 | insertion of default `matches: 1` |
 | new namespace | exact lib and alias | repeated require entry text |
 | old namespaces | all 3 exact lib/alias removals | lookup of the declared entry in frozen clauses |
@@ -370,7 +375,7 @@ Pure protocol checks passed:
 
 - `F A B B A F` contains two runs per arm;
 - each arm's positions sum to 7 and have mean position 3.5;
-- the frozen task contains none of `file_groups`, `symbol_rewrites`, or
+- the frozen task contains none of `file_groups`, `symbol_migration`, or
   `require_change`;
 - the request-shape screen still expands both retained candidate payloads to
   the exact canonical edit multiset;
