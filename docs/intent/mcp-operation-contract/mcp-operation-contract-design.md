@@ -574,6 +574,104 @@ with a null caller-owned hole. The template names that exact path and publishes
 `next_call`; after the caller supplies valid syntax, the ordinary request starts
 validation again with no inherited authority.
 
+## Injective Compact Location Normalization
+
+The compact `edits` request language may accept three alternate spellings of an
+otherwise explicit edit location. This is representation tolerance, not owner
+selection. Each accepted spelling must prove one structural address from the
+request and the frozen source snapshot. If the proof is incomplete, the
+ordinary request refuses before write.
+
+The normalizer belongs only to the compact edit compiler used by
+`edit_clojure` and the `edits` branch of `apply_clojure_changes`. It does not
+change generic direct `changes`, retained-basis changes, extraction, computed
+programs, or CLI `:forms` semantics. A source-blind JSON adapter may preserve an
+omitted location, but it cannot infer or default that location. The pure
+normalizer runs after all target source bytes have been captured once and
+before the unchanged generic transaction compiler resolves explicit owners.
+
+```text
+compact edit request
+  -> source-blind shape validation
+  -> one frozen source capture
+  -> pure compact location normalization
+       -> explicit named-owner or namespace selector
+       -> typed pre-write refusal
+  -> unchanged direct transaction compiler
+  -> existing parse, atomic write, read-back, receipt, and rollback
+```
+
+The normalizer receives the complete compact request, canonical file selector,
+parsed `from` and `to` forms, declared positive match count, and frozen source
+map. It returns an ordinary request with an explicit location plus bounded
+normalization evidence. It never writes, formats, invokes semantic tooling, or
+retains authority. The generic compiler revalidates the emitted request and
+remains the mutation authority.
+
+### Relation A: exact namespace name in named-owner position
+
+If `within.form` resolves exactly one named owner, that owner remains
+authoritative and no fallback runs. If it resolves more than one owner, the
+request refuses as ambiguous. Only when it resolves zero named owners may the
+normalizer compare the supplied string with the parsed name of the file's one
+direct namespace owner. Exact equality emits explicit namespace scope. Zero or
+several namespace owners, a different name, or reader-conditional ownership
+refuses.
+
+### Relation B: complete namespace clause without a location
+
+An omitted location may become namespace scope only when all of the following
+are true:
+
+- the edit identifies exactly one supported Clojure source file, either as
+  `file` or a singleton `files` vector;
+- `from` and `to` each parse as one complete list-shaped namespace clause with
+  the same recognized clause keyword;
+- the file has exactly one direct namespace owner;
+- the declared match count equals the number of lossless `from` fingerprints
+  among the namespace's direct clause children;
+- the namespace-descendant count and whole-file count equal that direct-child
+  count, proving that no nested or external lookalike competes; and
+- no reader-conditional or platform ambiguity owns the selected clause.
+
+Inside that complete proof, a singleton `files` vector becomes the identical
+scalar `file`. A different clause kind, detached comment, malformed form,
+nested-only match, competing equal subtree, stale fingerprint, or count
+mismatch leaves the request unnormalized and therefore refused by the compact
+contract.
+
+### Relation C: complete named top-level owner without a location
+
+An omitted location may become named-owner scope only when all of the following
+are true:
+
+- the edit identifies exactly one supported Clojure source file;
+- `matches` is exactly one;
+- `from` and `to` each parse as one complete named top-level form;
+- both forms have the same owner kind and exact owner name;
+- the frozen file has exactly one corresponding direct owner; and
+- that owner's complete lossless fingerprint equals `from`.
+
+The complete fingerprint, not kind and name alone, is the stale-source guard.
+It retains comments, metadata, reader macros, and token spelling while ignoring
+only insignificant whitespace according to the existing transaction kernel.
+An anonymous form, renamed owner, changed owner kind, nested lookalike,
+duplicate owner, reader-conditional ambiguity, or stale count refuses.
+
+### Result evidence and atomic refusal
+
+Successful normalization reports the edit identity or index, the relation used,
+the requested location shape, and the emitted explicit location. It reports no
+source body and grants no authority beyond the ordinary transaction that
+rechecks it. A request containing several edits may use several relations, but
+all locations compile against one frozen source map. If one edit cannot be
+proved, the complete transaction refuses before mutation; successful sibling
+normalizations do not create partial write authority or an executable retry.
+
+Omitted `within` never means root scope. Similarity, edit distance, source
+proximity, a unique lexical hint, or a sole remaining candidate never satisfies
+these relations. EDN root-scoped edits retain their existing explicit contract.
+
 ## Compact Root-Scoped Data Edits
 
 `edit_clojure` admits `.edn` only for an exact literal edit whose location is
@@ -613,6 +711,7 @@ existing lossless transaction contract.
 | Exact repository verifier | Project-owned `"exact"` profile with `:acceptance :exact-exit`; execute one closed argv after candidate read-back | Arbitrary request command; generic `verify=fast`; clj-kondo diagnostic delta; external second action | It deletes one model boundary without changing file scope, warning policy, command arguments, or rollback authority. |
 | EDN edit scope | Exact root-scoped literal edits, optionally grouped across explicit files | Extension allowlist only; all structural operations; native patch only | Root scope reuses the lossless transaction kernel while preventing namespace/owner claims that EDN cannot support. |
 | Selector recovery | Per-failed-owner bounded hypotheses with no automatic selection | Aggregate candidates, automatic fuzzy selection, or immediate retained continuation | One refusal gives the model enough real structure for an exact retry without letting presentation rank become authority. |
+| Compact location tolerance | Three compact-only injective relations over one frozen snapshot, lowered to explicit generic selectors | Global namespace fallback; root-scope default; fuzzy owner selection; source-blind inference | The accepted spellings recover observed model mistakes while every zero/many, stale, nested, or competing case remains a pre-write refusal and generic CLI/direct semantics do not widen. |
 
 ## Open Questions & Future Decisions
 
