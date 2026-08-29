@@ -164,6 +164,13 @@
         (is (= 1 (:changes result)))
         (is (= 1 (:edits result)))
         (is (= 1 (:files result)))
+        (is (= #{:version :sha256 :files :effects}
+               (set (keys (:canonical_effect_identity result)))))
+        (is (= 1 (get-in result [:canonical_effect_identity :files])))
+        (is (= 1 (get-in result [:canonical_effect_identity :effects])))
+        (is (re-matches #"[0-9a-f]{64}"
+                        (get-in result
+                                [:canonical_effect_identity :sha256])))
         (is (= {:ignored ["expect"]
                 :reason "editor counts are derived"}
                (:input_normalization result)))
@@ -178,12 +185,45 @@
                       request)]
           (is (false? (:ok stale)))
           (is (= "expect-count-mismatch" (:error_type stale)))
+          (is (not (contains? stale :canonical_effect_identity)))
           (is (:source_unchanged stale))
           (is (= after (slurp source-file))))
         (let [undo (transaction/execute-undo!
                      {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (is (= before (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest canonical-effect-identity-refuses-prewrite-through-public-route
+  (let [workspace (temp-dir)
+        receipt-dir (io/file workspace "receipts")
+        source-file (io/file workspace "src/demo.clj")
+        before "(ns demo)\n(defn route-event [] :done)\n"
+        request
+        {"edits"
+         [{"file" "src/demo.clj"
+           "within" {"form" "route-event"}
+           "from" ":done"
+           "to" ":complete"}]}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file before)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath receipt-dir)
+               :prepare-compiled! (fn [_ compiled]
+                                    (dissoc compiled :validated))}
+              request)]
+        (is (false? (:ok result)))
+        (is (= "invalid-canonical-effect-input" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result)))
+        (is (false? (:write_authority result)))
+        (is (not (contains? result :canonical_effect_identity)))
+        (is (= before (slurp source-file)))
+        (is (not (.exists receipt-dir))))
       (finally
         (delete-tree! workspace)))))
 
@@ -344,6 +384,7 @@
               (assoc-in request ["programs" 0 "expect" "matches"] 2))]
         (is (false? (:ok refused)))
         (is (= "expected-count-mismatch" (:error_type refused)))
+        (is (not (contains? refused :canonical_effect_identity)))
         (is (:source_unchanged refused))
         (doseq [relative ["src/bench/app_shell.clj"
                           "src/bench/source_reader.clj"]]
@@ -357,6 +398,8 @@
         (is (:verification_complete result))
         (is (= 6 (:edits result)))
         (is (= 2 (:files result)))
+        (is (not (contains? result :canonical_effect_identity))
+            "program-backed compact batches remain outside the first identity slice")
         (doseq [relative ["src/bench/app_shell.clj"
                           "src/bench/source_reader.clj"]]
           (is (= (slurp (io/file fixture-root "after" relative))

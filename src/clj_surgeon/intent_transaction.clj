@@ -1226,6 +1226,243 @@
       {:error (.getMessage e)
        :error-type :intent-compiler-failure})))
 
+(defn- canonical-effect-refusal!
+  [message data]
+  (refuse! :invalid-canonical-effect-input
+           message
+           (assoc data
+                  :source-unchanged true
+                  :mutation-attempted false
+                  :write-authority false)))
+
+(defn- project-relative-file
+  [canonical-project-root file]
+  (when-not (and (string? canonical-project-root)
+                 (not (str/blank? canonical-project-root))
+                 (string? file)
+                 (not (str/blank? file)))
+    (canonical-effect-refusal!
+      "Canonical effect identity requires non-empty project and file paths"
+      {:file file}))
+  (try
+    (let [supplied-root (java.nio.file.Paths/get canonical-project-root
+                                                 (make-array String 0))
+          _ (when-not (.isAbsolute supplied-root)
+              (canonical-effect-refusal!
+                "Canonical effect project root must be absolute"
+                {}))
+          root (.normalize supplied-root)
+          source (java.nio.file.Paths/get file (make-array String 0))
+          _ (when-not (.isAbsolute source)
+              (canonical-effect-refusal!
+                "Canonical effect file path must be absolute"
+                {:file file}))
+          resolved (-> (if (.isAbsolute source)
+                         source
+                         (.resolve root source))
+                       .normalize)]
+      (when-not (.startsWith resolved root)
+        (canonical-effect-refusal!
+          "Canonical effect file resolves outside the project root"
+          {:file file}))
+      (let [relative (-> (str (.relativize root resolved))
+                         (str/replace "\\" "/"))]
+        (when (str/blank? relative)
+          (canonical-effect-refusal!
+            "Canonical effect file identity is empty"
+            {:file file}))
+        relative))
+    (catch clojure.lang.ExceptionInfo error
+      (throw error))
+    (catch Exception error
+      (canonical-effect-refusal!
+        "Canonical effect file identity is invalid"
+        {:file file :cause (.getMessage error)}))))
+
+(defn- canonical-effect-row
+  [file edit]
+  (let [path (:path edit)
+        preorder (get-in edit [:address :preorder])
+        end-preorder (:end-preorder edit)
+        raw-offset (:offset edit)
+        raw? (:raw edit)
+        before (:before edit)
+        after (:after edit)
+        insert-side (:insert-side edit)
+        delete? (:delete edit)
+        _ (when (or (and insert-side delete?)
+                    (and insert-side
+                         (not (#{:insert-left :insert-right} insert-side)))
+                    (and (some? delete?) (not (true? delete?))))
+            (canonical-effect-refusal!
+              "Canonical effect has an invalid edit-kind combination"
+              {:file file}))
+        kind (cond
+               insert-side insert-side
+
+               delete? :delete
+               :else :replace)
+        natural-offset? (and (integer? raw-offset) (not (neg? raw-offset)))
+        kind-evidence?
+        (and
+          (string? before)
+          (string? after)
+          (case kind
+            (:insert-left :insert-right)
+            (and (true? raw?)
+                 natural-offset?
+                 (empty? before)
+                 (not (str/blank? after)))
+
+            :delete
+            (and (true? raw?)
+                 natural-offset?
+                 (not (str/blank? before))
+                 (empty? after))
+
+            :replace
+            (and (not (str/blank? before))
+                 (not (str/blank? after))
+                 (or (and (nil? raw?) (nil? raw-offset))
+                     (and (true? raw?) natural-offset?)))))]
+    (when-not (and (vector? path)
+                   (seq path)
+                   (every? #(and (integer? %) (not (neg? %))) path)
+                   (integer? preorder)
+                   (not (neg? preorder))
+                   (integer? end-preorder)
+                   (<= preorder end-preorder)
+                   (or (nil? raw-offset) natural-offset?)
+                   (string? before)
+                   (string? after)
+                   kind-evidence?)
+      (canonical-effect-refusal!
+        "Canonical effect lacks a complete resolved structural identity"
+        {:file file}))
+    {:sort-key [path preorder end-preorder raw-offset kind before after]
+     :row [:effect kind path preorder end-preorder raw-offset before after]}))
+
+(defn canonical-effect-identity
+  ;; @spec MCP-OP-EDIT-028
+  ;; @spec MCP-OP-EDIT-029
+  "Derive a lossless order-independent identity from one successful compiled transaction."
+  [canonical-project-root compiled]
+  (when-not (and (map? compiled)
+                 (true? (:ok compiled))
+                 (= :change (:operation compiled))
+                 (= transaction-version (:transaction-version compiled))
+                 (integer? (:intent-count compiled))
+                 (pos? (:intent-count compiled))
+                 (integer? (:match-count compiled))
+                 (pos? (:match-count compiled))
+                 (integer? (:changed-file-count compiled))
+                 (pos? (:changed-file-count compiled))
+                 (vector? (:intents compiled))
+                 (= (:intent-count compiled) (count (:intents compiled)))
+                 (string? (:diff compiled))
+                 (map? (:validated compiled))
+                 (true? (get-in compiled [:validated :whole-files-parsed]))
+                 (map? (:original-sources compiled))
+                 (map? (:future-sources compiled)))
+    (canonical-effect-refusal!
+      "Canonical effect identity requires a successful compiled transaction"
+      {}))
+  (let [compiled-files (:files compiled)]
+    (when-not (and (vector? compiled-files) (seq compiled-files))
+      (canonical-effect-refusal!
+        "Canonical effect identity requires compiled files"
+        {}))
+    (let [compiled-file-set (set (map :file compiled-files))
+          original-file-set (set (keys (:original-sources compiled)))
+          future-file-set (set (keys (:future-sources compiled)))
+          _ (when-not (and (= (count compiled-files)
+                              (get-in compiled [:validated :file-count]))
+                           (= compiled-file-set original-file-set)
+                           (= compiled-file-set future-file-set))
+              (canonical-effect-refusal!
+                "Canonical effect identity requires one complete compiler snapshot"
+                {:compiled-files (count compiled-files)
+                 :validated-files (get-in compiled [:validated :file-count])
+                 :original-files (count original-file-set)
+                 :future-files (count future-file-set)}))
+          file-records
+          (mapv
+            (fn [{:keys [file source-hash result-hash match-count edits]}]
+              (let [original-source (get (:original-sources compiled) file)
+                    future-source (get (:future-sources compiled) file)]
+                (when-not (and (string? file)
+                               (string? original-source)
+                               (string? future-source)
+                               (string? source-hash)
+                               (re-matches #"[0-9a-f]{64}" source-hash)
+                               (string? result-hash)
+                               (re-matches #"[0-9a-f]{64}" result-hash)
+                               (= source-hash
+                                  (structural-lens/source-hash original-source))
+                               (= result-hash
+                                  (structural-lens/source-hash future-source))
+                               (vector? edits)
+                               (integer? match-count)
+                               (not (neg? match-count))
+                               (= match-count (count edits)))
+                  (canonical-effect-refusal!
+                    "Canonical effect file lacks complete snapshot or edit evidence"
+                    {:file file}))
+                (let [effect-records (mapv #(canonical-effect-row file %) edits)
+                      relative-file
+                      (project-relative-file canonical-project-root file)]
+                  (assert-disjoint-edits! file edits)
+                  {:sort-key relative-file
+                   :row [:file
+                         relative-file
+                         source-hash
+                         result-hash
+                         (->> effect-records
+                              (sort-by :sort-key)
+                              (mapv :row))]
+                   :effect-count (count effect-records)})))
+            compiled-files)
+          effect-count (reduce + (map :effect-count file-records))
+          changed-file-count (count (filter (comp pos? :effect-count)
+                                            file-records))
+          duplicate-files
+          (->> file-records
+               (map :sort-key)
+               frequencies
+               (keep (fn [[file count]] (when (> count 1) file)))
+               sort
+               vec)]
+      (when-not (pos? effect-count)
+        (canonical-effect-refusal!
+          "Canonical effect identity requires at least one concrete effect"
+          {}))
+      (when (seq duplicate-files)
+        (canonical-effect-refusal!
+          "Canonical effect identity contains duplicate project-relative files"
+          {:files duplicate-files}))
+      (when (not= effect-count (:match-count compiled))
+        (canonical-effect-refusal!
+          "Canonical effect count does not match the compiled transaction"
+          {:expected (:match-count compiled) :actual effect-count}))
+      (when (not= changed-file-count (:changed-file-count compiled))
+        (canonical-effect-refusal!
+          "Canonical effect file count does not match the compiled transaction"
+          {:expected (:changed-file-count compiled)
+           :actual changed-file-count}))
+      (let [ordered-files (->> file-records
+                               (filter (comp pos? :effect-count))
+                               (sort-by :sort-key)
+                               (mapv :row))
+            projection [:canonical-effect/v1
+                        ordered-files
+                        (count ordered-files)
+                        effect-count]]
+        {:version 1
+         :sha256 (structural-lens/source-hash (pr-str projection))
+         :files (count ordered-files)
+         :effects effect-count
+         :projection projection}))))
+
 (defn with-future-sources
   "Replace a compiled transaction's candidate sources with staged transformed
    sources. A changed candidate becomes one hash-guarded raw edit so inverse
@@ -2010,7 +2247,11 @@
 
                                       (:location-normalization compiled)
                                       (assoc :location-normalization
-                                             (:location-normalization compiled))))]
+                                             (:location-normalization compiled))
+
+                                      (:canonical-effect-identity compiled)
+                                      (assoc :canonical-effect-identity
+                                             (:canonical-effect-identity compiled))))]
                               (observe-change-result
                                 :success capabilities compiled
                                 {:path receipt-path

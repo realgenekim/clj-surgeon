@@ -4,6 +4,7 @@
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -983,6 +984,33 @@
                (small-permutations (vec (remove #{value} values)))))
         values))))
 
+(defn- compiler-shaped-effect-transaction
+  [file-records]
+  (let [files
+        (mapv
+          (fn [{:keys [file source future edits]}]
+            {:file file
+             :source-hash (structural-lens/source-hash source)
+             :result-hash (structural-lens/source-hash future)
+             :match-count (count edits)
+             :edits edits})
+          file-records)
+        effect-count (reduce + (map :match-count files))
+        changed-file-count (count (filter (comp pos? :match-count) files))]
+    {:ok true
+     :operation :change
+     :transaction-version 1
+     :intent-count 1
+     :match-count effect-count
+     :changed-file-count changed-file-count
+     :intents [{}]
+     :files files
+     :diff "synthetic compiler witness"
+     :original-sources (into {} (map (juxt :file :source) file-records))
+     :future-sources (into {} (map (juxt :file :future) file-records))
+     :validated {:whole-files-parsed true
+                 :file-count (count files)}}))
+
 (deftest independent-change-permutations-compile-and-invert-identically
   (let [sources {"src/a.clj"
                  "(ns app.a)\n(def value [(old x) :body :tail])\n"
@@ -1017,13 +1045,15 @@
         (is (every? valid-source? (vals (:future-sources inverse))))))))
 
 (deftest canonical-effect-identity-is-exact-and-permutation-invariant
-  (let [sources {"src/a.clj"
+  ;; @spec MCP-OP-EDIT-028
+  ;; @spec MCP-OP-EDIT-029
+  (let [sources {"/work/project/src/a.clj"
                  "(ns app.a)\n(def value [(old x) :body :tail])\n"
-                 "src/b.clj"
+                 "/work/project/src/b.clj"
                  "(ns app.b)\n(def view {:status :idle :untouched 42})\n"}
-        intents [(intent ["src/a.clj"] "(old x)" "(new x)" 1)
-                 (intent ["src/a.clj"] ":body" ":body.page" 1)
-                 (intent ["src/b.clj"] ":idle" ":ready" 1)]
+        intents [(intent ["/work/project/src/a.clj"] "(old x)" "(new x)" 1)
+                 (intent ["/work/project/src/a.clj"] ":body" ":body.page" 1)
+                 (intent ["/work/project/src/b.clj"] ":idle" ":ready" 1)]
         expected {:intent-count 3 :edit-count 3 :changed-file-count 2}
         identities
         (mapv
@@ -1057,6 +1087,299 @@
             :projection expected-projection}
            (first identities))
         "the private identity retains exact source strings and resolved addresses")))
+
+(deftest canonical-effect-identity-binds-lossless-effect-provenance
+  (let [source "(ns app.a)\n(def value [(old x) (gone)])\n"
+        future "(ns app.a)\n(def value [(a) (new x)])\n"
+        source-hash (structural-lens/source-hash source)
+        result-hash (structural-lens/source-hash future)
+        compiled
+        (compiler-shaped-effect-transaction
+          [{:file "/work/project/src/a.clj"
+            :source source
+            :future future
+            :edits
+            [{:path [0 3]
+              :address {:preorder 9}
+              :end-preorder 10
+              :offset 30
+              :raw true
+              :delete true
+              :before "(gone)"
+              :after ""}
+             {:path [0 1]
+              :address {:preorder 2}
+              :end-preorder 2
+              :offset 10
+              :raw true
+              :insert-side :insert-left
+              :before ""
+              :after "(a) "}
+             {:path [0 2]
+              :address {:preorder 5}
+              :end-preorder 6
+              :before "(old x)"
+              :after "(new x)"}]}])
+        projection
+        [:canonical-effect/v1
+         [[:file
+           "src/a.clj"
+           source-hash
+           result-hash
+           [[:effect :insert-left [0 1] 2 2 10 "" "(a) "]
+            [:effect :replace [0 2] 5 6 nil "(old x)" "(new x)"]
+            [:effect :delete [0 3] 9 10 30 "(gone)" ""]]]]
+         1
+         3]
+        identity
+        (transaction/canonical-effect-identity "/work/project" compiled)]
+    (is (= {:version 1
+            :sha256 (structural-lens/source-hash (pr-str projection))
+            :files 1
+            :effects 3
+            :projection projection}
+           identity))
+    (doseq [changed
+            [(assoc-in compiled [:files 0 :edits 1 :offset] 11)
+             (assoc-in compiled [:files 0 :edits 1 :after] "(a)\n")
+             (assoc-in compiled [:files 0 :edits 2 :before] " (old x)")
+             (assoc-in compiled [:files 0 :edits 2 :path] [0 4])]]
+      (is (not= (:sha256 identity)
+                (:sha256
+                  (transaction/canonical-effect-identity
+                    "/work/project" changed)))))))
+
+(deftest canonical-effect-identity-orders-all-four-effect-permutations
+  (let [source "(ns app.a)\n(def value [:old])\n"
+        future "(ns app.a)\n(def value [:new])\n"
+        effects
+        [{:path [0 1]
+          :address {:preorder 2}
+          :end-preorder 2
+          :offset 10
+          :raw true
+          :insert-side :insert-left
+          :before ""
+          :after "(a) "}
+         {:path [0 2]
+          :address {:preorder 5}
+          :end-preorder 6
+          :before "(old x)"
+          :after "(new x)"}
+         {:path [0 3]
+          :address {:preorder 9}
+          :end-preorder 10
+          :offset 30
+          :raw true
+          :delete true
+          :before "(gone)"
+          :after ""}
+         {:path [0 4]
+          :address {:preorder 12}
+          :end-preorder 12
+          :before ":old"
+          :after ":new"}]
+        identities
+        (mapv
+          (fn [ordered-effects]
+            (transaction/canonical-effect-identity
+              "/work/project"
+              (compiler-shaped-effect-transaction
+                [{:file "/work/project/src/a.clj"
+                  :source source
+                  :future future
+                  :edits ordered-effects}])))
+          (small-permutations effects))]
+    (is (= 24 (count identities)))
+    (is (apply = identities))))
+
+(deftest equifinal-effect-decompositions-retain-distinct-identities
+  (let [source "(ns app.a)\n(def value (f a b))\n"
+        future "(ns app.a)\n(def value (f x y))\n"
+        compiled
+        (fn [edits]
+          (compiler-shaped-effect-transaction
+            [{:file "/work/project/src/a.clj"
+              :source source
+              :future future
+              :edits edits}]))
+        whole
+        (transaction/canonical-effect-identity
+          "/work/project"
+          (compiled [{:path [0 1]
+                      :address {:preorder 2}
+                      :end-preorder 8
+                      :before "(f a b)"
+                      :after "(f x y)"}]))
+        parts
+        (transaction/canonical-effect-identity
+          "/work/project"
+          (compiled [{:path [0 1 1]
+                      :address {:preorder 4}
+                      :end-preorder 4
+                      :before "a"
+                      :after "x"}
+                     {:path [0 1 2]
+                      :address {:preorder 6}
+                      :end-preorder 6
+                      :before "b"
+                      :after "y"}]))]
+    (is (= 1 (:effects whole)))
+    (is (= 2 (:effects parts)))
+    (is (not= (:sha256 whole) (:sha256 parts))
+        "future hashes alone cannot substitute for lossless effect identity")))
+
+(deftest canonical-effect-identity-does-not-change-receipt-or-inverse
+  (let [sources {"/work/project/src/a.clj"
+                 "(ns app.a)\n(def value (old x))\n"}
+        compiled
+        (transaction/compile-transaction
+          sources
+          (spec [(intent ["/work/project/src/a.clj"]
+                         "(old x)" "(new x)" 1)]
+                {:intent-count 1 :edit-count 1 :changed-file-count 1}))
+        identity
+        (transaction/canonical-effect-identity "/work/project" compiled)
+        plain-receipt (transaction/build-receipt compiled)
+        identity-receipt
+        (transaction/build-receipt
+          (assoc compiled :canonical-effect-identity identity))]
+    (is (= plain-receipt identity-receipt))
+    (is (= (:receipt-hash plain-receipt)
+           (:receipt-hash identity-receipt)))
+    (is (= (:inverse plain-receipt)
+           (:inverse identity-receipt)))))
+
+(deftest canonical-effect-identity-refuses-unproven-or-outside-root-input
+  (let [effect-a {:path [0 1]
+                  :address {:preorder 2}
+                  :end-preorder 2
+                  :before "a"
+                  :after "b"}
+        effect-b {:path [0 2]
+                  :address {:preorder 4}
+                  :end-preorder 4
+                  :before "c"
+                  :after "d"}
+        transaction
+        (fn [file-records]
+          (compiler-shaped-effect-transaction file-records))]
+    (doseq [compiled
+            [{:error "overlap" :error-type :overlapping-intents}
+             {:ok true :files []}
+             (dissoc
+               (transaction
+                 [{:file "/work/project/src/a.clj"
+                   :source "a"
+                   :future "b"
+                   :edits [effect-a]}])
+               :validated)
+             (transaction
+               [{:file "/other/project/src/a.clj"
+                 :source "a"
+                 :future "b"
+                 :edits [effect-a]}])
+             (transaction
+               [{:file "/work/project/src/a.clj"
+                 :source "a"
+                 :future "b"
+                 :edits [effect-a]}
+                {:file "/work/project/src/../src/a.clj"
+                 :source "c"
+                 :future "d"
+                 :edits [effect-b]}])
+             (transaction
+               [{:file "/work/project/src/a.clj"
+                 :source "a"
+                 :future "b"
+                 :edits [(assoc effect-a
+                                :insert-side :insert-left
+                                :delete true)]}])]]
+      (let [error
+            (try
+              (transaction/canonical-effect-identity "/work/project" compiled)
+              nil
+              (catch clojure.lang.ExceptionInfo exception
+                (ex-data exception)))]
+        (is (= :invalid-canonical-effect-input (:error-type error)))
+        (is (true? (:source-unchanged error)))
+        (is (false? (:mutation-attempted error)))
+        (is (false? (:write-authority error)))
+        (is (nil? (:projection error)))
+        (is (nil? (:sha256 error)))))))
+
+(deftest canonical-effect-identity-refuses-impossible-kind-evidence
+  ;; @spec MCP-OP-EDIT-028
+  (let [base {:path [0 1]
+              :address {:preorder 2}
+              :end-preorder 2}
+        invalid-effects
+        [(assoc base
+                :insert-side :insert-left
+                :before ""
+                :after "(a) ")
+         (assoc base
+                :insert-side :insert-left
+                :raw true
+                :offset 1
+                :before "x"
+                :after "(a) ")
+         (assoc base
+                :delete true
+                :raw true
+                :offset 1
+                :before "a"
+                :after "b")
+         (assoc base
+                :insert-side :middle
+                :raw true
+                :offset 1
+                :before ""
+                :after "(a) ")
+         (assoc base
+                :insert-side :insert-left
+                :delete true
+                :raw true
+                :offset 1
+                :before ""
+                :after "")]]
+    (doseq [effect invalid-effects]
+      (let [compiled
+            (compiler-shaped-effect-transaction
+              [{:file "/work/project/src/a.clj"
+                :source "a"
+                :future "b"
+                :edits [effect]}])
+            error
+            (try
+              (transaction/canonical-effect-identity "/work/project" compiled)
+              nil
+              (catch clojure.lang.ExceptionInfo exception
+                (ex-data exception)))]
+        (is (= :invalid-canonical-effect-input (:error-type error)))
+        (is (true? (:source-unchanged error)))
+        (is (nil? (:projection error)))))))
+
+(deftest canonical-effect-identity-ignores-untouched-scoped-files
+  (let [effect {:path [0 1]
+                :address {:preorder 2}
+                :end-preorder 2
+                :before "a"
+                :after "b"}
+        changed {:file "/work/project/src/a.clj"
+                 :source "a"
+                 :future "b"
+                 :edits [effect]}
+        untouched {:file "/work/project/src/b.clj"
+                   :source "c"
+                   :future "c"
+                   :edits []}
+        narrow (compiler-shaped-effect-transaction [changed])
+        broad (compiler-shaped-effect-transaction [changed untouched])]
+    (is (= (transaction/canonical-effect-identity "/work/project" narrow)
+           (transaction/canonical-effect-identity "/work/project" broad)))
+    (is (= 1 (:files (transaction/canonical-effect-identity
+                       "/work/project" broad))))))
 
 (deftest intents-match-only-original-snapshots-and-never-cascade
   (let [source "(ns app.a)\n(def values [(old x) (new y)])\n"
