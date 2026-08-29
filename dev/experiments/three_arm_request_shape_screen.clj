@@ -6,6 +6,7 @@
   compiler."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure.edn :as edn]
@@ -152,7 +153,17 @@
                  (assoc-in [:properties "require_change"]
                            require-change-field-schema)
                  (update :anyOf conj
-                         {:required ["symbol_migration" "require_change"]}))}
+                         {:required ["symbol_migration" "require_change"]})
+                 ;; Legacy flat requests remain valid when they use neither
+                 ;; candidate field. Once either candidate field appears,
+                 ;; both complete candidate fields are required.
+                 (update :allOf (fnil conj [])
+                         {:anyOf
+                          [{:not {:anyOf
+                                  [{:required ["symbol_migration"]}
+                                   {:required ["require_change"]}]}}
+                           {:required ["symbol_migration"
+                                       "require_change"]}]}))}
 
     (throw (ex-info "Unknown three-arm screen arm" {:arm arm}))))
 
@@ -648,6 +659,8 @@
 
 (defn score-call [sources expected-after-hashes arm arguments geometry]
   (let [arguments (public-json arguments)
+        admission-result
+        (admission/authorize (:schema (tool-surface arm)) arguments)
         expanded (expand-request sources arm arguments)
         product (when (:ok expanded)
                   (migration/compile-request sources (:request expanded)))
@@ -676,12 +689,14 @@
           (<= payload-bytes (* 0.60 (json-bytes (flat-request)))))]
     {:schema :clj-surgeon.three-arm-request-shape-run/v1
      :arm arm
-     :correct (and exact? transaction-equal? adherence? one-action?
+     :correct (and (= {:ok true} admission-result)
+                   exact? transaction-equal? adherence? one-action?
                    final-response-exact?
                    (:complete coverage) payload-ok?)
      :semantic-exact exact?
      :treatment-adherent adherence?
      :one-action one-action?
+     :admission admission-result
      :payload {:bytes payload-bytes :within-budget payload-ok?}
      :final-agent-message {:expected expected-final-response
                            :actual final-response
@@ -820,24 +835,80 @@
           (every? :correct (vals scores))
           (every? true? (vals falsifiers)))}))
 
+(defn- midpoint [values]
+  (when (and (= 2 (count values)) (every? number? values))
+    (/ (reduce + values) 2.0)))
+
+(defn- arm-midpoints [runs]
+  {:prompt-to-first-call-ms
+   (midpoint (mapv #(get-in % [:geometry :prompt-to-call-ms]) runs))
+   :complete-wall-ms
+   (midpoint (mapv #(get-in % [:geometry :complete-wall-ms]) runs))})
+
+(defn- at-most-fraction? [candidate control fraction]
+  (and (number? candidate)
+       (number? control)
+       (<= candidate (* fraction control))))
+
+(defn- not-regressed? [candidate control]
+  (and (number? candidate)
+       (number? control)
+       (<= candidate control)))
+
+(defn- delta-metrics [candidate control]
+  (when (and (number? candidate) (number? control) (pos? control))
+    {:control-ms control
+     :candidate-ms candidate
+     :improvement-ms (- control candidate)
+     :percent-lower (* 100.0 (/ (- control candidate) control))}))
+
 (defn cohort-report [runs]
-  (let [by-arm (group-by :arm runs)
+  (let [run-order (mapv :arm runs)
+        by-arm (group-by :arm runs)
         arm-report
         (into {}
               (map (fn [arm]
                      [arm {:runs (count (get by-arm arm))
                            :correct (count (filter :correct (get by-arm arm)))
                            :treatment-adherent
-                           (count (filter :treatment-adherent (get by-arm arm)))}]))
-              arms)]
+                           (count (filter :treatment-adherent (get by-arm arm)))
+                           :midpoint (arm-midpoints (get by-arm arm))}]))
+              arms)
+        f-prompt (get-in arm-report [:flat :midpoint
+                                     :prompt-to-first-call-ms])
+        a-prompt (get-in arm-report [:file-groups :midpoint
+                                     :prompt-to-first-call-ms])
+        b-prompt (get-in arm-report [:closed-relations :midpoint
+                                     :prompt-to-first-call-ms])
+        f-wall (get-in arm-report [:flat :midpoint :complete-wall-ms])
+        a-wall (get-in arm-report [:file-groups :midpoint :complete-wall-ms])
+        b-wall (get-in arm-report [:closed-relations :midpoint
+                                   :complete-wall-ms])]
     {:schema :clj-surgeon.three-arm-request-shape-cohort/v1
+     :order run-order
      :arms arm-report
-     :gate {:two-per-arm
+     :comparisons
+     {:file-groups-vs-flat
+      {:prompt-to-first-call (delta-metrics a-prompt f-prompt)
+       :complete-wall (delta-metrics a-wall f-wall)}
+      :closed-relations-vs-flat
+      {:prompt-to-first-call (delta-metrics b-prompt f-prompt)
+       :complete-wall (delta-metrics b-wall f-wall)}}
+     :gate {:exact-order (= cohort-order run-order)
+            :two-per-arm
             (every? #(= 2 (get-in arm-report [% :runs])) arms)
             :all-correct
             (every? #(= 2 (get-in arm-report [% :correct])) arms)
             :all-treatment-adherent
-            (every? #(= 2 (get-in arm-report [% :treatment-adherent])) arms)}}))
+            (every? #(= 2 (get-in arm-report [% :treatment-adherent])) arms)
+            :a-prompt-at-least-15-percent-lower
+            (at-most-fraction? a-prompt f-prompt 0.85)
+            :a-complete-wall-not-regressed
+            (not-regressed? a-wall f-wall)
+            :b-prompt-at-least-20-percent-lower
+            (at-most-fraction? b-prompt f-prompt 0.80)
+            :b-complete-wall-not-regressed
+            (not-regressed? b-wall f-wall)}}))
 
 (defn- parse-pairs [args]
   (when (odd? (count args))
@@ -864,6 +935,7 @@
                     :shell-call-count (parse-long shell-calls)
                     :file-change-count (parse-long file-changes)
                     :final-agent-message final-response
+                    :complete-wall-ms (:process-wall-ms timing)
                     :prompt-to-call-ms
                     (owner-screen/prompt-to-first-call-ms timing)}
           {:keys [sources expected-after-hashes]} (migration/load-fixture)]
@@ -872,7 +944,10 @@
 
     "cohort"
     (let [runs (mapv #(edn/read-string (slurp (io/file %))) (rest args))]
-      (prn (cohort-report runs)))
+      (let [result (cohort-report runs)]
+        (prn result)
+        (when-not (every? true? (vals (:gate result)))
+          (System/exit 1))))
 
     "prerequisites"
     (let [result (prerequisite-report)]
