@@ -464,6 +464,11 @@
         (is (= 6 (count (:events joined))))
         (is (:ok mapped))
         (is (:ok (score/score-run (:row mapped))))
+        (testing "post-run workspace deletion does not erase frozen identity"
+          (delete-tree! (io/file (:workspace-root entry)))
+          (let [deleted-workspace (score/manifest-entry->row entry nil)]
+            (is (:ok deleted-workspace))
+            (is (:ok (score/score-run (:row deleted-workspace))))))
         (testing "manifest workspace must be its canonical directory spelling"
           (let [noncanonical (str (:workspace-root entry) "/.")
                 result (score/manifest-entry->row
@@ -500,7 +505,7 @@
                 wrong-receipt (assoc-in parsed
                                         [3 :item :result :structured_content
                                          :receipt_hash]
-                                        sha-a)]
+                                        "not-a-sha256")]
             (doseq [[label events expected-error]
                     [[:id wrong-id :call-id-mismatch]
                      [:receipt wrong-receipt :evidence-incomplete]]]
