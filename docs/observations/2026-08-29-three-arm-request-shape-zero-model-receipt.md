@@ -13,13 +13,13 @@ fixture mutation occurred.
 
 - Production base: `54aae16f340033dc6d9452043b335c6bb98dea04`
 - Production tree: `937ee8032c8697594bb1b6b5b7036747b8bb9517`
-- Experiment candidate: `b298b8b6306bdd3d7d4713234e65f5cbc2bc7aa4`
-- Experiment tree: `08bdfc92678b80d869d19f782842d71c263b8a1f`
+- Experiment candidate: `6328db51557bc39ef1a0d40ca171a1ac9873005a`
+- Experiment tree: `7643441141abe042cb48e343c2707f3fa0649c4e`
 - Product source/test/design diff SHA-256: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
-- Experiment code diff SHA-256: `5ca7eeb151c6d1fda13211ad10186c0a5428b14f0a0e3e0c5bc67a3b0fe4d157`
+- Experiment code diff SHA-256: `816f566a70154d384dc6a4709293e3919a0cdaa418b5fe06043d08578402056b`
 - Protocol SHA-256: `635bc7e8f9467cf4e03a458d672665d3245e2a2686c9aad9b142192b6e447157`
-- Harness SHA-256: `d9b3e2ec8385d3989de0af241eaac48983e57dd614f80e3ef21ff9350f5692d1`
-- Scorer SHA-256: `69a66bddad9590eaf7be54c03cd42ffa5375af2d9bbf7726d0d5e2f1e1cbb880`
+- Harness SHA-256: `f171c5d843f6c818461c53311fd34d7961aa8daa168a9da6909caa145f2fa66b`
+- Scorer SHA-256: `880feae92b5af28b6b40b6c1a32a9aba47fa427b4c1cca8f60f845545074be57`
 - Observer SHA-256: `a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18`
 - Frozen task SHA-256: `789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1`
 - Frozen capsule SHA-256: `7d985f4d30acdf871f615b174e0f6c37338539253e6591cf898f96c26f39d4b9`
@@ -113,8 +113,8 @@ The pure gates also reject or disqualify:
 - duplicate symbol rows; and
 - reordered B owner rows.
 
-The controller's single bounded-heap `--self-test` invocation passed 18 tests
-and 91 assertions with zero failures or errors. This includes the complete
+The controller's single bounded-heap `--self-test` invocation passed 20 tests
+and 107 assertions with zero failures or errors. This includes the complete
 5-test, 23-assertion candidate-admission suite. An earlier controller omitted
 that file and therefore ran only 12 tests and 63 assertions; the manually
 combined 17/86 claim was true of two commands but false of the launch artifact.
@@ -124,6 +124,27 @@ The scorer also treats the completed agent message as correctness evidence.
 It reads the last completed `agent_message` from `events.jsonl`, retains its
 exact bytes in `score.edn`, and requires the response to equal `call captured`.
 The permanent falsifier proves that a varied terminal response is incorrect.
+
+An adversarial hardening pass added three more launch laws:
+
+1. every captured call runs through its arm's exact advertised schema, and
+   `correct` requires `{:ok true}` admission while retaining typed denial
+   evidence;
+2. B's server-owned authority envelope accepts complete candidate-only and
+   flat-only requests but denies either partial candidate field, including
+   when a legacy field is also present; and
+3. aggregate scoring requires exact `F A B B A F` order, two correct and
+   treatment-adherent runs per arm, A prompt-to-first-call at least 15 percent
+   below F, B at least 20 percent below F, and neither candidate's complete
+   wall above F. The report retains each two-run midpoint plus absolute and
+   percentage deltas.
+
+Codex removes the historical top-level JSON Schema `anyOf` from its client
+projection. Candidate closure therefore lives in that server-owned authority
+envelope: each legacy branch explicitly forbids either candidate field, while
+the candidate branch requires both. The scorer executes the full advertised
+schema; the registry observer separately proves the accepted reduced client
+projection.
 
 ## Real client-visible preflight
 
@@ -136,17 +157,22 @@ top-level input-schema `anyOf`.
 The controller stopped before prompt submission. It made zero model calls and
 zero mutation actions.
 
-- Preflight summary SHA-256: `8529d17af1f1e59cd849c585a30e7ea49fe24b094c02c09e278382c3c18da084`
-- Run-config SHA-256: `34bb6455d5da3eef29928c7cc83a1cfec51d4d4f59e34f090500ab9e011913ca`
-- Prerequisite report SHA-256: `f7541e933a2131abb2a255b04430ab0eb1d31d30d86c858f15052d9b21089d01`
-- Raw archive: `/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-b298b8b-20260829T082259Z.tar.gz`
-- Archive SHA-256: `d2eba34d2a5b89f6ba9227c16ba7804b4619e7c04a78ef4252f0e8a7b936ffad`
+- Preflight summary SHA-256: `98cf458a74ab1122fb10a01f02747194d3e94b247ce6a7e79906d213087647b1`
+- Run-config SHA-256: `76079a5e380912806f57b0cd75e2999667f968c85905b5da2886ca6fb5777d75`
+- Prerequisite report SHA-256: `cd31a86c3b3068a736a7ab30094a853dd06813b0f2269e39bbea6f4d853b8584`
+- Raw archive: `/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-6328db5-20260829T083955Z.tar.gz`
+- Archive SHA-256: `30b3bd5cacefc952d7d81f4a22e1ef03ac9578a646ecbdbeac0963e7dddcf545`
 
 The real token-free registry preflight was rerun because `run-config.json`
 binds both the exact Git head and the harness SHA. The public surfaces did not
 change, but retaining the old preflight would not prove the repaired launch
 artifact. All three fresh registry projections passed with zero model calls
 and zero mutation actions.
+
+The controller now also requires an explicit approved 40-character candidate
+head outside self-test, compares it with the actual checkout before any
+preflight or model action, and records both values in `run-config.json`. Its
+mismatch falsifier exits 2 before any client or model process starts.
 
 ## Verdict
 
@@ -167,4 +193,4 @@ Passing compiler tests only authorizes the model screen; it does not authorize
 promotion.
 
 Machine-readable evidence is in
-`docs/observations/evidence/three-arm-request-shape-b298b8b.edn`.
+`docs/observations/evidence/three-arm-request-shape-6328db5.edn`.

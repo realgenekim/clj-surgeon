@@ -1,0 +1,95 @@
+{:schema :clj-surgeon.three-arm-request-shape-evidence/v3
+ :base {:commit "54aae16f340033dc6d9452043b335c6bb98dea04"
+        :tree "937ee8032c8697594bb1b6b5b7036747b8bb9517"}
+ :candidate
+ {:commit "6328db51557bc39ef1a0d40ca171a1ac9873005a"
+  :tree "7643441141abe042cb48e343c2707f3fa0649c4e"
+  :product-diff-sha256
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  :experiment-diff-sha256
+  "816f566a70154d384dc6a4709293e3919a0cdaa418b5fe06043d08578402056b"}
+ :hashes
+ {:protocol
+  "635bc7e8f9467cf4e03a458d672665d3245e2a2686c9aad9b142192b6e447157"
+  :harness
+  "f171c5d843f6c818461c53311fd34d7961aa8daa168a9da6909caa145f2fa66b"
+  :scorer
+  "880feae92b5af28b6b40b6c1a32a9aba47fa427b4c1cca8f60f845545074be57"
+  :scorer-tests
+  "8857e50bc2eaeaf85b174c72c687aaf75d192178e3ac6cd35849136c1f144b1f"
+  :observer
+  "a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18"
+  :task
+  "789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1"}
+ :zero-model
+ {:model-calls 0
+  :mutation-actions 0
+  :bounded-jvm {:xms-mib 64 :xmx-mib 512}
+  :controller-self-test {:tests 20 :assertions 107
+                         :failures 0 :errors 0}
+  :schema-admission
+  {:required-for-correct true
+   :evidence-retained true
+   :complete-candidate-only :allowed
+   :flat-only :allowed
+   :partial-symbol-migration :denied
+   :partial-require-change :denied
+   :unexpected-nested-field :denied}
+  :terminal-response
+  {:expected "call captured"
+   :source :last-completed-agent-message
+   :retained-in-score true
+   :exact-equality-required true}
+  :aggregate
+  {:order [:flat :file-groups :closed-relations
+           :closed-relations :file-groups :flat]
+   :two-runs-per-arm true
+   :pair-statistic :two-run-midpoint
+   :file-groups-gates {:prompt-percent-lower-at-least 15.0
+                       :complete-wall-not-regressed true}
+   :closed-relations-gates {:prompt-percent-lower-at-least 20.0
+                            :complete-wall-not-regressed true}
+   :absolute-and-percentage-deltas-retained true
+   :order-and-performance-falsifiers true}
+  :argument-budgets
+  {:flat {:bytes 6353}
+   :file-groups {:bytes 5189 :maximum-fraction-of-flat 0.82}
+   :closed-relations {:bytes 2703 :maximum-fraction-of-flat 0.60}}}
+ :provenance-fence
+ {:expected-head-required true
+  :expected "6328db51557bc39ef1a0d40ca171a1ac9873005a"
+  :actual "6328db51557bc39ef1a0d40ca171a1ac9873005a"
+  :mismatch-exit 2
+  :mismatch-before-preflight-or-model true}
+ :client-preflight
+ {:model-calls 0
+  :mutation-actions 0
+  :arms [:flat :file-groups :closed-relations]
+  :tool-set ["edit_clojure"]
+  :summary-sha256
+  "98cf458a74ab1122fb10a01f02747194d3e94b247ce6a7e79906d213087647b1"
+  :run-config-sha256
+  "76079a5e380912806f57b0cd75e2999667f968c85905b5da2886ca6fb5777d75"
+  :prerequisites-sha256
+  "cd31a86c3b3068a736a7ab30094a853dd06813b0f2269e39bbea6f4d853b8584"
+  :flat-registry-sha256
+  "30fd6c4947216b04cefc4964c559ab31e55aa7324e062a21fcbbf84e5a8063e0"
+  :file-groups-registry-sha256
+  "4ac41f9572bcaf24a568667479a0cbe6b1e3e4ccb5742f7275367ed0d1488d3c"
+  :closed-relations-registry-sha256
+  "1685d47892ebce029c6c257978c5a7224ff7cae79e1f4523737817706bcf4928"}
+ :archive
+ {:path
+  "/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-6328db5-20260829T083955Z.tar.gz"
+  :sha256
+  "30b3bd5cacefc952d7d81f4a22e1ef03ac9578a646ecbdbeac0963e7dddcf545"}
+ :supersedes
+ [{:candidate "a9a9d5dd50f099b8569a86f6c0897898f2d3fbb1"
+   :reason :incomplete-controller-self-test}
+  {:candidate "b298b8b6306bdd3d7d4713234e65f5cbc2bc7aa4"
+   :reason :missing-schema-and-performance-authority}
+  {:candidate "21fb7970b69ac17d911e87240fd28e0564706cb7"
+   :reason :client-stripped-top-level-all-of}
+  {:candidate "c1c1b21a88c1fa58df22239a20c53a32a439804d"
+   :reason :client-stripped-top-level-one-of}]
+ :verdict :go-f-a-b-b-a-f-capture-only-cohort}
