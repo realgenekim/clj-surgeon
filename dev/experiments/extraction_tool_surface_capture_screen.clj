@@ -143,27 +143,16 @@
 (defn- validate-client-catalog [advertised registry expected-server]
   (let [advertised-tools (:tools advertised)
         client-tools (:tool-projection registry)
-        client-names (mapv :name client-tools)
-        client-by-name (into {} (map (juxt :name identity)) client-tools)
         client-peer-tools (filterv #(not= "apply_clojure_changes" (:name %))
                                    client-tools)
         peer-sha (surface/sha256 client-peer-tools)
-        expected-source
-        (assoc owner-aware-mcp-surface-observer/registry-observation-source
-               :server-selector {:field "name" :value expected-server})]
-    {:ok (and (= "clj-surgeon.codex-mcp-registry.v1" (:schema registry))
-              (= expected-source (:observation-source registry))
-              (= expected-server (:server registry))
-              (= (vec (sort (map :name advertised-tools)))
-                 (:tool-names registry))
-              (= client-names (:tool-names registry))
-              (= (set (map :name advertised-tools)) (set (keys client-by-name)))
-              (= (count advertised-tools)
-                 (count client-tools)
-                 (count client-by-name))
-              (= expected-client-peer-surface-sha256 peer-sha))
-     :catalog-count (count client-tools)
-     :client-peer-surface-sha256 peer-sha}))
+        catalog
+        (owner-aware-mcp-surface-observer/validate-catalog
+          advertised-tools registry expected-server)]
+    (assoc catalog
+           :ok (and (:ok catalog)
+                    (= expected-client-peer-surface-sha256 peer-sha))
+           :client-peer-surface-sha256 peer-sha)))
 
 (defn- transition-ms [timing phase]
   (some #(when (= phase (:phase %)) (:observer-elapsed-ms %))
@@ -359,6 +348,7 @@
                    (filterv #(not= "apply_clojure_changes" (:name %))
                             client-tools))
         registry {:schema "clj-surgeon.codex-mcp-registry.v1"
+                  :ok true
                   :observation-source
                   (assoc observer/registry-observation-source
                          :server-selector {:field "name" :value "clj-surgeon"})
