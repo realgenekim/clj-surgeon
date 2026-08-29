@@ -1042,6 +1042,8 @@
       (contains? result :unknown) (assoc :unknown (:unknown result))
       (contains? result :allowed) (assoc :allowed (:allowed result))
       (contains? result :missing) (assoc :missing (:missing result))
+      (contains? result :supplied-fields)
+      (assoc :supplied_fields (:supplied-fields result))
       (some? change-index) (assoc :change_index change-index)
       (contains? result :change-id) (assoc :change_id change-id)
       (contains? result :field) (assoc :field field)

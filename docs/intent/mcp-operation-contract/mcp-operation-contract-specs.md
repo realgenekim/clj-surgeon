@@ -71,9 +71,9 @@ tests witness the requirement.
 
 ## Injective Compact Edit Field Normalization
 
-- [ ] **MCP-OP-EDIT-017**: When one compact edit supplies exactly one complete value pair named `from`/`to`, `old`/`new`, or `before`/`after`, clj-surgeon shall preserve the canonical pair or injectively lower the alias pair to `from`/`to` before location or source compilation, without changing either value.
-- [ ] **MCP-OP-EDIT-018**: When any compact edit supplies a partial pair, a cross-pair mixture, more than one complete pair, or a canonical pair plus aliases, clj-surgeon shall refuse the complete request before source read or mutation, identify the exact edit path and supplied fields, publish source unchanged and write authority false, and grant no partial normalization or retry authority.
-- [ ] **MCP-OP-EDIT-019**: The public editor schema shall admit only the three closed complete value-pair spellings while describing `from`/`to` as canonical; successful alias lowering shall publish bounded requested and emitted field evidence, and a field-pair refusal shall state the exact alias mapping and direct the caller to the exposed `edit_clojure` operation rather than another tool.
+- [x] **MCP-OP-EDIT-017**: When one compact edit supplies exactly one complete value pair named `from`/`to`, `old`/`new`, or `before`/`after`, clj-surgeon shall preserve the canonical pair or injectively lower the alias pair to `from`/`to` before location or source compilation, without changing either value.
+- [x] **MCP-OP-EDIT-018**: When any compact edit supplies a partial pair, a cross-pair mixture, more than one complete pair, or a canonical pair plus aliases, clj-surgeon shall refuse the complete request before source read or mutation, identify the exact edit path and supplied fields, publish source unchanged and write authority false, and grant no partial normalization or retry authority.
+- [x] **MCP-OP-EDIT-019**: The public editor schema shall admit only the three closed complete value-pair spellings while describing `from`/`to` as canonical; successful alias lowering shall publish bounded requested and emitted field evidence, and a field-pair refusal shall state the exact alias mapping and direct the caller to the exposed `edit_clojure` operation rather than another tool.
 
 ## Extraction Planning
 

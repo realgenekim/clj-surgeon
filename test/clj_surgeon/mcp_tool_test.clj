@@ -238,6 +238,7 @@
     (is (= "invalid-mcp-request" (:error_type result)))
     (is (= "invalid-editor-field-pair" (:reason result)))
     (is (= ["edits" 0] (:path result)))
+    (is (= ["old"] (:supplied_fields result)))
     (is (:source_unchanged result))
     (is (false? (:mutation_attempted result)))
     (is (false? (:write_authority result)))
