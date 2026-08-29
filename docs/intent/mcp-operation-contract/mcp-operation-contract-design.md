@@ -1047,13 +1047,17 @@ compare the already-correct normalized flat representation with the relation
 representation while holding the production description, schema, location
 normalizer, transaction, verifier, task, model, and scorer constant.
 
-Both arms must compile to byte-identical canonical transactions and frozen
-future files and complete exact verification in one first call. The relation
-arm must reduce median request-emission time in both counterbalanced blocks and
-by at least 20 percent pooled. It must independently reduce complete verified
-wall time by at least 20 percent pooled. Capture-only evidence, payload-size
-reduction, meaning-preserving byte drift, or a complete-wall win without the
-emission-time result cannot promote the mechanism.
+Both arms must make exactly one compact `apply_clojure_changes` call with the
+same project-owned `verify="exact"` profile, compile to byte-identical canonical
+transactions and frozen future files, and complete exact verification in that
+first call. This benchmark shape preserves the authority boundary:
+`apply_clojure_changes` owns verifier selection and `edit_clojure` does not gain
+it. The relation arm must reduce median request-emission time in both
+counterbalanced blocks and by at least 20 percent pooled. It must independently
+reduce complete verified wall time by at least 20 percent pooled. Capture-only
+evidence, payload-size reduction, meaning-preserving byte drift, or a
+complete-wall win without the emission-time result cannot promote the
+mechanism.
 
 The immutable causal protocol defines two four-run serial blocks:
 `N R R N`, then `R N N R`, where `N` is normalized flat and `R` is the

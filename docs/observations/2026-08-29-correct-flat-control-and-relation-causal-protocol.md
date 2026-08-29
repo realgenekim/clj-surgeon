@@ -170,9 +170,9 @@ Before the first model token, prove:
 5. both select the same exact verifier and terminal-response contract;
 6. both routes traverse the same compact-location normalizer, while the flat
    route never invokes relation lowering; and
-7. a fresh client registry exposes exactly one tool and one identical surface,
-   using the production compact-editor description rather than the generic
-   change-tool prose.
+7. a fresh client registry exposes exactly one tool and one identical surface:
+   the production `apply_clojure_changes` description and schema with its
+   existing compact relation and exact-verifier capabilities.
 
 ## Smallest useful cohort
 
@@ -213,7 +213,8 @@ Block 2: R N N R
 At `N=8`, promotion requires:
 
 - 4/4 exact first calls for each arm;
-- one `edit_clojure` call per run and no other action;
+- one compact `apply_clojure_changes` call with `verify="exact"` per run and no
+  other action;
 - identical canonical transaction and future hashes;
 - exact verification inside the transaction;
 - the R `T_verified` median lower than the N median in each counterbalanced
@@ -229,7 +230,7 @@ The cohort is capped at eight. A borderline result is not promoted.
 
 An admitted run must:
 
-- emit `edit_clojure` as its first item, without a preamble;
+- emit `apply_clojure_changes` as its first item, without a preamble;
 - use its assigned representation;
 - make exactly one MCP call;
 - perform zero reads, searches, shell commands, native file changes, refusals,
