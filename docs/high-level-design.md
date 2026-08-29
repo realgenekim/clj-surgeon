@@ -226,8 +226,9 @@ request may combine all four categories as one already-decided transaction:
 ```text
 compact edit request
   -> source-blind closed-shape validation
+  -> source-blind symbol and existing-action lowering
   -> one frozen source capture
-  -> pure relation compilation
+  -> pure source-aware require compilation
        -> require changes -------- exact namespace edits
        -> symbol migration ------- exact owner-scoped edits
        -> literal exceptions ----- existing compact edits
@@ -248,6 +249,11 @@ The relation boundary is fail-closed:
 
 - relation objects are closed and reject unknown, partial, duplicate, or
   conflicting fields before mutation;
+- before source capture, symbol migration lowers to ordinary guarded edits and
+  the existing literal/deletion actions establish the complete source file
+  set; in the first slice, every require-change file must already occur in that
+  set, so relation compilation needs no second read or transaction-engine
+  change;
 - ordered file and owner rows must be unique, non-empty, and carry positive
   exact match counts;
 - the symbol relation supports only the declared `preserve-name` rule and
