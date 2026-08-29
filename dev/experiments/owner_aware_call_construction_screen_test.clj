@@ -105,7 +105,25 @@
     (is (:correct exact-root))
     (is (false? (:correct wrong-root)))
     (is (= :benchmark-workspace-root-mismatch
-           (get-in wrong-root [:compiler :error-type])))))
+           (get-in wrong-root [:compiler :error-type]))))
+  (testing "a symlink spelling of the same canonical root matches production"
+    (let [parent (java.nio.file.Files/createTempDirectory
+                   "owner-aware-root-alias"
+                   (make-array java.nio.file.attribute.FileAttribute 0))
+          alias (.resolve parent "workspace")]
+      (try
+        (java.nio.file.Files/createSymbolicLink
+          alias
+          (.toPath (java.io.File. migration/canonical-workspace))
+          (make-array java.nio.file.attribute.FileAttribute 0))
+        (is (:correct
+              (screen/score-fixture-call
+                :control
+                (assoc migration/oracle-request "workspace_root" (str alias))
+                one-action)))
+        (finally
+          (java.nio.file.Files/deleteIfExists alias)
+          (java.nio.file.Files/deleteIfExists parent))))))
 
 (deftest wrong-owner-remains-an-invalid-first-call
   (let [bad (assoc-in migration/candidate-manifest

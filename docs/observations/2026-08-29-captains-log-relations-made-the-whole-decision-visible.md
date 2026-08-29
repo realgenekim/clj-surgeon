@@ -182,6 +182,19 @@ future N/R cohort must be a separate Linked-Intent-approved real-mutation
 runner. Synthetic protocol tests no longer lend authority to a weaker process
 boundary.
 
+Workspace identity follows the production router: roots are canonicalized
+before comparison. A symlink spelling of the same canonical directory is
+accepted and permanently witnessed; a different canonical directory refuses.
+The benchmark does not invent stricter path-spelling authority than the
+product.
+
+The final independent re-audit found one more self-consistency trap: the shell
+pilot still invoked the retired prerequisite scorer after capture, while the
+new pure tests exercised the repaired scorer. The executable path now invokes
+the repaired public-schema and workspace-routing scorer directly. A token-free
+shell witness rejects any regression to the retired scorer. Capture-only pilot
+results remain reconnaissance, never promotion evidence.
+
 This is the evening's recurring lesson in miniature: make the experiment cheap,
 then spend the saved cycle attacking the measuring instrument. A faster wrong
 answer is bad; a persuasive false positive is worse.

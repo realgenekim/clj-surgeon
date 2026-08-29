@@ -19,6 +19,7 @@ timeout_seconds=${BENCH_TIMEOUT_SECONDS:-180}
 self_test=false
 pilot=false
 preflight_only=false
+capture_scorer_namespace=owner-aware-call-construction-screen
 
 usage() {
   cat <<'EOF'
@@ -122,6 +123,7 @@ run_zero_model_tests() {
   [ "$refusal_status" -eq 2 ]
   rg -q 'Capture-only cohort execution is retired' "$refusal_file"
   rm -f "$refusal_file"
+  [ "$capture_scorer_namespace" = owner-aware-call-construction-screen ]
   clojure -Sdeps '{:paths ["src" "test" "bench" "dev/experiments"]}' \
     -M:clj-surgeon/mcp -e \
     '(load-file "dev/experiments/clj_surgeon/experiments/mcp_candidate_admission_test.clj")
@@ -188,7 +190,7 @@ jq -n \
   --arg model "$model" --arg reasoning "$reasoning" \
   --arg mode "$(if [ "$pilot" = true ]; then printf pilot; else printf cohort; fi)" \
   --arg harness_sha "$(shasum -a 256 "${BASH_SOURCE[0]}" | awk '{print $1}')" \
-  --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_prereq.clj" | awk '{print $1}')" \
+  --arg scorer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_call_construction_screen.clj" | awk '{print $1}')" \
   --arg observer_sha "$(shasum -a 256 "$repo_root/dev/experiments/owner_aware_mcp_surface_observer.clj" | awk '{print $1}')" \
   --arg fixture_sha "$(shasum -a 256 "$repo_root/bench/fixtures/edit_portfolio/submission-row-extraction-cleanup/task.txt" | awk '{print $1}')" \
   --argjson order "$(arms_json "${arms[@]}")" \
@@ -313,7 +315,7 @@ for arm in "${arms[@]}"; do
   [ -s "$capture_file" ] || { echo "No captured call: $run_id" >&2; exit 2; }
 
   clojure -Sdeps '{:paths ["src" "test" "dev/experiments"]}' \
-    -M:clj-surgeon/mcp -m owner-aware-call-construction-prereq score \
+    -M:clj-surgeon/mcp -m "$capture_scorer_namespace" score \
     --arm "$arm" --capture "$capture_file" \
     --timing "$run_dir/event-timing.edn" --mcp-calls "$mcp_calls" \
     --shell-calls "$shell_calls" --file-changes "$file_changes" \
