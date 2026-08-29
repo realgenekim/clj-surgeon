@@ -60,12 +60,14 @@ speed multiple:
 - A file groups: 0/2 exact;
 - B closed relations: 2/2 exact, 2,715 bytes, 48.912-second prompt midpoint,
   51.500-second capture-only wall midpoint; and
-- F and A supplied all 23 symbol sites and 14 deletions but omitted all nine
-  require additions, three require removals, and the bespoke rewrite.
+- F and A supplied the complete 33 edit rows and 14 deletions, but addressed all
+  nine namespace rows as named forms instead of the namespace owner; those
+  complete semantic decisions therefore refused `change-owner-mismatch`.
 
-The mechanism is decision visibility. Product work must preserve four explicit
-classes: symbol migration, require delta, exceptional edits, and owner
-deletions. The incorrect controls forbid a causal performance claim.
+The mechanism is decision and address legibility. Product work must preserve
+four explicit classes—symbol migration, require delta, exceptional edits, and
+owner deletions—while deriving the exact namespace address mechanically. The
+incorrect controls forbid a causal performance claim.
 
 ## Existing production functions to reuse
 

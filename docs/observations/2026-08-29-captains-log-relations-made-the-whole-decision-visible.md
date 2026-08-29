@@ -1,4 +1,4 @@
-# Captain's Log: Relations Made the Whole Decision Visible
+# Captain's Log: Relations Made Namespace Ownership Legible
 
 **Date:** 2026-08-29  
 **Bead:** `clj-surgeon-45j`  
@@ -8,8 +8,8 @@
 
 ## Result
 
-The closed-relation request shape was the only arm that expressed the complete
-51-edit decision correctly on its first call.
+The closed-relation request shape was the only arm that encoded the complete
+51-edit decision with valid structural addresses on its first call.
 
 | Arm | Shape | Exact first call | Prompt-to-call midpoint | Capture-only wall midpoint | Payload |
 |---|---|---:|---:|---:|---:|
@@ -30,25 +30,23 @@ This was a capture-only screen. It did not mutate the fixture, run the
 transaction verifier, or reproduce the native mutation route. It therefore
 does not establish a new Surgeon-versus-native multiple.
 
-## What the models actually omitted
+## What the models actually got wrong
 
 The flat and file-group failures were not random parenthesis mistakes. Both
 flat calls and the admitted file-group call correctly supplied:
 
 - all 23 exact symbol sites, including the three non-default match counts;
+- all 9 exact namespace before/after replacements;
+- the exact guarded `detail-controls` replacement;
 - all 14 owner deletions; and
 - all 9 affected files.
 
-They all omitted two complete decision classes:
-
-- the require relation: add `sample.views.submission-row` as
-  `submission-row` in 9 files and remove 3 now-unused review aliases; and
-- the bespoke guarded rewrite of `detail-controls`.
-
-The compiler consequently refused the flat and first grouped calls with
-`change-owner-mismatch`. The second grouped call also failed public-schema
-admission. Its refusal was pre-mutation and correctly carried no write
-authority.
+Their semantic decision was complete. Their structural address was wrong:
+every namespace edit used `within.form=<namespace-name>` instead of the exact
+namespace selector `within.namespace=true`. The compiler consequently refused
+both flat calls and the first grouped call with `change-owner-mismatch`. The
+second grouped call also failed public-schema admission. Every refusal was
+pre-mutation and correctly carried no write authority.
 
 B made each kind of intent visible as a separate concept:
 
@@ -62,21 +60,23 @@ one coherent decision
 ```
 
 Both B callers completed every branch. The key mechanism is therefore not
-"shorter JSON." It is a schema that mirrors the model's plan and makes omission
-of a whole decision class conspicuous.
+"shorter JSON." It is a schema that mirrors the model's plan and removes a
+fickle representation decision: the caller states the exact require delta,
+while the compiler supplies the namespace owner and guarded clause edit.
 
 ## Surprise
 
 File grouping was worse than the flat control despite deleting repeated file
 names. Its payload was somewhat smaller, but it took longer and preserved the
-same conceptual blind spot. Compression by removing repeated syntax did not
+same namespace-address hazard. Compression by removing repeated syntax did not
 reduce the model's decision burden.
 
 Closed relations did both jobs at once:
 
 1. They named the semantic relationship once instead of asking the model to
    spell every resulting source fragment.
-2. They acted as a checklist of the complete decision.
+2. They removed the derived namespace-location choice that defeated all four
+   flat/grouped attempts.
 
 This is the strongest evidence so far that request materialization cost is
 driven by the number and visibility of model decisions, not only output bytes.
@@ -104,16 +104,19 @@ The next ratchet is one pure, snapshot-bound compiler that lowers a closed
 relation into the existing canonical compact transaction. The product API must
 keep four properties:
 
-- each relation is explicit and independently admissible;
+- the paired relations are explicit and jointly admissible;
 - expansion is mechanical against the one frozen source snapshot;
 - ambiguity or stale source refuses before mutation; and
 - the existing flat route remains available while the candidate is tested.
 
-The next experiment must use actual mutation and exact verification. It must
-compare correct arms only, preserve the frozen 51-edit/9-file meaning, and
-measure complete verified task time. If the closed relation remains exact and
-first-call one-shot, it can finally be compared honestly with the retained
-native controls.
+The next experiment must use actual mutation and exact verification. Its flat
+oracle is already known: the retained exact 33-row request uses
+`within.namespace=true` for all nine namespace edits. It must compare that
+correct flat arm with a relation arm that expands to the same canonical
+transaction, preserve the frozen 51-edit/9-file meaning, and measure complete
+verified task time. If the closed relation remains exact and first-call
+one-shot, it can finally be compared honestly with the retained native
+controls.
 
 ## Method note
 
