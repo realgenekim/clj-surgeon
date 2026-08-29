@@ -159,3 +159,72 @@ main lane could quote an exciting number.
 
 The product mechanism is promising. The promotion claim is not yet earned.
 That distinction is the result.
+
+## Superseding result: the independent acid test earned promotion
+
+The HOLD above was not rewritten. We answered its architectural question,
+proved a canonical identity only after exact guard resolution and complete
+disjointness, and ran a new cohort from the first position. Candidate
+`90b47d1b0f1a4971e2731652c71e765fd58bbf21`, tree
+`bfdce9bfacbd6e932de132e87e5dd19f4ab74170`, ran on Anvil dev-a in the
+predeclared `N R R N` then `R N N R` order. No old row was rescored into this
+result, no failed position was retried, and Block 2 started only after the
+frozen Block 1 scorer authorized it.
+
+Both environment fences passed before and after both blocks. All eight runs
+were semantic-correct, exact-correct, source-set-exact,
+representation-adherent, route-adherent, and verification-complete. Every run
+used one first-action `apply_clojure_changes` call with the same
+relation-capable surface and exact project verifier. One normalized-flat
+request again placed the bespoke edit in a different submitted position. Its
+request and transaction hashes remained different diagnostics, while its
+proven canonical effect identity, nine future hashes, read-back bytes, 51
+effects, and 9 files were exact.
+
+| Run | Arm | `T_emit` | `T_complete_verified` | Process wall |
+|---|---|---:|---:|---:|
+| B1 N1 | normalized flat | 59.796 s | 63.352 s | 64.226 s |
+| B1 R1 | closed relation | 32.185 s | 37.874 s | 38.628 s |
+| B1 R2 | closed relation | 35.349 s | 39.421 s | 40.109 s |
+| B1 N2 | normalized flat | 53.164 s | 56.896 s | 57.741 s |
+| B2 R1 | closed relation | 30.969 s | 35.295 s | 36.225 s |
+| B2 N1 | normalized flat | 52.849 s | 56.924 s | 57.595 s |
+| B2 N2 | normalized flat | 55.578 s | 60.165 s | 61.173 s |
+| B2 R2 | closed relation | 36.528 s | 41.154 s | 41.883 s |
+
+The unchanged gates all passed:
+
+| Aggregate | `T_emit` reduction | Complete-verified reduction |
+|---|---:|---:|
+| Block 1 | 40.21% | 35.72% |
+| Block 2 | 37.75% | 34.71% |
+| Pooled | **37.90%** | **33.99%** |
+
+The pooled closed-relation complete-verified median was 38.647 seconds; the
+process-wall median was 39.369 seconds. Against the closest retained exact
+native midpoint for this same 51-edit, nine-file workload, 289.507 seconds,
+the complete relation route is **7.35x faster** and 86.40 percent lower wall.
+That native comparison reuses an earlier matched native cohort; the causal
+promotion verdict comes from the same-candidate normalized-flat control and
+the unchanged dual gate above.
+
+The final scorer returned `cohort-valid=true`, `block-2-authorized=true`, and
+`promote=true`. Its final report SHA-256 is
+`5f4702d1d08d828956ad0764fff2575701a75a9804345b3b4d346c980eeca7ca`;
+the coordinator receipt SHA-256 is
+`6bbb096787793687cf2e642ac23072b3dee5206a273d3dd745e951aa9d6445a6`;
+and the 39-artifact manifest SHA-256 is
+`8d775c16da94ab4ed0e2a48c9e7b1a4d570d5d4eef4029a85ec7c4879d281978`.
+The exact result is retained at
+`/srv/fleet/dev-a/clj-surgeon-chord-results/90b47d1-20260829T231008Z`.
+The checkout was clean afterward, `.cpcache` was absent, and every private MCP
+server and cohort process was stopped.
+
+The breakthrough was not “make JSON smaller.” Removing 63.7 percent of an
+unrelated tool surface had previously bought only 5.2 percent. Here the closed
+relation removed repeated exact decision material from the request while both
+arms saw the same public surface. The model emitted 37.90 percent sooner, and
+that saving survived exact mutation, verification, response completion, both
+counterbalanced blocks, and an independent machine. The architecture and the
+measurement now agree: compress repetition, preserve explicit identity, and
+let one proven transaction own the effects.

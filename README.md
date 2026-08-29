@@ -63,6 +63,31 @@ lower wall time** for compact Surgeon. On a small two-file, three-change control
 native remains faster. The tool earns its ceremony when exact mechanical state
 spans enough owners and files to collapse many fragile actions into one chord.
 
+### Closed relations made the 51-edit chord 34 percent faster
+
+A later independent Anvil cohort kept that same complete 51-edit, nine-file
+decision and the same relation-capable `apply_clojure_changes` surface in both
+arms. The normalized-flat arm repeated every exact namespace and symbol edit.
+The closed-relation arm stated one exact symbol migration plus one exact require
+change; Surgeon lowered it through the same guarded compiler and atomic
+transaction.
+
+The predeclared Sol/high schedule was `N R R N` then `R N N R`. All eight runs
+were correct, route-adherent, one-shot, and exact verified. The relation arm
+reduced median request-emission time by 40.21 percent in Block 1 and 37.75
+percent in Block 2. Pooled, it emitted 37.90 percent sooner and completed exact
+verification 33.99 percent sooner: 38.647 seconds versus 58.544 seconds.
+Complete process wall was 39.369 seconds. Against the retained matched native
+midpoint of 289.507 seconds for this workload, that is **7.35x faster**.
+
+This was not promoted from an attractive first block. An early cohort was held
+because caller row order changed an exact transaction hash. The product first
+proved that fully resolved, non-overlapping effects have a canonical semantic
+identity while submitted order remains diagnostic provenance. A new whole
+cohort then passed both counterbalanced blocks and the unchanged 20-percent
+emission and verified-wall gates on candidate `90b47d1`. See the
+[append-only promotion receipt](docs/observations/2026-08-29-captains-log-closed-relations-earned-a-hold.md#superseding-result-the-independent-acid-test-earned-promotion).
+
 Why make structure a product primitive? In an additive Terra/high screen, the
 native caller generated a Perl program to perform this extraction and to
 balance the Clojure delimiters. That script replaced a complete

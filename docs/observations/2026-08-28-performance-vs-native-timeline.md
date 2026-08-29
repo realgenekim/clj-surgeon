@@ -126,3 +126,21 @@ Generate this view from the TSV as part of benchmark receipt publication, and
 require each new matched result to name its frozen task family, correctness
 law, candidate commit, native control, and sample size. That makes the graph a
 guard against benchmark drift instead of a manually curated victory chart.
+
+## 2026-08-29 append: closed relations passed the acid test
+
+The 35th retained aggregate adds the fresh, independently fenced Closed Compact
+Relations cohort. Four relation runs completed the 51-edit, nine-file workload
+in a 39.369-second process-wall median. The closest retained exact native
+midpoint for the same workload is 289.507 seconds, so the new point is 7.35x
+native. More importantly, its same-candidate normalized-flat control isolates
+the product mechanism: relation requests emitted 37.90 percent sooner and
+completed exact verification 33.99 percent sooner across both counterbalanced
+blocks. All eight causal-cohort rows were correct and route-adherent; the frozen
+scorer returned `promote=true`.
+
+The earlier HOLD and two invalid instrumentation cohorts remain in the record.
+They are not counted as wins or replaced by this point. A separate durable
+sentinel, `clj-surgeon-bvq`, now owns the cheaper, more sensitive use of this
+instrument: comparing installed stable, current main, and candidate on quiet
+Anvil hardware to catch dangerous performance regressions before publication.

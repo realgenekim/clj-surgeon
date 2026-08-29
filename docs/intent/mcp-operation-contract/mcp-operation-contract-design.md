@@ -739,6 +739,17 @@ It does not alter the held scorer, authorize the held second block, or mark
 performance promotion complete. Active requirements `MCP-OP-EDIT-028..030`
 own the pure projection, permutation/refusal law, and bounded public evidence.
 
+Superseding promotion evidence on 2026-08-29 closed that hold without
+rescoring or splicing the retained attempt. Candidate `90b47d1` ran one fresh
+whole `N R R N` then `R N N R` real-mutation cohort on Anvil dev-a. Both block
+environment fences passed, all eight calls were correct, route-adherent,
+one-shot, exact-verified transactions, and the scorer returned
+`promote=true`. Relation `T_emit` improved by 40.21 percent in Block 1, 37.75
+percent in Block 2, and 37.90 percent pooled. Complete verified time improved
+by 35.72 percent, 34.71 percent, and 33.99 percent respectively. This evidence
+completes `MCP-OP-EDIT-025`; the earlier HOLD remains the historical reason
+canonical effect identity and the second counterbalanced block were required.
+
 ## #Public request shape
 
 The first slice admits `symbol_migration` and `require_change` only as a pair.
