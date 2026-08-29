@@ -335,7 +335,12 @@
             ["symbol_migration" "files" 0 1 2]]
            [:disallowed-route (assoc relation-request "changes" []) ["changes"]]
            [:legacy-mask (assoc relation-request "symbol_rewrites" {})
-            ["symbol_rewrites"]]]]
+            ["symbol_rewrites"]]
+           [:multiply-qualified-symbol
+            (assoc-in relation-request
+                      ["symbol_migration" "files" 0 1 0 1]
+                      "one/two/three")
+            ["symbol_migration" "files" 0 1 0 1]]]]
     (testing (name label)
       (let [result (relations/compile-source-blind request)]
         (is (false? (:ok result)) (pr-str result))
@@ -345,6 +350,18 @@
         (is (false? (:mutation-attempted result)))
         (is (false? (:write-authority result)))
         (is (not (contains? result :request))))))
+  (testing "public reader forms refuse without evaluation"
+    (doseq [request
+            [(assoc-in relation-request
+                       ["symbol_migration" "files" 0 1 0 1]
+                       "#=(println \"READER-EVAL-EXECUTED\")")
+             (assoc-in relation-request ["require_change" "add" "lib"]
+                       "#=(println \"READER-EVAL-EXECUTED\")")]]
+      (let [result (atom nil)
+            output (with-out-str
+                     (reset! result (relations/compile-source-blind request)))]
+        (is (empty? output))
+        (is (false? (:ok @result))))))
   (let [workspace (temp-dir)
         config {:project-root (.getPath workspace)}
         invalid (dissoc relation-request "require_change")]
@@ -425,7 +442,10 @@
                       "[sample.reviews :as reviews] ;; keep")]
              [:reader-conditional
               (assoc sources (first relation-files)
-                     "(ns sample.review-updates (:require #?(:clj [sample.reviews :as reviews])))")]]]
+                     "(ns sample.review-updates (:require #?(:clj [sample.reviews :as reviews])))")]
+             [:removal-leaves-no-survivor
+              (assoc sources "src/sample/views/log.clj"
+                     "(ns sample.views.log\n  (:require\n   [sample.views.review :as review]))\n")]]]
       (testing (name label)
         (let [refusal (relations/compile-frozen changed source-blind)]
           (is (false? (:ok refusal)) (pr-str refusal))

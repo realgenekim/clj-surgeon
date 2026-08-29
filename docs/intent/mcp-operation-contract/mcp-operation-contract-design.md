@@ -741,7 +741,7 @@ another relation spelling.
 | `columns` | Exactly `[owner, from, matches]`, in that order. |
 | `files` | A nonempty ordered vector of `[file, rows]` tuples. Each canonical file is unique and each ordered `rows` vector is nonempty. |
 | row `owner` | One nonblank exact named top-level owner. |
-| row `from` | One qualified Clojure symbol token. |
+| row `from` | One unqualified or singly qualified Clojure symbol token. |
 | row `matches` | One positive exact integer count. |
 
 Each migration row is unique by canonical file, owner, and source symbol. The
@@ -754,7 +754,7 @@ Alias, owner, namespace, and symbol fields use the same Clojure reader and
 symbol predicates as the existing compact contract. `from` must parse as one
 plain symbol node with exactly one nonblank qualifier and one nonblank name.
 Keywords, strings, quoted forms, metadata-bearing forms, reader forms, and
-unqualified or multiply qualified spellings are outside this slice. The
+multiply qualified spellings are outside this slice. The
 generated target must differ from `from`; a target alias equal to the source
 qualifier is a no-op refusal.
 
