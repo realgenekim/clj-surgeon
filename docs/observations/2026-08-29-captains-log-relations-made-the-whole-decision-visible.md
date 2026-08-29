@@ -1,4 +1,4 @@
-# Captain's Log: Relations Made Namespace Ownership Legible
+# Captain's Log: Relations May Make a Complete Decision Cheaper to State
 
 **Date:** 2026-08-29  
 **Bead:** `clj-surgeon-45j`  
@@ -6,126 +6,117 @@
 **Retained archive:** `clj-surgeon-bench-archive/2026-08-29/6328db5-cohort-20260829T0851Z.tar.gz`  
 **Archive SHA-256:** `1af9110d6bbdbe369cdcdf7feee0f70bac78b0f25717a24d937dfe603ecc9d2c`
 
-## Result
+## The result changed when we tested the scorer
 
-The closed-relation request shape was the only arm that encoded the complete
-51-edit decision with valid structural addresses on its first call.
+The first analysis said the relation arm was 2/2 exact while flat and grouped
+arms were 0/2. That was wrong. The models had supplied the complete decision;
+the capture-only scorer had omitted a production normalization stage.
 
-| Arm | Shape | Exact first call | Prompt-to-call midpoint | Capture-only wall midpoint | Payload |
-|---|---|---:|---:|---:|---:|
-| F | flat edit rows | 0/2 | 65.841 s | 68.500 s | 6,470 B |
-| A | rows grouped by file | 0/2 | 83.703 s | 87.000 s | 5,666/5,918 B |
-| B | `require_change` + `symbol_migration` + bespoke edit + deletions | 2/2 | 48.912 s | 51.500 s | 2,715 B |
+All four non-relation callers constructed all 33 edit rows and 14 owner
+deletions. Three placed each exact namespace name in `within.form`; one placed a
+typed namespace-owner object there. The historical scorer sent those requests
+directly to the generic transaction compiler. Current production first runs
+source-proved compact-location normalization, which safely lowers an exact
+namespace name to namespace ownership when it is unique.
 
-Every B call admitted through the public schema, described all 51 matches in
-9 files, compiled to the frozen canonical transaction and future hashes, and
-needed no refusal, recovery, search, file read, or second model turn.
+Replaying the immutable calls through the current product path corrected the
+record:
 
-The formal three-arm speed comparison did **not** pass: F and A were incorrect,
-so their walls are not valid performance controls. B's prompt-to-call midpoint
-was descriptively 25.7% below F and its wall midpoint was 24.8% below F, but
-those are hypothesis-generating deltas, not a publishable causal speed claim.
+| Arm | Historical score | Product-equivalent exact | Prompt-to-call midpoint | Capture wall midpoint | Payload |
+|---|---:|---:|---:|---:|---:|
+| F: flat rows | 0/2 | 2/2 | 65.841 s | 68.500 s | 6,470 B |
+| A: file groups | 0/2 | 1/2 | 83.703 s | 87.000 s | 5,666/5,918 B |
+| B: closed relations | 2/2 | 2/2 | 48.912 s | 51.500 s | 2,715 B |
 
-This was a capture-only screen. It did not mutate the fixture, run the
-transaction verifier, or reproduce the native mutation route. It therefore
-does not establish a new Surgeon-versus-native multiple.
+Every successful product-equivalent replay compiled 51 matches across 9 files
+to all nine frozen future hashes. A's other call remains a real public-schema
+failure. No replay mutated source.
 
-## What the models actually got wrong
+## The harness also taught the wrong interface
 
-The flat and file-group failures were not random parenthesis mistakes. Both
-flat calls and the admitted file-group call correctly supplied:
-
-- all 23 exact symbol sites, including the three non-default match counts;
-- all 9 exact namespace before/after replacements;
-- the exact guarded `detail-controls` replacement;
-- all 14 owner deletions; and
-- all 9 affected files.
-
-Their semantic decision was complete. Their structural address was wrong:
-every namespace edit used `within.form=<namespace-name>` instead of the exact
-namespace selector `within.namespace=true`. The compiler consequently refused
-both flat calls and the first grouped call with `change-owner-mismatch`. The
-second grouped call also failed public-schema admission. Every refusal was
-pre-mutation and correctly carried no write authority.
-
-B made each kind of intent visible as a separate concept:
+At the same candidate commit, production `edit_clojure` explicitly taught:
 
 ```text
-one coherent decision
-        |
-        +-- require_change -------- 9 files / 3 removals
-        +-- symbol_migration ------ 23 owner rows / 27 matches
-        +-- edits ----------------- 1 exceptional guarded rewrite
-        `-- delete_owners --------- 14 exact owners
+within {form}
+within {namespace:true} for the unique ns form
+within {namespace:name} for an exact namespace
 ```
 
-Both B callers completed every branch. The key mechanism is therefore not
-"shorter JSON." It is a schema that mirrors the model's plan and removes a
-fickle representation decision: the caller states the exact require delta,
-while the compiler supplies the namespace owner and guarded clause edit.
+The experimental surface replaced that with the generic change-tool
+description. Its first compact instruction said every edit contained
+`within {form}`. Later prose mixed in a typed namespace-owner spelling from the
+direct-change language. The nested schema was correct, but the high-salience
+description was misleading. That explains the four callers' consistent choice
+of the `form` property and makes the old correctness contrast doubly invalid.
 
-## Surprise
+The future harness must preserve the production description and prove the
+client-visible registry surface before spending model tokens.
 
-File grouping was worse than the flat control despite deleting repeated file
-names. Its payload was somewhat smaller, but it took longer and preserved the
-same namespace-address hazard. Compression by removing repeated syntax did not
-reduce the model's decision burden.
+## What remains genuinely exciting
 
-Closed relations did both jobs at once:
+The corrected comparison is stronger for the materialization hypothesis. F and
+B are both 2/2 product-equivalent exact, yet B reached the complete first call
+16.929 seconds sooner at the midpoint—25.7 percent—and reduced capture wall by
+17.0 seconds, or 24.8 percent. It represented the same canonical transaction in
+2,715 bytes rather than 6,470.
 
-1. They named the semantic relationship once instead of asking the model to
-   spell every resulting source fragment.
-2. They removed the derived namespace-location choice that defeated all four
-   flat/grouped attempts.
+```text
+Normalized flat control                       Closed relation treatment
 
-This is the strongest evidence so far that request materialization cost is
-driven by the number and visibility of model decisions, not only output bytes.
+33 literal edit rows                          require_change
+14 owner deletions                             symbol_migration
+~6.0-6.5 KB                          versus   1 bespoke edit
+                                                14 owner deletions
+                                                2.7 KB
+        |                                             |
+        +-- compact-location normalization <----------+
+        +-- same generic transaction compiler
+        +-- same 51 matches / 9 files / future hashes
+```
 
-## Counterfactual and validity boundary
+The relation did not make an incorrect decision correct. It may have made an
+already-correct decision materially cheaper for the model to state. That is the
+only causal hypothesis worth carrying forward.
 
-Had we scored only payload size or server execution, A would have looked
-promising and B would have looked like an ordinary compression optimization.
-Retaining every model attempt exposed the opposite: A made the model slower and
-did not make it correct; B changed first-call behavior.
+## Claim boundary
 
-The cohort is small (`n=2` per arm), its controls are wrong, and it used one
-Sol/high caller stratum. The correct decision is:
+This was still a capture-only `N=2` screen. The arms exposed different schemas,
+the harness did not mutate files, and no exact verifier ran. Therefore:
 
-- **GO** to a bounded product-shaped closed-relation candidate and a real
-  mutation cohort;
-- **NO-GO** to claim causal speedup from this cohort;
+- **GO** to an experimental same-candidate relation compiler and real mutation
+  screen after HLD approval;
+- **NO-GO** to claim a product speedup or a new Surgeon-versus-native multiple;
+- **NO-GO** to claim relations are needed for correctness;
 - **NO-GO** to merge the experimental compiler wholesale; and
-- **STOP** the generic file-group option unless new evidence explains why it
-  would preserve conceptual coverage.
+- **STOP** generic file grouping unless new evidence earns it.
 
-## What becomes cheaper next
+## Cheapest decisive experiment
 
-The next ratchet is one pure, snapshot-bound compiler that lowers a closed
-relation into the existing canonical compact transaction. The product API must
-keep four properties:
+One immutable candidate exposes the production surface to every run.
 
-- the paired relations are explicit and jointly admissible;
-- expansion is mechanical against the one frozen source snapshot;
-- ambiguity or stale source refuses before mutation; and
-- the existing flat route remains available while the candidate is tested.
+```text
+N = normalized flat request
+R = closed relation -> ordinary edits -> same normalizer
 
-The next experiment must use actual mutation and exact verification. Its flat
-oracle is already known: the retained exact 33-row request uses
-`within.namespace=true` for all nine namespace edits. It must compare that
-correct flat arm with a relation arm that expands to the same canonical
-transaction, preserve the frozen 51-edit/9-file meaning, and measure complete
-verified task time. If the closed relation remains exact and first-call
-one-shot, it can finally be compared honestly with the retained native
-controls.
+Block 1: N R R N
+Block 2, only if block 1 is exact and >=15% faster: R N N R
+```
 
-## Method note
+Before model launch, both oracles must pass the public schema and compile to the
+same canonical transaction, 51 matches, 9 files, future hashes, exact verifier,
+and terminal-response contract. Every run must perform one real
+`edit_clojure` mutation and exact verification. Promotion at `N=8` requires 4/4
+exact per arm, R faster in both blocks, and at least 20 percent lower complete
+verified midpoint or median.
 
-This result exists because the two-lane method worked as designed. SURGEON1
-owned the production hypothesis and launch decision. SURGEON2 falsified two
-earlier candidates that could admit partial B requests or omit exact cohort
-gates. Only candidate `6328db5` earned model tokens. The ugly controls were
-kept as evidence instead of tuned away.
+## Method lesson
 
-That is `(N * K * sigma) / t` in practice: independent schema options,
-parallel adversarial review, experiments spent on the uncertain model boundary,
-and a short retained decision cycle.
+The most valuable result was not the attractive 25.7 percent number. It was
+catching our own false denominator before building a product around it.
+SURGEON1 replayed the raw calls through production. Independent adversaries
+identified both the skipped normalizer and the non-production description.
+The relation architecture survived, but its reason for existence became much
+narrower and more falsifiable.
+
+That is the useful form of `(N * K * sigma) / t`: parallel review does not only
+find more wins. It prevents us from manufacturing them.

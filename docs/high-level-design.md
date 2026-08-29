@@ -263,11 +263,34 @@ the declared file set. A missing or ambiguous decision remains the caller's
 responsibility.
 
 The retained flat and file-group callers did not omit those decisions. They
-supplied all 33 edit rows but addressed each namespace clause as a named form,
-which safely refused `change-owner-mismatch`. The paired relation removes that
-derived address choice: the caller supplies the exact add/remove decision and
-file, while the compiler emits the one exact namespace-scoped edit. This is the
-observed legibility mechanism the first slice must preserve.
+supplied all 33 edit rows and 14 owner deletions. Three addressed each namespace
+clause with the exact namespace name in `within.form`; one used an unsupported
+typed namespace object there. The historical capture scorer rejected all four
+because it called the generic transaction compiler without production's
+source-proved compact-location normalization. Replaying the retained calls
+through the current product path made both flat calls and one grouped call
+exact: 51 matches, 9 files, and every frozen future hash. The fourth grouped
+call remains a real schema-admission failure.
+
+Namespace-name normalization is therefore already sufficient to preserve flat
+correctness for the observed string-shaped calls. The paired relation is not a
+correctness rescue. Its distinct hypothesis is that naming the require and
+symbol relationships once reduces `T_emit` and complete verified task time
+beyond an already-correct normalized flat route. In the retained capture-only
+cohort, both flat and relation arms were 2/2 product-equivalent exact, while the
+relation midpoint reached the first call 16.929 seconds (25.7 percent) sooner
+and emitted 2,715 bytes instead of 6,470. That is a small descriptive signal,
+not a causal product result.
+
+The retained cohort also replaced the production compact-editor description
+with the generic change-tool description. Its leading instruction said every
+edit used `within {form}` even though the nested schema correctly exposed
+`within.namespace`. Production already teaches `{namespace:true}` and
+`{namespace:name}`. A product experiment must preserve that production text and
+schema for both arms, prove the actual client projection, and charge the larger
+relation surface equally. Description repair and location normalization are
+general correctness defenses; they do not remove the flat route's roughly
+6-kilobyte construction burden.
 
 The relation boundary is fail-closed:
 
@@ -333,11 +356,14 @@ measured, while leaving the compiler reusable by a later CLI adapter.
 This relation is promoted only if a fresh, correct-control mutation cohort
 proves exact future bytes or the approved meaning-preserving equivalent,
 configured verification, first-call correctness, and lower complete verified
-wall time after charging the larger schema surface. Capture-only evidence does
-not satisfy that gate. A relation whose independent omission pattern does not
-recur, whose callers route around it, or whose complete-task time fails to beat
-the flat route remains experimental or is retired. New relations require new
-repeated evidence; this first slice is not precedent for a refactoring catalog.
+wall time after charging the larger schema surface. The control must traverse
+the same candidate and the same source-proved compact-location normalizer; the
+treatment adds only closed-relation lowering before that common path.
+Capture-only evidence does not satisfy that gate. A relation whose construction
+advantage does not recur, whose callers route around it, or whose complete-task
+time fails to beat the normalized flat route remains experimental or is
+retired. New relations require new repeated evidence; this first slice is not
+precedent for a refactoring catalog.
 
 Extraction planning is a read operation over the same pure compiler and
 workspace snapshot used by extraction execution. It returns a bounded movement
