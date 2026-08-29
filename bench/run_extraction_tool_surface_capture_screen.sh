@@ -100,6 +100,14 @@ wait_for_pid() {
   wait "$pid"
 }
 
+output_root_is_clean() {
+  local path=$1
+  [ ! -L "$path" ] &&
+    { [ ! -e "$path" ] ||
+      { [ -d "$path" ] &&
+        [ -z "$(find "$path" -mindepth 1 -maxdepth 1 -print -quit)" ]; }; }
+}
+
 run_zero_model_tests() {
   git -C "$repo_root" merge-base --is-ancestor "$base_commit" HEAD
   [ "$(shasum -a 256 "$repo_root/dev/experiments/extraction_tool_surface.clj" | awk '{print $1}')" = "$surface_source_sha" ]
@@ -111,6 +119,25 @@ run_zero_model_tests() {
     '01d502300c9e6af22e22e69f5680a4ed767ecc7fa64e4c9bce1d91b78bdfba47' ]
   [ "${arms[*]}" = 'control treatment treatment control' ]
   [ "${run_ids[*]}" = '01-control 02-treatment 03-treatment 04-control' ]
+
+  local output_probe empty_output nonempty_output regular_output symlink_output
+  output_probe=$(mktemp -d "${TMPDIR:-/tmp}/extraction-surface-output-root.XXXXXX")
+  empty_output="$output_probe/empty"
+  nonempty_output="$output_probe/nonempty"
+  regular_output=$(mktemp "$output_probe/regular.XXXXXX")
+  symlink_output="$output_probe/symlink"
+  mkdir "$empty_output" "$nonempty_output"
+  mktemp "$nonempty_output/prior.XXXXXX" >/dev/null
+  ln -s "$empty_output" "$symlink_output"
+  output_root_is_clean "$output_probe/absent"
+  output_root_is_clean "$empty_output"
+  ! output_root_is_clean "$nonempty_output"
+  ! output_root_is_clean "$regular_output"
+  ! output_root_is_clean "$symlink_output"
+  unlink "$symlink_output"
+  unlink "$regular_output"
+  unlink "$nonempty_output"/prior.*
+  rmdir "$empty_output" "$nonempty_output" "$output_probe"
 
   local prompt
   prompt=$(mktemp "${TMPDIR:-/tmp}/extraction-surface-prompt.XXXXXX")
@@ -159,8 +186,8 @@ if [ -z "$result_dir" ]; then
   echo '--output is required for --run' >&2
   exit 2
 fi
-if [ -e "$result_dir" ] && [ -n "$(find "$result_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
-  echo '--output must not contain any prior run artifacts' >&2
+if ! output_root_is_clean "$result_dir"; then
+  echo '--output must be absent or an empty non-symlink directory' >&2
   exit 2
 fi
 if [ -z "$expected_head" ] || [ -z "$expected_tree" ] || \
