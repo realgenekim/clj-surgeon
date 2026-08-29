@@ -628,6 +628,7 @@
   ;; @spec MCP-OP-EDIT-003
   ;; @spec MCP-OP-EDIT-004
   ;; @spec MCP-OP-EDIT-005
+  ;; @spec MCP-OP-EDIT-011
   (try
     (let [redundant-expect? (present? params "expect")
           params (without-field params "expect")]
@@ -641,15 +642,18 @@
                 (let [path ["edits" index]
                       _ (validate-fields! edit editor-fields
                                           required-editor-fields path)
-                      within (field edit "within")
-                      _ (validate-fields! within editor-within-fields
-                                          required-editor-within-fields
-                                          (conj path "within"))
+                      within-present? (present? edit "within")
+                      within (when within-present?
+                               (field edit "within"))
+                      _ (when within-present?
+                          (validate-fields! within editor-within-fields
+                                            required-editor-within-fields
+                                            (conj path "within")))
                       form? (present? within "form")
                       namespace? (present? within "namespace")
                       root? (present? within "root")
                       locations (count (filter true? [form? namespace? root?]))
-                      _ (when-not (= 1 locations)
+                      _ (when (and within (not= 1 locations))
                           (refuse! :ambiguous-editor-location
                                    (conj path "within")
                                    "Provide exactly one of form, namespace, or root"))
@@ -676,7 +680,9 @@
                       _ (when-not (= (count files) (count (distinct files)))
                           (refuse! :duplicate-file (conj path "files")
                                    "Grouped edit files must be unique"))
-                      _ (when (and files? (not root?))
+                      _ (when (and files?
+                                   (or within (< 1 (count files)))
+                                   (not root?))
                           (refuse! :invalid-grouped-editor-scope
                                    (conj path "within")
                                    "Grouped files require root scope"))
@@ -808,6 +814,18 @@
           (seq programs)
           (assoc :programs programs)
 
+          (seq edits)
+          (assoc :compact-location-normalization
+                 {:change-indexes
+                  (->> edits
+                       (keep-indexed
+                         (fn [index edit]
+                           (when-not (= true
+                                        (some-> (field edit "within")
+                                                (field "root")))
+                             index)))
+                       vec)})
+
           redundant-expect?
           (assoc :input-normalization
                  {:ignored ["expect"]
@@ -833,6 +851,10 @@
             (cond-> validated
               (and (:ok validated) (seq (:programs compiled)))
               (assoc-in [:params :programs] (:programs compiled))
+
+              (and (:ok validated) (:compact-location-normalization compiled))
+              (assoc :compact-location-normalization
+                     (:compact-location-normalization compiled))
 
               (:input-normalization compiled)
               (assoc :input-normalization (:input-normalization compiled))))
@@ -1087,6 +1109,8 @@
                     :zero-callers-authoritative :zero_callers_authoritative})))
       (:format result) (assoc :format (:format result))
       (:verification result) (assoc :verification (:verification result))
+      (:location-normalization result)
+      (assoc :location_normalization (:location-normalization result))
       (and cold (not verification-complete?))
       (assoc :next_call (:next_call cold)))))
 

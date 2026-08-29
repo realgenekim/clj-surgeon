@@ -6,7 +6,11 @@
    real validator and intent compiler against frozen source bytes."
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-compact-location :as compact-location]
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.outline :as outline]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [owner-aware-symbol-migration :as migration]
@@ -216,7 +220,8 @@
       (when (and (= 1 (count records))
                  (= 1 (count (direct-form-nodes source))))
         (let [record (first records)]
-          (when (:name record)
+          (when (and (:name record)
+                     (= (list-head form-node) (:type record)))
             {:node form-node
              :kind (:type record)
              :name (:name record)}))))))
@@ -289,7 +294,141 @@
     (if-not (:ok lowered)
       lowered
       (assoc lowered :product
-             (migration/compile-request sources (:request lowered))))))
+             (if (some #(not (contains? % "within"))
+                       (get-in lowered [:request "edits"]))
+               {:ok false :error-type :historical-missing-within}
+               (migration/compile-request sources (:request lowered)))))))
+
+(defn compile-product
+  [sources request]
+  (let [expanded (expand-symbol-migration request)]
+    (if-not (:ok expanded)
+      expanded
+      (let [validated (contract/validate-tool-params (:request expanded))]
+        (if-not (:ok validated)
+          validated
+          (let [spec (contract/tool-params->transaction (:params validated))
+                prepared
+                (compact-location/normalize-spec
+                  sources spec (:compact-location-normalization validated))]
+            (if (:error prepared)
+              prepared
+              (assoc prepared
+                     :owner-row-count (:owner-row-count expanded)
+                     :declared-match-count (:declared-match-count expanded)
+                     :compiled
+                     (transaction/compile-transaction
+                       sources (:spec prepared))))))))))
+
+(defn replay-product-one
+  [sources expected-after-hashes capture]
+  (let [result (compile-product sources (:request capture))
+        compiled (:compiled result)]
+    (merge
+      (select-keys capture [:run :base :capture-sha256])
+      {:ok (and (:ok result) (:ok compiled))
+       :owner-row-count (:owner-row-count result)
+       :declared-match-count (:declared-match-count result)
+       :match-count (:match-count compiled)
+       :changed-file-count (:changed-file-count compiled)
+       :future-hashes-equal
+       (and (:ok compiled)
+            (= expected-after-hashes (migration/file-hashes compiled)))
+       :exact-future
+       (and (:ok result)
+            (:ok compiled)
+            (= 51 (:match-count compiled))
+            (= 9 (:changed-file-count compiled))
+            (= expected-after-hashes (migration/file-hashes compiled)))
+       :location-normalization (:location-normalization result)
+       :error-type (or (:error-type result) (:error-type compiled))})))
+
+(declare capture-files load-capture)
+
+(def retained-manifest-file
+  "dev/experiments/namespace_tolerance_retained_manifest.edn")
+
+(defn canonical-data
+  [value]
+  (cond
+    (map? value)
+    (into (sorted-map)
+          (map (fn [[key child]] [key (canonical-data child)]))
+          value)
+
+    (vector? value) (mapv canonical-data value)
+    (sequential? value) (mapv canonical-data value)
+    :else value))
+
+(defn retained-request
+  [manifest {:keys [base location-shape]}]
+  (let [request (case base
+                  :oracle migration/oracle-request
+                  :candidate migration/candidate-manifest)
+        names (:namespace-names manifest)
+        namespace-count (count names)
+        edit-at
+        (fn [request index transform]
+          (update-in request ["edits" index] transform))
+        namespace-name-shape
+        (fn [request]
+          (reduce
+            (fn [result [index namespace-name]]
+              (edit-at result index
+                       #(assoc % "within" {"form" namespace-name})))
+            request
+            (map-indexed vector names)))
+        omitted-shape
+        (fn [request end-index]
+          (reduce
+            (fn [result index]
+              (edit-at result index
+                       (fn [edit]
+                         (-> edit
+                             (assoc "files" [(get edit "file")])
+                             (dissoc "file" "within")))))
+            request
+            (range end-index)))]
+    (dissoc
+      (case location-shape
+        :namespace-name-in-form (namespace-name-shape request)
+        :namespace-clauses-omitted (omitted-shape request namespace-count)
+        :namespace-clauses-and-complete-owner-omitted
+        (omitted-shape request (inc namespace-count)))
+      "workspace_root")))
+
+(defn load-retained-manifest
+  []
+  (edn/read-string (slurp retained-manifest-file)))
+
+(defn retained-captures
+  [manifest]
+  (mapv
+    (fn [{:keys [request-sha256] :as run}]
+      (let [request (retained-request manifest run)
+            actual (sha256 (pr-str (canonical-data request)))]
+        (assoc run
+               :request request
+               :request-hash-equal (= request-sha256 actual)
+               :actual-request-sha256 actual)))
+    (:runs manifest)))
+
+(defn product-report
+  []
+  (let [{:keys [sources expected-after-hashes]} (migration/load-fixture)
+        manifest (load-retained-manifest)
+        captures (retained-captures manifest)
+        runs (mapv #(replay-product-one sources expected-after-hashes %)
+                   captures)
+        request-hashes-equal (every? :request-hash-equal captures)]
+    {:capture-count (count captures)
+     :unique-request-count (count (set (map :request-sha256 captures)))
+     :request-hashes-equal request-hashes-equal
+     :exact-run-count (count (filter :exact-future runs))
+     :all-eight-exact (and (= 8 (count captures))
+                           request-hashes-equal
+                           (every? :exact-future runs))
+     :runs runs}))
 
 (defn exact-future?
   [product expected-after-hashes]

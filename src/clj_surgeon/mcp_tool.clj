@@ -6,6 +6,7 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-formatter :as formatter]
@@ -54,7 +55,7 @@
     "items contain find, except guarded top-level insertion: omit find and name exactly one forms owner. To delete two or more known named owners, use forms "
     "with delete: true once; do not create marker forms or wait for semantic preparation. "
     "Insertion actions use an array of nonblank strings; one array item may contain several complete forms, "
-   "which Surgeon splits in order. Insertion strings refuse malformed forms and refuse comment-bearing gaps. For named top-level "
+    "which Surgeon splits in order. Insertion strings refuse malformed forms and refuse comment-bearing gaps. For named top-level "
     "def or defn owners, use forms: [name]. owner is only for the namespace form "
     "and must be {kind: namespace, name: ns-name}; never pass owner as a string. "
     "For one multimethod implementation, use forms: [{kind: defmethod, name: render, dispatch: :card}]. "
@@ -449,7 +450,7 @@
 
 (defn- execute-explicit-change!
   ;; @spec OP-ALG-MCP-001
-  [config root resolved receipt verify]
+  [config root resolved receipt verify compact-location-plan]
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
                           verify (:verification-profiles config)
@@ -496,7 +497,11 @@
                      (cond-> {:spec (:spec resolved) :receipt-out receipt}
                        prepare-compiled!
                        (assoc :prepare-compiled!
-                              #(prepare-compiled! project-root %))))]
+                              #(prepare-compiled! project-root %))
+
+                       compact-location-plan
+                       (assoc :prepare-spec
+                              #(compact-location/normalize-spec %1 %2 compact-location-plan))))]
         (if (or (:error result) (nil? verify))
           result
           (let [verification (cond
@@ -650,7 +655,8 @@
                                 (get-in validated [:params :verify]))
                               (execute-explicit-change!
                                 config root resolved receipt
-                                (get-in validated [:params :verify]))))
+                                (get-in validated [:params :verify])
+                                (:compact-location-normalization validated))))
                     classified (cond->
                                  (contract/classify-kernel-result
                                    (.toString root) result)

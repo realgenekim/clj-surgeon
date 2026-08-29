@@ -78,7 +78,7 @@
               routes))
     (is (= #{"file" "files" "within" "from" "to" "matches"}
            (set (keys (:properties gesture)))))
-    (is (= ["within" "from" "to"]
+    (is (= ["from" "to"]
            (:required gesture)))
     (is (false? (:additionalProperties gesture)))
     (is (= #{"form" "namespace" "root"}
