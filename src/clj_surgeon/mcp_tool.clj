@@ -660,6 +660,9 @@
                     classified (cond->
                                  (contract/classify-kernel-result
                                    (.toString root) result)
+                                 (:compact-field-normalization validated)
+                                 (assoc :compact_field_normalization
+                                        (:compact-field-normalization validated))
                                  (:input-normalization validated)
                                  (assoc :input_normalization
                                         (:input-normalization validated)))]
@@ -810,7 +813,9 @@
   (str
     "Commit one atomic Clojure edit transaction with no preflight read when the "
     "decision is complete. edits are exact literal replacements guarded by the "
-    "exact old subtree: use file with within {form}, {namespace:true} for the "
+    "exact value pair from/to. The exact aliases old/new and before/after are "
+    "also accepted and lowered to from/to; supply exactly one complete pair. The "
+    "exact old subtree uses file with within {form}, {namespace:true} for the "
     "file's unique ns form, or {namespace:name} for an explicitly named ns. Use "
     "explicit files with within {root:true} for one grouped "
     "Clojure/EDN edit. matches defaults to one and is enforced in every file. Optional programs are "

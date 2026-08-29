@@ -79,8 +79,8 @@
             result (contract/validate-tool-params
                      (assoc-in gesture-request ["edits" 0] edit))]
         (is (:ok result))
-        (is (= ":done" (get-in result [:params :changes 0 "find"])))
-        (is (= ":complete" (get-in result [:params :changes 0 "replace"])))
+        (is (= ":done" (get-in result [:params :changes 0 :find])))
+        (is (= ":complete" (get-in result [:params :changes 0 :replace])))
         (is (= [{:edit_index 0
                  :relation relation
                  :requested_fields [source-field target-field]
