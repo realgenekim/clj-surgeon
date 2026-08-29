@@ -892,3 +892,55 @@ first file as argument zero, and the capture server omitted required
 `elapsed_ms` from its structured success response. The retained per-run
 emission clocks and captured arguments remain usable for offline replay, but no
 MCP-success or complete-turn claim is made from this cohort.
+
+## Three exact location laws recovered every retained call
+
+The eight captured requests became a better experiment than another model
+cohort. They preserved the model's actual first call, the frozen fixture, and
+the exact future-source oracle. A pure replay could therefore ask whether a
+different request spelling compiled to the identical guarded transaction
+without paying another model boundary or touching source.
+
+The original two namespace laws reached an honest 7/8 ceiling:
+
+1. Six calls used the exact parsed namespace name as `within.form`. They became
+   valid only after proving that no named owner matched, exactly one direct
+   namespace existed, and its name was byte-for-byte equal to the supplied
+   selector.
+2. One call omitted `within` for complete namespace clauses. It became valid
+   only after proving that every lossless `from` match was a direct child of
+   the unique namespace, the direct-child count equaled the declared count,
+   and the same fingerprint occurred nowhere nested or elsewhere in the file.
+
+Those laws also normalized a singleton `files` vector to its identical scalar
+`file` inside the complete proof. They recovered seven calls to exactly 51
+matches in nine files with every capsule future hash equal. They correctly
+left `01-control` refused because its tenth omitted selector was a complete
+`detail-controls` definition, not a namespace clause.
+
+That refusal exposed a third injective relation. When `from` and `to` are each
+one complete named top-level owner with the same kind and name, `matches` is
+one, and the complete lossless `from` fingerprint occurs exactly once as a
+direct top-level owner, the old form itself supplies its location. This law
+rescued only `01-control`. Together the three laws recovered 8/8 retained
+calls to the exact frozen future.
+
+An independent adversarial review caught an important weakness before the
+experiment was integrated: the first namespace-clause prototype counted all
+descendants under `ns`. That would have accepted a nested lookalike and did not
+exclude an identical candidate elsewhere. The tightened proof requires
+declared count = direct namespace-child count = namespace-descendant count =
+whole-file count. Nested-only and competing-outside-namespace fixtures now
+refuse.
+
+The completed experiment passed 4 tests and 37 assertions, the fast suite at
+636 tests and 5,467 assertions, the cold MCP suite at 269 tests and 2,284
+assertions, and clj-kondo with zero errors or warnings. It changed no product,
+schema, fixture source, installed tool, or shared runtime.
+
+The architectural conclusion is narrow. Add one compact-only pure location
+normalizer after the frozen source read and before the unchanged generic
+transaction compiler. Do not teach generic CLI/direct `:forms` selectors to
+fall back to namespaces. Do not default omitted `within` to root scope. Exact
+named owners remain authoritative, and every ambiguity or stale fingerprint
+continues to refuse the complete batch before write.
