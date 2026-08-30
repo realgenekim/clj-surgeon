@@ -43,6 +43,11 @@ Paths in scope:
 
 ## The acid test — the ultimate measure of performance (ratified Gene, 2026-08-30)
 
+Before designing, running, or interpreting ANY experiment, screen, or benchmark, read
+[.claude/skills/designing-experiments/SKILL.md](.claude/skills/designing-experiments/SKILL.md)
+— the earned method: empirical-usage grounding, preregistration with kill criteria,
+sub-ceiling controls, and the Anvil acid test as the only proof rung.
+
 **A performance improvement is proven by exactly one instrument: a matched serial Anvil
 comparison at an exact product commit — the Surgeon route versus a matched native route on a
 REAL historical decision, both arms completing the same task, scored by the same semantic

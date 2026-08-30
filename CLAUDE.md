@@ -12,6 +12,10 @@ Before non-trivial feature or refactoring work, read:
 - [docs/testing-guidelines.md](docs/testing-guidelines.md) for the one-shot
   feature standard and required test layers.
 - The applicable plan in [docs/plans/](docs/plans/) when one exists.
+- [.claude/skills/designing-experiments/SKILL.md](.claude/skills/designing-experiments/SKILL.md)
+  before designing, running, or interpreting ANY experiment, screen, or benchmark —
+  the earned scientific method: empirical-usage grounding, preregistration with kill
+  criteria, sub-ceiling controls, and the Anvil acid test as the only proof rung.
 
 When working in this repository, the working-tree [skill.md](skill.md)
 supersedes any installed clj-surgeon skill; installed copies are stable
