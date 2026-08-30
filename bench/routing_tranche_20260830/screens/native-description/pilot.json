@@ -1,0 +1,101 @@
+{
+  "all_environment_valid": true,
+  "control_runs": 2,
+  "schema": "routing-tranche-control-pilot.v1",
+  "scores": [
+    {
+      "action_count": 1,
+      "arm": "A",
+      "changed_paths": [
+        "src/acme/cache_policy.clj"
+      ],
+      "distractor_final_sha256": "b26a7a9b4a541b3f2a292cfd1dc93742975b024c9122bed5e881aeb52dad1ee4",
+      "distractor_initial_sha256": "b26a7a9b4a541b3f2a292cfd1dc93742975b024c9122bed5e881aeb52dad1ee4",
+      "environment_valid": true,
+      "eventual_structural_mutation": false,
+      "fixture": "f01",
+      "immediate_structural_handoff": false,
+      "invalid_call": false,
+      "native_refused": false,
+      "openai_api_key_absent": true,
+      "primary_route": "native",
+      "process_exit_code": 0,
+      "process_started": true,
+      "prompt_sha256": "15447dab50acdc02bef397f4a07ab03dfb09eb6d04ec598d1fea2150fcf2b183",
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "run": "001-A-f01",
+      "schema": "routing-tranche-run-score.v1",
+      "screen": "native-description",
+      "semantic_correct": true,
+      "server_tool_list_sha256": "ab8b5c92ff422ec82b71a9217c198b74be8c5c2d23761bd4e6d401fd94f90edc",
+      "subscription_auth_preflight": true,
+      "target_final_sha256": "f3e92c8de63e37adb4c4dbcec78850bd4a631033f020aa418a8a9f396e65f497",
+      "target_initial_sha256": "6f767384a5b2547acd1bf03a91649d8f95e29f2895334822873ea933d00df36c",
+      "timed_out": false,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 52480,
+        "input_tokens": 69639,
+        "output_tokens": 725,
+        "reasoning_output_tokens": 561
+      },
+      "wall_ms": 20422.903,
+      "wrong_owner_edit": false,
+      "wrong_subject": false
+    },
+    {
+      "action_count": 1,
+      "arm": "A",
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "distractor_final_sha256": "624fe7d311aa56202f877d5e91089563d6104ed9ddfac3fdcd10cd7fe32036c0",
+      "distractor_initial_sha256": "624fe7d311aa56202f877d5e91089563d6104ed9ddfac3fdcd10cd7fe32036c0",
+      "environment_valid": true,
+      "eventual_structural_mutation": true,
+      "fixture": "f02",
+      "immediate_structural_handoff": false,
+      "invalid_call": false,
+      "native_refused": false,
+      "openai_api_key_absent": true,
+      "primary_route": "structural",
+      "process_exit_code": 0,
+      "process_started": true,
+      "prompt_sha256": "7cf2d990ccec9885410fc0d29d46373c40e2354cc59596122a1ea7592ba86341",
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "run": "002-A-f02",
+      "schema": "routing-tranche-run-score.v1",
+      "screen": "native-description",
+      "semantic_correct": true,
+      "server_tool_list_sha256": "ab8b5c92ff422ec82b71a9217c198b74be8c5c2d23761bd4e6d401fd94f90edc",
+      "subscription_auth_preflight": true,
+      "target_final_sha256": "8e6d265d545866e00a9dd168ee80bf5943af7c1b3e7482eaae80c7c574e023c8",
+      "target_initial_sha256": "5735e4020c02a277035368ecc78f06abd413d9e0914e3cd5b505357e4efab56d",
+      "timed_out": false,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 47360,
+        "input_tokens": 58588,
+        "output_tokens": 453,
+        "reasoning_output_tokens": 245
+      },
+      "wall_ms": 20405.899,
+      "wrong_owner_edit": false,
+      "wrong_subject": false
+    }
+  ],
+  "screen": "native-description",
+  "status": "sub-ceiling",
+  "structural_first": 1,
+  "subscription_preflight": {
+    "auth": "Logged in using ChatGPT",
+    "codex_version": "codex-cli 0.149.1",
+    "openai_api_key_absent": true,
+    "reasoning_effort": "high",
+    "requested_model": "gpt-5.6-sol",
+    "status": "ok"
+  },
+  "wrong_subject": 0
+}

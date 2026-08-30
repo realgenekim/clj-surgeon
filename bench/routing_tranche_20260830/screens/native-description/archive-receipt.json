@@ -1,0 +1,8 @@
+{
+  "archive": "native-description-raw-streams.tar.gz",
+  "archive_sha256": "5daca013eca53ec2762da41416a041f333212c4f330b1d5a83d2ffd2d7a8aa04",
+  "manifest_entries": 455,
+  "manifest_sha256": "0f6b408da029b8c7447675a8623cf552934513759be06ecd3450709dc18c2175",
+  "schema": "routing-tranche-archive.v1",
+  "screen": "native-description"
+}
