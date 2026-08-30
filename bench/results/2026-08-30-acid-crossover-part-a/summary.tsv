@@ -1,0 +1,4 @@
+run	wall_seconds	output_tokens	actions	one_shot	semantic_correct	exact_presentation	source_set_exact	route_adherent	wrong_subject
+1	18.096	425	1	true	true	false	true	true	false
+2	17.949	404	1	true	true	false	true	true	false
+median	18.0225	414.5	1	2/2	2/2	0/2	2/2	2/2	0

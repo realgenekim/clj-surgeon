@@ -1,0 +1,15 @@
+{:schema "clj-surgeon.acid-test-archive/v1"
+ :part :regression-gate
+ :host "anvil-server"
+ :seat "dev-a"
+ :remote-result
+ "/srv/fleet/dev-a/clj-surgeon-acid-results/part-a-c55-20260830-001"
+ :remote-archive
+ "/srv/fleet/dev-a/clj-surgeon-acid-results/part-a-c55-20260830-001.tar.gz"
+ :raw-manifest-sha256
+ "d3414b796ef6a7de73290cfdeb217b5c249e9e7b6e8b2e6e07f3c424e12e78ed"
+ :archive-sha256
+ "813da5c3bf753f5d7aae0e3292a542da3ab674cda6a615451a5f39a882ee87f7"
+ :control-copy
+ "/private/tmp/clj-surgeon-acid-archives-20260830/part-a/part-a-c55-20260830-001.tar.gz"
+ :control-copy-verified true}
