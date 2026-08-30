@@ -2,7 +2,7 @@
 
 Date: 2026-08-29 PT  
 Lane: SWEEP lane 1  
-Status: **environment-blocked after three retained invalid attempts; mechanism not tested**
+Status: **first attempt environment-blocked; repair cohort preregistered and not run**
 
 ## Question and source prior
 
@@ -221,3 +221,36 @@ The exact temporary work root, including its per-episode copied authentication
 state, was removed from `/tmp` and moved to the user trash; it was not included
 in the retained archive. No cohort process remained. The targeted experiment
 does not advance the agent-usage window marker.
+
+## Repair cohort preregistration
+
+This section was committed and pushed before any repair-cohort model call. The
+first attempt exposed no treatment response: all three attempts failed before
+`./owner-edit dashboard`, so controlled refusals, source reads after refusal,
+successful mutations, and wrong-subject mutations were all zero. Its retained
+losses remain in the combined chart and are never replaced or reclassified.
+
+The repair cohort is a new execution with the original predictions, fixture,
+prompt, helper, scorer, `C T T C` times five schedule, validity dimensions,
+minimum 10 fully valid episodes per arm, effect estimands, power warning, and
+kill rule unchanged. It permits exactly two controller-only corrections:
+
+1. invoke Codex with `--sandbox danger-full-access` inside the disposable
+   episode fixture, matching the established Anvil harness route and avoiding
+   the seat's unsupported nested Bubblewrap loopback setup;
+2. launch each `codex exec` with stdin connected to `DEVNULL`, so a completed
+   one-turn process receives EOF instead of waiting for additional input.
+
+The repair controller, and no other input, may differ for those two lines and
+for identities derived from them. Before launch, the new result root must copy
+the original frozen fixture, expected bytes, helper, prompt, schedule, and
+scorer and prove their SHA-256 values equal the first attempt's manifest. It
+must self-test the closed-stdin subprocess boundary without a model call,
+refreeze all identities, use fresh workspaces and `CODEX_HOME` directories,
+and retain a new immutable manifest. Any other drift refuses the repair cohort
+before its next token.
+
+The repair cohort starts again at position 1 of the complete schedule. The
+first attempt's C=1/T=2 invalid losses do not enter the repair cohort's valid
+denominators, but the final report shows both attempts together. No inference
+is drawn unless the repair cohort obtains 10 fully valid episodes per arm.
