@@ -1,0 +1,16 @@
+{
+  "schema": "routing-tranche-ceiling-repair-freeze.v1",
+  "status": "frozen",
+  "original_pilot_status": "ceiling",
+  "original_control_runs": 2,
+  "original_structural_first": 2,
+  "cohort_processes_started": 0,
+  "ladder": [
+    ["f03", "f04"],
+    ["f05", "f06"],
+    ["f07", "f08"]
+  ],
+  "addendum_sha256": "d9fb9d69bc253ef672125f75d83adf516bc0d288891839d3844b131f4deda78e",
+  "runner_sha256": "19ae6b2be54fb61f1a4d9b3cb980c9926211ac419aa87ac0639716030f18a6d9",
+  "wrong_subject_required": 0
+}
