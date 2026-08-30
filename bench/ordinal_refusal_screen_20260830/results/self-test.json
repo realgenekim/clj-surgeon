@@ -1,0 +1,22 @@
+{
+  "checks": {
+    "auth_present": true,
+    "catalog_has_three_tools": true,
+    "codex_present": true,
+    "cohort_balanced": true,
+    "expected_one_ready": true,
+    "expected_pending_count_26": true,
+    "experiment_notice_names_product_boundary": true,
+    "fixture_owner_count_27": true,
+    "initial_pending_count_27": true,
+    "near_miss_absent": true,
+    "pilot_interleaved": true,
+    "single_bytewise_effect": true,
+    "target_ordinal_19": true,
+    "unit_tests": true
+  },
+  "schema": "ordinal-refusal-screen-self-test.v1",
+  "status": "ok",
+  "unit_test_stderr": "test_apply_retry_can_retype_correct_owner (test_screen.ProxyTest.test_apply_retry_can_retype_correct_owner) ... ok\ntest_catalog_is_arm_independent (test_screen.ProxyTest.test_catalog_is_arm_independent) ... ok\ntest_control_is_truncated_and_has_no_template (test_screen.ProxyTest.test_control_is_truncated_and_has_no_template) ... ok\ntest_correct_ordinal_mutates_only_target (test_screen.ProxyTest.test_correct_ordinal_mutates_only_target) ... ok\ntest_treatment_has_complete_numbered_list_and_one_inert_hole (test_screen.ProxyTest.test_treatment_has_complete_numbered_list_and_one_inert_hole) ... ok\ntest_wrong_ordinal_is_observable_wrong_subject (test_screen.ProxyTest.test_wrong_ordinal_is_observable_wrong_subject) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.013s\n\nOK\n",
+  "unit_test_stdout": ""
+}

@@ -1,0 +1,14 @@
+{
+  "aggregate_sha256": "845780b7f34cb2fab923ceac074750fd9177e447f652f5f34d32b3436afc38c7",
+  "archive": "results/archives/ordinal-refusal-screen-20260830.tar.gz",
+  "archive_sha256": "7104f1158b73550cc84fa1e69589a4bc8029a161297a374b2177fc010b86f512",
+  "artifact_count": 137,
+  "credential_material_included": false,
+  "experiment_notice": "EXPERIMENT SURFACE ONLY — not product code, not product authority, and not compliant evidence that product refusals may carry executable payloads.",
+  "experiment_only": true,
+  "manifest": "results/artifact-manifest.sha256",
+  "manifest_sha256": "341d6c04d80adee4826ae36c68e1f296ba613ee39bd7685aca25adceefa9b492",
+  "product_contract": false,
+  "result_receipt_sha256": "77e9157935ea1948ce830620b11e972c7b310f0c62aca9719e29d5230bafcfc3",
+  "schema": "ordinal-refusal-screen-archive.v1"
+}

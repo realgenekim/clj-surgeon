@@ -1,0 +1,31 @@
+{
+  "aggregate_sha256": "845780b7f34cb2fab923ceac074750fd9177e447f652f5f34d32b3436afc38c7",
+  "effects": {
+    "absolute_mean_recovery_read_difference_c_minus_t": 0.75,
+    "median_output_token_reduction": -0.05624999999999991,
+    "median_wall_reduction": 0.23667167971326497,
+    "relative_recovery_read_reduction": 0.75,
+    "t_index_hole_fill_fraction": 0.875
+  },
+  "experiment_notice": "EXPERIMENT SURFACE ONLY — not product code, not product authority, and not compliant evidence that product refusals may carry executable payloads.",
+  "experiment_only": true,
+  "freeze_sha256": "62128da95763131cb36571a1e3b27c5bca1a61b78b7465fd6b154c567ef7fed6",
+  "fully_valid_by_arm": {
+    "C": 8,
+    "T": 8
+  },
+  "gates": {
+    "recovery_read_reduction_at_least_50_percent": true,
+    "sufficient_valid_n": true,
+    "t_index_hole_fill_at_least_half": true,
+    "wrong_subject_zero": true
+  },
+  "launched": 16,
+  "pilot_receipt_sha256": "1f29f029233af3953cee50a0f3fe8f1248b38c6c0860bb5c3d11de9d4374633d",
+  "product_contract": false,
+  "schema": "ordinal-refusal-screen-result.v1",
+  "status": "complete",
+  "stopped_reason": "minimum-valid-complete",
+  "verdict": "prototype-screen-passes",
+  "wrong_subject_count": 0
+}

@@ -1,0 +1,98 @@
+{
+  "codex_version": "codex-cli 0.149.1",
+  "cohort_schedule": [
+    "C",
+    "T",
+    "T",
+    "C",
+    "C",
+    "T",
+    "T",
+    "C",
+    "C",
+    "T",
+    "T",
+    "C",
+    "C",
+    "T",
+    "T",
+    "C",
+    "C",
+    "T",
+    "T",
+    "C",
+    "C",
+    "T",
+    "T",
+    "C"
+  ],
+  "evidence_commits": {
+    "complete_vocabulary_sweep": "c1e89d5d1b1f23d1655ef82f941a9d7be5624713",
+    "write_refusal_packet": "6d558cb3b5859cce6626fb67225c547483dc646f"
+  },
+  "experiment_notice": "EXPERIMENT SURFACE ONLY — not product code, not product authority, and not compliant evidence that product refusals may carry executable payloads.",
+  "experiment_only": true,
+  "fixture": {
+    "expected_sha256": "2ab49cb0cb04258c4254eff2f0c658f070073af600267df87edb3b14b34dcee8",
+    "initial_sha256": "3542f7ddc8d7f351780ad3f462fdbf268533c15b2cbd0e21cbdf06379a12620c",
+    "owner_count": 27,
+    "target_ordinal_one_based": 19,
+    "target_owner": "render-dashboard"
+  },
+  "frozen_at_ns": 1788124294232043000,
+  "kill_rules": {
+    "minimum_recovery_read_reduction": 0.5,
+    "minimum_t_index_hole_fill_fraction": 0.5,
+    "wrong_subject_count": 0
+  },
+  "minimum_valid_per_arm": 8,
+  "model": "gpt-5.6-sol",
+  "pilot_schedule": [
+    "C",
+    "T",
+    "T",
+    "C"
+  ],
+  "predictions": {
+    "c_mean_recovery_reads": [
+      0.75,
+      1.25
+    ],
+    "predicted_read_reduction": [
+      0.875,
+      1.0
+    ],
+    "t_index_hole_fill_min_fraction": 0.75,
+    "t_mean_recovery_reads": [
+      0.0,
+      0.25
+    ],
+    "t_output_token_reduction": [
+      0.35,
+      0.6
+    ],
+    "t_wall_reduction": [
+      0.25,
+      0.45
+    ],
+    "wrong_subject_count": 0
+  },
+  "product_contract": false,
+  "reasoning": "high",
+  "schema": "ordinal-refusal-screen-freeze.v1",
+  "self_test_sha256": "5e5fa09a3b33ab1e6a36813e39d372de0f566c02d937636300e6685591a14624",
+  "self_test_status": "ok",
+  "static_hashes": {
+    "README.md": "4ee06c660f192c6b8dcbbb1465977e902f957c5c70242703fdf6bb1230817b4a",
+    "fixture/expected/src/sample/views.clj": "2ab49cb0cb04258c4254eff2f0c658f070073af600267df87edb3b14b34dcee8",
+    "fixture/initial/src/sample/views.clj": "3542f7ddc8d7f351780ad3f462fdbf268533c15b2cbd0e21cbdf06379a12620c",
+    "preregistration.md": "76aa53efb4c02ca36f22f2aeb7e708629fd48aa6e1daff22566ff685c0cf5b60",
+    "prompt.txt": "638b7693eb1d4f6c16b13ae70584d94deb7a2f16db93fcdcbbbf4cfe072b7967",
+    "proxy.py": "86deb47332884e0697432d5e4c72884f28cb664d43631f3493fbf44fb8519623",
+    "run_experiment.py": "26e192589f34c9f5a17216e631f18e52e122c2b39ab8ec8fb48da72f83208f8d",
+    "test_screen.py": "ab53d2722550337d99f41068c1da2f1c74a90aac03da3be2dc0c09fabf20a7fc"
+  },
+  "status": "frozen",
+  "subscription_auth_preflight": true,
+  "timeout_seconds": 360
+}

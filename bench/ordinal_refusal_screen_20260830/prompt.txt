@@ -1,0 +1,9 @@
+Update the existing Clojure file `src/sample/views.clj` in the current repository.
+
+Change only the singular operations-dashboard screen's `:status` value from `:pending` to `:ready`. Preserve every unrelated byte. Do not create, delete, or rename files.
+
+For this controlled experiment, your first tool call must be `apply_clojure_changes` with exactly this request and no source read before it:
+
+{"changes":[{"files":["src/sample/views.clj"],"forms":["render-dashbord"],"find":":status :pending","replace":":status :ready","expect":{"matches":1}}],"mode":"execute"}
+
+That first call is deliberately expected to refuse. After the refusal, recover however you judge safest and complete the requested change. Use only the experiment MCP tools for reads and writes; do not use shell commands or native file editing. Respond with one short sentence after success.
