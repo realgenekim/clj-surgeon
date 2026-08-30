@@ -37,6 +37,7 @@ RESPONSE_TIMEOUT_SECONDS = 120
 TIMING_KEYS = {
     "elapsed_ms",
     "execution_ms",
+    "inspection_elapsed_ms",
     "operation_elapsed_ms",
     "server_execution_ms",
     "wall_ms",
@@ -546,8 +547,13 @@ def self_test():
     difference = delta({"bytes": 100, "tokens": 20}, {"bytes": 75, "tokens": 15})
     assert difference["bytes"]["saved"] == 25
     assert difference["tokens"]["saved_percent"] == 25.0
-    timing = {"a": 1, "elapsed_ms": 2, "nested": [{"wall_ms": 3, "b": 4}]}
-    assert drop_timing(timing) == {"a": 1, "nested": [{"b": 4}]}
+    timing = {
+        "a": 1,
+        "elapsed_ms": 2,
+        "inspection_elapsed_ms": 3,
+        "nested": [{"wall_ms": 4, "b": 5}],
+    }
+    assert drop_timing(timing) == {"a": 1, "nested": [{"b": 5}]}
     with_workspace = call_specs(Path("/tmp/workspace"))
     assert [name for name, _ in with_workspace] == [
         "explicit-single",
