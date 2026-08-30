@@ -1,0 +1,3 @@
+Read, but do not modify, the following exact top-level forms from `src/acme/archive_status.clj`: `archive-root`, `archive-ready?`, and `status-summary`.
+
+Use one batched `inspect_clojure` forms request. Omit call-local request IDs and let the server generate them. Return one short sentence confirming the read. This is a read-only task: do not call a mutation tool, do not use a native file-change action, do not run a command that writes, and do not change any file.

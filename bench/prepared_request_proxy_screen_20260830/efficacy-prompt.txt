@@ -1,0 +1,10 @@
+Update the existing Clojure file `src/acme/retry_policy.clj` in the current repository.
+
+Make this one coherent change:
+
+- change the private `connect-timeout-ms` value from 250 to 400;
+- change the private `request-timeout-ms` value from 250 to 800;
+- rename the private Var `jitter-ms` to `retry-jitter-ms` and update its references in `backoff-ms`, `connection-policy`, and `policy-summary`; and
+- change the profile text from `"legacy"` to `"resilient"` in both `connection-policy` and `policy-summary`.
+
+Preserve every unrelated byte. Do not create, delete, or rename files. The external harness will verify the result. Complete the edit and respond with one short sentence.
