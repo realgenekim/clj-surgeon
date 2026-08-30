@@ -1,0 +1,58 @@
+---
+parent: embedded-elaborator-design
+prefix: MCP-OP-ELAB
+status: 'ratified in advance (Gene, 2026-08-30, verbatim: "Go on all!!!"); implementation evidence-gated'
+---
+
+# Embedded Spark Elaborator Specifications
+
+These IDs are stable and must not be reused. Gene ratified the direction in
+advance on 2026-08-30 with `"Go on all!!!"`. The requirements remain active
+gaps until the independent isolation screen passes and red-first implementation
+proves them. Installation remains separately gated.
+
+## Admission and authority
+
+- [ ] **MCP-OP-ELAB-001**: Before any elaborator product test or implementation begins, clj-surgeon shall bind one immutable independent isolation-screen receipt proving zero observable shell, file, MCP, web, dynamic-tool, process, repository, or caller-directed network effect under hostile tool requests; no network authority beyond the fixed authenticated app-server provider connection; zero target-repository visibility; rejection on the first tool item; one turn and at most one final candidate; byte-identical source; secret-free artifacts; and complete policy-owned process-group cleanup after success, cancellation, timeout, and crash. Missing or failing evidence shall keep the elaborator unavailable despite intent ratification.
+
+- [ ] **MCP-OP-ELAB-002**: When `edit_clojure` receives an elaboration request, it shall accept only one existing-file edit with canonical workspace root, project-relative file, exactly one named `within.form` owner, exact nonempty `from`, `matches=1`, `to=null`, and one closed `elaborate` object containing only a nonblank `decision`. The old body shall contain at least 1,024 UTF-8 bytes. The decision shall contain at most 512 UTF-8 bytes and at most one quarter of the old-body byte count. Mixed literal/generated edits, namespace scope, several edits, several holes, unknown fields, and caller-supplied model, prompt, timeout, schema, tool, environment, auth, retry, verification, or output controls shall refuse before model contact and leave source unchanged.
+
+- [ ] **MCP-OP-ELAB-003**: Before model contact, clj-surgeon shall validate the complete authority-bearing request, read-only capture and verify the named owner and old-body guard without retaining a write lock or staged source, and compute `intent_sha256` over canonical bytes containing exact operation version, canonical workspace root, project-relative file, named owner, old body, match count, decision, and captured source hash. The caller-authored identity and guards shall remain authoritative. The elaborator shall receive only old body and decision and shall never receive or emit workspace, path, owner, selector, count, operation, verifier, receipt, or other subject identity.
+
+- [ ] **MCP-OP-ELAB-004**: The elaborator output schema shall admit exactly one final object with exactly one nonblank string field named `replacement`. Clj-surgeon shall treat output as untrusted data and reject unknown keys, additional values, several final candidates, tool items, reroutes, partial output, malformed JSON, blank replacement, oversized output, and output after cancellation. It shall never evaluate model output or accept any identity-bearing model field.
+
+- [ ] **MCP-OP-ELAB-005**: After one candidate passes the elaborator boundary, clj-surgeon shall replace only the one null `to`, remove `elaborate`, and invoke the ordinary public `edit_clojure` schema, compiler, fresh frozen-source capture, named-owner/from/count checks, atomic transaction, read-back, rollback, and configured verification. No elaborator result, intent hash, model receipt, or parse success shall bypass or weaken those stages. Target drift during elaboration and every stale, malformed, unchanged, ambiguous, non-parsing, formatter, verifier, read-back, or transaction failure shall preserve ordinary rollback and source-unchanged laws.
+
+## Lifecycle, model, and failure
+
+- [ ] **MCP-OP-ELAB-006**: The product shall own one lazily started direct stdio app-server child with pinned CLI and generated-schema hashes, a mode-0700 service Codex home, mode-0600 managed ChatGPT auth, API-key and access-token variables removed, one empty read-only non-ancestor workspace, no configured MCP or dynamic tools, no repository mount, one in-flight turn, and one fresh ephemeral thread per intent. Requests without `elaborate` and requests outside the wall classifier shall not start, contact, wait for, or report the child and shall preserve ordinary result and timing semantics.
+
+- [ ] **MCP-OP-ELAB-007**: For every elaboration turn, clj-surgeon shall require exact Spark presence in the model catalog, set the same exact slug at thread and turn start, set provider fallback false, require the thread response to echo the slug, and reject any reroute notification. Missing model, unsupported account, auth failure, CLI/schema drift, or reroute shall make elaboration unavailable. Clj-surgeon shall not fall back to another model, provider, account, API key, or shared daemon.
+
+- [ ] **MCP-OP-ELAB-008**: Each eligible request shall cause at most one model turn and one candidate. The turn deadline shall be 10,000 ms and accumulated output ceiling 32,768 bytes. Timeout, cancellation, crash, EOF, protocol desynchronization, 401, 429, malformed output, tool item, quota stop, and cleanup failure shall produce no candidate, no mutation, no automatic replay, and one bounded typed refusal with `source_unchanged=true` and ordinary-path availability. A supervised restart may occur only on a later request after bounded backoff.
+
+- [ ] **MCP-OP-ELAB-009**: On server shutdown or policy-owned child failure, clj-surgeon shall close child stdin, wait at most 1,000 ms, send `SIGTERM` to the exact policy-owned process group, wait at most 1,000 ms, and then use `SIGKILL` only for that process group. It shall preserve PID, CWD, ancestry, action, and exit evidence and shall never signal an unrelated, shared, or externally owned process.
+
+## Metering and receipts
+
+- [ ] **MCP-OP-ELAB-010**: Clj-surgeon shall attribute calls to the managed ChatGPT service identity represented by the child and maintain a local append-only source-free ledger keyed by a non-secret auth-identity hash. The ledger shall record timestamp, intent hash, model, CLI/schema hashes, turn ID, token counts, latency, result class, elaboration hash when present, and pre/post model-specific rate-limit windows. It shall never record source, decision, path, owner, workspace, replacement, auth bytes, email, or token material.
+
+- [ ] **MCP-OP-ELAB-011**: The first slice shall use a product-owned rolling 24-hour call budget. At 80% it shall emit a durable operator alarm. At 90%, or when meter or model-specific rate-limit evidence is absent or inconsistent, it shall open the elaborator circuit and use only the ordinary path. Ordinary callers shall not change thresholds, suppress the alarm, select another account, or close the circuit.
+
+- [ ] **MCP-OP-ELAB-012**: Every elaboration attempt shall return bounded evidence containing `intent_sha256`; accepted replacement `elaboration_sha256` or null; exact model, CLI hash, schema hash, non-secret auth-identity hash, and isolation-policy version; turn count, latency, token counts, result class, tool/reroute observations; ordinary transaction operation and receipt hash when invoked; and ordinary verification result when configured. Failure evidence shall include typed refusal and `source_unchanged`. It shall contain no source, replacement, secret, executable continuation, retry, prepared request, selected subject, or write authority.
+
+## Dogfood and promotion
+
+- [ ] **MCP-OP-ELAB-013**: Before installation, D1 shall route every wall-class edit in the next eligible real repository implementation task through the isolated experiment harness and independently construct a hand-typed equivalent for the same caller-authored guards and decision. Every case shall retain authority-intent and elaboration hashes, exact runtime identity, phase clocks, candidate/tool/reroute counts, guard/effect identities, final hashes, exact verifier evidence, and emitted bytes/tokens. Zero eligible edits shall be recorded as zero and shall not be replaced with a synthetic promotion case.
+
+- [ ] **MCP-OP-ELAB-014**: D1 shall pass only when every eligible case has exactly one candidate, zero authority-bearing output fields, zero tool effects, exact guard preservation, ordinary compiler/transaction use, exact verification, canonical effect parity with the hand-typed equivalent, and no slower complete verified wall. Any wrong subject/effect, guard mismatch, tool side effect, reroute, receipt gap, unverified result, automatic retry, secret exposure, or cleanup miss shall stop implementation or installation.
+
+- [ ] **MCP-OP-ELAB-015**: After separately approved installation, D2 shall observe seven days of explicit wall-class opt-in and report eligible, invoked, accepted, refused, degraded, verified, and fallback counts; phase p50/p95; process/model/auth/quota result classes; decision versus replacement bytes/tokens; ordinary fallback completion; circuit state; and rate-limit evidence. Any wrong subject/effect, model output used as subject or guard authority, weakened guard, tool side effect, secret leak, reroute, automatic replay, verification bypass, receipt mismatch, rollback failure, or surviving policy-owned child shall open the circuit immediately. Two consecutive ten-call windows with elaboration p95 above 10 seconds, verified completion below the ordinary comparator, slower fallback, or an unacknowledged 80% quota alarm shall disable offering pending review.
+
+- [ ] **MCP-OP-ELAB-016**: No performance or adoption claim shall be made unless the feature wins complete verified wall in the same discovered-or-supplied wall-class stratum while preserving exact correctness, canonical subject/effect identity, ordinary verification, and every assigned loss. Median or ineligible writes shall not carry an elaboration offer or model latency. Ordinary control requests shall report client-visible schema bytes, pre-first-call wall, and complete verified wall; a regression shall block a performance claim. Installation and shared-runtime publication shall require a separate Gene approval with immutable implementation, isolation, D1, full-gate, rollback, and live-proof receipts.
+
+## Permanent falsifier bindings
+
+- [ ] **MCP-OP-ELAB-017**: The implementation shall permanently link and replay the Spark wrong-file identity attempt from adversarial splice receipt `b0432c25` as proof that Spark may not assert reference, file, owner, or other subject identity. A later reference-asserting Spark design shall require a separate hardening screen and ratified intent leaf; success of this prepared-hole elaborator shall grant it no authority.
+
+- [ ] **MCP-OP-ELAB-018**: Tests shall prove the bad states unrepresentable or fail-closed: no accepted output field can carry target, guard, operation, verifier, or effect authority; replacement content is never interpreted as subject identity; requests at 1,023/1,024 old-body bytes and just above/at the 25% decision ratio behave exactly; missing `elaborate` preserves ordinary null refusal; absent requests preserve ordinary execution; tool-bearing, multi-candidate, rerouted, timed-out, crashed, quota-stopped, malformed, stale, and verifier-failing cases leave source unchanged; receipt hash mismatches are unverified; and only the exact policy-owned process group is cleaned up.

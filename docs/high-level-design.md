@@ -546,6 +546,47 @@ assembly and recovery work; routing and adoption lift are explicitly outside
 the claim. The permanent leaf is
 [Prepared Guarded Edit Request](intent/prepared-request/prepared-request-design.md).
 
+### Elaborate only caller-owned prepared holes
+
+An optional embedded elaborator may fill the replacement hole in one otherwise
+complete prepared `edit_clojure` request. The caller still authors the
+workspace, file, named owner, exact old source, cardinality, and concise
+replacement decision. The server freezes and hashes that intent before model
+contact. The elaborator receives only old body plus decision and can return
+only one replacement body. It never receives or emits workspace, file, owner,
+selector, match count, verification, operation, or tool authority.
+
+The replacement is untrusted data. Clj-surgeon rejects tool items, additional
+candidates, unknown fields, model reroutes, guard changes, and malformed or
+oversized output. A valid replacement re-enters the ordinary public
+`edit_clojure` schema, compiler, frozen-source checks, atomic writer, read-back,
+rollback, and verification path. Generated Clojure is parsed but never
+evaluated by the elaborator adapter. Timeout, crash, auth failure, quota stop,
+isolation failure, or model absence produces no candidate and leaves the
+ordinary caller-authored path immediately available. The server never replays
+an intent automatically.
+
+The first slice is explicit and selective. It accepts exactly one prepared
+whole-owner hole only when the old body is at least 1,024 UTF-8 bytes and the
+decision is no more than one quarter of that body. Requests without the
+elaboration field execute the unchanged ordinary path and do not start the
+child. This keeps median writes off the model path and confines the experiment
+to the measured wall class where replacement materialization dominates the
+decision.
+
+The child is one lazily started, directly supervised `codex app-server`
+process with a fresh ephemeral thread per intent, exact Spark pinning, one
+in-flight turn, an empty read-only workspace, no repository visibility, and a
+bounded output/deadline. Production admission additionally requires an
+independent isolation screen to prove that attempted tool use cannot cause an
+observable side effect. Prompt obedience and a tool-free sample are not a
+security boundary.
+
+Receipts bind the canonical caller intent, accepted elaboration bytes, exact
+model/runtime/auth identity, isolation policy, quota evidence, ordinary
+transaction result, and verification. The permanent leaf is
+[Embedded Spark Elaborator](intent/embedded-elaborator/embedded-elaborator-design.md).
+
 Five independently testable modules compose the read-mission surface:
 
 1. A complete selector diagnostic names the failed request, file, requested
