@@ -529,6 +529,14 @@ captures each file once, resolves those clues against the complete frozen
 candidate universe, and returns bounded evidence with source hashes and exact
 owner anchors.
 
+The typed inspect entrance may remove call-local bookkeeping only through a
+closed request-shape proof. A batch either preserves every caller-supplied
+request ID or assigns every ID in input order. An omitted operation denotes
+`forms` only when the remaining complete forms shape proves that operation.
+Mixed ID ownership and every other operation omission refuse before snapshot
+capture. Normalization changes neither file, owner, form, basis, snapshot, nor
+result authority.
+
 Five independently testable modules compose the read-mission surface:
 
 1. A complete selector diagnostic names the failed request, file, requested

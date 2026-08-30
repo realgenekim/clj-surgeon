@@ -70,9 +70,7 @@ tenet:
 
 ## Draft artifacts and phase stops
 
-- `read-request-normalization-design.md` is the proposed LLD.
-- `read-request-normalization-specs.md` is the proposed EARS registry with
-  stable IDs `MCP-OP-READ-NORM-001..005`.
+- Ratified read-request normalization artifacts now live in [the permanent LID leaf](../read-request-normalization/).
 - `measurement-evidence-design.md` is a separate telemetry-product LLD.
 - `measurement-evidence-specs.md` is its proposed EARS registry with stable
   IDs `MEASURE-EVID-001` and `MEASURE-WALL-001..003`.
