@@ -1,0 +1,178 @@
+{
+  "schema" : "clj-surgeon.prefill-decode-score/v1",
+  "meta" : {
+    "replicates" : 9,
+    "schema" : "clj-surgeon.prefill-decode-probe/v1",
+    "codex_args" : "exec --json --skip-git-repo-check --ephemeral -s read-only -C /tmp/ratio-work.RYsEN6 -c model=gpt-5.6-sol -c model_reasoning_effort=low --ignore-user-config",
+    "codex_version" : "codex-cli 0.147.0",
+    "env_before" : {
+      "phase" : "before",
+      "wall_clock" : "2026-08-30T02:15:40Z",
+      "loadavg" : "1.12 1.10 1.17",
+      "nproc" : "16",
+      "hostname" : "anvil-server",
+      "whoami" : "dev-a",
+      "uname" : "Linux 7.0.0-22-generic x86_64"
+    },
+    "reasoning" : "low",
+    "run_nonce" : "1788056140-3968554",
+    "blob_chars" : 1048000,
+    "copy_words" : 1229,
+    "conditions" : "C B D E",
+    "count_to" : 600,
+    "profile" : "clean",
+    "model" : "gpt-5.6-sol"
+  },
+  "prefill" : {
+    "marginal-input-tokens" : null,
+    "delta-ms" : null,
+    "resolved" : false,
+    "tokens-per-second" : null,
+    "estimate-kind" : "lower-bound",
+    "note" : "Delta did not clear the noise floor; prefill of this many tokens is not distinguishable from zero. Reported as a lower bound using the combined MAD as the largest time it could have taken."
+  },
+  "conditions" : {
+    "A" : {
+      "wall-ms-min" : null,
+      "wall-ms-median" : null,
+      "cached-input-tokens-median" : null,
+      "reasoning-tokens-median" : null,
+      "n" : 0,
+      "prompt-bytes-median" : null,
+      "n-not-reproduced" : 0,
+      "route-adherent" : null,
+      "wall-ms-p25" : null,
+      "wall-ms-mad" : null,
+      "n-failed" : 0,
+      "output-tokens-median" : null,
+      "condition" : "A",
+      "wall-ms-p75" : null,
+      "input-tokens-median" : null,
+      "n-attempted" : 0,
+      "turn-started-ms-median" : null,
+      "exactness-checked" : false,
+      "wall-ms-max" : null,
+      "decoded-tokens-median" : null
+    },
+    "B" : {
+      "wall-ms-min" : 25518.0,
+      "wall-ms-median" : 25742.0,
+      "cached-input-tokens-median" : 14080.0,
+      "reasoning-tokens-median" : 17.0,
+      "n" : 9,
+      "prompt-bytes-median" : 126.0,
+      "n-not-reproduced" : 0,
+      "route-adherent" : 1.0,
+      "wall-ms-p25" : 25532.0,
+      "wall-ms-mad" : 210.0,
+      "n-failed" : 0,
+      "output-tokens-median" : 1222.0,
+      "condition" : "B",
+      "wall-ms-p75" : 25823.0,
+      "input-tokens-median" : 14423.0,
+      "n-attempted" : 9,
+      "turn-started-ms-median" : 313.4,
+      "exactness-checked" : true,
+      "wall-ms-max" : 26705.0,
+      "decoded-tokens-median" : 1239.0
+    },
+    "C" : {
+      "wall-ms-min" : 3497.0,
+      "wall-ms-median" : 3854.0,
+      "cached-input-tokens-median" : 14080.0,
+      "reasoning-tokens-median" : 0.0,
+      "n" : 9,
+      "prompt-bytes-median" : 53.0,
+      "n-not-reproduced" : 0,
+      "route-adherent" : 1.0,
+      "wall-ms-p25" : 3730.0,
+      "wall-ms-mad" : 357.0,
+      "n-failed" : 0,
+      "output-tokens-median" : 5.0,
+      "condition" : "C",
+      "wall-ms-p75" : 4549.0,
+      "input-tokens-median" : 14403.0,
+      "n-attempted" : 9,
+      "turn-started-ms-median" : 314.7,
+      "exactness-checked" : false,
+      "wall-ms-max" : 4910.0,
+      "decoded-tokens-median" : 5.0
+    }
+  },
+  "ratio" : {
+    "prefill-over-decode" : null,
+    "kind" : "unresolved"
+  },
+  "copy-screen" : {
+    "rates" : {
+      "B" : {
+        "condition" : "B",
+        "n" : 9,
+        "route-adherent" : 1.0,
+        "n-not-reproduced" : 0,
+        "marginal-decoded-tokens" : 1234.0,
+        "delta-ms" : 21888.0,
+        "tokens-per-second" : 56.4,
+        "resolved" : true
+      },
+      "D" : {
+        "condition" : "D",
+        "n" : 9,
+        "route-adherent" : 1.0,
+        "n-not-reproduced" : 0,
+        "marginal-decoded-tokens" : 1228.0,
+        "delta-ms" : 22757.0,
+        "tokens-per-second" : 54.0,
+        "resolved" : true
+      },
+      "E" : {
+        "condition" : "E",
+        "n" : 9,
+        "route-adherent" : 1.0,
+        "n-not-reproduced" : 0,
+        "marginal-decoded-tokens" : 1198.0,
+        "delta-ms" : 22167.0,
+        "tokens-per-second" : 54.0,
+        "resolved" : true
+      }
+    },
+    "copy-over-compose-unpredictable" : {
+      "comparison" : "D over B",
+      "token-counts-matched" : true,
+      "copy-tokens" : 1228.0,
+      "compose-tokens" : 1234.0,
+      "speedup" : 0.96
+    },
+    "copy-over-compose-same-content" : {
+      "comparison" : "E over B",
+      "token-counts-matched" : true,
+      "copy-tokens" : 1198.0,
+      "compose-tokens" : 1234.0,
+      "speedup" : 0.96
+    },
+    "unpredictable-over-predictable-copy" : {
+      "comparison" : "D over E",
+      "token-counts-matched" : true,
+      "copy-tokens" : 1228.0,
+      "compose-tokens" : 1198.0,
+      "speedup" : 1.0
+    }
+  },
+  "confounds" : [ "Wall clock includes network transfer of the prompt. Condition A ships ~1 MB, condition C ships ~1 KB, so (A - C) contains upload time as well as prefill. Prefill rate is therefore a LOWER bound even when the delta resolves.", "Server-side batching and queueing are invisible from the client. A turn may wait behind other tenants; that time lands in the floor and in both deltas.", "Provider prefix caching is defeated for condition A's filler (fresh random words per replicate) but the codex system prompt and tool definitions are cached identically across all conditions, so the cached prefix cancels in the subtraction.", "Reasoning tokens are counted as decode because they are produced serially, but they are not visible, so condition B's decode total is trusted from the provider's own usage report rather than from the text.", "Token counts come from the provider's usage report, not from a local tokenizer. They are authoritative for billing and are assumed authoritative for work.", "A single provider, model, and datacentre. Nothing here generalises to other hardware, other models, or the same model under different load.", "codex exec is an agent wrapper, not a raw completion. The floor includes CLI process start, config load, and session setup, which a raw API call would not pay." ],
+  "floor" : {
+    "ms" : 3854.0,
+    "mad-ms" : 357.0,
+    "min-ms" : 3497.0,
+    "max-ms" : 4910.0,
+    "n" : 9,
+    "local-startup-ms" : 314.7,
+    "note" : "Condition C. Neither prefill nor decode: process start, scheduling, queueing, request setup, response teardown."
+  },
+  "decode" : {
+    "marginal-decoded-tokens" : 1234.0,
+    "delta-ms" : 21888.0,
+    "resolved" : true,
+    "tokens-per-second" : 56.4,
+    "estimate-kind" : "point"
+  }
+}

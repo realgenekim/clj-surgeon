@@ -300,3 +300,204 @@ Re-run with:
 bench/measure_prefill_decode_ratio.sh OUT_DIR          # probe: emits facts
 bb bench/score_prefill_decode_ratio.clj OUT_DIR --markdown   # fold: emits verdicts
 ```
+
+---
+
+# Appendix B — copying is not cheaper than composing, and transcription did not drift
+
+Date: 2026-08-29. Added by `opus-bench`. **Append-only: Appendix A and everything above it are unchanged.**
+
+Appendix A measured how fast the model writes. It did not ask **what** it was writing. Every
+emission number this project owns — the 56.5 tok/s above, the R² = 0.99886 linearity, the
+~6 ms/char constant — was measured on **composed** output: text the model constructed. Nothing had
+measured **transcription**: the model reproducing text sitting in its immediately preceding input.
+
+That gap sat directly under the design then converging, in which the server pre-composes complete
+candidate calls (free, at 15 µs/token) and the model accepts one by **echoing the candidate's
+subject verbatim**. Two separate assumptions were load-bearing and neither had been tested:
+
+1. **Speed.** If serving stacks accept long verbatim runs at a multiple of base decode rate —
+   speculative decoding does exactly this — echoing an entire pre-composed call would cost little
+   more than emitting a bare ordinal, and the safety-versus-brevity tension would mostly dissolve.
+2. **Accuracy.** That a model asked to copy an identifier reproduces it **exactly**. If
+   transcription is even slightly lossy, the design's central claim inverts: a garbled subject is a
+   **wrong subject**, produced by the mechanism adopted to prevent wrong subjects.
+
+Gene, on why both got measured rather than argued: *"Don't let logic or interpretation deter you /
+them from firing off a cheap test and experiment to prove or disprove."*
+
+## B.1 — Speed: copy versus compose
+
+Same protocol as Appendix A. Anvil dev-a, `gpt-5.6-sol`, reasoning `low`, subscription route,
+**n = 9 per condition**, interleaved C/B/D/E rotation. Probe and fold are the same committed
+harness, extended with two conditions.
+
+| Cond | Kind | n | route-adherent | not reproduced | decoded tok | delta over floor | tok/s |
+|---|---|---|---|---|---|---|---|
+| **B** | compose (constructs the sequence) | 9 | 1.00 | 0 | 1,234 | 21,888 ms | **56.4** |
+| **D** | copy, unpredictable (random word block) | 9 | 1.00 | 0 | 1,228 | 22,757 ms | **54.0** |
+| **E** | copy, same content as B (the sequence, supplied) | 9 | 1.00 | 0 | 1,198 | 22,167 ms | **54.0** |
+
+Floor for this run: **3,854 ms** (MAD 357, n = 9) — within noise of Appendix A's 3,927 ms, measured
+a few hours later. Token counts across B, D and E agree within 3%, so this compares **rate, not
+volume**, and that was verified from the provider's usage report rather than estimated.
+
+Three conditions rather than two, for the same reason Appendix A used three: D versus B changes both
+the operation and the content, so on its own it cannot say which mattered. **E holds the content
+fixed** — it supplies the identical integer sequence B composes — and varies only whether the model
+had to construct it.
+
+```
+copy(unpredictable) / compose   = 0.96x
+copy(same content)  / compose   = 0.96x
+copy(unpredictable) / copy(predictable) = 1.00x
+```
+
+**There is no copy discount. Transcription runs at 0.96× composition — if anything marginally
+slower, and well inside the spread.** Supplying the exact answer in the prompt did not speed up
+emitting it. Predictability did not matter either: reproducing random words cost the same as
+reproducing an integer sequence.
+
+**What this settles.** The hypothesised 3–5× copy discount does not exist on this route. Whatever
+speculative decoding is or is not doing here, it is **not** visible as a throughput gain the design
+can spend. **The Appendix A numbers stand unmodified, and they apply to echoed output exactly as
+they apply to authored output.** An echoed 500-token call costs the same ~8.9 s as a composed one.
+Echoing a pre-composed call is a **safety** argument, not an economy one, and it must be justified
+on those terms — the cost model does not subsidise it.
+
+This is a loss for the leading proposal and it stays in the chart. Predeclared and reported: all 36
+trials were route-adherent, and **all 27 emissions in B, D and E reproduced their expected text
+byte-for-byte**, so no trial was excluded and no comparison rests on a truncated output.
+
+## B.2 — Accuracy: does the model copy an identifier exactly?
+
+A separate probe, because accuracy is not timing: `bench/measure_transcription_fidelity.clj` and
+`bench/score_transcription_fidelity.clj`.
+
+**The corpus is adversarial on purpose.** Easy names would have measured nothing. 24 identifiers in
+the proposed `path#name` shape, built from six confusability traps:
+
+| Trap | Example pair |
+|---|---|
+| near-identical file, same function | `views/review.clj#render-review` vs `views/reviews.clj#render-review` |
+| underscore vs hyphen (the Clojure file/namespace trap) | `db/review_queries.clj#fetch-review` vs `#fetch_review` vs `review-queries.clj` |
+| trailing punctuation only | `validate.clj#valid-review` vs `#valid-review?` vs `#valid-review!` |
+| case only | `util/HTTPClient.clj` vs `util/HttpClient.clj` |
+| long shared prefix, discriminator deep in the string | `..._summary_builder.clj#build-quarterly-summary` vs `#build-quarterly-summaries` vs `_builders.clj#...` |
+| digit confusables | `v2_add_index.clj#migrate-v2` vs `v21_add_index.clj#migrate-v21` vs `v2_add_indexes.clj#migrate-v2` |
+
+Three arms, n = 9, candidate order reshuffled every replicate so no single lucky layout could stand
+in for the result:
+
+- **F** — reproduce all 24 identifiers in order. Raw transcription fidelity.
+- **S-echo** — select by description, answer with the **full identifier**.
+- **S-ord** — select by description, answer with the **item number**.
+
+S-echo versus S-ord is the design question stated exactly: same block, same selection task, same
+difficulty, differing **only in how the chosen subject is encoded on the way out**.
+
+| Arm | trials | route-adherent | answers | exact | exact rate | VALID-OTHER (dangerous) | garbage (safe) |
+|---|---|---|---|---|---|---|---|
+| F | 9/9 | 1.00 | 216 | 216 | **100%** | 0 | 0 |
+| S-echo | 9/9 | 1.00 | 54 | 54 | **100%** | 0 | 0 |
+| S-ord | 9/9 | 1.00 | 54 | 54 | **100%** | 0 | 0 |
+
+**324 answers, zero errors, zero format failures.** Errors did not cluster on the near-identical
+pairs because there were no errors: **130 of those answers had a target exactly one character from
+a sibling** (`d=1`), and every one came back byte-exact.
+
+| Characters separating target from nearest sibling | answers | errors |
+|---|---|---|
+| 1 | 130 | 0 |
+| 2 | 31 | 0 |
+| 3 | 35 | 0 |
+| 11–19 | 74 | 0 |
+
+**The assumption holds. Transcription is not lossy on this corpus and this model.** The specific
+fear — that echoing an identifier would silently produce a *different valid identifier* — did not
+materialise once.
+
+### The caveat that matters more than the table
+
+**Zero observed is not zero.** With no failures, the honest statement is an upper bound, not a
+point estimate. By the rule of three, at 95% confidence:
+
+| Arm | 0 errors in | true error rate bounded below |
+|---|---|---|
+| F | 216 | **1.39%** |
+| S-echo | 54 | **5.56%** |
+| S-ord | 54 | **5.56%** |
+
+So this run supports *"identifier transcription is reliable"* and **cannot** support *"the
+wrong-subject rate is under 1%"* for the selection path specifically. **If the design's safety case
+needs a wrong-subject rate below ~1%, this experiment does not establish it** — that needs roughly
+300 selection answers per arm, which is another twenty minutes on the same rig. Worth doing before
+anyone leans on the number.
+
+### Why the ordinal arm cannot be ranked by its accuracy alone
+
+Both encodings scored 100%, so on this corpus they are **indistinguishable on accuracy**. Fable and
+Sol both refused ordinals by argument; the measurement neither confirms nor refutes them, and that
+is worth saying plainly rather than reading a preference into a tie.
+
+But the tie hides a structural asymmetry the fold makes explicit, and it is the reason a raw
+accuracy comparison between the two would have been misleading even had it separated them:
+
+- **A mistyped identifier is usually GARBAGE.** It names no candidate. The server refuses it. Safe,
+  loud, recoverable.
+- **A wrong ordinal is almost always a VALID OTHER CANDIDATE.** Nearly every way to get a number
+  wrong yields another number in range. The server accepts it and mutates the wrong subject,
+  returning `ok=true`.
+
+**Ordinal errors land in the dangerous bucket by construction; identifier errors mostly do not.**
+Equal error rates therefore do not mean equal risk, and the two encodings cannot be ranked on a
+headline accuracy number. This is the same wrong-index failure recorded in the body of this document
+— *"replacing file paths with numeric indices cut payload 23.67% and silently mutated the wrong
+file, returning `ok=true`"* — and the measurement is consistent with design rule 3 above: **never
+trade identity for brevity.** Appendix A already showed the trade buys nothing worth having; input
+is 1,000× cheaper than output, so identity is close to free to carry.
+
+## What Appendix B changes
+
+1. **The copy discount does not exist.** Delete it from any cost model that assumed it. Echoed
+   output is priced exactly like authored output: **~17.7 ms per token, 0.96× compose.**
+2. **Identity-echo survives on safety, not on price.** It is not nearly-free relative to an ordinal;
+   it costs full freight per token. It is still the right choice, because Appendix A shows input is
+   1,000× cheaper than output and because ordinal errors are structurally silent while transcription
+   errors are structurally loud — but the argument is safety and failure-kind, never throughput.
+3. **Shrinking what the model authors remains the only emission lever that works.** Nothing about
+   how the text is derived changes its cost. Only its length does.
+
+## What B cannot separate
+
+1. **A 24-candidate block.** Confusability grows with catalogue size; this says nothing about 500
+   candidates.
+2. **One model, one reasoning effort, one hour.** A cheaper model, a longer context, or a loaded
+   server could all transcribe worse. Re-run rather than quote.
+3. **Selection difficulty is controlled but not realistic** — the descriptions were written by the
+   same author as the corpus, so real ambiguity is understated.
+4. **Byte equality after trimming is the whole test.** A downstream resolver that normalises case or
+   separators would mask errors this counts — and would introduce wrong-subject risk this does not
+   measure.
+5. **The speed arms cannot see server-side batching or speculative decoding directly.** They observe
+   only that no throughput advantage reached the client. A discount that exists but is not passed
+   through is indistinguishable, from here, from one that does not exist — and for design purposes
+   they are the same thing.
+
+## Confidence
+
+**MEASURED, ours, 2026-08-29.** Copy/compose emission ratio **0.96×** (n = 9 per condition, token
+counts matched within 3%, all emissions byte-exact). Identifier transcription fidelity **324/324
+exact** across three arms on an adversarial 24-identifier corpus, with the true error rate bounded
+below **1.39%** (F) and **5.56%** (selection arms) at 95%.
+
+Re-run with:
+
+```bash
+RATIO_CONDITIONS="C B D E" RATIO_COPY_WORDS=1229 \
+  bench/measure_prefill_decode_ratio.sh OUT_DIR
+bb bench/score_prefill_decode_ratio.clj OUT_DIR --markdown
+
+bb bench/measure_transcription_fidelity.clj OUT_DIR 9
+bb bench/score_transcription_fidelity.clj OUT_DIR --markdown
+```

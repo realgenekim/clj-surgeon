@@ -1,0 +1,143 @@
+{
+  "schema" : "clj-surgeon.transcription-fidelity-score/v1",
+  "meta" : {
+    "started" : "2026-08-30T02:28:35.483354215Z",
+    "replicates" : 9,
+    "schema" : "clj-surgeon.transcription-fidelity-probe/v1",
+    "reasoning" : "low",
+    "hostname" : "anvil-server",
+    "loadavg" : "2.47 1.60 1.28",
+    "corpus-size" : 24,
+    "codex-args" : "codex exec --json --skip-git-repo-check --ephemeral -s read-only --ignore-user-config -c model=gpt-5.6-sol -c model_reasoning_effort=low -",
+    "model" : "gpt-5.6-sol"
+  },
+  "corpus-size" : 24,
+  "arms" : {
+    "F" : {
+      "error-rate-95pct-upper-bound" : 0.01389,
+      "dangerous-rate" : 0.0,
+      "arm" : "F",
+      "valid-other" : 0,
+      "route-adherent" : 1.0,
+      "by-nearest-distance" : {
+        "1" : {
+          "n" : 108,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "2" : {
+          "n" : 27,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "3" : {
+          "n" : 27,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "11" : {
+          "n" : 9,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "14" : {
+          "n" : 18,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "17" : {
+          "n" : 18,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "19" : {
+          "n" : 9,
+          "errors" : 0,
+          "error-rate" : 0.0
+        }
+      },
+      "exact-rate" : 1.0,
+      "garbage" : 0,
+      "trials-adherent" : 9,
+      "exact" : 216,
+      "answers" : 216,
+      "trials-attempted" : 9,
+      "misses" : [ ]
+    },
+    "S-echo" : {
+      "error-rate-95pct-upper-bound" : 0.05556,
+      "dangerous-rate" : 0.0,
+      "arm" : "S-echo",
+      "valid-other" : 0,
+      "route-adherent" : 1.0,
+      "by-nearest-distance" : {
+        "1" : {
+          "n" : 22,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "2" : {
+          "n" : 4,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "3" : {
+          "n" : 8,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "11" : {
+          "n" : 2,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "14" : {
+          "n" : 6,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "17" : {
+          "n" : 6,
+          "errors" : 0,
+          "error-rate" : 0.0
+        },
+        "19" : {
+          "n" : 6,
+          "errors" : 0,
+          "error-rate" : 0.0
+        }
+      },
+      "exact-rate" : 1.0,
+      "garbage" : 0,
+      "trials-adherent" : 9,
+      "exact" : 54,
+      "answers" : 54,
+      "trials-attempted" : 9,
+      "misses" : [ ]
+    },
+    "S-ord" : {
+      "error-rate-95pct-upper-bound" : 0.05556,
+      "dangerous-rate" : 0.0,
+      "arm" : "S-ord",
+      "valid-other" : 0,
+      "route-adherent" : 1.0,
+      "by-nearest-distance" : { },
+      "exact-rate" : 1.0,
+      "garbage" : 0,
+      "trials-adherent" : 9,
+      "exact" : 54,
+      "answers" : 54,
+      "trials-attempted" : 9,
+      "misses" : [ ]
+    }
+  },
+  "design-question" : {
+    "note" : "Same selection task, same block, differing only in how the chosen subject is encoded on the way out.",
+    "echo-exact-rate" : 1.0,
+    "ordinal-exact-rate" : 1.0,
+    "echo-dangerous-rate" : 0.0,
+    "ordinal-dangerous-rate" : 0.0,
+    "verdict" : "Indistinguishable on this corpus: both encodings were exact and neither produced a wrong-subject."
+  },
+  "confounds" : [ "A 24-candidate block. Confusability grows with block size; this does not measure a 500-candidate catalogue.", "One model at one reasoning effort. A cheaper model or a longer context could transcribe worse.", "The selection arms use descriptions written by the same author as the corpus, so selection difficulty is controlled but not realistic.", "An ordinal has almost no garbage failure mode: nearly every wrong number is still a valid number. Ordinal errors therefore land in the dangerous bucket by construction, and raw exactness cannot be compared across encodings without this classification.", "Exactness here is byte equality after trimming. A downstream resolver that normalises case or separators would mask errors this test counts, and would introduce wrong-subject risk this test does not measure." ]
+}

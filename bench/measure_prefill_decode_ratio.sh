@@ -7,10 +7,26 @@
 #   that was REPEATED from published figures and never measured on our own
 #   models and hardware. This probe measures it.
 #
-# THE THREE CONDITIONS (two conditions cannot separate the fixed per-turn floor)
+# THE CONDITIONS (two conditions cannot separate the fixed per-turn floor)
 #   A  large prompt, ~1 token output   -> wall ~= floor + prefill(large)
-#   B  small prompt, large output      -> wall ~= floor + decode(large)
+#   B  small prompt, large output      -> wall ~= floor + decode(large), COMPOSED
 #   C  small prompt, ~1 token output   -> wall ~= floor
+#
+# COPY-VERSUS-COMPOSE (added 2026-08-29). Every emission number this project has
+# was measured on COMPOSED output. Nothing had measured TRANSCRIPTION — the model
+# reproducing text sitting in its immediately preceding input. If a serving stack
+# accepts long verbatim runs faster than authored ones, echoing a pre-composed
+# call is far cheaper than composing one, and the safety-versus-brevity tension
+# largely dissolves.
+#   D  copy a random word block   -> transcription of UNPREDICTABLE content
+#   E  copy the integer sequence  -> transcription of the text B composes
+#
+#   D vs B  the headline copy-vs-compose comparison (content differs)
+#   E vs B  same content, differing only in whether it was already in context
+#   D vs E  same operation, differing only in how predictable the content is
+#
+# Conditions B, D, and E are matched on OUTPUT TOKEN COUNT so the comparison is
+# of RATE, not volume. Verify from the provider usage report, never by estimate.
 #
 #   prefill_rate = marginal_input_tokens(A-C)  / (median A - median C)
 #   decode_rate  = marginal_output_tokens(B-C) / (median B - median C)
@@ -34,8 +50,11 @@
 #   RATIO_REASONING    reasoning effort                      [low]
 #   RATIO_REPLICATES   replicates per condition              [9]
 #   RATIO_CONDITIONS   subset to run, space separated        [A B C]
+#                        e.g. "C B D E" for the copy-vs-compose screen
 #   RATIO_BLOB_CHARS   condition-A filler size in chars      [1048000]
-#   RATIO_COUNT_TO     condition-B "count to N" target       [600]
+#   RATIO_COUNT_TO     condition-B/E "count to N" target     [600]
+#   RATIO_COPY_WORDS   condition-D block size in words       [1150]
+#                        tune this so D's output token count matches B's
 #   RATIO_PROFILE      clean | fleet                         [clean]
 #                        clean = --ignore-user-config (no MCP servers, explicit
 #                                model/reasoning) — isolates the model.
@@ -66,6 +85,7 @@ replicates=${RATIO_REPLICATES:-9}
 conditions=${RATIO_CONDITIONS:-A B C}
 blob_chars=${RATIO_BLOB_CHARS:-1048000}
 count_to=${RATIO_COUNT_TO:-600}
+copy_words=${RATIO_COPY_WORDS:-1150}
 profile=${RATIO_PROFILE:-clean}
 
 command -v codex >/dev/null || { echo "codex not on PATH" >&2; exit 2; }
@@ -112,8 +132,38 @@ make_blob () {
   (spit \"$dest\" (subs (.toString sb) 0 $chars)))"
 }
 
+# The integer sequence that condition B is asked to compose. Written out so the
+# copy conditions can be handed the byte-identical text, and so B's output can be
+# checked for exactness on the same footing as a copy.
+make_integer_block () {
+  local upto=$1 dest=$2
+  seq 1 "$upto" > "$dest"
+}
+
+# A fresh random word block sized in WORDS rather than characters, because the
+# copy conditions are matched on OUTPUT TOKEN COUNT, not byte length.
+make_word_block () {
+  local seed=$1 words_n=$2 dest=$3
+  bb -e "
+(let [words (clojure.string/split
+              \"the of and to in a is that for it as was with be by on not he this are or his from at which but have an they one had we all their there been if more when will would who so no said its about into them can only other new some could time these two may then do first any my now such like our over man me even most made after also did many before must through back years where much your way well down should because each just those people how too little state good very make world still own see men work long get here between both life being under never day same another know while last might us great old year off come since against go came right used take three\"
+              #\"\\s+\")
+      rng (java.util.Random. $seed)]
+  (spit \"$dest\"
+    (clojure.string/join \" \"
+      (repeatedly $words_n #(nth words (.nextInt rng (count words)))))))"
+}
+
+copy_instruction='Repeat the following block exactly, character for character. Output only the block itself: no commentary, no preamble, no code fences, no tool use.
+
+'
+
 prompt_for () {
   local cond=$1 rep=$2 dest=$3
+  # expected.txt holds the exact text the model is supposed to emit, for every
+  # condition where exactness is checkable. The probe records whether the
+  # emission matched; it does not decide what that means.
+  rm -f "$work_dir/expected.txt"
   case "$cond" in
     A)
       make_blob "$(( 1000 * rep + RANDOM ))" "$blob_chars" "$work_dir/blob.txt"
@@ -123,7 +173,22 @@ prompt_for () {
         cat "$work_dir/blob.txt"; } > "$dest"
       ;;
     B)
+      # COMPOSE: the model constructs the sequence from an instruction.
       printf '%s' "Print the integers from 1 to ${count_to}, one per line, ascending, with no other text, no commentary, no code fences, and no tool use." > "$dest"
+      make_integer_block "$count_to" "$work_dir/expected.txt"
+      ;;
+    D)
+      # COPY, unpredictable content: pure transcription of random words that the
+      # model cannot have guessed.
+      make_word_block "$(( 7000 * rep + RANDOM ))" "$copy_words" "$work_dir/expected.txt"
+      { printf '%s' "$copy_instruction"; cat "$work_dir/expected.txt"; } > "$dest"
+      ;;
+    E)
+      # COPY, predictable content: the SAME text condition B composes, now
+      # present in the input. B vs E holds content constant and varies only
+      # whether the model had to construct it.
+      make_integer_block "$count_to" "$work_dir/expected.txt"
+      { printf '%s' "$copy_instruction"; cat "$work_dir/expected.txt"; } > "$dest"
       ;;
     C)
       printf '%s' 'Do not use any tools. Reply with exactly one word: ok' > "$dest"
@@ -131,6 +196,27 @@ prompt_for () {
     *) echo "unknown condition: $cond" >&2; exit 2 ;;
   esac
 }
+
+# Pull the agent message out of the timestamped JSONL and record, as a FACT,
+# whether it reproduced the expected bytes. Leading and trailing whitespace is
+# trimmed before comparison; nothing else is normalised.
+extract_message () {
+  local jsonl=$1 dest=$2
+  bb -e "
+(require '[cheshire.core :as json] '[clojure.string :as str])
+(let [lines (->> (slurp \"$jsonl\") str/split-lines (remove str/blank?))
+      msgs (keep (fn [l]
+                   (let [[_ p] (str/split l #\"\\t\" 2)]
+                     (when p
+                       (try (let [e (json/parse-string p true)]
+                              (when (= \"agent_message\" (get-in e [:item :type]))
+                                (get-in e [:item :text])))
+                            (catch Exception _ nil)))))
+                 lines)]
+  (spit \"$dest\" (or (first msgs) \"\")))" 2>/dev/null || : > "$dest"
+}
+
+sha16 () { (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | cut -c1-16; }
 
 # --------------------------------------------------------------- codex invoke
 codex_args=(exec --json --skip-git-repo-check --ephemeral
@@ -146,7 +232,7 @@ fi
   printf ',"run_nonce":"%s"' "$run_nonce"
   printf ',"model":"%s","reasoning":"%s","profile":"%s"' "$model" "$reasoning" "$profile"
   printf ',"replicates":%s,"conditions":"%s"' "$replicates" "$conditions"
-  printf ',"blob_chars":%s,"count_to":%s' "$blob_chars" "$count_to"
+  printf ',"blob_chars":%s,"count_to":%s,"copy_words":%s' "$blob_chars" "$count_to" "$copy_words"
   printf ',"codex_version":"%s"' "$(codex --version 2>&1 | tr -d '"' | head -1)"
   printf ',"codex_args":"%s"' "${codex_args[*]}"
   printf ',"env_before":%s' "$(read_env before)"
@@ -181,18 +267,39 @@ for rep in $(seq 1 "$replicates"); do
     set -e
     end_ns=$(date +%s%N)
 
+    # ---- reproduction check (a fact, not a verdict) --------------------------
+    # An emission that truncated or paraphrased invalidates a copy-vs-compose
+    # comparison, so exactness is recorded per trial and the fold excludes the
+    # non-adherent ones rather than silently folding them in.
+    extract_message "$out_dir/trials/$tag.jsonl" "$work_dir/message.txt"
+    msg_sha=""; exp_sha=""; reproduction_exact="null"
+    if [ -s "$work_dir/expected.txt" ]; then
+      # Trim leading/trailing whitespace on both sides before comparing.
+      awk 'BEGIN{RS="\0"} {gsub(/^[ \t\r\n]+|[ \t\r\n]+$/,""); printf "%s", $0}' \
+        "$work_dir/expected.txt" > "$work_dir/expected.trim"
+      awk 'BEGIN{RS="\0"} {gsub(/^[ \t\r\n]+|[ \t\r\n]+$/,""); printf "%s", $0}' \
+        "$work_dir/message.txt" > "$work_dir/message.trim"
+      exp_sha=$(sha16 "$work_dir/expected.trim")
+      msg_sha=$(sha16 "$work_dir/message.trim")
+      if [ "$exp_sha" = "$msg_sha" ]; then reproduction_exact="true"; else reproduction_exact="false"; fi
+      cp "$work_dir/expected.txt" "$out_dir/trials/$tag.expected.txt"
+    fi
+    cp "$work_dir/message.txt" "$out_dir/trials/$tag.message.txt" 2>/dev/null || true
+
     {
       printf '{"tag":"%s","condition":"%s","replicate":%s' "$tag" "$cond" "$rep"
       printf ',"start_ns":%s,"end_ns":%s,"wall_ms":%s' \
         "$start_ns" "$end_ns" "$(( (end_ns - start_ns) / 1000000 ))"
       printf ',"exit_code":%s,"prompt_bytes":%s,"prompt_sha256_16":"%s"' \
         "$rc" "$prompt_bytes" "$prompt_sha"
+      printf ',"expected_sha256_16":"%s","message_sha256_16":"%s","reproduction_exact":%s' \
+        "$exp_sha" "$msg_sha" "$reproduction_exact"
       printf ',"loadavg":"%s"' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo unknown)"
       printf '}\n'
     } > "$out_dir/trials/$tag.timing.json"
 
-    printf 'trial %-8s rc=%s wall=%sms prompt=%sB\n' \
-      "$tag" "$rc" "$(( (end_ns - start_ns) / 1000000 ))" "$prompt_bytes" >&2
+    printf 'trial %-8s rc=%s wall=%sms prompt=%sB exact=%s\n' \
+      "$tag" "$rc" "$(( (end_ns - start_ns) / 1000000 ))" "$prompt_bytes" "$reproduction_exact" >&2
   done
 done
 

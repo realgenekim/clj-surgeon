@@ -115,7 +115,13 @@
                           (str/split row #"\t" -1)))]
          ;; :ok is a derived verdict, not a stored fact — recompute it here so
          ;; the rehydrated path and the raw path agree on which trials count.
-         (assoc m :ok (and (= 0.0 (:exit_code m)) (some? (:input-tokens m)))))))))
+         (-> m
+             (assoc :ok (and (= 0.0 (:exit_code m)) (some? (:input-tokens m))))
+             (assoc :reproduction_exact
+                    (case (str (:reproduction_exact m))
+                      "true" true
+                      "false" false
+                      nil))))))))
 
 (defn load-run
   "Prefer the raw trials directory; fall back to the committed fact table."
@@ -134,11 +140,26 @@
 
 ;; -------------------------------------------------------------------- summary
 
-(defn summarize-condition [trials cond-key]
-  (let [ts (filter #(and (= cond-key (:condition %)) (:ok %)) trials)
+(defn summarize-condition
+  "Summarise one condition.
+
+  VALIDITY, PREDECLARED: a trial counts only if it exited 0, reported usage, and
+  — where an exact output was specified — reproduced it byte-for-byte after
+  trimming. A truncated or paraphrased emission is not a slow copy, it is a
+  different task, and folding it in would silently understate copy cost. The
+  excluded trials are counted and reported, never dropped quietly."
+  [trials cond-key]
+  (let [all (filter #(= cond-key (:condition %)) trials)
+        adherent? #(not (false? (:reproduction_exact %)))
+        ts (filter #(and (:ok %) (adherent? %)) all)
         walls (map :wall_ms ts)]
     {:condition cond-key
      :n (count ts)
+     :n-attempted (count all)
+     :n-not-reproduced (count (filter #(false? (:reproduction_exact %)) all))
+     :route-adherent (when (seq all)
+                       (round (/ (count (filter adherent? all)) (double (count all))) 3))
+     :exactness-checked (boolean (some #(some? (:reproduction_exact %)) all))
      :n-failed (count (filter #(and (= cond-key (:condition %)) (not (:ok %))) trials))
      :wall-ms-median (round (median walls) 1)
      :wall-ms-min (round (first (sort walls)) 1)
@@ -161,6 +182,55 @@
   (and (some? delta-ms)
        (pos? delta-ms)
        (> delta-ms (* 2.0 (+ (or spread-a 0) (or spread-c 0))))))
+
+(defn emission-rate
+  "Decode rate for one emission condition, measured against the same floor."
+  [cond-summary floor-summary]
+  (let [d-ms (when (and (:wall-ms-median cond-summary) (:wall-ms-median floor-summary))
+               (- (:wall-ms-median cond-summary) (:wall-ms-median floor-summary)))
+        marg (when (and (:decoded-tokens-median cond-summary)
+                        (:decoded-tokens-median floor-summary))
+               (- (:decoded-tokens-median cond-summary)
+                  (:decoded-tokens-median floor-summary)))
+        res (resolved? d-ms (:wall-ms-mad cond-summary) (:wall-ms-mad floor-summary))]
+    {:condition (:condition cond-summary)
+     :n (:n cond-summary)
+     :route-adherent (:route-adherent cond-summary)
+     :n-not-reproduced (:n-not-reproduced cond-summary)
+     :marginal-decoded-tokens marg
+     :delta-ms (round d-ms 1)
+     :tokens-per-second (when (and marg d-ms (pos? d-ms)) (round (/ marg (/ d-ms 1000.0)) 1))
+     :resolved res}))
+
+(defn copy-screen
+  "Copy versus compose. B composes; D and E transcribe.
+
+  Reported as a RATE ratio, and only when the conditions being compared emitted
+  comparable token counts — otherwise this measures volume, not speed, and the
+  comparison is returned as invalid rather than as a number."
+  [trials floor]
+  (let [summ (fn [k] (summarize-condition trials k))
+        b (summ "B") d (summ "D") e (summ "E")
+        rates (into {} (for [x [b d e] :when (pos? (:n x))]
+                         [(:condition x) (emission-rate x floor)]))
+        tok (fn [k] (get-in rates [k :marginal-decoded-tokens]))
+        tps (fn [k] (get-in rates [k :tokens-per-second]))
+        matched? (fn [k1 k2]
+                   (let [t1 (tok k1) t2 (tok k2)]
+                     (and t1 t2 (pos? t1) (pos? t2)
+                          (< (/ (Math/abs (- t1 t2)) (double (max t1 t2))) 0.10))))
+        discount (fn [copy-k compose-k]
+                   (when (and (tps copy-k) (tps compose-k))
+                     {:comparison (str copy-k " over " compose-k)
+                      :token-counts-matched (matched? copy-k compose-k)
+                      :copy-tokens (tok copy-k)
+                      :compose-tokens (tok compose-k)
+                      :speedup (round (/ (tps copy-k) (tps compose-k)) 2)}))]
+    (when (seq rates)
+      {:rates rates
+       :copy-over-compose-unpredictable (discount "D" "B")
+       :copy-over-compose-same-content (discount "E" "B")
+       :unpredictable-over-predictable-copy (discount "D" "E")})))
 
 (defn score [{:keys [meta trials]}]
   (let [a (summarize-condition trials "A")
@@ -213,6 +283,7 @@
                      (nil? ratio) "unresolved"
                      a-resolved "point"
                      :else "lower-bound")}
+     :copy-screen (copy-screen trials c)
      :confounds
      ["Wall clock includes network transfer of the prompt. Condition A ships ~1 MB, condition C ships ~1 KB, so (A - C) contains upload time as well as prefill. Prefill rate is therefore a LOWER bound even when the delta resolves."
       "Server-side batching and queueing are invisible from the client. A turn may wait behind other tenants; that time lands in the floor and in both deltas."
@@ -259,13 +330,39 @@
            " tok/s (" (:estimate-kind decode) ")")
       (str "RATIO:   " (f (:prefill-over-decode ratio)) "x (" (:kind ratio) ")")
       ""
+      (when-let [cs (:copy-screen s)]
+        (str/join
+         "\n"
+         (concat
+          ["COPY VERSUS COMPOSE"
+           "| Cond | Kind | n | route-adherent | not reproduced | decoded tok | delta | tok/s |"
+           "|---|---|---|---|---|---|---|---|"]
+          (for [k ["B" "D" "E"]
+                :let [r (get-in cs [:rates k])]
+                :when r]
+            (str "| " k " | "
+                 (case k "B" "compose" "D" "copy/unpredictable" "E" "copy/same-content") " | "
+                 (:n r) " | " (f (:route-adherent r)) " | " (f (:n-not-reproduced r)) " | "
+                 (f (:marginal-decoded-tokens r)) " | " (f (:delta-ms r)) " ms | "
+                 (f (:tokens-per-second r)) " |"))
+          [""]
+          (for [[label kw] [["copy(unpredictable) / compose" :copy-over-compose-unpredictable]
+                            ["copy(same content) / compose" :copy-over-compose-same-content]
+                            ["copy(unpredictable) / copy(predictable)" :unpredictable-over-predictable-copy]]
+                :let [d (get cs kw)]
+                :when d]
+            (str "  " label " = " (f (:speedup d)) "x"
+                 "  [token counts matched: " (:token-counts-matched d)
+                 "; " (f (:copy-tokens d)) " vs " (f (:compose-tokens d)) " tokens]")))))
+      ""
       "Confounds this measurement cannot separate:"
       (str/join "\n" (map #(str "  - " %) (:confounds s)))])))
 
 (def tsv-columns
   [:tag :condition :replicate :wall_ms :exit_code :prompt_bytes :prompt_sha256_16
    :input-tokens :cached-input-tokens :output-tokens :reasoning-output-tokens
-   :decoded-tokens :turn-started-ms :message-chars :loadavg])
+   :decoded-tokens :turn-started-ms :message-chars
+   :expected_sha256_16 :message_sha256_16 :reproduction_exact :loadavg])
 
 (defn tsv
   "Per-trial facts as a tab-separated time series. This is the shape

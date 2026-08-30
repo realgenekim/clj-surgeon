@@ -1,0 +1,108 @@
+{
+  "started" : "2026-08-30T02:28:35.483354215Z",
+  "replicates" : 9,
+  "schema" : "clj-surgeon.transcription-fidelity-probe/v1",
+  "reasoning" : "low",
+  "hostname" : "anvil-server",
+  "corpus" : [ {
+    "id" : "src/sample/views/review.clj#render-review",
+    "desc" : "renders a single review",
+    "group" : "near-identical-file"
+  }, {
+    "id" : "src/sample/views/reviews.clj#render-review",
+    "desc" : "renders the review index page",
+    "group" : "near-identical-file"
+  }, {
+    "id" : "src/sample/views/review_updates.clj#render-review-row",
+    "desc" : "renders one row of the review updates table",
+    "group" : "near-identical-file"
+  }, {
+    "id" : "src/sample/db/review_queries.clj#fetch-review",
+    "desc" : "fetches a review from the database",
+    "group" : "underscore-hyphen"
+  }, {
+    "id" : "src/sample/db/review_queries.clj#fetch_review",
+    "desc" : "the legacy database fetch kept for the old API",
+    "group" : "underscore-hyphen"
+  }, {
+    "id" : "src/sample/db/review-queries.clj#fetch-review",
+    "desc" : "fetches a review through the deprecated path",
+    "group" : "underscore-hyphen"
+  }, {
+    "id" : "src/sample/domain/validate.clj#valid-review?",
+    "desc" : "tests whether a review is valid",
+    "group" : "trailing-punctuation"
+  }, {
+    "id" : "src/sample/domain/validate.clj#valid-review",
+    "desc" : "returns the validity record for a review",
+    "group" : "trailing-punctuation"
+  }, {
+    "id" : "src/sample/domain/validate.clj#valid-review!",
+    "desc" : "asserts review validity and throws on failure",
+    "group" : "trailing-punctuation"
+  }, {
+    "id" : "src/sample/domain/transform.clj#normalize*",
+    "desc" : "the unmemoised normalisation primitive",
+    "group" : "trailing-punctuation"
+  }, {
+    "id" : "src/sample/domain/transform.clj#normalize",
+    "desc" : "normalises a value for storage",
+    "group" : "trailing-punctuation"
+  }, {
+    "id" : "src/sample/util/HTTPClient.clj#send-request",
+    "desc" : "sends a request through the upper-case client",
+    "group" : "case-only"
+  }, {
+    "id" : "src/sample/util/HttpClient.clj#send-request",
+    "desc" : "sends a request through the mixed-case client",
+    "group" : "case-only"
+  }, {
+    "id" : "src/sample/reporting/aggregation/quarterly_summary_builder.clj#build-quarterly-summary",
+    "desc" : "builds one quarterly summary",
+    "group" : "deep-discriminator"
+  }, {
+    "id" : "src/sample/reporting/aggregation/quarterly_summary_builder.clj#build-quarterly-summaries",
+    "desc" : "builds every quarterly summary at once",
+    "group" : "deep-discriminator"
+  }, {
+    "id" : "src/sample/reporting/aggregation/quarterly_summary_builders.clj#build-quarterly-summary",
+    "desc" : "builds a quarterly summary using the pluralised builder namespace",
+    "group" : "deep-discriminator"
+  }, {
+    "id" : "src/sample/migrations/v2_add_index.clj#migrate-v2",
+    "desc" : "the migration that adds a single index",
+    "group" : "digit-confusable"
+  }, {
+    "id" : "src/sample/migrations/v21_add_index.clj#migrate-v21",
+    "desc" : "the twenty-first migration",
+    "group" : "digit-confusable"
+  }, {
+    "id" : "src/sample/migrations/v2_add_indexes.clj#migrate-v2",
+    "desc" : "the migration that adds several indexes",
+    "group" : "digit-confusable"
+  }, {
+    "id" : "src/sample/core.clj#start-system",
+    "desc" : "starts the system",
+    "group" : "control"
+  }, {
+    "id" : "src/sample/config.clj#load-config",
+    "desc" : "loads configuration",
+    "group" : "control"
+  }, {
+    "id" : "src/sample/http/routes.clj#app-routes",
+    "desc" : "defines the application routes",
+    "group" : "control"
+  }, {
+    "id" : "src/sample/cache/lru.clj#evict-oldest",
+    "desc" : "evicts the oldest cache entry",
+    "group" : "control"
+  }, {
+    "id" : "src/sample/mail/sender.clj#deliver-message",
+    "desc" : "delivers an outbound message",
+    "group" : "control"
+  } ],
+  "loadavg" : "2.47 1.60 1.28",
+  "corpus-size" : 24,
+  "codex-args" : "codex exec --json --skip-git-repo-check --ephemeral -s read-only --ignore-user-config -c model=gpt-5.6-sol -c model_reasoning_effort=low -",
+  "model" : "gpt-5.6-sol"
+}
