@@ -1,9 +1,13 @@
 # Rename verb screen: the bytes won and Sol reliability killed it
 
-**Decision:** KILL the proposed product surface after this screen.  
-**Date:** 2026-08-30  
-**Product source:** `c55de2279826af5ed21c90981591479dd2e802b2`  
-**Preregistration:** `47fa7a682ae612f4bc14185fffb7652635a49aed`  
+**Decision:** KILL the proposed product surface after this screen.
+
+**Date:** 2026-08-30
+
+**Product source:** `c55de2279826af5ed21c90981591479dd2e802b2`
+
+**Preregistration:** `47fa7a682ae612f4bc14185fffb7652635a49aed`
+
 **Frozen harness:** `15c3acbe99f38bfb8d1ce242f8450b8a137de7c5`
 
 ## Answer

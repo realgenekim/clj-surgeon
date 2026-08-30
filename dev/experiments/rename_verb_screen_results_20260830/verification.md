@@ -29,4 +29,3 @@ All commands ran from the frozen experiment worktree at harness commit
 The full-suite timeout-classification flake does not touch the experiment
 proxy, fixture, scorer, raw results, or KILL decision. It is retained rather
 than hidden.
-
