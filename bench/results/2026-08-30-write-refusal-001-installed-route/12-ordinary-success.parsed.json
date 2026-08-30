@@ -1,0 +1,34 @@
+{
+  "jsonrpc" : "2.0",
+  "id" : 12,
+  "result" : {
+    "content" : [ {
+      "type" : "text",
+      "text" : "edit_clojure\n  1 edits · 1 files · 1297.52 ms\n\n✓ atomic commit complete\n✓ written bytes read back and verified\n✓ terminal evidence · verification_complete=true · next action none"
+    } ],
+    "isError" : false,
+    "structuredContent" : {
+      "format" : {
+        "status" : "complete",
+        "file-count" : 1,
+        "changed-file-count" : 0,
+        "elapsed_ms" : 1285.690375
+      },
+      "elapsed_ms" : 1297.52075,
+      "verification_complete" : true,
+      "operation" : "edit_clojure",
+      "committed" : true,
+      "read_back_hashes" : {
+        "src/success.clj" : "1a6fd57dbbe2675354c4371031cc45c2c4f81e839c621e9bd4ec2c9dd96aac09"
+      },
+      "next_action" : "none",
+      "ok" : true,
+      "files" : 1,
+      "edits" : 1,
+      "changes" : 1,
+      "receipt_hash" : "de99209d4708da5d0cb54029dbbca2dffc8d375669a2453d6a2a7d74ca91510b",
+      "undo_receipt" : "/Users/genekim/.local/state/clj-surgeon/workspaces/03aa9914f1e4cf5ab8bdd57c34d7cc5af63cd89a315acc7dee4dff7069155648/receipts/8a06528c-04ef-4e64-b231-08f9f4ff4482.edn",
+      "workspace_root" : "/private/tmp/clj-surgeon-write-refusal-release.8fR5uN/proof-workspaces/success"
+    }
+  }
+}

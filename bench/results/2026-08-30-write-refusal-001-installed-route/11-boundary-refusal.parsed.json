@@ -1,0 +1,1625 @@
+{
+  "jsonrpc" : "2.0",
+  "id" : 11,
+  "result" : {
+    "content" : [ {
+      "type" : "text",
+      "text" : "edit_clojure\n  refused · expect-count-mismatch · 41.35 ms\n  change 0 · installed-boundary-refusal\n\n✓ source unchanged\n→ Correct the declared scope or count and call apply_clojure_changes once."
+    } ],
+    "isError" : true,
+    "structuredContent" : {
+      "expected_count" : 130,
+      "kernel_phase" : "compile",
+      "elapsed_ms" : 41.345625,
+      "remedy" : "Correct the declared scope or count and call apply_clojure_changes once.",
+      "write_refusal_evidence" : {
+        "candidate_continuation" : {
+          "remaining_count" : 1,
+          "family" : "generic-count-mismatch",
+          "page_limit" : 128,
+          "authority" : false,
+          "operation" : "edit_clojure",
+          "executable" : false,
+          "next_offset" : 128,
+          "ordering_version" : 1,
+          "candidate_query_sha256" : "54b52258364d8107fc6c8c52ac8250284d1216df145e988333994ad4004d792c",
+          "write_authority" : false,
+          "version" : 1,
+          "subject" : {
+            "change_index" : 0,
+            "change_id" : "installed-boundary-refusal",
+            "selector_sha256" : "be2956bf8900fcec07bf4fa2e5c35cdb63fa85321c42140414a801a4075a011c"
+          },
+          "refusal_type" : "expect-count-mismatch",
+          "snapshot_guards" : {
+            "src/boundary.clj" : "664e057e130ea17097612d63019295c9a5124e687c5ee4e6361adffd08176c31"
+          }
+        },
+        "expected_count" : 130,
+        "family" : "generic-count-mismatch",
+        "available_count" : 129,
+        "authority" : false,
+        "operation" : "edit_clojure",
+        "actual_count" : 129,
+        "returned_count" : 128,
+        "omitted_count" : 1,
+        "truncated" : true,
+        "write_authority" : false,
+        "items" : [ {
+          "line" : 3,
+          "end_line" : 3,
+          "address" : {
+            "preorder" : 7
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-000"
+        }, {
+          "line" : 4,
+          "end_line" : 4,
+          "address" : {
+            "preorder" : 12
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-001"
+        }, {
+          "line" : 5,
+          "end_line" : 5,
+          "address" : {
+            "preorder" : 17
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-002"
+        }, {
+          "line" : 6,
+          "end_line" : 6,
+          "address" : {
+            "preorder" : 22
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-003"
+        }, {
+          "line" : 7,
+          "end_line" : 7,
+          "address" : {
+            "preorder" : 27
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-004"
+        }, {
+          "line" : 8,
+          "end_line" : 8,
+          "address" : {
+            "preorder" : 32
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-005"
+        }, {
+          "line" : 9,
+          "end_line" : 9,
+          "address" : {
+            "preorder" : 37
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-006"
+        }, {
+          "line" : 10,
+          "end_line" : 10,
+          "address" : {
+            "preorder" : 42
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-007"
+        }, {
+          "line" : 11,
+          "end_line" : 11,
+          "address" : {
+            "preorder" : 47
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-008"
+        }, {
+          "line" : 12,
+          "end_line" : 12,
+          "address" : {
+            "preorder" : 52
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-009"
+        }, {
+          "line" : 13,
+          "end_line" : 13,
+          "address" : {
+            "preorder" : 57
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-010"
+        }, {
+          "line" : 14,
+          "end_line" : 14,
+          "address" : {
+            "preorder" : 62
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-011"
+        }, {
+          "line" : 15,
+          "end_line" : 15,
+          "address" : {
+            "preorder" : 67
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-012"
+        }, {
+          "line" : 16,
+          "end_line" : 16,
+          "address" : {
+            "preorder" : 72
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-013"
+        }, {
+          "line" : 17,
+          "end_line" : 17,
+          "address" : {
+            "preorder" : 77
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-014"
+        }, {
+          "line" : 18,
+          "end_line" : 18,
+          "address" : {
+            "preorder" : 82
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-015"
+        }, {
+          "line" : 19,
+          "end_line" : 19,
+          "address" : {
+            "preorder" : 87
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-016"
+        }, {
+          "line" : 20,
+          "end_line" : 20,
+          "address" : {
+            "preorder" : 92
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-017"
+        }, {
+          "line" : 21,
+          "end_line" : 21,
+          "address" : {
+            "preorder" : 97
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-018"
+        }, {
+          "line" : 22,
+          "end_line" : 22,
+          "address" : {
+            "preorder" : 102
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-019"
+        }, {
+          "line" : 23,
+          "end_line" : 23,
+          "address" : {
+            "preorder" : 107
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-020"
+        }, {
+          "line" : 24,
+          "end_line" : 24,
+          "address" : {
+            "preorder" : 112
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-021"
+        }, {
+          "line" : 25,
+          "end_line" : 25,
+          "address" : {
+            "preorder" : 117
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-022"
+        }, {
+          "line" : 26,
+          "end_line" : 26,
+          "address" : {
+            "preorder" : 122
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-023"
+        }, {
+          "line" : 27,
+          "end_line" : 27,
+          "address" : {
+            "preorder" : 127
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-024"
+        }, {
+          "line" : 28,
+          "end_line" : 28,
+          "address" : {
+            "preorder" : 132
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-025"
+        }, {
+          "line" : 29,
+          "end_line" : 29,
+          "address" : {
+            "preorder" : 137
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-026"
+        }, {
+          "line" : 30,
+          "end_line" : 30,
+          "address" : {
+            "preorder" : 142
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-027"
+        }, {
+          "line" : 31,
+          "end_line" : 31,
+          "address" : {
+            "preorder" : 147
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-028"
+        }, {
+          "line" : 32,
+          "end_line" : 32,
+          "address" : {
+            "preorder" : 152
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-029"
+        }, {
+          "line" : 33,
+          "end_line" : 33,
+          "address" : {
+            "preorder" : 157
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-030"
+        }, {
+          "line" : 34,
+          "end_line" : 34,
+          "address" : {
+            "preorder" : 162
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-031"
+        }, {
+          "line" : 35,
+          "end_line" : 35,
+          "address" : {
+            "preorder" : 167
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-032"
+        }, {
+          "line" : 36,
+          "end_line" : 36,
+          "address" : {
+            "preorder" : 172
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-033"
+        }, {
+          "line" : 37,
+          "end_line" : 37,
+          "address" : {
+            "preorder" : 177
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-034"
+        }, {
+          "line" : 38,
+          "end_line" : 38,
+          "address" : {
+            "preorder" : 182
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-035"
+        }, {
+          "line" : 39,
+          "end_line" : 39,
+          "address" : {
+            "preorder" : 187
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-036"
+        }, {
+          "line" : 40,
+          "end_line" : 40,
+          "address" : {
+            "preorder" : 192
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-037"
+        }, {
+          "line" : 41,
+          "end_line" : 41,
+          "address" : {
+            "preorder" : 197
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-038"
+        }, {
+          "line" : 42,
+          "end_line" : 42,
+          "address" : {
+            "preorder" : 202
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-039"
+        }, {
+          "line" : 43,
+          "end_line" : 43,
+          "address" : {
+            "preorder" : 207
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-040"
+        }, {
+          "line" : 44,
+          "end_line" : 44,
+          "address" : {
+            "preorder" : 212
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-041"
+        }, {
+          "line" : 45,
+          "end_line" : 45,
+          "address" : {
+            "preorder" : 217
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-042"
+        }, {
+          "line" : 46,
+          "end_line" : 46,
+          "address" : {
+            "preorder" : 222
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-043"
+        }, {
+          "line" : 47,
+          "end_line" : 47,
+          "address" : {
+            "preorder" : 227
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-044"
+        }, {
+          "line" : 48,
+          "end_line" : 48,
+          "address" : {
+            "preorder" : 232
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-045"
+        }, {
+          "line" : 49,
+          "end_line" : 49,
+          "address" : {
+            "preorder" : 237
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-046"
+        }, {
+          "line" : 50,
+          "end_line" : 50,
+          "address" : {
+            "preorder" : 242
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-047"
+        }, {
+          "line" : 51,
+          "end_line" : 51,
+          "address" : {
+            "preorder" : 247
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-048"
+        }, {
+          "line" : 52,
+          "end_line" : 52,
+          "address" : {
+            "preorder" : 252
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-049"
+        }, {
+          "line" : 53,
+          "end_line" : 53,
+          "address" : {
+            "preorder" : 257
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-050"
+        }, {
+          "line" : 54,
+          "end_line" : 54,
+          "address" : {
+            "preorder" : 262
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-051"
+        }, {
+          "line" : 55,
+          "end_line" : 55,
+          "address" : {
+            "preorder" : 267
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-052"
+        }, {
+          "line" : 56,
+          "end_line" : 56,
+          "address" : {
+            "preorder" : 272
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-053"
+        }, {
+          "line" : 57,
+          "end_line" : 57,
+          "address" : {
+            "preorder" : 277
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-054"
+        }, {
+          "line" : 58,
+          "end_line" : 58,
+          "address" : {
+            "preorder" : 282
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-055"
+        }, {
+          "line" : 59,
+          "end_line" : 59,
+          "address" : {
+            "preorder" : 287
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-056"
+        }, {
+          "line" : 60,
+          "end_line" : 60,
+          "address" : {
+            "preorder" : 292
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-057"
+        }, {
+          "line" : 61,
+          "end_line" : 61,
+          "address" : {
+            "preorder" : 297
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-058"
+        }, {
+          "line" : 62,
+          "end_line" : 62,
+          "address" : {
+            "preorder" : 302
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-059"
+        }, {
+          "line" : 63,
+          "end_line" : 63,
+          "address" : {
+            "preorder" : 307
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-060"
+        }, {
+          "line" : 64,
+          "end_line" : 64,
+          "address" : {
+            "preorder" : 312
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-061"
+        }, {
+          "line" : 65,
+          "end_line" : 65,
+          "address" : {
+            "preorder" : 317
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-062"
+        }, {
+          "line" : 66,
+          "end_line" : 66,
+          "address" : {
+            "preorder" : 322
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-063"
+        }, {
+          "line" : 67,
+          "end_line" : 67,
+          "address" : {
+            "preorder" : 327
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-064"
+        }, {
+          "line" : 68,
+          "end_line" : 68,
+          "address" : {
+            "preorder" : 332
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-065"
+        }, {
+          "line" : 69,
+          "end_line" : 69,
+          "address" : {
+            "preorder" : 337
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-066"
+        }, {
+          "line" : 70,
+          "end_line" : 70,
+          "address" : {
+            "preorder" : 342
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-067"
+        }, {
+          "line" : 71,
+          "end_line" : 71,
+          "address" : {
+            "preorder" : 347
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-068"
+        }, {
+          "line" : 72,
+          "end_line" : 72,
+          "address" : {
+            "preorder" : 352
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-069"
+        }, {
+          "line" : 73,
+          "end_line" : 73,
+          "address" : {
+            "preorder" : 357
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-070"
+        }, {
+          "line" : 74,
+          "end_line" : 74,
+          "address" : {
+            "preorder" : 362
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-071"
+        }, {
+          "line" : 75,
+          "end_line" : 75,
+          "address" : {
+            "preorder" : 367
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-072"
+        }, {
+          "line" : 76,
+          "end_line" : 76,
+          "address" : {
+            "preorder" : 372
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-073"
+        }, {
+          "line" : 77,
+          "end_line" : 77,
+          "address" : {
+            "preorder" : 377
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-074"
+        }, {
+          "line" : 78,
+          "end_line" : 78,
+          "address" : {
+            "preorder" : 382
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-075"
+        }, {
+          "line" : 79,
+          "end_line" : 79,
+          "address" : {
+            "preorder" : 387
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-076"
+        }, {
+          "line" : 80,
+          "end_line" : 80,
+          "address" : {
+            "preorder" : 392
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-077"
+        }, {
+          "line" : 81,
+          "end_line" : 81,
+          "address" : {
+            "preorder" : 397
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-078"
+        }, {
+          "line" : 82,
+          "end_line" : 82,
+          "address" : {
+            "preorder" : 402
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-079"
+        }, {
+          "line" : 83,
+          "end_line" : 83,
+          "address" : {
+            "preorder" : 407
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-080"
+        }, {
+          "line" : 84,
+          "end_line" : 84,
+          "address" : {
+            "preorder" : 412
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-081"
+        }, {
+          "line" : 85,
+          "end_line" : 85,
+          "address" : {
+            "preorder" : 417
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-082"
+        }, {
+          "line" : 86,
+          "end_line" : 86,
+          "address" : {
+            "preorder" : 422
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-083"
+        }, {
+          "line" : 87,
+          "end_line" : 87,
+          "address" : {
+            "preorder" : 427
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-084"
+        }, {
+          "line" : 88,
+          "end_line" : 88,
+          "address" : {
+            "preorder" : 432
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-085"
+        }, {
+          "line" : 89,
+          "end_line" : 89,
+          "address" : {
+            "preorder" : 437
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-086"
+        }, {
+          "line" : 90,
+          "end_line" : 90,
+          "address" : {
+            "preorder" : 442
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-087"
+        }, {
+          "line" : 91,
+          "end_line" : 91,
+          "address" : {
+            "preorder" : 447
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-088"
+        }, {
+          "line" : 92,
+          "end_line" : 92,
+          "address" : {
+            "preorder" : 452
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-089"
+        }, {
+          "line" : 93,
+          "end_line" : 93,
+          "address" : {
+            "preorder" : 457
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-090"
+        }, {
+          "line" : 94,
+          "end_line" : 94,
+          "address" : {
+            "preorder" : 462
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-091"
+        }, {
+          "line" : 95,
+          "end_line" : 95,
+          "address" : {
+            "preorder" : 467
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-092"
+        }, {
+          "line" : 96,
+          "end_line" : 96,
+          "address" : {
+            "preorder" : 472
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-093"
+        }, {
+          "line" : 97,
+          "end_line" : 97,
+          "address" : {
+            "preorder" : 477
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-094"
+        }, {
+          "line" : 98,
+          "end_line" : 98,
+          "address" : {
+            "preorder" : 482
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-095"
+        }, {
+          "line" : 99,
+          "end_line" : 99,
+          "address" : {
+            "preorder" : 487
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-096"
+        }, {
+          "line" : 100,
+          "end_line" : 100,
+          "address" : {
+            "preorder" : 492
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-097"
+        }, {
+          "line" : 101,
+          "end_line" : 101,
+          "address" : {
+            "preorder" : 497
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-098"
+        }, {
+          "line" : 102,
+          "end_line" : 102,
+          "address" : {
+            "preorder" : 502
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-099"
+        }, {
+          "line" : 103,
+          "end_line" : 103,
+          "address" : {
+            "preorder" : 507
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-100"
+        }, {
+          "line" : 104,
+          "end_line" : 104,
+          "address" : {
+            "preorder" : 512
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-101"
+        }, {
+          "line" : 105,
+          "end_line" : 105,
+          "address" : {
+            "preorder" : 517
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-102"
+        }, {
+          "line" : 106,
+          "end_line" : 106,
+          "address" : {
+            "preorder" : 522
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-103"
+        }, {
+          "line" : 107,
+          "end_line" : 107,
+          "address" : {
+            "preorder" : 527
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-104"
+        }, {
+          "line" : 108,
+          "end_line" : 108,
+          "address" : {
+            "preorder" : 532
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-105"
+        }, {
+          "line" : 109,
+          "end_line" : 109,
+          "address" : {
+            "preorder" : 537
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-106"
+        }, {
+          "line" : 110,
+          "end_line" : 110,
+          "address" : {
+            "preorder" : 542
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-107"
+        }, {
+          "line" : 111,
+          "end_line" : 111,
+          "address" : {
+            "preorder" : 547
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-108"
+        }, {
+          "line" : 112,
+          "end_line" : 112,
+          "address" : {
+            "preorder" : 552
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-109"
+        }, {
+          "line" : 113,
+          "end_line" : 113,
+          "address" : {
+            "preorder" : 557
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-110"
+        }, {
+          "line" : 114,
+          "end_line" : 114,
+          "address" : {
+            "preorder" : 562
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-111"
+        }, {
+          "line" : 115,
+          "end_line" : 115,
+          "address" : {
+            "preorder" : 567
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-112"
+        }, {
+          "line" : 116,
+          "end_line" : 116,
+          "address" : {
+            "preorder" : 572
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-113"
+        }, {
+          "line" : 117,
+          "end_line" : 117,
+          "address" : {
+            "preorder" : 577
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-114"
+        }, {
+          "line" : 118,
+          "end_line" : 118,
+          "address" : {
+            "preorder" : 582
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-115"
+        }, {
+          "line" : 119,
+          "end_line" : 119,
+          "address" : {
+            "preorder" : 587
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-116"
+        }, {
+          "line" : 120,
+          "end_line" : 120,
+          "address" : {
+            "preorder" : 592
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-117"
+        }, {
+          "line" : 121,
+          "end_line" : 121,
+          "address" : {
+            "preorder" : 597
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-118"
+        }, {
+          "line" : 122,
+          "end_line" : 122,
+          "address" : {
+            "preorder" : 602
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-119"
+        }, {
+          "line" : 123,
+          "end_line" : 123,
+          "address" : {
+            "preorder" : 607
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-120"
+        }, {
+          "line" : 124,
+          "end_line" : 124,
+          "address" : {
+            "preorder" : 612
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-121"
+        }, {
+          "line" : 125,
+          "end_line" : 125,
+          "address" : {
+            "preorder" : 617
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-122"
+        }, {
+          "line" : 126,
+          "end_line" : 126,
+          "address" : {
+            "preorder" : 622
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-123"
+        }, {
+          "line" : 127,
+          "end_line" : 127,
+          "address" : {
+            "preorder" : 627
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-124"
+        }, {
+          "line" : 128,
+          "end_line" : 128,
+          "address" : {
+            "preorder" : 632
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-125"
+        }, {
+          "line" : 129,
+          "end_line" : 129,
+          "address" : {
+            "preorder" : 637
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-126"
+        }, {
+          "line" : 130,
+          "end_line" : 130,
+          "address" : {
+            "preorder" : 642
+          },
+          "file" : "src/boundary.clj",
+          "scope_kind" : "form",
+          "owner_kind" : "form",
+          "owner_name" : "owner-127"
+        } ],
+        "version" : 1,
+        "failed_stage" : "intent-compilation",
+        "subject" : {
+          "change_index" : 0,
+          "change_id" : "installed-boundary-refusal",
+          "selector_sha256" : "be2956bf8900fcec07bf4fa2e5c35cdb63fa85321c42140414a801a4075a011c"
+        },
+        "per_file_counts" : {
+          "src/boundary.clj" : 129
+        },
+        "per_form_counts" : {
+          "src/boundary.clj" : {
+            "owner-046" : 1,
+            "owner-011" : 1,
+            "owner-072" : 1,
+            "owner-120" : 1,
+            "owner-108" : 1,
+            "owner-086" : 1,
+            "owner-041" : 1,
+            "owner-058" : 1,
+            "owner-020" : 1,
+            "owner-106" : 1,
+            "owner-109" : 1,
+            "owner-085" : 1,
+            "owner-024" : 1,
+            "owner-018" : 1,
+            "owner-114" : 1,
+            "owner-065" : 1,
+            "owner-040" : 1,
+            "owner-102" : 1,
+            "owner-021" : 1,
+            "owner-060" : 1,
+            "owner-043" : 1,
+            "owner-126" : 1,
+            "owner-128" : 1,
+            "owner-030" : 1,
+            "owner-048" : 1,
+            "owner-121" : 1,
+            "owner-036" : 1,
+            "owner-047" : 1,
+            "owner-039" : 1,
+            "owner-100" : 1,
+            "owner-010" : 1,
+            "owner-061" : 1,
+            "owner-116" : 1,
+            "owner-077" : 1,
+            "owner-089" : 1,
+            "owner-103" : 1,
+            "owner-119" : 1,
+            "owner-074" : 1,
+            "owner-009" : 1,
+            "owner-015" : 1,
+            "owner-124" : 1,
+            "owner-087" : 1,
+            "owner-029" : 1,
+            "owner-088" : 1,
+            "owner-104" : 1,
+            "owner-069" : 1,
+            "owner-082" : 1,
+            "owner-034" : 1,
+            "owner-016" : 1,
+            "owner-107" : 1,
+            "owner-101" : 1,
+            "owner-003" : 1,
+            "owner-025" : 1,
+            "owner-004" : 1,
+            "owner-062" : 1,
+            "owner-022" : 1,
+            "owner-049" : 1,
+            "owner-051" : 1,
+            "owner-052" : 1,
+            "owner-044" : 1,
+            "owner-037" : 1,
+            "owner-063" : 1,
+            "owner-090" : 1,
+            "owner-035" : 1,
+            "owner-115" : 1,
+            "owner-083" : 1,
+            "owner-098" : 1,
+            "owner-092" : 1,
+            "owner-076" : 1,
+            "owner-084" : 1,
+            "owner-055" : 1,
+            "owner-019" : 1,
+            "owner-054" : 1,
+            "owner-013" : 1,
+            "owner-113" : 1,
+            "owner-095" : 1,
+            "owner-067" : 1,
+            "owner-081" : 1,
+            "owner-027" : 1,
+            "owner-028" : 1,
+            "owner-006" : 1,
+            "owner-007" : 1,
+            "owner-005" : 1,
+            "owner-111" : 1,
+            "owner-105" : 1,
+            "owner-001" : 1,
+            "owner-053" : 1,
+            "owner-073" : 1,
+            "owner-094" : 1,
+            "owner-008" : 1,
+            "owner-033" : 1,
+            "owner-093" : 1,
+            "owner-097" : 1,
+            "owner-070" : 1,
+            "owner-122" : 1,
+            "owner-026" : 1,
+            "owner-091" : 1,
+            "owner-064" : 1,
+            "owner-080" : 1,
+            "owner-056" : 1,
+            "owner-017" : 1,
+            "owner-000" : 1,
+            "owner-118" : 1,
+            "owner-099" : 1,
+            "owner-038" : 1,
+            "owner-112" : 1,
+            "owner-042" : 1,
+            "owner-012" : 1,
+            "owner-123" : 1,
+            "owner-078" : 1,
+            "owner-127" : 1,
+            "owner-125" : 1,
+            "owner-031" : 1,
+            "owner-023" : 1,
+            "owner-002" : 1,
+            "owner-068" : 1,
+            "owner-110" : 1,
+            "owner-079" : 1,
+            "owner-117" : 1,
+            "owner-075" : 1,
+            "owner-032" : 1,
+            "owner-057" : 1,
+            "owner-050" : 1,
+            "owner-096" : 1,
+            "owner-014" : 1,
+            "owner-059" : 1,
+            "owner-045" : 1,
+            "owner-071" : 1,
+            "owner-066" : 1
+          }
+        },
+        "snapshot_guards" : {
+          "src/boundary.clj" : "664e057e130ea17097612d63019295c9a5124e687c5ee4e6361adffd08176c31"
+        }
+      },
+      "operation" : "edit_clojure",
+      "change_index" : 0,
+      "actual_count" : 129,
+      "phase" : "kernel",
+      "error_type" : "expect-count-mismatch",
+      "reason" : "expect-count-mismatch",
+      "source_unchanged" : true,
+      "ok" : false,
+      "error" : "Intent 0 expected 130 matches, found 129",
+      "change_id" : "installed-boundary-refusal",
+      "per_file_counts" : {
+        "/private/tmp/clj-surgeon-write-refusal-release.8fR5uN/proof-workspaces/boundary/src/boundary.clj" : 129
+      },
+      "workspace_root" : "/private/tmp/clj-surgeon-write-refusal-release.8fR5uN/proof-workspaces/boundary",
+      "per_form_counts" : {
+        "src/boundary.clj" : {
+          "owner-046" : 1,
+          "owner-011" : 1,
+          "owner-072" : 1,
+          "owner-120" : 1,
+          "owner-108" : 1,
+          "owner-086" : 1,
+          "owner-041" : 1,
+          "owner-058" : 1,
+          "owner-020" : 1,
+          "owner-106" : 1,
+          "owner-109" : 1,
+          "owner-085" : 1,
+          "owner-024" : 1,
+          "owner-018" : 1,
+          "owner-114" : 1,
+          "owner-065" : 1,
+          "owner-040" : 1,
+          "owner-102" : 1,
+          "owner-021" : 1,
+          "owner-060" : 1,
+          "owner-043" : 1,
+          "owner-126" : 1,
+          "owner-128" : 1,
+          "owner-030" : 1,
+          "owner-048" : 1,
+          "owner-121" : 1,
+          "owner-036" : 1,
+          "owner-047" : 1,
+          "owner-039" : 1,
+          "owner-100" : 1,
+          "owner-010" : 1,
+          "owner-061" : 1,
+          "owner-116" : 1,
+          "owner-077" : 1,
+          "owner-089" : 1,
+          "owner-103" : 1,
+          "owner-119" : 1,
+          "owner-074" : 1,
+          "owner-009" : 1,
+          "owner-015" : 1,
+          "owner-124" : 1,
+          "owner-087" : 1,
+          "owner-029" : 1,
+          "owner-088" : 1,
+          "owner-104" : 1,
+          "owner-069" : 1,
+          "owner-082" : 1,
+          "owner-034" : 1,
+          "owner-016" : 1,
+          "owner-107" : 1,
+          "owner-101" : 1,
+          "owner-003" : 1,
+          "owner-025" : 1,
+          "owner-004" : 1,
+          "owner-062" : 1,
+          "owner-022" : 1,
+          "owner-049" : 1,
+          "owner-051" : 1,
+          "owner-052" : 1,
+          "owner-044" : 1,
+          "owner-037" : 1,
+          "owner-063" : 1,
+          "owner-090" : 1,
+          "owner-035" : 1,
+          "owner-115" : 1,
+          "owner-083" : 1,
+          "owner-098" : 1,
+          "owner-092" : 1,
+          "owner-076" : 1,
+          "owner-084" : 1,
+          "owner-055" : 1,
+          "owner-019" : 1,
+          "owner-054" : 1,
+          "owner-013" : 1,
+          "owner-113" : 1,
+          "owner-095" : 1,
+          "owner-067" : 1,
+          "owner-081" : 1,
+          "owner-027" : 1,
+          "owner-028" : 1,
+          "owner-006" : 1,
+          "owner-007" : 1,
+          "owner-005" : 1,
+          "owner-111" : 1,
+          "owner-105" : 1,
+          "owner-001" : 1,
+          "owner-053" : 1,
+          "owner-073" : 1,
+          "owner-094" : 1,
+          "owner-008" : 1,
+          "owner-033" : 1,
+          "owner-093" : 1,
+          "owner-097" : 1,
+          "owner-070" : 1,
+          "owner-122" : 1,
+          "owner-026" : 1,
+          "owner-091" : 1,
+          "owner-064" : 1,
+          "owner-080" : 1,
+          "owner-056" : 1,
+          "owner-017" : 1,
+          "owner-000" : 1,
+          "owner-118" : 1,
+          "owner-099" : 1,
+          "owner-038" : 1,
+          "owner-112" : 1,
+          "owner-042" : 1,
+          "owner-012" : 1,
+          "owner-123" : 1,
+          "owner-078" : 1,
+          "owner-127" : 1,
+          "owner-125" : 1,
+          "owner-031" : 1,
+          "owner-023" : 1,
+          "owner-002" : 1,
+          "owner-068" : 1,
+          "owner-110" : 1,
+          "owner-079" : 1,
+          "owner-117" : 1,
+          "owner-075" : 1,
+          "owner-032" : 1,
+          "owner-057" : 1,
+          "owner-050" : 1,
+          "owner-096" : 1,
+          "owner-014" : 1,
+          "owner-059" : 1,
+          "owner-045" : 1,
+          "owner-071" : 1,
+          "owner-066" : 1
+        }
+      }
+    }
+  }
+}
