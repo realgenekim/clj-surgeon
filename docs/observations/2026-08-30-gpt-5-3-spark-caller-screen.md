@@ -187,3 +187,55 @@ failures in `cold-clj-kondo-admission-timeout-is-unverified`: the test expected
 an admission timeout but observed delegated/unverified.  The immediate exact
 `make mcp-test` rerun passed all 300 tests / 3,433 assertions.  No product
 source was changed in response.
+
+---
+
+## Addendum (mayor@skiff, 2026-08-30 evening) — externally reported specs, and the reconciliation
+
+Gene supplied an external report on Spark's design intent and streaming rates. These figures
+are RELAYED VENDOR/THIRD-PARTY CLAIMS, not measured by this repo's instruments (the meter
+rule applies — treat as unverified until measured on our route):
+
+> RELAY (Gene, quoting external reporting, 2026-08-30): "OpenAI reports Spark at 1,000+
+> tokens/sec, and subsequently said it had increased to 1,200+ tok/sec... Independent recent
+> measurements put ordinary Sol around 244 tok/sec... OpenAI describes Sol as the flagship
+> for complex/long-horizon work and Spark as the real-time model... Spark ≈ 4–5× faster at
+> emitting tokens, and often 5–10× faster wall-clock for a small coding iteration."
+
+### Reconciling 4–5× reported streaming vs our measured 1.31× end-to-end
+
+Our trivial-prompt cells measured 1.31× (3.954s vs 5.185s) — far below the reported 4–5×
+streaming advantage. These are different quantities, and both can be right:
+
+- Our cells emitted TINY outputs (one-sentence responses). End-to-end wall on short
+  emissions is dominated by fixed costs — session startup, prompt processing, harness
+  overhead — which the decode-rate advantage cannot touch. A 4–5× decode advantage on ~30
+  output tokens saves tens of milliseconds inside a multi-second floor.
+- The reported 5–10× wall advantage applies to iterations with SUBSTANTIAL output, where
+  decode time dominates. None of our cells were in that regime.
+- Implication for this screen's numbers: our 1.31× is a FLOOR specific to short-output
+  work, not a refutation of the vendor figures. A long-emission cell (e.g., a wall-class
+  write) would be the discriminating measurement if the ratio ever matters to a decision.
+
+### The strategic reconciliation — why the reported design intent strengthens this screen's finding
+
+The external positioning ("real-time model... lightweight targeted edits" vs Sol for
+"complex/long-horizon work") matches this screen's inverse surprise exactly: Spark was
+flawless on the strict guarded surfaces (3/3 one-shot writes, 3/3 one-turn refusal
+recoveries, and 2/2 exact on the 64-byte rename verb in the sibling screen — where Sol
+went 4/6 by freelancing its own schema) and unreliable on the permissive read schema.
+
+Two consequences worth recording:
+
+1. **The emission-compression program and Spark are convergent, not competing.** Grammars
+   that shrink output (splices, prepared holes, verbs) reduce the raw-streaming advantage
+   (less to stream) while INCREASING Spark's reliability fit (stricter surfaces are where
+   it excels). The division of labor that falls out matches the vendor's own: judgment
+   models design and diagnose; Spark-class models execute prepared, guarded, hole-filling
+   bangs. The measured evidence for that split now exists on both sides.
+2. **Per-token pricing of the direction asymmetry differs by caller.** At a reported
+   ~1,000–1,200 tok/s decode, Spark's output tokens are ~4–5× cheaper in wall-clock than
+   Sol's ~244 tok/s. Emission-savings measured in seconds must therefore state their
+   caller: a 400-token saving is ~1.6s on Sol-class decode and ~0.3–0.4s on Spark-class.
+   Turn elimination is caller-invariant; byte shaving is not. One more reason the turn
+   family outranks the byte family in the opportunity map.
