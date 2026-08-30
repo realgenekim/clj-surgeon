@@ -1,0 +1,54 @@
+{
+  "schema": "prepared-request-replication-result-receipt.v1",
+  "branch": "experiment/prepared-request-replication-20260830",
+  "base_commit": "a9afcd13b1e9b63129e3cf87575c291a96cf187d",
+  "freeze_commit": "90103a50b3a0bee3de2e31241940435bb186e01f",
+  "freeze_sha256": "02b72336b88d7e23ebb48f15dd2a85fbca1d0c27869e5894ed972b18f62ade55",
+  "preflight_sha256": "3467cf0588f3a5bc4354dd7c442439f47fe76df5eee4281881a802313e7ec692",
+  "aggregate_sha256": "a58b69a5860a25061747ed454f16a75faa5dc3cc502b15cff695d5eef2fdf0a9",
+  "archive_sha256": "7441b0354080fc9f6aa9ea474d158b9ef9f7a2fcb3d4452452284f26c1ee20d2",
+  "manifest_sha256": "4c6662fc725b9c7c528daad65ac3d42587e48117859971477d07de2c86508d93",
+  "scorer_audit_sha256": "af90dd22b4be96d3ba2e0da3a18cb47625ba9624edac9c0c0db2618de36c8554",
+  "report_sha256": "b790d692b8246785942e3048b76ba8c5b0a7a5a4b0f55e9bc79b0fa19ff9918a",
+  "measured_process_starts": 20,
+  "cells": {
+    "U": {
+      "attempts": 10,
+      "surgeon_first": 10,
+      "environment_valid": 10,
+      "semantic_correct": 10,
+      "wrong_subject": 0,
+      "median_turns_to_success": 2.0,
+      "median_output_tokens": 1711.5,
+      "median_wall_ms": 45388.143887,
+      "audited_refusals": 6,
+      "audited_route_adherent": 6
+    },
+    "P": {
+      "attempts": 10,
+      "surgeon_first": 10,
+      "environment_valid": 10,
+      "semantic_correct": 10,
+      "wrong_subject": 0,
+      "median_turns_to_success": 2.0,
+      "median_output_tokens": 899.5,
+      "median_wall_ms": 27122.9545115,
+      "audited_refusals": 0,
+      "audited_route_adherent": 10
+    }
+  },
+  "primary": {
+    "p_minus_u_percentage_points": 0.0,
+    "newcombe_95_percentage_points": [-27.753279986288926, 27.753279986288926],
+    "kill_below_percentage_points": 20.0,
+    "replication_gate_passed": false
+  },
+  "safety_gate_passed": true,
+  "verdict": "screen-does-not-replicate",
+  "inference_limit": "n=10/arm; the interval does not establish equivalence or population resolution",
+  "remote_result_root": "/srv/fleet/dev-a/clj-surgeon-prepared-request-replication-20260830-v2/bench/prepared_request_replication_20260830",
+  "local_archive": "/private/tmp/prepared-request-replication-receipts-20260830/prepared-request-replication-20260830.tar.gz",
+  "archive_entries": 418,
+  "manifest_members_verified": 417,
+  "raw_streams_retained": true
+}

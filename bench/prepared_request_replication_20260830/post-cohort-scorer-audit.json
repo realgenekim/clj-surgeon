@@ -1,0 +1,70 @@
+{
+  "schema": "prepared-request-replication-scorer-audit.v1",
+  "immutable_events_changed": false,
+  "frozen_scores_changed": false,
+  "frozen_aggregate_changed": false,
+  "reason": "The frozen scorer counted an MCP refusal only when item.error was non-null. Production edit_clojure refusals normally use status=failed and structured_content.ok=false with error=null. This audit applies the preregistered success/refusal definition directly to the retained raw events.",
+  "affected_runs": [
+    {
+      "run": 6,
+      "arm": "U",
+      "frozen_refusal_count": 0,
+      "audited_refusal_count": 1,
+      "frozen_route_adherent": true,
+      "audited_route_adherent": false
+    },
+    {
+      "run": 9,
+      "arm": "U",
+      "frozen_refusal_count": 0,
+      "audited_refusal_count": 2,
+      "frozen_route_adherent": true,
+      "audited_route_adherent": false
+    },
+    {
+      "run": 14,
+      "arm": "U",
+      "frozen_refusal_count": 0,
+      "audited_refusal_count": 1,
+      "frozen_route_adherent": true,
+      "audited_route_adherent": false
+    },
+    {
+      "run": 20,
+      "arm": "U",
+      "frozen_refusal_count": 1,
+      "audited_refusal_count": 2,
+      "frozen_route_adherent": false,
+      "audited_route_adherent": false
+    }
+  ],
+  "audited_summary": {
+    "P": {
+      "attempts": 10,
+      "surgeon_first": 10,
+      "refusals": 0,
+      "runs_with_refusal": 0,
+      "route_adherent": 10,
+      "median_turns_to_success": 2.0
+    },
+    "U": {
+      "attempts": 10,
+      "surgeon_first": 10,
+      "refusals": 6,
+      "runs_with_refusal": 4,
+      "route_adherent": 6,
+      "median_turns_to_success": 2.0
+    }
+  },
+  "unchanged_endpoints": [
+    "primary_route",
+    "surgeon_first_rate",
+    "turns_to_success",
+    "output_tokens",
+    "environment_valid",
+    "semantic_correct",
+    "exact_bytes",
+    "wrong_subject",
+    "registered_verdict"
+  ]
+}
