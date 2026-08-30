@@ -233,6 +233,12 @@ attempts.
 ## Captain's log
 
 - **Option created:** turn exact read evidence into a visible edit template.
+- **Proxy verdict, 2026-08-30:** the valid counterbalanced cohort failed the routing gate: control
+  was 4/4 correct Surgeon-first and treatment was 2/4. Treatment nevertheless reduced median
+  output 30.0%, construction refusals 7 to 4, and recovery actions 20 to 8 with correctness 4/4 in
+  both arms. The routing result does not advance the leaf LLD. The aligned recovery signal goes to
+  Gene as a separate recovery-oriented gate decision. Raw receipt:
+  `docs/observations/2026-08-30-prepared-request-option-a-proxy-valid-verdict.md`.
 - **Counterfactual:** if prompt authority or fixture-specific salience caused
   Sweep-2, the tool-result treatment will not move unforced routing.
 - **Surprise:** the safest product object is necessarily less complete than the
