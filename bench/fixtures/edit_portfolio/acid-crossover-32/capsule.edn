@@ -1,0 +1,51 @@
+{:id :acid-crossover-32,
+ :decision-boundary :affected-surface-not-supplied,
+ :provenance
+ {:kind :realistic-scale-family,
+  :source
+  "one expanded feature-rename family with reference and literal migration",
+  :minimized
+  "prefix-stable rung with 32 exact changes across 6 files; active identifiers coexist with preserved history decoys"},
+ :targets
+ ["src/acid_crossover/flags.clj"
+  "src/acid_crossover/ui.clj"
+  "src/acid_crossover/jobs.clj"
+  "src/acid_crossover/audit.clj"
+  "src/acid_crossover/api.clj"
+  "src/acid_crossover/checks.clj"],
+ :hashes
+ {"src/acid_crossover/api.clj"
+  {:before
+   "43c4be15497d46bd04ac6dabe1143c90b19d7b7ef350afac6fc677a4fae009db",
+   :after
+   "9570e684404df7ebe2df09b70ad35abdf3eb4d8239555957e1aefa2dfce080df"},
+  "src/acid_crossover/audit.clj"
+  {:before
+   "a0ce4321be9df39567306d96da3f93036910b9b5e98da66fc27ce17f6f297ede",
+   :after
+   "97f3c8de073fe04958c26a1f546a650b87e4169e19b90c0402bc84b54172db4b"},
+  "src/acid_crossover/checks.clj"
+  {:before
+   "8aabc5664e7fedcb4c068638717281a4e2c911c51a04e7e014d5ead4b7c41200",
+   :after
+   "9c66686ec24651cd0b79fffa44b3a4a1e0f7def137f7fd81847f9fffcc10f0b1"},
+  "src/acid_crossover/flags.clj"
+  {:before
+   "343dab98ee4804016f4c372e79a50ca6e2b876e64d8dda8aa49a9bc4451f9e0c",
+   :after
+   "3f6d44e537a4b3d259559ac6cbe4383726a997676cdebbba49f2a29c25aa766e"},
+  "src/acid_crossover/jobs.clj"
+  {:before
+   "36bf33b07004c8596c25caa7ed7978efebaaa044553a51da589a31863109383c",
+   :after
+   "b8706a52c31b757e01bc82edbcac37e266aed56c9847c09d8ea1d70b1e84f93e"},
+  "src/acid_crossover/ui.clj"
+  {:before
+   "28087de41d6881bb39d8036f0c375eda2974ab064f1e28ec9c1d6251acf8399a",
+   :after
+   "abeb9ec3a14baca6390b35b5db0879da41168bcf24951819ea29f1480eb84174"}},
+ :verification
+ {:exact-bytes-secondary true,
+  :meaning-preserved true,
+  :parse-clojure true},
+ :expected {:changed-files 6, :edits 32}}

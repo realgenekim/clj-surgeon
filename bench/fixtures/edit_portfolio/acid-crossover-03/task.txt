@@ -1,0 +1,5 @@
+Rename the active feature API `acid-crossover.flags/legacy-mode?` to `acid-crossover.flags/command-mode?` everywhere under src/acid_crossover. Determine the affected files, owners, and exact edit sites from the source before changing anything.
+
+Update the related `:legacy-mode` keyword and exact `"legacy-mode"` wire literal only where they participate in the same active feature records. Preserve migration-history strings and comments that merely mention the old name, and preserve every unrelated byte.
+
+Apply the complete discovered decision as one coherent mutation action if your available editor supports it. Verify all changed files and report the discovery and mutation routes, including whether the mutation succeeded on the first attempt.

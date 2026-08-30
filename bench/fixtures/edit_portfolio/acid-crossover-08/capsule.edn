@@ -1,0 +1,25 @@
+{:id :acid-crossover-08,
+ :decision-boundary :affected-surface-not-supplied,
+ :provenance
+ {:kind :realistic-scale-family,
+  :source
+  "one expanded feature-rename family with reference and literal migration",
+  :minimized
+  "prefix-stable rung with 8 exact changes across 2 files; active identifiers coexist with preserved history decoys"},
+ :targets ["src/acid_crossover/flags.clj" "src/acid_crossover/ui.clj"],
+ :hashes
+ {"src/acid_crossover/flags.clj"
+  {:before
+   "343dab98ee4804016f4c372e79a50ca6e2b876e64d8dda8aa49a9bc4451f9e0c",
+   :after
+   "3f6d44e537a4b3d259559ac6cbe4383726a997676cdebbba49f2a29c25aa766e"},
+  "src/acid_crossover/ui.clj"
+  {:before
+   "28087de41d6881bb39d8036f0c375eda2974ab064f1e28ec9c1d6251acf8399a",
+   :after
+   "abeb9ec3a14baca6390b35b5db0879da41168bcf24951819ea29f1480eb84174"}},
+ :verification
+ {:exact-bytes-secondary true,
+  :meaning-preserved true,
+  :parse-clojure true},
+ :expected {:changed-files 2, :edits 8}}
