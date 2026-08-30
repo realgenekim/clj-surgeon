@@ -1,7 +1,7 @@
 ---
 parent: measurement-evidence-design
 prefix: MEASURE
-status: draft-for-ratification
+status: ratified (Gene, 2026-08-30, verbatim: "Go")
 ---
 
 # Measurement Evidence Specifications

@@ -95,3 +95,11 @@ installation, MCP reload, or a benchmark cohort.
 - `screen/ceremony-attribution` at `7682abf`
 - `experiment/next-call-copy-and-consumption-meter` at `a6b4392`
 - `bench/prefill-decode-ratio` at `93d9918`
+
+## Ratification record
+
+2026-08-30: Gene ratified BOTH leaves (verbatim answer: "Go") after the conn independently
+verified the ratchet self-test (passed under its own run) and read the normalization specs
+verbatim. Implementation contract: red witnesses activate first and must show exactly the
+registered red count before any implementation lands; install remains gated on green plus a
+live-route token measurement.

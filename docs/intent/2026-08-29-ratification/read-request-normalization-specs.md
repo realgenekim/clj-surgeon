@@ -1,7 +1,7 @@
 ---
 parent: read-request-normalization-design
 prefix: MCP-OP-READ-NORM
-status: draft-for-ratification
+status: ratified (Gene, 2026-08-30, verbatim: "Go")
 ---
 
 # Closed Inspect Request Normalization Specifications
