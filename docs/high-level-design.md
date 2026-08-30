@@ -537,6 +537,15 @@ Mixed ID ownership and every other operation omission refuse before snapshot
 capture. Normalization changes neither file, owner, form, basis, snapshot, nor
 result authority.
 
+An eligible successful terminal `forms` read may also expose a non-executable
+prepared `edit_clojure` descriptor with explicit file, named-owner, old-source,
+and count guards plus caller-owned null replacement holes. The descriptor is
+read evidence, not a next call: it carries no write authority, invents no
+replacement, and never appears on a refusal. Its purpose is to reduce request
+assembly and recovery work; routing and adoption lift are explicitly outside
+the claim. The permanent leaf is
+[Prepared Guarded Edit Request](intent/prepared-request/prepared-request-design.md).
+
 Five independently testable modules compose the read-mission surface:
 
 1. A complete selector diagnostic names the failed request, file, requested

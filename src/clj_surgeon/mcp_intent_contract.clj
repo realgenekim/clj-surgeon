@@ -101,9 +101,11 @@
   ([root]
    (let [spec-files
          [(io/file root
-            "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")
+                   "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")
           (io/file root
                    "docs/intent/read-request-normalization/read-request-normalization-specs.md")
+          (io/file root
+                   "docs/intent/prepared-request/prepared-request-specs.md")
           (io/file root
                    "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")]]
      (audit-contract

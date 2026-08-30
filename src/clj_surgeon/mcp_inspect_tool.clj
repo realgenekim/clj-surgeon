@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-prepared-request :as prepared-request]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -319,6 +320,7 @@
            {:required ["verification_job" "view"]}]})
 
 ;; @spec MCP-OP-SCHEMA-001
+;; @spec MCP-OP-PREP-REQ-009
 (def inspect-output-schema
   {:type "object"
    :additionalProperties true
@@ -361,7 +363,8 @@
     "elapsed_ms" {:type "number" :minimum 0}
     "inspection_elapsed_ms" {:type "number" :minimum 0}
     "job_elapsed_ms" {:type "number" :minimum 0}
-    "next_call" {:type "object"}}
+    "next_call" {:type "object"}
+    "prepared_request" prepared-request/prepared-request-schema}
    :required ["ok" "operation" "elapsed_ms"]
    :anyOf [{:required ["read_complete"]}
            {:required ["basis" "surface" "decision-site-ids"
@@ -863,6 +866,7 @@
             (:workspace-root routed)))))))
 
 ;; @spec MCP-OP-READ-DIAG-002
+;; @spec MCP-OP-PREP-REQ-005
 (defn- inspect-summary
   [result]
   (cond
@@ -943,12 +947,25 @@
     (basis-view-summary result)
 
     :else
-    (inspect/concise-summary result)))
+    (let [summary (inspect/concise-summary result)]
+      (if (:prepared_request result)
+        (str summary "\n\n" prepared-request/coaching-text)
+        summary))))
 
 ;; @spec MCP-OP-READ-CONT-002
+;; @spec MCP-OP-PREP-REQ-001
+;; @spec MCP-OP-PREP-REQ-006
 (defn- enforce-result-budget
-  [raw-result]
+  [ordinary-result raw-result]
   (cond
+    (:prepared_request raw-result)
+    (let [normalized (assoc raw-result :elapsed_ms 0.0)
+          required-bytes
+          (mcp-result-byte-count (inspect-summary normalized) normalized)]
+      (if (<= required-bytes max-public-result-bytes)
+        raw-result
+        ordinary-result))
+
     (and (:ok raw-result)
          (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
     (enforce-public-result-budget
@@ -986,16 +1003,19 @@
   [_exchange params callback]
   (mcp-operation/invoke!
     {:execute
-     #(enforce-result-budget
-        (if-let [config @runtime-config]
-          (execute-inspect! config params)
-          {:ok false
-           :operation "inspect_clojure"
-           :error_type "server-not-initialized"
-           :error "inspect_clojure server is not initialized"
-           :read_complete false
-           :source_unchanged true
-           :next_action "restart_server"}))
+     #(let [ordinary-result
+            (if-let [config @runtime-config]
+              (execute-inspect! config params)
+              {:ok false
+               :operation "inspect_clojure"
+               :error_type "server-not-initialized"
+               :error "inspect_clojure server is not initialized"
+               :read_complete false
+               :source_unchanged true
+               :next_action "restart_server"})]
+        (enforce-result-budget
+          ordinary-result
+          (prepared-request/project-result ordinary-result)))
      :summarize inspect-summary
      :callback callback}))
 
