@@ -1,0 +1,110 @@
+{
+  "schema" : "clj-surgeon.prefill-decode-score/v1",
+  "meta" : {
+    "replicates" : 5,
+    "schema" : "clj-surgeon.prefill-decode-probe/v1",
+    "codex_args" : "exec --json --skip-git-repo-check --ephemeral -s read-only -C /tmp/ratio-work.IfAojq -c model=gpt-5.6-sol -c model_reasoning_effort=low",
+    "codex_version" : "codex-cli 0.147.0",
+    "env_before" : {
+      "phase" : "before",
+      "wall_clock" : "2026-08-30T01:55:53Z",
+      "loadavg" : "1.22 1.27 1.17",
+      "nproc" : "16",
+      "hostname" : "anvil-server",
+      "whoami" : "dev-a",
+      "uname" : "Linux 7.0.0-22-generic x86_64"
+    },
+    "reasoning" : "low",
+    "run_nonce" : "1788054953-3543154",
+    "blob_chars" : 1048000,
+    "conditions" : "C",
+    "count_to" : 600,
+    "profile" : "fleet",
+    "model" : "gpt-5.6-sol"
+  },
+  "conditions" : {
+    "A" : {
+      "wall-ms-min" : null,
+      "wall-ms-median" : null,
+      "cached-input-tokens-median" : null,
+      "reasoning-tokens-median" : null,
+      "n" : 0,
+      "prompt-bytes-median" : null,
+      "wall-ms-p25" : null,
+      "wall-ms-mad" : null,
+      "n-failed" : 0,
+      "output-tokens-median" : null,
+      "condition" : "A",
+      "wall-ms-p75" : null,
+      "input-tokens-median" : null,
+      "turn-started-ms-median" : null,
+      "wall-ms-max" : null,
+      "decoded-tokens-median" : null
+    },
+    "B" : {
+      "wall-ms-min" : null,
+      "wall-ms-median" : null,
+      "cached-input-tokens-median" : null,
+      "reasoning-tokens-median" : null,
+      "n" : 0,
+      "prompt-bytes-median" : null,
+      "wall-ms-p25" : null,
+      "wall-ms-mad" : null,
+      "n-failed" : 0,
+      "output-tokens-median" : null,
+      "condition" : "B",
+      "wall-ms-p75" : null,
+      "input-tokens-median" : null,
+      "turn-started-ms-median" : null,
+      "wall-ms-max" : null,
+      "decoded-tokens-median" : null
+    },
+    "C" : {
+      "wall-ms-min" : 3776.0,
+      "wall-ms-median" : 4417.0,
+      "cached-input-tokens-median" : 9984.0,
+      "reasoning-tokens-median" : 0.0,
+      "n" : 5,
+      "prompt-bytes-median" : 53.0,
+      "wall-ms-p25" : 4049.0,
+      "wall-ms-mad" : 463.0,
+      "n-failed" : 0,
+      "output-tokens-median" : 5.0,
+      "condition" : "C",
+      "wall-ms-p75" : 4880.0,
+      "input-tokens-median" : 14403.0,
+      "turn-started-ms-median" : 329.9,
+      "wall-ms-max" : 5233.0,
+      "decoded-tokens-median" : 5.0
+    }
+  },
+  "floor" : {
+    "ms" : 4417.0,
+    "mad-ms" : 463.0,
+    "min-ms" : 3776.0,
+    "max-ms" : 5233.0,
+    "n" : 5,
+    "local-startup-ms" : 329.9,
+    "note" : "Condition C. Neither prefill nor decode: process start, scheduling, queueing, request setup, response teardown."
+  },
+  "prefill" : {
+    "marginal-input-tokens" : null,
+    "delta-ms" : null,
+    "resolved" : false,
+    "tokens-per-second" : null,
+    "estimate-kind" : "lower-bound",
+    "note" : "Delta did not clear the noise floor; prefill of this many tokens is not distinguishable from zero. Reported as a lower bound using the combined MAD as the largest time it could have taken."
+  },
+  "decode" : {
+    "marginal-decoded-tokens" : null,
+    "delta-ms" : null,
+    "resolved" : false,
+    "tokens-per-second" : null,
+    "estimate-kind" : "unresolved"
+  },
+  "ratio" : {
+    "prefill-over-decode" : null,
+    "kind" : "unresolved"
+  },
+  "confounds" : [ "Wall clock includes network transfer of the prompt. Condition A ships ~1 MB, condition C ships ~1 KB, so (A - C) contains upload time as well as prefill. Prefill rate is therefore a LOWER bound even when the delta resolves.", "Server-side batching and queueing are invisible from the client. A turn may wait behind other tenants; that time lands in the floor and in both deltas.", "Provider prefix caching is defeated for condition A's filler (fresh random words per replicate) but the codex system prompt and tool definitions are cached identically across all conditions, so the cached prefix cancels in the subtraction.", "Reasoning tokens are counted as decode because they are produced serially, but they are not visible, so condition B's decode total is trusted from the provider's own usage report rather than from the text.", "Token counts come from the provider's usage report, not from a local tokenizer. They are authoritative for billing and are assumed authoritative for work.", "A single provider, model, and datacentre. Nothing here generalises to other hardware, other models, or the same model under different load.", "codex exec is an agent wrapper, not a raw completion. The floor includes CLI process start, config load, and session setup, which a raw API call would not pay." ]
+}

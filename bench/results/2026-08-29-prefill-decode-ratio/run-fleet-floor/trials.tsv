@@ -1,0 +1,6 @@
+tag	condition	replicate	wall_ms	exit_code	prompt_bytes	prompt_sha256_16	input-tokens	cached-input-tokens	output-tokens	reasoning-output-tokens	decoded-tokens	turn-started-ms	message-chars	loadavg
+r01-C	C	1	3776	0	53	ac06a64cbe87a9b9	14403	9984	5	0	5	340.8	2	1.22 1.27 1.17
+r02-C	C	2	5233	0	53	ac06a64cbe87a9b9	14403	14080	5	0	5	361.3	2	1.20 1.26 1.17
+r03-C	C	3	4417	0	53	ac06a64cbe87a9b9	14403	9984	5	0	5	323.8	2	1.51 1.32 1.19
+r04-C	C	4	4049	0	53	ac06a64cbe87a9b9	14403	14080	5	0	5	329.9	2	1.47 1.32 1.19
+r05-C	C	5	4880	0	53	ac06a64cbe87a9b9	14403	9984	5	0	5	315.0	2	1.43 1.31 1.19
