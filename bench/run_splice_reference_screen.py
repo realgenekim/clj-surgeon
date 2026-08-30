@@ -26,6 +26,7 @@ from splice_reference_screen import ideal_requests, score_episode, sha256_manife
 MODEL = "gpt-5.6-sol"
 SPARK_MODEL = "gpt-5.3-codex-spark"
 REASONING = "high"
+PRODUCT_COMMIT = "c55de2279826af5ed21c90981591479dd2e802b2"
 COHORT = ["Q", "R", "R", "Q", "R", "Q", "Q", "R",
           "Q", "R", "R", "Q", "R", "Q", "Q", "R"]
 BONUS = ["Q", "R"]
@@ -188,7 +189,7 @@ def check_frozen(repo_root: Path, expected_head: str) -> dict[str, str]:
         raise SystemExit(f"HEAD mismatch: expected {expected_head}, found {head}")
     if status:
         raise SystemExit("protocol checkout must be clean before the first model call")
-    base = run(["git", "rev-parse", "origin/release/closed-relations-published"], repo_root)
+    base = run(["git", "rev-parse", PRODUCT_COMMIT], repo_root)
     source_diff = subprocess.run(
         ["git", "diff", "--quiet", base, "--", "src", "test"], cwd=repo_root
     ).returncode

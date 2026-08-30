@@ -156,3 +156,18 @@ PYTHONDONTWRITEBYTECODE=1 \
   --auth-file /Users/genekim/.codex/auth.json \
   --expected-head <frozen-protocol-commit>
 ```
+
+## Forward-only immutable-product amendment
+
+Frozen after two fail-closed launcher checks and before any model call. The
+first check rejected an incorrectly expanded protocol SHA. The second resolved
+the symbolic ref `origin/release/closed-relations-published` to the later
+prepared-request commit `b445a8c`, then correctly detected product differences
+from this experiment's inherited source. The foundation report had frozen the
+product at `c55de2279826af5ed21c90981591479dd2e802b2`; a moving ref was therefore
+the wrong provenance assertion.
+
+The checker now compares `src/` and `test/` directly with immutable product
+commit `c55de2279826af5ed21c90981591479dd2e802b2`. Fixture, task, proxy behavior,
+models, schedule, scorer, predictions, and kill criteria are unchanged. Neither
+failed launch created the result root or emitted a model event.
