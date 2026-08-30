@@ -2,7 +2,7 @@
 
 Date: 2026-08-29 PT  
 Lane: SWEEP lane 1  
-Status: **preregistered; no experiment episode has run**
+Status: **environment-blocked after three retained invalid attempts; mechanism not tested**
 
 ## Question and source prior
 
@@ -148,3 +148,76 @@ The final report records the remote path and copied-back archive hashes. It
 does not advance the agent-usage window marker because this is a targeted
 causal experiment rather than a history sweep.
 
+## Execution result: typed refusal
+
+Execution began from the preregistered commit
+`21263688cea01eb4a1295fb56b0798a4babe1b1d` and tree
+`d216eef5ba063914f63e230475338e7a48a3e609`. The frozen controller, scorer,
+helper, prompt, 24-owner fixture, expected output, and `C T T C` schedule passed
+their zero-token self-tests and input fence. Authentication preflight also
+passed. No prompt, scorer, fixture, schedule, classification, or gate was
+changed after launch, and the cohort was not rerun.
+
+The private-workspace shell sandbox then failed before the required helper
+could execute in every attempted episode:
+
+```text
+bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted
+```
+
+Consequently, no attempt produced the controlled refusal. The controller
+retained the first C loss and the first T loss. It started the next scheduled T
+position before the systemic gate was confirmed; that partial raw stream was
+also retained and scored. The controller and its episode process were stopped
+before episode 4. All three fixture-after hashes equal the frozen
+fixture-before hash
+`4584e308ee222b6fa885f88596b94251a8edf90db39febb1afb603b545fe93f7`;
+there was no mutation and no wrong-subject change.
+
+The execution window was
+`2026-08-30T07:03:32.883638Z` through
+`2026-08-30T07:06:08.149414Z` UTC, or
+`2026-08-30T00:03:32.883638-07:00` through
+`2026-08-30T00:06:08.149414-07:00` PT.
+
+| episode | arm | environment valid | semantic correct | route adherent | fully valid | controlled refusal | reread | recovery turns | wrong subject |
+|---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | C | no | no | no | no | 0 | no | n/a | no |
+| 2 | T | no | no | no | no | 0 | no | n/a | no |
+| 3 | T | no | no | no | no | 0 | no | n/a | no |
+
+Valid counts are C=0 and T=0; invalid retained counts are C=1 and T=2.
+Therefore the preregistered reread risk difference, risk ratio, recovery-turn
+medians, and interval are not estimable. The mechanism kill criterion is
+**not tested**, rather than passed or failed. These losses do not change the
+preregistered resolution warning: even a completed 10-valid-per-arm screen
+would have had about 16.1% Fisher-exact power and a roughly 39.5 percentage-
+point normal 95% half-width. No null equivalence is claimed.
+
+### Retention and cleanup receipts
+
+- Remote result root:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/21263688-20260830T065352Z`
+- Remote archive:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/21263688-20260830T065352Z.tar.gz`
+- Copied-back archive:
+  `/home/dev-a/clj-surgeon-sweep-lane1-receipts/21263688-20260830T065352Z.tar.gz`
+- Remote and copied-back archive SHA-256:
+  `3db42c3e9fb675c6a9f68f6a3c039f82b48be7505de9b802f1e430203b784b19`
+- Remote blocked receipt:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/21263688-20260830T065352Z/blocked-receipt.json`
+- Copied-back blocked receipt:
+  `/home/dev-a/clj-surgeon-sweep-lane1-receipts/21263688-20260830T065352Z-blocked-receipt.json`
+- Remote and copied-back receipt SHA-256:
+  `4e07f9bc0e14c9f5967374ff4ac67f79fef487b75fe99e58c9ea95f0e1e666a1`
+- Frozen input-manifest SHA-256:
+  `9ad2c6d4aafffb247ea9273ccd9f22c4390ddcfc459ee86469add5280db6ee64`
+- Episode-manifest SHA-256:
+  `041e6bcf96848bd7af1f0cda12bcaccfd44fe67e56c85e4ea083291e993518ba`
+- Result-manifest SHA-256:
+  `b7c253fde23c6057d255e12e1e1857cfdab2db5481df0755dc932ec7537f3f97`
+
+The exact temporary work root, including its per-episode copied authentication
+state, was removed from `/tmp` and moved to the user trash; it was not included
+in the retained archive. No cohort process remained. The targeted experiment
+does not advance the agent-usage window marker.
