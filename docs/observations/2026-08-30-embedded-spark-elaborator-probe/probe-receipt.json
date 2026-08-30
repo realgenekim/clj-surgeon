@@ -1,0 +1,465 @@
+{
+  "schema": "clj-surgeon.embedded-spark-probe.v1",
+  "recorded_at": "2026-08-30T22:53:59.371Z",
+  "codex_cli_version": "0.149.1",
+  "candidate_mode": "codex app-server --listen stdio://",
+  "transport": "JSONL over stdio; JSON-RPC 2.0 header omitted",
+  "isolation": {
+    "dedicated_child": true,
+    "temporary_codex_home": true,
+    "auth_source": "existing auth.json copied mode 0600, then deleted",
+    "auth_mode": "chatgpt",
+    "api_key_environment_scrubbed": true,
+    "empty_config": true,
+    "configured_mcp_contact": false,
+    "ephemeral_thread": true
+  },
+  "model": {
+    "requested": "gpt-5.3-codex-spark",
+    "thread_start_reported": "gpt-5.3-codex-spark",
+    "provider": "openai",
+    "allow_provider_model_fallback": false,
+    "reroutes": [],
+    "effort": "low"
+  },
+  "input": {
+    "text": "Subject: `route-event` in `src/app/router.clj`, workspace `/repo`. From-anchor guard: `:done`. Expect guard: exactly one match within owner `route-event`. Decision: replace that form with `:complete`. Return only the complete `edit_clojure` arguments JSON object. Preserve the caller-authored path, owner, anchor, and cardinality exactly; invent no fields. Do not call tools.",
+    "intent_sha256": "086fb51532597b7885766a91faa2cea344ab405557e7499f2108b027707c5eab",
+    "approximate_whitespace_tokens": 47,
+    "frozen_expected": {
+      "workspace_root": "/repo",
+      "edits": [
+        {
+          "file": "src/app/router.clj",
+          "within": {
+            "form": "route-event"
+          },
+          "from": ":done",
+          "to": ":complete",
+          "matches": 1
+        }
+      ]
+    },
+    "output_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workspace_root": {
+          "type": "string"
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "within": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "form": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "form"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "matches": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "file",
+              "within",
+              "from",
+              "to",
+              "matches"
+            ]
+          }
+        }
+      },
+      "required": [
+        "workspace_root",
+        "edits"
+      ]
+    },
+    "timeout_ms": 60000,
+    "max_output_bytes": 4096
+  },
+  "spawn": {
+    "os_spawn_event_ms": 4.196,
+    "initialize_round_trip_ms": 87.748,
+    "process_start_to_initialized_ms": 90.284,
+    "initialized_user_agent": "clj-surgeon-embedded-spark-probe/0.149.1 (Mac OS 26.5.2; arm64) supacode/0.10.8 (clj-surgeon-embedded-spark-probe; 1.0.0)",
+    "initialized_platform": "unix/macos"
+  },
+  "account": {
+    "type": "chatgpt",
+    "plan_type": "pro",
+    "requires_openai_auth": true
+  },
+  "runs": [
+    {
+      "run": 1,
+      "thread_id": "01a054e0-ef3c-7560-89d3-8109766e361b",
+      "turn_id": "01a054e0-ef58-7623-bdfd-4a850ec8ee10",
+      "latency_ms": 9063.961,
+      "status": "completed",
+      "output_bytes": 142,
+      "output_text": "{\"workspace_root\":\"/repo\",\"edits\":[{\"file\":\"src/app/router.clj\",\"within\":{\"form\":\"route-event\"},\"from\":\":done\",\"to\":\":complete\",\"matches\":1}]}",
+      "elaboration_sha256": "95128be522b1af0f7164079801c3334ab40772fc29447382768e0915207fc102",
+      "parsed": {
+        "workspace_root": "/repo",
+        "edits": [
+          {
+            "file": "src/app/router.clj",
+            "within": {
+              "form": "route-event"
+            },
+            "from": ":done",
+            "to": ":complete",
+            "matches": 1
+          }
+        ]
+      },
+      "parse_error": null,
+      "exact_match": true,
+      "tool_items": [],
+      "verification": {
+        "output_schema_supplied": true,
+        "json_parse": true,
+        "exact_frozen_expected": true,
+        "no_tool_items": true
+      },
+      "token_usage": "<redacted>"
+    },
+    {
+      "run": 2,
+      "thread_id": "01a054e0-ef3c-7560-89d3-8109766e361b",
+      "turn_id": "01a054e1-12c3-7ba0-8e86-6e1303ef14ab",
+      "latency_ms": 2011.922,
+      "status": "completed",
+      "output_bytes": 142,
+      "output_text": "{\"workspace_root\":\"/repo\",\"edits\":[{\"file\":\"src/app/router.clj\",\"within\":{\"form\":\"route-event\"},\"from\":\":done\",\"to\":\":complete\",\"matches\":1}]}",
+      "elaboration_sha256": "95128be522b1af0f7164079801c3334ab40772fc29447382768e0915207fc102",
+      "parsed": {
+        "workspace_root": "/repo",
+        "edits": [
+          {
+            "file": "src/app/router.clj",
+            "within": {
+              "form": "route-event"
+            },
+            "from": ":done",
+            "to": ":complete",
+            "matches": 1
+          }
+        ]
+      },
+      "parse_error": null,
+      "exact_match": true,
+      "tool_items": [],
+      "verification": {
+        "output_schema_supplied": true,
+        "json_parse": true,
+        "exact_frozen_expected": true,
+        "no_tool_items": true
+      },
+      "token_usage": "<redacted>"
+    },
+    {
+      "run": 3,
+      "thread_id": "01a054e0-ef3c-7560-89d3-8109766e361b",
+      "turn_id": "01a054e1-1a9f-79c2-89a9-d204e6638227",
+      "latency_ms": 1424.817,
+      "status": "completed",
+      "output_bytes": 142,
+      "output_text": "{\"workspace_root\":\"/repo\",\"edits\":[{\"file\":\"src/app/router.clj\",\"within\":{\"form\":\"route-event\"},\"from\":\":done\",\"to\":\":complete\",\"matches\":1}]}",
+      "elaboration_sha256": "95128be522b1af0f7164079801c3334ab40772fc29447382768e0915207fc102",
+      "parsed": {
+        "workspace_root": "/repo",
+        "edits": [
+          {
+            "file": "src/app/router.clj",
+            "within": {
+              "form": "route-event"
+            },
+            "from": ":done",
+            "to": ":complete",
+            "matches": 1
+          }
+        ]
+      },
+      "parse_error": null,
+      "exact_match": true,
+      "tool_items": [],
+      "verification": {
+        "output_schema_supplied": true,
+        "json_parse": true,
+        "exact_frozen_expected": true,
+        "no_tool_items": true
+      },
+      "token_usage": "<redacted>"
+    },
+    {
+      "run": 4,
+      "thread_id": "01a054e0-ef3c-7560-89d3-8109766e361b",
+      "turn_id": "01a054e1-202f-7f83-b14b-b108f6790102",
+      "latency_ms": 1239.874,
+      "status": "completed",
+      "output_bytes": 142,
+      "output_text": "{\"workspace_root\":\"/repo\",\"edits\":[{\"file\":\"src/app/router.clj\",\"within\":{\"form\":\"route-event\"},\"from\":\":done\",\"to\":\":complete\",\"matches\":1}]}",
+      "elaboration_sha256": "95128be522b1af0f7164079801c3334ab40772fc29447382768e0915207fc102",
+      "parsed": {
+        "workspace_root": "/repo",
+        "edits": [
+          {
+            "file": "src/app/router.clj",
+            "within": {
+              "form": "route-event"
+            },
+            "from": ":done",
+            "to": ":complete",
+            "matches": 1
+          }
+        ]
+      },
+      "parse_error": null,
+      "exact_match": true,
+      "tool_items": [],
+      "verification": {
+        "output_schema_supplied": true,
+        "json_parse": true,
+        "exact_frozen_expected": true,
+        "no_tool_items": true
+      },
+      "token_usage": "<redacted>"
+    },
+    {
+      "run": 5,
+      "thread_id": "01a054e0-ef3c-7560-89d3-8109766e361b",
+      "turn_id": "01a054e1-2508-7883-bfdc-2c87b867a521",
+      "latency_ms": 2268.51,
+      "status": "completed",
+      "output_bytes": 142,
+      "output_text": "{\"workspace_root\":\"/repo\",\"edits\":[{\"file\":\"src/app/router.clj\",\"within\":{\"form\":\"route-event\"},\"from\":\":done\",\"to\":\":complete\",\"matches\":1}]}",
+      "elaboration_sha256": "95128be522b1af0f7164079801c3334ab40772fc29447382768e0915207fc102",
+      "parsed": {
+        "workspace_root": "/repo",
+        "edits": [
+          {
+            "file": "src/app/router.clj",
+            "within": {
+              "form": "route-event"
+            },
+            "from": ":done",
+            "to": ":complete",
+            "matches": 1
+          }
+        ]
+      },
+      "parse_error": null,
+      "exact_match": true,
+      "tool_items": [],
+      "verification": {
+        "output_schema_supplied": true,
+        "json_parse": true,
+        "exact_frozen_expected": true,
+        "no_tool_items": true
+      },
+      "token_usage": "<redacted>"
+    }
+  ],
+  "summary": {
+    "runs": 5,
+    "exact_matches": 5,
+    "tool_free_runs": 5,
+    "completed_runs": 5,
+    "latency_ms": {
+      "min": 1239.874,
+      "median": 2011.922,
+      "p95_interpolated": 7704.871,
+      "max": 9063.961,
+      "mean": 3201.817
+    }
+  },
+  "metering": {
+    "thread_usage": {
+      "summary": {
+        "lifetimeTokens": "<redacted>",
+        "peakDailyTokens": "<redacted>",
+        "longestRunningTurnSec": null,
+        "currentStreakDays": null,
+        "longestStreakDays": null
+      },
+      "dailyUsageBuckets": null,
+      "threadUsage": null
+    },
+    "account_rate_limits_before": {
+      "rateLimits": {
+        "limitId": "codex",
+        "limitName": null,
+        "primary": {
+          "usedPercent": 43,
+          "windowDurationMins": 10080,
+          "resetsAt": 1788643355
+        },
+        "secondary": null,
+        "credits": {
+          "hasCredits": false,
+          "unlimited": false,
+          "balance": "0"
+        },
+        "individualLimit": null,
+        "spendControlReached": false,
+        "planType": "pro",
+        "rateLimitReachedType": null
+      },
+      "rateLimitsByLimitId": {
+        "codex_bengalfox": {
+          "limitId": "codex_bengalfox",
+          "limitName": "GPT-5.3-Codex-Spark",
+          "primary": {
+            "usedPercent": 39,
+            "windowDurationMins": 300,
+            "resetsAt": 1788147612
+          },
+          "secondary": {
+            "usedPercent": 30,
+            "windowDurationMins": 10080,
+            "resetsAt": 1788714346
+          },
+          "credits": null,
+          "individualLimit": null,
+          "spendControlReached": null,
+          "planType": "pro",
+          "rateLimitReachedType": null
+        },
+        "codex": {
+          "limitId": "codex",
+          "limitName": null,
+          "primary": {
+            "usedPercent": 43,
+            "windowDurationMins": 10080,
+            "resetsAt": 1788643355
+          },
+          "secondary": null,
+          "credits": {
+            "hasCredits": false,
+            "unlimited": false,
+            "balance": "0"
+          },
+          "individualLimit": null,
+          "spendControlReached": false,
+          "planType": "pro",
+          "rateLimitReachedType": null
+        }
+      },
+      "rateLimitResetCredits": {
+        "availableCount": 1,
+        "credits": [
+          {
+            "id": "RateLimitResetCredit_38e4b0d2dca08191ac7f164f207332fc",
+            "resetType": "codexRateLimits",
+            "status": "available",
+            "grantedAt": 1787356910,
+            "expiresAt": 1789948910,
+            "title": "Full reset",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          }
+        ]
+      }
+    },
+    "account_rate_limits_after": {
+      "rateLimits": {
+        "limitId": "codex",
+        "limitName": null,
+        "primary": {
+          "usedPercent": 43,
+          "windowDurationMins": 10080,
+          "resetsAt": 1788643355
+        },
+        "secondary": null,
+        "credits": {
+          "hasCredits": false,
+          "unlimited": false,
+          "balance": "0"
+        },
+        "individualLimit": null,
+        "spendControlReached": false,
+        "planType": "pro",
+        "rateLimitReachedType": null
+      },
+      "rateLimitsByLimitId": {
+        "codex": {
+          "limitId": "codex",
+          "limitName": null,
+          "primary": {
+            "usedPercent": 43,
+            "windowDurationMins": 10080,
+            "resetsAt": 1788643355
+          },
+          "secondary": null,
+          "credits": {
+            "hasCredits": false,
+            "unlimited": false,
+            "balance": "0"
+          },
+          "individualLimit": null,
+          "spendControlReached": false,
+          "planType": "pro",
+          "rateLimitReachedType": null
+        },
+        "codex_bengalfox": {
+          "limitId": "codex_bengalfox",
+          "limitName": "GPT-5.3-Codex-Spark",
+          "primary": {
+            "usedPercent": 42,
+            "windowDurationMins": 300,
+            "resetsAt": 1788147612
+          },
+          "secondary": {
+            "usedPercent": 31,
+            "windowDurationMins": 10080,
+            "resetsAt": 1788714346
+          },
+          "credits": null,
+          "individualLimit": null,
+          "spendControlReached": null,
+          "planType": "pro",
+          "rateLimitReachedType": null
+        }
+      },
+      "rateLimitResetCredits": {
+        "availableCount": 1,
+        "credits": [
+          {
+            "id": "RateLimitResetCredit_38e4b0d2dca08191ac7f164f207332fc",
+            "resetType": "codexRateLimits",
+            "status": "available",
+            "grantedAt": 1787356910,
+            "expiresAt": 1789948910,
+            "title": "Full reset",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          }
+        ]
+      }
+    }
+  },
+  "stderr": "",
+  "shutdown": {
+    "method": "stdin_eof",
+    "code": 0,
+    "signal": null
+  }
+}
