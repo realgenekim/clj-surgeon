@@ -1,19 +1,47 @@
 # Prepared Request Ratification Packet
 
-Status: **Option A HLD ratified; leaf LLD, EARS requirements, red tests, and
-product code deferred.** Gene ratified decision 2 on 2026-08-30 with `"2 go"`
-inside `"1 go, 2 go, 3 go"`. The experiment-only proxy screen is separately
-authorized. Installation and MCP reload remain unauthorized.
+Status: **Option A HLD ratified; recovery-oriented leaf LLD and EARS registry
+ready for distinct ratification; red tests and product code deferred.** Gene
+ratified decision 2 on 2026-08-30 with `"2 go"` inside
+`"1 go, 2 go, 3 go"`. After the proxy result, Gene authorized this recovery
+design phase with `"Recovery go -- go, but explain to me what's the benefit,
+potential or actual"`. Installation and MCP reload remain unauthorized.
 
 ## Decision requested
 
-Option A is selected: an eligible successful inspect result carries a
+Ratify the completed success-only Option A leaf LLD and candidate requirements
+`MCP-OP-PREP-REQ-001..009`. An eligible successful inspect result carries a
 non-executable prepared edit template with caller-owned replacement holes.
 
-This ratification selects the HLD direction and the contract for a non-product
-proxy experiment. It does not ratify the leaf LLD or EARS registry and does not
-authorize product implementation. The fallback remains Option C, limited to
-recovery after a mechanically correctable refusal.
+This decision does not authorize red tests or product implementation. It also
+does not authorize a prepared or corrected mutation in a refusal. The proposed,
+pre-ratification write-refusal leaf would own source-free recovery evidence at
+its 13 audited sites. Option A remains useful if that sibling leaf is never
+ratified. A future refusal-side correction remains a distinct Option C design
+with its own authority gate.
+
+### Decision options
+
+**A — Ratify the success-only LLD and `MCP-OP-PREP-REQ-001..009`
+(recommended).** Why it might be right: the descriptor-plus-static-sentence
+treatment reduced recovery work in a valid cohort without losing correctness
+or read-only safety.
+Cost: eligible read results may add up to 4,096 bytes, the projection and output
+schema need permanent tests, and the recovery effect still needs a fresh
+product-shaped cohort. Assumption: callers that already inspect can use a
+guard-complete template more reliably than they reconstruct the edit request.
+
+**B — Hold the prepared-request leaf.** Why it might be right: routing lost,
+two of four treatment attempts completed through another mutation route, and
+the recovery sample is small. Cost: the measured median reduction of about 18
+seconds and 912 output tokens remains unavailable. Assumption: write-refusal
+completeness or future caller improvements will remove the same recovery work
+without adding a success-side descriptor.
+
+Recommendation: choose A. The deciding argument is that the
+descriptor-plus-static-sentence proxy treatment, not only the complete prompt
+object, produced a measurable recovery signal. If that assumption fails in the
+forward acceptance cohort, stop the leaf and keep B.
 
 ## Evidence boundary
 
@@ -30,8 +58,10 @@ recovery after a mechanically correctable refusal.
   and complete. Those IDs are evidence labels only. They do not grant selector,
   snapshot, or write authority.
 
-The causal bundle is **less request assembly plus more route salience**. The
-packet does not claim that request bytes alone caused the routing change.
+The historical Sweep-2 causal bundle was **less request assembly plus more
+route salience**. The product hypothesis in this packet is narrower: less
+recovery after the same eligible inspect exposure. It does not use routing to
+pass.
 
 ### Ratification reframe
 
@@ -41,10 +71,40 @@ percentage-point routing effect did not replicate. The prepared arm did reduce
 median recovery output by 47.4% (1,711.5 to 899.5 tokens) and reduced observed
 construction refusals from six to zero.
 
-The ratified value claim is therefore **assembly-error elimination and
-recovery-output reduction**. Routing lift remains unresolved and secondary as
-a product claim. The frozen proxy experiment keeps its original primary gate;
-this reframe does not rescore or weaken it.
+The ratified value claim is therefore **assembly-error and recovery-output
+reduction**. Routing lift is unsupported and excluded from this leaf's product
+claim. The frozen proxy's failed primary gate remains closed. This reframe does
+not rescore or weaken it.
+
+### Recovery result and exact claim
+
+The valid success-side proxy cohort failed its routing gate: control completed
+Surgeon-first in 4/4 attempts and treatment in 2/4. The same cohort measured
+30.0% lower median output, construction refusals falling from seven to four,
+recovery actions falling from 20 to eight, and 25.3% lower median complete
+wall. The sibling complete-request screen measured 47.4% lower median output
+and six versus zero construction refusals.
+
+The null-hole product shape did not eliminate all assembly errors. The exact
+claim for this leaf is narrower: after an eligible successful inspect exposes
+the descriptor, the descriptor may reduce later request-construction refusals
+and observable recovery effort. The complete-request magnitude does not
+transfer automatically to the null-hole descriptor. The leaf makes no routing,
+adoption, universal one-shot, or general speed claim.
+
+### Benefit in plain language
+
+Actual: in the valid proxy cohort, the median completed task fell from 69.291
+seconds to 51.729 seconds and emitted 912 fewer output tokens. Recovery actions
+fell from 20 to eight across four attempts per arm. The sibling experiment
+independently found the same direction with a 47.4% output reduction.
+
+Potential: an agent that already inspected the intended forms can fill only
+the replacement values instead of rebuilding file, owner, old source, and
+count guards. That can prevent a malformed first mutation call or remove a
+repair turn, especially for a fast or weak caller. The first-call and
+Spark-class screens in the LLD test those possibilities. They are not current
+claims.
 
 ## Non-negotiable authority boundary
 
@@ -73,12 +133,12 @@ be measured.
 ## Option A — Successful inspect result carries a prepared edit template
 
 An eligible successful `inspect_clojure` result carries one visible
-`prepared_request` for `edit_clojure`. The final LLD must decide whether the
-first slice prepares one exact selection or an ordered batch. Each eligible
-selection must be inside one uniquely named top-level owner, with exact source,
-exact cardinality, and a completed read. The template repeats the
-canonical workspace, project-relative file, named owner, exact selected
-`from` source, and match count. Each `to` value is a named null hole. The
+`prepared_request` for `edit_clojure`. The first slice prepares one through six
+complete named whole forms from one terminal `forms` result for one file. Each
+eligible form has exact source, exact hashes and anchor, exact cardinality, and
+a unique named top-level owner. The template repeats the canonical workspace,
+project-relative file, named owner, exact selected `from` source, and match
+count. Each `to` value is a named null hole. The
 concise result uses static server-owned conditional text: if the caller
 independently decides that these exact selections are the intended mutation
 subjects, fill the holes and submit `prepared_request.arguments`; otherwise,
@@ -95,11 +155,10 @@ read can see the template. Exact selections may be too rare. A template with
 caller holes may not reproduce the effect of a complete unchanged-submit
 request.
 
-Load-bearing assumption: route choice remains open after inspection, and a
-visible guard-complete template with only replacement holes is salient and
-easy enough to increase successful Surgeon-first mutation. The experiment
-must count sessions that never inspect or never see the template; conditioning
-only on exposed sessions would create a false green.
+Load-bearing assumption: after the same eligible inspect exposure, a visible
+guard-complete template with only replacement holes reduces later construction
+refusals, recovery actions, or output while preserving exact correctness and
+fallback behavior. Routing remains descriptive and cannot make this leaf pass.
 
 ## Option B — Dedicated `prepare_edit` operation
 
@@ -153,69 +212,47 @@ refusal recovery, not as prepared-request adoption.
 
 This option cannot override the existing non-executable template laws in
 `MCP-OP-EDIT-010` or `MCP-OP-READ-CONT-001..002`. It requires a separate exact
-correction-authority decision.
+correction-authority decision. It also cannot coexist with the proposed
+write-refusal leaf at `6d558cb3`, whose invariant forbids corrected requests.
+Ratifying Option C would require a separate decision that amends or supersedes
+that invariant; the two designs cannot be composed concurrently as written.
 
 ## Recommendation and fallback
 
-Choose Option A for the first transfer experiment because it is the closest
-safe test of partial transfer without charging an extra tool turn. Its null
-replacement holes make it materially weaker than the complete causal object.
-Do not approve implementation from the Sweep-2 result alone.
+Ratify the success-only Option A leaf and its nine candidate requirements. The
+deciding argument is that the same null-hole shape reduced recovery work in a
+valid cohort while preserving correctness and read-only safety. It did not
+improve routing, so routing remains outside the product claim.
 
-Fallback: if an exact eligible read cannot produce the public template without
-guessing a subject or forcing whole-owner replacement, stop Option A and test
-Option C as a narrower recovery feature. Do not widen the server's judgment to
-save the adoption thesis.
+Fallback: if the template cannot reduce repeat construction refusals or one
+observable recovery action after product-shaped exposure, stop this leaf. Do
+not add refusal-side correction, force inspection, or widen server judgment to
+save it. Write-refusal completeness remains a separate sibling leaf.
 
-## Falsifiable adoption commitment
+## Historical routing gate — closed loss
 
-For one frozen external-repository task family and one fixed caller/model
-stratum, run eight fresh sessions in counterbalanced order: four control and
-four prepared-result sessions. An experiment-only MCP proxy preserves the
-production tool catalog and handlers and changes only the successful inspect
-response projection. It adds the frozen null-hole candidate descriptor in
-treatment and does not edit product files, mutate source, install, reload, or
-publish a tool.
-Prompts, task, source, and scoring remain identical. Inspection is not forced
-or mentioned. Construction and execution of this proxy require separate
-experiment authority after this HLD choice.
+The frozen proxy ran eight efficacy sessions and four read-only safety
+sessions. Every fresh session remained in its assigned denominator, including
+sessions that did not inspect, did not receive the template, refused, or used
+another mutation route.
 
-The option advances only if all of these conditions hold:
+The registered routing gate required treatment Surgeon-first in at least 3/4
+attempts and at least 25 percentage points above control. Treatment was 2/4;
+control was 4/4. The gate failed and is closed. The recovery decision did not
+rescore it. This packet therefore cannot claim routing lift, adoption lift, or
+successful transfer of the prompt-embedded routing signal.
 
-1. the prepared arm selects `edit_clojure` as the first mutation route in at
-   least 3/4 attempts;
-2. the prepared arm improves successful Surgeon-first routing by at least 25
-   percentage points over control;
-3. exact semantic correctness does not decrease;
-4. refusal rate does not increase; and
-5. four additional read-only safety attempts, two per arm, produce zero
-   mutations.
-
-Every fresh session remains in the primary denominator, including sessions
-that never inspect, never receive the template, refuse, or choose native.
-Exposure and conditional conversion are secondary diagnostics only. Complete
-task wall, total observable client actions, and tool calls remain in the loss
-chart, but they are not inferred from hidden reasoning and do not override the
-primary routing gate.
-
-Do not call a routing miss a pass. A miss means the prompt-embedded routing
-signal did not transfer under this gate. If the registered recovery outcomes
-still reproduce, the ratified HLD remains supported by its reframed value
-claim, but the experiment does not advance the leaf LLD automatically. That
-outcome requires a separate recovery-oriented LLD decision. It is not
-permission to force inspection, add a route cue, or rescore only exposed
-attempts.
+The completed LLD replaces no historical outcome. It uses only the separately
+authorized recovery question and the forward-only acceptance gates in
+`prepared-request-design.md`.
 
 ## Phase stops
 
-1. Gene selected Option A and separately authorized the non-product proxy
-   experiment.
-2. The proxy experiment runs before product code. A primary-gate pass returns
-   a completed leaf LLD and EARS registry for separate ratification. A miss
-   keeps them deferred unless Gene separately selects a recovery-oriented gate.
-3. After a pass, the selected leaf LLD is completed and ratified separately.
-4. The completed EARS registry and stable IDs are ratified separately.
-5. Direct red witnesses activate the approved requirements.
+1. Gene selected Option A and authorized the proxy experiment.
+2. The valid proxy missed routing and produced aligned recovery evidence.
+3. Gene authorized the recovery-oriented LLD phase.
+4. This completed leaf LLD and EARS registry require distinct ratification.
+5. Direct red witnesses require separate activation after ratification.
 6. Product code may begin only after the exact intended red count is proved.
 7. Installation, MCP reload, and any post-product cohort require separate
    authority after green product verification.
@@ -224,6 +261,11 @@ attempts.
 
 - `experiment/differential-routing-interview-20260829` at `a9afcd13`
 - `experiment/external-corpus-shape-census` at `28ee81f4`
+- `experiment/prepared-request-replication-20260830` at `6277e067`
+- `experiment/prepared-request-proxy-screen-20260830` at `ab5759e5`
+- externally reported sibling packet `docs/write-refusal-ratification-20260830`
+  at `6d558cb3`, used only for scope coordination because that object is not
+  present in this worktree
 - installed read normalization at `c55de227`
 - `docs/high-level-design.md`, especially **Compress a coherent read mission
   without guessing**
@@ -239,11 +281,17 @@ attempts.
   both arms. The routing result does not advance the leaf LLD. The aligned recovery signal goes to
   Gene as a separate recovery-oriented gate decision. Raw receipt:
   `docs/observations/2026-08-30-prepared-request-option-a-proxy-valid-verdict.md`.
-- **Counterfactual:** if prompt authority or fixture-specific salience caused
-  Sweep-2, the tool-result treatment will not move unforced routing.
+- **Recovery design authorized, 2026-08-30:** Gene said `"Recovery go -- go"`.
+  The completed LLD keeps Option A success-only, makes the recovery claim
+  narrower than error elimination, and composes with write-refusal completeness
+  as a sibling artifact rather than a shared retry authority.
+- **Counterfactual:** if the proxy's recovery signal came from fixture-specific
+  behavior, the product descriptor will not reduce recovery actions or output
+  after the same eligible inspect exposure.
 - **Surprise:** the safest product object is necessarily less complete than the
   causal prompt object because the server does not own replacement meaning.
-- **Falsifier:** less than +25 points, fewer than 3/4 prepared Surgeon-first
-  attempts, any correctness loss, or any mutation in the read-only arm.
+- **Falsifier:** either arm is not 4/4 exactly correct, treatment contact is not
+  exact, treatment fails the registered recovery-action or output gate, or any
+  read-only safety attempt mutates source.
 - **Decision:** select the closest safe transfer experiment; keep implementation
   behind the result.
