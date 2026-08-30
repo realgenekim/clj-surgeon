@@ -45,9 +45,11 @@ authority.
 
 For the paid path, independently construct the equivalent guarded
 `edit_clojure` arguments from the same frozen source. Retain both serialized
-argument objects, require byte identity, submit the filled-descriptor object
-through the real MCP route, and require the exact expected committed source.
-This separates request-size savings from construction and recovery savings.
+argument objects, require exact decoded JSON equality, submit the
+filled-descriptor object through the real MCP route, and require the exact
+expected committed source. JSON object-member order is not semantic and may
+differ; preserve and measure both raw serializations. This separates
+request-size savings from construction and recovery savings.
 
 ## Predeclared validity
 
@@ -61,8 +63,8 @@ This separates request-size savings from construction and recovery savings.
   equal after removing candidate `prepared_request` and timing fields; and
 - `source_unchanged`: the fixture hash is byte-identical before and after both
   read-only arms; and
-- `paid_path_correct`: filled and independently constructed arguments are
-  byte-identical, the filled request commits with verification complete in a
+- `paid_path_correct`: filled and independently constructed arguments decode
+  to equal JSON values, the filled request commits with verification complete in a
   separate workspace, and the final source hash equals the frozen expected
   hash.
 

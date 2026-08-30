@@ -388,7 +388,7 @@ def capture_paid_path(worktree, workspace, result_dir, encoding):
     return {
         "exit_code": exit_code,
         "metrics": metrics,
-        "arguments_byte_identical": filled_raw == scratch_raw,
+        "arguments_semantically_equal": filled_arguments == scratch_arguments,
         "edit_success": successful_tool_response(edit_response),
         "committed": structured.get("committed") is True,
         "verification_complete": structured.get("verification_complete") is True,
@@ -554,7 +554,7 @@ def main():
     expected_paid_hash = sha256_file(expected_paid_fixture)
     semantic = semantic_verdict(control, candidate)
     paid_valid = (
-        paid["arguments_byte_identical"]
+        paid["arguments_semantically_equal"]
         and paid["edit_success"]
         and paid["committed"]
         and paid["verification_complete"]
@@ -590,7 +590,7 @@ def main():
             "source_hash_after": after_hash,
             "source_unchanged": before_hash == after_hash,
             "paid_path": {
-                "arguments_byte_identical": paid["arguments_byte_identical"],
+                "arguments_semantically_equal": paid["arguments_semantically_equal"],
                 "edit_success": paid["edit_success"],
                 "committed": paid["committed"],
                 "verification_complete": paid["verification_complete"],
