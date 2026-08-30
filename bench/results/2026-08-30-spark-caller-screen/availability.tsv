@@ -1,0 +1,5 @@
+requested_model	exit_code	wall_ms	result
+gpt-5.3-spark	1	3768	unsupported-with-chatgpt-account
+5.3-spark	1	3559	unsupported-with-chatgpt-account
+spark	1	3825	unsupported-with-chatgpt-account
+gpt-5.3-codex-spark	0	5761	SPARK_OK

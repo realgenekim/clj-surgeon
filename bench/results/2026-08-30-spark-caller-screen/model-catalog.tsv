@@ -1,0 +1,10 @@
+slug	visibility	display_name	description
+gpt-5.6-sol	list	GPT-5.6-Sol	Latest frontier agentic coding model.
+gpt-5.6-terra	list	GPT-5.6-Terra	Balanced agentic coding model for everyday work.
+gpt-5.6-luna	list	GPT-5.6-Luna	Fast and affordable agentic coding model.
+gpt-reserve	hide	GPT-Reserve	Fast and affordable agentic coding model.
+gpt-5.5	list	GPT-5.5	Frontier model for complex coding, research, and real-world work.
+gpt-5.4	list	GPT-5.4	Strong model for everyday coding.
+gpt-5.4-mini	list	GPT-5.4-Mini	Small, fast, and cost-efficient model for simpler coding tasks.
+gpt-5.3-codex-spark	list	GPT-5.3-Codex-Spark	Ultra-fast coding model.
+codex-auto-review	hide	Codex Auto Review	Automatic approval review model for Codex.

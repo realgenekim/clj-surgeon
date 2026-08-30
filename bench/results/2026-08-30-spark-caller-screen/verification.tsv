@@ -1,0 +1,17 @@
+schema	clj-surgeon.spark-caller-screen-verification.v1
+baseline_exact	6/6
+source_manifest_exact	12/12
+wrong_subject	0
+read_mcp_failures	5,2,2
+recovery_mcp_failures	1,1,1
+read_operationless_first_calls	0/3
+read_omitted_id_first_calls	2/3
+guarded_write_one_shot	3/3
+recovery_shape_exact	3/3
+chord_native_route	3/3
+raw_archive_sha256	25406e5cd5bcd8c30c70a70f5404b31d3901f2da5f50384189873eab1ea85781
+pre_amendment_archive_sha256	fa45a7189fbe41e2641825a9c098c1f2258be50672280692b2c6bf19607a6d96
+test_fast	647-tests/5562-assertions/0-failures
+analyzer_contract_test	4-tests/20-assertions/0-failures
+mcp_test_initial	300-tests/3433-assertions/2-cold-admission-timing-failures
+mcp_test_immediate_rerun	300-tests/3433-assertions/0-failures

@@ -1,0 +1,1 @@
+bash bench/run_spark_caller_screen.sh --product-root '/private/tmp/clj-surgeon-spark-product-c55' --output '<new-output-dir>' --auth-file '/Users/genekim/.codex/auth.json'

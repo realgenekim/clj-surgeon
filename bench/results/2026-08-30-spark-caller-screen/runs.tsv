@@ -1,0 +1,13 @@
+cell	replicate	model	wall_ms	exit_code	input_tokens	cached_input_tokens	output_tokens	reasoning_tokens	actions	mcp_calls	inspect_calls	edit_calls	command_calls	file_changes	mcp_failures	error_types	route	one_shot	exact	wrong_subject	read_shorthand_operationless_omittedids_toolms
+read	1	gpt-5.3-codex-spark	13159	0	136734	120832	2462	1855	6	6	6	0	0	0	5	invalid-mcp-request	none	false	true	0	false/false/82.237666
+read	2	gpt-5.3-codex-spark	10498	0	82586	67072	2683	2271	3	3	3	0	0	0	2	invalid-mcp-request	none	false	true	0	false/true/93.27633399999999
+read	3	gpt-5.3-codex-spark	10578	0	78703	64256	2279	1847	3	3	3	0	0	0	2	invalid-mcp-request	none	false	true	0	false/true/88.535375
+write	1	gpt-5.3-codex-spark	10084	0	39258	28928	1400	1256	1	1	0	1	0	0	0		surgeon	true	true	0	false/false/129.290875
+write	2	gpt-5.3-codex-spark	7671	0	40915	33664	1399	1209	1	1	0	1	0	0	0		surgeon	true	true	0	false/false/111.682042
+write	3	gpt-5.3-codex-spark	7289	0	39157	29184	1572	1340	1	1	0	1	0	0	0		surgeon	true	true	0	false/false/112.84825
+recovery	1	gpt-5.3-codex-spark	10760	0	60111	51328	1470	1206	2	2	0	2	0	0	1	expect-count-mismatch	surgeon	true	true	0	false/false/243.128084
+recovery	2	gpt-5.3-codex-spark	11215	0	54186	43776	1868	1618	2	2	0	2	0	0	1	expect-count-mismatch	surgeon	true	true	0	false/false/156.250333
+recovery	3	gpt-5.3-codex-spark	12438	0	54924	43776	2229	1954	2	2	0	2	0	0	1	expect-count-mismatch	surgeon	true	true	0	false/false/121.032668
+chord	1	gpt-5.3-codex-spark	18106	0	54776	47104	7146	6070	3	0	0	0	3	0	0		native	false	true	0	false/false/0
+chord	2	gpt-5.3-codex-spark	11079	0	26178	15616	4354	3774	1	0	0	0	1	0	0		native	true	true	0	false/false/0
+chord	3	gpt-5.3-codex-spark	34165	0	194827	167168	10959	8797	9	0	0	0	9	0	0		native	false	true	0	false/false/0

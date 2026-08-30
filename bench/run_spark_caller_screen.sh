@@ -190,7 +190,12 @@ record_run() {
   command_calls=$(jq -s '[.[] | select(.type == "item.started" and .item.type == "command_execution")] | length' "$run_dir/events.jsonl")
   file_changes=$(jq -s '[.[] | select(.type == "item.started" and .item.type == "file_change")] | length' "$run_dir/events.jsonl")
   actions=$((mcp_calls + command_calls + file_changes))
-  failures=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "mcp_tool_call") | (.item.result.structured_content.ok // .item.result.structuredContent.ok // true) | select(. == false)] | length' "$run_dir/events.jsonl")
+  failures=$(jq -s '[.[]
+    | select(.type == "item.completed" and .item.type == "mcp_tool_call")
+    | {status: .item.status,
+       content: (.item.result.structured_content // .item.result.structuredContent // {})}
+    | select(.status == "failed" or .content.ok == false or .content.error_type != null)]
+    | length' "$run_dir/events.jsonl")
   error_types=$(jq -s -r '[.[] | select(.type == "item.completed" and .item.type == "mcp_tool_call") | (.item.result.structured_content.error_type // .item.result.structuredContent.error_type // empty)] | unique | join(",")' "$run_dir/events.jsonl")
   tool_ms=$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "mcp_tool_call") | (.item.result.structured_content.elapsed_ms // .item.result.structuredContent.elapsed_ms // 0)] | add // 0' "$run_dir/events.jsonl")
 
@@ -226,7 +231,8 @@ record_run() {
         && [ "$error_types" = expect-count-mismatch ] && one_shot=true
       ;;
     chord)
-      [ "$exact" = true ] && [ "$failures" -eq 0 ] && one_shot=true
+      [ "$exact" = true ] && [ "$failures" -eq 0 ] && [ "$actions" -eq 1 ] \
+        && one_shot=true
       ;;
   esac
 
@@ -255,8 +261,8 @@ catalog_home="$result_root/catalog-codex-home"
 mkdir -p "$catalog_home"
 ln -s "$auth_file" "$catalog_home/auth.json"
 CODEX_HOME="$catalog_home" codex debug models > "$result_root/model-catalog.json" 2> "$result_root/model-catalog.stderr"
-jq -r '.. | objects | (.slug? // .model? // .id? // empty)' "$result_root/model-catalog.json" \
-  | LC_ALL=C sort -u > "$result_root/available-model-identifiers.txt"
+jq -r '.models[].slug' "$result_root/model-catalog.json" \
+  | LC_ALL=C sort -u > "$result_root/catalog-model-identifiers.txt"
 
 accepted_spark=""
 mkdir -p "$result_root/availability"

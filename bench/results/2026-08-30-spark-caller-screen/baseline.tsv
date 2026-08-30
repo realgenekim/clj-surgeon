@@ -1,0 +1,7 @@
+pair	position	model	wall_ms	exit_code	input_tokens	cached_input_tokens	output_tokens	reasoning_tokens	final_exact
+1	1	gpt-5.3-codex-spark	4186	0	10977	4224	63	53	true
+1	2	gpt-5.6-sol	4591	0	14157	9984	8	0	true
+2	3	gpt-5.6-sol	5185	0	14157	9984	8	0	true
+2	4	gpt-5.3-codex-spark	3611	0	10977	8064	68	58	true
+3	5	gpt-5.3-codex-spark	3954	0	10977	4224	52	42	true
+3	6	gpt-5.6-sol	5432	0	14283	9984	8	0	true

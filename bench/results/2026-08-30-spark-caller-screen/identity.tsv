@@ -1,0 +1,10 @@
+schema	clj-surgeon.spark-caller-screen.v1
+started_utc	2026-08-30T17:05:29Z
+product_commit	c55de2279826af5ed21c90981591479dd2e802b2
+product_tree	565f009f0ff25fdedbc2fba5ad9ba5f55783e023
+experiment_commit	605054d1f3237cb3ecca9f9afed17a27e0e2d009
+experiment_tree	c2554b0b29d8d54d29462333d89fd9e7c2c00b42
+harness_sha256	238766726bec6cf77a24a4974994cdef012dfd81b86d1c997a83f1ac42a02cde
+codex_version	codex-cli 0.149.1
+reasoning	high
+route	subscription-chatgpt
