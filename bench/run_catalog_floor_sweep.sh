@@ -10,10 +10,11 @@ result_dir=${1:?usage: bench/run_catalog_floor_sweep.sh OUT_DIR}
 auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
 model=${BENCH_MODEL:-gpt-5.6-sol}
 reasoning=${BENCH_REASONING:-low}
-blocks=${BENCH_BLOCKS:-12}
+blocks=${BENCH_BLOCKS:-14}
 max_load=${BENCH_MAX_LOAD:-4.0}
-arms=(C T D P M R)
+arms=(C T D P M I R)
 server_arms=(T D P M R)
+mcp_arms=(T D P M I R)
 
 command -v codex >/dev/null || { echo "codex not on PATH" >&2; exit 2; }
 command -v clojure >/dev/null || { echo "clojure not on PATH" >&2; exit 2; }
@@ -58,7 +59,7 @@ arm_keyword() {
 }
 
 write_config() {
-  local path=$1 url=$2
+  local path=$1 url=$2 arm=${3:-}
   {
     printf '%s\n' '[mcp_servers.catalog-probe]'
     printf 'url = "%s"\n' "$url"
@@ -66,7 +67,29 @@ write_config() {
     printf '%s\n' 'default_tools_approval_mode = "approve"'
     printf '%s\n' 'startup_timeout_sec = 30'
     printf '%s\n' 'tool_timeout_sec = 30'
+    if [ "$arm" = I ]; then
+      printf '%s\n' 'enabled_tools = ["inspect_clojure"]'
+    fi
   } > "$path"
+}
+
+server_path_for_arm() {
+  if [ "$1" = I ]; then
+    printf '%s\n' R
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+seed_codex_home() {
+  local home=$1
+  install -m 600 "$auth_file" "$home/auth.json"
+  if [ -f "$(dirname "$auth_file")/installation_id" ]; then
+    install -m 600 "$(dirname "$auth_file")/installation_id" "$home/installation_id"
+  fi
+  if [ -f "$(dirname "$auth_file")/models_cache.json" ]; then
+    install -m 600 "$(dirname "$auth_file")/models_cache.json" "$home/models_cache.json"
+  fi
 }
 
 read_load() {
@@ -112,11 +135,13 @@ done
 # Token-free Codex client projection for every MCP arm.
 printf '{"C":{"client_bytes":0,"tool_count":0,"parameter_count":0}' \
   > "$result_dir/catalogs.json"
-for arm in "${server_arms[@]}"; do
+for arm in "${mcp_arms[@]}"; do
   preflight="$result_dir/servers/$arm/preflight"
+  server_arm=$(server_path_for_arm "$arm")
   mkdir -p "$preflight/codex-home"
-  ln -s "$auth_file" "$preflight/codex-home/auth.json"
-  write_config "$preflight/codex-home/config.toml" "$(cat "$result_dir/servers/$arm/url.txt")"
+  seed_codex_home "$preflight/codex-home"
+  write_config "$preflight/codex-home/config.toml" \
+    "$(cat "$result_dir/servers/$server_arm/url.txt")" "$arm"
   start_ns=$(date +%s%N)
   CODEX_HOME="$preflight/codex-home" clojure -J-Xms32m -J-Xmx256m \
     -Sdeps '{:paths ["src" "bench"]}' -M \
@@ -138,7 +163,7 @@ for arm in "${server_arms[@]}"; do
   jq -c . "$preflight/catalog.json" >> "$result_dir/catalogs.json"
 done
 printf '}\n' >> "$result_dir/catalogs.json"
-jq -e 'keys == ["C","D","M","P","R","T"]' "$result_dir/catalogs.json" >/dev/null
+jq -e 'keys == ["C","D","I","M","P","R","T"]' "$result_dir/catalogs.json" >/dev/null
 
 if [ "${BENCH_PREFLIGHT_ONLY:-0}" = 1 ]; then
   jq . "$result_dir/catalogs.json"
@@ -156,18 +181,20 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
   > "$result_dir/runs.tsv"
 
 schedules=(
-  'C T D P M R'
-  'T D P M R C'
-  'D P M R C T'
-  'P M R C T D'
-  'M R C T D P'
-  'R C T D P M'
-  'R M P D T C'
-  'C R M P D T'
-  'T C R M P D'
-  'D T C R M P'
-  'P D T C R M'
-  'M P D T C R'
+  'C T D P M I R'
+  'T D P M I R C'
+  'D P M I R C T'
+  'P M I R C T D'
+  'M I R C T D P'
+  'I R C T D P M'
+  'R C T D P M I'
+  'R I M P D T C'
+  'C R I M P D T'
+  'T C R I M P D'
+  'D T C R I M P'
+  'P D T C R I M'
+  'M P D T C R I'
+  'I M P D T C R'
 )
 
 for block in $(seq 1 "$blocks"); do
@@ -181,9 +208,11 @@ for block in $(seq 1 "$blocks"); do
     run_dir="$result_dir/runs/$run_id"
     codex_home="$run_dir/codex-home"
     mkdir -p "$codex_home"
-    ln -s "$auth_file" "$codex_home/auth.json"
+    seed_codex_home "$codex_home"
     if [ "$arm" != C ]; then
-      write_config "$codex_home/config.toml" "$(cat "$result_dir/servers/$arm/url.txt")"
+      server_arm=$(server_path_for_arm "$arm")
+      write_config "$codex_home/config.toml" \
+        "$(cat "$result_dir/servers/$server_arm/url.txt")" "$arm"
     fi
     load_before=$(read_load)
     start_ns=$(date +%s%N)

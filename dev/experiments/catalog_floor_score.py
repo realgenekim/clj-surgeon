@@ -10,7 +10,7 @@ import statistics
 from pathlib import Path
 
 
-ARMS = ("C", "T", "D", "P", "M", "R")
+ARMS = ("C", "T", "D", "P", "M", "I", "R")
 MARGIN_MS = 125.0
 
 
@@ -146,6 +146,7 @@ def main():
         "shape_checks": {
             "parameters_minus_description_ms": median(paired(admitted, "D", "P")) if admitted else None,
             "many_tools_minus_description_ms": median(paired(admitted, "D", "M")) if admitted else None,
+            "full_projection_minus_inspect_only_ms": median(paired(admitted, "I", "R")) if admitted else None,
             "real_minus_tiny_ms": median(paired(admitted, "T", "R")) if admitted else None,
         },
         "promotion_authority": False,

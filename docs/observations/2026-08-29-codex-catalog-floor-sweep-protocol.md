@@ -27,6 +27,7 @@ prestarted bounded JVM, and no-effect handler. Only the static catalog differs.
 | D | one tool, about 64 KiB of description | byte scaling with tool count fixed |
 | P | one tool, about 64 KiB carried by parameters | parameter-shape check |
 | M | sixteen tools, about 64 KiB total | tool-count check |
+| I | real server list, only `inspect_clojure` enabled | projection-size check with transport fixed |
 | R | frozen real four-tool clj-surgeon catalog | external-validity check |
 
 Before calls, a token-free Codex app-server projection must record each arm's
@@ -37,7 +38,7 @@ identity.
 
 ## Schedule and validity
 
-Twelve blocks use six rotations and their reverses. Every arm therefore occurs
+Fourteen blocks use seven rotations and their reverses. Every arm therefore occurs
 twice in every position. No arm may stop early because its sign is favorable.
 
 A row is admitted only when these independent fields are true:
@@ -61,6 +62,8 @@ completion-to-process-exit.
   unchanged.
 - `P - D` and `M - D` test whether equal-sized catalogs differ because bytes
   are arranged as parameters or tools.
+- `R - I` tests full versus one-tool client projection while the server returns
+  the same full catalog in both arms.
 - A block-stratified Theil-Sen slope estimates milliseconds per exact
   client-visible byte.
 

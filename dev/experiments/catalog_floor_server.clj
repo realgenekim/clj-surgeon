@@ -40,6 +40,7 @@
                     :destructive false
                     :idempotent true
                     :open-world false}
+      :outcome-classes #{:typed-refusal}
       :structured? true
       :tool-fn (no-effect-handler tool-name)})))
 
