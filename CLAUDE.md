@@ -22,6 +22,44 @@ implementation. A useful plan fixes the observable contract, non-goals,
 failure data, exhaustive behavior matrix, real-program evidence, documentation
 updates, and verification gates. It is not a chronological coding diary.
 
+## The acid test — the ultimate measure of performance (ratified Gene, 2026-08-30)
+
+**A performance improvement is proven by exactly one instrument: a matched serial Anvil
+comparison at an exact product commit — the Surgeon route versus a matched native route on a
+REAL historical decision, both arms completing the same task, scored by the same semantic
+scorer.** The README headline table is the canonical form. Nothing else is proof.
+
+The evidence hierarchy, strongest first:
+
+1. **Anvil matched pairs on real historical decisions** — proof. Report per-arm wall seconds
+   end-to-end, emitted output tokens, action count, one-shot rate, and the speedup multiple,
+   at a named product commit.
+2. **Local matched pairs** — replication evidence supporting an Anvil result, never a
+   substitute for one.
+3. **Synthetic screens and fixtures** — option-buying signals that justify the next
+   experiment. They may kill a claim cheaply; they may never mint a performance claim.
+4. **Token/byte deltas priced through measured rates** — projections. Label them as
+   projections until an acid-test pair converts them.
+
+**Every performance claim names its task class** — change count, file count, reference
+count — because the advantage inverts with scale and a classless claim is unfalsifiable.
+The measured map as of 2026-08-30: native wins the small class (two files / three changes,
+and a 5-reference single-file rename); Surgeon wins 4.9–9.7× on the large mechanical class
+(15-form extraction with 63 callers; 51-edit nine-file chord). The crossover between those
+anchors is unmapped; routing guidance must not claim territory the map does not cover.
+
+Corollaries: a regression gate for any installed change is the same instrument run in
+reverse (the historical benchmark decisions re-run at the new commit); and "faster" without
+an acid-test receipt is relayed as `projected`, never as `measured`.
+
+**The skill text is the actuator.** When an acid test moves the map, the routing guidance
+agents actually read — working-tree `skill.md` and the installed agent-routing text — is
+rewritten in the SAME change to articulate the class boundary in decision form ("use
+Surgeon when …, use native when …", with the measured counts). The map lives in the skill;
+the receipts live in the README and `docs/observations/`. A measured boundary that never
+reaches the skill text changes no agent's behavior and therefore bought nothing.
+
+
 ## Testing
 
 - Run: `make test`

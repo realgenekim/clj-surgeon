@@ -41,6 +41,37 @@ Paths in scope:
 - `test/clj_surgeon/cli_dispatch_test.clj`
 - `Makefile`
 
+## The acid test — the ultimate measure of performance (ratified Gene, 2026-08-30)
+
+**A performance improvement is proven by exactly one instrument: a matched serial Anvil
+comparison at an exact product commit — the Surgeon route versus a matched native route on a
+REAL historical decision, both arms completing the same task, scored by the same semantic
+scorer.** The README headline table is the canonical form. Nothing else is proof.
+
+Evidence hierarchy, strongest first: (1) Anvil matched pairs on real historical decisions —
+proof; report per-arm wall seconds, emitted output tokens, action count, one-shot rate, and
+speedup at a named product commit. (2) Local matched pairs — replication evidence only.
+(3) Synthetic screens — option-buying signals; they may kill a claim cheaply, never mint a
+performance claim. (4) Priced token/byte deltas — projections until an acid-test pair
+converts them.
+
+**Every performance claim names its task class** (change count, file count, reference
+count): the advantage inverts with scale. Measured map as of 2026-08-30: native wins the
+small class (two files / three changes; 5-reference single-file rename); Surgeon wins
+4.9–9.7× on the large mechanical class (15-form extraction / 63 callers; 51-edit nine-file
+chord). The crossover is unmapped; routing guidance must not claim unmapped territory.
+Regression gate for any installed change: re-run the historical benchmark decisions at the
+new commit. "Faster" without an acid-test receipt is relayed as `projected`, never
+`measured`.
+
+**The skill text is the actuator.** When an acid test moves the map, the routing guidance
+agents actually read — working-tree `skill.md` and the installed agent-routing text — is
+rewritten in the SAME change to articulate the class boundary in decision form ("use
+Surgeon when …, use native when …", with the measured counts). The map lives in the skill;
+the receipts live in the README and `docs/observations/`. A measured boundary that never
+reaches the skill text changes no agent's behavior and therefore bought nothing.
+
+
 ## Linked-Intent Development (MANDATORY)
 
 Consult the `linked-intent-dev` skill for changes in the scoped paths. Walk
