@@ -111,6 +111,22 @@ load_ok() {
   awk -v value="$1" -v limit="$max_load" 'BEGIN {exit !(value <= limit)}'
 }
 
+wait_for_green_load() {
+  local attempt value
+  attempt=0
+  while [ "$attempt" -lt 180 ]; do
+    value=$(read_load)
+    if load_ok "$value"; then
+      printf '%s\n' "$value"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+  echo "load remained above $max_load for 180 seconds: $(read_load)" >&2
+  return 1
+}
+
 for arm in "${server_arms[@]}"; do
   server_dir="$result_dir/servers/$arm"
   mkdir -p "$server_dir"
@@ -213,8 +229,7 @@ schedules=(
 
 for block in $(seq 1 "$blocks"); do
   schedule=${schedules[$(((block - 1) % ${#schedules[@]}))]}
-  block_load=$(read_load)
-  load_ok "$block_load" || { echo "load too high before block $block: $block_load" >&2; exit 3; }
+  block_load=$(wait_for_green_load) || exit 3
   position=0
   for arm in $schedule; do
     position=$((position + 1))
