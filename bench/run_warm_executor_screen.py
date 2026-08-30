@@ -137,6 +137,7 @@ class AppServer:
         self.codex = codex
         self.codex_home = codex_home
         self.run_dir = run_dir
+        self.run_dir.mkdir(parents=True, exist_ok=True)
         self.model = model
         self.cwd = cwd
         self.history: list[dict[str, Any]] = []
@@ -144,6 +145,7 @@ class AppServer:
         self.request_id = 0
         self.log_lock = threading.Lock()
         self.protocol_path = run_dir / "protocol.jsonl"
+        shutil.copy2(codex_home / "config.toml", run_dir / "codex-config.toml")
         self.stderr_stream = (run_dir / "app-server.stderr").open("w")
         self.process_start_ns = now_ns()
         command = [
@@ -469,7 +471,7 @@ def make_codex_home(root: Path, auth_file: Path, mcp_url: str | None) -> Path:
             f'url = "{mcp_url}"\n'
             "required = true\n"
             'enabled_tools = ["edit_clojure"]\n'
-            'default_tools_approval_mode = "writes"\n'
+            'default_tools_approval_mode = "approve"\n'
             "startup_timeout_sec = 10\n"
             "tool_timeout_sec = 90\n"
         )
@@ -487,6 +489,24 @@ def prepare_workspace(template_dir: Path, workspace: Path) -> None:
 
 def reset_fixture(template_dir: Path, workspace: Path) -> None:
     shutil.copy2(template_dir / FIXTURE_REL, workspace / FIXTURE_REL)
+
+
+def discard_codex_home(home: Path) -> None:
+    if home.name != "codex-home":
+        raise RuntimeError(f"refusing to discard unexpected path: {home}")
+    if home.exists():
+        shutil.rmtree(home)
+
+
+def copy_receipts_without_runtime(source: Path, destination: Path) -> None:
+    def ignore_runtime(_directory: str, names: list[str]) -> set[str]:
+        return {name for name in names if name == "codex-home"}
+
+    shutil.copytree(source, destination, ignore=ignore_runtime)
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
 
 
 def message_method(entry: dict[str, Any]) -> str | None:
@@ -778,6 +798,13 @@ def run(args: argparse.Namespace) -> int:
     if not codex:
         raise RuntimeError("codex is not on PATH")
     prereg = validate_prerun(repo, auth_file, codex)
+    cold_source = (
+        Path(args.reuse_cold_trivial_from).resolve()
+        if args.reuse_cold_trivial_from
+        else None
+    )
+    if cold_source and not (cold_source / "cold-trivial.jsonl").is_file():
+        raise RuntimeError(f"cold source lacks frozen rows: {cold_source}")
     out.mkdir(parents=True)
     template_dir = repo / "bench/fixtures/warm_executor"
     template_text = (template_dir / FIXTURE_REL).read_text()
@@ -797,6 +824,14 @@ def run(args: argparse.Namespace) -> int:
         "python": sys.version,
         "start_wall_ns": wall_ns(),
         "load_average": load_average(),
+        "recovery": (
+            {
+                "cold_trivial_source": str(cold_source),
+                "policy": "reuse 10 valid cold-trivial rows; retain invalid prepared attempts; rerun prepared and previously unstarted warm cells",
+            }
+            if cold_source
+            else None
+        ),
     }
     write_json(out / "meta.json", meta)
     results: dict[str, list[dict[str, Any]]] = {
@@ -806,47 +841,61 @@ def run(args: argparse.Namespace) -> int:
         "warmup": [],
     }
 
+    if cold_source:
+        results["cold_trivial"] = read_jsonl(cold_source / "cold-trivial.jsonl")
+        for row in results["cold_trivial"]:
+            append_jsonl(out / "cold-trivial.jsonl", row)
+        retained = out / "attempt-1-retained"
+        copy_receipts_without_runtime(cold_source / "cold-trivial", retained / "cold-trivial")
+        copy_receipts_without_runtime(
+            cold_source / "cold-prepared", retained / "invalid-cold-prepared"
+        )
+        for name in ("meta.json", "cold-prepared.jsonl", "ATTEMPT_FAILURE.md"):
+            shutil.copy2(cold_source / name, retained / name)
+
     # Cold trivial: fresh process and fresh ephemeral thread for every trial.
-    for replicate in range(1, 6):
-        for model in alternating_order(replicate):
-            label = MODEL_LABEL[model]
-            trial_dir = out / "cold-trivial" / f"r{replicate:02d}-{label}"
-            workspace = trial_dir / "workspace"
-            workspace.mkdir(parents=True)
-            home = make_codex_home(trial_dir / "codex-home", auth_file, None)
-            app = AppServer(codex, home, trial_dir, model, workspace)
-            try:
-                thread = app.start_thread("read-only")
-                turn = app.turn(
-                    thread["thread_id"],
-                    "Do not use tools. Reply with exactly COLD_OK.",
-                )
-                row = {
-                    "model": model,
-                    "replicate": replicate,
-                    "thread_id": thread["thread_id"],
-                    "turn_id": turn["turn_id"],
-                    "process_bootstrap_ms": (
-                        app.initialize_arrival_ns - app.process_start_ns
+    if not cold_source:
+        for replicate in range(1, 6):
+            for model in alternating_order(replicate):
+                label = MODEL_LABEL[model]
+                trial_dir = out / "cold-trivial" / f"r{replicate:02d}-{label}"
+                workspace = trial_dir / "workspace"
+                workspace.mkdir(parents=True)
+                home = make_codex_home(trial_dir / "codex-home", auth_file, None)
+                app = AppServer(codex, home, trial_dir, model, workspace)
+                try:
+                    thread = app.start_thread("read-only")
+                    turn = app.turn(
+                        thread["thread_id"],
+                        "Do not use tools. Reply with exactly COLD_OK.",
                     )
-                    / 1_000_000,
-                    "thread_setup_ms": thread["thread_setup_ms"],
-                    "request_to_first_token_ms": turn["request_to_first_token_ms"],
-                    "decode_tail_ms": turn["decode_tail_ms"],
-                    "turn_e2e_ms": turn["turn_e2e_ms"],
-                    "total_e2e_ms": (
-                        turn["completed_ns"] - app.process_start_ns
-                    )
-                    / 1_000_000,
-                    "final_text": final_text(turn),
-                    "valid": final_text(turn) == "COLD_OK",
-                    "load_average": load_average(),
-                }
-                write_json(trial_dir / "score.json", row)
-                results["cold_trivial"].append(row)
-                append_jsonl(out / "cold-trivial.jsonl", row)
-            finally:
-                app.stop()
+                    row = {
+                        "model": model,
+                        "replicate": replicate,
+                        "thread_id": thread["thread_id"],
+                        "turn_id": turn["turn_id"],
+                        "process_bootstrap_ms": (
+                            app.initialize_arrival_ns - app.process_start_ns
+                        )
+                        / 1_000_000,
+                        "thread_setup_ms": thread["thread_setup_ms"],
+                        "request_to_first_token_ms": turn["request_to_first_token_ms"],
+                        "decode_tail_ms": turn["decode_tail_ms"],
+                        "turn_e2e_ms": turn["turn_e2e_ms"],
+                        "total_e2e_ms": (
+                            turn["completed_ns"] - app.process_start_ns
+                        )
+                        / 1_000_000,
+                        "final_text": final_text(turn),
+                        "valid": final_text(turn) == "COLD_OK",
+                        "load_average": load_average(),
+                    }
+                    write_json(trial_dir / "score.json", row)
+                    results["cold_trivial"].append(row)
+                    append_jsonl(out / "cold-trivial.jsonl", row)
+                finally:
+                    app.stop()
+                    discard_codex_home(home)
 
     # Matched cold prepared bangs: persistent isolated MCP, fresh Codex process.
     cold_states: dict[str, dict[str, Any]] = {}
@@ -899,6 +948,7 @@ def run(args: argparse.Namespace) -> int:
                     append_jsonl(out / "cold-prepared.jsonl", row)
                 finally:
                     app.stop()
+                    discard_codex_home(home)
     finally:
         for state in cold_states.values():
             state["mcp"].stop()
@@ -971,6 +1021,7 @@ def run(args: argparse.Namespace) -> int:
         for state in warm_states.values():
             state["app"].stop()
             state["mcp"].stop()
+            discard_codex_home(state["root"] / "codex-home")
 
     write_json(out / "results.json", results)
     summary = summarize(results)
@@ -987,6 +1038,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--auth-file")
+    parser.add_argument("--reuse-cold-trivial-from")
     args = parser.parse_args()
     return run(args)
 
