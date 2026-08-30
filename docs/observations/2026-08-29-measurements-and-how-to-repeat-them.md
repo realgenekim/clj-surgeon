@@ -327,3 +327,72 @@ docs/captains-logs-2026-08-29            all four narrative logs (this file incl
 - Load matters: the ratio cohort held **1.00-1.34** throughout. A gate that failed at load 210+
   earlier in the program was re-measured at load 4-9 and failed identically — **check load before
   blaming it.**
+
+---
+
+## 5. APPENDED — the sixth withdrawal, and the close of the last live path
+
+**The native pre-landing parse-gate prize is WITHDRAWN. Verdict: NO-GO / STOP.**
+
+This was the only surviving proposal that could have shipped: a reader-parse and form-diff gate on
+every native Clojure write — zero adoption ask, covering all mutations, no model behavior change.
+Its prize came from one source and was never reproduced. It has now been audited independently.
+
+**Independent population:** 118 session starts, 27 Clojure-writing sessions, **463** successful
+existing-Clojure native writes.
+
+**What reproduced:** the shape — 11 writing sessions carrying reader/compile-bearing outputs.
+
+**What did not:** "131 error events, 42 loops" resolves to **44 distinct error-bearing outputs / 66
+signature occurrences**, and the loop count is entirely an artifact of the window chosen: **8 loops
+at 60 s, 14 at 300 s, 16 at 900 s.**
+
+**The finding that kills it.** Every 300 s candidate was bounded-reviewed and classified: **8 genuine
+causal accidents, 3 intentional red experiments, 3 non-causal or undecidable.** Of the 8 genuine
+accidents, **only one carried a reader signature at all — and it was a malformed REPL expression,
+not post-state source.**
+
+> **Genuine post-state reader-parse-catchable loops: 0 of 8.**
+
+**The gate would have sat in front of all 463 native writes and prevented none of the reviewed
+accidental loops.** Normalized genuine rate **~9.5/week**, below the predeclared **15/week** gate.
+
+**And the cost side could not be cleared either.** Retained false-refusal exposure includes two
+`.cljc` actions and two reader-conditional actions. rewrite-clj accepted representative
+conditional/tag/regex syntax **3/3** — but **complete post-states are absent, so zero false refusals
+cannot honestly be claimed.** The audit said so rather than reporting a clean bill.
+
+**Reopen only on:** a fresh population showing **>= 15 genuine post-write source-reader loops/week**,
+**plus** a shadow parser demonstrating materially more catches than false refusals.
+
+Evidence: branch `experiment/native-prelanding-gate-audit`, head `a02368a2`,
+`docs/observations/2026-08-29-native-prelanding-parse-gate-prize-audit.md`.
+
+### The withdrawal table, updated
+
+| withdrawn | claimed | actual |
+|---|---|---|
+| candidate-list truncation | 33.5 min prize | never existed |
+| "191 derivable corrections" | 191 authoritative | hint-only |
+| ceremony wall | 21.2 h, 812x | 5.68-9.74 h, 218x-373x |
+| catalog tax | +490 ms/turn | ~40.75 ms, no slope |
+| body corruption | ~17% in production | harness never called MCP |
+| **native parse-gate prize** | **42 loops, >=30 catchable** | **0 of 8 catchable** |
+
+**Six withdrawals. Every one single-source. Every one relayed before it was checked.**
+
+### Where this leaves the program, stated plainly
+
+**Every optimization lane is now closed on evidence.** Seven grammar designs, the carriage change,
+the doctrine intervention, the catalog tax, the fidelity fix (no defect exists), and now the
+verifier.
+
+**What the day produced is measurements, not shipped improvements** — the 1,284x ratio, the
+3.5237 ms/byte emission constant, the 0.96x copy/compose null, the 24.277% compression bound, the
+6.0% addressable adoption share, and the constrained-decoding fact. **Those are durable and they
+are what the next design will be priced against.**
+
+**And the method is the other product.** Six wrong numbers were caught before any of them reached a
+build, at a cost of essentially zero quota. The measurements survived because they had sample sizes,
+controls, floor conditions, and predictions registered before the data. **The rule is the artifact:
+a single-source number is a hypothesis wearing a decimal point.**
