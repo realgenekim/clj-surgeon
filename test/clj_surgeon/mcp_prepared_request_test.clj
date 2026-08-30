@@ -207,9 +207,6 @@
                (assoc-in base
                          [:results 0 :forms 0 :source_anchor :selection_range :end]
                          {:line 0 :character 999})
-               (assoc-in base
-                         [:results 0 :forms 0 :source_anchor :range :end :character]
-                         999)
                (assoc-in base [:results 0 :forms 0 :form_type] nil)
                (assoc-in base [:results 0 :forms 0 :form_type] 7)
                (assoc-in base
@@ -219,7 +216,25 @@
                (assoc-in base
                          [:results 0 :forms 0 :source_anchor :selection_range]
                          {:start {:line 0 :character 0}
-                          :end {:line 0 :character 1}})]]
+                          :end {:line 0 :character 1}})
+               (assoc-in
+                 (eligible-result "/canonical/workspace" "src/demo.clj"
+                                  [["alpha" "(def alpha \"alpha\")"]])
+                 [:results 0 :forms 0 :source_anchor :selection_range]
+                 {:start {:line 0 :character 12}
+                  :end {:line 0 :character 17}})
+               (assoc-in
+                 (eligible-result "/canonical/workspace" "src/demo.clj"
+                                  [["alpha" "(def ^alpha alpha 1)"]])
+                 [:results 0 :forms 0 :source_anchor :selection_range]
+                 {:start {:line 0 :character 6}
+                  :end {:line 0 :character 11}})
+               (assoc-in
+                 (eligible-result "/canonical/workspace" "src/demo.clj"
+                                  [["alpha" "(def ^{:tag alpha} alpha 1)"]])
+                 [:results 0 :forms 0 :source_anchor :selection_range]
+                 {:start {:line 0 :character 12}
+                  :end {:line 0 :character 17}})]]
         (is (identical? candidate (project candidate)))))))
 
 ;; @spec MCP-OP-PREP-REQ-002
@@ -464,6 +479,26 @@
                       "expect" {"requests" 1 "files" 1}})]
           (is (false? (:error? crlf)))
           (is (map? (get-in crlf [:structured :prepared_request]))))
+        (doseq [[file source]
+                [["src/trailing-space.clj"
+                  "(ns trailing-space)\n(def alpha :old)   \n"]
+                 ["src/inline-comment.clj"
+                  "(ns inline-comment)\n(def alpha :old) ; keep\n"]
+                 ["src/trailing-space-crlf.clj"
+                  "(ns trailing-space-crlf)\r\n(def alpha :old)   \r\n"]
+                 ["src/inline-comment-crlf.clj"
+                  "(ns inline-comment-crlf)\r\n(def alpha :old) ; keep\r\n"]]]
+          (let [read-result
+                (invoke-inspect
+                  root file source
+                  {"requests" [{"operation" "forms"
+                                "file" file
+                                "forms" ["alpha"]
+                                "expect" {"forms" 1}}]
+                   "expect" {"requests" 1 "files" 1}})]
+            (is (false? (:error? read-result)))
+            (is (map? (get-in read-result
+                              [:structured :prepared_request])))))
         (write-source! root "src/unrelated.clj" "(ns unrelated)\n(def untouched :yes)\n")
         (is (= "edit_clojure" (mcp-tool/request-operation filled)))
         (let [committed (mcp-tool/execute-request! config filled)]

@@ -1,7 +1,7 @@
 ---
 parent: prepared-request-design
 prefix: MCP-OP-PREP-REQ
-status: 'ratified (Gene, 2026-08-30, verbatim: "Wow!!! Love it! Go!")'
+status: 'ratified (Gene, 2026-08-30, PREP-BLOB-2, verbatim: "A!")'
 ---
 
 # Prepared Guarded Edit Request Specifications
@@ -11,9 +11,16 @@ deleted. Gene ratified the Option A HLD, authorized the recovery-oriented LLD
 phase, and ratified this design and registry on 2026-08-30. Tests and code may
 now claim these requirements through exact `@spec` annotations.
 
+Gene ratified the exact post-LLD clarifications with PREP-BLOB-1 `"A. Go"` and
+PREP-BLOB-2 `"A!"`. PREP-BLOB-2 trusts the server-owned source-anchor producer
+for the outer form range. The projector independently reparses returned source
+to prove exactly one top-level form whose structural owner-token range equals
+`selection_range`. It shall not infer exact outer-end geometry from normalized
+returned source or accept a numeric line-ending tolerance.
+
 ## Eligibility and projection
 
-- [x] **MCP-OP-PREP-REQ-001**: When one terminal `inspect_clojure` batch is eligible, clj-surgeon shall publish one complete ordered `prepared_request`. The batch shall have `ok=true`, `read_complete=true`, `next_action=none`, and exactly one request, result, and project-relative file. The result shall be `forms` and contain one through six complete returned forms. The suffix shall be `.clj`, `.cljs`, or `.cljc`. For `.cljc`, every returned form shall have exactly platforms `["clj", "cljs"]`. Every form shall have source, form hash, the same file hash, a valid source anchor, exact cardinality, and one unique named top-level owner addressable through public `within.form`; namespace forms shall be ineligible because their public address is `within.namespace`. The result and batch source-character counts shall each equal their returned-source totals. The ordinary result shall contain a canonical workspace root and exactly one matching file-hash map. Snapshot guards, when present, shall equal that map. The result shall contain no basis, prepared basis, continuation, or retry template. The descriptor shall be at most 4,096 canonical bytes. After pure projection, the inspect integration shall measure the normalized pre-finalization candidate with `elapsed_ms=0.0`; if `mcp-result-byte-count` exceeds 32,768 bytes, it shall emit the unchanged ordinary result without the descriptor. This is a deterministic emission gate, not a final-wire byte cap. If one condition fails, clj-surgeon shall publish no descriptor or partial template.
+- [x] **MCP-OP-PREP-REQ-001**: When one terminal `inspect_clojure` batch is eligible, clj-surgeon shall publish one complete ordered `prepared_request`. The batch shall have `ok=true`, `read_complete=true`, `next_action=none`, and exactly one request, result, and project-relative file. The result shall be `forms` and contain one through six complete returned forms. The suffix shall be `.clj`, `.cljs`, or `.cljc`. For `.cljc`, every returned form shall have exactly platforms `["clj", "cljs"]`. Every form shall have source, form hash, the same file hash, a valid source anchor, exact cardinality, and one unique named top-level owner addressable through public `within.form`; namespace forms shall be ineligible because their public address is `within.namespace`. The server-owned source-anchor producer shall remain authoritative for the outer form range. The projector shall independently parse the returned source and require exactly one top-level form whose structural owner-token range equals `selection_range`; matching text in a string, comment, or metadata annotation shall not prove owner identity. The projector shall not infer exact outer-end geometry from normalized returned source or use a numeric line-ending tolerance. The result and batch source-character counts shall each equal their returned-source totals. The ordinary result shall contain a canonical workspace root and exactly one matching file-hash map. Snapshot guards, when present, shall equal that map. The result shall contain no basis, prepared basis, continuation, or retry template. The descriptor shall be at most 4,096 canonical bytes. After pure projection, the inspect integration shall measure the normalized pre-finalization candidate with `elapsed_ms=0.0`; if `mcp-result-byte-count` exceeds 32,768 bytes, it shall emit the unchanged ordinary result without the descriptor. This is a deterministic emission gate, not a final-wire byte cap. If one condition fails, clj-surgeon shall publish no descriptor or partial template.
 
 - [x] **MCP-OP-PREP-REQ-002**: When clj-surgeon publishes a prepared request, its arguments shall repeat the ordinary result's canonical workspace root. Each edit shall contain the project-relative file, named-owner scope, exact selected old source as `from`, `matches=1`, and one caller-owned null `to`. `caller_holes` shall list every and only those null `to` paths once in edit order. The descriptor shall contain no other null or non-public `edit_clojure` argument field. Canonical descriptor bytes shall be UTF-8 JSON from recursively lexicographically sorted public string-keyed maps, unchanged vector order, and `json/generate-string`. The descriptor SHA-256 shall cover those exact bytes.
 

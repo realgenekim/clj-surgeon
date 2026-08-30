@@ -1,7 +1,7 @@
 ---
 parent: high-level-design
 prefix: MCP-OP-PREP-REQ
-status: 'ratified (Gene, 2026-08-30, verbatim: "Wow!!! Love it! Go!")'
+status: 'ratified (Gene, 2026-08-30, PREP-BLOB-2, verbatim: "A!")'
 ---
 
 # Prepared Guarded Edit Request
@@ -11,6 +11,14 @@ This is the ratified success-only leaf LLD. Gene ratified the Option A HLD on
 `"Recovery go -- go"`, and ratified this LLD and its EARS registry with
 `"Wow!!! Love it! Go!"`. Red-first implementation is active. Installation and
 MCP reload remain separately gated.
+
+Gene later ratified the exact post-LLD clarifications with PREP-BLOB-1
+`"A. Go"` and PREP-BLOB-2 `"A!"`. PREP-BLOB-2 makes the server-owned
+`mcp_source_anchor` producer authoritative for the outer form range. The
+projector independently reparses returned form source and proves that it
+contains exactly one top-level form whose structural owner-token range equals
+`selection_range`. It does not infer exact outer-end geometry from normalized
+returned source or accept a numeric line-ending tolerance.
 
 ## Context and causal evidence
 
@@ -70,6 +78,10 @@ The projection emits a descriptor only when all of these conditions hold:
   public `within.form`, exact hashes, and a valid source anchor inside the
   returned file; namespace forms are ineligible because their public address
   is `within.namespace`;
+- the existing server-owned source-anchor producer remains the sole authority
+  for the outer form range; the projector reparses the returned source and
+  requires exactly one top-level form whose structural owner-token range is
+  exactly `selection_range`;
 - the result and batch character counts equal the returned form sources;
 - the result file is project-relative and has a supported suffix;
 - for `.cljc`, every returned form has exactly the shared platform set

@@ -3,7 +3,9 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.structural-lens :as structural-lens]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.zip :as z])
   (:import
    (java.nio.charset StandardCharsets)
    (java.nio.file Paths)
@@ -172,42 +174,56 @@
   (and (position<=? (:start outer) (:start inner))
        (position<=? (:end inner) (:end outer))))
 
-(defn- range-fits-source?
-  [value source]
-  (let [start (:start value)
-        end (:end value)
-        lines (str/split source #"\n" -1)
-        line-span (dec (count lines))
-        expected-end-character
-        (if (zero? line-span)
-          (+ (:character start) (count (first lines)))
-          (count (last lines)))]
-    (and (= (- (:line end) (:line start)) line-span)
-         (contains? #{expected-end-character (inc expected-end-character)}
-                    (:character end)))))
+(defn- unwrap-metadata-target
+  [value]
+  (loop [current value]
+    (if (= :meta (node/tag current))
+      (recur (->> (node/children current)
+                  (remove node/whitespace-or-comment?)
+                  last))
+      current)))
+
+(defn- owner-name-node
+  [form-node owner]
+  (when-let [header-node (->> (node/children form-node)
+                              (remove node/whitespace-or-comment?)
+                              second)]
+    (let [candidate (unwrap-metadata-target header-node)]
+      (when (and (node/symbol-node? candidate)
+                 (= owner (node/string candidate)))
+        candidate))))
+
+(defn- returned-source-owner-range
+  [source owner]
+  (try
+    (let [root-node (z/node (z/of-string* source {:track-position? true}))
+          forms (->> (node/children root-node)
+                     (remove node/whitespace-or-comment?)
+                     vec)
+          owner-node (when (= 1 (count forms))
+                       (owner-name-node (first forms) owner))
+          {:keys [row col end-row end-col]} (some-> owner-node meta)]
+      (when (every? some? [row col end-row end-col])
+        {:start {:line (dec row) :character (dec col)}
+         :end {:line (dec end-row) :character (dec end-col)}}))
+    (catch Exception _ nil)))
+
+(defn- local-position
+  [form-start position]
+  (let [line (- (:line position) (:line form-start))]
+    {:line line
+     :character (if (zero? line)
+                  (- (:character position) (:character form-start))
+                  (:character position))}))
 
 (defn- selection-names-owner?
   [form-range selection-range source owner]
   (let [form-start (:start form-range)
-        selection-start (:start selection-range)
-        selection-end (:end selection-range)
-        line-index (- (:line selection-start) (:line form-start))
-        lines (str/split source #"\n" -1)
-        line (get lines line-index)
-        start-character (if (zero? line-index)
-                          (- (:character selection-start)
-                             (:character form-start))
-                          (:character selection-start))
-        end-character (if (zero? line-index)
-                        (- (:character selection-end)
-                           (:character form-start))
-                        (:character selection-end))]
-    (and (= (:line selection-start) (:line selection-end))
-         (string? line)
-         (<= 0 start-character)
-         (< start-character end-character)
-         (<= end-character (count line))
-         (= owner (subs line start-character end-character)))))
+        local-selection {:start (local-position form-start
+                                                (:start selection-range))
+                         :end (local-position form-start
+                                              (:end selection-range))}]
+    (= (returned-source-owner-range source owner) local-selection)))
 
 (defn- form-evidence?
   [file file-hash expected-platforms form]
@@ -236,7 +252,6 @@
          (range? form-range)
          (range? selection-range)
          (range-contained? form-range selection-range)
-         (range-fits-source? form-range source)
          (selection-names-owner? form-range selection-range source owner)
          (= (dec (:line form)) (get-in form-range [:start :line]))
          (= (dec (:end_line form)) (get-in form-range [:end :line])))))
