@@ -953,8 +953,10 @@
         summary))))
 
 ;; @spec MCP-OP-READ-CONT-002
+;; @spec MCP-OP-PREP-REQ-001
+;; @spec MCP-OP-PREP-REQ-006
 (defn- enforce-result-budget
-  [raw-result]
+  [ordinary-result raw-result]
   (cond
     (:prepared_request raw-result)
     (let [normalized (assoc raw-result :elapsed_ms 0.0)
@@ -962,7 +964,7 @@
           (mcp-result-byte-count (inspect-summary normalized) normalized)]
       (if (<= required-bytes max-public-result-bytes)
         raw-result
-        (dissoc raw-result :prepared_request)))
+        ordinary-result))
 
     (and (:ok raw-result)
          (#{"prepare-change" "basis-view" "plan-extraction"} (:mode raw-result)))
@@ -1001,17 +1003,19 @@
   [_exchange params callback]
   (mcp-operation/invoke!
     {:execute
-     #(enforce-result-budget
-        (prepared-request/project-result
-          (if-let [config @runtime-config]
-            (execute-inspect! config params)
-            {:ok false
-             :operation "inspect_clojure"
-             :error_type "server-not-initialized"
-             :error "inspect_clojure server is not initialized"
-             :read_complete false
-             :source_unchanged true
-             :next_action "restart_server"})))
+     #(let [ordinary-result
+            (if-let [config @runtime-config]
+              (execute-inspect! config params)
+              {:ok false
+               :operation "inspect_clojure"
+               :error_type "server-not-initialized"
+               :error "inspect_clojure server is not initialized"
+               :read_complete false
+               :source_unchanged true
+               :next_action "restart_server"})]
+        (enforce-result-budget
+          ordinary-result
+          (prepared-request/project-result ordinary-result)))
      :summarize inspect-summary
      :callback callback}))
 

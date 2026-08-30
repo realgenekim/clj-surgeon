@@ -944,6 +944,7 @@
   [_exchange params callback]
   (handle-operation (request-operation params) params callback))
 
+;; @spec MCP-OP-PREP-REQ-007
 (defn handle-edit-clojure
   "Stable callback that preserves edit_clojure entrance authority and identity."
   [_exchange params callback]

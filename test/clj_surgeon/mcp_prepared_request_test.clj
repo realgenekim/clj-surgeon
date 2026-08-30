@@ -1,8 +1,11 @@
 (ns clj-surgeon.mcp-prepared-request-test
   (:require
+   [cheshire.core :as json]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
+   [clj-surgeon.mcp-prepared-request :as prepared-request]
    [clj-surgeon.mcp-schema :as schema]
+   [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -111,6 +114,31 @@
                            :structured structured})))
     (first @calls)))
 
+(defn- private-var
+  [namespace name]
+  (some-> (ns-resolve namespace name) deref))
+
+(defn- source-at-descriptor-bytes
+  [project bytes-var target]
+  (let [template (:prepared_request (project (eligible-result)))
+        empty-source "(def alpha \"\")"
+        empty-descriptor (assoc-in template [:arguments :edits 0 :from]
+                                   empty-source)
+        padding-size (- target (count (bytes-var empty-descriptor)))]
+    (when-not (neg? padding-size)
+      (str "(def alpha \"" (apply str (repeat padding-size "x")) "\")"))))
+
+(defn- result-at-prefinalized-bytes
+  [result target]
+  (let [summary (private-var 'clj-surgeon.mcp-inspect-tool 'inspect-summary)
+        empty-candidate (assoc result :padding "")
+        empty-normalized (assoc empty-candidate :elapsed_ms 0.0)
+        empty-size (inspect-tool/mcp-result-byte-count
+                     (summary empty-normalized) empty-normalized)
+        padding-size (- target empty-size)]
+    (when-not (neg? padding-size)
+      (assoc result :padding (apply str (repeat padding-size "x"))))))
+
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-002
 (deftest eligible-results-project-complete-ordered-descriptors
@@ -165,7 +193,24 @@
                [[:results 0 :forms 0 :form_type] "ns"]
                [[:file_hashes] {}]]]
         (let [candidate (assoc-in base path value)]
-          (is (identical? candidate (project candidate))))))))
+          (is (identical? candidate (project candidate)))))
+      (doseq [candidate
+              [(assoc base :results 1)
+               (assoc-in base [:results 0 :forms 0 :source] 1)
+               (-> base
+                   (assoc-in [:results 0 :file] "src/\u0000demo.clj")
+                   (assoc-in [:results 0 :forms 0 :file] "src/\u0000demo.clj"))
+               (assoc-in base
+                         [:results 0 :forms 0 :source_anchor :selection_range]
+                         {:start {:line 0 :character 10}
+                          :end {:line 0 :character 5}})
+               (assoc-in base
+                         [:results 0 :forms 0 :source_anchor :selection_range :end]
+                         {:line 0 :character 999})
+               (assoc-in base
+                         [:results 0 :forms 0 :source_anchor :range :end :character]
+                         999)]]
+        (is (identical? candidate (project candidate)))))))
 
 ;; @spec MCP-OP-PREP-REQ-002
 (deftest canonical-descriptor-bytes-hash-and-budgets-are-exact
@@ -180,12 +225,32 @@
         (is (= (seq left-bytes) (seq right-bytes)))
         (is (= (hash-var left) (hash-var right)))
         (is (= 34 (count left-bytes)))
+        (is (= "62f1bef61696036b34a61e76fe8881113e5a680cd58f53e9caa136c957b6a146"
+               (hash-var left)))
         (is (re-matches #"[0-9a-f]{64}" (hash-var left)))
         (is (= (seq (bytes-var {:v [1 2]}))
                (seq (bytes-var {:v [1 2]}))))
         (is (not= (seq (bytes-var {:v [1 2]}))
                   (seq (bytes-var {:v [2 1]}))))
-        (is (= false (:a left)))))))
+        (is (= false (:a left)))
+        (let [descriptor (:prepared_request
+                           ((public-var 'project-result) (eligible-result)))]
+          (is (= 269 (count (bytes-var descriptor))))
+          (is (= "326d1a28d2b349be2ccd77da65a346625df7537c023b9ebdfa5090cc8949ac8a"
+                 (hash-var descriptor))))
+        (let [project (public-var 'project-result)
+              source-4096 (source-at-descriptor-bytes project bytes-var 4096)
+              source-4097 (source-at-descriptor-bytes project bytes-var 4097)
+              result-4096 (project (eligible-result
+                                     "/canonical/workspace" "src/demo.clj"
+                                     [["alpha" source-4096]]))
+              result-4097 (project (eligible-result
+                                     "/canonical/workspace" "src/demo.clj"
+                                     [["alpha" source-4097]]))]
+          (is (string? source-4096))
+          (is (string? source-4097))
+          (is (= 4096 (count (bytes-var (:prepared_request result-4096)))))
+          (is (not (contains? result-4097 :prepared_request))))))))
 
 ;; @spec MCP-OP-PREP-REQ-003
 (deftest prepared-descriptors-repeat-identity-and-carry-no-opaque-ids
@@ -237,13 +302,20 @@
 (deftest ineligible-handler-output-is-byte-identical-with-fixed-clock
   (let [root (temp-dir)]
     (try
-      (let [{:keys [content error? structured]}
-            (invoke-inspect
-              root "src/demo.clj" "(ns demo)\n(def alpha :old)\n"
-              {"requests" [{"operation" "forms" "file" "src/demo.clj"
-                            "forms" ["alpha"] "include_source" false
-                            "expect" {"forms" 1}}]
-               "expect" {"requests" 1 "files" 1}})]
+      (let [request {"requests" [{"operation" "forms" "file" "src/demo.clj"
+                                  "forms" ["alpha"] "include_source" false
+                                  "expect" {"forms" 1}}]
+                     "expect" {"requests" 1 "files" 1}}
+            baseline (with-redefs [prepared-request/project-result identity]
+                       (invoke-inspect root "src/demo.clj"
+                                       "(ns demo)\n(def alpha :old)\n" request))
+            {:keys [content error? structured] :as projected}
+            (invoke-inspect root "src/demo.clj"
+                            "(ns demo)\n(def alpha :old)\n" request)
+            fix-clock #(assoc % :elapsed_ms 0.0 :inspection_elapsed_ms 0.0)
+            baseline-fixed (fix-clock (:structured baseline))
+            projected-fixed (fix-clock structured)
+            summary (private-var 'clj-surgeon.mcp-inspect-tool 'inspect-summary)]
         (is (false? error?))
         (is (:ok structured))
         (is (:read_complete structured))
@@ -251,7 +323,11 @@
         (is (not (contains? structured :prepared_request)))
         (is (not (str/includes? (first content) coaching)))
         (is (= 1 (:request_count structured)))
-        (is (= 1 (:file_count structured))))
+        (is (= 1 (:file_count structured)))
+        (is (= (:error? baseline) (:error? projected)))
+        (is (= (seq (prepared-request/canonical-json-bytes baseline-fixed))
+               (seq (prepared-request/canonical-json-bytes projected-fixed))))
+        (is (= (summary baseline-fixed) (summary projected-fixed))))
       (finally
         (inspect-tool/init! nil)
         (delete-tree! root)))))
@@ -328,20 +404,36 @@
 ;; @spec MCP-OP-PREP-REQ-007
 ;; @spec MCP-OP-PREP-REQ-009
 (deftest real-shared-cljc-result-round-trips-through-one-edit
-  (let [root (temp-dir)]
+  (let [root (temp-dir)
+        receipt-dir (io/file root "receipts")
+        before (str "(ns demo)\n"
+                    "(def connection-options\n"
+                    "  {:pool-size 8\n"
+                    "   :timeout-ms 5000})\n")
+        replacement (str "(def connection-options\n"
+                         "  {:pool-size 16\n"
+                         "   :timeout-ms 5000})")
+        after (str "(ns demo)\n" replacement "\n")]
     (try
       (let [{:keys [content error? structured]}
             (invoke-inspect
               root "src/demo.cljc"
-              (str "(ns demo)\n"
-                   "(def connection-options\n"
-                   "  {:pool-size 8\n"
-                   "   :timeout-ms 5000})\n")
+              before
               {"requests" [{"operation" "forms" "file" "src/demo.cljc"
                             "forms" ["connection-options"]
                             "expect" {"forms" 1}}]
                "expect" {"requests" 1 "files" 1}})
-            prepared (:prepared_request structured)]
+            prepared (:prepared_request structured)
+            filled (-> prepared
+                       :arguments
+                       (assoc-in [:edits 0 :to] replacement)
+                       json/generate-string
+                       (json/parse-string false))
+            config {:project-root (.getPath root)
+                    :receipt-dir (.getPath receipt-dir)
+                    :verification-profiles {"fast" {:commands []}}
+                    :verify! (fn [_root profile _profiles _files]
+                               {:ok true :profile profile :checks []})}]
         (is (false? error?))
         (is (:ok structured))
         (is (:read_complete structured))
@@ -351,7 +443,22 @@
                (get-in structured [:results 0 :forms 0 :name])))
         (is (= "none" (:next_action structured)))
         (is (and (map? prepared)
-                 (str/ends-with? (first content) coaching))))
+                 (str/ends-with? (first content) coaching)))
+        (write-source! root "src/unrelated.clj" "(ns unrelated)\n(def untouched :yes)\n")
+        (is (= "edit_clojure" (mcp-tool/request-operation filled)))
+        (let [committed (mcp-tool/execute-request! config filled)]
+          (is (true? (:ok committed)) (pr-str committed))
+          (is (true? (:committed committed)))
+          (is (true? (:verification_complete committed)))
+          (is (= after (slurp (io/file root "src/demo.cljc"))))
+          (is (= "(ns unrelated)\n(def untouched :yes)\n"
+                 (slurp (io/file root "src/unrelated.clj")))))
+        (let [stale (mcp-tool/execute-request! config filled)]
+          (is (false? (:ok stale)))
+          (is (true? (:source_unchanged stale)))
+          (is (= after (slurp (io/file root "src/demo.cljc"))))
+          (is (= "(ns unrelated)\n(def untouched :yes)\n"
+                 (slurp (io/file root "src/unrelated.clj"))))))
       (finally
         (inspect-tool/init! nil)
         (delete-tree! root)))))
@@ -368,4 +475,26 @@
                  (project (assoc result :elapsed_ms 999999.999)))))
         (is (<= (inspect-tool/mcp-result-byte-count
                   "normalized" (assoc result :elapsed_ms 0.0))
-                32768))))))
+                32768))
+        (let [enforce (private-var 'clj-surgeon.mcp-inspect-tool
+                                   'enforce-result-budget)
+              summary (private-var 'clj-surgeon.mcp-inspect-tool
+                                   'inspect-summary)
+              edge (result-at-prefinalized-bytes result 32768)
+              overflow (result-at-prefinalized-bytes result 32769)
+              edge-ordinary (dissoc edge :prepared_request)
+              overflow-ordinary (dissoc overflow :prepared_request)]
+          (is (map? edge))
+          (is (map? overflow))
+          (is (contains? (enforce edge-ordinary edge) :prepared_request))
+          (is (str/includes?
+                (summary (assoc (enforce edge-ordinary edge) :elapsed_ms 0.0))
+                coaching))
+          (is (identical? overflow-ordinary
+                          (enforce overflow-ordinary overflow)))
+          (is (not (contains? (enforce overflow-ordinary overflow)
+                              :prepared_request)))
+          (is (not (str/includes?
+                     (summary (assoc (enforce overflow-ordinary overflow)
+                                     :elapsed_ms 0.0))
+                     coaching))))))))

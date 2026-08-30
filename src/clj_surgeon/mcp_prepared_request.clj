@@ -119,11 +119,13 @@
        (not (str/includes? file "\\"))
        (not (str/starts-with? file "/"))
        (not (re-find #"(?i)^[a-z]:" file))
-       (let [path (Paths/get file (make-array String 0))]
-         (let [normalized (.normalize path)]
+       (try
+         (let [path (Paths/get file (make-array String 0))
+               normalized (.normalize path)]
            (and (not (.isAbsolute path))
                 (= file (.toString normalized))
-                (not= ".." (some-> normalized (.getName 0) str)))))))
+                (not= ".." (some-> normalized (.getName 0) str))))
+         (catch Exception _ false))))
 
 (defn- canonical-root?
   [root]
@@ -153,11 +155,35 @@
        (non-negative-integer? (:line value))
        (non-negative-integer? (:character value))))
 
+(defn- position<=?
+  [left right]
+  (not (pos? (compare [(:line left) (:character left)]
+                      [(:line right) (:character right)]))))
+
 (defn- range?
   [value]
   (and (map? value)
        (position? (:start value))
-       (position? (:end value))))
+       (position? (:end value))
+       (position<=? (:start value) (:end value))))
+
+(defn- range-contained?
+  [outer inner]
+  (and (position<=? (:start outer) (:start inner))
+       (position<=? (:end inner) (:end outer))))
+
+(defn- range-fits-source?
+  [value source]
+  (let [start (:start value)
+        end (:end value)
+        lines (str/split source #"\n" -1)
+        line-span (dec (count lines))
+        expected-end-character
+        (if (zero? line-span)
+          (+ (:character start) (count (first lines)))
+          (count (last lines)))]
+    (and (= (- (:line end) (:line start)) line-span)
+         (= (:character end) expected-end-character))))
 
 (defn- form-evidence?
   [file file-hash expected-platforms form]
@@ -183,6 +209,8 @@
          (<= (:line form) (:end_line form))
          (range? form-range)
          (range? selection-range)
+         (range-contained? form-range selection-range)
+         (range-fits-source? form-range source)
          (= (dec (:line form)) (get-in form-range [:start :line]))
          (= (dec (:end_line form)) (get-in form-range [:end :line])))))
 
@@ -250,11 +278,12 @@
 ;; @spec MCP-OP-PREP-REQ-003
 ;; @spec MCP-OP-PREP-REQ-004
 ;; @spec MCP-OP-PREP-REQ-006
-;; @spec MCP-OP-PREP-REQ-007
 ;; @spec MCP-OP-PREP-REQ-008
 (defn project-result
   "Attach one inert prepared request to an intrinsically eligible read result."
   [result]
-  (if-let [prepared (eligible-descriptor result)]
-    (assoc result :prepared_request prepared)
-    result))
+  (try
+    (if-let [prepared (eligible-descriptor result)]
+      (assoc result :prepared_request prepared)
+      result)
+    (catch Exception _ result)))
