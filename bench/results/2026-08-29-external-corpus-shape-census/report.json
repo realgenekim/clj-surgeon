@@ -1,0 +1,196 @@
+{
+  "privacy": {
+    "commands_emitted": false,
+    "patches_emitted": false,
+    "paths_emitted": false,
+    "session_identifiers_emitted": false,
+    "source_emitted": false,
+    "tool_arguments_emitted": false
+  },
+  "providers": {
+    "claude": {
+      "reason": "the bounded collector exposes no privacy-safe repository cwd projection for Claude sessions; no Codex/Claude denominator was combined",
+      "status": "unmeasured"
+    },
+    "codex": {
+      "repositories": {
+        "external-a": {
+          "active_evidence_files": 17,
+          "addressable_ladder": {
+            "all_successful_native_writes": 63,
+            "comment_only": 0,
+            "established_all_targets_in_src_or_test": 0,
+            "established_files_all_target_rule": 0,
+            "same_mission_created_all_targets": 0,
+            "small_single_hunk_up_to_4_changed_lines": 0,
+            "substantive_existing_clojure": 0,
+            "trivial_union": 0,
+            "updates_existing_clojure": 0
+          },
+          "edit_shapes": {
+            "changed_bytes": {},
+            "changed_bytes_total": 0,
+            "empty_navigation_anchors_excluded": 0,
+            "hunk_count_total": 0,
+            "hunk_counts": {},
+            "insertion_changed_byte_percent": null,
+            "insertion_hunk_percent": null
+          },
+          "evidence_manifest_sha256": "b401b57a2fe3e6409750cc264d0f5ae80450127c26885aa2c98bdee0b2803c61",
+          "matched_evidence_files": 17,
+          "mission_count": 17,
+          "native": {
+            "failed_repo_writes": 3,
+            "out_of_root_file_references": 3,
+            "session_attempted_writes": 67,
+            "successful_out_of_repo_writes": 1,
+            "successful_repo_writes": 63,
+            "unparsed_writes": 0
+          },
+          "owner_repetition": {
+            "distinct_subjects": 0,
+            "eligible_changed_hunks": 0,
+            "extra_occurrences_after_first": 0,
+            "identity": "repository-relative file plus named top-level owner visible in hunk context",
+            "owner_visible_hunk_percent": null,
+            "owner_visible_hunks": 0,
+            "repeated_subject_percent": null,
+            "repeated_subjects": 0,
+            "subject_occurrences": 0
+          },
+          "reach": {
+            "denominator_successful_native_plus_structural": 63,
+            "final_src_test_ladder_share_of_native_percent": 0.0,
+            "successful_structural_share_percent": 0.0
+          },
+          "repository_root_sha256": "11c8bfbec76cd2a8757a1799f1d85ec034b2aa60b4140e9001019e55803f38cf",
+          "structural_mutations": {
+            "attempted_calls": 0,
+            "by_operation_and_status": {
+              "apply_clojure_changes": {},
+              "edit_clojure": {}
+            },
+            "successful_repo_calls": 0,
+            "target_statuses": {}
+          },
+          "subject_repetition": {
+            "distinct_subjects": 0,
+            "extra_occurrences_after_first": 0,
+            "identity": "canonical repository-relative file within one task turn",
+            "repeated_subject_percent": null,
+            "repeated_subjects": 0,
+            "subject_occurrences": 0,
+            "unassigned_successful_existing_clojure_actions": 0
+          },
+          "thresholds": {
+            "file_repetition_upper_bound_crosses": false,
+            "insertion_bytes_reprices": false,
+            "reach_prediction_under_5_percent": true,
+            "subject_repetition_reprices": false
+          }
+        },
+        "external-b": {
+          "active_evidence_files": 12,
+          "addressable_ladder": {
+            "all_successful_native_writes": 266,
+            "comment_only": 4,
+            "established_all_targets_in_src_or_test": 119,
+            "established_files_all_target_rule": 119,
+            "same_mission_created_all_targets": 8,
+            "small_single_hunk_up_to_4_changed_lines": 27,
+            "substantive_existing_clojure": 127,
+            "trivial_union": 29,
+            "updates_existing_clojure": 156
+          },
+          "edit_shapes": {
+            "changed_bytes": {
+              "deletion": 1031,
+              "insertion": 91495,
+              "replacement": 133100
+            },
+            "changed_bytes_total": 225626,
+            "empty_navigation_anchors_excluded": 44,
+            "hunk_count_total": 351,
+            "hunk_counts": {
+              "deletion": 6,
+              "insertion": 113,
+              "replacement": 232
+            },
+            "insertion_changed_byte_percent": 40.551620823841226,
+            "insertion_hunk_percent": 32.193732193732195
+          },
+          "evidence_manifest_sha256": "72af782956b01afd2699c78edede4733ff147c9f50509ce18cda52899da9701d",
+          "matched_evidence_files": 111,
+          "mission_count": 53,
+          "native": {
+            "failed_repo_writes": 14,
+            "out_of_root_file_references": 356,
+            "session_attempted_writes": 568,
+            "successful_out_of_repo_writes": 229,
+            "successful_repo_writes": 266,
+            "unparsed_writes": 40
+          },
+          "owner_repetition": {
+            "distinct_subjects": 60,
+            "eligible_changed_hunks": 351,
+            "extra_occurrences_after_first": 8,
+            "identity": "repository-relative file plus named top-level owner visible in hunk context",
+            "owner_visible_hunk_percent": 19.373219373219374,
+            "owner_visible_hunks": 68,
+            "repeated_subject_percent": 13.333333333333334,
+            "repeated_subjects": 8,
+            "subject_occurrences": 68
+          },
+          "reach": {
+            "denominator_successful_native_plus_structural": 270,
+            "final_src_test_ladder_share_of_native_percent": 44.73684210526316,
+            "successful_structural_share_percent": 1.4814814814814814
+          },
+          "repository_root_sha256": "8577c2c0088a5424feb4c00d812b0de677dc09c8de12ff4419b41f96be474006",
+          "structural_mutations": {
+            "attempted_calls": 22,
+            "by_operation_and_status": {
+              "apply_clojure_changes": {
+                "completed-unknown": 7,
+                "execution-error": 1,
+                "refused": 7,
+                "success": 3,
+                "unknown": 3
+              },
+              "edit_clojure": {
+                "success": 1
+              }
+            },
+            "successful_repo_calls": 4,
+            "target_statuses": {
+              "match": 17,
+              "mismatch": 5
+            }
+          },
+          "subject_repetition": {
+            "distinct_subjects": 50,
+            "extra_occurrences_after_first": 138,
+            "identity": "canonical repository-relative file within one task turn",
+            "repeated_subject_percent": 52.0,
+            "repeated_subjects": 26,
+            "subject_occurrences": 188,
+            "unassigned_successful_existing_clojure_actions": 0
+          },
+          "thresholds": {
+            "file_repetition_upper_bound_crosses": true,
+            "insertion_bytes_reprices": false,
+            "reach_prediction_under_5_percent": true,
+            "subject_repetition_reprices": false
+          }
+        }
+      },
+      "status": "measured"
+    }
+  },
+  "schema": "clj-surgeon.external-corpus-shape-census.v1",
+  "source_collector_receipt_sha256": "3ca4599657a666c37276e85d941a61750abe0904cb0ef647034cc05a3ad30600",
+  "window": {
+    "since": "2026-08-22T00:00:00Z",
+    "until": "2026-08-30T02:09:33.141926Z"
+  }
+}

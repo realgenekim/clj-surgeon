@@ -1,0 +1,30 @@
+{
+  "schema": "clj-surgeon.external-corpus-shape-census-reconciliation.v1",
+  "external_b": {
+    "corrected_fold": {
+      "existing_clojure_actions": 156,
+      "final_src_test_actions": 119,
+      "successful_in_repo_native_actions": 266
+    },
+    "independent_lineage_fold": {
+      "existing_clojure_actions": 156,
+      "final_src_test_actions": 119,
+      "successful_in_repo_native_actions": 263
+    },
+    "reconciliation": {
+      "existing_clojure_exact": true,
+      "final_src_test_exact": true,
+      "native_denominator_absolute_difference": 3,
+      "native_denominator_relative_difference_percent": 1.1278195488721805,
+      "native_denominator_difference_explanation": "The lineage parser binds one first string literal to every apply_patch invocation in a multi-call cell. The corrected parser resolves each inline or latest assigned patch independently."
+    }
+  },
+  "lineage_fold_sha256": "a99a9ed0c1dd45e216b65e5400b181aabb572013ade704a51f41886c6eb71b90",
+  "privacy": {
+    "paths_emitted": false,
+    "session_identifiers_emitted": false,
+    "commands_emitted": false,
+    "source_emitted": false,
+    "patches_emitted": false
+  }
+}
