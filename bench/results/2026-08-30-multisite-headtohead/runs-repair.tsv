@@ -1,0 +1,13 @@
+episode	arm	environment_valid	semantic_correct	route_adherent	payload_bytes	payload_tokens	wall_seconds	turns_to_success	retries	provider_output_tokens
+1	N	False	False	False	0	0	0.090543	None	None	None
+2	S	False	False	False	0	0	0.085242	None	None	None
+3	S	False	False	False	0	0	0.085948	None	None	None
+4	N	False	False	False	0	0	0.086122	None	None	None
+5	S	False	False	False	0	0	0.074935	None	None	None
+6	N	False	False	False	0	0	0.049037	None	None	None
+7	N	False	False	False	0	0	0.091957	None	None	None
+8	S	False	False	False	0	0	0.078453	None	None	None
+9	N	False	False	False	0	0	0.086676	None	None	None
+10	S	False	False	False	0	0	0.086174	None	None	None
+11	S	False	False	False	0	0	0.102061	None	None	None
+12	N	False	False	False	0	0	0.047334	None	None	None

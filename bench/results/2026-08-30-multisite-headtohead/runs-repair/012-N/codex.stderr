@@ -1,0 +1,5 @@
+Error loading config.toml:
+/private/tmp/multisite-codex-home-choro6f3/config.toml:13:1: unknown configuration field `tools.view_image`
+   |
+13 | view_image = false
+   | ^^^^^^^^^^

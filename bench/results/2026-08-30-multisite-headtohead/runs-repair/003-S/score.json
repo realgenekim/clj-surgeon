@@ -1,0 +1,33 @@
+{
+  "arm": "S",
+  "catalog_valid": true,
+  "changed_paths": [],
+  "environment_valid": false,
+  "episode": 3,
+  "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+  "final_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+  "hook_models": [],
+  "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+  "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+  "mutation_calls": 0,
+  "mutation_tools": [],
+  "payload_bytes": 0,
+  "payload_calls": [],
+  "payload_tokens": 0,
+  "process_exit_code": 1,
+  "process_timed_out": false,
+  "provider_usage": {
+    "cached_input_tokens": null,
+    "input_tokens": null,
+    "output_tokens": null
+  },
+  "reasoning_effort": "high",
+  "requested_model": "gpt-5.6-sol",
+  "retries": null,
+  "route_adherent": false,
+  "schema": "multisite-headtohead-episode.v1",
+  "semantic_correct": false,
+  "server_source_unchanged_from_base": true,
+  "turns_to_success": null,
+  "wall_seconds": 0.08594787516631186
+}

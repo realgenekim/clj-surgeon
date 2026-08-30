@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/runs-repair/011-S/workspace", :server :clj-surgeon, :port 56287, :host "127.0.0.1", :pid 24931, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:56287/mcp"}
