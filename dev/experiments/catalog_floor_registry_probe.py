@@ -116,7 +116,9 @@ def main():
             "attempts": attempts,
             "tool_count": len(visible),
             "client_bytes": len(visible_json.encode()),
-            "client_sha256": hashlib.sha256(visible_json.encode()).hexdigest(),
+            # The retained Codex registry observer hashes jq -cS output, which
+            # includes one trailing newline. Preserve that exact authority.
+            "client_sha256": hashlib.sha256((visible_json + "\n").encode()).hexdigest(),
             "client_projection": visible,
             "process_to_initialize_ms": (initialized_ns - started_ns) / 1_000_000,
             "initialize_to_registry_ms": (ready_ns - initialized_ns) / 1_000_000,
