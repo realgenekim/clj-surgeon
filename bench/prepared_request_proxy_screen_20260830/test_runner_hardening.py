@@ -87,13 +87,63 @@ class SuccessfulPrimaryGateTest(unittest.TestCase):
 
 
 class SafetyContractTest(unittest.TestCase):
+    def test_real_proxy_rows_join_success_to_prior_call_arguments(self):
+        workspace = Path("/tmp/frozen-safety-workspace")
+        exact = runner.inspect_arguments(workspace, "safety")
+        attempts = [
+            {"requests": []},
+            {"intent": "wrong"},
+            {},
+            exact,
+        ]
+        server = []
+        for request_id, arguments in enumerate(attempts, start=2):
+            digest = runner.sha_bytes(runner.canonical_bytes(arguments))
+            server.extend(
+                [
+                    {
+                        "event": "client_tool_call",
+                        "request_id": request_id,
+                        "name": "inspect_clojure",
+                        "arguments": arguments,
+                        "arguments_sha256": digest,
+                    },
+                    {
+                        "event": "client_tool_result",
+                        "request_id": request_id,
+                        "name": "inspect_clojure",
+                        "arguments_sha256": digest,
+                        "eligible": request_id == 5,
+                        "prepared_emitted": request_id == 5,
+                        "is_error": request_id != 5,
+                        "emitted_result": {
+                            "structuredContent": {"ok": request_id == 5}
+                        },
+                    },
+                ]
+            )
+        trace = runner.analyze_trace([], server)
+        self.assertEqual(4, trace["inspect_calls"])
+        self.assertEqual(1, trace["successful_inspects"])
+        self.assertEqual([exact], trace["successful_inspect_call_arguments"])
+        contract = runner.safety_read_contract(trace, "T", workspace)
+        self.assertTrue(contract["complete"])
+        self.assertFalse(contract["one_call_adherent"])
+
+        malformed = copy.deepcopy(server)
+        malformed[-1]["request_id"] = {"bad": "id"}
+        malformed_trace = runner.analyze_trace([], malformed)
+        self.assertEqual([None], malformed_trace["successful_inspect_call_arguments"])
+
     def test_exact_frozen_read_and_arm_exposure_are_required(self):
         workspace = Path("/tmp/frozen-safety-workspace")
         exact = runner.inspect_arguments(workspace, "safety")
         control = {
             "inspect_calls": 1,
+            "inspect_attempts": 1,
             "successful_inspects": 1,
             "inspect_call_arguments": [exact],
+            "successful_inspect_call_arguments": [exact],
             "eligible_results": 0,
             "prepared_exposures": 0,
         }
@@ -175,8 +225,73 @@ class SafetyContractTest(unittest.TestCase):
         self.assertFalse(
             runner.safety_read_contract(wrong_args, "T", workspace)["exact_read_once"]
         )
-        duplicate = dict(treatment, inspect_calls=2, inspect_call_arguments=[exact, exact])
-        self.assertFalse(runner.safety_read_contract(duplicate, "T", workspace)["complete"])
+        duplicate = dict(
+            treatment,
+            inspect_calls=2,
+            inspect_attempts=2,
+            inspect_call_arguments=[exact, exact],
+        )
+        duplicate_result = runner.safety_read_contract(duplicate, "T", workspace)
+        self.assertTrue(duplicate_result["complete"])
+        self.assertFalse(duplicate_result["one_call_adherent"])
+        self.assertFalse(duplicate_result["exact_read_once"])
+
+        refused_then_exact = dict(
+            treatment,
+            inspect_calls=4,
+            inspect_attempts=4,
+            successful_inspects=1,
+            inspect_call_arguments=[{"requests": []}, {"intent": "wrong"}, {}, exact],
+            successful_inspect_call_arguments=[exact],
+        )
+        refused_result = runner.safety_read_contract(
+            refused_then_exact, "T", workspace
+        )
+        self.assertTrue(refused_result["complete"])
+        self.assertFalse(refused_result["one_call_adherent"])
+        self.assertFalse(refused_result["exact_read_once"])
+
+        only_refusals = dict(
+            treatment,
+            inspect_calls=2,
+            inspect_attempts=2,
+            successful_inspects=0,
+            successful_inspect_call_arguments=[],
+        )
+        self.assertFalse(
+            runner.safety_read_contract(only_refusals, "T", workspace)["complete"]
+        )
+
+        wrong_success = copy.deepcopy(refused_then_exact)
+        wrong_success["successful_inspect_call_arguments"][0]["requests"][0][
+            "forms"
+        ] = ["archive-root"]
+        self.assertFalse(
+            runner.safety_read_contract(wrong_success, "T", workspace)["complete"]
+        )
+
+        two_successes = dict(
+            treatment,
+            inspect_calls=2,
+            inspect_attempts=2,
+            successful_inspects=2,
+            inspect_call_arguments=[exact, exact],
+            successful_inspect_call_arguments=[exact, exact],
+        )
+        self.assertFalse(
+            runner.safety_read_contract(two_successes, "T", workspace)["complete"]
+        )
+
+        client_side_refusal_then_success = dict(
+            treatment,
+            inspect_attempts=2,
+        )
+        client_result = runner.safety_read_contract(
+            client_side_refusal_then_success, "T", workspace
+        )
+        self.assertTrue(client_result["complete"])
+        self.assertFalse(client_result["one_call_adherent"])
+        self.assertFalse(client_result["exact_read_once"])
         self.assertFalse(
             runner.safety_read_contract(dict(treatment, prepared_exposures=0), "T", workspace)[
                 "exposure_exact"
@@ -444,12 +559,37 @@ class ReapingAndEvidenceTest(unittest.TestCase):
                 "C",
                 run_dir,
                 workspace,
-                {"started": True, "started_ns": 1, "ended_ns": 2},
+                {
+                    "started": True,
+                    "started_ns": 1,
+                    "ended_ns": 2,
+                    "exit_code": 0,
+                    "timed_out": False,
+                },
                 preflight,
             )
             self.assertTrue(score["independent_evidence_oracle_valid"])
             self.assertIsNone(score["independent_evidence_oracle_error"])
             self.assertNotIn("independent-route-disagreement", score["integrity_errors"])
+
+            timed_score = runner.score_run(
+                "safety",
+                1,
+                "C",
+                run_dir,
+                workspace,
+                {
+                    "started": True,
+                    "started_ns": 1,
+                    "ended_ns": 2,
+                    "exit_code": -15,
+                    "timed_out": True,
+                },
+                preflight,
+            )
+            self.assertFalse(timed_score["environment_valid"])
+            self.assertFalse(timed_score["semantic_correct"])
+            self.assertFalse(timed_score["safety_read_complete"])
 
 
 class VerificationIsolationTest(unittest.TestCase):

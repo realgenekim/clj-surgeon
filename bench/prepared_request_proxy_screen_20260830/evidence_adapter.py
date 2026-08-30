@@ -550,18 +550,19 @@ def _codex_proxy_bijection(
     for key in sorted(codex_groups):
         codex_group = codex_groups[key]
         proxy_group = proxy_groups.get(key, [])
-        client_refusals = [
-            _client_refusal_reason(item["completion_item"])
-            for item in codex_group
-        ]
-        if not proxy_group and all(reason is not None for reason in client_refusals):
-            continue
-        if any(reason is not None for reason in client_refusals):
-            _refuse(
-                "ambiguous-client-refusal-proxy-match",
-                name=key[0],
-                argument_sha256=key[1],
-            )
+        if not proxy_group:
+            client_refusals = [
+                _client_refusal_reason(item["completion_item"])
+                for item in codex_group
+            ]
+            if all(reason is not None for reason in client_refusals):
+                continue
+            if any(reason is not None for reason in client_refusals):
+                _refuse(
+                    "ambiguous-client-refusal-proxy-match",
+                    name=key[0],
+                    argument_sha256=key[1],
+                )
         if len(codex_group) != len(proxy_group):
             _refuse(
                 "non-bijective-proxy-match",

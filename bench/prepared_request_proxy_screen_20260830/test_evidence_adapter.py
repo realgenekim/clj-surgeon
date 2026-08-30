@@ -464,6 +464,27 @@ class EvidenceAdapterTest(unittest.TestCase):
         raw["proxy_rows"][1:3] = []
         assert_adapter_refusal(self, "non-bijective-proxy-match", raw)
 
+    def test_matched_proxy_refusal_may_carry_real_client_result(self):
+        raw = valid_raw_attempt()
+        completion = raw["codex_events"][1]["item"]
+        completion["status"] = "failed"
+        completion["error"] = None
+        completion["result"] = {
+            "structured_content": {
+                "ok": False,
+                "reason": "missing-fields",
+            }
+        }
+        raw["proxy_rows"][2] = proxy_result(
+            10,
+            "inspect_clojure",
+            raw["proxy_rows"][1]["arguments"],
+            emitted=False,
+            ok=False,
+        )
+        report = adapter.adapt_and_compile(raw, IDENTITIES)
+        self.assertEqual(1, report["semantic_facts"]["refusal_count"])
+
     def test_overlapping_identical_calls_are_ambiguous(self):
         raw = valid_raw_attempt()
         inspect_start = copy.deepcopy(raw["codex_events"][0])
