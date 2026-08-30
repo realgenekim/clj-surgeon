@@ -1,8 +1,11 @@
 # Prepared-request Option A proxy — frozen safety stop
 
-Date: 2026-08-30  
-Experiment candidate: `709f5ef6e943d2837f86e91254325296b13e0133`  
-Candidate tree: `9dbe6947fa42d89be46d0b414ef586550094bd66`  
+Date: 2026-08-30
+
+Experiment candidate: `709f5ef6e943d2837f86e91254325296b13e0133`
+
+Candidate tree: `9dbe6947fa42d89be46d0b414ef586550094bd66`
+
 Host: Anvil `dev-b`
 
 ## Verdict
