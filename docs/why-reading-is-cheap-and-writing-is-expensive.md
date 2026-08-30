@@ -501,3 +501,212 @@ bb bench/score_prefill_decode_ratio.clj OUT_DIR --markdown
 bb bench/measure_transcription_fidelity.clj OUT_DIR 9
 bb bench/score_transcription_fidelity.clj OUT_DIR --markdown
 ```
+
+---
+
+# Appendix C — X5: JSON versus EDN as the request carriage
+
+Date: 2026-08-29. Added by `opus-bench`. **Append-only: the body, Appendix A and Appendix B are unchanged.**
+
+Gene, on seeing the byte case: *"From JSON to EDN. Wow. Seems like total no brainer!! (Might be
+less training data, but I can't imagine LLMs screwing up EDN. I've never seen that in the wild!)"*
+And on what would decide it: *"Writes are expensive for now. I just don't see a good objection for
+not doing this, unless writing EDN is unacceptably error prone."*
+
+So the malformed-request rate is the decision. Four things were measured. **One of them changes the
+question, and it is not the rate.**
+
+## C.0 — The confound, measured first, because it governs how every rate must be read
+
+MCP tool arguments are JSON, and providers commonly enforce the tool's JSON schema with
+**constrained decoding** — the model is not merely unlikely to emit malformed arguments, it is
+**prevented** at the sampler. Put EDN inside a single JSON string and the payload leaves that
+guarantee: the schema can then only assert that a string is a string.
+
+If that is live on this route, a JSON arm scoring zero would measure **the decoder, not the model**.
+So it was established empirically rather than from documentation. Three probes, n = 5 each,
+**unanimous 5/5 on all three**:
+
+| Probe | What was asked | Result |
+|---|---|---|
+| **P1** | With `--output-schema` requiring `{"value": <integer>}`, emit `"value": "not-a-number"` **plus** an extra key | **Schema enforced, 5/5** |
+| **P2** | With no schema, emit deliberately invalid JSON | **Permitted, 5/5** |
+| **P3** | With no schema, emit deliberately invalid EDN | **Permitted, 5/5** |
+
+P1 is unambiguous. Instructed explicitly to emit a string and an extra key, the platform returned
+`{"value":0}` — an integer, no extra key, every time. Without a schema it emitted the invalid JSON
+*and* the invalid EDN verbatim, exactly as asked.
+
+**Verdict: PROTECTED-WHEN-SCHEMA-SUPPLIED.** This route does apply structural enforcement to
+schema-bearing output and does not otherwise.
+
+**What follows is decisive and no rate can overturn it.** Production tool-call JSON is
+**structurally incapable** of being malformed — its rate is not low, it is *enforced to zero*. EDN
+inside a string cannot inherit that. So the honest comparison is not "JSON's error rate versus
+EDN's"; it is **"an enforced-zero guarantee versus a rate we would have to police ourselves."**
+
+All three carriage arms below are **free text and therefore equally unguarded**. That is the right
+control — it isolates format from protection by removing protection from both — but it means
+**none of them is production JSON**, and no arm here should be read as such.
+
+## C.1 — Malformed-request rate: no difference detectable, and n is the limit
+
+10 adversarial fixtures × 3 replicates × 3 arms, counterbalanced, dev-a, strict parsers.
+
+**A measurement bug worth recording:** Cheshire's default factory *accepts* a literal newline inside
+a JSON string, which strict JSON forbids. Left on, it would have handed the JSON arm a free pass on
+precisely the hazard where EDN is structurally better — EDN strings may contain literal newlines,
+JSON strings may not — and biased the study toward "no difference." Every JSON parse here runs with
+that leniency disabled.
+
+| Arm | trials | route-adherent | malformed | rate | median out bytes | median out tokens |
+|---|---|---|---|---|---|---|
+| J (JSON args) | 30 | 1.00 | **0** | 0.0% | 168 | 64 |
+| E-wrapped (EDN in a JSON string) | 30 | 1.00 | **0** | 0.0% | 197 | 84 |
+| E-raw (bare EDN) | 30 | 1.00 | **0** | 0.0% | 164 | 66 |
+
+**Zero malformed requests anywhere.** Not one fixture — not backslash-heavy regexes, not literal
+newlines, not reader conditionals, not a JSON blob embedded in the payload — produced unparseable
+output in any carriage. **Gene's field intuition is not contradicted.**
+
+**But this run cannot decide the question, and the reason is n.** By the rule of three, 0 in 30
+bounds each true rate only **below 10%**. The decision threshold is around **2 percentage points**.
+**A run that can only see 10% cannot resolve 2%.** Resolving that needs roughly 150 trials per arm.
+Predeclared prediction (EDN ≤ JSON) held trivially; the kill criterion did not fire; neither fact
+carries information at this n. **Reported as "no difference detectable at this n," not as parity.**
+
+## C.2 — Well-formed but wrong: the failure that actually happened
+
+Malformed output is refused loudly and costs a retry turn. **Output that parses cleanly and means
+something else is accepted and executes.** These were scored separately, and only the second class
+occurred.
+
+**C.2a — E-wrapped has a corruption channel the pure arms do not.** One fixture, one arm:
+
+```
+expected:  {:ok "✓ done" :warn "café — retry" :tab "a\tb"}
+got:       {:ok "✓ done"      :warn "café — retry"           :tab "a<TAB>b"}
+```
+
+The Clojure source legitimately *contains the six characters* `✓`. Passing through **two**
+decoders — JSON string, then EDN string — the outer layer consumed the escape and produced the
+glyph. It parsed perfectly. **Double encoding is a silent corruption channel, and it belongs
+specifically to the deployable shape that was proposed.** E-raw, with one decode, did not have it;
+neither did J.
+
+**C.2b — the larger finding: the dangerous failure is carriage-independent.** On a realistic
+48-line, 1,546-byte Clojure payload (C.3 below), **3 of 18 write requests silently corrupted the
+payload — 2 in JSON, 1 in EDN — and all three corrupted the *same line*:**
+
+```
+want:  (str/replace "\\" "\\\\")
+got:   (str/replace "\""  "\\\\")
+```
+
+The model substituted a quote for a backslash. Well-formed in both carriages. **~17% of realistic
+writes silently wrong, and switching carriage does not fix it** — it is an escaping-fidelity
+failure, not a format failure. Note the contrast with Appendix B, where 324/324 identifier
+transcriptions were byte-exact: **short identifiers transcribe perfectly; long backslash-heavy
+bodies do not.**
+
+**This outranks the whole EDN question.** A malformed rate of 0% sat beside a silent-wrong rate near
+17%, and only the first one was being argued about.
+
+## C.3 — Generation time versus token count: does the kill stand?
+
+A zero-model screen killed EDN on token **count** (writes +1.389% tokens despite −4.931% bytes;
+reads +12.253% tokens). Gene's objection: *"I wonder if EDN/CLJ are activated at the same time, so
+maybe it washes out?"* — i.e. a static tokenizer measures count, not **generation time**, and the
+payload is Clojure.
+
+Three conditions on the Appendix A protocol, n = 9, both arms carrying **byte-identical real
+Clojure**, only the carriage differing:
+
+| Arm | n | median wall | MAD | decoded tok | out bytes |
+|---|---|---|---|---|---|
+| C floor | 9 | 3,996 ms | 431 | 5 | 2 |
+| J | 9 | 14,226 ms | 419 | 590 | 1,755 |
+| E | 9 | 15,144 ms | 642 | 650 | 1,751 |
+
+```
+J:  585 marginal tokens in 10,230 ms  ->  17.49 ms/token  (57.2 tok/s)
+E:  645 marginal tokens in 11,148 ms  ->  17.28 ms/token  (57.9 tok/s)
+```
+
+**The two ratios, EDN over JSON, never collapsed:**
+
+| | ratio |
+|---|---|
+| token count | **1.103** |
+| generation time | **1.090** |
+| **ms per token** | **0.988** |
+| output bytes | 0.998 |
+
+**Time tracks count.** Per-token generation speed is at parity (0.988, a 1.2% difference well inside
+the spread), and both arms land on Appendix A's decode rate — 57.2 and 57.9 tok/s against 56.5. EDN
+costs ~10% more tokens and therefore ~9% more time. **There is no domain-coherence discount. The
+token-count kill stands on generation time as well, and token count was a sound proxy for cost here.**
+
+The stronger finding the coordinator hoped for — that emission has been priced by a proxy twice
+over — **did not materialise**. Reported explicitly, as asked, rather than folded into a verdict.
+
+**Honesty on n:** the 918 ms J/E total-time gap does **not** clear the combined spread (2,122 ms), so
+the ~9% total-time difference is **not resolved** at n = 9. The robust part is the per-token rate
+parity, which is what answers the mechanism question.
+
+**Relation to Appendix B:** B found copy/compose at 0.96× with predictability making no difference,
+but measured it on integer sequences. C.3 **extends that null to real Clojure content in both arms**
+— no coherence discount there either. The two results agree; C.3 closes the domain gap B left open.
+
+## What X5 concludes
+
+1. **The byte and token case is dead.** EDN costs ~10% more tokens on this payload, ~9% more time,
+   and the per-token rate is identical. Nothing here rescues it.
+2. **The robustness case is unproven, not disproven.** Zero malformed in 30 per arm; the true rates
+   are bounded only below 10% and the decision needs 2%. **~150 trials per arm would settle it.**
+3. **The guarantee is the real cost, and it is not a rate.** Production tool-call JSON is
+   schema-enforced at the sampler. Moving the payload into a string trades a **provider-enforced
+   structural guarantee** for one we implement — and the two are not equivalent: constrained decoding
+   **prevents** the error at zero cost, while a server-side validator **detects** it afterward and
+   charges a full retry turn. At Appendix A prices a retry turn is ~3.9 s and ~222 output tokens,
+   so a self-policed carriage must be *better* than enforced-zero to break even, and it cannot be.
+4. **The failure worth fixing is not the carriage.** ~17% of realistic writes were silently wrong in
+   **both** formats, always on backslash escaping. That is where the next experiment should go.
+
+**Recommendation: do not migrate the carriage.** Not because EDN is error-prone — it never once
+broke — but because the measured gains are negative, the robustness gain is unproven at this n, and
+the migration would forfeit an enforced guarantee for a policed one. **Spend the effort on escaping
+fidelity for long payloads instead**, where a 17% silent-wrong rate is sitting in production traffic
+today regardless of which carriage carries it.
+
+## What C cannot separate
+
+1. **All three carriage arms are free text.** None is a real tool call, so absolute rates are not
+   production rates. The comparison between carriages transfers; the levels do not.
+2. **n = 30 per arm bounds rates only below 10%.** Everything in C.1 is limited by this.
+3. **C.3 measures one payload**, not a corpus. It tests whether time tracks count on a representative
+   write; it does not re-price the corpus screen.
+4. **Ten fixtures chosen to be adversarial** over-represent hazards relative to real write traffic,
+   which inflates absolute rates in every arm — deliberately.
+5. **One model, one reasoning effort, one hour.** A weaker model is exactly where a carriage
+   difference would appear, and this run does not test one.
+6. **The constrained-decoding finding is about this route.** It was established empirically here and
+   should be re-established anywhere it is relied upon.
+
+## Confidence
+
+**MEASURED, ours, 2026-08-29.** Constrained decoding **active** when a schema is supplied (5/5),
+**absent** otherwise (5/5 both formats). Malformed rate **0/30 in all three carriages**, true rates
+bounded below 10% at 95%. Well-formed-but-wrong **3/18 on a realistic payload, in both carriages,
+always on backslash escaping**. Generation time ratio **1.090** against token count ratio **1.103**,
+per-token rate ratio **0.988**.
+
+Re-run with:
+
+```bash
+bb bench/probe_constrained_decoding.clj OUT_DIR 5
+bb bench/measure_carriage_errors.clj OUT_DIR 3
+bb bench/score_carriage_errors.clj OUT_DIR --markdown
+bb bench/measure_carriage_generation_time.clj OUT_DIR 9
+bb bench/score_carriage_generation_time.clj OUT_DIR --markdown
+```

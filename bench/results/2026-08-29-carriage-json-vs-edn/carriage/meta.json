@@ -1,0 +1,64 @@
+{
+  "started" : "2026-08-30T03:02:01.088138923Z",
+  "replicates" : 3,
+  "schema" : "clj-surgeon.carriage-error-probe/v1",
+  "prediction" : "EDN malformed rate <= JSON malformed rate",
+  "reasoning" : "low",
+  "hostname" : "anvil-server",
+  "tasks" : [ {
+    "name" : "embedded-double-quotes",
+    "hazard" : "string containing escaped double quotes — both carriages must escape",
+    "file" : "src/app/msg.clj",
+    "owner" : "render-warning"
+  }, {
+    "name" : "backslashes-and-regex",
+    "hazard" : "backslashes in a regex and a Windows path — double-escaping trap",
+    "file" : "src/app/parse.clj",
+    "owner" : "token-re"
+  }, {
+    "name" : "literal-newlines-multiline",
+    "hazard" : "multi-line code — EDN strings may contain literal newlines, JSON strings may not",
+    "file" : "src/app/core.clj",
+    "owner" : "start"
+  }, {
+    "name" : "reader-conditional-cljc",
+    "hazard" : "reader conditional inside the payload",
+    "file" : "src/app/plat.cljc",
+    "owner" : "now-ms"
+  }, {
+    "name" : "namespaced-keywords",
+    "hazard" : "namespaced and auto-resolved keywords",
+    "file" : "src/app/spec.clj",
+    "owner" : "review-spec"
+  }, {
+    "name" : "deep-nesting",
+    "hazard" : "deeply nested collections — delimiter balancing under depth",
+    "file" : "src/app/cfg.clj",
+    "owner" : "defaults"
+  }, {
+    "name" : "json-ism-inside-payload",
+    "hazard" : "THE MECHANISM TEST: a JSON blob inside the code, commas and colons everywhere",
+    "file" : "src/app/fixture.clj",
+    "owner" : "sample-body"
+  }, {
+    "name" : "char-literals-and-metadata",
+    "hazard" : "character literals and metadata — EDN reader edge cases",
+    "file" : "src/app/text.clj",
+    "owner" : "split-lines*"
+  }, {
+    "name" : "unicode-and-escapes",
+    "hazard" : "unicode and escape sequences",
+    "file" : "src/app/i18n.clj",
+    "owner" : "labels"
+  }, {
+    "name" : "quotes-newlines-backslash-combined",
+    "hazard" : "every hazard at once — the worst realistic case",
+    "file" : "src/app/report.clj",
+    "owner" : "render-row"
+  } ],
+  "n-tasks" : 10,
+  "loadavg-start" : "1.24 1.28 1.21",
+  "kill-criterion" : "EDN malformed > 2x JSON kills the idea",
+  "arms" : [ "J", "E-wrapped", "E-raw" ],
+  "model" : "gpt-5.6-sol"
+}

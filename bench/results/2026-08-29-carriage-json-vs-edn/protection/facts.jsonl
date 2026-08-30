@@ -1,0 +1,15 @@
+{"tag":"r01-P1-schema-violation","replicate":1,"probe":"P1-schema-violation","exit":0,"wall-ms":5697,"verdict":"schema-enforced","message":"{\"value\":0}","stderr-tail":""}
+{"tag":"r01-P2-invalid-json-freetext","replicate":1,"probe":"P2-invalid-json-freetext","exit":0,"wall-ms":4304,"verdict":"invalid-json-permitted","message":"{\"a\": \"unterminated, \"b\": [1,2,}","stderr-tail":""}
+{"tag":"r01-P3-invalid-edn-freetext","replicate":1,"probe":"P3-invalid-edn-freetext","exit":0,"wall-ms":3439,"verdict":"invalid-edn-permitted","message":"{:a \"unterminated :b [1 2}","stderr-tail":""}
+{"tag":"r02-P1-schema-violation","replicate":2,"probe":"P1-schema-violation","exit":0,"wall-ms":4092,"verdict":"schema-enforced","message":"{\"value\":0}","stderr-tail":""}
+{"tag":"r02-P2-invalid-json-freetext","replicate":2,"probe":"P2-invalid-json-freetext","exit":0,"wall-ms":4436,"verdict":"invalid-json-permitted","message":"{\"a\": \"unterminated, \"b\": [1,2,}","stderr-tail":""}
+{"tag":"r02-P3-invalid-edn-freetext","replicate":2,"probe":"P3-invalid-edn-freetext","exit":0,"wall-ms":4359,"verdict":"invalid-edn-permitted","message":"{:a \"unterminated :b [1 2}","stderr-tail":""}
+{"tag":"r03-P1-schema-violation","replicate":3,"probe":"P1-schema-violation","exit":0,"wall-ms":4054,"verdict":"schema-enforced","message":"{\"value\":0}","stderr-tail":""}
+{"tag":"r03-P2-invalid-json-freetext","replicate":3,"probe":"P2-invalid-json-freetext","exit":0,"wall-ms":4725,"verdict":"invalid-json-permitted","message":"{\"a\": \"unterminated, \"b\": [1,2,}","stderr-tail":""}
+{"tag":"r03-P3-invalid-edn-freetext","replicate":3,"probe":"P3-invalid-edn-freetext","exit":0,"wall-ms":5744,"verdict":"invalid-edn-permitted","message":"{:a \"unterminated :b [1 2}","stderr-tail":""}
+{"tag":"r04-P1-schema-violation","replicate":4,"probe":"P1-schema-violation","exit":0,"wall-ms":6264,"verdict":"schema-enforced","message":"{\"value\":0}","stderr-tail":""}
+{"tag":"r04-P2-invalid-json-freetext","replicate":4,"probe":"P2-invalid-json-freetext","exit":0,"wall-ms":4938,"verdict":"invalid-json-permitted","message":"{\"a\": \"unterminated, \"b\": [1,2,}","stderr-tail":""}
+{"tag":"r04-P3-invalid-edn-freetext","replicate":4,"probe":"P3-invalid-edn-freetext","exit":0,"wall-ms":4829,"verdict":"invalid-edn-permitted","message":"{:a \"unterminated :b [1 2}","stderr-tail":""}
+{"tag":"r05-P1-schema-violation","replicate":5,"probe":"P1-schema-violation","exit":0,"wall-ms":5406,"verdict":"schema-enforced","message":"{\"value\":0}","stderr-tail":""}
+{"tag":"r05-P2-invalid-json-freetext","replicate":5,"probe":"P2-invalid-json-freetext","exit":0,"wall-ms":4057,"verdict":"invalid-json-permitted","message":"{\"a\": \"unterminated, \"b\": [1,2,}","stderr-tail":""}
+{"tag":"r05-P3-invalid-edn-freetext","replicate":5,"probe":"P3-invalid-edn-freetext","exit":0,"wall-ms":4820,"verdict":"invalid-edn-permitted","message":"{:a \"unterminated :b [1 2}","stderr-tail":""}

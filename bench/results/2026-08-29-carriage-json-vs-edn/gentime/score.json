@@ -1,0 +1,93 @@
+{
+  "schema" : "clj-surgeon.carriage-generation-time-score/v1",
+  "meta" : {
+    "started" : "2026-08-30T03:14:33.727910175Z",
+    "replicates" : 9,
+    "schema" : "clj-surgeon.carriage-generation-time-probe/v1",
+    "reasoning" : "low",
+    "hostname" : "anvil-server",
+    "payload-lines" : 48,
+    "loadavg-start" : "0.99 1.32 1.31",
+    "payload-bytes" : 1546,
+    "arms" : [ "C", "J", "E" ],
+    "model" : "gpt-5.6-sol"
+  },
+  "arms" : {
+    "C" : {
+      "payload-exact" : 0,
+      "arm" : "C",
+      "reasoning-tokens-median" : 0.0,
+      "wall-median" : 3996.0,
+      "n" : 9,
+      "wall-mad" : 431.0,
+      "output-tokens-median" : 5.0,
+      "wall-min" : 3546.0,
+      "n-attempted" : 9,
+      "output-bytes-median" : 2.0,
+      "parse-failures" : 0,
+      "decoded-tokens-median" : 5.0,
+      "wall-max" : 5447.0
+    },
+    "J" : {
+      "payload-exact" : 7,
+      "arm" : "J",
+      "reasoning-tokens-median" : 12.0,
+      "wall-median" : 14226.0,
+      "n" : 9,
+      "wall-mad" : 419.0,
+      "output-tokens-median" : 578.0,
+      "wall-min" : 13303.0,
+      "n-attempted" : 9,
+      "output-bytes-median" : 1755.0,
+      "parse-failures" : 0,
+      "decoded-tokens-median" : 590.0,
+      "wall-max" : 16362.0
+    },
+    "E" : {
+      "payload-exact" : 8,
+      "arm" : "E",
+      "reasoning-tokens-median" : 41.0,
+      "wall-median" : 15144.0,
+      "n" : 9,
+      "wall-mad" : 642.0,
+      "output-tokens-median" : 609.0,
+      "wall-min" : 13399.0,
+      "n-attempted" : 9,
+      "output-bytes-median" : 1751.0,
+      "parse-failures" : 0,
+      "decoded-tokens-median" : 650.0,
+      "wall-max" : 18716.0
+    }
+  },
+  "floor" : {
+    "ms" : 3996.0,
+    "mad" : 431.0,
+    "n" : 9
+  },
+  "per-arm" : {
+    "J" : {
+      "marginal-decoded-tokens" : 585.0,
+      "decode-ms" : 10230.0,
+      "ms-per-token" : 17.4872,
+      "tokens-per-second" : 57.2,
+      "output-bytes-median" : 1755.0
+    },
+    "E" : {
+      "marginal-decoded-tokens" : 645.0,
+      "decode-ms" : 11148.0,
+      "ms-per-token" : 17.2837,
+      "tokens-per-second" : 57.9,
+      "output-bytes-median" : 1751.0
+    }
+  },
+  "ratios" : {
+    "token-count-edn-over-json" : 1.1026,
+    "generation-time-edn-over-json" : 1.0897,
+    "ms-per-token-edn-over-json" : 0.9884,
+    "byte-edn-over-json" : 0.9977,
+    "difference-resolved" : false,
+    "note" : "If generation-time ratio tracks token-count ratio, counting tokens was a sound proxy for cost. If they diverge, it was not."
+  },
+  "verdict" : "NOT RESOLVED AT THIS n. The J/E decode-time difference (918.0 ms) does not exceed the combined spread (2122.0 ms). Report as parity NOT ESTABLISHED rather than as parity, and note that token count ratio is 1.1026 while time ratio is 1.0897.",
+  "confounds" : [ "Both arms carry byte-identical Clojure; only the carriage differs. That is the intended isolation, but it also means this measures ONE payload, not a corpus. Content-dependent effects are not sampled.", "Time is wall clock from process launch, so it includes network and the fixed per-turn floor. The floor is subtracted using a contemporaneous C arm, but server-side queueing is invisible and lands in every arm.", "Token counts come from the provider usage report, which is the same source the decision uses for billing.", "Reasoning tokens are included in decoded tokens because they are produced serially and cost time, but they are not part of the carriage and add variance unrelated to format.", "One model, one reasoning effort, one hour. A different model could tokenize EDN quite differently.", "This does not reproduce the corpus-wide token screen; it tests whether TIME tracks COUNT on a representative write. A divergence here invalidates the proxy, it does not by itself re-price the corpus." ]
+}

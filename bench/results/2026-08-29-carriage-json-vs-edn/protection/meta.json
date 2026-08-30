@@ -1,0 +1,9 @@
+{
+  "schema" : "clj-surgeon.constrained-decoding-probe/v1",
+  "replicates" : 5,
+  "model" : "gpt-5.6-sol",
+  "reasoning" : "low",
+  "question" : "Does this route apply constrained/structured decoding to model output?",
+  "hostname" : "anvil-server",
+  "started" : "2026-08-30T03:00:22.424508745Z"
+}

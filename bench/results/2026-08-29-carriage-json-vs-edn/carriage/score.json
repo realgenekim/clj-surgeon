@@ -1,0 +1,133 @@
+{
+  "turns-per-100-requests" : {
+    "J" : 0.0,
+    "E-wrapped" : 0.0,
+    "E-raw" : 0.0
+  },
+  "schema" : "clj-surgeon.carriage-error-score/v1",
+  "comparison" : {
+    "E-wrapped" : {
+      "malformed-rate" : 0.0,
+      "json-malformed-rate" : 0.0,
+      "ratio-to-json" : null,
+      "prediction-held" : true,
+      "kill-criterion-triggered" : false,
+      "extra-retry-turns-per-100-requests" : 0.0,
+      "median-output-bytes-delta-vs-json" : 29.0,
+      "median-output-tokens-delta-vs-json" : 20.0
+    },
+    "E-raw" : {
+      "malformed-rate" : 0.0,
+      "json-malformed-rate" : 0.0,
+      "ratio-to-json" : null,
+      "prediction-held" : true,
+      "kill-criterion-triggered" : false,
+      "extra-retry-turns-per-100-requests" : 0.0,
+      "median-output-bytes-delta-vs-json" : -4.0,
+      "median-output-tokens-delta-vs-json" : 2.0
+    }
+  },
+  "meta" : {
+    "started" : "2026-08-30T03:02:01.088138923Z",
+    "replicates" : 3,
+    "schema" : "clj-surgeon.carriage-error-probe/v1",
+    "prediction" : "EDN malformed rate <= JSON malformed rate",
+    "reasoning" : "low",
+    "hostname" : "anvil-server",
+    "n-tasks" : 10,
+    "loadavg-start" : "1.24 1.28 1.21",
+    "kill-criterion" : "EDN malformed > 2x JSON kills the idea",
+    "arms" : [ "J", "E-wrapped", "E-raw" ],
+    "model" : "gpt-5.6-sol"
+  },
+  "prediction" : "EDN malformed rate <= JSON malformed rate",
+  "retry-turn-cost" : {
+    "median-wall-ms" : null,
+    "note" : "Cost of ONE recovery turn. Multiply by the malformed rate to get the real price of a carriage."
+  },
+  "verdict" : "NO DIFFERENCE DETECTABLE AT THIS n. Every arm produced zero malformed requests (J n=30, E-wrapped n=30, E-raw n=30). The true rates are bounded only below the rule-of-three values in each arm; this run cannot distinguish them and does not justify a migration on robustness grounds.",
+  "confounds" : [ "The model was asked to EMIT a request as text, not to call a tool. A real tool call is constrained by a schema the harness cannot reproduce here, so absolute rates are not the production rates; the COMPARISON between carriages is what transfers.", "E-wrapped still pays JSON escaping for the one string it occupies, so it is not a clean EDN arm. That is why E-raw exists: E-wrapped minus E-raw is how much the JSON envelope gives back.", "Ten fixtures chosen to be adversarial. They over-represent hazards relative to real write traffic, which inflates absolute malformed rates in every arm and is intended to.", "One model at one reasoning effort. A weaker model is exactly where a carriage difference would appear, and this run does not test one.", "A code fence is counted as malformed because a parser rejects it, but it is reported separately since it is arguably a prompt-format failure rather than a carriage failure.", "Rates near zero cannot be separated at this n. Rule-of-three bounds are given so the reader can see what the run can and cannot support." ],
+  "kill-criterion" : "EDN malformed > 2x JSON kills the idea",
+  "arms" : {
+    "J" : {
+      "retry" : {
+        "n" : 0,
+        "median-wall-ms" : null,
+        "median-output-tokens" : null,
+        "recovered" : 0
+      },
+      "median-wall-ms" : 5431.0,
+      "malformed-excluding-fence-only" : 0,
+      "payload-corruptions" : [ ],
+      "malformed-rate-excluding-fence-only" : 0.0,
+      "median-output-tokens" : 64.0,
+      "arm" : "J",
+      "route-adherent" : 1.0,
+      "malformed-rate" : 0.0,
+      "median-output-bytes" : 168.0,
+      "malformed" : 0,
+      "malformed-rate-95pct-upper-bound" : 0.1,
+      "route-adherent-n" : 30,
+      "parsed-but-wrong-payload" : 0,
+      "content-exact-rate" : 1.0,
+      "trials" : 30,
+      "failures" : [ ],
+      "kinds" : { }
+    },
+    "E-wrapped" : {
+      "retry" : {
+        "n" : 0,
+        "median-wall-ms" : null,
+        "median-output-tokens" : null,
+        "recovered" : 0
+      },
+      "median-wall-ms" : 6522.0,
+      "malformed-excluding-fence-only" : 0,
+      "payload-corruptions" : [ {
+        "tag" : "r01-unicode-and-escapes-E-wrapped",
+        "task" : "unicode-and-escapes",
+        "expected" : "(def labels\n  {:ok \"\\u2713 done\" :warn \"caf\\u00e9 \\u2014 retry\" :tab \"a\\tb\"})",
+        "got" : "(def labels\n  {:ok \"✓ done\" :warn \"café — retry\" :tab \"a\tb\"})"
+      } ],
+      "malformed-rate-excluding-fence-only" : 0.0,
+      "median-output-tokens" : 84.0,
+      "arm" : "E-wrapped",
+      "route-adherent" : 1.0,
+      "malformed-rate" : 0.0,
+      "median-output-bytes" : 197.0,
+      "malformed" : 0,
+      "malformed-rate-95pct-upper-bound" : 0.1,
+      "route-adherent-n" : 30,
+      "parsed-but-wrong-payload" : 1,
+      "content-exact-rate" : 0.9667,
+      "trials" : 30,
+      "failures" : [ ],
+      "kinds" : { }
+    },
+    "E-raw" : {
+      "retry" : {
+        "n" : 0,
+        "median-wall-ms" : null,
+        "median-output-tokens" : null,
+        "recovered" : 0
+      },
+      "median-wall-ms" : 5636.0,
+      "malformed-excluding-fence-only" : 0,
+      "payload-corruptions" : [ ],
+      "malformed-rate-excluding-fence-only" : 0.0,
+      "median-output-tokens" : 66.0,
+      "arm" : "E-raw",
+      "route-adherent" : 1.0,
+      "malformed-rate" : 0.0,
+      "median-output-bytes" : 164.0,
+      "malformed" : 0,
+      "malformed-rate-95pct-upper-bound" : 0.1,
+      "route-adherent-n" : 30,
+      "parsed-but-wrong-payload" : 0,
+      "content-exact-rate" : 1.0,
+      "trials" : 30,
+      "failures" : [ ],
+      "kinds" : { }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "P1" : {
+    "schema-enforced" : 5
+  },
+  "P2" : {
+    "invalid-json-permitted" : 5
+  },
+  "P3" : {
+    "invalid-edn-permitted" : 5
+  },
+  "schema-enforced" : true,
+  "conclusion" : "PROTECTED-WHEN-SCHEMA-SUPPLIED: the platform enforced the supplied output schema, while free-text JSON was left unguarded. Production tool-call JSON therefore carries a guarantee that free-text JSON does not, and moving the payload into a string forfeits it."
+}
