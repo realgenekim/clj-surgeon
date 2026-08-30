@@ -252,6 +252,26 @@ class SlotIntegrityTest(unittest.TestCase):
 
 
 class ReapingAndEvidenceTest(unittest.TestCase):
+    def test_model_process_never_inherits_supervisor_stdin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            process = mock.Mock()
+            process.wait.return_value = 0
+            with mock.patch.object(
+                runner, "ATTEMPTS", root / "attempts.jsonl"
+            ), mock.patch.object(
+                runner.subprocess, "Popen", return_value=process
+            ) as popen:
+                result = runner.run_process(
+                    ["codex", "exec", "prompt"],
+                    root,
+                    root / "stdout.jsonl",
+                    root / "stderr.log",
+                    {"phase": "safety", "run": 1, "arm": "C"},
+                )
+            self.assertEqual(result["exit_code"], 0)
+            self.assertIs(popen.call_args.kwargs["stdin"], runner.subprocess.DEVNULL)
+
     def test_context_reaps_child_when_post_start_operation_raises(self):
         class FakeProduct:
             closed = False

@@ -1,8 +1,8 @@
 # Preregistration: non-executable prepared-request proxy screen
 
-Status: forward candidate 4 preregistered. Freeze is one-shot and must occur before any model process. Product code, installation, reload, and shared-runtime mutation are outside this experiment.
+Status: forward candidate 5 preregistered. Freeze is one-shot and must occur before any model process. Product code, installation, reload, and shared-runtime mutation are outside this experiment.
 
-The first frozen attempt was invalid because the harness verifier created cache files inside the measured workspace. The second frozen attempt was invalid because a safe explicit `operation: "forms"` request did not equal the operation-less shorthand byte for byte. The third frozen attempt cleared two safety slots and then rejected an otherwise exact read because it omitted the optional workspace root and used the private server's identical default. No invalid attempt reached efficacy, none is rescored, and none is pooled with a future cohort.
+The first frozen attempt was invalid because the harness verifier created cache files inside the measured workspace. The second frozen attempt was invalid because a safe explicit `operation: "forms"` request did not equal the operation-less shorthand byte for byte. The third frozen attempt cleared two safety slots and then rejected an otherwise exact read because it omitted the optional workspace root and used the private server's identical default. The fourth frozen attempt inherited an open supervising stdin, so `codex exec` waited for additional input until the frozen timeout; the harness now binds model stdin to `/dev/null`. No invalid attempt reached efficacy, none is rescored, and none is pooled with a future cohort.
 
 ## Question
 

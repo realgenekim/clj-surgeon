@@ -1124,7 +1124,14 @@ def run_process(
         "w", encoding="utf-8"
     ) as err:
         try:
-            process = subprocess.Popen(argv, cwd=cwd, stdout=out, stderr=err, text=True)
+            process = subprocess.Popen(
+                argv,
+                cwd=cwd,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                text=True,
+            )
             started = True
             append_jsonl(
                 ATTEMPTS, {"event": "process_start", "started_at_ns": started_ns, **start_record}
