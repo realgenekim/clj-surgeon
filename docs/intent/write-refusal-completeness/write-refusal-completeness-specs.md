@@ -1,15 +1,15 @@
 ---
 parent: write-refusal-completeness-design
 prefix: MCP-OP-WRITE-REFUSAL
-status: pre-ratification
+status: 'ratified (Gene, 2026-08-30, verbatim: "Go")'
 ---
 
 # Write-Side Refusal Completeness Specifications
 
-These candidate IDs are stable and must not be reused if a requirement is
-deleted. Every requirement is deferred. Design and EARS ratification leaves
-all eight requirements `[D]`. Separate explicit authority is required to
-activate red witnesses, begin product code, install, or reload MCP.
+These active IDs are stable and must not be reused if a requirement is
+deleted. Gene ratified this design and registry on 2026-08-30 with `Go`.
+Mayor separately authorized red-first product implementation with independent
+SURGEON2 verification. Installation and MCP reload remain separately gated.
 
 In every requirement, the version-1 inert continuation descriptor is the
 closed, non-executable object defined by the parent design. It binds the

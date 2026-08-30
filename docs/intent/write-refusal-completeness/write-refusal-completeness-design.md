@@ -1,14 +1,16 @@
 ---
 parent: mcp-operation-contract-design
 prefix: MCP-OP-WRITE-REFUSAL
-status: pre-ratification
+status: 'ratified (Gene, 2026-08-30, verbatim: "Go")'
 ---
 
 # Write-Side Refusal Completeness
 
-Status: pre-ratification leaf LLD. Gene ratified entry into the LID design
-phase on 2026-08-30 with the verbatim decision `1 go, 2 go, 3 go`. This leaf,
-its requirements, tests, and implementation are not ratified.
+Status: ratified leaf LLD. Gene ratified entry into the LID design phase on
+2026-08-30 with the verbatim decision `1 go, 2 go, 3 go` and ratified this
+design and its EARS registry on 2026-08-30 with the verbatim decision `Go`.
+Mayor authorized red-first implementation under independent SURGEON2
+verification. Installation and MCP reload remain separately gated.
 
 ## Context
 
@@ -345,7 +347,8 @@ arguments, timeout value, environment, secret, or a fallback profile.
 
 ## Non-goals
 
-- No product code, tests, `@spec` annotations, install, MCP reload, or cohort.
+- No installation, MCP reload, shared-runtime mutation, or cohort from this
+  ratification.
 - No new executable continuation or candidate-page operation.
 - No automatic candidate selection, fuzzy correction, or replacement inference.
 - No source-body, command, secret, verifier-output, or absolute-path expansion.
@@ -355,10 +358,8 @@ arguments, timeout value, environment, secret, or a fallback profile.
 
 ## Deferred verification design
 
-After separate explicit authorization to activate red witnesses, the test
-phase must activate one requirement family at a time, beginning with
-`MCP-OP-WRITE-REFUSAL-001`. Design and EARS ratification alone leaves every
-requirement `[D]`. Permanent witnesses must prove exact candidate
+The authorized test phase activates one requirement family at a time,
+beginning with `MCP-OP-WRITE-REFUSAL-001`. Permanent witnesses must prove exact candidate
 coverage, deterministic ordering, honest truncation counts, public-envelope
 bounds, zero executable retry fields, zero inherited write authority, and
 unchanged source on every pre-write refusal. Tests for any post-effect path
@@ -373,8 +374,7 @@ by the repository testing guide.
 
 ## Ratification boundary
 
-Ratifying this leaf and its deferred registry would authorize the later test
-design phase only. Every requirement would remain `[D]`. A separate explicit
-decision is required to activate red witnesses. Another decision is required
-before product code, installation, or MCP reload. Stop here for Gene's design
-and EARS decision.
+Gene ratified this leaf and its registry on 2026-08-30 with `Go`. Mayor then
+authorized red-first implementation, beginning with family 001 and preserving
+the frozen-red checkpoint before behavior changes. Installation, MCP reload,
+and shared-runtime changes still require a separate explicit decision.

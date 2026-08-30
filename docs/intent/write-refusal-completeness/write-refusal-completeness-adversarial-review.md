@@ -1,6 +1,6 @@
 ---
 parent: write-refusal-completeness-design
-status: pre-ratification adversarial review
+status: 'ratified adversarial review (Gene, 2026-08-30, verbatim: "Go")'
 ---
 
 # Write-Side Refusal Completeness Adversarial Review
@@ -85,5 +85,6 @@ The surviving pass confirmed:
 - no executable retry, selected candidate, prepared request, or inherited
   write authority.
 
-Final verdict: **SURVIVES. Ready for Gene's design and EARS ratification
-decision. No test or implementation is authorized.**
+Final review verdict: **SURVIVES.** Gene ratified the reviewed design and EARS
+registry on 2026-08-30 with `Go`. Mayor separately authorized red-first
+implementation with independent verification.

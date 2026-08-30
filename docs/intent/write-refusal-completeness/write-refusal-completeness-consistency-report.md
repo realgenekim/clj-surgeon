@@ -1,6 +1,6 @@
 ---
 parent: write-refusal-completeness-design
-status: pre-ratification consistency review
+status: 'ratified consistency review (Gene, 2026-08-30, verbatim: "Go")'
 ---
 
 # Write-Side Refusal Completeness Consistency Report
@@ -80,6 +80,5 @@ after the threshold correction. The reviewed SHA-256 values and complete
 finding disposition are recorded in
 `write-refusal-completeness-adversarial-review.md`.
 
-Verdict: **the packet passes the four LID consistency checks and independent
-adversarial review; it remains unratified, deferred, and
-non-implementation-authorizing.**
+Verdict: **the packet passed the four LID consistency checks and independent
+adversarial review before Gene ratified it on 2026-08-30 with `Go`.**
