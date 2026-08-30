@@ -1,0 +1,39 @@
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+model_catalog_json = "/private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/model-catalog-surgeon.json"
+model_instructions_file = "/private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/system-prompt.txt"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+update_plan_enabled = false
+web_search = "disabled"
+check_for_update_on_startup = false
+analytics.enabled = false
+feedback.enabled = false
+
+[tools]
+view_image = false
+web_search = false
+
+[features]
+shell_tool = false
+apps = false
+plugins = false
+multi_agent = false
+memories = false
+hooks = true
+
+[[hooks.PreToolUse]]
+matcher = ".*"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "/usr/bin/python3 /private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/capture_tool_hook.py"
+timeout = 10
+
+[mcp_servers.clj-surgeon]
+url = "http://127.0.0.1:64097/mcp"
+required = true
+enabled_tools = ["edit_clojure"]
+default_tools_approval_mode = "approve"
+startup_timeout_sec = 10
+tool_timeout_sec = 45

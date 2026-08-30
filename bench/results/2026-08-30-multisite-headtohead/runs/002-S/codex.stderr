@@ -1,0 +1,5 @@
+Error loading config.toml:
+/private/tmp/multisite-codex-home-_whnymxo/config.toml:7:1: unknown configuration field `update_plan_enabled`
+  |
+7 | update_plan_enabled = false
+  | ^^^^^^^^^^^^^^^^^^^
