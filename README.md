@@ -63,6 +63,23 @@ lower wall time** for compact Surgeon. On a small two-file, three-change control
 native remains faster. The tool earns its ceremony when exact mechanical state
 spans enough owners and files to collapse many fragile actions into one chord.
 
+### Discovery-inclusive crossover is beyond 32 changes
+
+A later serial Sol/high Anvil ladder at exact product commit `c55de227` kept
+the full decision out of the prompt in both arms. One realistic feature rename
+scaled from 3/1 to 8/2, 16/4, and 32/6 exact changes/files. Native won every
+rung: median walls were 53.955 versus 65.089 seconds, 79.622 versus 95.036,
+66.183 versus 102.909, and 97.398 versus 140.721. Native was 8/8 correct;
+Surgeon was 7/8 correct. Wrong-subject was zero.
+
+The same-family crossover was not observed, so its honest bound is greater
+than 32 changes and greater than six files. Do not combine that bound with the
+51-edit chord as if counts were the only variable: the ladder required live
+discovery, while the chord supplied the complete exact decision. Use native
+for the measured discovery-required class and retain Surgeon for large
+already-decided chords. See the
+[frozen result](docs/observations/2026-08-30-acid-crossover-ladder-result.md).
+
 ### Closed relations made the 51-edit chord 34 percent faster
 
 A later independent Anvil cohort kept that same complete 51-edit, nine-file

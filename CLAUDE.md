@@ -156,6 +156,13 @@ updates, and verification gates. It is not a chronological coding diary.
   absent from the compact editor, or gates that must participate in rollback.
   Use the process-starting CLI only when MCP is unavailable, the operation is
   not exposed there, or the CLI itself is under test.
+- **Measured routing boundary:** for discovery-required rename, resolved-
+  reference, keyword, and literal work, native discovery plus native patching
+  is faster through 32 changes across six files. Above that class, discovery
+  performance is unmeasured. Do not extrapolate from the 51-edit/nine-file
+  Surgeon win because that task supplied the complete exact decision. When a
+  complete multi-owner or multi-file decision is already supplied, one guarded
+  Surgeon transaction remains the measured large-work route.
 - Do not discover, register, or call the semantic backend directly. For
   cross-file definitions, references, implementations, incoming calls, and
   outgoing calls, use Surgeon `inspect_clojure` preparation. Surgeon owns any

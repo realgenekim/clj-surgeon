@@ -9,6 +9,13 @@ description: >-
 Optimize complete verified task time. Do not load this skill for an ordinary
 bounded structural read or already-decided compact edit.
 
+**Measured routing boundary:** use native discovery and patching for rename,
+reference, keyword, and literal work through 32 changes across six files; above
+that class is unmeasured. The 51-edit/nine-file Surgeon win supplied the exact
+decision, so counts do not transfer between discovered and supplied work. Use
+one guarded Surgeon transaction when the exact decision is supplied, or when
+atomicity, rollback, or fused verification independently earns it.
+
 ## Load only the required reference
 
 - Read [advanced MCP routes](skills/clj-surgeon/references/mcp-advanced.md) for semantic

@@ -1,0 +1,9 @@
+rung	arm	n	median_wall_s	median_output_tokens	median_actions	correct	correct_one_shot	exact	source_set	route	wrong_subject
+03	surgeon	2	65.0890	2795.5	5.0	2/2	2/2	2/2	2/2	2/2	0
+03	native	2	53.9550	2221.0	5.0	2/2	2/2	2/2	2/2	2/2	0
+08	surgeon	2	95.0355	4051.0	6.5	2/2	2/2	2/2	2/2	2/2	0
+08	native	2	79.6215	3118.0	6.0	2/2	2/2	2/2	2/2	2/2	0
+16	surgeon	2	102.9085	4624.0	7.0	1/2	1/2	1/2	2/2	2/2	0
+16	native	2	66.1825	2830.0	5.5	2/2	2/2	2/2	2/2	2/2	0
+32	surgeon	2	140.7205	6954.5	6.5	2/2	1/2	2/2	2/2	2/2	0
+32	native	2	97.3980	4316.0	6.5	2/2	2/2	2/2	2/2	2/2	0

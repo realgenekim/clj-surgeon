@@ -1,0 +1,17 @@
+rung	pair	position	arm	wall_s	output_tokens	actions	discovery_failures	mutation_attempts	mutation_failures	correct	exact	route	source_set	correct_one_shot	wrong_subject
+03	1	1	surgeon	76.804	3300	5	2	1	0	true	true	true	true	true	false
+03	1	2	native	58.607	2486	5	0	1	0	true	true	true	true	true	false
+03	2	1	native	49.303	1956	5	0	1	0	true	true	true	true	true	false
+03	2	2	surgeon	53.374	2291	5	2	1	0	true	true	true	true	true	false
+08	1	1	native	72.692	3009	7	0	1	0	true	true	true	true	true	false
+08	1	2	surgeon	82.168	3248	5	2	1	0	true	true	true	true	true	false
+08	2	1	surgeon	107.903	4854	8	3	1	0	true	true	true	true	true	false
+08	2	2	native	86.551	3227	5	0	1	0	true	true	true	true	true	false
+16	1	1	surgeon	97.224	4549	6	3	1	0	false	false	true	true	false	false
+16	1	2	native	69.046	3056	6	0	1	0	true	true	true	true	true	false
+16	2	1	native	63.319	2604	5	0	1	0	true	true	true	true	true	false
+16	2	2	surgeon	108.593	4699	8	2	1	0	true	true	true	true	true	false
+32	1	1	native	97.212	4055	7	0	1	0	true	true	true	true	true	false
+32	1	2	surgeon	163.029	8055	8	3	3	2	true	true	true	true	false	false
+32	2	1	surgeon	118.412	5854	5	2	1	0	true	true	true	true	true	false
+32	2	2	native	97.584	4577	6	0	1	0	true	true	true	true	true	false
