@@ -171,3 +171,67 @@ So the first log's law stands, and the second log's companion stands, and this l
 2. **Measure the term before optimizing it.**
 3. **Measure ADOPTION before optimizing the per-call cost — and verify the premise your design
    depends on before designing six of them.**
+
+---
+
+## CORRECTION, appended same night: the 17% corruption claim is WITHDRAWN
+
+**The defect this log called "the defect that outranks every optimization" was never measured on the
+production path.** SURGEON2 audited the harness that produced it (receipt `2290192c`, branch
+`experiment/body-fidelity-audit`) and found:
+
+> **The retained 3/18 harness did not call MCP and did not write files.** It asked the model to emit
+> free-text JSON/EDN, and `parse-ok` meant **outer carriage only.**
+
+So "~17% silent corruption in production traffic today" described a **free-text emission exercise**,
+not the tool. **I relayed it four times and wrote it into this log as the top-priority finding.**
+
+### What the audit found instead
+
+**The MCP path does not corrupt.** A no-model HTTP bisection of the real path: JSON arguments decoded
+exactly, and **`apply_clojure_changes` committed 5/5 exact sensitive substrings** — backslash
+replacement, regex literal, literal `\n`, literal `\u` escapes, nested quotes — at a **wire maximum
+backslash run of 9**, with `verification_complete=true`. Malformed source was refused
+`invalid-intent-form`, `source_unchanged`, byte-identical.
+
+**The model does sometimes emit wrong content, and the existing guards catch nearly all of it.**
+Exact replay reproduced **5/18 wrong-but-carriage-valid** (JSON 2/9, EDN 3/9) — but **only 1/18 was
+also valid Clojure. Four of the five would meet the existing invalid-intent-form refusal.**
+
+**The registered backslash-depth prediction FAILED, and was reported as failed rather than
+loosened.** Clean raw-message depths were **all 9**; corrupt JSON `[7,9]`, corrupt EDN `[5,5,5]`.
+**Deep escaping marks difficulty but does not discriminate failure** — one corrupt row retained depth
+9. Its instruction: *do not launch the carrier arm on that mechanism claim.* **The double-escaping
+mechanism is dead, and the freeform-carrier experiment is cancelled.**
+
+**Exposure, from exact authorities:** 195 writes / 630,138 canonical bytes; backslashes in 43/195
+(22.05%), regex literals 15/195 (7.69%), literal Unicode escapes **0**, union 45/195 (23.08%). A
+common shape — but **a fixture rate cannot be multiplied into production**, which is precisely the
+error the withdrawn 17% embodied.
+
+**One law re-confirmed:** a deliberately wrong but valid replacement committed cleanly. **The frozen
+basis proves the OLD bytes, not the INTENDED new ones** — so no generic server refusal exists without
+independent effect authority. Same-model hashes and escape-count heuristics are **not** authority.
+
+### What this does to the strategy in the body of this log
+
+**"Fix fidelity first" is void — there is no fidelity defect in the tool.** The inversion it implied
+(*if the envelope is the cause, native writes are corruption-free*) is **moot: the envelope is not
+the cause.** What remains is ordinary model error on hard payloads, mostly already refused.
+
+**Two questions survive: adoption, and whether the tool's verification identity is worth more than
+its editing identity.**
+
+### The tally, updated
+
+**Five withdrawn figures, not four:** the truncation prize, the 191 derivable corrections, the
+21.2-hour ceremony headline, the +490 ms catalog tax, and now the 17% corruption.
+
+**Every single one had one source. Every figure with n>1 and controls survived.** The 1,284x ratio
+held. The 3.5237 ms/byte emission constant held. The 24.277% mnemonic saving held. The 6.0%
+addressable share held, and held again under independent reproduction.
+
+**The rule this earns, stated plainly for the next seat: a single-source number is a hypothesis
+wearing a decimal point.** Do not relay one as measured, and do not let one into a captain's log
+without a second derivation — including, and especially, when it is the most interesting thing you
+have found that day.
