@@ -1,0 +1,1344 @@
+{
+  "addressable_action_ladder": {
+    "all_successful_native_patches": 2759,
+    "comment_only": 20,
+    "established_all_targets_in_src_or_test": 369,
+    "established_any_target_in_src_or_test": 369,
+    "established_files_all_target_rule": 557,
+    "established_files_any_target_rule": 523,
+    "same_session_created_all_targets": 315,
+    "same_session_created_any_target": 349,
+    "small_single_hunk_up_to_4_changed_lines": 188,
+    "substantive_existing_clojure": 872,
+    "trivial_union": 201,
+    "updates_existing_clojure": 1073
+  },
+  "established_existing_clojure_by_repository": {
+    "clj-surgeon": 434,
+    "other-clojure": 123
+  },
+  "evidence_file_count": 122,
+  "evidence_manifest_sha256": "43aab89635314fb6c19e2d7dd8636be1210d13bdcec04422805ef2d19058d49e",
+  "missing_evidence_sessions": [],
+  "native_patch": {
+    "attempted_actions": 2933,
+    "failed_actions": 174,
+    "outer_attempted_actions": 2922,
+    "outer_failed_actions": 172,
+    "outer_successful_actions": 2750,
+    "outer_successful_by_session": {
+      "00da3bad682f": 25,
+      "12446948c906": 16,
+      "1640658d7e5b": 8,
+      "175b28b05af7": 3,
+      "1c69d26d7c86": 3,
+      "2090ad8af957": 44,
+      "216732d7abe4": 300,
+      "288727a10c97": 9,
+      "28fe254be905": 5,
+      "2c0d4d7d1d9b": 5,
+      "2d365dcb1175": 7,
+      "33fab481be21": 4,
+      "3ef8d35bb1e1": 72,
+      "41960711e3d4": 7,
+      "429cae526bfd": 6,
+      "42bf71a42daf": 34,
+      "456222be5a37": 129,
+      "46059ec9ea7c": 12,
+      "471c92d91531": 26,
+      "4fb4ddb241b2": 8,
+      "4fe663ebdbad": 1440,
+      "52b31dc01678": 112,
+      "563ccef377e9": 15,
+      "61b49ddeb542": 20,
+      "6faed93774bc": 11,
+      "7b965f779aac": 19,
+      "805c86ff8241": 8,
+      "95fffe0aa365": 4,
+      "9bb14c286863": 32,
+      "9bb5f2b5e616": 7,
+      "a16b9d56dab5": 6,
+      "ae24bcb0b6f4": 61,
+      "ae2fff8cbde2": 12,
+      "b35ce66bdf67": 64,
+      "baac4ca4c296": 16,
+      "c32a936573f2": 9,
+      "c54a7c4283f9": 40,
+      "c58fb661e32f": 17,
+      "cb68258b396d": 6,
+      "cc9995a0a9e2": 3,
+      "d04428eb5913": 2,
+      "d9a069c3a79b": 14,
+      "dc420e04f9d2": 7,
+      "e6bcb8b92d2c": 11,
+      "e7e1d56d2123": 14,
+      "f6ee529c67dd": 10,
+      "fb90e9572cb1": 28,
+      "fbe1442ad7d6": 39
+    },
+    "parsed_actions": 2843,
+    "parsed_successful_by_session": {
+      "00da3bad682f": 25,
+      "12446948c906": 16,
+      "1640658d7e5b": 1,
+      "175b28b05af7": 3,
+      "1c69d26d7c86": 3,
+      "2090ad8af957": 43,
+      "216732d7abe4": 279,
+      "288727a10c97": 9,
+      "28fe254be905": 5,
+      "2c0d4d7d1d9b": 5,
+      "2d365dcb1175": 7,
+      "33fab481be21": 4,
+      "3ef8d35bb1e1": 72,
+      "41960711e3d4": 7,
+      "429cae526bfd": 6,
+      "42bf71a42daf": 34,
+      "456222be5a37": 126,
+      "46059ec9ea7c": 12,
+      "471c92d91531": 26,
+      "4fb4ddb241b2": 8,
+      "4fe663ebdbad": 1414,
+      "52b31dc01678": 112,
+      "563ccef377e9": 15,
+      "61b49ddeb542": 19,
+      "6faed93774bc": 11,
+      "7b965f779aac": 19,
+      "805c86ff8241": 8,
+      "95fffe0aa365": 4,
+      "9bb14c286863": 32,
+      "9bb5f2b5e616": 7,
+      "a16b9d56dab5": 6,
+      "ae24bcb0b6f4": 49,
+      "ae2fff8cbde2": 12,
+      "b35ce66bdf67": 64,
+      "baac4ca4c296": 15,
+      "c32a936573f2": 9,
+      "c54a7c4283f9": 40,
+      "c58fb661e32f": 17,
+      "cb68258b396d": 6,
+      "cc9995a0a9e2": 3,
+      "d04428eb5913": 2,
+      "d9a069c3a79b": 14,
+      "dc420e04f9d2": 7,
+      "e6bcb8b92d2c": 11,
+      "e7e1d56d2123": 12,
+      "f6ee529c67dd": 10,
+      "fb90e9572cb1": 28,
+      "fbe1442ad7d6": 39
+    },
+    "repository_classes": {
+      "clj-surgeon": 2349,
+      "other": 221,
+      "other-clojure": 189
+    },
+    "successful_actions": 2759,
+    "successful_by_session": {
+      "00da3bad682f": 25,
+      "12446948c906": 16,
+      "1640658d7e5b": 8,
+      "175b28b05af7": 3,
+      "1c69d26d7c86": 3,
+      "2090ad8af957": 44,
+      "216732d7abe4": 300,
+      "288727a10c97": 9,
+      "28fe254be905": 5,
+      "2c0d4d7d1d9b": 5,
+      "2d365dcb1175": 7,
+      "33fab481be21": 4,
+      "3ef8d35bb1e1": 72,
+      "41960711e3d4": 7,
+      "429cae526bfd": 6,
+      "42bf71a42daf": 34,
+      "456222be5a37": 132,
+      "46059ec9ea7c": 12,
+      "471c92d91531": 26,
+      "4fb4ddb241b2": 8,
+      "4fe663ebdbad": 1444,
+      "52b31dc01678": 112,
+      "563ccef377e9": 15,
+      "61b49ddeb542": 20,
+      "6faed93774bc": 11,
+      "7b965f779aac": 19,
+      "805c86ff8241": 8,
+      "95fffe0aa365": 4,
+      "9bb14c286863": 32,
+      "9bb5f2b5e616": 7,
+      "a16b9d56dab5": 6,
+      "ae24bcb0b6f4": 63,
+      "ae2fff8cbde2": 12,
+      "b35ce66bdf67": 64,
+      "baac4ca4c296": 16,
+      "c32a936573f2": 9,
+      "c54a7c4283f9": 40,
+      "c58fb661e32f": 17,
+      "cb68258b396d": 6,
+      "cc9995a0a9e2": 3,
+      "d04428eb5913": 2,
+      "d9a069c3a79b": 14,
+      "dc420e04f9d2": 7,
+      "e6bcb8b92d2c": 11,
+      "e7e1d56d2123": 14,
+      "f6ee529c67dd": 10,
+      "fb90e9572cb1": 28,
+      "fbe1442ad7d6": 39
+    },
+    "thread_sources": {
+      "subagent": 605,
+      "user": 2154
+    }
+  },
+  "privacy": {
+    "commands_emitted": false,
+    "paths_emitted": false,
+    "source_emitted": false,
+    "tool_arguments_emitted": false
+  },
+  "schema": "clj-surgeon.adoption-census-independent.v1",
+  "session_count": 122,
+  "session_start_population": {
+    "at_reported_native_1145_boundary": {
+      "native_patch": {
+        "all_successful_native_patches": 1145,
+        "comment_only": 8,
+        "established_all_targets_in_src_or_test": 70,
+        "established_any_target_in_src_or_test": 70,
+        "established_files_all_target_rule": 162,
+        "established_files_any_target_rule": 155,
+        "same_session_created_all_targets": 216,
+        "same_session_created_any_target": 223,
+        "small_single_hunk_up_to_4_changed_lines": 73,
+        "substantive_existing_clojure": 378,
+        "trivial_union": 77,
+        "updates_existing_clojure": 455
+      },
+      "surgeon_operation_counts": {
+        "edit_clojure": 7,
+        "inspect_clojure": 443
+      },
+      "until": "2026-08-30T03:07:29.742000+00:00"
+    },
+    "edit_calls": [
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 50,
+        "backslash_characters": 50,
+        "escaped_backslashes": 0,
+        "input_chars": 1351,
+        "operation": "edit_clojure",
+        "refusal_type": null,
+        "repository_class": "clj-surgeon",
+        "session_key": "9bb5f2b5e616",
+        "session_started_in_window": true,
+        "status": "success",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-27T19:07:13.816000+00:00",
+        "workspace_class": "other"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 190,
+        "backslash_characters": 190,
+        "escaped_backslashes": 2,
+        "input_chars": 7542,
+        "operation": "edit_clojure",
+        "refusal_type": null,
+        "repository_class": "other",
+        "session_key": "52b31dc01678",
+        "session_started_in_window": true,
+        "status": "success",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T06:09:47.695000+00:00",
+        "workspace_class": "other"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 146,
+        "backslash_characters": 146,
+        "escaped_backslashes": 0,
+        "input_chars": 4220,
+        "next_mutation_delay_seconds": 26.422,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 26.422,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:44:12.722000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 148,
+        "backslash_characters": 148,
+        "escaped_backslashes": 0,
+        "input_chars": 4236,
+        "operation": "edit_clojure",
+        "refusal_type": null,
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "success",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:44:39.144000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 3,
+        "backslash_characters": 3,
+        "escaped_backslashes": 0,
+        "input_chars": 694,
+        "next_mutation_delay_seconds": 13.836,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 13.836,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:44:50.776000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 11,
+        "backslash_characters": 11,
+        "escaped_backslashes": 0,
+        "input_chars": 898,
+        "operation": "edit_clojure",
+        "refusal_type": null,
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "success",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:45:04.612000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 215,
+        "backslash_characters": 215,
+        "escaped_backslashes": 0,
+        "input_chars": 4736,
+        "next_mutation_delay_seconds": 24.173,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "failed",
+        "next_successful_mutation_delay_seconds": 47.708,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T18:00:51.599000+00:00",
+        "workspace_class": "clj-surgeon"
+      }
+    ],
+    "native_patch": {
+      "all_successful_native_patches": 1163,
+      "comment_only": 8,
+      "established_all_targets_in_src_or_test": 70,
+      "established_any_target_in_src_or_test": 70,
+      "established_files_all_target_rule": 162,
+      "established_files_any_target_rule": 155,
+      "same_session_created_all_targets": 223,
+      "same_session_created_any_target": 230,
+      "small_single_hunk_up_to_4_changed_lines": 74,
+      "substantive_existing_clojure": 385,
+      "trivial_union": 78,
+      "updates_existing_clojure": 463
+    },
+    "native_patch_attempted": 1216,
+    "native_patch_by_repository": {
+      "clj-surgeon": {
+        "all_successful_native_patches": 905,
+        "comment_only": 8,
+        "established_all_targets_in_src_or_test": 5,
+        "established_any_target_in_src_or_test": 5,
+        "established_files_all_target_rule": 92,
+        "established_files_any_target_rule": 90,
+        "same_session_created_all_targets": 215,
+        "same_session_created_any_target": 217,
+        "small_single_hunk_up_to_4_changed_lines": 59,
+        "substantive_existing_clojure": 307,
+        "trivial_union": 63,
+        "updates_existing_clojure": 370
+      },
+      "other": {
+        "all_successful_native_patches": 162,
+        "comment_only": 0,
+        "established_all_targets_in_src_or_test": 0,
+        "established_any_target_in_src_or_test": 0,
+        "established_files_all_target_rule": 0,
+        "established_files_any_target_rule": 0,
+        "same_session_created_all_targets": 0,
+        "same_session_created_any_target": 0,
+        "small_single_hunk_up_to_4_changed_lines": 0,
+        "substantive_existing_clojure": 0,
+        "trivial_union": 0,
+        "updates_existing_clojure": 0
+      },
+      "other-clojure": {
+        "all_successful_native_patches": 96,
+        "comment_only": 0,
+        "established_all_targets_in_src_or_test": 65,
+        "established_any_target_in_src_or_test": 65,
+        "established_files_all_target_rule": 70,
+        "established_files_any_target_rule": 65,
+        "same_session_created_all_targets": 8,
+        "same_session_created_any_target": 13,
+        "small_single_hunk_up_to_4_changed_lines": 15,
+        "substantive_existing_clojure": 78,
+        "trivial_union": 15,
+        "updates_existing_clojure": 93
+      }
+    },
+    "native_patch_failed": 53,
+    "native_patch_outer_actions": {
+      "all_successful_native_patches": 1161,
+      "comment_only": 8,
+      "established_all_targets_in_src_or_test": 70,
+      "established_any_target_in_src_or_test": 70,
+      "established_files_all_target_rule": 162,
+      "established_files_any_target_rule": 155,
+      "same_session_created_all_targets": 223,
+      "same_session_created_any_target": 230,
+      "small_single_hunk_up_to_4_changed_lines": 74,
+      "substantive_existing_clojure": 385,
+      "trivial_union": 78,
+      "updates_existing_clojure": 463
+    },
+    "native_patch_outer_actions_by_repository": {
+      "clj-surgeon": {
+        "all_successful_native_patches": 905,
+        "comment_only": 8,
+        "established_all_targets_in_src_or_test": 5,
+        "established_any_target_in_src_or_test": 5,
+        "established_files_all_target_rule": 92,
+        "established_files_any_target_rule": 90,
+        "same_session_created_all_targets": 215,
+        "same_session_created_any_target": 217,
+        "small_single_hunk_up_to_4_changed_lines": 59,
+        "substantive_existing_clojure": 307,
+        "trivial_union": 63,
+        "updates_existing_clojure": 370
+      },
+      "other": {
+        "all_successful_native_patches": 160,
+        "comment_only": 0,
+        "established_all_targets_in_src_or_test": 0,
+        "established_any_target_in_src_or_test": 0,
+        "established_files_all_target_rule": 0,
+        "established_files_any_target_rule": 0,
+        "same_session_created_all_targets": 0,
+        "same_session_created_any_target": 0,
+        "small_single_hunk_up_to_4_changed_lines": 0,
+        "substantive_existing_clojure": 0,
+        "trivial_union": 0,
+        "updates_existing_clojure": 0
+      },
+      "other-clojure": {
+        "all_successful_native_patches": 96,
+        "comment_only": 0,
+        "established_all_targets_in_src_or_test": 65,
+        "established_any_target_in_src_or_test": 65,
+        "established_files_all_target_rule": 70,
+        "established_files_any_target_rule": 65,
+        "same_session_created_all_targets": 8,
+        "same_session_created_any_target": 13,
+        "small_single_hunk_up_to_4_changed_lines": 15,
+        "substantive_existing_clojure": 78,
+        "trivial_union": 15,
+        "updates_existing_clojure": 93
+      }
+    },
+    "native_patch_unparsed": 49,
+    "population_rule": "first session_meta timestamp is inside the frozen half-open window",
+    "reported_count_boundaries": {
+      "edit_calls_6": {
+        "available": 7,
+        "next_timestamp": "2026-08-29T18:00:51.599000+00:00",
+        "timestamp": "2026-08-29T17:45:04.612000+00:00"
+      },
+      "inspect_calls_400": {
+        "available": 443,
+        "next_timestamp": "2026-08-30T01:52:03.241000+00:00",
+        "timestamp": "2026-08-30T01:45:13.264000+00:00"
+      },
+      "native_success_1145": {
+        "available": 1161,
+        "next_timestamp": "2026-08-30T03:08:06.021000+00:00",
+        "timestamp": "2026-08-30T03:07:29.742000+00:00"
+      }
+    },
+    "session_count": 118,
+    "surgeon_operation_counts": {
+      "edit_clojure": 7,
+      "inspect_clojure": 443
+    },
+    "surgeon_operation_statuses": {
+      "apply_clojure_changes": {},
+      "edit_clojure": {
+        "refused": 3,
+        "success": 4
+      },
+      "inspect_clojure": {
+        "completed-unknown": 162,
+        "execution-error": 3,
+        "refused": 66,
+        "success": 162,
+        "unknown": 50
+      }
+    },
+    "surgeon_outer_action_counts": {
+      "edit_clojure": 7,
+      "inspect_clojure": 441
+    }
+  },
+  "source_receipt_sha256": "b61a703eb42fc886530b4dfbcb11fa7ee84d58aec89e861121c14e9be910a5db",
+  "substantive_existing_clojure_by_repository": {
+    "clj-surgeon": 725,
+    "other-clojure": 147
+  },
+  "surgeon": {
+    "by_operation_and_status": {
+      "apply_clojure_changes": {
+        "completed-unknown": 1,
+        "execution-error": 2,
+        "refused": 19,
+        "success": 37
+      },
+      "edit_clojure": {
+        "execution-error": 1,
+        "refused": 19,
+        "success": 54
+      },
+      "inspect_clojure": {
+        "completed-unknown": 355,
+        "execution-error": 3,
+        "refused": 138,
+        "success": 483,
+        "unknown": 65
+      }
+    },
+    "call_count": 1177,
+    "failed_edit_count": 20,
+    "failed_edits": [
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 36,
+        "backslash_characters": 36,
+        "escaped_backslashes": 7,
+        "input_chars": 1313,
+        "next_mutation_delay_seconds": 17.375,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 17.375,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-26T05:51:14.878000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 6,
+        "backslash_characters": 6,
+        "escaped_backslashes": 0,
+        "input_chars": 739,
+        "next_mutation_delay_seconds": 33.523,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 33.523,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "expect-count-mismatch",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-26T08:43:21.984000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 68,
+        "backslash_characters": 68,
+        "escaped_backslashes": 4,
+        "input_chars": 2500,
+        "next_mutation_delay_seconds": 18.674,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "failed",
+        "next_successful_mutation_delay_seconds": 38.255,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-27T05:22:18.882000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 187,
+        "backslash_characters": 187,
+        "escaped_backslashes": 45,
+        "input_chars": 2213,
+        "next_mutation_delay_seconds": 15.915,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 15.915,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-27T15:49:42.470000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 22,
+        "backslash_characters": 22,
+        "escaped_backslashes": 0,
+        "input_chars": 912,
+        "next_mutation_delay_seconds": 7.965,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 7.965,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-27T23:14:39.677000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 8,
+        "backslash_characters": 8,
+        "escaped_backslashes": 0,
+        "input_chars": 1321,
+        "next_mutation_delay_seconds": 25.888,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 25.888,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-27T23:20:09.270000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 0,
+        "backslash_characters": 0,
+        "escaped_backslashes": 0,
+        "input_chars": 10081,
+        "next_mutation_delay_seconds": 122.37,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 122.37,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T04:21:33.218000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 4,
+        "backslash_characters": 4,
+        "escaped_backslashes": 0,
+        "input_chars": 593,
+        "next_mutation_delay_seconds": 7.323,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 7.323,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T04:24:15.477000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 16,
+        "backslash_characters": 16,
+        "escaped_backslashes": 0,
+        "input_chars": 2180,
+        "next_mutation_delay_seconds": 12.704,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 12.704,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T15:27:17.802000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 0,
+        "backslash_characters": 0,
+        "escaped_backslashes": 0,
+        "input_chars": 705,
+        "next_mutation_delay_seconds": 10.424,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 10.424,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T23:57:17.002000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 0,
+        "backslash_characters": 0,
+        "escaped_backslashes": 0,
+        "input_chars": 1056,
+        "next_mutation_delay_seconds": 13.567,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 13.567,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "expect-count-mismatch",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-28T23:58:12.485000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 14,
+        "backslash_characters": 14,
+        "escaped_backslashes": 0,
+        "input_chars": 762,
+        "next_mutation_delay_seconds": 11.246,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 11.246,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-29T03:59:47.985000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 76,
+        "backslash_characters": 76,
+        "escaped_backslashes": 0,
+        "input_chars": 2942,
+        "next_mutation_delay_seconds": 20.01,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 20.01,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-29T04:00:36.643000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 46,
+        "backslash_characters": 46,
+        "escaped_backslashes": 0,
+        "input_chars": 3497,
+        "next_mutation_delay_seconds": 19.446,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 19.446,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-29T09:37:55.173000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 38,
+        "backslash_characters": 38,
+        "escaped_backslashes": 0,
+        "input_chars": 2713,
+        "next_mutation_delay_seconds": 17.163,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 17.163,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-29T09:38:29.156000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 146,
+        "backslash_characters": 146,
+        "escaped_backslashes": 0,
+        "input_chars": 4220,
+        "next_mutation_delay_seconds": 26.422,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 26.422,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:44:12.722000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 3,
+        "backslash_characters": 3,
+        "escaped_backslashes": 0,
+        "input_chars": 694,
+        "next_mutation_delay_seconds": 13.836,
+        "next_mutation_route": "edit_clojure",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 13.836,
+        "next_successful_mutation_route": "edit_clojure",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T17:44:50.776000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 30,
+        "backslash_characters": 30,
+        "escaped_backslashes": 0,
+        "input_chars": 2094,
+        "next_mutation_delay_seconds": 8.808,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 8.808,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "refused",
+        "thread_source": "user",
+        "timestamp": "2026-08-29T17:47:42.713000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 215,
+        "backslash_characters": 215,
+        "escaped_backslashes": 0,
+        "input_chars": 4736,
+        "next_mutation_delay_seconds": 24.173,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "failed",
+        "next_successful_mutation_delay_seconds": 47.708,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": "invalid-intent-form",
+        "repository_class": "clj-surgeon",
+        "session_key": "e6bcb8b92d2c",
+        "session_started_in_window": true,
+        "status": "refused",
+        "thread_source": "subagent",
+        "timestamp": "2026-08-29T18:00:51.599000+00:00",
+        "workspace_class": "clj-surgeon"
+      },
+      {
+        "argument_backslash_characters": 0,
+        "argument_parsed": false,
+        "argument_source_backslash_characters": 0,
+        "backslash_characters": 0,
+        "escaped_backslashes": 0,
+        "input_chars": 549,
+        "next_mutation_delay_seconds": 4.551,
+        "next_mutation_route": "native-patch",
+        "next_mutation_status": "success",
+        "next_successful_mutation_delay_seconds": 4.551,
+        "next_successful_mutation_route": "native-patch",
+        "operation": "edit_clojure",
+        "refusal_type": null,
+        "repository_class": "clj-surgeon",
+        "session_key": "4fe663ebdbad",
+        "session_started_in_window": false,
+        "status": "execution-error",
+        "thread_source": "user",
+        "timestamp": "2026-08-30T02:50:26.038000+00:00",
+        "workspace_class": "temporary"
+      }
+    ],
+    "operations_by_session": {
+      "06d9b976899d": {
+        "inspect_clojure": 11
+      },
+      "075c2378b949": {
+        "inspect_clojure": 5
+      },
+      "1488eeef1476": {
+        "inspect_clojure": 9
+      },
+      "1640658d7e5b": {
+        "inspect_clojure": 6
+      },
+      "216732d7abe4": {
+        "inspect_clojure": 133
+      },
+      "253096a0909a": {
+        "inspect_clojure": 1
+      },
+      "288727a10c97": {
+        "inspect_clojure": 8
+      },
+      "28fe254be905": {
+        "apply_clojure_changes": 8,
+        "inspect_clojure": 39
+      },
+      "2d365dcb1175": {
+        "inspect_clojure": 15
+      },
+      "35b893768b62": {
+        "inspect_clojure": 1
+      },
+      "40187cc7235d": {
+        "inspect_clojure": 2
+      },
+      "456222be5a37": {
+        "apply_clojure_changes": 5,
+        "inspect_clojure": 31
+      },
+      "46059ec9ea7c": {
+        "inspect_clojure": 6
+      },
+      "4fb4ddb241b2": {
+        "inspect_clojure": 10
+      },
+      "4fe663ebdbad": {
+        "apply_clojure_changes": 46,
+        "edit_clojure": 67,
+        "inspect_clojure": 531
+      },
+      "52b31dc01678": {
+        "edit_clojure": 1,
+        "inspect_clojure": 31
+      },
+      "595e11822931": {
+        "inspect_clojure": 1
+      },
+      "61b49ddeb542": {
+        "inspect_clojure": 2
+      },
+      "66a041ee1869": {
+        "inspect_clojure": 1
+      },
+      "6982a7f895e6": {
+        "inspect_clojure": 1
+      },
+      "6d517b8cedd6": {
+        "inspect_clojure": 19
+      },
+      "6faed93774bc": {
+        "inspect_clojure": 7
+      },
+      "785f77cb0c3b": {
+        "inspect_clojure": 4
+      },
+      "823dc0db21e3": {
+        "inspect_clojure": 1
+      },
+      "87f702570068": {
+        "inspect_clojure": 3
+      },
+      "8c6441cd213e": {
+        "inspect_clojure": 1
+      },
+      "8c8253bd47cd": {
+        "inspect_clojure": 4
+      },
+      "8d23034c280c": {
+        "inspect_clojure": 5
+      },
+      "965b0fc58488": {
+        "inspect_clojure": 1
+      },
+      "9bb5f2b5e616": {
+        "edit_clojure": 1
+      },
+      "bafe7b1d872c": {
+        "inspect_clojure": 13
+      },
+      "c5654e6ae956": {
+        "inspect_clojure": 1
+      },
+      "c58fb661e32f": {
+        "inspect_clojure": 12
+      },
+      "c9cc238d30b7": {
+        "inspect_clojure": 6
+      },
+      "cc9995a0a9e2": {
+        "inspect_clojure": 1
+      },
+      "cfb058217362": {
+        "inspect_clojure": 5
+      },
+      "d07db459a9c0": {
+        "inspect_clojure": 9
+      },
+      "d13320e9691a": {
+        "inspect_clojure": 12
+      },
+      "d680e7e786cc": {
+        "inspect_clojure": 4
+      },
+      "db58410d4f32": {
+        "inspect_clojure": 5
+      },
+      "dc1f951ddfa1": {
+        "inspect_clojure": 1
+      },
+      "dc420e04f9d2": {
+        "inspect_clojure": 15
+      },
+      "dfc5e302b3d9": {
+        "inspect_clojure": 10
+      },
+      "e4cf161a3911": {
+        "inspect_clojure": 7
+      },
+      "e54738b50e7b": {
+        "inspect_clojure": 6
+      },
+      "e6bcb8b92d2c": {
+        "edit_clojure": 5,
+        "inspect_clojure": 31
+      },
+      "ed6faa95dba8": {
+        "inspect_clojure": 1
+      },
+      "eeeacd6610ba": {
+        "inspect_clojure": 1
+      },
+      "ef327d49b312": {
+        "inspect_clojure": 12
+      },
+      "f06f5a558956": {
+        "inspect_clojure": 3
+      }
+    },
+    "outer_operation_counts": {
+      "apply_clojure_changes": 59,
+      "edit_clojure": 73,
+      "inspect_clojure": 1042
+    },
+    "outer_operations_by_session": {
+      "06d9b976899d": {
+        "inspect_clojure": 11
+      },
+      "075c2378b949": {
+        "inspect_clojure": 5
+      },
+      "1488eeef1476": {
+        "inspect_clojure": 9
+      },
+      "1640658d7e5b": {
+        "inspect_clojure": 6
+      },
+      "216732d7abe4": {
+        "inspect_clojure": 131
+      },
+      "253096a0909a": {
+        "inspect_clojure": 1
+      },
+      "288727a10c97": {
+        "inspect_clojure": 8
+      },
+      "28fe254be905": {
+        "apply_clojure_changes": 8,
+        "inspect_clojure": 39
+      },
+      "2d365dcb1175": {
+        "inspect_clojure": 15
+      },
+      "35b893768b62": {
+        "inspect_clojure": 1
+      },
+      "40187cc7235d": {
+        "inspect_clojure": 2
+      },
+      "456222be5a37": {
+        "apply_clojure_changes": 5,
+        "inspect_clojure": 31
+      },
+      "46059ec9ea7c": {
+        "inspect_clojure": 6
+      },
+      "4fb4ddb241b2": {
+        "inspect_clojure": 10
+      },
+      "4fe663ebdbad": {
+        "apply_clojure_changes": 46,
+        "edit_clojure": 66,
+        "inspect_clojure": 531
+      },
+      "52b31dc01678": {
+        "edit_clojure": 1,
+        "inspect_clojure": 31
+      },
+      "595e11822931": {
+        "inspect_clojure": 1
+      },
+      "61b49ddeb542": {
+        "inspect_clojure": 2
+      },
+      "66a041ee1869": {
+        "inspect_clojure": 1
+      },
+      "6982a7f895e6": {
+        "inspect_clojure": 1
+      },
+      "6d517b8cedd6": {
+        "inspect_clojure": 19
+      },
+      "6faed93774bc": {
+        "inspect_clojure": 7
+      },
+      "785f77cb0c3b": {
+        "inspect_clojure": 4
+      },
+      "823dc0db21e3": {
+        "inspect_clojure": 1
+      },
+      "87f702570068": {
+        "inspect_clojure": 3
+      },
+      "8c6441cd213e": {
+        "inspect_clojure": 1
+      },
+      "8c8253bd47cd": {
+        "inspect_clojure": 4
+      },
+      "8d23034c280c": {
+        "inspect_clojure": 5
+      },
+      "965b0fc58488": {
+        "inspect_clojure": 1
+      },
+      "9bb5f2b5e616": {
+        "edit_clojure": 1
+      },
+      "bafe7b1d872c": {
+        "inspect_clojure": 13
+      },
+      "c5654e6ae956": {
+        "inspect_clojure": 1
+      },
+      "c58fb661e32f": {
+        "inspect_clojure": 12
+      },
+      "c9cc238d30b7": {
+        "inspect_clojure": 6
+      },
+      "cc9995a0a9e2": {
+        "inspect_clojure": 1
+      },
+      "cfb058217362": {
+        "inspect_clojure": 5
+      },
+      "d07db459a9c0": {
+        "inspect_clojure": 9
+      },
+      "d13320e9691a": {
+        "inspect_clojure": 12
+      },
+      "d680e7e786cc": {
+        "inspect_clojure": 4
+      },
+      "db58410d4f32": {
+        "inspect_clojure": 5
+      },
+      "dc1f951ddfa1": {
+        "inspect_clojure": 1
+      },
+      "dc420e04f9d2": {
+        "inspect_clojure": 15
+      },
+      "dfc5e302b3d9": {
+        "inspect_clojure": 10
+      },
+      "e4cf161a3911": {
+        "inspect_clojure": 7
+      },
+      "e54738b50e7b": {
+        "inspect_clojure": 6
+      },
+      "e6bcb8b92d2c": {
+        "edit_clojure": 5,
+        "inspect_clojure": 31
+      },
+      "ed6faa95dba8": {
+        "inspect_clojure": 1
+      },
+      "eeeacd6610ba": {
+        "inspect_clojure": 1
+      },
+      "ef327d49b312": {
+        "inspect_clojure": 12
+      },
+      "f06f5a558956": {
+        "inspect_clojure": 3
+      }
+    },
+    "refusal_types": {
+      "ambiguous-insertion-gap": 1,
+      "batch-form-selection-failed": 116,
+      "expect-count-mismatch": 3,
+      "inspect-cardinality-mismatch": 4,
+      "inspect-output-limit": 2,
+      "invalid-forms-selector": 1,
+      "invalid-intent-form": 24,
+      "missing-fields": 3,
+      "non-empty-array": 2,
+      "overlapping-intents": 1,
+      "public": 1,
+      "public-schema-denied": 2,
+      "server-not-initialized": 1,
+      "source-file-not-found": 3,
+      "transaction-expectation-mismatch": 4,
+      "unknown-fields": 6,
+      "verification-baseline-failed": 1,
+      "verification-failed": 1
+    },
+    "repository_classes": {
+      "clj-surgeon": 1046,
+      "other": 131
+    },
+    "thread_sources": {
+      "subagent": 273,
+      "unknown": 9,
+      "user": 895
+    }
+  },
+  "window": {
+    "since": "2026-08-24T07:00:00Z",
+    "since_source": "argument",
+    "until": "2026-08-30T04:17:08.306112Z"
+  }
+}
