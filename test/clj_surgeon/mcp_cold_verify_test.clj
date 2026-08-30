@@ -81,44 +81,38 @@
   ;; @spec MCP-OP-ANALYZER-004
   ;; @spec MCP-OP-ANALYZER-005
   (let [root (temp-dir)
-        lock-path (str (java.nio.file.Files/createTempFile
-                         "clj-surgeon-cold-admission-" ".lock"
-                         (make-array java.nio.file.attribute.FileAttribute 0)))
-        priority-lock-path (str (java.nio.file.Files/createTempFile
-                                  "clj-surgeon-cold-priority-" ".lock"
-                                  (make-array java.nio.file.attribute.FileAttribute 0)))
-        gate (.getCanonicalPath
-               (java.io.File. "resources/clj-kondo-admission.py"))
-        options (into-array
-                  java.nio.file.OpenOption
-                  [java.nio.file.StandardOpenOption/READ
-                   java.nio.file.StandardOpenOption/WRITE])]
+        bounded-call (atom nil)]
     (try
       (cold-verify/clear-jobs!)
-      (with-open [channel (java.nio.channels.FileChannel/open
-                            (java.nio.file.Path/of lock-path
-                                                   (make-array String 0))
-                            options)
-                  _lock (.lock channel)]
-        (binding [process-env/*clj-kondo-lock-path* lock-path
-                  process-env/*clj-kondo-priority-lock-path* priority-lock-path
-                  process-env/*clj-kondo-admission-path* gate
-                  process-env/*pressure-status-path* "/definitely/missing/status.json"
-                  process-env/*maximum-normalized-load* 1000000.0]
-          (let [launched (cold-verify/launch!
-                           (.getPath root) "full"
-                           {:command ["clj-kondo" "--lint" "must-not-launch"]
-                            :timeout-ms 250})
-                result (await-terminal root (:verification_job launched))]
-            (is (:ok result))
-            (is (false? (:passed result)))
-            (is (= :unverified (:status result)))
-            (is (= :clj-kondo-admission-timeout (:error-type result)))
-            (is (= :admission-timeout
-                   (get-in result [:admission :status])))
-            (is (true? (:verification_complete result)))
-            (is (= "restore_analyzer_authority_before_retry"
-                   (:next_action result))))))
+      (with-redefs [process-env/run-bounded!
+                    (fn [request]
+                      (reset! bounded-call request)
+                      {:finished? true
+                       :exit 75
+                       :elapsed_ms 150.0
+                       :output "clj-kondo-admission-timeout"
+                       :output-bytes 27
+                       :output-sha256 (apply str (repeat 64 "a"))
+                       :output-truncated false
+                       :admission {:status :admission-timeout
+                                   :error-type :clj-kondo-admission-timeout}})]
+        (let [launched (cold-verify/launch!
+                         (.getPath root) "full"
+                         {:command ["clj-kondo" "--lint" "must-not-launch"]
+                          :timeout-ms 250})
+              result (await-terminal root (:verification_job launched))]
+          (is (= ["clj-kondo" "--lint" "must-not-launch"]
+                 (:command @bounded-call)))
+          (is (= 250 (:timeout-ms @bounded-call)))
+          (is (:ok result))
+          (is (false? (:passed result)))
+          (is (= :unverified (:status result)))
+          (is (= :clj-kondo-admission-timeout (:error-type result)))
+          (is (= :admission-timeout
+                 (get-in result [:admission :status])))
+          (is (true? (:verification_complete result)))
+          (is (= "restore_analyzer_authority_before_retry"
+                 (:next_action result)))))
       (finally
         (cold-verify/clear-jobs!)
         (delete-tree! root)))))
