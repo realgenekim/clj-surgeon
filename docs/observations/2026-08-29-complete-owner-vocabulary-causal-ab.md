@@ -222,6 +222,11 @@ state, was removed from `/tmp` and moved to the user trash; it was not included
 in the retained archive. No cohort process remained. The targeted experiment
 does not advance the agent-usage window marker.
 
+Audit defect: after the first cohort had stopped, publication troubleshooting
+issued one shallow listing of `/home/dev-a`, contrary to the no-home-scan
+instruction. It occurred after all experimental inputs and results were frozen,
+did not enter either archive, and did not affect the repair cohort or estimates.
+
 ## Repair cohort preregistration
 
 This section was committed and pushed before any repair-cohort model call. The
