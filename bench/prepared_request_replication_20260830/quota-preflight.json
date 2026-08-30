@@ -1,0 +1,14 @@
+{
+  "schema": "prepared-request-replication-quota-preflight.v1",
+  "observed_at": "2026-08-30T14:22:28Z",
+  "seat": "dev-a",
+  "pane": "%32",
+  "account": "genekkanban@gmail.com",
+  "plan": "Pro",
+  "model": "gpt-5.6-sol",
+  "reasoning": "high",
+  "weekly_headroom_percent": 98,
+  "codex_version": "0.147.0",
+  "method": "raw tmux /status on exact dev-a pane; Agent Bridge verified the pane and empty composer",
+  "note": "Status warned that limits may be briefly stale; headroom is reported, not consumption."
+}

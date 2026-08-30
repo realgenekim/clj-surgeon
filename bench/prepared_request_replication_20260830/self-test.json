@@ -1,0 +1,6 @@
+{
+  "assertions": 12,
+  "completed_at_ns": 1788100317956562000,
+  "schema": "prepared-request-replication-self-test.v1",
+  "status": "ok"
+}

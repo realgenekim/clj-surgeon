@@ -1,0 +1,4 @@
+{:paths ["src"]
+ :aliases
+ {:test {:extra-paths ["test"]
+         :main-opts ["-m" "acme.fixture-test"]}}}

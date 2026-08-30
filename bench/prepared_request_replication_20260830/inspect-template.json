@@ -1,0 +1,24 @@
+{
+  "requests": [
+    {
+      "id": "checkout-policy-owners",
+      "operation": "forms",
+      "file": "src/acme/checkout_policy.clj",
+      "forms": [
+        "connect-timeout-ms",
+        "request-timeout-ms",
+        "retry-budget",
+        "policy-label"
+      ],
+      "expect": {"forms": 4}
+    },
+    {
+      "id": "checkout-client-owner",
+      "operation": "forms",
+      "file": "src/acme/checkout_client.clj",
+      "forms": ["request-options"],
+      "expect": {"forms": 1}
+    }
+  ],
+  "expect": {"requests": 2, "files": 2}
+}

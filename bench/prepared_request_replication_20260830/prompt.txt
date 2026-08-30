@@ -1,0 +1,18 @@
+Update the existing checkout resilience policy in the current synthetic Clojure repository.
+
+Before any mutation, call `inspect_clojure` exactly once with the batched request below. Do not inspect or read any file a second time.
+
+```json
+__INSPECT_REQUEST__
+```
+
+After that inspection returns, choose either the offered native patch/edit method or the offered `edit_clojure` method. Use the mutation method you judge best; do not use another write mechanism.
+
+Make this one coherent change across the two checkout files:
+
+- in `src/acme/checkout_policy.clj`, change private `connect-timeout-ms` from 250 to 400;
+- in that file, change private `request-timeout-ms` from 900 to 1200;
+- rename public Var `retry-budget` to `resilience-budget` and update its qualified caller in `src/acme/checkout_client.clj`; and
+- change the checkout profile text from `"legacy"` to `"resilient"` everywhere it appears in `retry-budget`, `policy-label`, and `request-options`.
+
+Preserve every unrelated byte, including `src/acme/analytics_policy.clj`. Do not create, delete, or rename files. Do not mutate before the inspection result. The external harness will verify the result. Complete the edit and respond with one short sentence without explaining the route choice.

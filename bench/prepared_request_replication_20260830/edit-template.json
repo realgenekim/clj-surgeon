@@ -1,0 +1,46 @@
+{
+  "edits": [
+    {
+      "file": "src/acme/checkout_policy.clj",
+      "within": {"form": "connect-timeout-ms"},
+      "from": "250",
+      "to": "400"
+    },
+    {
+      "file": "src/acme/checkout_policy.clj",
+      "within": {"form": "request-timeout-ms"},
+      "from": "900",
+      "to": "1200"
+    },
+    {
+      "file": "src/acme/checkout_policy.clj",
+      "within": {"form": "retry-budget"},
+      "from": "retry-budget",
+      "to": "resilience-budget"
+    },
+    {
+      "file": "src/acme/checkout_policy.clj",
+      "within": {"form": "retry-budget"},
+      "from": "\"legacy\"",
+      "to": "\"resilient\""
+    },
+    {
+      "file": "src/acme/checkout_policy.clj",
+      "within": {"form": "policy-label"},
+      "from": "\"legacy\"",
+      "to": "\"resilient\""
+    },
+    {
+      "file": "src/acme/checkout_client.clj",
+      "within": {"form": "request-options"},
+      "from": "policy/retry-budget",
+      "to": "policy/resilience-budget"
+    },
+    {
+      "file": "src/acme/checkout_client.clj",
+      "within": {"form": "request-options"},
+      "from": "\"legacy\"",
+      "to": "\"resilient\""
+    }
+  ]
+}
