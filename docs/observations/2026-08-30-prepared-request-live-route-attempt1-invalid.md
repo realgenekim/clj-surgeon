@@ -1,7 +1,13 @@
 # Prepared-request live-route attempt 1 — invalid
 
-Attempt root:
+Durable attempt root:
+`bench/results/2026-08-30-prepared-request-live-route-attempt1-invalid`
+
+Original attempt root:
 `/private/tmp/clj-surgeon-prepared-live-measure.dlyb6e/results`
+
+Manifest SHA-256:
+`3f46ff076f8969152a9f860c4a3711754edb7ce99032fc564b1913de1d43c65a`
 
 The first frozen run stopped at its paid-path validity gate. All read-side
 semantic checks passed, the ineligible response carried no descriptor, the

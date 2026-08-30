@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":103,"method":"tools/call","params":{"name":"inspect_clojure","arguments":{"workspace_root":"/private/tmp/clj-surgeon-prepared-live-measure.dlyb6e/results/workspace","requests":[{"id":"subject","operation":"forms","file":"src/sample.clj","forms":["alpha","beta","gamma","delta","epsilon","zeta","eta"],"expect":{"forms":7}}],"expect":{"requests":1,"files":1}}}}

@@ -1,0 +1,1 @@
+{"workspace_root":"/private/tmp/clj-surgeon-prepared-live-measure.dlyb6e/results/paid-workspace","edits":[{"file":"src/sample.clj","within":{"form":"alpha"},"from":"(def alpha 1)","to":"(def alpha 42)","matches":1}]}
