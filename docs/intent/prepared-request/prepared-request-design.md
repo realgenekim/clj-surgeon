@@ -66,8 +66,10 @@ The projection emits a descriptor only when all of these conditions hold:
   `next_action=none`;
 - the batch has one request, one file, and one result;
 - that result has `operation=forms` and returns from one through six forms;
-- every form has source, a unique named top-level owner, exact hashes, and a
-  valid source anchor inside the returned file;
+- every form has source, a unique named top-level owner addressable through
+  public `within.form`, exact hashes, and a valid source anchor inside the
+  returned file; namespace forms are ineligible because their public address
+  is `within.namespace`;
 - the result and batch character counts equal the returned form sources;
 - the result file is project-relative and has a supported suffix;
 - for `.cljc`, every returned form has exactly the shared platform set
