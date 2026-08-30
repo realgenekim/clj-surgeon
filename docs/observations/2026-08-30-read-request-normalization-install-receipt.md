@@ -67,6 +67,11 @@ Receipts are at `~/bin/clj-surgeon.receipt.edn`,
 `~/.codex/skills/clj-surgeon.receipt.edn`, and
 `~/.claude/skills/clj-surgeon.receipt.edn`.
 
+The stable install was finalized from the canonical checkout after its safe
+fast-forward. `~/.local/share/clj-surgeon/control-plane-root` and its receipt
+therefore name `/Users/genekim/src.local/clj-surgeon/` at commit `c55de227`,
+not the temporary release worktree.
+
 ## Shared MCP publication
 
 The shared MCP remained PID 65458; it was not restarted. Its CWD and relative
