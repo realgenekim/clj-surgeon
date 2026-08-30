@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js",
+    "mcp",
+    "list"
+  ],
+  "ended_ns": 1788101131295378000,
+  "exit_code": 0,
+  "started_ns": 1788101131222163000,
+  "stderr": "",
+  "stdout": "Name         Url                         Bearer Token Env Var  Status   Auth       \nclj-surgeon  http://127.0.0.1:60496/mcp  -                     enabled  Unsupported\n",
+  "timed_out": false
+}

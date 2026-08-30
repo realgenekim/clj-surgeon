@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js",
+    "exec",
+    "--json",
+    "--strict-config",
+    "-c",
+    "model_provider=\"__multisite_preflight_no_provider__\"",
+    "-C",
+    "/private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/exec-valid-preflight/workspace",
+    "CONFIG PARSE SENTINEL. This must not reach a model."
+  ],
+  "ended_ns": 1788101126386725000,
+  "exit_code": 1,
+  "started_ns": 1788101126329806000,
+  "stderr": "Error: Model provider `__multisite_preflight_no_provider__` not found\n",
+  "stdout": "",
+  "timed_out": false
+}

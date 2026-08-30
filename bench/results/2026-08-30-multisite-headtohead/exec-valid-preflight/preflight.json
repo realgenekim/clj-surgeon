@@ -1,0 +1,31 @@
+{
+  "addendum_sha256": "bc5d206ad38b374afa30844bcb0a5ae62dbb0e26753b4d89b56dc56d6a2cd4e8",
+  "base_runner_sha256": "c578374f13d2a09bc3bc940a9a7d53cc35c4be8028fcf0856298a4a2f088b128",
+  "completed_at_ns": 1788101131344215000,
+  "fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+  "invalid_provider_sentinel": "__multisite_preflight_no_provider__",
+  "native": {
+    "child_openai_environment_variables": [],
+    "completed_model_turns": 0,
+    "config_sha256": "a7782eef9af3dc301bbc020d334f807212ffb8c301c44de47da172b707b223c5",
+    "exec_validation_exit_code": 1,
+    "exec_validation_stopped_at_missing_provider": true,
+    "mcp_server_present": false,
+    "resolved_apply_patch_tool_type": "freeform",
+    "tool_hook_bytes": 0
+  },
+  "previous_killed_cohort_commit": "d52d29c4577e3e0506ec0b939315be2c82ef5a06",
+  "runner_sha256": "10195680b48e2c3c43e1fdbdeb25b38c7abeb29f581c0e19db26ee6b1b4d56cf",
+  "schema": "multisite-exec-valid-preflight.v1",
+  "status": "ok",
+  "surgeon": {
+    "child_openai_environment_variables": [],
+    "completed_model_turns": 0,
+    "config_sha256": "b2eca3ce77df9814d83ffe907875cc664cf2a654fc5253bf16daa21f6018bc09",
+    "exec_validation_exit_code": 1,
+    "exec_validation_stopped_at_missing_provider": true,
+    "mcp_server_present": true,
+    "resolved_apply_patch_tool_type": null,
+    "tool_hook_bytes": 0
+  }
+}
