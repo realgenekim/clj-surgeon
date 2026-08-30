@@ -1,23 +1,29 @@
 Use the available structural tools to update `src/splice_reference/fixture.clj`.
-First read the exact forms `retry-policy`, `cache-policy`, `alert-rules`, and
-`rollout-policy` together in one `inspect_clojure` call. Then submit all four
-owner-scoped replacements together in one `edit_clojure` call.
+First read the exact forms `alpha-forms`, `keyword-twins`,
+`substring-siblings`, and `repeated-literals` together in one
+`inspect_clojure` call. Then submit all four owner-scoped replacements together
+in one `edit_clojure` call.
 
-Make exactly these changes:
+Each owner deliberately contains four near-identical candidate spans. Change
+only these exact candidates from `:enabled? false` to `:enabled? true`:
 
-1. `retry-policy`: max attempts 7, initial delay 400 ms, max delay 12000 ms,
-   and add `:jitter-strategy :full` immediately after `:max-delay-ms`.
-2. `cache-policy`: TTL 900000 ms, refresh-ahead 60000 ms, add
-   `:stale-while-revalidate-ms 120000` immediately after refresh-ahead,
-   max entries 5000, compression true, and namespace prefix
-   `"splice-screen:v2"`.
-3. `alert-rules`: change the three warning/critical pairs to 650/1200,
-   1.5/4.0, and 400/800 respectively; change their minimum samples to
-   150, 250, and 75. Preserve rule order and window sizes.
-4. `rollout-policy`: stages become 3%/30 min, 20%/60 min, and 100%/90 min;
-   add `:saturation` to `:abort-on`; set rollback window to 180 minutes.
+1. In `alpha-forms`, the `:slot :alpha-b` candidate whose quoted form is
+   `(def alpha "alphabet")` and whose pair is `[:alphabet :alpha]`.
+2. In `keyword-twins`, the fourth candidate, `:slot :pair-d`, whose primary
+   pair is `[:alphabet :alpha]`, secondary pair is `[:alpha :alphabet]`, and
+   position is `:first`.
+3. In `substring-siblings`, the first candidate, `:slot :text-a`, whose needle
+   is the substring `"alpha"`, sibling is `"alphabet"`, and position is
+   `:short`.
+4. In `repeated-literals`, the third candidate, `:slot :literal-c`, whose
+   repeated literal and quoted form are identical to its siblings but whose
+   position is `:east`.
 
-Preserve all unmentioned bytes, key order, indentation, and line breaks. Do not
-use shell commands, native file reads, or file-change tools. Omit
-`workspace_root` because the isolated server owns it. After the verified edit,
-reply exactly: done
+Preserve every other byte, candidate order, indentation, and line break. In a
+reference arm, choose each `from_ref` only after checking its full readable
+file, owner, candidate id, offsets, preview, and identity token in the labeled
+read. If you actively performed that check, copy the label's `identity_token`
+into the optional `ref_readback` field; omit it if you did not. Do not use shell
+commands, native file reads, or file-change tools. Omit `workspace_root`
+because the isolated server owns it. After the verified edit, reply exactly:
+done

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the frozen pilot and 8/arm splice-by-reference synthetic screen."""
+"""Run the frozen 8/arm adversarial splice-reference replication and Spark bonus."""
 
 from __future__ import annotations
 
@@ -24,10 +24,11 @@ from splice_reference_screen import ideal_requests, score_episode, sha256_manife
 
 
 MODEL = "gpt-5.6-sol"
+SPARK_MODEL = "gpt-5.3-codex-spark"
 REASONING = "high"
-PILOT = ["Q", "R"]
 COHORT = ["Q", "R", "R", "Q", "R", "Q", "Q", "R",
           "Q", "R", "R", "Q", "R", "Q", "Q", "R"]
+BONUS = ["Q", "R"]
 
 
 def run(command: list[str], cwd: Path) -> str:
@@ -107,7 +108,8 @@ def run_codex(command: list[str], env: dict[str, str], cwd: Path,
 
 
 def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
-                auth_file: Path, timeout: int, manifest: dict[str, Any]) -> dict[str, Any]:
+                auth_file: Path, timeout: int, manifest: dict[str, Any],
+                model: str = MODEL) -> dict[str, Any]:
     run_id = f"{index:02d}-{arm}"
     run_dir = output / phase / run_id
     fixture_root = repo_root / "bench/fixtures/splice_reference"
@@ -133,7 +135,7 @@ def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
         command = [
             "codex", "exec", "--json", "--ephemeral", "--ignore-rules",
             "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never",
-            "-m", MODEL, "-c", f'model_reasoning_effort="{REASONING}"',
+            "-m", model, "-c", f'model_reasoning_effort="{REASONING}"',
             "-C", str(workspace), prompt,
         ]
         env = dict(os.environ)
@@ -144,11 +146,11 @@ def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
             command, env, workspace, run_dir / "events.jsonl", run_dir / "stderr.txt", timeout,
         )
         episode = {
-            "schema": "clj-surgeon.splice-reference-episode.v1",
+            "schema": "clj-surgeon.splice-reference-adversarial-episode.v1",
             "run_id": run_id,
             "phase": phase,
             "arm": arm,
-            "model": MODEL,
+            "model": model,
             "reasoning": REASONING,
             "subscription_route": True,
             "openai_api_key_removed": True,
@@ -167,7 +169,7 @@ def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
         )
         write_json(run_dir / "score.json", score)
         print(
-            f"{phase} {run_id}: complete={score['completed_task']} "
+            f"{phase} {run_id} {model}: complete={score['completed_task']} "
             f"exact={score['exact_bytes']} refs={score['reference_count']} "
             f"edit_tokens={score['emitted']['mutation_tokens']} "
             f"wrong_subject={score['wrong_subject']}",
@@ -176,31 +178,6 @@ def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
         return score
     finally:
         shutil.rmtree(home)
-
-
-def pilot_summary(scores: list[dict[str, Any]], ideal: dict[str, Any]) -> dict[str, Any]:
-    q, r = scores
-    gate = {
-        "zero_model_possible_token_reduction_at_least_25_percent":
-            ideal["possible_reduction"]["tokens"] >= 0.25,
-        "Q_completed_exact_conventional":
-            q["completed_task"] and q["conventional_call_count"] >= 1
-            and q["quoted_anchor_count"] >= 4,
-        "R_completed_exact_strict_reference":
-            r["completed_task"] and r["reference_used_strict"]
-            and r["resolved_identity_count"] == 4,
-        "observed_arms_differ":
-            r["emitted"]["mutation_tokens"] < q["emitted"]["mutation_tokens"],
-        "wrong_subject_zero": q["wrong_subject"] + r["wrong_subject"] == 0,
-    }
-    return {
-        "schema": "clj-surgeon.splice-reference-pilot.v1",
-        "order": PILOT,
-        "ideal": ideal,
-        "scores": scores,
-        "sub_ceiling_gate": gate,
-        "continue_to_cohort": all(gate.values()),
-    }
 
 
 def check_frozen(repo_root: Path, expected_head: str) -> dict[str, str]:
@@ -250,22 +227,23 @@ def main() -> int:
     fixture_root = repo_root / "bench/fixtures/splice_reference"
     manifest = json.loads((fixture_root / "spans.json").read_text(encoding="utf-8"))
     ideal = ideal_requests(manifest)
-    if ideal["possible_reduction"]["tokens"] < 0.25:
+    if ideal["possible_reduction"]["tokens"] < 0.30:
         raise SystemExit("zero-model instrument cannot express the registered token effect")
     args.output.mkdir(parents=True)
     config = {
-        "schema": "clj-surgeon.splice-reference-run-config.v1",
+        "schema": "clj-surgeon.splice-reference-adversarial-run-config.v1",
         **frozen,
         "created_utc": utc_now(),
         "model": MODEL,
+        "bonus_model": SPARK_MODEL,
         "reasoning": REASONING,
         "route": "codex exec ChatGPT subscription; OPENAI_API_KEY removed",
         "tokenizer": {
             "encoding": "o200k_base",
             "tiktoken_version": tiktoken.__version__,
         },
-        "pilot_order": PILOT,
         "cohort_order": COHORT,
+        "bonus_order": BONUS,
         "attempts_per_arm": 8,
         "hashes": {
             str(path.relative_to(repo_root)): file_sha(path)
@@ -277,7 +255,7 @@ def main() -> int:
                 fixture_root / "task.txt",
                 fixture_root / "before" / manifest["file"],
                 fixture_root / "expected" / manifest["file"],
-                repo_root / "docs/observations/2026-08-30-splice-reference-screen-preregistration.md",
+                repo_root / "docs/observations/2026-08-30-splice-reference-adversarial-replication-preregistration.md",
             ]
         },
         "codex_version": run(["codex", "--version"], repo_root),
@@ -286,20 +264,7 @@ def main() -> int:
         "ideal_requests": ideal,
     }
     write_json(args.output / "run-config.json", config)
-    pilot_scores = [
-        run_episode(index, "pilot", arm, args.output, repo_root, args.auth_file.resolve(),
-                    args.timeout, manifest)
-        for index, arm in enumerate(PILOT, start=1)
-    ]
-    pilot = pilot_summary(pilot_scores, ideal)
-    write_json(args.output / "pilot-summary.json", pilot)
-    if not pilot["continue_to_cohort"]:
-        (args.output / "manifest.sha256").write_text(
-            "\n".join(sha256_manifest(args.output)) + "\n", encoding="utf-8"
-        )
-        print("pilot gate refused cohort launch", flush=True)
-        return 1
-    print("pilot gate passed; launching frozen 16-run cohort", flush=True)
+    print("launching frozen 16-run Sol cohort", flush=True)
     cohort_scores = [
         run_episode(index, "cohort", arm, args.output, repo_root, args.auth_file.resolve(),
                     args.timeout, manifest)
@@ -308,11 +273,31 @@ def main() -> int:
     summary = summarize(cohort_scores, expected_attempts=8)
     summary["order"] = COHORT
     summary["registered_kill_thresholds"] = {
-        "minimum_token_reduction": 0.25,
+        "minimum_token_reduction": 0.30,
         "maximum_wrong_subject": 0,
-        "minimum_strict_reference_use_rate_R": 0.5,
+        "minimum_strict_reference_uses_R": 6,
+        "R_exact_must_be_at_least_Q_exact": True,
     }
     write_json(args.output / "cohort-summary.json", summary)
+    print("launching frozen two-cell Spark bonus", flush=True)
+    bonus_scores = [
+        run_episode(index, "bonus", arm, args.output, repo_root, args.auth_file.resolve(),
+                    args.timeout, manifest, model=SPARK_MODEL)
+        for index, arm in enumerate(BONUS, start=1)
+    ]
+    bonus_summary = {
+        "schema": "clj-surgeon.splice-reference-adversarial-spark-bonus.v1",
+        "model": SPARK_MODEL,
+        "order": BONUS,
+        "scores": bonus_scores,
+        "exact": sum(score["exact_bytes"] for score in bonus_scores),
+        "strict_reference_uses_R": sum(
+            score["reference_used_strict"] for score in bonus_scores if score["arm"] == "R"
+        ),
+        "wrong_subject": sum(score["wrong_subject"] for score in bonus_scores),
+        "descriptive_only_not_pooled": True,
+    }
+    write_json(args.output / "spark-bonus-summary.json", bonus_summary)
     (args.output / "manifest.sha256").write_text(
         "\n".join(sha256_manifest(args.output)) + "\n", encoding="utf-8"
     )

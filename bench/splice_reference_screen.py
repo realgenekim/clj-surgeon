@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scoring and receipt helpers for the splice-by-reference screen."""
+"""Scoring and receipt helpers for adversarial splice-reference replication."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def ideal_requests(manifest: dict[str, Any]) -> dict[str, Any]:
+    targets = [spec for spec in manifest["candidates"] if "to" in spec]
     conventional = {
         "edits": [
             {
@@ -42,7 +43,7 @@ def ideal_requests(manifest: dict[str, Any]) -> dict[str, Any]:
                 "to": spec["to"],
                 "matches": 1,
             }
-            for spec in manifest["spans"]
+            for spec in targets
         ]
     }
     reference = {
@@ -50,11 +51,11 @@ def ideal_requests(manifest: dict[str, Any]) -> dict[str, Any]:
             {
                 "file": manifest["file"],
                 "within": spec["within"],
-                "from_ref": f"s{index}",
+                "from_ref": spec["label"],
                 "to": spec["to"],
                 "matches": 1,
             }
-            for index, spec in enumerate(manifest["spans"], start=1)
+            for spec in targets
         ]
     }
     q = request_metrics(conventional)
@@ -120,6 +121,27 @@ def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
         if row.get("event") == "reference-refusal"
         and row.get("refusal", {}).get("wrong_subject") is True
     ]
+    identity_audits = [
+        resolution
+        for row in receipts
+        if row.get("event") in {"reference-refusal", "edit-result"}
+        for resolution in (
+            row.get("resolutions", [])
+            if row.get("event") == "reference-refusal"
+            else row.get("resolved_references", [])
+        )
+        if isinstance(resolution, dict) and "identity_match" in resolution
+    ]
+    wrong_identity_audits = [row for row in identity_audits if row["identity_match"] is False]
+    verified_readbacks = [
+        row for row in identity_audits
+        if row.get("readback_present") is True and row.get("readback_match") is True
+    ]
+    blind_references = [row for row in identity_audits if row.get("readback_present") is False]
+    incorrect_readbacks = [
+        row for row in identity_audits
+        if row.get("readback_present") is True and row.get("readback_match") is False
+    ]
     typed_reference_failures = [row for row in receipts if row.get("event") == "reference-refusal"]
     annotations = [row for row in receipts if row.get("event") == "read-annotation"]
     edit_results = [row for row in receipts if row.get("event") == "edit-result"]
@@ -143,7 +165,7 @@ def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
     route_adherent = shell_calls == 0 and file_change_calls == 0
     completed = environment_valid and route_adherent and exact and product_verified
     return {
-        "schema": "clj-surgeon.splice-reference-episode-score.v1",
+        "schema": "clj-surgeon.splice-reference-adversarial-episode-score.v1",
         "run_id": run_dir.name,
         "arm": arm,
         "environment_valid": environment_valid,
@@ -152,7 +174,7 @@ def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
         "route_adherent": route_adherent,
         "completed_task": completed,
         "product_verification_complete": product_verified,
-        "wrong_subject": len(wrong_subject_rows),
+        "wrong_subject": max(len(wrong_subject_rows), len(wrong_identity_audits)),
         "typed_reference_failures": len(typed_reference_failures),
         "reference_count": refs,
         "quoted_anchor_count": quoted,
@@ -161,6 +183,16 @@ def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
         "reference_used_strict": strict_reference_calls > 0 and quoted == 0,
         "reference_used_any": refs > 0,
         "resolved_identity_count": resolved_count,
+        "resolved_identity_audit_count": len(identity_audits),
+        "verified_readback_reference_count": len(verified_readbacks),
+        "blind_reference_count": len(blind_references),
+        "incorrect_readback_count": len(incorrect_readbacks),
+        "readback_behavior": (
+            "verified" if identity_audits and len(verified_readbacks) == len(identity_audits)
+            else "blind" if blind_references and not verified_readbacks
+            else "mixed" if identity_audits
+            else "not_applicable"
+        ),
         "read_annotation_count": len(annotations),
         "turns": {
             "mcp_round_trips": len(tool_requests),
@@ -198,6 +230,15 @@ def summarize(scores: list[dict[str, Any]], expected_attempts: int) -> dict[str,
             "wrong_subject": sum(score["wrong_subject"] for score in arms[arm]),
             "typed_reference_failures": sum(score["typed_reference_failures"] for score in arms[arm]),
             "strict_reference_uses": sum(score["reference_used_strict"] for score in arms[arm]),
+            "verified_readback_episodes": sum(
+                score["readback_behavior"] == "verified" for score in arms[arm]
+            ),
+            "blind_fire_episodes": sum(
+                score["readback_behavior"] == "blind" for score in arms[arm]
+            ),
+            "mixed_readback_episodes": sum(
+                score["readback_behavior"] == "mixed" for score in arms[arm]
+            ),
             "median_mutation_utf8_bytes": median([
                 score["emitted"]["mutation_utf8_bytes"] for score in completed[arm]
             ]),
@@ -226,12 +267,13 @@ def summarize(scores: list[dict[str, Any]], expected_attempts: int) -> dict[str,
         for arm in ["Q", "R"]
     )
     kills = {
-        "less_than_25_percent_token_reduction": reduction_tokens is None or reduction_tokens < 0.25,
+        "less_than_30_percent_token_reduction": reduction_tokens is None or reduction_tokens < 0.30,
         "any_wrong_subject": wrong_subject > 0,
-        "reference_use_below_half": reference_rate < 0.5,
+        "R_exact_below_Q_parity": stats["R"]["exact"] < stats["Q"]["exact"],
+        "strict_reference_adoption_below_6_of_8": stats["R"]["strict_reference_uses"] < 6,
     }
     return {
-        "schema": "clj-surgeon.splice-reference-screen-summary.v1",
+        "schema": "clj-surgeon.splice-reference-adversarial-summary.v1",
         "expected_attempts_per_arm": expected_attempts,
         "arms": stats,
         "primary": {
@@ -243,11 +285,16 @@ def summarize(scores: list[dict[str, Any]], expected_attempts: int) -> dict[str,
         "secondary": {
             "wrong_subject_total": wrong_subject,
             "strict_reference_use_rate_R": reference_rate,
+            "readback_behavior_R": {
+                "verified_episodes": stats["R"]["verified_readback_episodes"],
+                "blind_fire_episodes": stats["R"]["blind_fire_episodes"],
+                "mixed_episodes": stats["R"]["mixed_readback_episodes"],
+            },
         },
         "validity_gate_passed": validity,
         "kills": kills,
         "screen_survives": validity and not any(kills.values()),
-        "screen_only_no_performance_claim": True,
+        "fresh_adversarial_replication": True,
     }
 
 

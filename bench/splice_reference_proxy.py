@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Experiment-only stdio MCP proxy for the splice-by-reference screen.
+"""Experiment-only stdio MCP proxy for adversarial splice-reference replication.
 
 This file deliberately lives under bench/. It does not alter the product
 handler. Arm R annotates successful reads with snapshot-bound span labels and
@@ -74,16 +74,24 @@ def add_reference_schema(tool: dict[str, Any]) -> dict[str, Any]:
         result.get("description", "")
         + " EXPERIMENT-ONLY: after an inspect result advertises snapshot-bound "
         "span labels, an edit may replace canonical from with from_ref (for "
-        "example s3). The server resolves and receipts the exact readable "
+        "example r05). The server resolves and receipts the exact readable "
         "identity before ordinary edit_clojure validation."
     )
     item = result["inputSchema"]["properties"]["edits"]["items"]
     item["properties"]["from_ref"] = {
         "type": "string",
-        "pattern": "^s[1-9][0-9]*$",
+        "pattern": "^r[0-9]{2}$",
         "description": (
             "Snapshot-bound span label from the immediately preceding inspect "
             "result. Supply only with to; do not also supply from/old/before."
+        ),
+    }
+    item["properties"]["ref_readback"] = {
+        "type": "string",
+        "pattern": "^[0-9a-f]{12}$",
+        "description": (
+            "Optional observable read-back signal. If you checked the chosen "
+            "label against the labeled read, copy its identity_token here."
         ),
     }
     pair_choices = item["allOf"][0]["oneOf"]
@@ -122,7 +130,10 @@ class ReferenceState:
     def __init__(self, workspace: Path, manifest: dict[str, Any]) -> None:
         self.workspace = workspace
         self.file = manifest["file"]
-        self.specs = manifest["spans"]
+        self.specs = manifest["candidates"]
+        self.targets_by_to_sha = {
+            sha256_text(spec["to"]): spec for spec in self.specs if "to" in spec
+        }
         self.labels: dict[str, dict[str, Any]] = {}
 
     def annotate(self, message: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -151,9 +162,20 @@ class ReferenceState:
                 ), []
             owner_source = matching_sources[0]
             start = owner_source.index(old)
-            label = f"s{index}"
+            label = spec["label"]
+            identity_token = sha256_text(canonical_json({
+                "candidate_id": spec["candidate_id"],
+                "file": self.file,
+                "within": spec["within"],
+                "owner_source_sha256": sha256_text(owner_source),
+                "anchor_sha256": sha256_text(old),
+                "start_utf8_byte": len(owner_source[:start].encode("utf-8")),
+            }))[:12]
             identity = {
                 "label": label,
+                "candidate_id": spec["candidate_id"],
+                "ordinal_in_owner": spec["ordinal_in_owner"],
+                "identity_token": identity_token,
                 "snapshot_hash": snapshot_hash,
                 "file": self.file,
                 "within": spec["within"],
@@ -164,16 +186,19 @@ class ReferenceState:
                 "anchor_utf8_bytes": len(old.encode("utf-8")),
                 "anchor_preview": old[:72].replace("\n", "\\n"),
                 "source": old,
-                "expected_to_sha256": sha256_text(spec["to"]),
             }
-            labels[label] = {**identity, "from": old, "to": spec["to"]}
+            labels[label] = {**identity, "from": old}
             rendered.append(identity)
         self.labels = labels
         structured["span_references"] = {
-            "schema": "clj-surgeon.splice-reference-read.v1",
+            "schema": "clj-surgeon.splice-reference-adversarial-read.v1",
             "snapshot_hash": snapshot_hash,
             "labels": rendered,
-            "instruction": "Use from_ref instead of re-quoting source in edit_clojure.",
+            "instruction": (
+                "Resolve the task's intended candidate against full readable identity, "
+                "then use from_ref instead of re-quoting source. Copy identity_token "
+                "to optional ref_readback only if you performed that check."
+            ),
         }
         content = result["result"].setdefault("content", [])
         content.append(
@@ -209,18 +234,45 @@ class ReferenceState:
                     f"edit {index} mixes from_ref with an ordinary value pair",
                     False,
                 )
-            if edit.get("file") != identity["file"] or edit.get("within") != identity["within"]:
+            target = edit.get("to")
+            intended = (
+                self.targets_by_to_sha.get(sha256_text(target))
+                if isinstance(target, str) else None
+            )
+            if intended is None:
+                return None, resolutions, failure(
+                    "splice-reference-unknown-intended-target",
+                    f"edit {index} does not carry one registered target result",
+                    False,
+                )
+            readback = edit.get("ref_readback")
+            resolution = {key: value for key, value in identity.items()
+                          if key not in {"from"}}
+            resolution.update({
+                "edit_index": index,
+                "intended_candidate_id": intended["candidate_id"],
+                "intended_file": self.file,
+                "intended_within": intended["within"],
+                "identity_match": (
+                    identity["candidate_id"] == intended["candidate_id"]
+                    and edit.get("file") == self.file
+                    and edit.get("within") == intended["within"]
+                ),
+                "readback_present": readback is not None,
+                "readback_match": readback == identity["identity_token"] if readback is not None else None,
+            })
+            resolutions.append(resolution)
+            if not resolution["identity_match"]:
                 return None, resolutions, failure(
                     "splice-reference-wrong-subject",
-                    f"{label} resolves to {identity['file']} {identity['within']}, not the requested subject",
+                    f"{label} resolved to {identity['candidate_id']}, not intended {intended['candidate_id']}",
                     True,
                 )
-            target = edit.get("to")
-            if not isinstance(target, str) or sha256_text(target) != identity["expected_to_sha256"]:
+            if readback is not None and readback != identity["identity_token"]:
                 return None, resolutions, failure(
-                    "splice-reference-wrong-subject",
-                    f"{label} was paired with content intended for a different span",
-                    True,
+                    "splice-reference-readback-mismatch",
+                    f"{label} identity token did not match the labeled read",
+                    False,
                 )
             source_path = self.workspace / identity["file"]
             if not source_path.is_file() or sha256_file(source_path) != identity["snapshot_hash"]:
@@ -237,11 +289,8 @@ class ReferenceState:
                     True,
                 )
             del edit["from_ref"]
+            edit.pop("ref_readback", None)
             edit["from"] = identity["from"]
-            resolution = {key: value for key, value in identity.items()
-                          if key not in {"from", "to"}}
-            resolution["edit_index"] = index
-            resolutions.append(resolution)
         return translated, resolutions, None
 
 

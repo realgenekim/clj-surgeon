@@ -1,44 +1,25 @@
 (ns splice-reference.fixture)
 
-(def retry-policy
-  {:max-attempts 5
-   :initial-delay-ms 250
-   :multiplier 2.0
-   :max-delay-ms 8000
-   :retryable-statuses #{408 425 429 500 502 503 504}
-   :idempotency-required? true
-   :respect-retry-after? true})
+(def alpha-forms
+  [{:slot :alpha-a :form '(def alpha "alpha") :pair [:alpha :alphabet] :literal "alpha" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :alpha-b :form '(def alpha "alphabet") :pair [:alphabet :alpha] :literal "alpha" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :alpha-c :form '(def alphabet "alpha") :pair [:alpha :alphabet] :literal "alphabet" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :alpha-d :form '(def alpha-prefix "alpha") :pair [:alphabet :alpha] :literal "alphabet" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}])
 
-(def cache-policy
-  {:ttl-ms 300000
-   :refresh-ahead-ms 30000
-   :max-entries 2000
-   :eviction :least-recently-used
-   :compress-values? false
-   :record-hit-rate? true
-   :namespace-prefix "splice-screen:v1"})
+(def keyword-twins
+  [{:slot :pair-a :primary [:alpha :alphabet] :secondary [:alphabet :alpha] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :pair-b :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :second :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :pair-c :primary [:alpha :alphabet] :secondary [:alphabet :alpha] :position :second :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}])
 
-(def alert-rules
-  [{:signal :latency-p99-ms
-    :warning 750
-    :critical 1500
-    :window-minutes 10
-    :minimum-samples 100}
-   {:signal :error-rate-percent
-    :warning 2.0
-    :critical 5.0
-    :window-minutes 5
-    :minimum-samples 200}
-   {:signal :queue-depth
-    :warning 500
-    :critical 1000
-    :window-minutes 15
-    :minimum-samples 50}])
+(def substring-siblings
+  [{:slot :text-a :needle "alpha" :sibling "alphabet" :rendered "(def alpha \"alpha\")" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :text-b :needle "alphabet" :sibling "alpha" :rendered "(def alpha \"alphabet\")" :position :long :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :text-c :needle "alpha" :sibling "alpha-prefix" :rendered "(def alphabet \"alpha\")" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :text-d :needle "alpha-prefix" :sibling "alpha" :rendered "(def alpha-prefix \"alpha\")" :position :long :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}])
 
-(def rollout-policy
-  {:stages [{:name :canary :traffic-percent 5 :hold-minutes 20}
-            {:name :regional :traffic-percent 25 :hold-minutes 45}
-            {:name :broad :traffic-percent 100 :hold-minutes 60}]
-   :abort-on #{:latency-regression :error-budget-breach}
-   :require-manual-approval? true
-   :rollback-window-minutes 120})
+(def repeated-literals
+  [{:slot :literal-a :literal "alpha" :quoted '(def alpha "alpha") :pair [:alpha :alpha] :position :north :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :literal-b :literal "alpha" :quoted '(def alpha "alpha") :pair [:alpha :alpha] :position :south :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :literal-c :literal "alpha" :quoted '(def alpha "alpha") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}
+   {:slot :literal-d :literal "alpha" :quoted '(def alpha "alpha") :pair [:alpha :alpha] :position :west :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}])

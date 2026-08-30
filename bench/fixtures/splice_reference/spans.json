@@ -1,26 +1,123 @@
 {
-  "schema": "clj-surgeon.splice-reference-fixture.v1",
+  "schema": "clj-surgeon.splice-reference-adversarial-fixture.v1",
   "file": "src/splice_reference/fixture.clj",
-  "spans": [
+  "owners": ["alpha-forms", "keyword-twins", "substring-siblings", "repeated-literals"],
+  "candidates": [
     {
-      "within": {"form": "retry-policy"},
-      "from": "{:max-attempts 5\n   :initial-delay-ms 250\n   :multiplier 2.0\n   :max-delay-ms 8000\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
-      "to": "{:max-attempts 7\n   :initial-delay-ms 400\n   :multiplier 2.0\n   :max-delay-ms 12000\n   :jitter-strategy :full\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}"
+      "candidate_id": "alpha-a",
+      "label": "r07",
+      "ordinal_in_owner": 1,
+      "within": {"form": "alpha-forms"},
+      "from": "{:slot :alpha-a :form '(def alpha \"alpha\") :pair [:alpha :alphabet] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
     },
     {
-      "within": {"form": "cache-policy"},
-      "from": "{:ttl-ms 300000\n   :refresh-ahead-ms 30000\n   :max-entries 2000\n   :eviction :least-recently-used\n   :compress-values? false\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v1\"}",
-      "to": "{:ttl-ms 900000\n   :refresh-ahead-ms 60000\n   :stale-while-revalidate-ms 120000\n   :max-entries 5000\n   :eviction :least-recently-used\n   :compress-values? true\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v2\"}"
+      "candidate_id": "alpha-b",
+      "label": "r02",
+      "ordinal_in_owner": 2,
+      "within": {"form": "alpha-forms"},
+      "from": "{:slot :alpha-b :form '(def alpha \"alphabet\") :pair [:alphabet :alpha] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+      "to": "{:slot :alpha-b :form '(def alpha \"alphabet\") :pair [:alphabet :alpha] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}"
     },
     {
-      "within": {"form": "alert-rules"},
-      "from": "[{:signal :latency-p99-ms\n    :warning 750\n    :critical 1500\n    :window-minutes 10\n    :minimum-samples 100}\n   {:signal :error-rate-percent\n    :warning 2.0\n    :critical 5.0\n    :window-minutes 5\n    :minimum-samples 200}\n   {:signal :queue-depth\n    :warning 500\n    :critical 1000\n    :window-minutes 15\n    :minimum-samples 50}]",
-      "to": "[{:signal :latency-p99-ms\n    :warning 650\n    :critical 1200\n    :window-minutes 10\n    :minimum-samples 150}\n   {:signal :error-rate-percent\n    :warning 1.5\n    :critical 4.0\n    :window-minutes 5\n    :minimum-samples 250}\n   {:signal :queue-depth\n    :warning 400\n    :critical 800\n    :window-minutes 15\n    :minimum-samples 75}]"
+      "candidate_id": "alpha-c",
+      "label": "r14",
+      "ordinal_in_owner": 3,
+      "within": {"form": "alpha-forms"},
+      "from": "{:slot :alpha-c :form '(def alphabet \"alpha\") :pair [:alpha :alphabet] :literal \"alphabet\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
     },
     {
-      "within": {"form": "rollout-policy"},
-      "from": "{:stages [{:name :canary :traffic-percent 5 :hold-minutes 20}\n            {:name :regional :traffic-percent 25 :hold-minutes 45}\n            {:name :broad :traffic-percent 100 :hold-minutes 60}]\n   :abort-on #{:latency-regression :error-budget-breach}\n   :require-manual-approval? true\n   :rollback-window-minutes 120}",
-      "to": "{:stages [{:name :canary :traffic-percent 3 :hold-minutes 30}\n            {:name :regional :traffic-percent 20 :hold-minutes 60}\n            {:name :broad :traffic-percent 100 :hold-minutes 90}]\n   :abort-on #{:latency-regression :error-budget-breach :saturation}\n   :require-manual-approval? true\n   :rollback-window-minutes 180}"
+      "candidate_id": "alpha-d",
+      "label": "r11",
+      "ordinal_in_owner": 4,
+      "within": {"form": "alpha-forms"},
+      "from": "{:slot :alpha-d :form '(def alpha-prefix \"alpha\") :pair [:alphabet :alpha] :literal \"alphabet\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "pair-a",
+      "label": "r04",
+      "ordinal_in_owner": 1,
+      "within": {"form": "keyword-twins"},
+      "from": "{:slot :pair-a :primary [:alpha :alphabet] :secondary [:alphabet :alpha] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "pair-b",
+      "label": "r16",
+      "ordinal_in_owner": 2,
+      "within": {"form": "keyword-twins"},
+      "from": "{:slot :pair-b :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :second :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "pair-c",
+      "label": "r01",
+      "ordinal_in_owner": 3,
+      "within": {"form": "keyword-twins"},
+      "from": "{:slot :pair-c :primary [:alpha :alphabet] :secondary [:alphabet :alpha] :position :second :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "pair-d",
+      "label": "r12",
+      "ordinal_in_owner": 4,
+      "within": {"form": "keyword-twins"},
+      "from": "{:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+      "to": "{:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}"
+    },
+    {
+      "candidate_id": "text-a",
+      "label": "r15",
+      "ordinal_in_owner": 1,
+      "within": {"form": "substring-siblings"},
+      "from": "{:slot :text-a :needle \"alpha\" :sibling \"alphabet\" :rendered \"(def alpha \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+      "to": "{:slot :text-a :needle \"alpha\" :sibling \"alphabet\" :rendered \"(def alpha \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}"
+    },
+    {
+      "candidate_id": "text-b",
+      "label": "r06",
+      "ordinal_in_owner": 2,
+      "within": {"form": "substring-siblings"},
+      "from": "{:slot :text-b :needle \"alphabet\" :sibling \"alpha\" :rendered \"(def alpha \\\"alphabet\\\")\" :position :long :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "text-c",
+      "label": "r10",
+      "ordinal_in_owner": 3,
+      "within": {"form": "substring-siblings"},
+      "from": "{:slot :text-c :needle \"alpha\" :sibling \"alpha-prefix\" :rendered \"(def alphabet \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "text-d",
+      "label": "r03",
+      "ordinal_in_owner": 4,
+      "within": {"form": "substring-siblings"},
+      "from": "{:slot :text-d :needle \"alpha-prefix\" :sibling \"alpha\" :rendered \"(def alpha-prefix \\\"alpha\\\")\" :position :long :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "literal-a",
+      "label": "r09",
+      "ordinal_in_owner": 1,
+      "within": {"form": "repeated-literals"},
+      "from": "{:slot :literal-a :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :north :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "literal-b",
+      "label": "r13",
+      "ordinal_in_owner": 2,
+      "within": {"form": "repeated-literals"},
+      "from": "{:slot :literal-b :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :south :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
+    },
+    {
+      "candidate_id": "literal-c",
+      "label": "r05",
+      "ordinal_in_owner": 3,
+      "within": {"form": "repeated-literals"},
+      "from": "{:slot :literal-c :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+      "to": "{:slot :literal-c :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}"
+    },
+    {
+      "candidate_id": "literal-d",
+      "label": "r08",
+      "ordinal_in_owner": 4,
+      "within": {"form": "repeated-literals"},
+      "from": "{:slot :literal-d :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :west :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}"
     }
   ]
 }

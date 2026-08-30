@@ -20,7 +20,7 @@ from splice_reference_proxy import (  # noqa: E402
     filter_and_annotate_tools,
     sha256_file,
 )
-from splice_reference_screen import ideal_requests  # noqa: E402
+from splice_reference_screen import ideal_requests, summarize  # noqa: E402
 
 
 FIXTURE = REPO_ROOT / "bench/fixtures/splice_reference"
@@ -35,16 +35,58 @@ class SpliceReferenceScreenTest(unittest.TestCase):
         before = (FIXTURE / "before" / self.manifest["file"]).read_text(encoding="utf-8")
         expected = (FIXTURE / "expected" / self.manifest["file"]).read_text(encoding="utf-8")
         actual = before
-        for spec in self.manifest["spans"]:
+        candidates = self.manifest["candidates"]
+        targets = [spec for spec in candidates if "to" in spec]
+        self.assertEqual(16, len(candidates))
+        self.assertEqual(4, len(targets))
+        self.assertEqual({4}, {
+            sum(spec["within"]["form"] == owner for spec in candidates)
+            for owner in self.manifest["owners"]
+        })
+        self.assertEqual([2, 4, 1, 3], [spec["ordinal_in_owner"] for spec in targets])
+        self.assertNotEqual(
+            [spec["label"] for spec in candidates],
+            sorted(spec["label"] for spec in candidates),
+        )
+        for spec in targets:
             self.assertGreaterEqual(len(spec["from"].encode("utf-8")), 100)
             self.assertEqual(1, actual.count(spec["from"]))
             actual = actual.replace(spec["from"], spec["to"], 1)
         self.assertEqual(expected, actual)
+        self.assertIn('(def alpha "alpha")', before)
+        self.assertIn('"alpha" :sibling "alphabet"', before)
 
     def test_zero_model_instrument_can_cross_kill_threshold(self) -> None:
         ideal = ideal_requests(self.manifest)
-        self.assertGreaterEqual(ideal["possible_reduction"]["utf8_bytes"], 0.25)
-        self.assertGreaterEqual(ideal["possible_reduction"]["tokens"], 0.25)
+        self.assertGreaterEqual(ideal["possible_reduction"]["utf8_bytes"], 0.30)
+        self.assertGreaterEqual(ideal["possible_reduction"]["tokens"], 0.30)
+
+    def test_kill_matrix_keeps_recovered_wrong_subject_loud(self) -> None:
+        def score(arm: str, index: int) -> dict:
+            return {
+                "arm": arm,
+                "completed_task": True,
+                "exact_bytes": True,
+                "environment_valid": True,
+                "route_adherent": True,
+                "wrong_subject": 1 if arm == "R" and index == 0 else 0,
+                "typed_reference_failures": 0,
+                "reference_used_strict": arm == "R",
+                "readback_behavior": "verified" if arm == "R" else "not_applicable",
+                "emitted": {
+                    "mutation_utf8_bytes": 2000 if arm == "Q" else 1300,
+                    "mutation_tokens": 650 if arm == "Q" else 440,
+                    "all_mcp_tokens": 700 if arm == "Q" else 500,
+                },
+                "turns": {"mcp_round_trips": 2},
+            }
+
+        scores = [score("Q", index) for index in range(8)]
+        scores += [score("R", index) for index in range(8)]
+        summary = summarize(scores, expected_attempts=8)
+        self.assertTrue(summary["validity_gate_passed"])
+        self.assertTrue(summary["kills"]["any_wrong_subject"])
+        self.assertFalse(summary["screen_survives"])
 
     def test_R_schema_adds_reference_without_removing_ordinary_pair(self) -> None:
         base = {
@@ -79,29 +121,44 @@ class SpliceReferenceScreenTest(unittest.TestCase):
                     "structuredContent": {
                         "ok": True,
                         "file_hashes": {self.manifest["file"]: sha256_file(source_file)},
-                        "results": [{"forms": [
-                            {"source": f"(def {spec['within']['form']}\n  {spec['from']})"}
-                            for spec in self.manifest["spans"]
-                        ]}],
+                        "results": [{"forms": [{"source": (
+                            FIXTURE / "before" / self.manifest["file"]
+                        ).read_text(encoding="utf-8")}]}],
                     },
                 },
             }
             state = ReferenceState(workspace, self.manifest)
             annotated, labels = state.annotate(response)
-            self.assertEqual(["s1", "s2", "s3", "s4"], [label["label"] for label in labels])
+            self.assertEqual(16, len(labels))
+            self.assertEqual(
+                [spec["label"] for spec in self.manifest["candidates"]],
+                [label["label"] for label in labels],
+            )
             self.assertIn("span_references", annotated["result"]["structuredContent"])
             good = ideal_requests(self.manifest)["R"]["arguments"]
             translated, resolved, refusal = state.translate(good)
             self.assertIsNone(refusal)
             self.assertEqual(4, len(resolved))
+            self.assertTrue(all(row["identity_match"] for row in resolved))
+            self.assertTrue(all(row["readback_present"] is False for row in resolved))
             self.assertTrue(all("from" in edit and "from_ref" not in edit
                                 for edit in translated["edits"]))
             wrong = copy.deepcopy(good)
-            wrong["edits"][0]["to"] = self.manifest["spans"][1]["to"]
-            translated, _, refusal = state.translate(wrong)
+            wrong["edits"][0]["from_ref"] = "r07"
+            translated, wrong_resolved, refusal = state.translate(wrong)
             self.assertIsNone(translated)
             self.assertEqual("splice-reference-wrong-subject", refusal["error_type"])
             self.assertTrue(refusal["wrong_subject"])
+            self.assertEqual("alpha-a", wrong_resolved[0]["candidate_id"])
+            self.assertEqual("alpha-b", wrong_resolved[0]["intended_candidate_id"])
+            self.assertFalse(wrong_resolved[0]["identity_match"])
+            checked = copy.deepcopy(good)
+            tokens = {row["label"]: row["identity_token"] for row in labels}
+            for edit in checked["edits"]:
+                edit["ref_readback"] = tokens[edit["from_ref"]]
+            translated, resolved, refusal = state.translate(checked)
+            self.assertIsNone(refusal)
+            self.assertTrue(all(row["readback_match"] for row in resolved))
             source_file.write_text(source_file.read_text(encoding="utf-8") + "; stale\n",
                                    encoding="utf-8")
             translated, _, refusal = state.translate(good)
@@ -152,13 +209,13 @@ class SpliceReferenceScreenTest(unittest.TestCase):
                 "jsonrpc": "2.0", "id": 3, "method": "tools/call",
                 "params": {"name": "inspect_clojure", "arguments": {
                     "requests": [{"file": self.manifest["file"],
-                                  "forms": [spec["within"]["form"] for spec in self.manifest["spans"]],
+                                  "forms": self.manifest["owners"],
                                   "expect": {"forms": 4}}],
                     "expect": {"requests": 1, "files": 1},
                 }},
             })
             labels = inspect["result"]["structuredContent"]["span_references"]["labels"]
-            self.assertEqual(4, len(labels))
+            self.assertEqual(16, len(labels))
             edit = request({
                 "jsonrpc": "2.0", "id": 4, "method": "tools/call",
                 "params": {"name": "edit_clojure",
@@ -166,6 +223,10 @@ class SpliceReferenceScreenTest(unittest.TestCase):
             })
             self.assertTrue(edit["result"]["structuredContent"]["ok"])
             self.assertEqual(4, len(edit["result"]["structuredContent"]["resolved_references"]))
+            self.assertTrue(all(
+                row["identity_match"]
+                for row in edit["result"]["structuredContent"]["resolved_references"]
+            ))
             self.assertEqual(
                 (FIXTURE / "expected" / self.manifest["file"]).read_text(encoding="utf-8"),
                 (workspace / self.manifest["file"]).read_text(encoding="utf-8"),
