@@ -1,0 +1,15 @@
+{
+  "completed_ns": 1118998060206083,
+  "decode_tail_ms": 154.053333,
+  "dispatch_ns": 1118993680962666,
+  "final_text": "WARM_READY",
+  "first_delta_ns": 1118997906152750,
+  "model": "gpt-5.3-codex-spark",
+  "request_ack_ms": 11.053667,
+  "request_to_first_token_ms": 4225.190084,
+  "response_ns": 1118993692016333,
+  "thread_id": "01a054db-9eb0-7003-b9ef-0a835a818ab8",
+  "turn_e2e_ms": 4379.243417,
+  "turn_id": "01a054db-9f64-7e43-802e-7bbd6a73591f",
+  "valid": true
+}

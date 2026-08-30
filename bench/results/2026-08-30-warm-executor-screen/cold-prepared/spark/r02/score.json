@@ -1,0 +1,44 @@
+{
+  "completed_ns": 1118938932242416,
+  "decode_tail_ms": 350.910416,
+  "dispatch_ns": 1118934310643291,
+  "first_delta_ns": 1118938581332000,
+  "load_average": [
+    4.9951171875,
+    6.59423828125,
+    6.7021484375
+  ],
+  "model": "gpt-5.3-codex-spark",
+  "process_bootstrap_ms": 93.185291,
+  "replicate": 2,
+  "request_ack_ms": 11.285084,
+  "request_to_first_token_ms": 4270.688709,
+  "response_ns": 1118934321928375,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "exact": false,
+    "final_text": "I\u2019m not able to execute the requested `clj-surgeon` MCP tool call in this environment because no MCP tool named `edit_clojure` is available to me here. I also can\u2019t honor the \u201cexactly once and no other tool\u201d requirement without that tool present.\n\nPlease run this edit from your MCP-enabled session with:\n`workspace_root: /private/tmp/.../workspace`\n`edits: [{file: \"src/warm_executor/fixture.clj\", within: {form: \"slot-01\"}, from: :todo, to: :done-01, matches: 1}]`",
+    "mcp_completed": 0,
+    "mcp_started": 0,
+    "one_shot": false,
+    "source_exact": false,
+    "started_action_types": [],
+    "terminal_exact": false,
+    "tool_arguments_exact": false,
+    "tool_success": false,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054da-b744-7cb1-acb7-9c9f9c5155ca",
+  "thread_setup_ms": 444.221791,
+  "total_e2e_ms": 5160.063791,
+  "turn_e2e_ms": 4621.599125,
+  "turn_id": "01a054da-b77c-7601-aa39-36e66fc35466"
+}

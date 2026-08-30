@@ -1,0 +1,15 @@
+{
+  "completed_ns": 1119006645838083,
+  "decode_tail_ms": 82.027625,
+  "dispatch_ns": 1119003452703916,
+  "final_text": "WARM_READY",
+  "first_delta_ns": 1119006563810458,
+  "model": "gpt-5.6-sol",
+  "request_ack_ms": 11.040334,
+  "request_to_first_token_ms": 3111.106542,
+  "response_ns": 1119003463744250,
+  "thread_id": "01a054db-c4ec-7f12-8ef2-3e73a1f9f6da",
+  "turn_e2e_ms": 3193.134167,
+  "turn_id": "01a054db-c590-7e33-822d-0c9df82f2f4d",
+  "valid": true
+}

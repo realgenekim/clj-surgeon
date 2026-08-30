@@ -1,0 +1,46 @@
+{
+  "completed_ns": 1118604982618333,
+  "decode_tail_ms": 517.83075,
+  "dispatch_ns": 1118595356325958,
+  "first_delta_ns": 1118604464787583,
+  "load_average": [
+    12.58740234375,
+    8.73583984375,
+    7.19287109375
+  ],
+  "model": "gpt-5.6-sol",
+  "process_bootstrap_ms": 123.320625,
+  "replicate": 1,
+  "request_ack_ms": 11.27675,
+  "request_to_first_token_ms": 9108.461625,
+  "response_ns": 1118595367602708,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "exact": false,
+    "final_text": "Unable to complete: the MCP tool call required approval, but the current approval policy is `never`.",
+    "mcp_completed": 1,
+    "mcp_started": 1,
+    "one_shot": false,
+    "source_exact": false,
+    "started_action_types": [
+      "mcpToolCall"
+    ],
+    "terminal_exact": false,
+    "tool_arguments_exact": true,
+    "tool_success": false,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054d5-8b18-77e3-9d3a-dff328c1d10e",
+  "thread_setup_ms": 1716.594125,
+  "total_e2e_ms": 11467.463375,
+  "turn_e2e_ms": 9626.292375,
+  "turn_id": "01a054d5-8bf6-77d1-8caa-ae6917b64f80"
+}

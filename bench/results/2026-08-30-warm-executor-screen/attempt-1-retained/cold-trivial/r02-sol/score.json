@@ -1,0 +1,19 @@
+{
+  "decode_tail_ms": 357.447917,
+  "final_text": "COLD_OK",
+  "load_average": [
+    5.2685546875,
+    6.78857421875,
+    6.43603515625
+  ],
+  "model": "gpt-5.6-sol",
+  "process_bootstrap_ms": 145.591416,
+  "replicate": 2,
+  "request_to_first_token_ms": 5681.003625,
+  "thread_id": "01a054d4-a441-7b22-9c7c-2d66c2671942",
+  "thread_setup_ms": 326.787708,
+  "total_e2e_ms": 6512.596,
+  "turn_e2e_ms": 6038.451542,
+  "turn_id": "01a054d4-a454-7900-8bb3-948922796d9e",
+  "valid": true
+}

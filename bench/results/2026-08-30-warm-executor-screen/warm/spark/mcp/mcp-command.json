@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "clojure",
+    "-J-Xms64m",
+    "-J-Xmx512m",
+    "-X:clj-surgeon/mcp",
+    ":tool-profile",
+    ":edit",
+    ":project-dir",
+    "\"/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/warm/spark/workspace\"",
+    ":telemetry",
+    ":full",
+    ":telemetry-dir",
+    "\"/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/warm/spark/mcp/mcp-telemetry\"",
+    ":run-id",
+    "\"warm-spark\"",
+    ":nrepl-port",
+    ":none",
+    ":port",
+    "0",
+    ":ready-file",
+    "\"/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/warm/spark/mcp/mcp-ready.edn\""
+  ],
+  "cwd": "/private/tmp/clj-surgeon-warm-executor-screen-20260830"
+}

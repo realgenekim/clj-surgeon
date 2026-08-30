@@ -1,0 +1,10 @@
+{
+  "final_results_sha256": "afe1742352609d1efc3526d2e92d054f5860cd926ea02948f237113f64da95c1",
+  "finalizer_sha256": "70bac4d5ef616fb308f6e73a134d0df9eb9523272166efcbe9ad3f4b9d812a0b",
+  "primary": "/private/tmp/warm-executor-screen-primary-20260830",
+  "primary_results_sha256": "c7d499a42d6b7e0e58b589e870247c3dfae9acfc74b8a82210f2512b81ac7015",
+  "replacement": "/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-spark-replacement",
+  "replacement_count": 1,
+  "replacement_rows_sha256": "0a3bcabaab38f26ba23bb93d1411d798bebf77260b6620f5e458e8ebbe31482f",
+  "schema": "clj-surgeon.warm-executor-finalization/v1"
+}

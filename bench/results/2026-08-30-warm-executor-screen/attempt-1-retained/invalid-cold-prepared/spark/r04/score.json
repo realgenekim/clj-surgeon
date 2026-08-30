@@ -1,0 +1,46 @@
+{
+  "completed_ns": 1118673004877000,
+  "decode_tail_ms": 124.346292,
+  "dispatch_ns": 1118666038591125,
+  "first_delta_ns": 1118672880530708,
+  "load_average": [
+    8.69482421875,
+    8.35400390625,
+    7.16259765625
+  ],
+  "model": "gpt-5.3-codex-spark",
+  "process_bootstrap_ms": 94.564125,
+  "replicate": 4,
+  "request_ack_ms": 11.494708,
+  "request_to_first_token_ms": 6841.939583,
+  "response_ns": 1118666050085833,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "exact": false,
+    "final_text": "The edit tool call did not run successfully.\n\nI made one `mcp__clj_surgeon.edit_clojure` call with your exact arguments, but it returned: MCP tool call requires approval, but approval policy is never.\n\nSo I cannot return `EXACT_OK` yet because success was not verified.",
+    "mcp_completed": 1,
+    "mcp_started": 1,
+    "one_shot": false,
+    "source_exact": false,
+    "started_action_types": [
+      "mcpToolCall"
+    ],
+    "terminal_exact": false,
+    "tool_arguments_exact": true,
+    "tool_success": false,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054d6-9fe7-73c3-b226-71dfea9ab895",
+  "thread_setup_ms": 468.234125,
+  "total_e2e_ms": 7530.029584,
+  "turn_e2e_ms": 6966.285875,
+  "turn_id": "01a054d6-a010-7ce3-9565-763efe988ce2"
+}

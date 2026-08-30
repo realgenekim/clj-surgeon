@@ -1,0 +1,12 @@
+(ns warm-executor.fixture)
+
+(def slot-01 {:slot 1 :state :done-01})
+(def slot-02 {:slot 2 :state :done-02})
+(def slot-03 {:slot 3 :state :done-03})
+(def slot-04 {:slot 4 :state :done-04})
+(def slot-05 {:slot 5 :state :todo})
+(def slot-06 {:slot 6 :state :todo})
+(def slot-07 {:slot 7 :state :todo})
+(def slot-08 {:slot 8 :state :todo})
+(def slot-09 {:slot 9 :state :todo})
+(def slot-10 {:slot 10 :state :todo})

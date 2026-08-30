@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/opt/homebrew/bin/codex",
+    "app-server",
+    "--listen",
+    "stdio://",
+    "-c",
+    "model=\"gpt-5.3-codex-spark\"",
+    "-c",
+    "model_reasoning_effort=\"low\""
+  ],
+  "codex_home": "/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/warm/spark/codex-home",
+  "cwd": "/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/warm/spark/workspace",
+  "metered_env_present": []
+}

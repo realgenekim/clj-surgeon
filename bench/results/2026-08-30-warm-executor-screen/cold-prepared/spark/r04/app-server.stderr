@@ -1,0 +1,4 @@
+2026-08-30T22:47:27.236032Z ERROR codex_app_server: Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.
+    1. /private/tmp/clj-surgeon-warm-executor-screen-20260830/.codex
+       To load project-local config, hooks, and exec policies, add /private/tmp/clj-surgeon-turn-waste-20260830 as a trusted project in /private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/cold-prepared/spark/r04/codex-home/config.toml.
+

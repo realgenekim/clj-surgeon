@@ -1,0 +1,46 @@
+{
+  "completed_ns": 1118955913746750,
+  "decode_tail_ms": 4395.02725,
+  "dispatch_ns": 1118946357497791,
+  "first_delta_ns": 1118951518719500,
+  "load_average": [
+    4.8779296875,
+    6.45849609375,
+    6.64990234375
+  ],
+  "model": "gpt-5.6-sol",
+  "process_bootstrap_ms": 157.022792,
+  "replicate": 3,
+  "request_ack_ms": 10.573125,
+  "request_to_first_token_ms": 5161.221709,
+  "response_ns": 1118946368070916,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "f02481db65dea2ea71b82345890c4620319794271a4704f59989f73baf3f1ae4"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "exact": true,
+    "final_text": "I\u2019m applying the single prepared Clojure edit now.EXACT_OK",
+    "mcp_completed": 1,
+    "mcp_started": 1,
+    "one_shot": true,
+    "source_exact": true,
+    "started_action_types": [
+      "mcpToolCall"
+    ],
+    "terminal_exact": false,
+    "tool_arguments_exact": true,
+    "tool_success": true,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054da-e654-7bb2-b418-42948816be8a",
+  "thread_setup_ms": 373.445833,
+  "total_e2e_ms": 10087.850584,
+  "turn_e2e_ms": 9556.248959,
+  "turn_id": "01a054da-e68a-7753-b60c-28420401c34a"
+}

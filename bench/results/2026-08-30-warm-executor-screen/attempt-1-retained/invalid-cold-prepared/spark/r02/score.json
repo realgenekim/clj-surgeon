@@ -1,0 +1,46 @@
+{
+  "completed_ns": 1118626039955166,
+  "decode_tail_ms": 87.702458,
+  "dispatch_ns": 1118619768298708,
+  "first_delta_ns": 1118625952252708,
+  "load_average": [
+    11.4912109375,
+    8.76123046875,
+    7.23828125
+  ],
+  "model": "gpt-5.3-codex-spark",
+  "process_bootstrap_ms": 107.125875,
+  "replicate": 2,
+  "request_ack_ms": 10.343292,
+  "request_to_first_token_ms": 6183.954,
+  "response_ns": 1118619778642000,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109"
+    },
+    "exact": false,
+    "final_text": "The requested `edit_clojure` call was made with your exact payload, but it could not execute in this session because the MCP edit tool returned:\n\n`MCP tool call requires approval, but approval policy is never`\n\nSo I cannot complete the edit in this run.",
+    "mcp_completed": 1,
+    "mcp_started": 1,
+    "one_shot": false,
+    "source_exact": false,
+    "started_action_types": [
+      "mcpToolCall"
+    ],
+    "terminal_exact": false,
+    "tool_arguments_exact": true,
+    "tool_success": false,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054d5-eb28-7ff0-961f-8de049e5398a",
+  "thread_setup_ms": 307.626,
+  "total_e2e_ms": 6687.510166,
+  "turn_e2e_ms": 6271.656458,
+  "turn_id": "01a054d5-eb52-7c61-bc64-fcf237203a5c"
+}

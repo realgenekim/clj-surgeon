@@ -1,0 +1,23 @@
+{
+  "attempts_used": 1,
+  "base_runner_sha256": "19db5bea43c3c0a0ee40bb019bda5f8b8eab24281247238fad5455498c249b33",
+  "maximum_attempts": 2,
+  "preregistration": {
+    "auth_status": "Logged in using ChatGPT",
+    "branch": "experiment/warm-executor-screen-20260830",
+    "child_metered_env_present": [],
+    "head": "2ee7f0f042ff92176cf50eb3f9ce50019de4ac2f",
+    "parent_metered_env_present": [
+      "OPENAI_API_KEY"
+    ],
+    "tree": "a47e4c0239f560a703d6c5cab6c695d0344e1bac"
+  },
+  "replacement_for": {
+    "model": "gpt-5.3-codex-spark",
+    "reason": "MCP catalog unavailable; no tool call and no mutation",
+    "replicate": 2
+  },
+  "runner_sha256": "a7b60b7287b9c753fec7f9de54aa3619e7cf74fe2538504eb5d13e6f357e207b",
+  "schema": "clj-surgeon.warm-executor-replacement/v1",
+  "valid_replacement_obtained": true
+}

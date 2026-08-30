@@ -1,0 +1,43 @@
+{
+  "bang": 10,
+  "completed_ns": 1119096351150750,
+  "decode_tail_ms": 90.960125,
+  "dispatch_ns": 1119094350176666,
+  "first_delta_ns": 1119096260190625,
+  "load_average": [
+    3.44091796875,
+    5.4345703125,
+    6.21044921875
+  ],
+  "model": "gpt-5.3-codex-spark",
+  "request_ack_ms": 29.389709,
+  "request_to_first_token_ms": 1910.013959,
+  "response_ns": 1119094379566375,
+  "score": {
+    "after_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "7f285e002b83a2c63242e824e5a3e476f6108f747a4cadd36a688036a42698c2"
+    },
+    "before_hashes": {
+      "AGENTS.md": "db31b4fd0a99dc9af1ff5e9bd586bcc568271feeef5ad942e3b73ce45f787287",
+      "src/warm_executor/fixture.clj": "f8c57f2b0093467d4991b20be7dd5777d539c2a20dc0ec3a02d9770f2ba3e0af"
+    },
+    "exact": true,
+    "final_text": "EXACT_OK",
+    "mcp_completed": 1,
+    "mcp_started": 1,
+    "one_shot": true,
+    "source_exact": true,
+    "started_action_types": [
+      "mcpToolCall"
+    ],
+    "terminal_exact": true,
+    "tool_arguments_exact": true,
+    "tool_success": true,
+    "unexpected_changed_paths": [],
+    "wrong_subject": false
+  },
+  "thread_id": "01a054db-9eb0-7003-b9ef-0a835a818ab8",
+  "turn_e2e_ms": 2000.974084,
+  "turn_id": "01a054dd-28a5-77c0-9eee-706ee32e7b62"
+}

@@ -1,0 +1,33 @@
+{
+  "codex_version": "codex-cli 0.149.1",
+  "cold_replicates": 5,
+  "fixture_sha256": "2f1cecf4b62c538889af16c5cdc99775bf4ba51277adf902aa4a1314546d4109",
+  "host": "MacBook-Air-67.local",
+  "load_average": [
+    5.8349609375,
+    6.9677734375,
+    6.49169921875
+  ],
+  "mechanism": "persistent codex app-server stdio; one process and thread per warm model",
+  "models": [
+    "gpt-5.3-codex-spark",
+    "gpt-5.6-sol"
+  ],
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "preregistration": {
+    "auth_status": "Logged in using ChatGPT",
+    "branch": "experiment/warm-executor-screen-20260830",
+    "child_metered_env_present": [],
+    "head": "d1ce1b26ca8ef21e9b6214cc28f0a5c877e882c2",
+    "parent_metered_env_present": [
+      "OPENAI_API_KEY"
+    ],
+    "tree": "9ac9e3ec5977ac4e92e67138f15d8602dc37ec26"
+  },
+  "python": "3.13.7 (v3.13.7:bcee1c32211, Aug 14 2025, 19:10:51) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "reasoning": "low",
+  "runner_sha256": "a7f750cf1a453a322448cca5703c7a2d4b95c990b44259fad5e91c6582fc9d4d",
+  "schema": "clj-surgeon.warm-executor-screen/v1",
+  "start_wall_ns": 1788129608678821000,
+  "warm_bangs": 10
+}

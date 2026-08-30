@@ -1,0 +1,7 @@
+[mcp_servers.clj-surgeon]
+url = "http://127.0.0.1:62931/mcp"
+required = true
+enabled_tools = ["edit_clojure"]
+default_tools_approval_mode = "approve"
+startup_timeout_sec = 10
+tool_timeout_sec = 90

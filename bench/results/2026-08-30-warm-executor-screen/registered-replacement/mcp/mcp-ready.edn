@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-spark-replacement/workspace", :server :clj-surgeon, :port 54046, :host "127.0.0.1", :pid 78052, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:54046/mcp"}

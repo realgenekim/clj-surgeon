@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-warm-executor-screen-20260830/bench/results/2026-08-30-warm-executor-screen/cold-prepared/sol/workspace", :server :clj-surgeon, :port 56248, :host "127.0.0.1", :pid 31804, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:56248/mcp"}

@@ -1,0 +1,19 @@
+{
+  "decode_tail_ms": 105.291291,
+  "final_text": "COLD_OK",
+  "load_average": [
+    5.64697265625,
+    6.841796875,
+    6.45654296875
+  ],
+  "model": "gpt-5.3-codex-spark",
+  "process_bootstrap_ms": 103.418334,
+  "replicate": 2,
+  "request_to_first_token_ms": 3526.394334,
+  "thread_id": "01a054d4-bdef-74e1-abaa-8269b264b782",
+  "thread_setup_ms": 401.797917,
+  "total_e2e_ms": 4137.82275,
+  "turn_e2e_ms": 3631.685625,
+  "turn_id": "01a054d4-bdfb-7613-b477-ba9f4465fc83",
+  "valid": true
+}
