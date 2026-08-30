@@ -63,6 +63,23 @@ lower wall time** for compact Surgeon. On a small two-file, three-change control
 native remains faster. The tool earns its ceremony when exact mechanical state
 spans enough owners and files to collapse many fragile actions into one chord.
 
+### Native still wins the measured small class
+
+That boundary is not a footnote. In a matched serial Anvil cohort at exact
+product commit `c55de227`, the task was one rename with five references plus
+one docstring in a single 137-line file. Native patching took a 9.054-second
+median and emitted 171 mutation-payload tokens. `edit_clojure` took 21.402
+seconds and emitted 318. All 12 runs were exact and route-adherent. For this
+small task class, native is the faster and terser route
+(`experiment/multisite-headtohead-20260830@b06f41e`).
+
+The crossover between that class and the measured large mechanical classes—the
+51-edit, nine-file chord and the 15-form extraction with 63 remaining caller
+occurrences, where Surgeon is 4.9--9.7x faster—is not yet mapped. A
+preregistered ladder is in flight; until it lands, routing guidance should not
+claim the unmeasured middle
+(`bench/acid-crossover-ladder-20260830@091a28a`).
+
 ### Closed relations made the 51-edit chord 34 percent faster
 
 A later independent Anvil cohort kept that same complete 51-edit, nine-file
@@ -87,6 +104,45 @@ identity while submitted order remains diagnostic provenance. A new whole
 cohort then passed both counterbalanced blocks and the unchanged 20-percent
 emission and verified-wall gates on candidate `90b47d1`. See the
 [append-only promotion receipt](docs/observations/2026-08-29-captains-log-closed-relations-earned-a-hold.md#superseding-result-the-independent-acid-test-earned-promotion).
+
+### Read requests now carry less ceremony and complete recovery evidence
+
+Read-request normalization was installed on 2026-08-30. A complete single
+forms read may omit its operation, and a multi-read may omit every request ID.
+On the live MCP wire those two read task classes saved 4 and 12 model-output
+proxy tokens per eligible call. This is a measured wire delta, not a
+complete-task speed claim
+(`experiment/read-normalization-live-token-measurement@abb70aea`). Mixed
+supplied and omitted IDs now refuse before any source read, making that
+wrong-subject class unrepresentable
+(`stable-read-request-normalization-20260830@c55de227`).
+
+The refusal side bought a larger mechanism. In a frozen 24-owner, single-file
+recovery screen, a refusal that enumerated the complete owner vocabulary
+caused the next-step source reread to fall from 10/10 to 0/10, a -100
+percentage-point difference; complete recoveries took one turn and truncated
+recoveries took two. This is causal screen evidence for that refusal-recovery
+task class, not a native-route performance comparison
+(`docs/sweep-lane1-complete-refusal-ab@c1e89d5d`). The install was
+dual-verified by an independent 10/10 matrix and fresh live-route proofs
+(`release/read-normalization-published-20260830@3a9edc1`).
+
+### Routing screens measure adoption, not performance
+
+On 24 paired mock-registry starts across 12 structural-edit fixtures, more
+salient structural-first guidance moved adoption from 9/24 to 24/24, a +62.5
+percentage-point lift. This is synthetic adoption/option evidence and does not
+mint a speed claim (`experiment/routing-tranche-20260830@f8f9500`). The real
+installed routing surface was already at ceiling on comparable fixtures: 4/4
+controls chose the structural route, so the transfer screen stopped before a
+treatment cohort (`experiment/routing-adoption-live-config-20260830@d66fcf3`).
+
+The external adoption gap has two measured parts. Among 119 addressable
+established Clojure source or test writes, at least 20.17 percent lacked the
+guidance, so distribution explains that slice. Another 52.94 percent had the
+guidance and remains unpriced until the crossover program measures its task
+classes; 26.89 percent was undeterminable from retained evidence
+(`audit/adoption-gap-attribution-20260830@628e6d1`).
 
 Why make structure a product primitive? In an additive Terra/high screen, the
 native caller generated a Perl program to perform this extraction and to
@@ -166,6 +222,70 @@ The project began after a coding agent spent 45 minutes refactoring a
 order forms. The initial four-hour prototype had 13 operations and about 1,500
 lines. The current implementation is larger and requires Babashka and
 clj-kondo. Those counts describe the prototype, not the current product.
+
+## The economics: reading (prefill) is ~1,300x cheaper than writing (decode)
+
+The measured Anvil `gpt-5.6-sol`/low probe used three conditions with n=9 each:
+a roughly 1,048,000-character read with one output token, a 53-character read
+with 1,239 output tokens, and a 53-character/one-token floor. Reading means
+input tokens (prefill) and ran at 72,529 tokens/second. Writing means output
+tokens (decode, autoregressive inference) and ran at 56.5 tokens/second. The
+ratio is 1,284x, reported here as ~1,300x and as a lower bound because the
+uncorrected prefill rate includes upload time. Across 59 production
+Surgeon-apply emissions with a 76.3x byte spread, output cost 3.5237
+milliseconds per byte of model output (`R^2 = 0.9807`). Input is also
+prompt-cacheable; output never is. Constrained decoding (sampler-level grammar
+enforcement) runs on tool-call arguments: JSON tool args cannot be malformed.
+
+That asymmetry fixes the design order:
+
+1. **Results may be rich; requests must be terse.** The server can return
+   generous, complete payloads as nearly free input, but it must minimize what
+   the model has to type as expensive output. That is why read requests dropped
+   ceremony fields and why refusals enumerate the complete recovery vocabulary.
+   In the frozen 24-owner recovery task, complete enumeration deleted the
+   recovery reread outright.
+2. **Phase deletion beats byte shaving.** One turn costs about 4--11 seconds
+   and hundreds of output tokens; sub-kilobyte savings do not beat deleting a
+   round-trip. The 5--10x wins on the measured 51-edit, nine-file chord and
+   15-form, 63-caller extraction come from collapsing
+   `discover -> assemble -> repair -> lint -> narrate` into one verified
+   transaction, not from faster parsing.
+3. **Reads set up writes.** Spend cheap reads freely to make the one expensive
+   write exact and one-shot: guarded, snapshot-fenced, and verified inside the
+   transaction.
+4. **Compress repetition, never identity.** Error detection runs on
+   redundancy. Subjects, owners, and files remain explicit even when that makes
+   the input larger.
+5. **Every verdict carries a price model.** Raw token counts mislead. At the
+   measured rates, the projection for 317 cached schema input tokens is about
+   4 milliseconds once; the projection for 12 fewer output tokens is about 200
+   milliseconds on every eligible call. A fold that ignores the measured
+   direction asymmetry reaches the wrong verdict.
+
+The methods, confounds, and replay commands are in
+[Why reading is cheap and writing is expensive](docs/why-reading-is-cheap-and-writing-is-expensive.md)
+and the immutable
+[2026-08-29 measurement ledger](https://github.com/realgenekim/clj-surgeon/blob/8ac7cde9b4b4942fc813c3bc64eb8df8bb6e82fe/docs/observations/2026-08-29-measurements-and-how-to-repeat-them.md)
+(`bench/prefill-decode-ratio@93d9918`;
+`docs/captains-logs-2026-08-29@8ac7cde`).
+
+## What the exploration cost
+
+For the 2026-08-29/30 burst, 36 Codex research-lane `tokens used` footer
+records in `/tmp/brainfleet/*.txt` sum to **6,562,902 tokens**. That is a lower
+bound for this burst: it counts only retained lane totals. Known metered
+Claude spend was **$7.86**—$6.90 for the route experiment plus $0.96 for the
+differential interview. Everything else known in this accounting ran on
+subscription compute; the spend total is also a lower bound for this burst.
+
+That investment bought 12 surviving measurements, 10+ preregistered kills,
+two installed features, the causal refusal law, and the crossover program now
+mapping the unmeasured middle. Negative results are purchases: they retire a
+plausible design before it becomes product folklore. The graveyard is the
+immutable
+[Six designs died and the tool was barely used](https://github.com/realgenekim/clj-surgeon/blob/8ac7cde9b4b4942fc813c3bc64eb8df8bb6e82fe/docs/observations/2026-08-29-captains-log-six-designs-died-and-the-tool-was-barely-used.md)
+record (`docs/captains-logs-2026-08-29@8ac7cde`).
 
 ## A structural editor for agents
 
