@@ -6,12 +6,13 @@ implementation active.** Gene ratified the leaf on 2026-08-30 with
 recovery authorization (`"Recovery go -- go"`) remain part of the decision
 record. Installation and MCP reload remain unauthorized.
 
-## Ratified decision
+## Ratification record
 
-The completed success-only Option A leaf LLD and requirements
-`MCP-OP-PREP-REQ-001..009` are active. An eligible successful inspect result
-carries a non-executable prepared edit template with caller-owned replacement
-holes.
+Gene ratified the completed success-only Option A leaf LLD and requirements
+`MCP-OP-PREP-REQ-001..009` on 2026-08-30 with `"Wow!!! Love it! Go!"`. The
+permanent leaf is [Prepared Guarded Edit Request](../prepared-request/prepared-request-design.md).
+An eligible successful inspect result carries a non-executable prepared edit
+template with caller-owned replacement holes.
 
 This decision authorizes red-first implementation of the pure projector and
 four narrow inspect-tool hooks specified by the leaf. It does not authorize a
@@ -243,7 +244,7 @@ successful transfer of the prompt-embedded routing signal.
 
 The completed LLD replaces no historical outcome. It uses only the separately
 authorized recovery question and the forward-only acceptance gates in
-`prepared-request-design.md`.
+`../prepared-request/prepared-request-design.md`.
 
 ## Phase stops
 

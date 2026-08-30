@@ -264,6 +264,12 @@ The narrow integration seam is `clj-surgeon.mcp-inspect-tool`:
   prepared result with `elapsed_ms=0.0`. Overflow returns the unchanged
   ordinary result, not a refusal.
 
+The pure projector owns only intrinsic eligibility and the 4,096-byte
+canonical descriptor limit. The inspect integration owns the 32,768-byte
+normalized pre-finalization gate because it owns the ordinary summary and MCP
+envelope. The `elapsed_ms=0.0` measurement makes this decision deterministic;
+it is not a claim that the later finalized wire envelope cannot grow.
+
 The ordinary `forms-result` in `clj-surgeon.mcp-inspect` already supplies form
 source, hash, file hash, anchor, owner name, platforms, and character counts.
 It does not change. The public edit schema, compiler, transaction, effect,
@@ -407,7 +413,8 @@ After ratification, the test phase must cover:
 
 ## Alternatives
 
-The competing options and deciding assumptions are in [README.md](README.md).
+The competing options and deciding assumptions are in the
+[ratification record](../2026-08-30-prepared-request-ratification/README.md).
 The dedicated preparation operation and refusal-correction surface remain
 separate options. Neither is implied by ratifying this skeleton.
 
