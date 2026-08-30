@@ -220,9 +220,10 @@ The existing `mcp-result-byte-count` function measures the public envelope,
 structured result with descriptor, and concise summary with coaching. The
 measurement sets `elapsed_ms=0.0` before `mcp-operation/invoke!` adds the actual
 elapsed value. Therefore this is a deterministic pre-finalization gate, not an
-exact final-wire bound. If that projected result exceeds 32,768 bytes, the
-projector omits the descriptor and coaching and returns the byte-identical
-ordinary result. Result bytes are not a reason to compress identity.
+exact final-wire bound. If that normalized projected result exceeds 32,768
+bytes, the inspect integration restores the saved byte-identical ordinary
+result, so neither descriptor nor coaching is emitted. Result bytes are not a
+reason to compress identity.
 
 ## Telemetry
 
