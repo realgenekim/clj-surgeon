@@ -2,7 +2,7 @@
 
 Date: 2026-08-29 PT  
 Lane: SWEEP lane 1  
-Status: **first attempt environment-blocked; repair cohort preregistered and not run**
+Status: **repair cohort complete; frozen causal screen passes**
 
 ## Question and source prior
 
@@ -254,3 +254,134 @@ The repair cohort starts again at position 1 of the complete schedule. The
 first attempt's C=1/T=2 invalid losses do not enter the repair cohort's valid
 denominators, but the final report shows both attempts together. No inference
 is drawn unless the repair cohort obtains 10 fully valid episodes per arm.
+
+## Repair cohort execution result
+
+The repair ran from preregistration commit
+`13dbc699c32b652e17a0b41879326dd13d0af623` and tree
+`c821361e71771508c2f6cb75c057c1f80979e3d5`. Before the first new model call,
+the fixture, expected bytes, helper, prompt, schedule, and scorer were copied
+from the first retained result root and proved byte-identical to its input
+manifest. Their SHA-256 values remained, respectively:
+
+```text
+4584e308ee222b6fa885f88596b94251a8edf90db39febb1afb603b545fe93f7
+a4839b38e900ed3cadd1bf5547120e1a53232b402f41e7f15160f08bff6e3751
+6967ea3393416b00550c5e5f459c30a4cf6ea53965511e0090ee44045793e039
+ecceb34d9477953ea2e94392e000818199b4a63bff98f0730f0e2ee51739c454
+9f8f9e445a712e7c4f7c8eec231fcc9fb2d673dea4d1d3360c260c5d0b33aceb
+7a6be463052111c6135e37206cb4539347ac23e8d0bf73ebee70d9a86d1984a0
+```
+
+The controller differed from the first attempt in exactly two removed and two
+added lines: `workspace-write` became `danger-full-access`, and the Codex
+subprocess received `stdin=subprocess.DEVNULL`. Its SHA-256 was
+`e99a5a7646cdc67d2e1b9a7c3d1a52e72e5659c599444c0a134922250c6e4a99`.
+The controller's 17 assertions, scorer's 18 assertions, 24-owner fixture test,
+exact two-line delta test, authentication preflight, and a separate six-
+assertion closed-stdin EOF/exit test all passed without a model call. The
+repair manifest was then frozen at
+`729469ea509467c8b6b3ea30b71f597e8fdbf375242ff428a1c1c47e75c5d716`.
+There was no postlaunch tuning.
+
+The repair cohort ran once from position 1 through the fixed `C T T C` times
+five schedule. All twenty scheduled positions were fully valid, so no
+replacement or extension episode ran. The execution window was
+`2026-08-30T07:25:33.538995Z` through
+`2026-08-30T07:31:27.726674Z` UTC, or
+`2026-08-30T00:25:33.538995-07:00` through
+`2026-08-30T00:31:27.726674-07:00` PT.
+
+### Combined loss chart
+
+The first attempt's three losses remain immutable and are shown before the
+repair cohort. `E`, `S`, and `R` are environment-valid, semantic-correct, and
+route-adherent. `CR` is the controlled-refusal count.
+
+| attempt | episode | arm | E | S | R | valid | CR | reread | recovery turns | wrong subject |
+|:---|---:|:---:|:---:|:---:|:---:|:---:|---:|:---:|:---:|:---:|
+| first | 1 | C | no | no | no | no | 0 | no | n/a | no |
+| first | 2 | T | no | no | no | no | 0 | no | n/a | no |
+| first | 3 | T | no | no | no | no | 0 | no | n/a | no |
+| repair | 1 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 2 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 3 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 4 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 5 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 6 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 7 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 8 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 9 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 10 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 11 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 12 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 13 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 14 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 15 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 16 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 17 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+| repair | 18 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 19 | T | yes | yes | yes | yes | 1 | yes | 2 | no |
+| repair | 20 | C | yes | yes | yes | yes | 1 | no | 1 | no |
+
+### Primary estimate, secondary outcome, and safety
+
+Among the repair cohort's fully valid episodes, Arm C reread in 0 of 10
+episodes (0%) and Arm T reread in 10 of 10 (100%). The risk difference C minus
+T is `-1.00`, or -100 percentage points. The frozen Newcombe score 95%
+interval is `[-1.0000, -0.4449]`, or -100.0 to -44.49 percentage points. The
+risk ratio C over T is `0.00`.
+
+Every Arm C recovery-turn value was 1 and every Arm T value was 2, giving
+medians of 1 and 2 and the predicted one-turn advantage for C. All twenty
+episodes were environment-valid, semantically correct, and route-adherent.
+Every final fixture matched the exact expected bytes, every mutation used the
+unchanged helper, and the wrong-subject count was zero.
+
+The original frozen kill rule therefore passes: T minus C's reread rate is
+100 percentage points, exceeding the required 30; C's median recovery turns
+are no worse; and wrong-subject is zero. The appropriate verdict is
+**causal-screen-passes**. It is not a population-resolution claim. The
+registered prior-based resolution warning remains: N=10 per arm offered only
+about 16.1% Fisher-exact power for the prior effect and an approximately 39.5
+percentage-point normal 95% half-width. The observed score interval is
+reported above, and no null equivalence is claimed.
+
+The discriminating counterfactuals were sharp in this fixture. Had complete
+owner vocabulary been insufficient to replace source inspection, some C
+episodes would have reread; none did. Had truncation not caused an information
+gap, some T episodes would have mutated without rereading; none did. The exact
+separation is specific to this frozen task, model, refusal shape, and recovery
+route and should be replicated before generalization.
+
+### Repair retention and cleanup receipts
+
+- Remote result root:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/13dbc699-repair-20260830T072148Z`
+- Remote archive:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/13dbc699-repair-20260830T072148Z.tar.gz`
+- Copied-back archive:
+  `/home/dev-a/clj-surgeon-sweep-lane1-receipts/13dbc699-repair-20260830T072148Z.tar.gz`
+- Remote and copied-back archive SHA-256:
+  `d71478d4b1840b4e3aa76331202b0a86607347398aa96d0a5c7a8851dd0ffe38`
+- Remote repair receipt:
+  `/srv/fleet/dev-a/clj-surgeon-sweep-lane1-results/13dbc699-repair-20260830T072148Z/repair-receipt.json`
+- Copied-back repair receipt:
+  `/home/dev-a/clj-surgeon-sweep-lane1-receipts/13dbc699-repair-20260830T072148Z-repair-receipt.json`
+- Remote and copied-back repair-receipt SHA-256:
+  `5cb0a368757f77417495b98dd7b43a3948fb605e4b022dfce4047525779edfdb`
+- Controller input-manifest SHA-256:
+  `839487d671e18c6aba53eb1478d33854c6f4f0f0ba1209a52b78bc3593f4b4d9`
+- Episode-manifest SHA-256:
+  `eb170114613ac08727a5e1ef4052b6d35a302d5d29afe52b4d1e7db414d6a6d0`
+- Final-report SHA-256:
+  `5cd5b5ade697ca5c1214d05ead2f87f87a2dbb7000084c258bc207b62d27e4de`
+- Result-manifest SHA-256:
+  `064ca504ce1d4b444cffa5ba451b83c5c1f484057a720e752824a64d0c41a879`
+
+All twenty raw streams and per-episode artifacts were retained. The exact
+credential-bearing work root and the original-identity fence checkout were
+moved to recoverable user trash after the cohort and were excluded from the
+archive. No cohort process remained. The repair observation worktree stayed
+clean until this append, the first attempt was not rewritten, and the targeted
+experiment does not advance the agent-usage window marker.
