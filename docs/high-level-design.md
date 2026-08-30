@@ -566,6 +566,167 @@ entrance keeps its own envelope, timing, and rendering contract.
 This separation favors general model reasoning over an expanding catalog of
 tool-owned typo, spelling, or naming heuristics.
 
+### Detect regressions with an adaptive paired sentinel
+
+Performance promotion and performance regression detection reuse the same
+frozen task and evidence schema, never the same invocation or verdict.
+Sentinel evidence cannot satisfy a promotion gate. Promotion asks whether a new
+mechanism has earned a durable speed claim, so it keeps the strict
+counterbalanced dual-block gate. The regression sentinel asks whether a known
+good release may have become dangerously slower. It is deliberately more
+sensitive and may return an unresolved warning without claiming either a win
+or a regression.
+
+The sentinel compares one exact candidate commit, `C`, with one immutable
+stable tag, `S`, on a quiet dedicated Anvil seat. Both arms use the same frozen
+15-owner extraction, model and reasoning level, prompt, client executable and
+tool-selection policy, scorer, formatter and exact verifier. A controller
+outside both product checkouts owns the fixture, schedule, clocks, evidence
+validation and archive. Each product checkout supplies only the versioned
+Surgeon runtime and its public tool surface. Surface differences are recorded
+and charged to the release because they can change model construction time;
+they are not mistaken for kernel differences. This prevents an older product
+from bringing an older, more favorable scorer into its own comparison.
+
+The controller reuses the existing clean Codex benchmark lifecycle for fresh
+workspaces, private homes and MCP servers, event capture, semantic scoring and
+child cleanup. Each product runtime remains the sole producer of its
+transaction and verifier receipt. The controller owns receipt capture,
+validation, retention and verdict. The sentinel adds scheduling and verdict
+policy around that lifecycle; it does not create a second runner, scorer,
+archive engine or mutation path. Stable and candidate products are materialized
+from exact Git objects into separate wrappers. The live installed binary and a
+worktree with tracked or untracked dirt are never release evidence.
+
+The selected schedule is adaptive:
+
+```text
+C -> S
+     |
+     +-- candidate is at least 8% slower --> S -> C
+```
+
+The first pair is a screen, not a verdict. When both rows and all evidence are
+valid, the invocation is green if `(C1 / S1) - 1` is below `0.08`. Otherwise,
+after a fresh pressure and environment admission, the controller immediately
+runs `S2, C2`. The completed invocation is red exactly when `C1 > S1`,
+`C2 > S2`, and pooled complete-verified slowdown is at least `0.10`. Every
+other valid triggered invocation is yellow and must be repeated by the nightly
+sentinel. Yellow is not rewritten as green or red merely to simplify release
+reporting.
+
+For the first pair, slowdown is `(C1 / S1) - 1` over `T_verified`. After the
+reverse pair, the pooled slowdown is
+`(median(C1, C2) / median(S1, S2)) - 1`; with two observations per arm, each
+median is the midpoint. "Loses both positions" independently requires
+`C1 > S1` and `C2 > S2`. Missing or invalid clocks cannot enter either formula.
+
+Complete-verified wall, `T_verified`, begins at the observed turn start and
+ends at the observed turn completion after the exact verifier and terminal
+result. It includes model construction, tool transport, server work,
+formatting, exact verification and result interpretation. Server-owned elapsed
+time and a no-model transaction canary may localize a slowdown, but neither can
+substitute for `T_verified` or change the model-inclusive verdict.
+
+Correctness and evidence remain stronger gates than timing. Wrong final bytes,
+missing exact verification, a non-adherent route, an unexpected tool call,
+identity drift, an invalid clock order, a dirty checkout, host-pressure
+invalidation or an incomplete archive stops the line before a timing verdict.
+The result names the typed reason: candidate correctness failure, stable
+baseline failure, invalid environment, invalid evidence or confirmed timing
+regression. An invalid measurement is never reported as a product slowdown.
+
+Every run freezes and checks these static identities before launch and after
+each completed pair:
+
+- stable and candidate commit, tree and completely clean state;
+- controller, worker, scorer, fixture, task, prompt and expected-result hashes;
+- Codex executable, package, model and reasoning configuration;
+- advertised and client-observed tool-surface hashes for each product;
+- formatter and exact-verifier command identities; and
+- Anvil host and admission-policy identity.
+
+Each run separately records a fresh bounded pressure sample and unique
+workspace, home, port and result-root identities, and proves that those
+resources belong only to that run. Values that must be unique are not compared
+for equality across arms.
+
+Every launched attempt remains in the ledger, including invalid and losing
+attempts. A failed observer, child, scorer, receipt or identity fence propagates
+nonzero. Retrying an infrastructure failure creates a new sentinel invocation;
+it never removes or replaces the failed attempt. Remote result trees become
+evidence only after immutable retention records the archive and manifest
+hashes.
+
+The stable baseline manifest binds the release tag name, annotated tag-object
+hash when present, full forty-hex peeled commit and tree. Any ref drift refuses;
+the tag name alone is not authority. The sentinel never advances the baseline
+automatically. A release owner may nominate a new stable tag only after the
+ordinary release gates; that explicit decision produces a separate receipt.
+The retained native midpoint remains useful historical context, but it is not
+the regression comparator because service and harness drift would be
+confounded with product drift.
+
+The common 15-owner route is the compatibility sentinel for historical and
+future releases. Its first backfill replays the observed install sequence as
+two exact comparisons: `b8e52cb` stable versus `75585be` candidate, then
+`75585be` stable versus `19ab864` candidate. The current external controller
+owns both comparisons and exposes only the common apply operation to the
+client. `b8e52cb` and `75585be` have byte-identical MCP extraction, contract,
+server, formatter, fixture and historical runner bytes, so their delta is a
+negative-control estimate of noise and is never called a product speedup.
+`19ab864` changes the apply surface while retaining the extraction kernel; its
+complete wall therefore measures the route-specific experience under the
+common apply-only client projection, including that operation's description
+and schema effects, while server-authoritative clocks help localize the change.
+A version
+that cannot expose the frozen route is reported as not comparable, not assigned
+a synthetic wall time. Relation-specific monitoring starts at `19ab864`, the
+first immutable release that owns that public request shape.
+
+The sentinel runs on `dev-a` before stable publication, nightly for the current
+installed release and on demand. Cost is telemetry, not contract. Retained
+relation-shaped dev-a process-wall samples imply about seventy-nine seconds for
+two runs and 157 seconds for four; cross-version backfills may cost more.
+Retained process-wall samples, four per route, provide only a provisional
+scheduling-noise bound: median absolute deviation was 3.01 to 4.13 percent and
+the observed range was 11.15 to 14.37 percent. They are not yet a
+`T_verified` calibration cohort. These small samples explain why one run is not
+evidence; they are calibration data, not a claim of a fixed population error
+rate.
+
+Exact enumeration over those retained samples also shows the cost of the
+adaptive schedule: one screen has weak power near a ten-percent regression.
+That limitation is accepted operationally, not hidden. Nightly runs create new
+independent invocations; they are never pooled to manufacture confidence or
+promotion evidence. The immediate reverse pair prevents a noisy first
+comparison from becoming a confirmed red. A green
+screen means only "no alert in this invocation"; it is not proof that no small
+regression exists.
+
+The sentinel is a pre-publication prerequisite, not live work inside
+`make install` or MCP reload. The release coordinator accepts only a complete
+sentinel receipt whose candidate identity still matches the publication
+candidate. Missing, invalid or confirmed-red evidence blocks publication before
+the deterministic installation window begins.
+
+A confirmed red exits nonzero, blocks stable publication, writes or updates
+one durable regression issue, and assigns it to the release owner selected by
+the controller's allowlisted configuration and frozen in the run manifest. The
+append-only sentinel ledger is verdict authority. The durable issue is its
+work-and-owner projection; Director mirrors that issue. A prior red clears only
+through an explicit release-owner resolution linked to a forced four-run
+recovery cohort. Recovery passes only when both positional slowdowns and pooled
+slowdown are below eight percent. Red, yellow, invalid, an ordinary two-run
+green and acknowledgement cannot clear the prior red. The controller records a
+new `recovered` ledger event and never rewrites the red event. Yellow writes the
+same evidence, creates or updates a distinct non-blocking durable issue assigned
+to the same owner, and schedules a fresh nightly screen without advancing the
+baseline. Green,
+yellow, invalid and red runs all remain in the append-only
+performance history. The sentinel never promotes a speedup: improvement claims
+still require the independent strict promotion cohort.
+
 ## Key Design Decisions
 
 ### Share the operation algebra, not the MCP facade
@@ -640,6 +801,18 @@ change selection, mutation, rollback, verification, or refusal semantics. It
 measures owned server work and excludes model reasoning, client scheduling,
 network transport, and background job duration.
 
+### Spend counterbalance only on regression suspicion
+
+The regression sentinel uses the adaptive `C, S` then conditional `S, C`
+schedule. A single candidate run is too noisy to classify a ten-to-twelve
+percent slowdown. A fixed four-run schedule is stronger but charges its full
+cost on every installation and invites operators to skip the sentinel. The
+adaptive pair keeps the ordinary path cheap and buys order reversal only when
+the screen crosses the declared threshold. Its lower one-invocation power is
+accepted operationally. Nightly runs are new invocations and are not pooled to
+manufacture confidence. The design does not weaken the confirmation law or
+silently advance a rolling baseline.
+
 ### Keep resolution relations explicit
 
 An executable read correction requires proof from one declared mechanical
@@ -667,6 +840,22 @@ counterexample that the native contract tests missed.
 
 ## Success Metrics
 
+- A normal regression screen launches exactly one candidate and one stable
+  model run; it launches the reverse pair only when the candidate screen is at
+  least eight percent slower.
+- A timing regression is red only when the candidate loses both positions and
+  pooled complete-verified wall is at least ten percent slower. Every other
+  valid triggered invocation remains yellow and is retained for nightly
+  repetition.
+- Candidate failure, stable failure, invalid environment and invalid evidence
+  stop publication with distinct typed outcomes; none is mislabeled as a
+  timing regression.
+- Every verdict binds immutable product, harness, fixture, client, model,
+  verifier, host and archive identities, and every launched attempt remains in
+  the durable ledger.
+- A confirmed red exits nonzero, blocks stable publication and remains assigned
+  to the manifest's release owner until valid later evidence resolves it.
+- The sentinel never advances its stable tag or promotes a speed claim.
 - Every public MCP operation returns a finite, non-negative `elapsed_ms` on
   success and refusal and renders the same value in its human summary.
 - A newly registered public MCP operation cannot pass the ordinary test suite
