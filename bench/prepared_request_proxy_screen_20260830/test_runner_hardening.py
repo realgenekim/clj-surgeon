@@ -101,6 +101,9 @@ class SafetyContractTest(unittest.TestCase):
         self.assertTrue(runner.safety_read_contract(control, "C", workspace)["complete"])
         self.assertTrue(runner.safety_read_contract(treatment, "T", workspace)["complete"])
         self.assertTrue(
+            runner.safety_read_contract(treatment, "T", workspace)["exact_read_once"]
+        )
+        self.assertTrue(
             runner.safety_read_contract(treatment, "T", workspace)["shorthand_adherent"]
         )
 
@@ -108,7 +111,64 @@ class SafetyContractTest(unittest.TestCase):
         explicit["inspect_call_arguments"][0]["requests"][0]["operation"] = "forms"
         explicit_result = runner.safety_read_contract(explicit, "T", workspace)
         self.assertTrue(explicit_result["complete"])
+        self.assertFalse(explicit_result["exact_read_once"])
         self.assertFalse(explicit_result["shorthand_adherent"])
+
+        omitted_root = copy.deepcopy(treatment)
+        omitted_root["inspect_call_arguments"][0].pop("workspace_root")
+        omitted_result = runner.safety_read_contract(omitted_root, "T", workspace)
+        self.assertTrue(omitted_result["complete"])
+        self.assertFalse(omitted_result["exact_read_once"])
+        self.assertTrue(omitted_result["shorthand_adherent"])
+
+        explicit_defaults = copy.deepcopy(omitted_root)
+        explicit_defaults["inspect_call_arguments"][0]["requests"][0][
+            "include_source"
+        ] = True
+        self.assertTrue(
+            runner.safety_read_contract(explicit_defaults, "T", workspace)["complete"]
+        )
+
+        non_default = copy.deepcopy(omitted_root)
+        non_default["inspect_call_arguments"][0]["requests"][0][
+            "include_source"
+        ] = False
+        self.assertFalse(
+            runner.safety_read_contract(non_default, "T", workspace)[
+                "semantic_read_once"
+            ]
+        )
+
+        for field in ("operation", "include_source"):
+            explicit_null = copy.deepcopy(omitted_root)
+            explicit_null["inspect_call_arguments"][0]["requests"][0][field] = None
+            self.assertFalse(
+                runner.safety_read_contract(explicit_null, "T", workspace)[
+                    "semantic_read_once"
+                ]
+            )
+
+        null_root = copy.deepcopy(omitted_root)
+        null_root["inspect_call_arguments"][0]["workspace_root"] = None
+        self.assertFalse(
+            runner.safety_read_contract(null_root, "T", workspace)[
+                "semantic_read_once"
+            ]
+        )
+
+        for path, replacement in (
+            (("files",), True),
+            (("requests",), True),
+            (("files",), 1.0),
+            (("requests",), 1.0),
+            (("forms",), 3.0),
+        ):
+            typed_count = copy.deepcopy(treatment)
+            expect = typed_count["inspect_call_arguments"][0]["expect"]
+            expect[path[0]] = replacement
+            typed_result = runner.safety_read_contract(typed_count, "T", workspace)
+            self.assertFalse(typed_result["semantic_read_once"])
+            self.assertFalse(typed_result["exact_read_once"])
 
         wrong_args = copy.deepcopy(treatment)
         wrong_args["inspect_call_arguments"][0]["requests"][0]["forms"] = ["archive-root"]

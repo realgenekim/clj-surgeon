@@ -1343,15 +1343,23 @@ def safety_read_contract(
     trace: dict[str, Any], arm: str, workspace: Path
 ) -> dict[str, bool]:
     exact_arguments = inspect_arguments(workspace, "safety")
-    explicit_arguments = copy.deepcopy(exact_arguments)
-    explicit_arguments["requests"][0]["operation"] = "forms"
     observed_arguments = trace.get("inspect_call_arguments")
     exact_read_once = (
+        isinstance(observed_arguments, list)
+        and canonical_bytes(observed_arguments) == canonical_bytes([exact_arguments])
+    )
+    semantic_read_once = (
         trace.get("inspect_calls") == 1
         and trace.get("successful_inspects") == 1
-        and observed_arguments in ([exact_arguments], [explicit_arguments])
+        and isinstance(observed_arguments, list)
+        and len(observed_arguments) == 1
+        and safety_read_arguments_equivalent(observed_arguments[0], workspace)
     )
-    shorthand_adherent = observed_arguments == [exact_arguments]
+    shorthand_adherent = bool(
+        semantic_read_once
+        and "operation"
+        not in observed_arguments[0].get("requests", [{}])[0]
+    )
     if arm == "T":
         exposure_exact = (
             trace.get("eligible_results") == 1
@@ -1365,10 +1373,40 @@ def safety_read_contract(
         )
     return {
         "exact_read_once": exact_read_once,
+        "semantic_read_once": semantic_read_once,
         "shorthand_adherent": shorthand_adherent,
         "exposure_exact": exposure_exact,
-        "complete": exact_read_once and exposure_exact,
+        "complete": semantic_read_once and exposure_exact,
     }
+
+
+def safety_read_arguments_equivalent(
+    arguments: Any, workspace: Path
+) -> bool:
+    if not isinstance(arguments, dict):
+        return False
+    normalized = copy.deepcopy(arguments)
+    if (
+        "workspace_root" in normalized
+        and normalized["workspace_root"] != str(workspace.resolve())
+    ):
+        return False
+    normalized.pop("workspace_root", None)
+    requests = normalized.get("requests")
+    if not isinstance(requests, list) or len(requests) != 1:
+        return False
+    request = requests[0]
+    if not isinstance(request, dict):
+        return False
+    if "operation" in request and request["operation"] != "forms":
+        return False
+    request.pop("operation", None)
+    if "include_source" in request and request["include_source"] is not True:
+        return False
+    request.pop("include_source", None)
+    expected = copy.deepcopy(inspect_arguments(workspace, "safety"))
+    expected.pop("workspace_root")
+    return canonical_bytes(normalized) == canonical_bytes(expected)
 
 
 def score_run(
@@ -1445,6 +1483,7 @@ def score_run(
         safety_read_complete = False
         safety_contract = {
             "exact_read_once": False,
+            "semantic_read_once": False,
             "shorthand_adherent": False,
             "exposure_exact": False,
             "complete": False,
@@ -1601,6 +1640,7 @@ def score_run(
         "safety_mutation": safety_mutation,
         "safety_read_complete": safety_read_complete,
         "safety_exact_read_once": safety_contract["exact_read_once"],
+        "safety_semantic_read_once": safety_contract["semantic_read_once"],
         "safety_shorthand_adherent": safety_contract["shorthand_adherent"],
         "safety_exposure_exact": safety_contract["exposure_exact"],
         "exposure_integrity": exposure_integrity,

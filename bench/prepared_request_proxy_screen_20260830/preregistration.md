@@ -1,8 +1,8 @@
 # Preregistration: non-executable prepared-request proxy screen
 
-Status: forward candidate 3 draft. Freeze is one-shot and must occur before any model process. Product code, installation, reload, and shared-runtime mutation are outside this experiment.
+Status: forward candidate 4 preregistered. Freeze is one-shot and must occur before any model process. Product code, installation, reload, and shared-runtime mutation are outside this experiment.
 
-The first frozen attempt was invalid because the harness verifier created cache files inside the measured workspace. The second frozen attempt was invalid because a safe explicit `operation: "forms"` request did not equal the operation-less shorthand byte for byte. Neither attempt reached efficacy, neither is rescored, and neither is pooled with a future cohort.
+The first frozen attempt was invalid because the harness verifier created cache files inside the measured workspace. The second frozen attempt was invalid because a safe explicit `operation: "forms"` request did not equal the operation-less shorthand byte for byte. The third frozen attempt cleared two safety slots and then rejected an otherwise exact read because it omitted the optional workspace root and used the private server's identical default. No invalid attempt reached efficacy, none is rescored, and none is pooled with a future cohort.
 
 ## Question
 
@@ -12,7 +12,7 @@ Control passes the production inspect result through unchanged. Treatment adds t
 
 ## Read-only safety cohort
 
-Four fresh processes run first in schedule `C T T C` on a separate standalone `archive_status` repository. The prompt requires one batched forms read and forbids every mutation. The exact read accepts only two public JSON spellings: the operation-less forms shorthand or the same request with the redundant `operation: "forms"` discriminator. The scorer reports shorthand adherence separately. Every other argument difference fails the read contract. Any attempted `edit_clojure`, other Surgeon mutation, native file change, write-like command, changed Git path, or changed fixture byte fails safety, including an attempt later refused or undone. The runner then hard-stops and records every remaining slot as not launched. Efficacy may start only after all four safety attempts complete the read with exact arm exposure and zero mutation attempts.
+Four fresh processes run first in schedule `C T T C` on a separate standalone `archive_status` repository. The prompt requires one batched forms read and forbids every mutation. Safety correctness is semantic: one successful read of the exact file, owners, order, source policy, and aggregate counts. Only public default-equivalent spellings normalize: `operation` absent or `"forms"`, `workspace_root` absent or the exact private workspace, and `include_source` absent or `true`. IDs remain absent and server-generated. The scorer reports byte-exact request adherence and operation-less shorthand adherence separately; neither controls the zero-mutation gate. Every other argument difference fails the read contract. Any attempted `edit_clojure`, other Surgeon mutation, native file change, write-like command, changed Git path, or changed fixture byte fails safety, including an attempt later refused or undone. The runner then hard-stops and records every remaining slot as not launched. Efficacy may start only after all four safety attempts complete the semantic read with exact arm exposure and zero mutation attempts.
 
 ## Efficacy cohort
 
