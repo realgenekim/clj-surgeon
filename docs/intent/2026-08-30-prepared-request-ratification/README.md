@@ -1,21 +1,19 @@
 # Prepared Request Ratification Packet
 
-Status: pre-ratification. This packet proposes a product direction and a
-falsification experiment. It does not authorize tests, product code, model
-runs, installation, or MCP reload.
+Status: **Option A HLD ratified; leaf LLD, EARS requirements, red tests, and
+product code deferred.** Gene ratified decision 2 on 2026-08-30 with `"2 go"`
+inside `"1 go, 2 go, 3 go"`. The experiment-only proxy screen is separately
+authorized. Installation and MCP reload remain unauthorized.
 
 ## Decision requested
 
-Choose which product surface should test whether a server-prepared guarded
-edit request transfers the routing gain seen in the prompt-embedded
-experiment.
+Option A is selected: an eligible successful inspect result carries a
+non-executable prepared edit template with caller-owned replacement holes.
 
-The recommendation is **Option A: test a non-executable prepared edit template
-in an eligible successful inspect result**. Ratification would select the HLD
-direction and the contract for a non-product proxy experiment. It would not
-ratify the leaf LLD or EARS registry, and it would not authorize product
-implementation. The fallback is Option C, limited to recovery after a
-mechanically correctable refusal.
+This ratification selects the HLD direction and the contract for a non-product
+proxy experiment. It does not ratify the leaf LLD or EARS registry and does not
+authorize product implementation. The fallback remains Option C, limited to
+recovery after a mechanically correctable refusal.
 
 ## Evidence boundary
 
@@ -34,6 +32,19 @@ mechanically correctable refusal.
 
 The causal bundle is **less request assembly plus more route salience**. The
 packet does not claim that request bytes alone caused the routing change.
+
+### Ratification reframe
+
+The independent replication observed 10/10 Surgeon-first in both prepared and
+unprepared arms. The fixture had no routing headroom, so the original +50
+percentage-point routing effect did not replicate. The prepared arm did reduce
+median recovery output by 47.4% (1,711.5 to 899.5 tokens) and reduced observed
+construction refusals from six to zero.
+
+The ratified value claim is therefore **assembly-error elimination and
+recovery-output reduction**. Routing lift remains unresolved and secondary as
+a product claim. The frozen proxy experiment keeps its original primary gate;
+this reframe does not rescore or weaken it.
 
 ## Non-negotiable authority boundary
 
@@ -187,17 +198,21 @@ task wall, total observable client actions, and tool calls remain in the loss
 chart, but they are not inferred from hidden reasoning and do not override the
 primary routing gate.
 
-Kill Option A before product implementation if it misses any gate. A failure
-means the prompt-embedded signal did not transfer to the product result. It is
-not permission to force inspection, add a route cue, or rescore only exposed
+Do not call a routing miss a pass. A miss means the prompt-embedded routing
+signal did not transfer under this gate. If the registered recovery outcomes
+still reproduce, the ratified HLD remains supported by its reframed value
+claim, but the experiment does not advance the leaf LLD automatically. That
+outcome requires a separate recovery-oriented LLD decision. It is not
+permission to force inspection, add a route cue, or rescore only exposed
 attempts.
 
 ## Phase stops
 
-1. Gene chooses one HLD option and, separately, may authorize the non-product
-   proxy experiment.
-2. The proxy experiment runs before product code. A miss keeps the leaf LLD
-   and every candidate EARS requirement deferred.
+1. Gene selected Option A and separately authorized the non-product proxy
+   experiment.
+2. The proxy experiment runs before product code. A primary-gate pass returns
+   a completed leaf LLD and EARS registry for separate ratification. A miss
+   keeps them deferred unless Gene separately selects a recovery-oriented gate.
 3. After a pass, the selected leaf LLD is completed and ratified separately.
 4. The completed EARS registry and stable IDs are ratified separately.
 5. Direct red witnesses activate the approved requirements.

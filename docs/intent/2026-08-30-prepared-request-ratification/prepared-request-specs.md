@@ -1,17 +1,18 @@
 ---
 parent: prepared-request-design
 prefix: MCP-OP-PREP-REQ
-status: pre-ratification
+status: hld-ratified-requirements-deferred
 ---
 
 # Prepared Guarded Edit Request Specifications
 
 These candidate IDs are stable and must not be reused if a requirement is
-deleted. Every requirement is deferred. Ratification of this packet selects
-only the HLD option and proxy experiment. These requirements stay deferred
-until the experiment passes, the open LLD decisions close, and Gene separately
-ratifies the completed design and registry. No test or code annotation may
-claim these requirements before that later ratification.
+deleted. Every requirement remains deferred. Gene ratified only the Option A
+HLD and proxy experiment on 2026-08-30. These requirements stay deferred until
+the experiment gate or a separately ratified recovery-oriented gate passes,
+the open LLD decisions close, and Gene separately ratifies the completed design
+and registry. No test or code annotation may claim these requirements before
+that later ratification.
 
 ## Eligibility and projection
 
@@ -69,4 +70,6 @@ for returning with a completed LLD and EARS registry for separate ratification:
 Complete task wall, observable client actions, and tool calls remain in the
 loss chart. They do not rescue a failed routing or safety gate. If the
 experiment misses any gate, these requirements remain deferred and product
-implementation does not begin.
+implementation does not begin. Construction-refusal and recovery-output
+outcomes remain reportable evidence for the ratified HLD, but cannot activate
+these requirements without a separate gate decision.

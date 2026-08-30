@@ -1,14 +1,14 @@
 ---
 parent: high-level-design
 prefix: MCP-OP-PREP-REQ
-status: pre-ratification
+status: hld-ratified-lld-deferred
 ---
 
 # Prepared Guarded Edit Request
 
-This is a leaf LLD skeleton. The current ratification decision is the HLD
-option and its non-product proxy experiment only. This skeleton is not yet
-ratifiable as the final LLD and authorizes no tests or implementation.
+This is a leaf LLD skeleton. Gene ratified the Option A HLD on 2026-08-30 with
+`"2 go"` inside `"1 go, 2 go, 3 go"`. The leaf LLD and EARS registry remain
+deferred. This skeleton authorizes no red tests or product implementation.
 
 ## Context and causal evidence
 
@@ -17,9 +17,10 @@ routing credit. The tested object was complete executable JSON in the user
 prompt. The proposed product object is a non-executable template in a tool
 result. Transfer is unproved and must be killed cheaply if it does not appear.
 
-The product hypothesis is that a visible prepared template removes mechanical
-call assembly and makes the structural mutation route salient. It is not a
-request-byte optimization.
+The ratified product hypothesis is that a visible prepared template removes
+mechanical call assembly, construction refusals, and recovery output. Routing
+salience remains an unresolved secondary hypothesis. This is not a request-byte
+optimization.
 
 ## Proposed first-slice decision
 
@@ -212,6 +213,11 @@ at least +25 percentage points over control, no correctness loss, no refusal
 increase, and zero mutations across four additional read-only safety attempts,
 two per arm. Complete task wall, observable client actions, and tool calls
 remain descriptive losses and cannot rescue a failed routing or safety gate.
+
+The separately registered construction-refusal and recovery-output outcomes
+must be reported even when the routing gate misses. They do not turn a miss
+into a pass. If they reproduce, they support the ratified value claim and
+justify a separate decision about a recovery-oriented LLD gate.
 
 ## Non-goals
 
