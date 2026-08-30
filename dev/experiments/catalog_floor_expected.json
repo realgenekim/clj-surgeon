@@ -1,0 +1,9 @@
+{
+  "C": {"client_bytes": 2, "tool_count": 0, "parameter_count": 0, "client_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
+  "T": {"client_bytes": 400, "tool_count": 1, "parameter_count": 0, "client_sha256": "6aee26aa2ad55920c31b069a74bee77b3e8808aef1a3fb90867a94b0123e415b"},
+  "D": {"client_bytes": 64384, "tool_count": 1, "parameter_count": 0, "client_sha256": "742ff1f7313f623d164f6035adbe0dcca13cbf8f24a90a7354848da903747e29"},
+  "P": {"client_bytes": 65551, "tool_count": 1, "parameter_count": 128, "client_sha256": "aa733b45114410248c4bcf12251bea42acc267c6c0bc334709e0d9cb1582b322"},
+  "M": {"client_bytes": 68529, "tool_count": 16, "parameter_count": 0, "client_sha256": "c4963ab56b331df20ca53b628bb1102fbbdb61ab611a9fe16513d277fb8071b7"},
+  "I": {"client_bytes": 13154, "tool_count": 1, "parameter_count": 22, "client_sha256": "5145d396c5f64f4591aff4ee0cedc2698a229067e4edf9a9459031d5f0bb1e1a"},
+  "R": {"client_bytes": 48045, "tool_count": 4, "parameter_count": 45, "client_sha256": "6a2e5865770571858da4890f483f4e008d1f20f7354e39ff086cc3c594f192a7"}
+}
