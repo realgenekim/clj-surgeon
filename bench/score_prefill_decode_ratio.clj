@@ -88,13 +88,49 @@
             :message-chars (count (or (get-in message [:event :item :text]) ""))
             :ok (and (= 0 (:exit_code timing)) (some? usage))})))
 
-(defn load-run [dir]
+(def tsv-numeric
+  #{:replicate :wall_ms :exit_code :prompt_bytes :input-tokens :cached-input-tokens
+    :output-tokens :reasoning-output-tokens :decoded-tokens :turn-started-ms :message-chars})
+
+(defn load-trials-tsv
+  "Rehydrate the fact table from trials.tsv.
+
+  bench/results/ARCHIVED.md keeps raw per-trial transcripts out of git, so a
+  committed run has trials.tsv but no trials/ directory. Reading it back means
+  a committed run stays re-foldable — a new question can be asked of an old run
+  without re-spending the calls, which is the entire point of separating the
+  probe from the fold."
+  [tsv-file]
+  (let [[header & rows] (str/split-lines (slurp (str tsv-file)))
+        cols (map keyword (str/split header #"\t"))]
+    (vec
+     (for [row rows :when (not (str/blank? row))]
+       (let [m (into {}
+                     (map (fn [k v]
+                            [k (cond
+                                 (str/blank? v) nil
+                                 (tsv-numeric k) (parse-double v)
+                                 :else v)])
+                          cols
+                          (str/split row #"\t" -1)))]
+         ;; :ok is a derived verdict, not a stored fact — recompute it here so
+         ;; the rehydrated path and the raw path agree on which trials count.
+         (assoc m :ok (and (= 0.0 (:exit_code m)) (some? (:input-tokens m)))))))))
+
+(defn load-run
+  "Prefer the raw trials directory; fall back to the committed fact table."
+  [dir]
   (let [meta (json/parse-string (slurp (str (fs/path dir "meta.json"))) true)
-        trials (->> (fs/glob (fs/path dir "trials") "*.timing.json")
-                    (map parse-trial)
-                    (sort-by :tag)
-                    vec)]
-    {:meta meta :trials trials}))
+        timing-files (seq (fs/glob (fs/path dir "trials") "*.timing.json"))
+        tsv-file (fs/path dir "trials.tsv")
+        trials (cond
+                 timing-files (vec (sort-by :tag (map parse-trial timing-files)))
+                 (fs/exists? tsv-file) (vec (sort-by :tag (load-trials-tsv tsv-file)))
+                 :else [])]
+    (when (empty? trials)
+      (binding [*out* *err*]
+        (println "warning: no trials found in" (str dir))))
+    {:meta meta :trials trials :source (if timing-files "trials/" "trials.tsv")}))
 
 ;; -------------------------------------------------------------------- summary
 
