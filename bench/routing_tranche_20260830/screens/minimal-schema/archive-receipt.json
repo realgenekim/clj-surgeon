@@ -1,0 +1,8 @@
+{
+  "archive": "minimal-schema-raw-streams.tar.gz",
+  "archive_sha256": "defd764c4e77d990bc5a2f8cd6e8efb065a2dce7558dc7dd989cebce1231430c",
+  "manifest_entries": 455,
+  "manifest_sha256": "46bd736f34234d14fc7ce7f82f8f7bb7e090a63b64c8076f764640e5bc92c072",
+  "schema": "routing-tranche-archive.v1",
+  "screen": "minimal-schema"
+}
