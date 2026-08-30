@@ -1,0 +1,8 @@
+{
+  "archive": "action-native-name-raw-streams.tar.gz",
+  "archive_sha256": "2b239ae90f404f69a4737a5d31ec155c274fc880ad4d47cbd58bc9298f58a2d3",
+  "manifest_entries": 889,
+  "manifest_sha256": "c2e3716550fcb79ed8398f4072fce1bd9ef7d98117155b21dc4339b1cd54fce1",
+  "schema": "routing-tranche-archive.v1",
+  "screen": "action-native-name"
+}
