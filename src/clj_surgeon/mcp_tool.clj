@@ -20,6 +20,7 @@
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
+   [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clojure.java.io :as io]
    [clojure.string :as str])
   (:import
@@ -30,62 +31,62 @@
 ;; @spec MCP-OP-EDIT-009
 (def tool-description
   (str
-    "Apply one failure-atomic Clojure transaction. For exact nested replacements, "
-    "send only workspace_root, edits, and optional verify. Each edits item contains "
-    "file, within {form}, from, to, and optional positive matches (default 1). "
-    "Do not send changes, expect, basis, or decisions with edits; Surgeon derives "
-    "IDs and counts. A redundant top-level expect is ignored and reported, while "
-    "every exact per-edit guard remains authoritative. If inspect_clojure returned "
-    "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
-    "fill every decision and submit once. To move named owners into one new "
-    "namespace, use extraction once. Supply exact caller_changes or explicitly "
-    "ignored_caller_files when the decision is known. Omit public_forms to derive only "
-    "mechanically required visibility from the same frozen snapshot; omission never "
-    "accounts for a discovered caller. When the task already supplies the exact file, "
-    "destination, forms, and any caller decisions, submit extraction directly without "
-    "plan-extraction. A genuine caller decision refuses pre-write with a completed plan. "
-    "When the task supplies an exact external verification command, omit verify and run "
-    "that command once after the transaction; do not substitute the full profile. "
-    "apply refuses missing, unmoved, already-public, or unsupported declarations. "
-    "Exact forms, caller edits, and files counts may be derived. "
-    "Direct extraction reports structural caller candidates, not semantic completeness. "
-    "Otherwise, use changes for different actions or owner-level edits. Never combine edits and changes. If any insertion, deletion, rename, assoc_entry, or heterogeneous action needs changes, encode every action in one changes array. Each changes item contains id, files, "
-    "expect, exactly one of forms or owner, and exactly one action: replace, delete, "
-    "insert_before, insert_after, rename_binding, or assoc_entry. Exact replacement, "
-    "insertion, and assoc_entry "
-    "items contain find, except guarded top-level insertion: omit find and name exactly one forms owner. To delete two or more known named owners, use forms "
-    "with delete: true once; do not create marker forms or wait for semantic preparation. "
-    "Insertion actions use an array of nonblank strings; one array item may contain several complete forms, "
-    "which Surgeon splits in order. Insertion strings refuse malformed forms and refuse comment-bearing gaps. For named top-level "
-    "def or defn owners, use forms: [name]. owner is only for the namespace form "
-    "and must be {kind: namespace, name: ns-name}; never pass owner as a string. "
-    "For one multimethod implementation, use forms: [{kind: defmethod, name: render, dispatch: :card}]. "
-    "find and replace must each contain one complete Clojure form. Example item: "
-    "{id: status, files: [src/app.clj], forms: [render], find: :old, "
-    "replace: :new, expect: {matches: 1, each_form: 1}}. "
-    "For a local rename that must preserve a destructured data key, use forms plus "
-    "rename_binding: {from: sort-by, to: sort-field, preserve_external_key: true}; "
-    "matches counts the binding and its resolved local usages. "
-    "To add one key/value to logically equal maps while preserving comments, use "
-    "find with assoc_entry: {key: :status, value: :ready}. "
-    "Top-level aggregate expect is optional redundant bookkeeping: Surgeon derives changes, edits, and files "
-    "from the exact per-change guards and reports a supplied mismatch as ignored normalization. "
-    "Omit verify unless the user or repository explicitly requests a configured transaction profile. "
-    "When requested, verify is fast, full, or the project-owned exact profile. Staged formatting, "
-    "commands, and hot laws roll back on failure. A configured cold job returns "
-    "verification_complete=false plus one inspect next_call; continue useful "
-    "work and copy it once instead of replaying the edit. Success parses and "
-    "reads back every file and publishes an inverse receipt. "
-    "verification_complete=true is terminal. When terminal_response is present, "
-    "check whether this mutation completes all remaining user-requested work. "
-    "If it does, return terminal_response exactly. Do not add text. If work "
-    "remains, do not return terminal_response; continue from the terminal evidence. Use native "
-    "patching for prose or one arbitrary text edit. For a repeated exact symbol "
-    "migration across named owners, use the paired symbol_migration and "
-    "require_change fields. symbol_migration groups [owner, from, matches] rows "
-    "by file and preserve-name changes only the qualifier. require_change names "
-    "the exact target lib/alias and per-file old lib/alias removals. Both tables "
-    "are complete authority: Surgeon discovers or chooses none of their values."))
+   "Apply one failure-atomic Clojure transaction. For exact nested replacements, "
+   "send only workspace_root, edits, and optional verify. Each edits item contains "
+   "file, within {form}, from, to, and optional positive matches (default 1). "
+   "Do not send changes, expect, basis, or decisions with edits; Surgeon derives "
+   "IDs and counts. A redundant top-level expect is ignored and reported, while "
+   "every exact per-edit guard remains authoritative. If inspect_clojure returned "
+   "basis and next_call, preserve workspace_root, basis, site IDs, and verify; "
+   "fill every decision and submit once. To move named owners into one new "
+   "namespace, use extraction once. Supply exact caller_changes or explicitly "
+   "ignored_caller_files when the decision is known. Omit public_forms to derive only "
+   "mechanically required visibility from the same frozen snapshot; omission never "
+   "accounts for a discovered caller. When the task already supplies the exact file, "
+   "destination, forms, and any caller decisions, submit extraction directly without "
+   "plan-extraction. A genuine caller decision refuses pre-write with a completed plan. "
+   "When the task supplies an exact external verification command, omit verify and run "
+   "that command once after the transaction; do not substitute the full profile. "
+   "apply refuses missing, unmoved, already-public, or unsupported declarations. "
+   "Exact forms, caller edits, and files counts may be derived. "
+   "Direct extraction reports structural caller candidates, not semantic completeness. "
+   "Otherwise, use changes for different actions or owner-level edits. Never combine edits and changes. If any insertion, deletion, rename, assoc_entry, or heterogeneous action needs changes, encode every action in one changes array. Each changes item contains id, files, "
+   "expect, exactly one of forms or owner, and exactly one action: replace, delete, "
+   "insert_before, insert_after, rename_binding, or assoc_entry. Exact replacement, "
+   "insertion, and assoc_entry "
+   "items contain find, except guarded top-level insertion: omit find and name exactly one forms owner. To delete two or more known named owners, use forms "
+   "with delete: true once; do not create marker forms or wait for semantic preparation. "
+   "Insertion actions use an array of nonblank strings; one array item may contain several complete forms, "
+   "which Surgeon splits in order. Insertion strings refuse malformed forms and refuse comment-bearing gaps. For named top-level "
+   "def or defn owners, use forms: [name]. owner is only for the namespace form "
+   "and must be {kind: namespace, name: ns-name}; never pass owner as a string. "
+   "For one multimethod implementation, use forms: [{kind: defmethod, name: render, dispatch: :card}]. "
+   "find and replace must each contain one complete Clojure form. Example item: "
+   "{id: status, files: [src/app.clj], forms: [render], find: :old, "
+   "replace: :new, expect: {matches: 1, each_form: 1}}. "
+   "For a local rename that must preserve a destructured data key, use forms plus "
+   "rename_binding: {from: sort-by, to: sort-field, preserve_external_key: true}; "
+   "matches counts the binding and its resolved local usages. "
+   "To add one key/value to logically equal maps while preserving comments, use "
+   "find with assoc_entry: {key: :status, value: :ready}. "
+   "Top-level aggregate expect is optional redundant bookkeeping: Surgeon derives changes, edits, and files "
+   "from the exact per-change guards and reports a supplied mismatch as ignored normalization. "
+   "Omit verify unless the user or repository explicitly requests a configured transaction profile. "
+   "When requested, verify is fast, full, or the project-owned exact profile. Staged formatting, "
+   "commands, and hot laws roll back on failure. A configured cold job returns "
+   "verification_complete=false plus one inspect next_call; continue useful "
+   "work and copy it once instead of replaying the edit. Success parses and "
+   "reads back every file and publishes an inverse receipt. "
+   "verification_complete=true is terminal. When terminal_response is present, "
+   "check whether this mutation completes all remaining user-requested work. "
+   "If it does, return terminal_response exactly. Do not add text. If work "
+   "remains, do not return terminal_response; continue from the terminal evidence. Use native "
+   "patching for prose or one arbitrary text edit. For a repeated exact symbol "
+   "migration across named owners, use the paired symbol_migration and "
+   "require_change fields. symbol_migration groups [owner, from, matches] rows "
+   "by file and preserve-name changes only the qualifier. require_change names "
+   "the exact target lib/alias and per-file old lib/alias removals. Both tables "
+   "are complete authority: Surgeon discovers or chooses none of their values."))
 
 ;; @spec MCP-OP-SCHEMA-001
 ;; @spec MCP-OP-RELAY-003
@@ -213,10 +214,10 @@
   (let [source (mcp-paths/resolve-source-path root file)
         target (mcp-paths/resolve-new-source-path root to)
         caller-spec (contract/tool-params->transaction
-                      {:changes caller-changes
-                       :expect {:changes (count caller-changes)
-                                :edits (:caller-edits expect)
-                                :files (count (distinct (mapcat :files caller-changes)))}})
+                     {:changes caller-changes
+                      :expect {:changes (count caller-changes)
+                               :edits (:caller-edits expect)
+                               :files (count (distinct (mapcat :files caller-changes)))}})
         callers (resolve-transaction-paths root caller-spec)
         ignored (mapv #(mcp-paths/resolve-source-path root %)
                       ignored-caller-files)
@@ -280,17 +281,17 @@
   ;; @spec MCP-OP-VERIFY-010
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
-                          verify (:verification-profiles config)
-                          (:verification-profile-source config)))
+                         verify (:verification-profiles config)
+                         (:verification-profile-source config)))
         sources (workspace-sources/read-all root)
         request (assoc request
                        :source (get sources (:file request))
                        :target-ns (extract/file-path->ns-name
-                                    (:to request) ["src" "test" "dev"])
+                                   (:to request) ["src" "test" "dev"])
                        :workspace-sources sources)
         compiled (->> (extraction/compile-extraction request)
                       (publicize-extraction-decision-refusal
-                        root sources request))
+                       root sources request))
         compiled
         (if (and (:ok compiled) (:formatter config))
           (let [format! (or (:format-candidates! config)
@@ -324,8 +325,8 @@
 
                          (nil? (:verify! config))
                          (change-buffer/capture-verification-baseline!
-                           project-root verify (:verification-profiles config)
-                           original-files)))]
+                          project-root verify (:verification-profiles config)
+                          original-files)))]
         (if (or (and exact-profile (not (:ok exact-profile)))
                 (and baseline (not (:ok baseline))))
           {:error (if exact-profile
@@ -347,7 +348,7 @@
                         (cond
                           exact-profile
                           (change-buffer/run-exact-verification!
-                            project-root exact-profile)
+                           project-root exact-profile)
 
                           (:verify! config)
                           ((:verify! config) project-root verify
@@ -355,12 +356,12 @@
 
                           :else
                           (change-buffer/run-verification!
-                            project-root verify (:verification-profiles config)
-                            future-files baseline)))]
+                           project-root verify (:verification-profiles config)
+                           future-files baseline)))]
                   (if (or (nil? verification) (:ok verification))
                     (do
                       (cold-verify/attach-undo-from-verification!
-                        project-root verification (:receipt-file result) (:receipt-hash result))
+                       project-root verification (:receipt-file result) (:receipt-hash result))
                       (cond-> result verification (assoc :verification verification)))
                     (let [rollback (extraction/undo! (:receipt result))
                           rolled-back (boolean (:ok rollback))]
@@ -409,8 +410,8 @@
   [telemetry-state request response total-start timings]
   (when telemetry-state
     (telemetry/record-call!
-      telemetry-state request response
-      (assoc timings :total_ms (elapsed-ms total-start))))
+     telemetry-state request response
+     (assoc timings :total_ms (elapsed-ms total-start))))
   response)
 
 (defn- resolve-program-paths
@@ -436,25 +437,25 @@
   [compiled programs]
   (let [sources
         (reduce
-          (fn [current {:keys [file]}]
-            (if (contains? current file)
-              current
-              (assoc current file (slurp file))))
-          (:original-sources compiled)
-          programs)
+         (fn [current {:keys [file]}]
+           (if (contains? current file)
+             current
+             (assoc current file (slurp file))))
+         (:original-sources compiled)
+         programs)
         program-result (program-tool/compile-programs sources programs)]
     (if-not (:ok program-result)
       program-result
       (let [raw-edits (concat (compiled-addressed-edits compiled)
                               (compiled-addressed-edits
-                                (:compiled program-result)))
+                               (:compiled program-result)))
             edits (mapv (fn [index edit]
                           (-> edit
                               (assoc :id (str "hybrid/" (inc index)))
                               (dissoc :intent-index)))
                         (range) raw-edits)
             combined (transaction/compile-addressed-transaction
-                       sources edits)]
+                      sources edits)]
         (if-not (:ok combined)
           (assoc combined :ok false :source-unchanged true)
           (assoc combined
@@ -475,9 +476,9 @@
                                  (mapv (fn [path]
                                          (or (get path-map path)
                                              (throw
-                                               (ex-info
-                                                 "Final relation path widened beyond the captured universe"
-                                                 {:path path}))))
+                                              (ex-info
+                                               "Final relation path widened beyond the captured universe"
+                                               {:path path}))))
                                        paths))))
                      changes)))}
     (catch clojure.lang.ExceptionInfo error
@@ -504,20 +505,20 @@
           validated
           (let [resolved
                 (resolve-spec-from-path-map
-                  (contract/tool-params->transaction (:params validated))
-                  path-map)]
+                 (contract/tool-params->transaction (:params validated))
+                 path-map)]
             (if-not (:ok resolved)
               resolved
               (let [canonical-files
                     (mapv (fn [raw]
                             (str (.relativize
-                                   root
-                                   (.toPath (io/file (get path-map raw))))))
+                                  root
+                                  (.toPath (io/file (get path-map raw))))))
                           (:relation-files relation-plan))
                     prepared
                     (compact-location/normalize-spec
-                      sources (:spec resolved)
-                      (:compact-location-normalization validated))]
+                     sources (:spec resolved)
+                     (:compact-location-normalization validated))]
                 (cond-> prepared
                   (not (:error prepared))
                   (assoc :compact-relation-normalization
@@ -528,11 +529,11 @@
   ;; @spec OP-ALG-MCP-001
   ;; @spec MCP-OP-EDIT-030
   [config root resolved receipt verify compact-location-plan relation-plan
-   compact-effect-identity?]
+   compact-effect-identity? public-operation]
   (let [exact-profile (when (= "exact" verify)
                         (change-buffer/compile-exact-profile
-                          verify (:verification-profiles config)
-                          (:verification-profile-source config)))
+                         verify (:verification-profiles config)
+                         (:verification-profile-source config)))
         files (->> (get-in resolved [:spec :changes])
                    (mapcat :in)
                    distinct
@@ -546,7 +547,7 @@
 
                      (nil? (:verify! config))
                      (change-buffer/capture-verification-baseline!
-                       project-root verify (:verification-profiles config) files)))
+                      project-root verify (:verification-profiles config) files)))
         baseline-refusal? (or (and exact-profile (not (:ok exact-profile)))
                               (and baseline (not (:ok baseline))))]
     (if baseline-refusal?
@@ -583,30 +584,34 @@
                     (assoc prepared
                            :canonical-effect-identity
                            (transaction/canonical-effect-identity
-                             project-root prepared)))))
+                            project-root prepared)))))
               base-prepare-compiled!)
             relation-prepare
             (when relation-plan
               (fn [sources _spec]
                 (let [prepared
                       (prepare-relation-spec
-                        root sources relation-plan
-                        (:relation-path-map resolved))]
+                       root sources relation-plan
+                       (:relation-path-map resolved))]
                   (when-let [evidence (:compact-relation-normalization prepared)]
                     (reset! relation-evidence evidence))
                   prepared)))
             result (transaction/execute-mcp-change!
-                     (cond-> {:spec (:spec resolved) :receipt-out receipt}
-                       prepare-compiled!
-                       (assoc :prepare-compiled!
-                              #(prepare-compiled! project-root %))
+                    (cond-> {:spec (:spec resolved)
+                             :receipt-out receipt
+                             :write-refusal-context
+                             {:operation public-operation
+                              :project-root project-root}}
+                      prepare-compiled!
+                      (assoc :prepare-compiled!
+                             #(prepare-compiled! project-root %))
 
-                       relation-prepare
-                       (assoc :prepare-spec relation-prepare)
+                      relation-prepare
+                      (assoc :prepare-spec relation-prepare)
 
-                       (and compact-location-plan (nil? relation-prepare))
-                       (assoc :prepare-spec
-                              #(compact-location/normalize-spec %1 %2 compact-location-plan))))
+                      (and compact-location-plan (nil? relation-prepare))
+                      (assoc :prepare-spec
+                             #(compact-location/normalize-spec %1 %2 compact-location-plan))))
             result (cond-> result
                      @relation-evidence
                      (assoc :compact-relation-normalization @relation-evidence))]
@@ -615,7 +620,7 @@
           (let [verification (cond
                                exact-profile
                                (change-buffer/run-exact-verification!
-                                 project-root exact-profile)
+                                project-root exact-profile)
 
                                (:verify! config)
                                ((:verify! config) project-root verify
@@ -623,20 +628,20 @@
 
                                :else
                                (change-buffer/run-verification!
-                                 project-root verify
-                                 (:verification-profiles config) files baseline))]
+                                project-root verify
+                                (:verification-profiles config) files baseline))]
             (if (:ok verification)
               (do
                 (cold-verify/attach-undo-from-verification!
-                  project-root verification (:receipt-file result) (:receipt-hash result))
+                 project-root verification (:receipt-file result) (:receipt-hash result))
                 (assoc result :verification verification))
               (let [rollback (transaction/execute-undo!
-                               {:receipt (:receipt-file result)})
+                              {:receipt (:receipt-file result)})
                     rolled-back? (boolean (:ok rollback))
                     hot-rollback (when rolled-back?
                                    (change-buffer/reload-after-rollback!
-                                     project-root verify
-                                     (:verification-profiles config)))]
+                                    project-root verify
+                                    (:verification-profiles config)))]
                 (when rolled-back?
                   (.delete (io/file (:receipt-file result))))
                 {:error (if (= :verification-unverified
@@ -653,7 +658,8 @@
 
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
-  [{:keys [project-root receipt-dir telemetry] :as config} params]
+  [{:keys [project-root receipt-dir telemetry] :as config} params
+   public-operation]
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners
@@ -692,7 +698,7 @@
                    (assoc config
                           :verification-profiles
                           (formatter/verification-profiles-after-format
-                            (:verification-profiles config) command)
+                           (:verification-profiles config) command)
                           :prepare-compiled!
                           (fn [project-root compiled]
                             (let [format! (or (:format-candidates! config)
@@ -719,42 +725,42 @@
                   (contract/validate-tool-params params)))]
     (if basis?
       (record-result!
-        telemetry params
-        (if (:ok validated)
-          (change-buffer/apply-basis! config normalized-params)
-          validated)
-        total-start {:validation_ms validation-ms})
+       telemetry params
+       (if (:ok validated)
+         (change-buffer/apply-basis! config normalized-params)
+         validated)
+       total-start {:validation_ms validation-ms})
       (if-not (:ok validated)
         (record-result! telemetry params (contract/normalize-refusal validated)
                         total-start {:validation_ms validation-ms})
         (try
           (let [[prepared confinement-ms]
                 (timed
-                  #(let [root (real-root project-root)
-                         resolved
-                         (if extraction?
-                           (resolve-extraction-paths
-                             root (get-in validated [:params :extraction]))
-                           (resolve-transaction-paths
-                             root
-                             (contract/tool-params->transaction
-                               (:params validated))))
-                         resolved
-                         (if-let [relation-plan (:compact-relation-plan validated)]
-                           (compact-relations/validate-path-resolution
-                             relation-plan resolved)
-                           resolved)
-                         programs (get-in validated [:params :programs])]
-                     {:root root
-                      :resolved
-                      (if (and (:ok resolved) (seq programs))
-                        (let [program-paths
-                              (resolve-program-paths root programs)]
-                          (if (:ok program-paths)
-                            (assoc resolved :programs
-                                   (:programs program-paths))
-                            program-paths))
-                        resolved)}))
+                 #(let [root (real-root project-root)
+                        resolved
+                        (if extraction?
+                          (resolve-extraction-paths
+                           root (get-in validated [:params :extraction]))
+                          (resolve-transaction-paths
+                           root
+                           (contract/tool-params->transaction
+                            (:params validated))))
+                        resolved
+                        (if-let [relation-plan (:compact-relation-plan validated)]
+                          (compact-relations/validate-path-resolution
+                           relation-plan resolved)
+                          resolved)
+                        programs (get-in validated [:params :programs])]
+                    {:root root
+                     :resolved
+                     (if (and (:ok resolved) (seq programs))
+                       (let [program-paths
+                             (resolve-program-paths root programs)]
+                         (if (:ok program-paths)
+                           (assoc resolved :programs
+                                  (:programs program-paths))
+                           program-paths))
+                       resolved)}))
                 {:keys [root resolved]} prepared]
             (if-not (:ok resolved)
               (record-result! telemetry params
@@ -771,17 +777,18 @@
                     [result kernel-ms]
                     (timed #(if extraction?
                               (execute-extraction!
-                                config root (:extraction resolved) receipt
-                                (get-in validated [:params :verify]))
+                               config root (:extraction resolved) receipt
+                               (get-in validated [:params :verify]))
                               (execute-explicit-change!
-                                config root resolved receipt
-                                (get-in validated [:params :verify])
-                                (:compact-location-normalization validated)
-                                (:compact-relation-plan validated)
-                                compact-effect-identity?)))
+                               config root resolved receipt
+                               (get-in validated [:params :verify])
+                               (:compact-location-normalization validated)
+                               (:compact-relation-plan validated)
+                               compact-effect-identity?
+                               public-operation)))
                     classified (cond->
-                                 (contract/classify-kernel-result
-                                   (.toString root) result)
+                                (contract/classify-kernel-result
+                                 (.toString root) result)
                                  (:compact-field-normalization validated)
                                  (assoc :compact_field_normalization
                                         (:compact-field-normalization validated))
@@ -796,21 +803,24 @@
                                  :kernel_ms kernel-ms}))))
           (catch Exception error
             (record-result!
-              telemetry params
-              {:ok false
-               :error_type "mcp-adapter-failure"
-               :error (.getMessage error)
-               :source_unchanged true
-               :remedy "Correct the project root or request and call apply_clojure_changes once."}
-              total-start {:validation_ms validation-ms})))))))
+             telemetry params
+             {:ok false
+              :error_type "mcp-adapter-failure"
+              :error (.getMessage error)
+              :source_unchanged true
+              :remedy "Correct the project root or request and call apply_clojure_changes once."}
+             total-start {:validation_ms validation-ms})))))))
 
 (defn execute-request!
   "Route one request to a canonical workspace context, then execute it."
   [config params]
-  (let [normalized (json/parse-string (json/generate-string params) true)
+  (let [public-operation (or (:public-operation config)
+                             "apply_clojure_changes")
+        normalized (json/parse-string (json/generate-string params) true)
         explicit-root? (contains? normalized :workspace_root)]
     (if-not explicit-root?
-      (let [result (execute-request-in-context! config normalized)
+      (let [result (execute-request-in-context!
+                    config normalized public-operation)
             resolved (workspace/canonical-root (:project-root config))]
         (cond-> result
           (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
@@ -819,7 +829,8 @@
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
-          (assoc (execute-request-in-context! (:config routed) (:params routed))
+          (assoc (execute-request-in-context!
+                  (:config routed) (:params routed) public-operation)
                  :workspace_root (:workspace-root routed)))))))
 
 (defn concise-summary
@@ -910,34 +921,38 @@
 (defn- handle-operation
   [operation params callback]
   (mcp-operation/invoke!
-    {:execute
-     (fn []
+   {:execute
+    (fn []
+      (write-refusal/bound-public-refusal
        (with-exact-terminal-response
          (assoc
-           (cond
-             (and (= "edit_clojure" operation)
-                  (or (contains? params :verify)
-                      (contains? params "verify")))
-             {:ok false
-              :error_type "invalid-mcp-request"
-              :error "edit_clojure does not authorize transaction verification"
-              :source_unchanged true
-              :mutation_attempted false
-              :write_authority false
-              :remedy "Use apply_clojure_changes when verification must share rollback authority."}
+          (cond
+            (and (= "edit_clojure" operation)
+                 (or (contains? params :verify)
+                     (contains? params "verify")))
+            {:ok false
+             :error_type "invalid-mcp-request"
+             :error "edit_clojure does not authorize transaction verification"
+             :source_unchanged true
+             :mutation_attempted false
+             :write_authority false
+             :remedy "Use apply_clojure_changes when verification must share rollback authority."}
 
-             @runtime-config
-             (execute-request! @runtime-config params)
+            @runtime-config
+            (execute-request!
+             (assoc @runtime-config :public-operation operation)
+             params)
 
-             :else
-             {:ok false
-              :error_type "server-not-initialized"
-              :error (str operation " server is not initialized")
-              :source_unchanged true
-              :remedy "Restart the configured clj-surgeon MCP server."})
-           :operation operation)))
-     :summarize concise-summary
-     :callback callback}))
+            :else
+            {:ok false
+             :error_type "server-not-initialized"
+             :error (str operation " server is not initialized")
+             :source_unchanged true
+             :remedy "Restart the configured clj-surgeon MCP server."})
+          :operation operation))
+       concise-summary))
+    :summarize concise-summary
+    :callback callback}))
 
 (defn handle-clj-change
   "Legacy inferred callback retained for compatibility with installed callers."
@@ -957,27 +972,27 @@
 
 (def edit-tool-description
   (str
-    "Commit one atomic Clojure edit transaction with no preflight read when the "
-    "decision is complete. edits are exact literal replacements guarded by the "
-    "exact value pair from/to. The exact aliases old/new and before/after are "
-    "also accepted and lowered to from/to; supply exactly one complete pair. The "
-    "exact old subtree uses file with within {form}, {namespace:true} for the "
-    "file's unique ns form, or {namespace:name} for an explicitly named ns. Use "
-    "explicit files with within {root:true} for one grouped "
-    "Clojure/EDN edit. matches defaults to one and is enforced in every file. Optional programs are "
-    "independent computed relations: file, an expression ending in transform, "
-    "and expect {matches, max_changed_characters}. delete_owners groups exact "
-    "named top-level forms by file and removes them without source bodies. Start a program with "
-    "(form 'owner) for one owner or [] for the whole file. All edits, programs, and deletions "
-    "compile against the same original snapshot; none observes another's output. "
-    "Any stale count, overlap, budget, comment-bearing computed selection, parse, "
-    "or write failure refuses or rolls back the whole batch. Exact spelling and "
-    "comments belong in edits; computed values belong in programs. Success returns "
-    "terminal read-back and undo evidence. For a repeated exact symbol migration "
-    "across named owners, use paired symbol_migration and require_change. Group "
-    "[owner, from, matches] rows by file; preserve-name changes only the qualifier. "
-    "Declare the exact target lib/alias and per-file old lib/alias removals. Surgeon "
-    "discovers or chooses none of these authoritative values."))
+   "Commit one atomic Clojure edit transaction with no preflight read when the "
+   "decision is complete. edits are exact literal replacements guarded by the "
+   "exact value pair from/to. The exact aliases old/new and before/after are "
+   "also accepted and lowered to from/to; supply exactly one complete pair. The "
+   "exact old subtree uses file with within {form}, {namespace:true} for the "
+   "file's unique ns form, or {namespace:name} for an explicitly named ns. Use "
+   "explicit files with within {root:true} for one grouped "
+   "Clojure/EDN edit. matches defaults to one and is enforced in every file. Optional programs are "
+   "independent computed relations: file, an expression ending in transform, "
+   "and expect {matches, max_changed_characters}. delete_owners groups exact "
+   "named top-level forms by file and removes them without source bodies. Start a program with "
+   "(form 'owner) for one owner or [] for the whole file. All edits, programs, and deletions "
+   "compile against the same original snapshot; none observes another's output. "
+   "Any stale count, overlap, budget, comment-bearing computed selection, parse, "
+   "or write failure refuses or rolls back the whole batch. Exact spelling and "
+   "comments belong in edits; computed values belong in programs. Success returns "
+   "terminal read-back and undo evidence. For a repeated exact symbol migration "
+   "across named owners, use paired symbol_migration and require_change. Group "
+   "[owner, from, matches] rows by file; preserve-name changes only the qualifier. "
+   "Declare the exact target lib/alias and per-file old lib/alias removals. Surgeon "
+   "discovers or chooses none of these authoritative values."))
 
 (def edit-clojure-tool
   {:id :edit-clojure

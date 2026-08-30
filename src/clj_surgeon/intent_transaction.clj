@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.binding-rename :as binding-rename]
    [clj-surgeon.file-ops :as file-ops]
+   [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.operation-algebra :as operation-algebra]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -850,7 +851,7 @@
      :edits (vec (mapcat :edits compiled))}))
 
 (defn- compile-intent-edits
-  [sources intent]
+  [sources intent write-refusal-context]
   (if (= :binding-rename (:kind intent))
     (compile-binding-rename-edits sources intent)
     (let [by-file (mapv (fn [file]
@@ -877,11 +878,57 @@
         (refuse! :expect-count-mismatch
                  (str "Intent " (:intent-index intent) " expected "
                       (:expect-count intent) " matches, found " actual-count)
-                 {:intent-index (:intent-index intent)
-                  :change-id (:id intent)
-                  :expected-count (:expect-count intent)
-                  :actual-count actual-count
-                  :per-file-counts per-file-counts}))
+                 (cond->
+                   {:intent-index (:intent-index intent)
+                    :change-id (:id intent)
+                    :expected-count (:expect-count intent)
+                    :actual-count actual-count
+                    :per-file-counts per-file-counts}
+                   (and write-refusal-context per-form-counts)
+                   (assoc :per-form-counts
+                          (write-refusal/project-relative-counts
+                            (:project-root write-refusal-context)
+                            per-form-counts))
+
+                   write-refusal-context
+                   (assoc
+                     :write-refusal-evidence
+                     (write-refusal/generic-count-mismatch-evidence
+                       {:operation (:operation write-refusal-context)
+                        :project-root (:project-root write-refusal-context)
+                        :change-index (:intent-index intent)
+                        :change-id (:id intent)
+                        :files (:files intent)
+                        :scope (cond
+                                 (:forms intent)
+                                 {:kind :form :forms (:forms intent)}
+
+                                 (:owner intent)
+                                 {:kind :namespace
+                                  :name (get-in intent [:owner :name])}
+
+                                 :else {:kind :root})
+                        :matcher (cond->
+                                   {:from (get-in intent [:from :source])
+                                    :operator (:operator intent)}
+                                   (:inside intent)
+                                   (assoc :inside
+                                          (get-in intent [:inside :source])))
+                        :expectation
+                        (select-keys intent
+                                     [:expect-count :each-file :each-form])
+                        :expected-count (:expect-count intent)
+                        :actual-count actual-count
+                        :per-file-counts per-file-counts
+                        :per-form-counts per-form-counts
+                        :items edits
+                        :snapshot-guards
+                        (into {}
+                              (map (fn [file]
+                                     [file
+                                      (structural-lens/source-hash
+                                        (get sources file))]))
+                              (:files intent))})))))
       (when (and (:each-file intent)
                  (some #(not= (:each-file intent) %)
                        (vals per-file-counts)))
@@ -1177,12 +1224,14 @@
      :result-source result-source}))
 
 (defn- compile-transaction*
-  [sources spec]
+  [sources spec options]
   (let [{:keys [mode intents expect]} (validate-spec! spec)
         files (ordered-scoped-files intents)
         _ (doseq [file files]
             (validate-complete-source! file (get sources file) :invalid-source))
-        compiled-intents (mapv #(compile-intent-edits sources %) intents)
+        compiled-intents (mapv #(compile-intent-edits
+                                  sources % (:write-refusal-context options))
+                               intents)
         edits-by-file (group-by :file (mapcat :edits compiled-intents))
         compiled-files (mapv #(compile-file % (get sources %) (get edits-by-file % []))
                              files)
@@ -1215,16 +1264,18 @@
 (defn compile-transaction
   "Compile explicit exact structural intents against an in-memory file map.
    Returns a complete future state or one structured refusal. Performs no I/O."
-  [sources spec]
-  (try
-    (when-not (map? sources)
-      (refuse! :invalid-sources "Sources must be a map of file path to source"))
-    (compile-transaction* sources spec)
-    (catch clojure.lang.ExceptionInfo e
-      (merge {:error (.getMessage e)} (ex-data e)))
-    (catch Exception e
-      {:error (.getMessage e)
-       :error-type :intent-compiler-failure})))
+  ([sources spec]
+   (compile-transaction sources spec nil))
+  ([sources spec options]
+   (try
+     (when-not (map? sources)
+       (refuse! :invalid-sources "Sources must be a map of file path to source"))
+     (compile-transaction* sources spec options)
+     (catch clojure.lang.ExceptionInfo e
+       (merge {:error (.getMessage e)} (ex-data e)))
+     (catch Exception e
+       {:error (.getMessage e)
+        :error-type :intent-compiler-failure}))))
 
 (defn- canonical-effect-refusal!
   [message data]
@@ -2136,7 +2187,7 @@
    :lifecycle :commit})
 
 (defn- compile-change-spec
-  [context spec prepare-spec]
+  [context spec prepare-spec write-refusal-context]
   (validate-spec! spec)
   (let [canonical-spec (canonicalize-spec spec)
         sources (read-sources (spec-files canonical-spec))
@@ -2151,7 +2202,9 @@
         _ (validate-spec! prepared-spec)
         algebra-result
         (operation-algebra/compile-change
-          (operation-algebra/change-entry compile-transaction)
+          (operation-algebra/change-entry
+            #(compile-transaction
+               %1 %2 {:write-refusal-context write-refusal-context}))
           context
           sources
           prepared-spec)]
@@ -2168,9 +2221,13 @@
   ;; @spec OP-ALG-CONTEXT-002, OP-ALG-IDENTITY-001, OP-ALG-RECEIPT-003,
   ;; @spec OP-ALG-RUNTIME-001
   "Compile, commit, verify, and publish one durable inverse receipt."
-  [context {:keys [spec receipt-out prepare-compiled! prepare-spec] :as opts}]
+  [context
+   {:keys [spec receipt-out prepare-compiled! prepare-spec
+           write-refusal-context]
+    :as opts}]
   (try
-    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec}
+    (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
+                                       :write-refusal-context}
                                      (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
@@ -2179,7 +2236,9 @@
     (when-not (map? spec)
       (refuse! :invalid-transaction-spec ":spec must be an EDN map"))
     (let [receipt-path (canonical-receipt-path receipt-out)
-          {:keys [spec compiled capabilities authority-error]} (compile-change-spec context spec prepare-spec)
+          {:keys [spec compiled capabilities authority-error]} (compile-change-spec
+                                                                 context spec prepare-spec
+                                                                 write-refusal-context)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
                      compiled)]

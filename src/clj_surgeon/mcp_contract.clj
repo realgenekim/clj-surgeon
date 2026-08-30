@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
+   [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.set :as set]
    [clojure.string :as str]
@@ -1089,7 +1090,13 @@
       (contains? result :expected-count) (assoc :expected_count (:expected-count result))
       (contains? result :actual-count) (assoc :actual_count (:actual-count result))
       (contains? result :per-file-counts) (assoc :per_file_counts (:per-file-counts result))
-      (contains? result :per-form-counts) (assoc :per_form_counts (:per-form-counts result))
+      (contains? result :per-form-counts)
+      (assoc :per_form_counts
+             (write-refusal/public-evidence (:per-form-counts result)))
+      (contains? result :write-refusal-evidence)
+      (assoc :write_refusal_evidence
+             (write-refusal/public-evidence
+               (:write-refusal-evidence result)))
       (contains? result :distribution) (assoc :distribution (some-> (:distribution result) name))
       (contains? result :operation) (assoc :kernel_operation (some-> (:operation result) name))
       (contains? result :phase) (assoc :kernel_phase (some-> (:phase result) name))
