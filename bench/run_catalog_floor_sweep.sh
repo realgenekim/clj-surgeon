@@ -32,6 +32,10 @@ codex_bin=$(command -v codex)
 codex_sha=$(shasum -a 256 "$codex_bin" | awk '{print $1}')
 head=$(git -C "$repo_root" rev-parse HEAD)
 tree=$(git -C "$repo_root" rev-parse HEAD^{tree})
+test ! -e "$repo_root/.cpcache" || {
+  echo "checkout already contains generated .cpcache" >&2
+  exit 2
+}
 
 server_pids=()
 server_pid_count=0
@@ -46,6 +50,13 @@ cleanup() {
   done
 }
 trap cleanup EXIT INT TERM
+
+archive_generated_cache() {
+  if [ -d "$repo_root/.cpcache" ]; then
+    test ! -e "$result_dir/generated-repo-cpcache"
+    mv "$repo_root/.cpcache" "$result_dir/generated-repo-cpcache"
+  fi
+}
 
 arm_keyword() {
   case "$1" in
@@ -104,9 +115,9 @@ for arm in "${server_arms[@]}"; do
   server_dir="$result_dir/servers/$arm"
   mkdir -p "$server_dir"
   arm_name=$(arm_keyword "$arm")
-  (cd "$server_dir"
+  (cd "$repo_root"
    exec clojure -J-Xms32m -J-Xmx256m \
-     -Sdeps "{:paths [\"$repo_root/src\" \"$repo_root/dev/experiments\"]}" \
+     -Sdeps '{:paths ["src" "dev/experiments"]}' \
      -X:clj-surgeon/mcp catalog-floor-server/start \
      :arm ":$arm_name" \
      :surface-receipt-file "\"$server_dir/advertised.json\"" \
@@ -144,9 +155,9 @@ for arm in "${mcp_arms[@]}"; do
   write_config "$preflight/codex-home/config.toml" \
     "$(cat "$result_dir/servers/$server_arm/url.txt")" "$arm"
   start_ns=$(date +%s%N)
-  (cd "$preflight"
+  (cd "$repo_root"
    CODEX_HOME="$preflight/codex-home" clojure -J-Xms32m -J-Xmx256m \
-     -Sdeps "{:paths [\"$repo_root/src\" \"$repo_root/bench\"]}" -M \
+     -Sdeps '{:paths ["src" "bench"]}' -M \
      -m capture-codex-mcp-registry --codex "$codex_bin" \
      --output "$preflight/registry.json" --server catalog-probe \
      > "$preflight/stdout.txt" 2> "$preflight/stderr.txt")
@@ -168,6 +179,7 @@ printf '}\n' >> "$result_dir/catalogs.json"
 jq -e 'keys == ["C","D","I","M","P","R","T"]' "$result_dir/catalogs.json" >/dev/null
 
 if [ "${BENCH_PREFLIGHT_ONLY:-0}" = 1 ]; then
+  archive_generated_cache
   jq . "$result_dir/catalogs.json"
   echo "catalog-floor token-free preflight complete: $result_dir" >&2
   exit 0
@@ -269,6 +281,7 @@ for block in $(seq 1 "$blocks"); do
 done
 
 python3 "$repo_root/dev/experiments/catalog_floor_score.py" "$result_dir" > "$result_dir/score.stdout.json"
+archive_generated_cache
 test "$(git -C "$repo_root" rev-parse HEAD)" = "$head"
 test "$(git -C "$repo_root" rev-parse HEAD^{tree})" = "$tree"
 test -z "$(git -C "$repo_root" status --short)"
