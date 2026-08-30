@@ -183,7 +183,31 @@
           (+ (:character start) (count (first lines)))
           (count (last lines)))]
     (and (= (- (:line end) (:line start)) line-span)
-         (= (:character end) expected-end-character))))
+         (contains? #{expected-end-character (inc expected-end-character)}
+                    (:character end)))))
+
+(defn- selection-names-owner?
+  [form-range selection-range source owner]
+  (let [form-start (:start form-range)
+        selection-start (:start selection-range)
+        selection-end (:end selection-range)
+        line-index (- (:line selection-start) (:line form-start))
+        lines (str/split source #"\n" -1)
+        line (get lines line-index)
+        start-character (if (zero? line-index)
+                          (- (:character selection-start)
+                             (:character form-start))
+                          (:character selection-start))
+        end-character (if (zero? line-index)
+                        (- (:character selection-end)
+                           (:character form-start))
+                        (:character selection-end))]
+    (and (= (:line selection-start) (:line selection-end))
+         (string? line)
+         (<= 0 start-character)
+         (< start-character end-character)
+         (<= end-character (count line))
+         (= owner (subs line start-character end-character)))))
 
 (defn- form-evidence?
   [file file-hash expected-platforms form]
@@ -197,6 +221,8 @@
          (seq source)
          (string? owner)
          (not (str/blank? owner))
+         (string? (:form_type form))
+         (not (str/blank? (:form_type form)))
          (not= "ns" (:form_type form))
          (= expected-platforms (:platforms form))
          (= file (:file form) (:file anchor))
@@ -211,6 +237,7 @@
          (range? selection-range)
          (range-contained? form-range selection-range)
          (range-fits-source? form-range source)
+         (selection-names-owner? form-range selection-range source owner)
          (= (dec (:line form)) (get-in form-range [:start :line]))
          (= (dec (:end_line form)) (get-in form-range [:end :line])))))
 

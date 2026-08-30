@@ -209,7 +209,17 @@
                          {:line 0 :character 999})
                (assoc-in base
                          [:results 0 :forms 0 :source_anchor :range :end :character]
-                         999)]]
+                         999)
+               (assoc-in base [:results 0 :forms 0 :form_type] nil)
+               (assoc-in base [:results 0 :forms 0 :form_type] 7)
+               (assoc-in base
+                         [:results 0 :forms 0 :source_anchor :selection_range]
+                         {:start {:line 0 :character 5}
+                          :end {:line 0 :character 5}})
+               (assoc-in base
+                         [:results 0 :forms 0 :source_anchor :selection_range]
+                         {:start {:line 0 :character 0}
+                          :end {:line 0 :character 1}})]]
         (is (identical? candidate (project candidate)))))))
 
 ;; @spec MCP-OP-PREP-REQ-002
@@ -444,6 +454,16 @@
         (is (= "none" (:next_action structured)))
         (is (and (map? prepared)
                  (str/ends-with? (first content) coaching)))
+        (let [crlf (invoke-inspect
+                     root "src/windows.clj"
+                     "(ns windows)\r\n(def alpha :old)\r\n"
+                     {"requests" [{"operation" "forms"
+                                   "file" "src/windows.clj"
+                                   "forms" ["alpha"]
+                                   "expect" {"forms" 1}}]
+                      "expect" {"requests" 1 "files" 1}})]
+          (is (false? (:error? crlf)))
+          (is (map? (get-in crlf [:structured :prepared_request]))))
         (write-source! root "src/unrelated.clj" "(ns unrelated)\n(def untouched :yes)\n")
         (is (= "edit_clojure" (mcp-tool/request-operation filled)))
         (let [committed (mcp-tool/execute-request! config filled)]
