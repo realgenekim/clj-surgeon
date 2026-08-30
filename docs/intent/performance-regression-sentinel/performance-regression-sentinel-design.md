@@ -625,6 +625,14 @@ speedup-earned result, update a promotion receipt, advance stable, import the
 native midpoint as its comparator or contribute a row to a promotion cohort.
 Repeated nightlies and a faster backfill remain sentinel evidence only.
 
+If a sentinel request supplies promotion fields, asks to satisfy a promotion
+gate, or presents sentinel evidence where promotion evidence is required, the
+closed decoder or verifier returns typed
+`:sentinel-promotion-authority-refused` before model launch, ledger append,
+promotion-record mutation or baseline mutation. The refusal preserves any
+existing sentinel evidence and grants no retry, promotion or baseline
+authority.
+
 ## Failure and Refusal Matrix
 
 | Failure | Classification | Effects |
