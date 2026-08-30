@@ -1,0 +1,19 @@
+Rename the Clojure function `jitter-ms` to `retry-jitter-ms` and update every
+reference in the supplied two-file workspace.
+
+The complete decision is fixed. Each listed old form occurs exactly once in
+the named top-level owner:
+
+- `src/bench/retry.clj`: owner `jitter-ms`, `jitter-ms` ->
+  `retry-jitter-ms`
+- `src/bench/retry.clj`: owners `retry-delay-ms`, `scheduled-at-ms`,
+  `retry-window-ms`, and `retry-budget-ms`, `jitter-ms` ->
+  `retry-jitter-ms`
+- `src/bench/worker.clj`: owners `next-job`, `park-worker`, and
+  `worker-deadline`, `retry/jitter-ms` -> `retry/retry-jitter-ms`
+
+Call the single available `edit_clojure` tool exactly once. Do not inspect or
+read source, use shell commands, or emit a file-change action. Omit
+`workspace_root` because the isolated server owns it. After the tool succeeds,
+reply exactly: RENAME_OK
+
