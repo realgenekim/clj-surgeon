@@ -628,8 +628,11 @@ def summarize(results: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {"models": {}}
     for model in MODELS:
         cold = [row for row in results["cold_trivial"] if row["model"] == model]
-        cold_prepared = [
+        cold_prepared_attempts = [
             row for row in results["cold_prepared"] if row["model"] == model
+        ]
+        cold_prepared = [
+            row for row in cold_prepared_attempts if row["score"]["exact"]
         ]
         warm = [row for row in results["warm_prepared"] if row["model"] == model]
         gross = median(cold, "total_e2e_ms")
@@ -655,6 +658,10 @@ def summarize(results: dict[str, Any]) -> dict[str, Any]:
             ),
             "cold_decode_tail_median_ms": median(cold, "decode_tail_ms"),
             "cold_prepared_n": len(cold_prepared),
+            "cold_prepared_attempts": len(cold_prepared_attempts),
+            "cold_prepared_invalid_retained": (
+                len(cold_prepared_attempts) - len(cold_prepared)
+            ),
             "cold_prepared_median_e2e_ms": cold_bang,
             "warm_prepared_n": len(warm),
             "warm_prepared_median_round_trip_ms": warm_bang,

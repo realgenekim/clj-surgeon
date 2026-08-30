@@ -71,7 +71,11 @@ class WarmExecutorScreenTest(unittest.TestCase):
                     }
                 )
                 results["cold_prepared"].append(
-                    {"model": model, "total_e2e_ms": 5000}
+                    {
+                        "model": model,
+                        "total_e2e_ms": 5000,
+                        "score": {"exact": True},
+                    }
                 )
             for index in range(10):
                 results["warm_prepared"].append(
