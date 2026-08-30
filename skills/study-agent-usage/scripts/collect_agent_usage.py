@@ -126,6 +126,7 @@ def joined_workspace_snapshot_sha256(
     return hashlib.sha256(WORKSPACE_SNAPSHOT_DOMAIN + evidence).hexdigest()
 
 
+# @spec MEASURE-EVID-001
 def compile_mcp_action_evidence(item: dict) -> dict:
     """Compile byte/hash scalars while private arguments and results are in scope."""
     evidence = {}
@@ -193,6 +194,7 @@ def source_hashes(
     return result
 
 
+# @spec MEASURE-EVID-001
 def compile_inspect_clock_evidence(arguments: object, result: object) -> dict:
     """Compile comparable inspect identities without retaining request/source data."""
     safe_arguments = arguments if isinstance(arguments, dict) else {}
@@ -583,6 +585,7 @@ def clipped_kind_coverage(items: list[dict], kind: str, start: int, end: int) ->
     ])
 
 
+# @spec MEASURE-EVID-001
 def compile_action_emission_evidence(
     source: dict,
     endpoint: dict | None,
@@ -700,6 +703,7 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
     return boundaries
 
 
+# @spec MEASURE-WALL-001
 def compile_event_clock(started_at: str, duration_ms: int, samples: list[dict]) -> dict:
     """Build an ordered measured-item and unattributed-gap clock for one turn."""
     turn_start_ms = round(parse_time(started_at).timestamp() * 1000)
@@ -773,6 +777,7 @@ def structural_write_items(turn: dict) -> list[dict]:
     ]
 
 
+# @spec MEASURE-WALL-002
 def compile_post_decision_wall(turn: dict) -> dict | None:
     """Compile per-turn post-write wall only when clock coverage is present."""
     clock = turn.get("event_clock") if isinstance(turn, dict) else None
@@ -814,6 +819,7 @@ def compile_post_decision_wall(turn: dict) -> dict | None:
     }
 
 
+# @spec MEASURE-WALL-003
 def aggregate_post_decision_wall(
     turns: list[dict], coverage_threshold: float
 ) -> dict:
@@ -907,6 +913,7 @@ def aggregate_post_decision_wall(
     }
 
 
+# @spec MEASURE-WALL-002
 def finalize_turn(turn: dict) -> dict:
     result = dict(turn)
     samples = result.pop("clj_surgeon_action_wall_ms")
@@ -2750,6 +2757,7 @@ def render_read_chain_receipt(receipt: dict, *, top: int = 12) -> str:
     return "\n".join(lines)
 
 
+# @spec MEASURE-WALL-002
 def render_event_clock_receipt(
     receipt: dict,
     *,

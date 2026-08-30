@@ -5,6 +5,8 @@ description: Analyze recent Codex and Claude Code history plus clj-surgeon MCP, 
 
 # Study Agent Usage
 
+Specification registry: `docs/intent/2026-08-29-ratification/measurement-evidence-specs.md`.
+
 Produce an anonymized, evidence-backed comparison from one bounded receipt.
 Do not rediscover either provider's history format by hand. The collector
 classifies `:change` as planning and `:change!` / `:undo-change!` as structural
