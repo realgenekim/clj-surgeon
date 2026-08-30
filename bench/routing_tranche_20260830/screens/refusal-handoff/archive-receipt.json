@@ -1,0 +1,8 @@
+{
+  "archive": "refusal-handoff-raw-streams.tar.gz",
+  "archive_sha256": "6d7b02d10ec245b90f83c0884277211240b208e19b3ecc2c043742f6e837bf2f",
+  "manifest_entries": 494,
+  "manifest_sha256": "0615f6dc66e1e2edde81d4455f7de222bb978f74090818367c775427a80f5cf5",
+  "schema": "routing-tranche-archive.v1",
+  "screen": "refusal-handoff"
+}
