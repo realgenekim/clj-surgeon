@@ -1,0 +1,172 @@
+{
+  "arm_medians_ms": {
+    "C": {
+      "answer_ms": 3764.9374225,
+      "complete_ms": 3797.4374225,
+      "init_ms": 305.08124599999996,
+      "tail_ms": 255.0,
+      "total_ms": 4402.5
+    },
+    "D": {
+      "answer_ms": 3696.006018,
+      "complete_ms": 3729.006018,
+      "init_ms": 335.13643049999996,
+      "tail_ms": 255.0,
+      "total_ms": 4381.0
+    },
+    "I": {
+      "answer_ms": 3693.4142055,
+      "complete_ms": 3714.4142055,
+      "init_ms": 372.36353199999996,
+      "tail_ms": 259.5,
+      "total_ms": 4377.5
+    },
+    "M": {
+      "answer_ms": 3700.7650510000003,
+      "complete_ms": 3735.2650510000003,
+      "init_ms": 336.7202055,
+      "tail_ms": 254.0,
+      "total_ms": 4677.5
+    },
+    "P": {
+      "answer_ms": 4012.9930889999996,
+      "complete_ms": 4043.9930889999996,
+      "init_ms": 316.7601825,
+      "tail_ms": 279.5,
+      "total_ms": 4851.0
+    },
+    "R": {
+      "answer_ms": 3506.244946,
+      "complete_ms": 3540.744946,
+      "init_ms": 353.11203850000004,
+      "tail_ms": 253.0,
+      "total_ms": 4122.5
+    },
+    "T": {
+      "answer_ms": 3837.4796845,
+      "complete_ms": 3871.4796845,
+      "init_ms": 346.7125695,
+      "tail_ms": 256.0,
+      "total_ms": 4494.0
+    }
+  },
+  "conclusion": "fixed-local-startup-no-detected-byte-scaling",
+  "contrasts_ms": {
+    "description_minus_tiny": {
+      "answer_ms": {
+        "bootstrap_95_ci": [
+          -1320.1362399999998,
+          436.3435414999999
+        ],
+        "paired_median": -163.34144250000008
+      },
+      "complete_ms": {
+        "bootstrap_95_ci": [
+          -1321.6362399999998,
+          435.3435414999999
+        ],
+        "paired_median": -161.84144250000008
+      },
+      "init_ms": {
+        "bootstrap_95_ci": [
+          -55.464080000000024,
+          55.34551299999998
+        ],
+        "paired_median": -0.49559350000001245
+      },
+      "tail_ms": {
+        "bootstrap_95_ci": [
+          -33.0,
+          54.0
+        ],
+        "paired_median": -2.0
+      },
+      "total_ms": {
+        "bootstrap_95_ci": [
+          -1435.0,
+          760.5
+        ],
+        "paired_median": -114.0
+      }
+    },
+    "real_minus_inspect": {
+      "answer_ms": {
+        "bootstrap_95_ci": [
+          -778.3376370000001,
+          339.22935499999994
+        ],
+        "paired_median": -127.40221850000012
+      },
+      "complete_ms": {
+        "bootstrap_95_ci": [
+          -796.3376369999999,
+          339.22935499999994
+        ],
+        "paired_median": -126.40221850000012
+      },
+      "init_ms": {
+        "bootstrap_95_ci": [
+          -50.953145000000006,
+          45.110726
+        ],
+        "paired_median": -1.3996094999999968
+      },
+      "tail_ms": {
+        "bootstrap_95_ci": [
+          -33.0,
+          17.0
+        ],
+        "paired_median": -1.0
+      },
+      "total_ms": {
+        "bootstrap_95_ci": [
+          -847.0,
+          276.0
+        ],
+        "paired_median": -143.5
+      }
+    },
+    "tiny_minus_clean": {
+      "answer_ms": {
+        "bootstrap_95_ci": [
+          -1260.2834210000005,
+          636.2995044999998
+        ],
+        "paired_median": -728.3000519999998
+      },
+      "complete_ms": {
+        "bootstrap_95_ci": [
+          -1258.2834210000005,
+          632.2995044999998
+        ],
+        "paired_median": -729.8000519999998
+      },
+      "init_ms": {
+        "bootstrap_95_ci": [
+          22.828025000000025,
+          68.28342100000003
+        ],
+        "paired_median": 40.749425000000016
+      },
+      "tail_ms": {
+        "bootstrap_95_ci": [
+          -26.0,
+          66.0
+        ],
+        "paired_median": -3.5
+      },
+      "total_ms": {
+        "bootstrap_95_ci": [
+          -1211.0,
+          598.5
+        ],
+        "paired_median": -760.5
+      }
+    }
+  },
+  "promotion_authority": false,
+  "route_adherent_count": 98,
+  "run_count": 98,
+  "schema": "clj-surgeon.catalog-floor-phase-audit.v1",
+  "valid_run_count": 98
+}

@@ -300,3 +300,28 @@ Re-run with:
 bench/measure_prefill_decode_ratio.sh OUT_DIR          # probe: emits facts
 bb bench/score_prefill_decode_ratio.clj OUT_DIR --markdown   # fold: emits verdicts
 ```
+
+## 2026-08-29 correction — the extra 490 ms was not a catalog-size tax
+
+The 3,927 versus 4,417 ms contrast above was a useful hypothesis, but it was not
+a causal comparison. Its 490 ms difference was smaller than the two arms'
+combined 743 ms MAD; the arms ran sequentially, and the loaded catalog identity
+was not frozen.
+
+A later Anvil experiment froze seven catalog shapes from zero tools through a
+real 48,045-byte catalog and synthetic 64 KiB surfaces. Fourteen counterbalanced
+blocks produced 98/98 valid, exact, no-action turns. It found:
+
+- **about 41 ms of fixed local MCP startup**, 95% interval 23–68 ms;
+- **no detectable byte-size effect** when 64 KiB was added to one tool: -0.5 ms,
+  interval -55 to +55 ms;
+- **no complete-wall catalog penalty** distinguishable from provider and answer
+  variance.
+
+The corrected design rule is narrower: a turn still has a large fixed floor,
+but catalog shrinking is not an earned way to reduce it. Keep useful,
+self-describing tools visible. Removing them can silently remove model
+capability, while the measured latency benefit is zero.
+
+Protocol, result, raw clocks, and compact evidence:
+[`docs/observations/2026-08-29-codex-catalog-floor-sweep-protocol.md`](observations/2026-08-29-codex-catalog-floor-sweep-protocol.md).
