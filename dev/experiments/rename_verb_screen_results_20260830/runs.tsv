@@ -1,0 +1,15 @@
+run_id	cohort	arm	replicate	model	completed	exact	one_shot	wrong_subject	verb_adopted	schema_fumble	request_bytes	request_o200k_tokens	output_tokens	turns	wall_ms
+01-V-r1	sol	V	1	gpt-5.6-sol	false	false	false	1	false	true	826	246	1153	1	27701
+02-T-r1	sol	T	1	gpt-5.6-sol	true	true	true	0	false	false	1000	302	939	1	27309
+03-T-r2	sol	T	2	gpt-5.6-sol	true	true	true	0	false	false	1000	302	822	1	23364
+04-V-r2	sol	V	2	gpt-5.6-sol	false	false	false	1	false	true	904	262	747	1	19663
+05-T-r3	sol	T	3	gpt-5.6-sol	true	true	true	0	false	false	1000	302	929	1	25816
+06-V-r3	sol	V	3	gpt-5.6-sol	true	true	true	0	true	false	64	19	243	1	10308
+07-V-r4	sol	V	4	gpt-5.6-sol	true	true	true	0	true	false	64	19	307	1	12245
+08-T-r4	sol	T	4	gpt-5.6-sol	false	false	false	1	false	false	824	246	1698	1	37613
+09-V-r5	sol	V	5	gpt-5.6-sol	true	true	true	0	true	false	64	19	444	1	14457
+10-T-r5	sol	T	5	gpt-5.6-sol	true	true	true	0	false	false	1000	302	917	1	24585
+11-T-r6	sol	T	6	gpt-5.6-sol	true	true	true	0	false	false	1000	302	929	1	25518
+12-V-r6	sol	V	6	gpt-5.6-sol	true	true	true	0	true	false	64	19	553	1	16803
+01-V-r1	spark	V	1	gpt-5.3-codex-spark	true	true	true	0	true	false	64	19	753	1	7858
+02-V-r2	spark	V	2	gpt-5.3-codex-spark	true	true	true	0	true	false	64	19	1254	1	8061

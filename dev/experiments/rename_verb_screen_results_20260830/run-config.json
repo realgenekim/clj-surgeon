@@ -1,0 +1,37 @@
+{
+  "schema": "clj-surgeon.rename-verb-screen-config.v1",
+  "product_commit": "c55de2279826af5ed21c90981591479dd2e802b2",
+  "experiment_commit": "15c3acbe99f38bfb8d1ce242f8450b8a137de7c5",
+  "experiment_tree": "a575efb1748eeddec7610ad15cf3b00a57b787ca",
+  "model": "gpt-5.6-sol",
+  "spark_model": "gpt-5.3-codex-spark",
+  "reasoning": "high",
+  "route": "subscription-chatgpt",
+  "order": [
+    "V",
+    "T",
+    "T",
+    "V",
+    "T",
+    "V",
+    "V",
+    "T",
+    "V",
+    "T",
+    "T",
+    "V"
+  ],
+  "codex_version": "codex-cli 0.149.1",
+  "tokenizer": {
+    "package": "tiktoken",
+    "version": "0.11.0",
+    "encoding": "o200k_base"
+  },
+  "hashes": {
+    "harness": "e9c0313558d7f37f5d27146c75e4cccb568751455a220e19f275d0cb6ebf43e6",
+    "proxy": "3ba9a3bc9ff28f6ce237388a63679c5403157ad86c82b73749e25d3066f6268b",
+    "scorer": "83191c4bbed2f17dc01471cbcd8ba5bb6a37a30e3474f02bf78fc44baea7e844",
+    "prompt": "221bdc79caa957b5978ec581a0d1b45da1b7fc973d57087abf3a2c758eb88241",
+    "plan": "260d0fd45f16dbdbfce76fcc5b72eddf87666bbf7392b7feaac50475cbca5de2"
+  }
+}

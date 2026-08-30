@@ -1,0 +1,72 @@
+{
+  "arms": {
+    "T": {
+      "completed": 5,
+      "exact": 5,
+      "median_output_tokens_completed": 929,
+      "median_request_bytes_completed": 1000,
+      "median_request_o200k_tokens_completed": 302,
+      "median_wall_ms_completed": 25518,
+      "n": 6,
+      "one_shot": 5,
+      "runs": [
+        "02-T-r1",
+        "03-T-r2",
+        "05-T-r3",
+        "08-T-r4",
+        "10-T-r5",
+        "11-T-r6"
+      ],
+      "schema_fumbles": 0,
+      "verb_adopted": 0,
+      "wrong_subject": 1
+    },
+    "V": {
+      "completed": 4,
+      "exact": 4,
+      "median_output_tokens_completed": 375.5,
+      "median_request_bytes_completed": 64.0,
+      "median_request_o200k_tokens_completed": 19.0,
+      "median_wall_ms_completed": 13351.0,
+      "n": 6,
+      "one_shot": 4,
+      "runs": [
+        "01-V-r1",
+        "04-V-r2",
+        "06-V-r3",
+        "07-V-r4",
+        "09-V-r5",
+        "12-V-r6"
+      ],
+      "schema_fumbles": 2,
+      "verb_adopted": 4,
+      "wrong_subject": 2
+    }
+  },
+  "decision": "KILL",
+  "kill_rules": {
+    "any_wrong_subject": true,
+    "below_50_percent_byte_reduction": false,
+    "correctness_loss": true
+  },
+  "observed": {
+    "correctness_rate_T": 0.8333333333333334,
+    "correctness_rate_V": 0.6666666666666666,
+    "equal_correctness": false,
+    "median_request_byte_reduction_percent": 93.6,
+    "median_request_o200k_token_reduction_percent": 93.70860927152317,
+    "point_prediction_met_bytes": true,
+    "point_prediction_percent": 90.0
+  },
+  "schema": "clj-surgeon.rename-verb-screen-summary.v1",
+  "spark_bonus": {
+    "exact": 2,
+    "n": 2,
+    "runs": [
+      "01-V-r1",
+      "02-V-r2"
+    ],
+    "schema_fumbles": 0,
+    "verb_adopted": 2
+  }
+}

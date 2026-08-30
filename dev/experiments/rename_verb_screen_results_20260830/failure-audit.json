@@ -1,0 +1,43 @@
+{
+  "schema": "clj-surgeon.rename-verb-failure-audit.v1",
+  "classification": "post-hoc diagnostic; registered scores and decision are unchanged",
+  "registered_wrong_subject_runs": [
+    "01-V-r1",
+    "04-V-r2",
+    "08-T-r4"
+  ],
+  "source_unchanged_refusals": [
+    {
+      "run_id": "01-V-r1",
+      "arm": "V",
+      "request_bytes": 826,
+      "request_o200k_tokens": 246,
+      "request_shape": "invented renames array",
+      "error_type": "invalid-rename-verb"
+    },
+    {
+      "run_id": "04-V-r2",
+      "arm": "V",
+      "request_bytes": 904,
+      "request_o200k_tokens": 262,
+      "request_shape": "invented owner/old_form/new_form edit rows",
+      "error_type": "invalid-rename-verb"
+    },
+    {
+      "run_id": "08-T-r4",
+      "arm": "T",
+      "request_bytes": 824,
+      "request_o200k_tokens": 246,
+      "request_shape": "invented owner/old/new edit rows",
+      "error_type": "invalid-mcp-request"
+    }
+  ],
+  "unexpected_source_paths": [],
+  "missing_source_paths": [],
+  "unintended_mutation_runs": [],
+  "successful_runs_exact_against_frozen_after": 11,
+  "refused_runs_with_original_before_bytes": 3,
+  "decision_changed": false,
+  "decision_reason": "V still lost registered correctness, 4/6 versus T 5/6"
+}
+
