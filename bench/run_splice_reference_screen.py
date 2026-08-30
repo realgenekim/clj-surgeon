@@ -205,6 +205,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--auth-file", type=Path)
     parser.add_argument("--expected-head")
+    parser.add_argument("--rescore-output", type=Path)
     parser.add_argument("--timeout", type=int, default=240)
     return parser.parse_args()
 
@@ -215,6 +216,58 @@ def main() -> int:
     if args.self_test:
         command = [sys.executable, "-m", "unittest", "-v", "bench/test_splice_reference_screen.py"]
         return subprocess.call(command, cwd=repo_root)
+    if args.rescore_output is not None:
+        output = args.rescore_output.resolve()
+        if not output.is_dir():
+            raise SystemExit("--rescore-output must name an existing retained result root")
+        fixture_root = repo_root / "bench/fixtures/splice_reference"
+        manifest = json.loads((fixture_root / "spans.json").read_text(encoding="utf-8"))
+        expected = fixture_root / "expected" / manifest["file"]
+        cohort_scores = []
+        for index, arm in enumerate(COHORT, start=1):
+            run_dir = output / "cohort" / f"{index:02d}-{arm}"
+            score = score_episode(run_dir, arm, manifest, expected)
+            write_json(run_dir / "score-rescored.json", score)
+            cohort_scores.append(score)
+        summary = summarize(cohort_scores, expected_attempts=8)
+        summary["order"] = COHORT
+        summary["registered_kill_thresholds"] = {
+            "minimum_token_reduction": 0.30,
+            "maximum_wrong_subject": 0,
+            "minimum_strict_reference_uses_R": 6,
+            "R_exact_must_be_at_least_Q_exact": True,
+        }
+        summary["forward_only_rescore"] = (
+            "includes proxy-refused edit attempts in emitted and round-trip totals"
+        )
+        write_json(output / "cohort-summary-rescored.json", summary)
+        bonus_scores = []
+        for index, arm in enumerate(BONUS, start=1):
+            run_dir = output / "bonus" / f"{index:02d}-{arm}"
+            score = score_episode(run_dir, arm, manifest, expected)
+            write_json(run_dir / "score-rescored.json", score)
+            bonus_scores.append(score)
+        write_json(output / "spark-bonus-summary-rescored.json", {
+            "schema": "clj-surgeon.splice-reference-adversarial-spark-bonus.v1",
+            "model": SPARK_MODEL,
+            "order": BONUS,
+            "scores": bonus_scores,
+            "exact": sum(score["exact_bytes"] for score in bonus_scores),
+            "strict_reference_uses_R": sum(
+                score["reference_used_strict"]
+                for score in bonus_scores if score["arm"] == "R"
+            ),
+            "wrong_subject": sum(score["wrong_subject"] for score in bonus_scores),
+            "descriptive_only_not_pooled": True,
+            "forward_only_rescore": (
+                "includes proxy-refused edit attempts in emitted and round-trip totals"
+            ),
+        })
+        (output / "manifest.sha256").write_text(
+            "\n".join(sha256_manifest(output)) + "\n", encoding="utf-8"
+        )
+        print(canonical_json(summary), flush=True)
+        return 0
     if not args.run or args.output is None or args.auth_file is None or not args.expected_head:
         raise SystemExit("--run requires --output, --auth-file, and --expected-head")
     args.output = args.output.resolve()

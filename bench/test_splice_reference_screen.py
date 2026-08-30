@@ -20,7 +20,7 @@ from splice_reference_proxy import (  # noqa: E402
     filter_and_annotate_tools,
     sha256_file,
 )
-from splice_reference_screen import ideal_requests, summarize  # noqa: E402
+from splice_reference_screen import ideal_requests, mutation_request_rows, summarize  # noqa: E402
 
 
 FIXTURE = REPO_ROOT / "bench/fixtures/splice_reference"
@@ -60,6 +60,17 @@ class SpliceReferenceScreenTest(unittest.TestCase):
         ideal = ideal_requests(self.manifest)
         self.assertGreaterEqual(ideal["possible_reduction"]["utf8_bytes"], 0.30)
         self.assertGreaterEqual(ideal["possible_reduction"]["tokens"], 0.30)
+
+    def test_proxy_refusal_remains_a_counted_mutation_attempt(self) -> None:
+        receipts = [
+            {"event": "tool-request", "tool": "inspect_clojure", "model_arguments": {}},
+            {"event": "reference-refusal", "model_arguments": {"edits": [{"from_ref": "r01"}]}},
+            {"event": "tool-request", "tool": "edit_clojure", "model_arguments": {"edits": []}},
+        ]
+        self.assertEqual(
+            [receipts[1], receipts[2]],
+            mutation_request_rows(receipts),
+        )
 
     def test_kill_matrix_keeps_recovered_wrong_subject_loud(self) -> None:
         def score(arm: str, index: int) -> dict:

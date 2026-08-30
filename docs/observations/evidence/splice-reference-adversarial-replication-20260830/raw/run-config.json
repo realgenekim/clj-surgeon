@@ -1,0 +1,145 @@
+{
+  "attempts_per_arm": 8,
+  "bonus_model": "gpt-5.3-codex-spark",
+  "bonus_order": [
+    "Q",
+    "R"
+  ],
+  "codex_version": "codex-cli 0.149.1",
+  "cohort_order": [
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R",
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R"
+  ],
+  "created_utc": "2026-08-30T22:28:40.949147+00:00",
+  "hashes": {
+    "bench/fixtures/splice_reference/before/src/splice_reference/fixture.clj": "39c8433aa85b2975a163926618c0e5ed9b73183ddfd75d63fc2f798f9a904e60",
+    "bench/fixtures/splice_reference/expected/src/splice_reference/fixture.clj": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+    "bench/fixtures/splice_reference/spans.json": "6e070acabcb8f8d04d35a82199b2e986ea8ced1ef70ab92c1fe978244e3da524",
+    "bench/fixtures/splice_reference/task.txt": "aa46993d9aec40ab4419549f972be531c16b50c09e0443c9670e082b42e62802",
+    "bench/run_splice_reference_screen.py": "e8208bc300d1b2b079d93bd70b4ff651fb97000331f776fb5112b6641e8c9d6c",
+    "bench/splice_reference_proxy.py": "e9a6b88e48c7f266f1ddaef29fbbf59f540f07ec81c6a471e2eb8cb51c8b57e7",
+    "bench/splice_reference_screen.py": "619b651f5b3bd0f1bc0d9bf904a350ff722e512f67b7706be4bbaf3e518c23f5",
+    "docs/observations/2026-08-30-splice-reference-adversarial-replication-preregistration.md": "73860df858be69c726a544797a4fbb7d1428f2bb55daf1a95158b8cfe0df1a86"
+  },
+  "head": "31c3ce02366fa530f8ef4c521e3fbaa5de9cdb1f",
+  "ideal_requests": {
+    "Q": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:slot :alpha-b :form '(def alpha \"alphabet\") :pair [:alphabet :alpha] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+            "matches": 1,
+            "to": "{:slot :alpha-b :form '(def alpha \"alphabet\") :pair [:alphabet :alpha] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "alpha-forms"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+            "matches": 1,
+            "to": "{:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "keyword-twins"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:slot :text-a :needle \"alpha\" :sibling \"alphabet\" :rendered \"(def alpha \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+            "matches": 1,
+            "to": "{:slot :text-a :needle \"alpha\" :sibling \"alphabet\" :rendered \"(def alpha \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "substring-siblings"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:slot :literal-c :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? false}",
+            "matches": 1,
+            "to": "{:slot :literal-c :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "repeated-literals"
+            }
+          }
+        ]
+      },
+      "tokens": 650,
+      "utf8_bytes": 2438
+    },
+    "R": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "r02",
+            "matches": 1,
+            "to": "{:slot :alpha-b :form '(def alpha \"alphabet\") :pair [:alphabet :alpha] :literal \"alpha\" :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "alpha-forms"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "r12",
+            "matches": 1,
+            "to": "{:slot :pair-d :primary [:alphabet :alpha] :secondary [:alpha :alphabet] :position :first :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "keyword-twins"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "r15",
+            "matches": 1,
+            "to": "{:slot :text-a :needle \"alpha\" :sibling \"alphabet\" :rendered \"(def alpha \\\"alpha\\\")\" :position :short :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "substring-siblings"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "r05",
+            "matches": 1,
+            "to": "{:slot :literal-c :literal \"alpha\" :quoted '(def alpha \"alpha\") :pair [:alpha :alpha] :position :east :evidence [:alpha :alphabet :alpha-prefix :alpha :alphabet :alpha-prefix :stable :reference :identity :adversarial :twin :candidate] :enabled? true}",
+            "within": {
+              "form": "repeated-literals"
+            }
+          }
+        ]
+      },
+      "tokens": 400,
+      "utf8_bytes": 1470
+    },
+    "possible_reduction": {
+      "tokens": 0.3846153846153846,
+      "utf8_bytes": 0.39704675963904845
+    }
+  },
+  "java_home": "/Users/genekim/.sdkman/candidates/java/26.0.2-open",
+  "model": "gpt-5.6-sol",
+  "python": "3.13.7 (v3.13.7:bcee1c32211, Aug 14 2025, 19:10:51) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "reasoning": "high",
+  "release_base": "c55de2279826af5ed21c90981591479dd2e802b2",
+  "route": "codex exec ChatGPT subscription; OPENAI_API_KEY removed",
+  "schema": "clj-surgeon.splice-reference-adversarial-run-config.v1",
+  "tokenizer": {
+    "encoding": "o200k_base",
+    "tiktoken_version": "0.11.0"
+  },
+  "tree": "c4afbe8e652f9aa05e3bfce2e3fa6e8d1a07f2cc"
+}

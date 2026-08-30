@@ -79,16 +79,30 @@ def count_codex_actions(events: list[dict[str, Any]], item_type: str) -> int:
     )
 
 
+def mutation_request_rows(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return every model-emitted edit attempt, including proxy refusals."""
+    return [
+        row for row in receipts
+        if (
+            row.get("event") == "tool-request" and row.get("tool") == "edit_clojure"
+        ) or row.get("event") == "reference-refusal"
+    ]
+
+
 def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
                   expected_file: Path) -> dict[str, Any]:
     receipts = load_jsonl(run_dir / "proxy-receipts.jsonl")
     events = load_jsonl(run_dir / "events.jsonl")
     episode = json.loads((run_dir / "episode.json").read_text(encoding="utf-8"))
     tool_requests = [row for row in receipts if row.get("event") == "tool-request"]
-    edit_requests = [row for row in tool_requests if row.get("tool") == "edit_clojure"]
+    edit_requests = mutation_request_rows(receipts)
     inspect_requests = [row for row in tool_requests if row.get("tool") == "inspect_clojure"]
     edit_metrics = [request_metrics(row.get("model_arguments", {})) for row in edit_requests]
-    all_metrics = [request_metrics(row.get("model_arguments", {})) for row in tool_requests]
+    refused_requests = [row for row in receipts if row.get("event") == "reference-refusal"]
+    all_metrics = [
+        request_metrics(row.get("model_arguments", {}))
+        for row in tool_requests + refused_requests
+    ]
     emitted = {
         "mutation_utf8_bytes": sum(metric["utf8_bytes"] for metric in edit_metrics),
         "mutation_tokens": sum(metric["tokens"] for metric in edit_metrics),
@@ -195,7 +209,7 @@ def score_episode(run_dir: Path, arm: str, manifest: dict[str, Any],
         ),
         "read_annotation_count": len(annotations),
         "turns": {
-            "mcp_round_trips": len(tool_requests),
+            "mcp_round_trips": len(tool_requests) + len(refused_requests),
             "inspect_calls": len(inspect_requests),
             "edit_calls": len(edit_requests),
             "shell_calls": shell_calls,
