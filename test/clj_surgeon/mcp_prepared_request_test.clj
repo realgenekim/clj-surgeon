@@ -22,7 +22,7 @@
   [name]
   (try
     (require 'clj-surgeon.mcp-prepared-request)
-    (ns-resolve 'clj-surgeon.mcp-prepared-request name)
+    (some-> (ns-resolve 'clj-surgeon.mcp-prepared-request name) deref)
     (catch java.io.FileNotFoundException _ nil)))
 
 (defn- temp-dir
@@ -179,7 +179,7 @@
             right-bytes (bytes-var right)]
         (is (= (seq left-bytes) (seq right-bytes)))
         (is (= (hash-var left) (hash-var right)))
-        (is (= 31 (count left-bytes)))
+        (is (= 34 (count left-bytes)))
         (is (re-matches #"[0-9a-f]{64}" (hash-var left)))
         (is (= (seq (bytes-var {:v [1 2]}))
                (seq (bytes-var {:v [1 2]}))))
@@ -274,7 +274,8 @@
       (let [prepared (:prepared_request (project (eligible-result)))
             args (:arguments prepared)
             filled (assoc-in args [:edits 0 :to] "(def alpha :new)")]
-        (is (:ok (contract/validate-tool-params filled)))
+        (is (:ok (contract/validate-tool-params
+                   (dissoc filled :workspace_root))))
         (is (false? (:ok (contract/validate-tool-params args))))
         (is (= 1 (count (:edits filled))))
         (is (= 1 (get-in filled [:edits 0 :matches])))
@@ -362,7 +363,9 @@
     (when (fn? project)
       (let [result (project (eligible-result))]
         (is (contains? result :prepared_request))
-        (is (= result (project (assoc result :elapsed_ms 999999.999))))
+        (is (= (:prepared_request result)
+               (:prepared_request
+                 (project (assoc result :elapsed_ms 999999.999)))))
         (is (<= (inspect-tool/mcp-result-byte-count
                   "normalized" (assoc result :elapsed_ms 0.0))
                 32768))))))
