@@ -59,7 +59,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--codex", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--server")
+    parser.add_argument("--server", required=True)
     parser.add_argument("--expected-count", type=int, required=True)
     args = parser.parse_args()
     started_ns = time.monotonic_ns()
@@ -96,8 +96,8 @@ def main():
             servers = response.get("result", {}).get("data", [])
             matches = [server for server in servers
                        if server.get("name") == args.server]
-            if args.server is None:
-                ready = not servers
+            if args.expected_count == 0:
+                ready = not matches
                 selected = {"tools": {}}
             else:
                 ready = (len(matches) == 1
@@ -117,6 +117,7 @@ def main():
             "tool_count": len(visible),
             "client_bytes": len(visible_json.encode()),
             "client_sha256": hashlib.sha256(visible_json.encode()).hexdigest(),
+            "client_projection": visible,
             "process_to_initialize_ms": (initialized_ns - started_ns) / 1_000_000,
             "initialize_to_registry_ms": (ready_ns - initialized_ns) / 1_000_000,
             "process_to_registry_ms": (ready_ns - started_ns) / 1_000_000,

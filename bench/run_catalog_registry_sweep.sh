@@ -11,7 +11,7 @@ auth_file=${BENCH_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}
 max_load=${BENCH_MAX_LOAD:-4.0}
 server_arms=(T D P M R)
 mcp_arms=(T D P M I R)
-blocks=14
+blocks=${BENCH_REGISTRY_BLOCKS:-14}
 codex_bin=$(command -v codex)
 expected="$repo_root/dev/experiments/catalog_floor_expected.json"
 
@@ -118,10 +118,10 @@ for block in $(seq 1 "$blocks"); do
       write_config "$home/config.toml" "$(cat "$result_dir/servers/$server_arm/url.txt")" "$arm"
     fi
     load_before=$(read_load); set +e
-    if [ -n "$server" ]; then server_args=(--server "$server"); else server_args=(); fi
+    server=catalog-probe
     CODEX_HOME="$home" python3 "$repo_root/dev/experiments/catalog_floor_registry_probe.py" \
       --codex "$codex_bin" --output "$run_dir/receipt.json" \
-      --expected-count "$expected_count" "${server_args[@]}"
+      --expected-count "$expected_count" --server "$server"
     rc=$?; set -e; load_after=$(read_load)
     ok=$(jq -r '.ok' "$run_dir/receipt.json")
     bytes=$(jq -r '.client_bytes' "$run_dir/receipt.json")
