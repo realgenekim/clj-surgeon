@@ -96,14 +96,16 @@
           [(.getPath file) (slurp file)])))
 
 (defn audit-current-repository
-  "Audit the repository's MCP operation intent leaf and all executable witnesses."
+  "Audit the repository's MCP operation intent leaves and all executable witnesses."
   ([] (audit-current-repository "."))
   ([root]
-   (let [spec-file
-         (io/file root
-                  "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")]
+   (let [spec-files
+         [(io/file root
+                   "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")
+          (io/file root
+                   "docs/intent/read-request-normalization/read-request-normalization-specs.md")]]
      (audit-contract
-       {:spec-text (slurp spec-file)
+       {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources
         (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
                (read-sources root ["Makefile"] ["Makefile"]))

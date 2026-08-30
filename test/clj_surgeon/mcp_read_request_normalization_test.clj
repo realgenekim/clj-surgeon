@@ -1,4 +1,4 @@
-(ns ratification.mcp-read-request-normalization-test
+(ns clj-surgeon.mcp-read-request-normalization-test
   "Red witness draft. This namespace is intentionally not attached to the
   ordinary runner until its HLD, LLD, and EARS phases are ratified."
   (:require

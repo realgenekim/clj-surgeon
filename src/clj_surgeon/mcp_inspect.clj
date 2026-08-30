@@ -244,8 +244,66 @@
            :expression (nonblank-string! (field request "expression")
                                          (conj path "expression"))})))))
 
+(def ^:private operationless-forms-fields
+  #{"id" "file" "forms" "expect" "include_source"})
+(def ^:private operationless-forms-required
+  #{"id" "file" "forms" "expect"})
+
+(defn- normalize-request-ids!
+  [requests]
+  (doseq [[index request] (map-indexed vector requests)]
+    (when-not (map? request)
+      (refuse! :expected-object ["requests" index]
+               "Expected a JSON object")))
+  (let [supplied? (mapv #(present? % "id") requests)]
+    (when (and (some true? supplied?) (some false? supplied?))
+      (refuse! :mixed-request-ids ["requests"]
+               "Request IDs must be either all supplied or all omitted"
+               {:read_started false}))
+    (if (every? true? supplied?)
+      requests
+      (mapv (fn [index request]
+              (assoc request "id" (str "request-" (inc index))))
+            (range)
+            requests))))
+
+(defn- complete-operationless-forms-request?
+  [request]
+  (let [actual (set (map field-name (keys request)))
+        forms (field request "forms")
+        expect (field request "expect")
+        expect-fields (when (map? expect)
+                        (set (map field-name (keys expect))))]
+    (and (every? actual operationless-forms-required)
+         (every? operationless-forms-fields actual)
+         (vector? forms)
+         (seq forms)
+         (= #{"forms"} expect-fields))))
+
+(defn- normalize-request-operations!
+  [requests]
+  (mapv
+    (fn [index request]
+      (if (present? request "operation")
+        request
+        (if (complete-operationless-forms-request? request)
+          (assoc request "operation" "forms")
+          (refuse! :operation-required ["requests" index "operation"]
+                   "Inspect request requires an explicit operation"
+                   {:read_started false
+                    :supported (vec (sort (keys operation-fields)))
+                    :supplied_fields
+                    (vec (sort (map field-name (keys request))))}))))
+    (range)
+    requests))
+
 (defn validate-inspect-params
   "Validate JSON-shaped inspect_clojure input and return normalized Clojure data."
+  ;; @spec MCP-OP-READ-NORM-001
+  ;; @spec MCP-OP-READ-NORM-002
+  ;; @spec MCP-OP-READ-NORM-003
+  ;; @spec MCP-OP-READ-NORM-004
+  ;; @spec MCP-OP-READ-NORM-005
   [params]
   (let [params (mcp-contract/json-containers->clj params)]
     (try
@@ -255,7 +313,10 @@
                 (refuse! :too-many-requests ["requests"]
                          "Inspect batch exceeds the maximum request count"
                          {:maximum max-requests :actual (count raw-requests)}))
-            requests (mapv validate-request! raw-requests (range))
+            normalized-requests (-> raw-requests
+                                    normalize-request-ids!
+                                    normalize-request-operations!)
+            requests (mapv validate-request! normalized-requests (range))
             snapshot-guards
             (when (present? params "snapshot_guards")
               (snapshot-guards! (field params "snapshot_guards")
@@ -392,7 +453,10 @@
       (contains? result :available-owners-truncated)
       (assoc :available_owners_truncated (:available-owners-truncated result))
       (contains? result :selection-failures)
-      (assoc :selection_failures (json-data (:selection-failures result)))
+      ;; @spec MCP-OP-READ-NORM-003
+      (assoc :selection_failures
+             (mapv #(assoc (json-data %) :request_id (:id request))
+                   (:selection-failures result)))
       (contains? result :form-candidates)
       (assoc :form_candidates (json-data (:form-candidates result)))
       (contains? result :candidate-limit)

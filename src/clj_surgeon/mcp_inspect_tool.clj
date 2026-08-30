@@ -125,13 +125,39 @@
    :additionalProperties false
    :properties
    (merge
-     {"id" {:type "string" :minLength 1}
+     {"id" {:type "string" :minLength 1
+            :description "Optional call-local correlation ID. Supply IDs on every request or omit them from every request."}
       "operation" {:const operation}
       "file" source-file-schema}
      properties)
-   :required (into ["id" "operation" "file"] required)})
+   :required (into ["operation" "file"] required)})
+
+(def ^:private forms-request-properties
+  {"forms" {:type "array" :minItems 1 :maxItems inspect/max-forms
+            :uniqueItems true
+            :items {:type "string" :minLength 1}}
+   "include_source" {:type "boolean" :default true
+                     :description "Set false for metadata-only form reads; line ranges, source character counts, hashes, and source anchors remain, while exact source bodies are omitted. Omit for exact source."}
+   "expect" {:type "object" :additionalProperties false
+             :properties {"forms" positive-integer-schema}
+             :required ["forms"]}})
+
+(defn- operationless-forms-request
+  []
+  {:type "object"
+   :additionalProperties false
+   :properties
+   (merge
+     {"id" {:type "string" :minLength 1
+            :description "Optional call-local correlation ID. Supply IDs on every request or omit them from every request."}
+      "file" source-file-schema}
+     forms-request-properties)
+   :required ["file" "forms" "expect"]})
 
 (def typed-inspect-schema
+  ;; @spec MCP-OP-READ-NORM-001
+  ;; @spec MCP-OP-READ-NORM-004
+  ;; @spec MCP-OP-READ-NORM-005
   {:type "object"
    :additionalProperties false
    :properties
@@ -146,20 +172,11 @@
     {:type "array"
      :minItems 1
      :maxItems inspect/max-requests
-     :description "Ordered all-or-nothing structural read requests with unique IDs."
+     :description "Ordered all-or-nothing structural read requests. IDs must be unique when supplied; supply all or omit all."
      :items
      {:oneOf
-      [(request-base
-         "forms"
-         {"forms" {:type "array" :minItems 1 :maxItems inspect/max-forms
-                   :uniqueItems true
-                   :items {:type "string" :minLength 1}}
-          "include_source" {:type "boolean" :default true
-                            :description "Set false for metadata-only form reads; line ranges, source character counts, hashes, and source anchors remain, while exact source bodies are omitted. Omit for exact source."}
-          "expect" {:type "object" :additionalProperties false
-                    :properties {"forms" positive-integer-schema}
-                    :required ["forms"]}}
-         ["forms" "expect"])
+      [(request-base "forms" forms-request-properties ["forms" "expect"])
+       (operationless-forms-request)
        (request-base "outline" {} [])
        (request-base
          "match"

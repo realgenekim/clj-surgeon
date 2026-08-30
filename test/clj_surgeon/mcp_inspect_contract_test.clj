@@ -93,8 +93,6 @@
             :non-empty-array ["requests"]]
            [:request-not-map (assoc forms-request "requests" [42])
             :expected-object ["requests" 0]]
-           [:missing-id (update-in forms-request ["requests" 0] dissoc "id")
-            :missing-fields ["requests" 0]]
            [:blank-id (assoc-in forms-request ["requests" 0 "id"] " ")
             :non-blank-string ["requests" 0 "id"]]
            [:duplicate-id
@@ -104,9 +102,6 @@
                                           "file" "src/b.clj")])
                 (assoc "expect" {"requests" 2 "files" 2}))
             :duplicate-id ["requests" 1 "id"]]
-           [:missing-operation
-            (update-in forms-request ["requests" 0] dissoc "operation")
-            :missing-fields ["requests" 0]]
            [:unknown-operation
             (assoc-in forms-request ["requests" 0 "operation"] "grep")
             :unknown-operation ["requests" 0 "operation"]]
