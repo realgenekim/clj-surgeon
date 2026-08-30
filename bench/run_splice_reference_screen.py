@@ -233,6 +233,7 @@ def main() -> int:
         return subprocess.call(command, cwd=repo_root)
     if not args.run or args.output is None or args.auth_file is None or not args.expected_head:
         raise SystemExit("--run requires --output, --auth-file, and --expected-head")
+    args.output = args.output.resolve()
     if args.output.exists():
         raise SystemExit("--output must not exist")
     if not args.auth_file.is_file():

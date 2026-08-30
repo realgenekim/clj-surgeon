@@ -165,3 +165,24 @@ auth file:
   --auth-file /Users/genekim/.codex/auth.json \
   --expected-head <frozen-protocol-commit>
 ```
+
+## Forward-only v2 launcher amendment
+
+Frozen after the stopped v1 pilot and before any v2 model call.
+
+The v1 Q and R episodes both exited in under 0.09 seconds with an empty event
+stream and the same `No such file or directory` stderr. The runner constructed
+the episode workspace beneath a relative output root, changed its working
+directory to that workspace, and then passed the same relative path to Codex's
+`-C`; Codex therefore looked for the workspace below itself and exited before
+loading the MCP or emitting a tool request. Both episodes remain scored as
+`environment_valid=false`, the v1 pilot gate remains closed, and its raw files
+and manifest remain under the original `raw/` result root. They are not pooled,
+replaced, or relabeled.
+
+Protocol v2 changes exactly one launcher fact: resolve the caller-supplied
+output root to an absolute path before constructing per-episode workspaces.
+Fixture, prompt, proxy, schemas, scorer, schedule, model, reasoning, validity
+rules, registered magnitudes, and kill criteria are unchanged. V2 writes to a
+new `raw-v2/` root and starts again with a fresh Q→R pilot. This amendment does
+not use or respond to any model behavior; v1 produced none.
