@@ -23,8 +23,8 @@ Gene decision after receipts.
 Large replacement bodies make a capable caller spend many output tokens
 retranscribing a decision it already made. The measured wall class has
 `|replacement| >> |decision|`; median writes often have no such asymmetry and
-must not pay model startup or latency. A warm subscription-authenticated Spark
-turn can elaborate a small decision into a complete replacement in roughly two
+must not pay model-turn latency. A warm subscription-authenticated Spark turn
+can elaborate a small decision into a complete replacement in roughly two
 seconds, but a model that can assert subject identity creates the same
 wrong-file failure class already observed in the splice-reference stress test.
 
@@ -76,8 +76,10 @@ cold to 2.288 seconds warm, a 66.2% reduction. The process and protocol can be
 kept warm; the evidence does not prove a locally resident model or a stable
 provider tail.
 
-Production uses one warm process but a fresh ephemeral thread per intent. This
-retains startup savings without cross-intent conversational state.
+Production starts and warms one process from the MCP boot supervisor, outside
+caller work, and uses a fresh ephemeral thread per real intent. The cold/warm
+comparison motivates that boot policy only. No caller amortization or edit-
+payback claim belongs to this leaf.
 
 ### Identity prohibition
 
@@ -102,7 +104,8 @@ and protocol overhead. D1 dogfooding must show a complete verified wall win;
 the classifier does not make that conclusion true by arithmetic.
 
 Requests outside this class use the ordinary path. There is no automatic
-elaboration, child startup, offer text, retry, or latency on median writes.
+elaboration, child contact, offer text, retry, or model latency on median
+writes.
 
 ## HLD options
 
@@ -235,7 +238,14 @@ elaboration. Any intervening target drift therefore refuses before write.
 
 The first product slice owns one directly supervised stdio child:
 
-- lazy start on the first eligible request;
+- start from the MCP server boot supervisor, never from a caller request;
+- initialize the child and submit one fixed, source-free, no-effect warm-up
+  turn before marking the elaborator available;
+- bound child initialization to 1,000 ms and the warm-up turn to the ordinary
+  10,000 ms turn deadline; neither deadline delays MCP readiness;
+- keep MCP health and readiness independent: if child start, auth, model pin,
+  warm-up, or admission fails or exceeds its boot budget, the server still
+  becomes healthy with the elaborator unavailable and ordinary edits active;
 - exact pinned Codex CLI package and generated app-server schema hashes;
 - a mode-0700 service Codex home and mode-0600 managed ChatGPT auth;
 - API-key and access-token environment variables removed;
@@ -254,8 +264,17 @@ On process loss, protocol desynchronization, timeout, malformed output, auth
 failure, model absence, reroute, tool item, quota stop, or isolation evidence
 failure, the current request returns an inert typed elaboration refusal with
 `source_unchanged=true`. It also states that the ordinary caller-authored edit
-path remains available. The server may attempt one supervised restart only on
-a later request after bounded backoff. It never replays the failed intent.
+path remains available. The boot supervisor may attempt one background restart
+after bounded backoff; no caller request starts or waits for that restart. It
+never replays the failed intent.
+
+The provider-side idle-decay curve is unknown. The adapter includes a disabled
+keepalive hook, but no cadence is enabled by this design. Red/verify evidence
+must compare the first real-shaped bang after 0, 60, and 240 idle minutes with
+the immediately following mid-stream bang. If a reproducible decay threshold
+appears, a later evidence-bound configuration may schedule one fixed no-effect
+tick before that threshold. Every tick uses the same isolation, pin, quota,
+one-turn, fresh-thread, and receipt laws. No finding means no keepalive spend.
 
 ## Isolation admission gate
 
@@ -343,7 +362,7 @@ For each eligible edit, retain:
 
 - canonical authority-intent and elaboration hashes;
 - exact model/CLI/schema/isolation identity;
-- cold/warm state, initialization, first-token, complete-turn, validation,
+- boot-ready state, idle age, first-token, complete-turn, validation,
   ordinary compile, formatter, verifier, and complete verified wall clocks;
 - candidate count, tool/reroute events, schema validity, parse validity,
   guard equality, canonical effect identity, and final source hashes;
@@ -397,7 +416,8 @@ later threshold change; it does not change this contract automatically.
 | Failure degrades safely. | Hidden retry or partial candidate is harmless. | Every failure class must return source unchanged, bounded evidence, and ordinary-path availability. | Any mutation, retained partial candidate, or blind retry stops the leaf. |
 | Warmth preserves quality. | Thread history causes drift or contamination. | Fresh thread per intent, ten sequential mixed bodies, first/last exactness, and cross-intent secret markers. | Any marker transfer or quality loss blocks admission. |
 | Exact model pinning is enforceable. | A configured slug is enough. | Missing Spark, reroute notification, mismatched thread response, fallback enabled, and schema drift. | Any substitution refuses; no fallback model. |
-| Wall selection excludes median writes. | An optional feature silently taxes every edit. | Boundary tests at 1,023/1,024 bytes and 25% ratio, calls without `elaborate`, catalog-size and pre-first-call telemetry. | Ineligible calls must not start/contact the child or change ordinary results. |
+| Wall selection excludes median writes. | An optional feature silently taxes every edit. | Boundary tests at 1,023/1,024 bytes and 25% ratio, calls without `elaborate`, catalog-size and pre-first-call telemetry. | Ineligible calls must not send a turn, wait for the child, or change ordinary results. |
+| Boot warmth survives real idle gaps. | Provider state decays even while app-server stays alive. | Frozen 0/60/240-minute idle cells comparing first-bang with immediate mid-stream bang. | Keepalive stays disabled unless a reproducible threshold appears; any later tick remains quota- and isolation-gated. |
 | Generated body is safe data. | Parse success or a hash grants correctness. | Unknown keys, tagged values, malformed reader forms, oversized output, ordinary compiler/refusal/rollback tests. | Adapter never evaluates output; ordinary validation remains mandatory. |
 | Quota is attributable and bounded. | Shared subscription spend is invisible. | Missing/stale meter, 80/90% thresholds, concurrent callers, ledger failure, and restart recovery. | Missing meter opens the circuit; callers cannot override it. |
 | Receipts bind the actual effect. | Model and transaction evidence can be spliced. | Intent, elaboration, transaction, read-back, and verifier hash mismatch tests. | Any mismatch is unverified and cannot claim success. |
@@ -453,7 +473,7 @@ retry. CLI behavior is unchanged in the first slice. The feature is an MCP
 
 | Edge | Narrow reading | Rejected widening |
 |---|---|---|
-| No `elaborate` field | Exact current `edit_clojure` validation and execution. | Start or warm the child speculatively. |
+| No `elaborate` field | Exact current `edit_clojure` validation and execution. | Send a turn or wait for child health. |
 | `elaborate` with a non-null `to` | Refuse the mixed authority shape before model contact. | Treat the literal as a hint, fallback, or second candidate. |
 | Null `to` without `elaborate` | Exact current null refusal. | Infer that every prepared hole requests generation. |
 | Decision or body exactly at a limit | Count canonical UTF-8 bytes and admit only the closed boundary. | Count characters/tokens approximately or truncate. |
@@ -487,9 +507,11 @@ retry. CLI behavior is unchanged in the first slice. The feature is an MCP
    process adapter.
 4. Implement fake-process lifecycle, timeout, quota, output, and cleanup
    witnesses before one bounded real-child contract batch.
-5. Integrate only by reconstructing and invoking the ordinary edit request.
-6. Run D1 on the next eligible real implementation edit and compare with the
+5. Measure the frozen 0/60/240-minute idle-decay cells; leave keepalive disabled
+   unless the evidence earns a cadence.
+6. Integrate only by reconstructing and invoking the ordinary edit request.
+7. Run D1 on the next eligible real implementation edit and compare with the
    hand-typed equivalent.
-7. Run affected tests and a milestone full suite; preserve load-deferred gates
+8. Run affected tests and a milestone full suite; preserve load-deferred gates
    as unverified rather than guessing.
-8. Return implementation, D1, full-gate, and install plan receipts to Gene.
+9. Return implementation, D1, full-gate, and install plan receipts to Gene.
