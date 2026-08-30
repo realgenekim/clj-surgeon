@@ -569,18 +569,21 @@ an intent automatically.
 The first slice is explicit and selective. It accepts exactly one prepared
 whole-owner hole only when the old body is at least 1,024 UTF-8 bytes and the
 decision is no more than one quarter of that body. Requests without the
-elaboration field execute the unchanged ordinary path and do not start the
-child. This keeps median writes off the model path and confines the experiment
-to the measured wall class where replacement materialization dominates the
-decision.
+elaboration field execute the unchanged ordinary path and do not contact or
+wait for the child. This keeps median writes off the model-turn path and
+confines the experiment to the measured wall class where replacement
+materialization dominates the decision.
 
-The child is one lazily started, directly supervised `codex app-server`
-process with a fresh ephemeral thread per intent, exact Spark pinning, one
-in-flight turn, an empty read-only workspace, no repository visibility, and a
-bounded output/deadline. Production admission additionally requires an
-independent isolation screen to prove that attempted tool use cannot cause an
-observable side effect. Prompt obedience and a tool-free sample are not a
-security boundary.
+The child is one directly supervised `codex app-server` process started by the
+MCP server boot supervisor. A fixed no-effect warm-up turn occurs outside any
+caller request. MCP readiness never depends on child or model availability;
+until boot admission and warm-up succeed, the elaborator is unavailable and
+the ordinary path remains healthy. Each real intent uses a fresh ephemeral
+thread, exact Spark pinning, one in-flight turn, an empty read-only workspace,
+no repository visibility, and a bounded output/deadline. Production admission
+additionally requires an independent isolation screen to prove that attempted
+tool use cannot cause an observable side effect. Prompt obedience and a
+tool-free sample are not a security boundary.
 
 Receipts bind the canonical caller intent, accepted elaboration bytes, exact
 model/runtime/auth identity, isolation policy, quota evidence, ordinary
