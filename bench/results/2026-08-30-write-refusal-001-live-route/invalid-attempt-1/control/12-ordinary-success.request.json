@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":103,"method":"tools/call","params":{"name":"edit_clojure","arguments":{"changes":[{"id":"ordinary-success","files":["src/success.clj"],"forms":["owner-000"],"find":":old","replace":":new","expect":{"matches":1}}]}}}
