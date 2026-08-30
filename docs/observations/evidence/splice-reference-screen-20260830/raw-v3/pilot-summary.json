@@ -1,0 +1,199 @@
+{
+  "continue_to_cohort": true,
+  "ideal": {
+    "Q": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:max-attempts 5\n   :initial-delay-ms 250\n   :multiplier 2.0\n   :max-delay-ms 8000\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "matches": 1,
+            "to": "{:max-attempts 7\n   :initial-delay-ms 400\n   :multiplier 2.0\n   :max-delay-ms 12000\n   :jitter-strategy :full\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "within": {
+              "form": "retry-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:ttl-ms 300000\n   :refresh-ahead-ms 30000\n   :max-entries 2000\n   :eviction :least-recently-used\n   :compress-values? false\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v1\"}",
+            "matches": 1,
+            "to": "{:ttl-ms 900000\n   :refresh-ahead-ms 60000\n   :stale-while-revalidate-ms 120000\n   :max-entries 5000\n   :eviction :least-recently-used\n   :compress-values? true\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v2\"}",
+            "within": {
+              "form": "cache-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "[{:signal :latency-p99-ms\n    :warning 750\n    :critical 1500\n    :window-minutes 10\n    :minimum-samples 100}\n   {:signal :error-rate-percent\n    :warning 2.0\n    :critical 5.0\n    :window-minutes 5\n    :minimum-samples 200}\n   {:signal :queue-depth\n    :warning 500\n    :critical 1000\n    :window-minutes 15\n    :minimum-samples 50}]",
+            "matches": 1,
+            "to": "[{:signal :latency-p99-ms\n    :warning 650\n    :critical 1200\n    :window-minutes 10\n    :minimum-samples 150}\n   {:signal :error-rate-percent\n    :warning 1.5\n    :critical 4.0\n    :window-minutes 5\n    :minimum-samples 250}\n   {:signal :queue-depth\n    :warning 400\n    :critical 800\n    :window-minutes 15\n    :minimum-samples 75}]",
+            "within": {
+              "form": "alert-rules"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:stages [{:name :canary :traffic-percent 5 :hold-minutes 20}\n            {:name :regional :traffic-percent 25 :hold-minutes 45}\n            {:name :broad :traffic-percent 100 :hold-minutes 60}]\n   :abort-on #{:latency-regression :error-budget-breach}\n   :require-manual-approval? true\n   :rollback-window-minutes 120}",
+            "matches": 1,
+            "to": "{:stages [{:name :canary :traffic-percent 3 :hold-minutes 30}\n            {:name :regional :traffic-percent 20 :hold-minutes 60}\n            {:name :broad :traffic-percent 100 :hold-minutes 90}]\n   :abort-on #{:latency-regression :error-budget-breach :saturation}\n   :require-manual-approval? true\n   :rollback-window-minutes 180}",
+            "within": {
+              "form": "rollout-policy"
+            }
+          }
+        ]
+      },
+      "tokens": 847,
+      "utf8_bytes": 2666
+    },
+    "R": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s1",
+            "matches": 1,
+            "to": "{:max-attempts 7\n   :initial-delay-ms 400\n   :multiplier 2.0\n   :max-delay-ms 12000\n   :jitter-strategy :full\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "within": {
+              "form": "retry-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s2",
+            "matches": 1,
+            "to": "{:ttl-ms 900000\n   :refresh-ahead-ms 60000\n   :stale-while-revalidate-ms 120000\n   :max-entries 5000\n   :eviction :least-recently-used\n   :compress-values? true\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v2\"}",
+            "within": {
+              "form": "cache-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s3",
+            "matches": 1,
+            "to": "[{:signal :latency-p99-ms\n    :warning 650\n    :critical 1200\n    :window-minutes 10\n    :minimum-samples 150}\n   {:signal :error-rate-percent\n    :warning 1.5\n    :critical 4.0\n    :window-minutes 5\n    :minimum-samples 250}\n   {:signal :queue-depth\n    :warning 400\n    :critical 800\n    :window-minutes 15\n    :minimum-samples 75}]",
+            "within": {
+              "form": "alert-rules"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s4",
+            "matches": 1,
+            "to": "{:stages [{:name :canary :traffic-percent 3 :hold-minutes 30}\n            {:name :regional :traffic-percent 20 :hold-minutes 60}\n            {:name :broad :traffic-percent 100 :hold-minutes 90}]\n   :abort-on #{:latency-regression :error-budget-breach :saturation}\n   :require-manual-approval? true\n   :rollback-window-minutes 180}",
+            "within": {
+              "form": "rollout-policy"
+            }
+          }
+        ]
+      },
+      "tokens": 509,
+      "utf8_bytes": 1615
+    },
+    "possible_reduction": {
+      "tokens": 0.39905548996458085,
+      "utf8_bytes": 0.3942235558889723
+    }
+  },
+  "order": [
+    "Q",
+    "R"
+  ],
+  "schema": "clj-surgeon.splice-reference-pilot.v1",
+  "scores": [
+    {
+      "actual_sha256": "e72d4368180829b2c2f832a95201ed707620db0a14b0486663b5469fd5f80592",
+      "arm": "Q",
+      "completed_task": true,
+      "conventional_call_count": 1,
+      "emitted": {
+        "all_mcp_tokens": 1889,
+        "all_mcp_utf8_bytes": 6337,
+        "mutation_tokens": 1761,
+        "mutation_utf8_bytes": 5844
+      },
+      "environment_valid": true,
+      "exact_bytes": true,
+      "expected_sha256": "e72d4368180829b2c2f832a95201ed707620db0a14b0486663b5469fd5f80592",
+      "product_verification_complete": true,
+      "quoted_anchor_count": 26,
+      "read_annotation_count": 0,
+      "reference_count": 0,
+      "reference_used_any": false,
+      "reference_used_strict": false,
+      "resolved_identity_count": 0,
+      "route_adherent": true,
+      "run_id": "01-Q",
+      "schema": "clj-surgeon.splice-reference-episode-score.v1",
+      "semantic_correct": true,
+      "strict_reference_call_count": 0,
+      "turns": {
+        "edit_calls": 2,
+        "file_change_calls": 0,
+        "inspect_calls": 2,
+        "mcp_round_trips": 4,
+        "shell_calls": 0
+      },
+      "typed_reference_failures": 0,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 174848,
+        "input_tokens": 200083,
+        "output_tokens": 8424,
+        "reasoning_output_tokens": 5690
+      },
+      "wall_seconds": 175.0344884158112,
+      "wrong_subject": 0
+    },
+    {
+      "actual_sha256": "e72d4368180829b2c2f832a95201ed707620db0a14b0486663b5469fd5f80592",
+      "arm": "R",
+      "completed_task": true,
+      "conventional_call_count": 0,
+      "emitted": {
+        "all_mcp_tokens": 572,
+        "all_mcp_utf8_bytes": 1857,
+        "mutation_tokens": 509,
+        "mutation_utf8_bytes": 1615
+      },
+      "environment_valid": true,
+      "exact_bytes": true,
+      "expected_sha256": "e72d4368180829b2c2f832a95201ed707620db0a14b0486663b5469fd5f80592",
+      "product_verification_complete": true,
+      "quoted_anchor_count": 0,
+      "read_annotation_count": 1,
+      "reference_count": 4,
+      "reference_used_any": true,
+      "reference_used_strict": true,
+      "resolved_identity_count": 4,
+      "route_adherent": true,
+      "run_id": "02-R",
+      "schema": "clj-surgeon.splice-reference-episode-score.v1",
+      "semantic_correct": true,
+      "strict_reference_call_count": 1,
+      "turns": {
+        "edit_calls": 1,
+        "file_change_calls": 0,
+        "inspect_calls": 1,
+        "mcp_round_trips": 2,
+        "shell_calls": 0
+      },
+      "typed_reference_failures": 0,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 77824,
+        "input_tokens": 102940,
+        "output_tokens": 1081,
+        "reasoning_output_tokens": 272
+      },
+      "wall_seconds": 33.79785849992186,
+      "wrong_subject": 0
+    }
+  ],
+  "sub_ceiling_gate": {
+    "Q_completed_exact_conventional": true,
+    "R_completed_exact_strict_reference": true,
+    "observed_arms_differ": true,
+    "wrong_subject_zero": true,
+    "zero_model_possible_token_reduction_at_least_25_percent": true
+  }
+}
