@@ -8,6 +8,14 @@ this study. The requested `designing-experiments` skill was unavailable, so thes
 frozen directly in the study. Later corrections, if any, must be labeled deviations and must
 not silently replace the registered result.
 
+**Pre-outcome method correction, frozen before overlap computation.** A checksum-only schema
+probe reproduced the prior study's 1,437-call population but showed that its 630,138-byte
+canonical request checksum is obtained by *removing* top-level `workspace_root`, not by
+replacing its value with `<workspace>` as the first registration draft said. Retaining the
+key with `<workspace>` yields 636,183 bytes. The counter therefore removes that one field and
+requires the published 630,138-byte checksum. This is a correction toward the prior method,
+does not inspect an overlap outcome, and is the study's only preregistration deviation.
+
 ### Population and privacy contract
 
 - Reuse the prior study's exact UTC window, **2026-08-22T00:00:00Z through
@@ -29,8 +37,8 @@ not silently replace the registered result.
 
 ### Units and counting rules
 
-- Serialize requests canonically exactly as the prior pass: compact JSON, UTF-8, with only
-  top-level `workspace_root` replaced by `<workspace>`. Text comparisons operate on the
+- Serialize requests canonically exactly as the prior pass: compact JSON and UTF-8, with only
+  top-level `workspace_root` removed under the correction above. Text comparisons operate on the
   UTF-8 byte sequences of the decoded JSON string values. “Byte” always means one UTF-8 byte.
 - For each pair, let `F` be the anchor (`from` or `find`) and `T` the transform (`to` or
   `replace`). Empty `T` contributes zero bytes and has an undefined ratio; count it, report
@@ -98,4 +106,3 @@ not silently replace the registered result.
   numerator/denominator byte totals; quantile vectors and population sizes; overhead formula
   inputs; invariants; script SHA-256; and receipt SHA-256. Every headline in the completed
   study must cite the corresponding receipt key or a displayed arithmetic equation.
-
