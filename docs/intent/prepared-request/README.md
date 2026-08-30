@@ -1,24 +1,23 @@
 # Prepared Request Ratification Packet
 
-Status: **Option A HLD ratified; recovery-oriented leaf LLD and EARS registry
-ready for distinct ratification; red tests and product code deferred.** Gene
-ratified decision 2 on 2026-08-30 with `"2 go"` inside
-`"1 go, 2 go, 3 go"`. After the proxy result, Gene authorized this recovery
-design phase with `"Recovery go -- go, but explain to me what's the benefit,
-potential or actual"`. Installation and MCP reload remain unauthorized.
+Status: **Recovery-oriented leaf LLD and EARS registry ratified; red-first
+implementation active.** Gene ratified the leaf on 2026-08-30 with
+`"Wow!!! Love it! Go!"`. The earlier Option A HLD ratification (`"2 go"`) and
+recovery authorization (`"Recovery go -- go"`) remain part of the decision
+record. Installation and MCP reload remain unauthorized.
 
-## Decision requested
+## Ratified decision
 
-Ratify the completed success-only Option A leaf LLD and candidate requirements
-`MCP-OP-PREP-REQ-001..009`. An eligible successful inspect result carries a
-non-executable prepared edit template with caller-owned replacement holes.
+The completed success-only Option A leaf LLD and requirements
+`MCP-OP-PREP-REQ-001..009` are active. An eligible successful inspect result
+carries a non-executable prepared edit template with caller-owned replacement
+holes.
 
-This decision does not authorize red tests or product implementation. It also
-does not authorize a prepared or corrected mutation in a refusal. The proposed,
-pre-ratification write-refusal leaf would own source-free recovery evidence at
-its 13 audited sites. Option A remains useful if that sibling leaf is never
-ratified. A future refusal-side correction remains a distinct Option C design
-with its own authority gate.
+This decision authorizes red-first implementation of the pure projector and
+four narrow inspect-tool hooks specified by the leaf. It does not authorize a
+prepared or corrected mutation in a refusal. The separate write-refusal leaf
+owns source-free recovery evidence at its audited sites. A future refusal-side
+correction remains a distinct Option C design with its own authority gate.
 
 ### Decision options
 
@@ -251,8 +250,9 @@ authorized recovery question and the forward-only acceptance gates in
 1. Gene selected Option A and authorized the proxy experiment.
 2. The valid proxy missed routing and produced aligned recovery evidence.
 3. Gene authorized the recovery-oriented LLD phase.
-4. This completed leaf LLD and EARS registry require distinct ratification.
-5. Direct red witnesses require separate activation after ratification.
+4. Gene ratified the completed leaf LLD and EARS registry with
+   `"Wow!!! Love it! Go!"`.
+5. Direct red witnesses are active.
 6. Product code may begin only after the exact intended red count is proved.
 7. Installation, MCP reload, and any post-product cohort require separate
    authority after green product verification.
@@ -285,6 +285,9 @@ authorized recovery question and the forward-only acceptance gates in
   The completed LLD keeps Option A success-only, makes the recovery claim
   narrower than error elimination, and composes with write-refusal completeness
   as a sibling artifact rather than a shared retry authority.
+- **Leaf ratified, 2026-08-30:** Gene said `"Wow!!! Love it! Go!"`. The
+  `MCP-OP-PREP-REQ-001..009` requirements and red-first implementation are
+  active. Installation and MCP reload remain separately gated.
 - **Counterfactual:** if the proxy's recovery signal came from fixture-specific
   behavior, the product descriptor will not reduce recovery actions or output
   after the same eligible inspect exposure.

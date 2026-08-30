@@ -1,16 +1,16 @@
 ---
 parent: high-level-design
 prefix: MCP-OP-PREP-REQ
-status: recovery-lld-ratification-requested
+status: 'ratified (Gene, 2026-08-30, verbatim: "Wow!!! Love it! Go!")'
 ---
 
 # Prepared Guarded Edit Request
 
-This is the completed success-only leaf LLD. Gene ratified the Option A HLD on
-2026-08-30 with `"2 go"` inside `"1 go, 2 go, 3 go"`. After the proxy result,
-Gene authorized this recovery design phase with `"Recovery go -- go"`. The LLD
-and EARS registry now require distinct ratification. This document authorizes
-no red tests or product implementation.
+This is the ratified success-only leaf LLD. Gene ratified the Option A HLD on
+2026-08-30 with `"2 go"`, authorized the recovery design with
+`"Recovery go -- go"`, and ratified this LLD and its EARS registry with
+`"Wow!!! Love it! Go!"`. Red-first implementation is active. Installation and
+MCP reload remain separately gated.
 
 ## Context and causal evidence
 
@@ -411,7 +411,7 @@ The competing options and deciding assumptions are in [README.md](README.md).
 The dedicated preparation operation and refusal-correction surface remain
 separate options. Neither is implied by ratifying this skeleton.
 
-## Decisions requested for LLD ratification
+## Ratified LLD decisions
 
 1. Eligibility is one successful terminal `forms` result for one file.
 2. The first slice allows one through six complete named whole-form edits.
@@ -423,5 +423,6 @@ separate options. Neither is implied by ratifying this skeleton.
 7. Proposed refusal completeness is an independent sibling surface, not
    prepared-request authority or a dependency of this leaf.
 
-A distinct Gene ratification is required before the EARS registry can activate
-and before red witnesses may begin.
+Gene ratified these decisions and the EARS registry on 2026-08-30 with
+`"Wow!!! Love it! Go!"`. Red witnesses may begin. Installation and MCP reload
+remain separately gated.

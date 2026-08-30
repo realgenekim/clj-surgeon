@@ -1,16 +1,15 @@
 ---
 parent: prepared-request-design
 prefix: MCP-OP-PREP-REQ
-status: recovery-ears-ratification-requested
+status: 'ratified (Gene, 2026-08-30, verbatim: "Wow!!! Love it! Go!")'
 ---
 
 # Prepared Guarded Edit Request Specifications
 
-These candidate IDs are stable and must not be reused if a requirement is
-deleted. Every requirement remains deferred. Gene ratified the Option A HLD
-and later authorized the recovery-oriented LLD phase on 2026-08-30. The
-completed design and this registry now require distinct ratification. No test
-or code annotation may claim these requirements before that decision.
+These active IDs are stable and must not be reused if a requirement is
+deleted. Gene ratified the Option A HLD, authorized the recovery-oriented LLD
+phase, and ratified this design and registry on 2026-08-30. Tests and code may
+now claim these requirements through exact `@spec` annotations.
 
 ## Eligibility and projection
 
@@ -56,7 +55,7 @@ The historical proxy experiment is not an EARS product requirement. It failed
 routing and is not eligible for rescoring. Its recovery result opened this LLD
 phase only.
 
-After ratification and deterministic red/green verification, a fresh
+After deterministic red/green verification, a fresh
 product-shaped cohort must run exactly `C,T,T,C` and then `T,C,C,T`. Every
 attempt receives the same frozen eligible successful inspect. Control emits no
 descriptor, and treatment emits exactly one. The cohort retains every attempt.
