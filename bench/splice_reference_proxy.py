@@ -295,6 +295,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--child-stderr", type=Path, required=True)
     parser.add_argument("--telemetry-dir", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--java-home", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -320,9 +321,16 @@ def main() -> int:
     with args.receipts.open("a", encoding="utf-8") as receipts, \
          args.stream.open("a", encoding="utf-8") as stream, \
          args.child_stderr.open("w", encoding="utf-8") as child_stderr:
+        child_env = dict(os.environ)
+        child_env["JAVA_HOME"] = str(args.java_home.resolve())
+        child_env["PATH"] = ":".join([
+            str(args.java_home.resolve() / "bin"),
+            "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin",
+        ])
         child = subprocess.Popen(
             child_command,
             cwd=args.repo_root,
+            env=child_env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=child_stderr,

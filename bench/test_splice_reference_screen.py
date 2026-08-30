@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -120,6 +121,7 @@ class SpliceReferenceScreenTest(unittest.TestCase):
                 "--stream", str(root / "stream.jsonl"),
                 "--child-stderr", str(root / "child.stderr"),
                 "--telemetry-dir", str(root / "telemetry"), "--run-id", "unit-R",
+                "--java-home", str(Path(os.environ["JAVA_HOME"]).resolve()),
             ]
             process = subprocess.Popen(
                 command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,

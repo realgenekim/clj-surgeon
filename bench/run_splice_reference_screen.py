@@ -53,7 +53,7 @@ def toml_string(value: str) -> str:
 
 def write_codex_config(path: Path, python: Path, proxy: Path, arm: str,
                        repo_root: Path, workspace: Path, manifest: Path,
-                       run_dir: Path, run_id: str) -> None:
+                       run_dir: Path, run_id: str, java_home: Path) -> None:
     proxy_args = [
         str(proxy), "--arm", arm,
         "--repo-root", str(repo_root),
@@ -64,6 +64,7 @@ def write_codex_config(path: Path, python: Path, proxy: Path, arm: str,
         "--child-stderr", str(run_dir / "mcp-child.stderr"),
         "--telemetry-dir", str(run_dir / "mcp-telemetry"),
         "--run-id", run_id,
+        "--java-home", str(java_home),
     ]
     rendered_args = ", ".join(toml_string(value) for value in proxy_args)
     path.write_text(
@@ -118,9 +119,14 @@ def run_episode(index: int, phase: str, arm: str, output: Path, repo_root: Path,
     try:
         (home / "auth.json").symlink_to(auth_file)
         config = home / "config.toml"
+        java_home_value = os.environ.get("JAVA_HOME")
+        if not java_home_value:
+            raise RuntimeError("JAVA_HOME is required for the isolated product MCP")
+        java_home = Path(java_home_value).resolve()
         write_codex_config(
             config, Path(sys.executable).resolve(), repo_root / "bench/splice_reference_proxy.py",
             arm, repo_root, workspace, fixture_root / "spans.json", run_dir, run_id,
+            java_home,
         )
         shutil.copy2(config, run_dir / "codex-config.toml")
         prompt = (fixture_root / "task.txt").read_text(encoding="utf-8")
@@ -276,6 +282,7 @@ def main() -> int:
         },
         "codex_version": run(["codex", "--version"], repo_root),
         "python": sys.version,
+        "java_home": str(Path(os.environ["JAVA_HOME"]).resolve()),
         "ideal_requests": ideal,
     }
     write_json(args.output / "run-config.json", config)

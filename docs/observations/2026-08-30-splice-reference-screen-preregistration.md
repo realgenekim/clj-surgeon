@@ -186,3 +186,23 @@ Fixture, prompt, proxy, schemas, scorer, schedule, model, reasoning, validity
 rules, registered magnitudes, and kill criteria are unchanged. V2 writes to a
 new `raw-v2/` root and starts again with a fresh Q→R pilot. This amendment does
 not use or respond to any model behavior; v1 produced none.
+
+## Forward-only v3 Java-environment amendment
+
+Frozen after the stopped v2 pilot and before any v3 model call.
+
+V2 reached the absolute workspaces and launched the proxy, but both Q and R
+failed the required MCP handshake at exactly 120 seconds. Their proxy duplex
+streams contain only Codex's initialize request, their tool-request receipts
+and Codex event streams are empty, and product-child stderr says no Java
+runtime could be located. The parent shell has a working JDK only through its
+explicit `JAVA_HOME`; the Codex-owned MCP environment did not preserve that
+binding. Both v2 episodes remain invalid, retained, and excluded.
+
+Protocol v3 adds one isolated-child launch fact: the runner records its exact
+resolved `JAVA_HOME`, supplies it to the proxy, and the proxy launches only the
+product MCP child with that JDK plus a bounded executable path. No prompt,
+fixture, model surface, proxy reference behavior, scorer, schedule,
+prediction, validity field, or kill rule changes. V3 writes to a new
+`raw-v3/` root and restarts at Q→R. This amendment is based solely on pre-model
+handshake evidence; v2 emitted no tool request and no model event.
