@@ -100,6 +100,15 @@ class SafetyContractTest(unittest.TestCase):
         treatment = dict(control, eligible_results=1, prepared_exposures=1)
         self.assertTrue(runner.safety_read_contract(control, "C", workspace)["complete"])
         self.assertTrue(runner.safety_read_contract(treatment, "T", workspace)["complete"])
+        self.assertTrue(
+            runner.safety_read_contract(treatment, "T", workspace)["shorthand_adherent"]
+        )
+
+        explicit = copy.deepcopy(treatment)
+        explicit["inspect_call_arguments"][0]["requests"][0]["operation"] = "forms"
+        explicit_result = runner.safety_read_contract(explicit, "T", workspace)
+        self.assertTrue(explicit_result["complete"])
+        self.assertFalse(explicit_result["shorthand_adherent"])
 
         wrong_args = copy.deepcopy(treatment)
         wrong_args["inspect_call_arguments"][0]["requests"][0]["forms"] = ["archive-root"]
