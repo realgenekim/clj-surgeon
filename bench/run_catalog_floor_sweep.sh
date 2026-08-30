@@ -104,15 +104,16 @@ for arm in "${server_arms[@]}"; do
   server_dir="$result_dir/servers/$arm"
   mkdir -p "$server_dir"
   arm_name=$(arm_keyword "$arm")
-  clojure -J-Xms32m -J-Xmx256m \
-    -Sdeps '{:paths ["src" "dev/experiments"]}' \
-    -X:clj-surgeon/mcp catalog-floor-server/start \
-    :arm ":$arm_name" \
-    :surface-receipt-file "\"$server_dir/advertised.json\"" \
-    :project-dir "\"$repo_root\"" \
-    :nrepl-port :none :port 0 \
-    :ready-file "\"$server_dir/ready.edn\"" \
-    > "$server_dir/stdout.txt" 2> "$server_dir/stderr.txt" &
+  (cd "$server_dir"
+   exec clojure -J-Xms32m -J-Xmx256m \
+     -Sdeps "{:paths [\"$repo_root/src\" \"$repo_root/dev/experiments\"]}" \
+     -X:clj-surgeon/mcp catalog-floor-server/start \
+     :arm ":$arm_name" \
+     :surface-receipt-file "\"$server_dir/advertised.json\"" \
+     :project-dir "\"$repo_root\"" \
+     :nrepl-port :none :port 0 \
+     :ready-file "\"$server_dir/ready.edn\"" \
+     > "$server_dir/stdout.txt" 2> "$server_dir/stderr.txt") &
   server_pids+=("$!")
   server_pid_count=$((server_pid_count + 1))
 done
@@ -143,11 +144,12 @@ for arm in "${mcp_arms[@]}"; do
   write_config "$preflight/codex-home/config.toml" \
     "$(cat "$result_dir/servers/$server_arm/url.txt")" "$arm"
   start_ns=$(date +%s%N)
-  CODEX_HOME="$preflight/codex-home" clojure -J-Xms32m -J-Xmx256m \
-    -Sdeps '{:paths ["src" "bench"]}' -M \
-    -m capture-codex-mcp-registry --codex "$codex_bin" \
-    --output "$preflight/registry.json" --server catalog-probe \
-    > "$preflight/stdout.txt" 2> "$preflight/stderr.txt"
+  (cd "$preflight"
+   CODEX_HOME="$preflight/codex-home" clojure -J-Xms32m -J-Xmx256m \
+     -Sdeps "{:paths [\"$repo_root/src\" \"$repo_root/bench\"]}" -M \
+     -m capture-codex-mcp-registry --codex "$codex_bin" \
+     --output "$preflight/registry.json" --server catalog-probe \
+     > "$preflight/stdout.txt" 2> "$preflight/stderr.txt")
   end_ns=$(date +%s%N)
   jq --argjson wall_ms "$(( (end_ns - start_ns) / 1000000 ))" \
     --argjson parameter_count "$(jq '[."tool-projection"[]."input-schema".properties | length] | add // 0' "$preflight/registry.json")" \
