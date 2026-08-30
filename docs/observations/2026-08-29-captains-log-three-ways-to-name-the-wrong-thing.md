@@ -140,3 +140,92 @@ effect identity** that binds a label to the intended owner *and* operation? If t
 Related: `docs/why-reading-is-cheap-and-writing-is-expensive.md`,
 `docs/observations/2026-08-29-captains-log-the-model-typed-less-it-did-not-think-less.md`,
 `docs/observations/2026-08-29-wrong-index-ended-emission-composition.md`.
+
+---
+
+## Postscript, same evening: the theory got its number
+
+Two results landed within the hour, and together they close the day's argument with arithmetic
+rather than principle.
+
+### The ratio: reading is 1,284x cheaper than writing
+
+Measured on Anvil dev-a, n=9 per condition, one interleaved cohort, three conditions with a
+tiny/tiny floor condition used to subtract fixed cost:
+
+| condition | median |
+|---|---|
+| A large input, tiny output | 6.954 s |
+| B tiny input, large output | 25.781 s |
+| C tiny/tiny (the floor) | 3.927 s |
+
+`A - C` = 3.027 s bought **219,544 input tokens -> 72,529 tok/s**.
+`B - C` = 21.854 s bought **1,234 output tokens -> 56.5 tok/s**.
+**Ratio 1,284x. ~14 microseconds to read a token; ~17.7 milliseconds to write one.**
+
+It read a 220,000-token document in three seconds. **Writing that same document would take 65
+minutes.**
+
+**It independently confirms the afternoon's emission constant.** That experiment, unrelated in
+design and run by a different seat, measured ~6 ms per authored character. At ~3 chars/token,
+17.7 ms/token is ~5.9 ms/char. **Neither experiment was built to check the other.**
+
+Our own decision rule, written before the measurement: *"At 100x the case for enriching results is
+obvious. At 10x, a result that triples in size starts to cost something."* At **1,284x** the read
+side is closed. **Spend input lavishly. Shave only what the model authors.**
+
+Caveats, stated: MEASURED but not replicated; the 72,529 figure includes upload, so the ratio is a
+**lower bound**.
+
+A number nobody asked for: the raw API floor is **3.927 s**, while our agent loop shows **~11 s per
+turn**. That ~7-second gap is **harness overhead we own** — now the largest unexplained cost in the
+system, and unlike inference speed it is ours to fix.
+
+### The guard: safety consumes 99.3% of the label prize
+
+SURGEON2's constructibility screen, zero model calls, receipt `2d40036d`.
+
+The proposal was to make a wrong-but-valid label detectable by binding each label to a content
+guard. **Verdict: STOP, again.** A content guard is **rung 4 (detected), not rung 5
+(unrepresentable)** — a coherent wrong label carrying its own matching guard remains perfectly
+representable.
+
+Worse, the guard does not even cover the corpus. In the retained request: **12/23 symbol rows share
+`from`+`matches`; 9/9 require rows share add/remove shapes; and 14/14 deletions admit no guard at
+all.** Only 35 of 47 rows are addressable.
+
+Then the cost, charged honestly against the 1,889-byte label bound. The fitted model is exact —
+**205 chars fixed overhead plus 35 chars per guard-character, across 35 guarded sites:**
+
+| guard width | request bytes |
+|---|---|
+| 8 | 2,374 |
+| 16 | 2,654 |
+| **22 (128-bit)** | **2,864** |
+| 32 | 3,214 |
+| 64 | 4,334 |
+
+**Current R is 2,871 bytes. A credible 128-bit guard leaves 7 bytes saved — 0.244%.**
+
+**The prize was 982 bytes. After paying for safety, 7 survive. The guard consumes 99.3% of the
+win.** To keep even a 20% saving, guards would have to be <= 5 characters, which is not a guard.
+
+Using full source as the discriminator does work — **0 duplicate pairs across all 44 sites** — and
+costs **16,613 characters**, nearly six times the unoptimized request.
+
+### Why the two results are the same result
+
+An hour before the guard numbers existed, we wrote the explanation in prose: **error detection runs
+on redundancy; compression is the removal of redundancy; so a maximally compressed subject reference
+is by construction maximally undetectable when wrong.**
+
+The guard screen is that sentence with a price tag. **Re-adding the redundancy costs almost exactly
+what removing it saved** — 982 bytes out, 975 bytes back. That is not a coincidence or a bad
+implementation. **It is the same quantity, measured twice, going in opposite directions.**
+
+And the ratio explains why the whole trade was mispriced from the start: **we were compressing the
+side of the ledger that costs 14 microseconds per token, and paying in the one currency that has no
+insurance — knowing which thing we meant.**
+
+**Final disposition: labels GO for reading and navigation. NO-GO as mutation authority, twice,
+now on arithmetic. Do not reopen without independent effect identity that is not a content digest.**
