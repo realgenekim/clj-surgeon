@@ -1,0 +1,12 @@
+{
+  "base_commit": "6d558cb3b5859cce6626fb67225c547483dc646f",
+  "branch": "experiment/ordinal-refusal-screen-20260830",
+  "commit_author": "sol <sol@skiff>",
+  "commit_trailer": "Co-Authored-By: Gene Kim <genek@itrevolution.com>",
+  "experiment_notice": "EXPERIMENT SURFACE ONLY — not product code, not product authority, and not compliant evidence that product refusals may carry executable payloads.",
+  "experiment_only": true,
+  "product_contract": false,
+  "result_commit": "00bac4d61da83c116d04f67ae570d3b3d66b61d1",
+  "result_tree": "db8c0a018674b2a5180a79678e8a5ce5e2b9c76d",
+  "schema": "ordinal-refusal-screen-git-receipt.v1"
+}
