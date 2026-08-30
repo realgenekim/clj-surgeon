@@ -60,6 +60,20 @@ Thus the felt-failure claim is earned: each refusal imposed a retry boundary. Th
 
 Counting these as 3 of 6 requires excluding one additional successful direct edit. Under the explicit session-start population the honest rate is 3 of 7, or 42.9%. That is still an unacceptable point-of-use refusal rate, but it is not 50%.
 
+### Subsequent body-fidelity bisection
+
+SURGEON2 independently localized the broader escape-heavy corruption claim at immutable commit `2290192c7e83c9afd95a54c30768aa5f94afdb96`. Its retained 18-arm harness had emitted free-text requests; it never called MCP. Five of 18 replayed messages contained a wrong body, but four of those five were invalid Clojure and only one was both wrong and Clojure-valid.
+
+A separate no-model probe then sent five escape-sensitive fixtures through real HTTP MCP. All five committed with exact readback, including regexes, nested quotes, literal escape sequences, and a maximum wire backslash depth of nine. Malformed Clojure refused before write and left source byte-identical. This establishes a sharper boundary:
+
+- the three census refusals remain real point-of-use retry costs;
+- model transcription of long bodies can fail before the tool call;
+- no MCP transport, parser, or writer corruption was reproduced;
+- backslash depth does not predict correctness;
+- a valid but unintended replacement remains undetectable without an independent intent oracle.
+
+Accordingly, do not use the census refusals to justify a parser/writer change. The earned design direction is to reduce model retranscription: compile transformations server-side or consume reviewed frozen replacement bytes. The body-fidelity raw archive is bound by SHA-256 `9c552a417fb67761cb338880f8ef8a9da7c16e326aaa7087282b919b09b0bc05`.
+
 ## Addressable ladder
 
 The independent ladder uses one successful outer native action as the unit. An action is an existing-Clojure update when it updates at least one `.clj`, `.cljc`, or `.cljs` file. “Small” means one hunk and at most four added-plus-removed lines. “Same-session created” is tracked from earlier successful `Add File` actions. For a multi-file action, I report both conservative interpretations: all Clojure targets created versus any target created.
