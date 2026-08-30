@@ -15,8 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-SCHEMA = "clj-surgeon.agent-usage-ethnography.v6"
+SCHEMA = "clj-surgeon.agent-usage-ethnography.v7"
 LOGICAL_ARGUMENT_DOMAIN = b"clj-surgeon.logical-tool-arguments.v1\0"
+WORKSPACE_IDENTITY_DOMAIN = b"clj-surgeon.workspace-identity.v1\0"
+WORKSPACE_SNAPSHOT_DOMAIN = b"clj-surgeon.workspace-snapshot.v1\0"
+DEFAULT_WALL_COVERAGE_THRESHOLD = 0.01
 MARKER_RE = re.compile(r"<!--\s*agent-usage-window-end:\s*([^\s]+)\s*-->")
 CLJ_PATH_RE = re.compile(r"(?<![\w.-])([~/.$\w-][~/.$\w-]*\.clj(?:c|s)?)(?![\w.-])")
 SURGEON_RE = re.compile(
@@ -93,6 +96,34 @@ def root_normalized_tool_arguments(arguments: dict) -> dict:
     if "workspace_root" in normalized:
         normalized["workspace_root"] = "<workspace>"
     return normalized
+
+
+def workspace_identity_sha256(arguments: object) -> str | None:
+    """Hash a supplied workspace root for equality without retaining the path."""
+    if not isinstance(arguments, dict):
+        return None
+    workspace_root = arguments.get("workspace_root")
+    if not isinstance(workspace_root, str) or not workspace_root:
+        return None
+    return hashlib.sha256(
+        WORKSPACE_IDENTITY_DOMAIN + workspace_root.encode("utf-8")
+    ).hexdigest()
+
+
+def joined_workspace_snapshot_sha256(
+    workspace_identity: object, snapshot_identity: object
+) -> str | None:
+    """Join only already-hashed workspace and returned snapshot evidence."""
+    if not all(
+        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
+        for value in (workspace_identity, snapshot_identity)
+    ):
+        return None
+    evidence = canonical_json_bytes({
+        "snapshot_sha256": snapshot_identity,
+        "workspace_identity_sha256": workspace_identity,
+    })
+    return hashlib.sha256(WORKSPACE_SNAPSHOT_DOMAIN + evidence).hexdigest()
 
 
 def compile_mcp_action_evidence(item: dict) -> dict:
@@ -183,8 +214,16 @@ def compile_inspect_clock_evidence(arguments: object, result: object) -> dict:
         ),
     }
     hashes = source_hashes(result)
+    workspace_identity = workspace_identity_sha256(safe_arguments)
+    if workspace_identity:
+        evidence["workspace_identity_sha256"] = workspace_identity
     if hashes:
         evidence["snapshot_sha256"] = canonical_sha256(sorted(hashes))
+        workspace_snapshot = joined_workspace_snapshot_sha256(
+            workspace_identity, evidence["snapshot_sha256"]
+        )
+        if workspace_snapshot:
+            evidence["workspace_snapshot_sha256"] = workspace_snapshot
     return evidence
 
 
@@ -454,6 +493,9 @@ def completed_item_clock_sample(payload: dict) -> dict | None:
         action_evidence = compile_mcp_action_evidence(item)
         if action_evidence:
             sample["action_evidence"] = action_evidence
+        workspace_identity = workspace_identity_sha256(item.get("arguments"))
+        if workspace_identity:
+            sample["workspace_identity_sha256"] = workspace_identity
         if server == "clj-surgeon":
             if tool == "inspect_clojure":
                 sample["kind"] = "surgeon-read"
@@ -633,6 +675,7 @@ def compile_post_surgeon_boundaries(items: list[dict], turn_start_ms: int, turn_
             "action_ordinal", "batch_cardinality", "file_cardinality",
             "request_operations", "result_outcome", "selector_cardinality",
             "snapshot_sha256", "structural_target_sha256",
+            "workspace_identity_sha256", "workspace_snapshot_sha256",
         ):
             if key in item:
                 result[key] = item[key]
@@ -706,15 +749,161 @@ def compile_event_clock(started_at: str, duration_ms: int, samples: list[dict]) 
     measured_coverage_ms = interval_coverage(measured_intervals)
     unattributed_wall_ms = max(0, turn_end_ms - turn_start_ms - measured_coverage_ms)
     duration = max(0, turn_end_ms - turn_start_ms)
-    return {
+    result = {
         "items": items,
         "by_kind_ms": dict(sorted(by_kind.items())),
         "measured_coverage_ms": measured_coverage_ms,
         "unattributed_wall_ms": unattributed_wall_ms,
-        "coverage_ratio": round(measured_coverage_ms / duration, 4) if duration else None,
         "post_surgeon_boundaries": compile_post_surgeon_boundaries(
             bounded, turn_start_ms, turn_end_ms
         ),
+    }
+    if duration:
+        result["coverage_ratio"] = round(measured_coverage_ms / duration, 4)
+    return result
+
+
+def structural_write_items(turn: dict) -> list[dict]:
+    clock = turn.get("event_clock") if isinstance(turn, dict) else None
+    items = clock.get("items") if isinstance(clock, dict) else None
+    return [
+        item for item in (items if isinstance(items, list) else [])
+        if isinstance(item, dict)
+        and item.get("kind") in {"native-patch", "surgeon-apply"}
+    ]
+
+
+def compile_post_decision_wall(turn: dict) -> dict | None:
+    """Compile per-turn post-write wall only when clock coverage is present."""
+    clock = turn.get("event_clock") if isinstance(turn, dict) else None
+    if not isinstance(clock, dict):
+        return None
+    coverage_ratio = clock.get("coverage_ratio")
+    if (
+        not isinstance(coverage_ratio, (int, float))
+        or isinstance(coverage_ratio, bool)
+    ):
+        return None
+    writes = structural_write_items(turn)
+    if not writes:
+        return None
+    decision = max(
+        enumerate(writes),
+        key=lambda pair: (pair[1].get("action_ordinal", -1), pair[0]),
+    )[1]
+    boundary_start = max(0, int(
+        (decision.get("offset_ms") or 0) + (decision.get("wall_ms") or 0)
+    ))
+    duration_ms = max(0, int(turn.get("duration_ms") or 0))
+    intervals = []
+    for item in clock.get("items") or []:
+        if not isinstance(item, dict) or item.get("kind") == "unattributed-gap":
+            continue
+        start = item.get("offset_ms")
+        wall = item.get("wall_ms")
+        if not isinstance(start, (int, float)) or not isinstance(wall, (int, float)):
+            continue
+        start = max(0, round(start))
+        end = min(duration_ms, start + max(0, round(wall)))
+        if start >= boundary_start and end > start:
+            intervals.append((start, end))
+    return {
+        "coverage_ratio": coverage_ratio,
+        "turn_end_wall_ms": max(0, duration_ms - boundary_start),
+        "completed_item_union_wall_ms": interval_coverage(intervals),
+    }
+
+
+def aggregate_post_decision_wall(
+    turns: list[dict], coverage_threshold: float
+) -> dict:
+    """Report three wall bases and fail closed on low per-turn coverage."""
+    admitted = []
+    contributions = []
+    excluded = []
+    for turn in turns:
+        wall = turn.get("post_decision_wall") if isinstance(turn, dict) else None
+        if not isinstance(wall, dict):
+            wall = compile_post_decision_wall(turn)
+        if wall is None:
+            if structural_write_items(turn):
+                exclusion = {"reason": "coverage-ratio-missing"}
+                if isinstance(turn.get("turn_key"), str):
+                    exclusion["turn_key"] = turn["turn_key"]
+                excluded.append(exclusion)
+            continue
+        contributions.append(wall)
+        coverage_ratio = wall["coverage_ratio"]
+        if coverage_ratio < coverage_threshold:
+            exclusion = {
+                "coverage_ratio": coverage_ratio,
+                "turn_end_wall_ms": wall["turn_end_wall_ms"],
+                "reason": "coverage-below-threshold",
+            }
+            if isinstance(turn.get("turn_key"), str):
+                exclusion["turn_key"] = turn["turn_key"]
+            excluded.append(exclusion)
+        else:
+            admitted.append(wall)
+
+    full = {
+        "status": "ok",
+        "contributing_turn_count": len(contributions),
+        "excluded_turn_count": 0,
+    }
+    if excluded:
+        full = {
+            "status": "refused",
+            "contributing_turn_count": len(contributions) + sum(
+                item["reason"] == "coverage-ratio-missing" for item in excluded
+            ),
+            "excluded_turn_count": len(excluded),
+            "reason": (
+                "contributing-turn-coverage-missing-or-below-threshold"
+                if any(item["reason"] == "coverage-ratio-missing" for item in excluded)
+                else "contributing-turn-coverage-below-threshold"
+            ),
+        }
+    elif contributions:
+        full["wall_ms"] = sum(
+            item["turn_end_wall_ms"] for item in contributions
+        )
+    else:
+        full = {
+            "status": "unavailable",
+            "contributing_turn_count": 0,
+            "excluded_turn_count": 0,
+            "reason": "no-structural-write-turns",
+        }
+
+    admitted_result = {
+        "status": "ok",
+        "wall_ms": sum(item["turn_end_wall_ms"] for item in admitted),
+        "contributing_turn_count": len(admitted),
+        "excluded_turn_count": len(excluded),
+    } if admitted else {
+        "status": "unavailable",
+        "contributing_turn_count": 0,
+        "excluded_turn_count": len(excluded),
+        "reason": "no-coverage-admitted-turns",
+    }
+    measured_result = {
+        "status": "ok",
+        "wall_ms": sum(
+            item["completed_item_union_wall_ms"] for item in contributions
+        ),
+        "contributing_turn_count": len(contributions),
+    } if contributions else {
+        "status": "unavailable",
+        "contributing_turn_count": 0,
+        "reason": "no-completed-item-wall-evidence",
+    }
+    return {
+        "coverage_threshold": coverage_threshold,
+        "full_turn_end": full,
+        "coverage_admitted_turn_end": admitted_result,
+        "completed_item_union": measured_result,
+        "excluded_turns": excluded,
     }
 
 
@@ -739,6 +928,11 @@ def finalize_turn(turn: dict) -> dict:
     result["event_clock"] = compile_event_clock(
         result["started_at"], result.get("duration_ms") or 0, clock_samples
     )
+    if "coverage_ratio" in result["event_clock"]:
+        result["coverage_ratio"] = result["event_clock"]["coverage_ratio"]
+    post_decision_wall = compile_post_decision_wall(result)
+    if post_decision_wall:
+        result["post_decision_wall"] = post_decision_wall
     return result
 
 
@@ -1146,7 +1340,11 @@ def candidate_files(root: Path, pattern: str, since: datetime):
     return sorted(result)
 
 
-def provider_summary(provider: str, sessions: list[dict]) -> dict:
+def provider_summary(
+    provider: str,
+    sessions: list[dict],
+    wall_coverage_threshold: float = DEFAULT_WALL_COVERAGE_THRESHOLD,
+) -> dict:
     relevant = [
         session
         for session in sessions
@@ -1187,6 +1385,9 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
                 post_surgeon_reasoning_wall.append(boundary.get("model_reasoning_ms") or 0)
                 post_surgeon_endpoints[boundary.get("next_kind") or "unknown"] += 1
                 post_surgeon_transports[boundary.get("transport") or "unknown"] += 1
+    task_turns = [
+        turn for session in relevant for turn in session.get("task_turns", [])
+    ]
     return {
         "provider": provider,
         "sessions_in_window": len(sessions),
@@ -1214,6 +1415,9 @@ def provider_summary(provider: str, sessions: list[dict]) -> dict:
         "post_surgeon_reasoning_wall": distribution(post_surgeon_reasoning_wall),
         "post_surgeon_endpoints": dict(sorted(post_surgeon_endpoints.items())),
         "post_surgeon_transports": dict(sorted(post_surgeon_transports.items())),
+        "post_decision_wall": aggregate_post_decision_wall(
+            task_turns, wall_coverage_threshold
+        ),
         "native_clojure_actions": dict(sorted(native.items())),
         "bounded_clojure_reads": sum(s["bounded_clojure_reads"] for s in relevant),
         "unbounded_clojure_reads": sum(s["unbounded_clojure_reads"] for s in relevant),
@@ -1466,6 +1670,17 @@ def collect(args) -> dict:
             "status": "error",
             "error": "--until must be later than --since",
         }
+    wall_coverage_threshold = getattr(
+        args, "wall_coverage_threshold", DEFAULT_WALL_COVERAGE_THRESHOLD
+    )
+    if not isinstance(wall_coverage_threshold, (int, float)) or not (
+        0 <= wall_coverage_threshold <= 1
+    ):
+        return {
+            "schema_version": SCHEMA,
+            "status": "error",
+            "error": "--wall-coverage-threshold must be between 0 and 1",
+        }
 
     codex_sessions = []
     for path in candidate_files(Path(args.codex_root), "rollout-*.json*", since):
@@ -1498,10 +1713,16 @@ def collect(args) -> dict:
             "tool_argument_content_emitted": False,
             "tool_result_content_emitted": False,
             "tool_logical_arguments_hashed": True,
+            "workspace_identities_hashed": True,
+            "workspace_snapshots_hashed": True,
         },
         "providers": {
-            "codex": provider_summary("codex", codex_sessions),
-            "claude": provider_summary("claude", claude_sessions),
+            "codex": provider_summary(
+                "codex", codex_sessions, wall_coverage_threshold
+            ),
+            "claude": provider_summary(
+                "claude", claude_sessions, wall_coverage_threshold
+            ),
         },
         "services": {
             "clj_surgeon_mcp": collect_surgeon_telemetry(
@@ -1569,6 +1790,106 @@ def self_test() -> int:
         "model-reasoning": 600,
         "other-tool": 500,
     }
+    assert "coverage_ratio" not in compile_event_clock(clock_start, 0, [])
+    covered_turn = {
+        "turn_key": "covered-turn",
+        "duration_ms": 1200,
+        "event_clock": {
+            "coverage_ratio": 0.75,
+            "items": [
+                {
+                    "kind": "native-patch", "action_ordinal": 1,
+                    "offset_ms": 100, "wall_ms": 100,
+                },
+                {
+                    "kind": "model-reasoning", "action_ordinal": 2,
+                    "offset_ms": 200, "wall_ms": 300,
+                },
+                {
+                    "kind": "other-tool", "action_ordinal": 3,
+                    "offset_ms": 300, "wall_ms": 200,
+                },
+            ],
+        },
+    }
+    low_coverage_turn = {
+        # Faithful minimized witness for the 2026-08-29 ceremony field failure.
+        "turn_key": "low-coverage-turn",
+        "duration_ms": 41741664,
+        "event_clock": {
+            "coverage_ratio": 0.0046,
+            "items": [
+                {
+                    "kind": "native-patch", "action_ordinal": 1,
+                    "offset_ms": 270339, "wall_ms": 200,
+                },
+                {
+                    "kind": "model-reasoning", "action_ordinal": 2,
+                    "offset_ms": 270539, "wall_ms": 54030,
+                },
+            ],
+        },
+    }
+    covered_wall = compile_post_decision_wall(covered_turn)
+    assert covered_wall == {
+        "coverage_ratio": 0.75,
+        "turn_end_wall_ms": 1000,
+        "completed_item_union_wall_ms": 300,
+    }
+    low_coverage_wall = compile_post_decision_wall(low_coverage_turn)
+    assert low_coverage_wall == {
+        "coverage_ratio": 0.0046,
+        "turn_end_wall_ms": 41471125,
+        "completed_item_union_wall_ms": 54030,
+    }
+    coverage_aggregate = aggregate_post_decision_wall(
+        [covered_turn, low_coverage_turn], 0.01
+    )
+    assert coverage_aggregate["full_turn_end"] == {
+        "status": "refused",
+        "contributing_turn_count": 2,
+        "excluded_turn_count": 1,
+        "reason": "contributing-turn-coverage-below-threshold",
+    }
+    assert "wall_ms" not in coverage_aggregate["full_turn_end"]
+    assert coverage_aggregate["coverage_admitted_turn_end"] == {
+        "status": "ok",
+        "wall_ms": 1000,
+        "contributing_turn_count": 1,
+        "excluded_turn_count": 1,
+    }
+    assert coverage_aggregate["completed_item_union"] == {
+        "status": "ok",
+        "wall_ms": 54330,
+        "contributing_turn_count": 2,
+    }
+    assert coverage_aggregate["coverage_threshold"] == 0.01
+    assert coverage_aggregate["excluded_turns"] == [{
+        "turn_key": "low-coverage-turn",
+        "coverage_ratio": 0.0046,
+        "turn_end_wall_ms": 41471125,
+        "reason": "coverage-below-threshold",
+    }]
+    missing_coverage_aggregate = aggregate_post_decision_wall([{
+        "turn_key": "missing-coverage-turn",
+        "duration_ms": 1000,
+        "event_clock": {"items": [{
+            "kind": "native-patch", "action_ordinal": 1,
+            "offset_ms": 100, "wall_ms": 100,
+        }]},
+    }], 0.01)
+    assert missing_coverage_aggregate["full_turn_end"] == {
+        "status": "refused",
+        "contributing_turn_count": 1,
+        "excluded_turn_count": 1,
+        "reason": "contributing-turn-coverage-missing-or-below-threshold",
+    }
+    assert missing_coverage_aggregate["excluded_turns"] == [{
+        "turn_key": "missing-coverage-turn",
+        "reason": "coverage-ratio-missing",
+    }]
+    assert "coverage_ratio" not in missing_coverage_aggregate["excluded_turns"][0]
+    assert "turn_end_wall_ms" not in missing_coverage_aggregate["excluded_turns"][0]
     cli_sample = completed_item_clock_sample({
         "started_at_ms": clock_start_ms,
         "completed_at_ms": clock_start_ms + 10,
@@ -1627,7 +1948,36 @@ def self_test() -> int:
         "selector_cardinality": 1,
         "structural_target_sha256": "cd87f8ce80370f498648589d63c92dec2a5b9deac8760a7390440866fce90b73",
         "snapshot_sha256": "5adb8c3d42601f14dc3c467830d23dcc75ffae17236d02c6bb26c6e31b1c3c8e",
+        "workspace_identity_sha256": "2a5535d223e3137d3fd5741cab4504e91b49b0bb369702f6ec82c804c5842397",
+        "workspace_snapshot_sha256": "293de7ec0fc3a8d0e0907f32c3d910a0a38f43f6245edf74bc53dbc5461b0a0c",
     }
+    assert len(inspect_evidence["workspace_identity_sha256"]) == 64
+    assert len(inspect_evidence["workspace_snapshot_sha256"]) == 64
+    same_workspace_snapshot = compile_inspect_clock_evidence(
+        {"workspace_root": "/PRIVATE/WORKSPACE", "requests": []},
+        {"structuredContent": {"file_hashes": {
+            "src/private.clj": private_snapshot_hash,
+        }}},
+    )
+    different_workspace_snapshot = compile_inspect_clock_evidence(
+        {"workspace_root": "/PRIVATE/OTHER", "requests": []},
+        {"structuredContent": {"file_hashes": {
+            "src/private.clj": private_snapshot_hash,
+        }}},
+    )
+    assert (
+        same_workspace_snapshot["workspace_snapshot_sha256"]
+        == inspect_evidence["workspace_snapshot_sha256"]
+    )
+    assert (
+        different_workspace_snapshot["workspace_snapshot_sha256"]
+        != inspect_evidence["workspace_snapshot_sha256"]
+    )
+    missing_workspace = compile_inspect_clock_evidence(
+        {"requests": []}, {"structuredContent": {}}
+    )
+    assert "workspace_identity_sha256" not in missing_workspace
+    assert "workspace_snapshot_sha256" not in missing_workspace
     assert inspect_result_outcome(
         {"structuredContent": {"ok": True}}
     ) == "ok"
@@ -2042,6 +2392,7 @@ def self_test() -> int:
         assert all(phase["actions"] == 1 for phase in codex_phases)
         assert codex["sessions"][0]["task_turns"][0]["route_phases"] == codex_phases
         clock = codex["sessions"][0]["task_turns"][0]["event_clock"]
+        assert codex["sessions"][0]["task_turns"][0]["coverage_ratio"] == 0.0207
         assert [item["kind"] for item in clock["items"][:5]] == [
             "unattributed-gap", "model-reasoning", "unattributed-gap",
             "surgeon-read", "unattributed-gap"
@@ -2091,6 +2442,12 @@ def self_test() -> int:
             "selector_cardinality": 1,
             "structural_target_sha256": clock["items"][3]["structural_target_sha256"],
             "snapshot_sha256": clock["items"][3]["snapshot_sha256"],
+            "workspace_identity_sha256": clock["items"][3][
+                "workspace_identity_sha256"
+            ],
+            "workspace_snapshot_sha256": clock["items"][3][
+                "workspace_snapshot_sha256"
+            ],
             "next_action_ordinal": 3,
         }]
         assert codex["post_surgeon_boundary_wall"]["median_ms"] == 800
@@ -2100,6 +2457,8 @@ def self_test() -> int:
         assert "surgeon-read · mcp inspect_clojure completed" in rendered_clock
         assert "action#2 batch=1 target=" in rendered_clock
         assert "snapshot=" in rendered_clock
+        assert "workspace=" in rendered_clock
+        assert "workspace-snapshot=" in rendered_clock
         assert "PRIVATE_" not in rendered_clock
         assert claude["clj_surgeon_ops"] == {":xray": 1}
         assert claude["activation_trigger_visible_sessions"] == 0
@@ -2120,6 +2479,8 @@ def self_test() -> int:
         assert receipt["privacy"]["tool_argument_content_emitted"] is False
         assert receipt["privacy"]["tool_result_content_emitted"] is False
         assert receipt["privacy"]["tool_logical_arguments_hashed"] is True
+        assert receipt["privacy"]["workspace_identities_hashed"] is True
+        assert receipt["privacy"]["workspace_snapshots_hashed"] is True
         assert receipt["services"]["clj_surgeon_mcp"]["mcp_tool_calls"] == 2
         assert receipt["services"]["clj_surgeon_mcp"]["error_types"] == {
             "match-count-mismatch": 1
@@ -2156,6 +2517,7 @@ def self_test() -> int:
         assert "PRIVATE_RESULT_CANARY" not in json.dumps(receipt)
         assert "PRIVATE_MESSAGE_CANARY" not in json.dumps(receipt)
         assert "/PRIVATE/CLOCK/PATH" not in json.dumps(receipt)
+        assert "PRIVATE_CLOCK_REQUEST" not in json.dumps(receipt)
         chain_receipt = {
             "window": receipt["window"],
             "providers": {"codex": {"sessions": [{
@@ -2208,6 +2570,15 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--receipt-out",
         help="Write the complete receipt here; defaults to a bounded file under /tmp",
+    )
+    result.add_argument(
+        "--wall-coverage-threshold",
+        type=float,
+        default=DEFAULT_WALL_COVERAGE_THRESHOLD,
+        help=(
+            "Minimum completed-item coverage ratio for aggregate turn-end wall "
+            f"(default: {DEFAULT_WALL_COVERAGE_THRESHOLD:g})"
+        ),
     )
     result.add_argument(
         "--full",
@@ -2278,6 +2649,7 @@ def compact_summary(receipt: dict, receipt_path: Path) -> dict:
             "post_surgeon_reasoning_wall": provider.get("post_surgeon_reasoning_wall", {}),
             "post_surgeon_endpoints": provider.get("post_surgeon_endpoints", {}),
             "post_surgeon_transports": provider.get("post_surgeon_transports", {}),
+            "post_decision_wall": provider.get("post_decision_wall", {}),
         }
     return {
         "status": receipt.get("status"),
@@ -2420,6 +2792,12 @@ def render_event_clock_receipt(
             "surgeon-read", "surgeon-plan", "surgeon-apply"
         ))
         model_ms = by_kind.get("model-reasoning", 0) + by_kind.get("model-message", 0)
+        coverage_ratio = clock.get("coverage_ratio")
+        coverage_text = (
+            f"coverage {100 * coverage_ratio:.1f}%"
+            if isinstance(coverage_ratio, (int, float))
+            else "coverage unavailable"
+        )
         lines.extend([
             f"session {candidate_session_key} · turn {turn.get('turn_key')} · {'complete' if turn.get('completed') else 'bounded-incomplete'}",
             "  " + " · ".join([
@@ -2427,7 +2805,7 @@ def render_event_clock_receipt(
                 f"model items {concise_duration(model_ms)}",
                 f"Surgeon {concise_duration(surgeon_ms)}",
                 f"unattributed {concise_duration(clock.get('unattributed_wall_ms') or 0)}",
-                f"coverage {100 * (clock.get('coverage_ratio') or 0):.1f}%",
+                coverage_text,
             ]),
         ])
         clock_items = clock.get("items", [])
@@ -2488,6 +2866,14 @@ def render_event_clock_receipt(
             if item.get("snapshot_sha256"):
                 detail = (
                     f"{detail or ''} snapshot={item['snapshot_sha256'][:12]}"
+                ).strip()
+            if item.get("workspace_identity_sha256"):
+                detail = (
+                    f"{detail or ''} workspace={item['workspace_identity_sha256'][:12]}"
+                ).strip()
+            if item.get("workspace_snapshot_sha256"):
+                detail = (
+                    f"{detail or ''} workspace-snapshot={item['workspace_snapshot_sha256'][:12]}"
                 ).strip()
             suffix = f" · {detail}" if detail else ""
             lines.append(

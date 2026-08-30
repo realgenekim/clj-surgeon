@@ -53,19 +53,36 @@ a completed Reasoning item; it does not expose hidden chain of thought.
 include inference, scheduling, prompt ingestion, serialization, transport,
 logging, or UI delay. Never relabel all unattributed wall as model thinking.
 
-Receipt schema v6 gives each completed clock item a privacy-safe action
+Receipt schema v7 copies each available clock `coverage_ratio` onto its task
+turn beside turn wall and reports structural-write post-decision wall on three
+bases: full turn-end wall, turn-end wall from coverage-admitted turns, and the
+overlap-safe union of completed clock items. Full turn-end aggregation refuses
+when any contributing turn is below the stated threshold or lacks coverage;
+the refusal omits aggregate `wall_ms` and lists the excluded hashed turn keys,
+per-turn wall when available, coverage when available, and reason. The default
+threshold is 0.01 and can be changed with `--wall-coverage-threshold RATIO`.
+Never sum refused full-wall candidates downstream or silently drop the listed
+turns. Missing coverage remains omitted, never zero.
+
+Receipt schema v7 gives each completed clock item a privacy-safe action
 ordinal. An `inspect_clojure` item also carries its request batch cardinality,
 file and selector counts, operation counts, typed result outcome, a SHA-256
 identity for the structural target with workspace paths and request bookkeeping
 removed, and—when source-hash evidence was returned—a second SHA-256 over the
-sorted source hashes. Adjacent reads receive only a categorical target relation:
+sorted source hashes. When the action supplies `workspace_root`, it carries a
+domain-separated `workspace_identity_sha256`; when returned source-hash evidence
+also exists, `workspace_snapshot_sha256` joins those two hashes. These fields
+prove equality only for the supplied workspace and returned snapshot evidence;
+they do not claim an unobserved whole-tree hash. Missing identity evidence is
+omitted. Adjacent reads receive only a categorical target relation:
 exact, same files, overlapping files, disjoint files, or unknown. The receipt
 never emits the target, workspace path, source, original source hash, request
-ID, or expectation. Use these identities to shortlist repeated-read chains,
+ID, or expectation. Hashes are equality evidence, never storage. Use these
+identities to shortlist repeated-read chains,
 then inspect only the bounded receipt-named transcript region needed to judge
 whether a later read was mechanically knowable earlier.
 
-For structured MCP actions, schema v6 also retains canonical UTF-8 argument
+For structured MCP actions, schema v7 also retains canonical UTF-8 argument
 byte count and a SHA-256 over the same arguments after replacing only the
 top-level `workspace_root` with `<workspace>`. Surgeon results retain only
 their canonical byte count. A post-Surgeon boundary copies those scalars and,
