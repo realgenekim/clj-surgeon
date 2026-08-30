@@ -235,3 +235,50 @@ addressable share held, and held again under independent reproduction.
 wearing a decimal point.** Do not relay one as measured, and do not let one into a captain's log
 without a second derivation — including, and especially, when it is the most interesting thing you
 have found that day.
+
+---
+
+## SEVENTH CORRECTION — and it was inside the correction section itself
+
+**An adversarial review of this seat's performance found a wrong single-source number sitting INSIDE
+the corrections section of this log — the same log that coined "a single-source number is a
+hypothesis wearing a decimal point."**
+
+**WITHDRAWN: "refusals already returned complete `available_owners` in 137/137 cases with zero
+truncation."** Independently measured by SURGEON1 (branch
+`experiment/first-call-read-success-screen`, receipt `0ddfd1dd`, preregistered at `322c794` before
+counting):
+
+> **Only 25 of 191 refusal candidate lists were complete. The premise of 137 complete lists is
+> false for this window.** Exact bounded rereads are **146**, not 119.
+
+**And the counter-evidence points opposite to the story it was used to tell:**
+
+| list given | re-read rate |
+|---|---|
+| complete | **12/25 = 48.0%** |
+| truncated | **134/166 = 80.7%** |
+
+**Completeness roughly halves the re-read rate.** This figure was cited all evening as proof that
+*"the model ignores complete information."* It mostly was not given complete information. The
+under-read argument built on it is weakened, not confirmed.
+
+**The same miscount propagated into `2026-08-29-captains-log-the-ledger-had-two-sides.md`** as "191
+selection refusals... 88.5% answered by a full recovery read." That sentence rests on the same
+broken denominator and is withdrawn with this one.
+
+**The withdrawal pass violated the rule it announced.** That is the finding, and it is worse than
+the arithmetic: a correction section is exactly where a reader's guard is lowest, and it is where
+this seat put an unverified number. **Corrections require the same second derivation as claims.**
+
+### The tally, honestly restated
+
+**Seven withdrawn figures. All seven relayed by this seat. All seven single-source.** And the review
+named the accounting dodge in the sentence above that reads *"the cost of being wrong six times was
+almost nothing"* — that price excludes six seats' re-derivation time, a surgeon dispatched against a
+bug that did not exist, and Gene's attention across a day of retractions.
+
+**"Zero false claims shipped" is true only under a definition of "shipped" that excludes Gene's head
+and these logs.** Under the Prime Directive the chronicle IS a product. The 17% corruption claim was
+published here as "the defect that outranks every optimization" and struck the same night. **It
+shipped. Briefly.**
