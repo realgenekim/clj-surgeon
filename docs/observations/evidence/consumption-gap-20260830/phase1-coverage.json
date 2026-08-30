@@ -1,0 +1,46 @@
+{
+  "schema": "consumption-gap-phase1-coverage.v1",
+  "preregistration_commit": "2ef7f7e",
+  "population": {
+    "complete_owner_list_refusals": 137,
+    "reread_episodes": 119
+  },
+  "classification_coverage": {
+    "classifiable": 0,
+    "coverage": 0.0,
+    "unclassifiable": 119
+  },
+  "missing_fields": {
+    "caller_model": "The MCP service records have no client, provider, or model identifier; the agent-usage receipt does not provide an event-level join from the 119 service refusals to a model.",
+    "recovery_result_semantics": "The privacy-safe receipts omit request values and tool-result content, so the 119 first recovery results cannot be assigned to the preregistered semantic categories.",
+    "verbatim_consumability": "The retained aggregate proves the owner vector was complete, but it omits the required selector, unique-answer relation, and refusal answer token needed by the registered test."
+  },
+  "retained_aggregate_evidence": {
+    "all_strata_same_file_recovery_episodes": 169,
+    "matched_same_file_subrequests": {
+      "forms": 290,
+      "match": 7,
+      "outline": 26
+    },
+    "forms_subrequests_all_had_selectors": true,
+    "interpretation_limit": "These subrequest counts combine current and legacy refusal strata and cannot be reassigned to the current 119 without event-level rows."
+  },
+  "input_artifacts": {
+    "first_read_success_receipt_sha256": "4f4042fe8baa823cbc6c485ac60af68b77d60728171093514d6fea712c143545",
+    "first_read_success_telemetry_sha256": "c21a09b6c55e00970b2f60909852949332949edaa26f870d46848bee98f0cece",
+    "owner_distribution_receipt_sha256": "d9711ffa318d356b4b44742e8981b455553c165728e3a028f12d26a407bf3300",
+    "wide_study_receipt_sha256": "5b3163e96c5c06a098b112e438dacc54851592cc6fa2f4971ec03282cd658a4d",
+    "production_selected_event_sha256": "bcb3e560e93c2bae5a1d0a4b31304dcb222f74e8d839be4931bcb673b4dd0b08",
+    "production_selection_refusal_sha256": "0ce7f8921249953e7ecd7c400996dac9aca1df4324bc4e4dfc546b5fc8972e56",
+    "production_source_manifest_sha256": "fdc5aedfd25df93730d662acd11f5868b88a5f6e0342d7425238ef7b37b30fb1"
+  },
+  "bounded_input_locator": {
+    "expected_telemetry_files": 6,
+    "error_bearing_jsonl_files_examined_under_private_tmp": 97,
+    "digest_matches": 0,
+    "receipt": "input-locator.json"
+  },
+  "phase1_verdict": "instrumentation-repair-required",
+  "phase2_required": false,
+  "phase2_status": "forbidden-by-preregistered-coverage-gate"
+}
