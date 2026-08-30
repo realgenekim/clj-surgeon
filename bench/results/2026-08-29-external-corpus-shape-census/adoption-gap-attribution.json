@@ -1,0 +1,319 @@
+{
+  "privacy": {
+    "commands_emitted": false,
+    "patches_emitted": false,
+    "paths_emitted": false,
+    "prompts_emitted": false,
+    "session_identifiers_emitted": false,
+    "source_emitted": false,
+    "tool_arguments_emitted": false
+  },
+  "repositories": {
+    "external-a": {
+      "addressable_task_shapes": {
+        "acid_test_shape_proxies": {
+          "per_mission_addressable_subset": {
+            "at_or_above_fifteen_hunk_proxy": 0,
+            "at_or_above_nine_file_fifty_one_hunk_proxy": 0,
+            "at_or_below_two_file_three_hunk_proxy": 0
+          },
+          "per_write_action": {
+            "at_or_above_fifteen_hunk_proxy": 0,
+            "at_or_above_nine_file_fifty_one_hunk_proxy": 0,
+            "at_or_below_two_file_three_hunk_proxy": 0
+          },
+          "reason": "retained native patch hunks do not prove semantic change count, decision completeness, named-form count, or reference count",
+          "status": "not-a-performance-classification",
+          "surgeon_measured_or_predicted_win_fraction": null,
+          "surgeon_win_fraction_status": "undeterminable"
+        },
+        "per_mission_addressable_subset": {
+          "action_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 0,
+              "4-14": 0,
+              "51+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          },
+          "changed_line_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 0,
+              "4-14": 0,
+              "51+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          },
+          "count": 0,
+          "file_count": {
+            "bins": {
+              "1": 0,
+              "2": 0,
+              "3-4": 0,
+              "5-8": 0,
+              "9+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          },
+          "hunk_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 0,
+              "4-14": 0,
+              "51+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          }
+        },
+        "per_write_action": {
+          "changed_line_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 0,
+              "4-14": 0,
+              "51+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          },
+          "count": 0,
+          "file_count": {
+            "bins": {
+              "1": 0,
+              "2": 0,
+              "3-4": 0,
+              "5-8": 0,
+              "9+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          },
+          "hunk_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 0,
+              "4-14": 0,
+              "51+": 0
+            },
+            "summary": {
+              "max": null,
+              "median": null,
+              "min": null,
+              "p90": null
+            }
+          }
+        }
+      },
+      "instruction_evidence_files": {
+        "active_evidence_files": 17,
+        "by_final_instruction_state": {
+          "guidance-present": 17
+        }
+      },
+      "repository_root_sha256": "11c8bfbec76cd2a8757a1799f1d85ec034b2aa60b4140e9001019e55803f38cf",
+      "routing_guidance_at_write_time": {
+        "addressable_established_src_test_writes": {
+          "by_guidance_state": {},
+          "count": 0
+        },
+        "all_successful_in_repo_native_writes": {
+          "by_guidance_state": {
+            "guidance-present": 63
+          },
+          "count": 63
+        }
+      },
+      "source_evidence_manifest_sha256": "b401b57a2fe3e6409750cc264d0f5ae80450127c26885aa2c98bdee0b2803c61"
+    },
+    "external-b": {
+      "addressable_task_shapes": {
+        "acid_test_shape_proxies": {
+          "per_mission_addressable_subset": {
+            "at_or_above_fifteen_hunk_proxy": 4,
+            "at_or_above_nine_file_fifty_one_hunk_proxy": 1,
+            "at_or_below_two_file_three_hunk_proxy": 3
+          },
+          "per_write_action": {
+            "at_or_above_fifteen_hunk_proxy": 0,
+            "at_or_above_nine_file_fifty_one_hunk_proxy": 0,
+            "at_or_below_two_file_three_hunk_proxy": 97
+          },
+          "reason": "retained native patch hunks do not prove semantic change count, decision completeness, named-form count, or reference count",
+          "status": "not-a-performance-classification",
+          "surgeon_measured_or_predicted_win_fraction": null,
+          "surgeon_win_fraction_status": "undeterminable"
+        },
+        "per_mission_addressable_subset": {
+          "action_count": {
+            "bins": {
+              "1-3": 3,
+              "15-50": 1,
+              "4-14": 4,
+              "51+": 1
+            },
+            "summary": {
+              "max": 63,
+              "median": 5,
+              "min": 1,
+              "p90": 63
+            }
+          },
+          "changed_line_count": {
+            "bins": {
+              "1-3": 0,
+              "15-50": 1,
+              "4-14": 1,
+              "51+": 7
+            },
+            "summary": {
+              "max": 1841,
+              "median": 197,
+              "min": 13,
+              "p90": 1841
+            }
+          },
+          "count": 9,
+          "file_count": {
+            "bins": {
+              "1": 1,
+              "2": 2,
+              "3-4": 4,
+              "5-8": 1,
+              "9+": 1
+            },
+            "summary": {
+              "max": 19,
+              "median": 4,
+              "min": 1,
+              "p90": 19
+            }
+          },
+          "hunk_count": {
+            "bins": {
+              "1-3": 3,
+              "15-50": 2,
+              "4-14": 2,
+              "51+": 2
+            },
+            "summary": {
+              "max": 150,
+              "median": 12,
+              "min": 1,
+              "p90": 150
+            }
+          }
+        },
+        "per_write_action": {
+          "changed_line_count": {
+            "bins": {
+              "1-3": 3,
+              "15-50": 47,
+              "4-14": 44,
+              "51+": 25
+            },
+            "summary": {
+              "max": 226,
+              "median": 21,
+              "min": 2,
+              "p90": 85
+            }
+          },
+          "count": 119,
+          "file_count": {
+            "bins": {
+              "1": 98,
+              "2": 16,
+              "3-4": 5,
+              "5-8": 0,
+              "9+": 0
+            },
+            "summary": {
+              "max": 3,
+              "median": 1,
+              "min": 1,
+              "p90": 2
+            }
+          },
+          "hunk_count": {
+            "bins": {
+              "1-3": 97,
+              "15-50": 0,
+              "4-14": 22,
+              "51+": 0
+            },
+            "summary": {
+              "max": 10,
+              "median": 2,
+              "min": 1,
+              "p90": 5
+            }
+          }
+        }
+      },
+      "instruction_evidence_files": {
+        "active_evidence_files": 12,
+        "by_final_instruction_state": {
+          "guidance-absent": 5,
+          "guidance-present": 5,
+          "undeterminable": 2
+        }
+      },
+      "repository_root_sha256": "8577c2c0088a5424feb4c00d812b0de677dc09c8de12ff4419b41f96be474006",
+      "routing_guidance_at_write_time": {
+        "addressable_established_src_test_writes": {
+          "by_guidance_state": {
+            "guidance-absent": 24,
+            "guidance-present": 63,
+            "undeterminable": 32
+          },
+          "count": 119
+        },
+        "all_successful_in_repo_native_writes": {
+          "by_guidance_state": {
+            "guidance-absent": 98,
+            "guidance-present": 112,
+            "undeterminable": 56
+          },
+          "count": 266
+        }
+      },
+      "source_evidence_manifest_sha256": "72af782956b01afd2699c78edede4733ff147c9f50509ce18cda52899da9701d"
+    }
+  },
+  "schema": "clj-surgeon.adoption-gap-attribution.v1",
+  "source_census_report_sha256": "bd7dd552e31b2e5fd068b6bfdcabec6b616376e6d58f1f9b9ea2b37be801e670",
+  "window": {
+    "since": "2026-08-22T00:00:00Z",
+    "until": "2026-08-30T02:09:33.141926Z"
+  }
+}
