@@ -50,9 +50,9 @@ reduction.
   sources stay unchanged; successful effects match.
 - `route_adherent`: actual MCP stdio JSON-RPC initialize, `tools/list`, and
   `tools/call` routes only.
-- No-cue equality excludes only named dynamic timing keys and private arm/root
-  path spellings. Raw payloads remain retained so the normalization is
-  auditable.
+- No-cue equality excludes only named dynamic timing keys, per-run
+  `receipt_hash` and `undo_receipt`, and private arm/root path spellings. Raw
+  payloads remain retained so the normalization is auditable.
 
 Any failed validity field makes the measurement invalid. Losses remain in the
 report.

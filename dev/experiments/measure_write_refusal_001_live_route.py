@@ -30,6 +30,7 @@ TIMING_KEYS = {
     "server_execution_ms",
     "wall_ms",
 }
+DYNAMIC_RECEIPT_KEYS = {"receipt_hash", "undo_receipt"}
 
 
 def json_bytes(value):
@@ -250,7 +251,7 @@ def normalize_dynamic(value, workspace, arm_dir):
         return {
             key: normalize_dynamic(item, workspace, arm_dir)
             for key, item in value.items()
-            if key not in TIMING_KEYS
+            if key not in TIMING_KEYS and key not in DYNAMIC_RECEIPT_KEYS
         }
     if isinstance(value, list):
         return [normalize_dynamic(item, workspace, arm_dir) for item in value]
