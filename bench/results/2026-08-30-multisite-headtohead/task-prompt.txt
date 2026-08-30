@@ -1,0 +1,13 @@
+Update the existing Clojure file `src/acme/retry_policy.clj` in the current repository.
+
+Make this one coherent change:
+
+- rename the private Var `retry-delay-ms` to `backoff-delay-ms`;
+- update its five references, one each in `initial-backoff`, `capped-backoff`, `retry-window`, `retry-schedule`, and `policy-summary`;
+- change the `policy-summary` docstring from `"Returns the legacy retry delay summary."` to `"Returns the adaptive backoff delay summary."`.
+
+The complete current file is reproduced below, so no discovery call is needed. Use the one offered mutation method. Preserve every unrelated byte. Do not create, delete, or rename files. The external harness will verify exact final bytes. Complete the edit and respond with one short sentence.
+
+```clojure
+{{SOURCE}}
+```

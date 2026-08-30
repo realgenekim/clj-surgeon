@@ -1,0 +1,64 @@
+{
+  "before_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+  "catalog_receipt": {
+    "differing_fields": [
+      "apply_patch_tool_type"
+    ],
+    "native_catalog_sha256": "ad475fe9e115c507f06c87b73d74a33b82edb0a9e907157575e854e75cfc7299",
+    "source_cache_sha256": "f144efc39ea37dd38e394cb86a5cc4422973ac11461c86c4d55339751e98945b",
+    "surgeon_catalog_sha256": "e1dc45d73fa3ecf00a0aacb8b5d421fa99b33e84c06588c543a11c8dcf5dd27b"
+  },
+  "child_openai_environment_variables": [],
+  "codex_version": "codex-cli 0.149.1",
+  "completed_at_ns": 1788100419960465000,
+  "expected_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+  "fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+  "fixture_lines": 137,
+  "frozen_input_hashes": {
+    "capture_tool_hook.py": "3638da51b868afb31e2e945b75a210e74eab9b772b2fd54a34237fa05ee3e602",
+    "effective-task-prompt.txt": "2ab6623d3153f71d87e3f181a7e645cdee7f9cd9bd1163ecba9bbfed7b617584",
+    "fixture/after/deps.edn": "3430bf7e08cae31e04ce305655919e650de1f73b4919273ba76f8eaa08b9ecf9",
+    "fixture/after/src/acme/retry_policy.clj": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+    "fixture/before/deps.edn": "3430bf7e08cae31e04ce305655919e650de1f73b4919273ba76f8eaa08b9ecf9",
+    "fixture/before/src/acme/retry_policy.clj": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+    "model-catalog-native.json": "ad475fe9e115c507f06c87b73d74a33b82edb0a9e907157575e854e75cfc7299",
+    "model-catalog-surgeon.json": "e1dc45d73fa3ecf00a0aacb8b5d421fa99b33e84c06588c543a11c8dcf5dd27b",
+    "oracle-edit-arguments.json": "e2b5651236fd15fed2595e3aee5171f1530feb8fc30b768a57450df0f648f32b",
+    "preregistration.md": "92668741161aaabda1cdff97b018a2e3f525b651888e2043930430610e730fa8",
+    "run_experiment.py": "c578374f13d2a09bc3bc940a9a7d53cc35c4be8028fcf0856298a4a2f088b128",
+    "system-prompt.txt": "72580a9fa83c17646d0ffc80f81a8ebb206be48fe810980cba094d19715af546",
+    "task-prompt.txt": "9dd5fb8367e9c4352823d3e585fd347c5de3c65ede3ef03e93af9d89eac9fea5"
+  },
+  "initialize_sha256": "62093e727103edd3cdcd15d0905dc76caee580b7d7111efa1c4891d066da143e",
+  "login_status": "Logged in using ChatGPT",
+  "new_symbol_count_after_preflight": 6,
+  "offered_server_tools": [
+    "apply_clojure_changes",
+    "edit_clojure",
+    "inspect_clojure",
+    "transform_clojure"
+  ],
+  "preflight_exact": true,
+  "preflight_verification_complete": true,
+  "schedule": [
+    "N",
+    "S",
+    "S",
+    "N",
+    "S",
+    "N",
+    "N",
+    "S",
+    "N",
+    "S",
+    "S",
+    "N"
+  ],
+  "schema": "multisite-headtohead-preflight.v1",
+  "server_base": "c55de2279826af5ed21c90981591479dd2e802b2",
+  "server_source_unchanged_from_base": true,
+  "status": "ok",
+  "tiktoken_encoding": "o200k_base",
+  "tiktoken_version": "0.9.0",
+  "tool_list_sha256": "efe95b2870d0bc427df1e6efbe01626bc15b28685050ad2e2692dffe3e9c526e"
+}
