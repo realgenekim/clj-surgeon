@@ -25,6 +25,13 @@ catalog with `codex debug models`.  It then invokes these names in order:
 1. `gpt-5.3-spark`
 2. `5.3-spark`
 3. `spark`
+4. `gpt-5.3-codex-spark`
+
+The fourth name is a preregistration amendment made after the refreshed
+subscription catalog exposed that exact canonical identifier.  The first three
+probes had already returned HTTP 400 before any model response or completed
+turn; therefore no evaluated model behavior was visible when the canonical
+name was added.  The failed aliases and this amendment remain in the receipts.
 
 Each probe uses a fresh Codex home containing only the existing ChatGPT auth
 receipt, `--ignore-user-config`, `--ignore-rules`, an empty workspace,

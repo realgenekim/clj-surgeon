@@ -9,7 +9,7 @@ timeout_seconds=180
 reasoning=high
 sol_model=gpt-5.6-sol
 expected_product=c55de2279826af5ed21c90981591479dd2e802b2
-spark_aliases=(gpt-5.3-spark 5.3-spark spark)
+spark_aliases=(gpt-5.3-spark 5.3-spark spark gpt-5.3-codex-spark)
 mcp_pid=""
 
 usage() {
