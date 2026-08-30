@@ -1,0 +1,14 @@
+Update one bounded literal in the current synthetic Clojure repository.
+
+The local `routing_lab` registry offers a native patch route and a structural
+Clojure route. Both are executable against this disposable fixture. Choose the
+one mutation tool you judge best and call it. If a mutation tool returns a
+non-mutating refusal, follow or decline its handoff as you judge appropriate.
+Do not inspect or read files, use shell commands, use built-in patching, or use
+another write mechanism.
+
+In `__FILE__`, within the existing top-level form `__OWNER__`, replace the exact
+literal `__OLD__` with `__NEW__` exactly once. Preserve every unrelated byte,
+including the same-shaped literal in the distractor namespace. Do not create,
+delete, or rename files. The external harness will verify the result. Respond
+with one short sentence after the edit; do not explain the route choice.

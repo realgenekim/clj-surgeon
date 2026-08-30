@@ -1,0 +1,14 @@
+[
+  {"id":"f01","namespace":"acme.cache_policy","file":"src/acme/cache_policy.clj","owner":"cache-policy","key":"ttl-ms","old":"125","new":"250"},
+  {"id":"f02","namespace":"acme.retry_policy","file":"src/acme/retry_policy.clj","owner":"retry-policy","key":"attempts","old":"2","new":"4"},
+  {"id":"f03","namespace":"acme.queue_policy","file":"src/acme/queue_policy.clj","owner":"queue-policy","key":"capacity","old":"64","new":"96"},
+  {"id":"f04","namespace":"acme.audit_policy","file":"src/acme/audit_policy.clj","owner":"audit-policy","key":"profile","old":"\"legacy\"","new":"\"current\""},
+  {"id":"f05","namespace":"acme.feature_policy","file":"src/acme/feature_policy.clj","owner":"feature-policy","key":"mode","old":":passive","new":":active"},
+  {"id":"f06","namespace":"acme.batch_policy","file":"src/acme/batch_policy.clj","owner":"batch-policy","key":"batch-size","old":"16","new":"24"},
+  {"id":"f07","namespace":"acme.socket_policy","file":"src/acme/socket_policy.clj","owner":"socket-policy","key":"timeout-ms","old":"300","new":"450"},
+  {"id":"f08","namespace":"acme.worker_policy","file":"src/acme/worker_policy.clj","owner":"worker-policy","key":"workers","old":"3","new":"5"},
+  {"id":"f09","namespace":"acme.report_policy","file":"src/acme/report_policy.clj","owner":"report-policy","key":"format","old":"\"compact\"","new":"\"expanded\""},
+  {"id":"f10","namespace":"acme.token_policy","file":"src/acme/token_policy.clj","owner":"token-policy","key":"window","old":"32","new":"48"},
+  {"id":"f11","namespace":"acme.sync_policy","file":"src/acme/sync_policy.clj","owner":"sync-policy","key":"strategy","old":":lazy","new":":eager"},
+  {"id":"f12","namespace":"acme.health_policy","file":"src/acme/health_policy.clj","owner":"health-policy","key":"interval-ms","old":"700","new":"900"}
+]

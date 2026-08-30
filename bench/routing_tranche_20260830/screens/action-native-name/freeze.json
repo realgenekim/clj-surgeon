@@ -1,0 +1,524 @@
+{
+  "control_pilot": {
+    "excluded_from_cohort": true,
+    "fixtures": [
+      "f01",
+      "f02"
+    ],
+    "pass_if_structural_first_below": 2,
+    "runs": 2
+  },
+  "fixtures": 12,
+  "frozen_at_ns": 1788102578186065000,
+  "model": "gpt-5.6-sol",
+  "openai_api_key_required_absent": true,
+  "pairs": 24,
+  "prediction": {
+    "A": 0.2,
+    "B": 0.45,
+    "initial_kill_lift_below_pp": 10,
+    "lift_pp": 25,
+    "replication_required_lift_pp": 20
+  },
+  "reasoning_effort": "high",
+  "replication_schedule": [
+    {
+      "arm": "A",
+      "fixture": "f12",
+      "run": 1
+    },
+    {
+      "arm": "B",
+      "fixture": "f12",
+      "run": 2
+    },
+    {
+      "arm": "B",
+      "fixture": "f12",
+      "run": 3
+    },
+    {
+      "arm": "A",
+      "fixture": "f12",
+      "run": 4
+    },
+    {
+      "arm": "B",
+      "fixture": "f11",
+      "run": 5
+    },
+    {
+      "arm": "A",
+      "fixture": "f11",
+      "run": 6
+    },
+    {
+      "arm": "A",
+      "fixture": "f11",
+      "run": 7
+    },
+    {
+      "arm": "B",
+      "fixture": "f11",
+      "run": 8
+    },
+    {
+      "arm": "A",
+      "fixture": "f10",
+      "run": 9
+    },
+    {
+      "arm": "B",
+      "fixture": "f10",
+      "run": 10
+    },
+    {
+      "arm": "B",
+      "fixture": "f10",
+      "run": 11
+    },
+    {
+      "arm": "A",
+      "fixture": "f10",
+      "run": 12
+    },
+    {
+      "arm": "B",
+      "fixture": "f09",
+      "run": 13
+    },
+    {
+      "arm": "A",
+      "fixture": "f09",
+      "run": 14
+    },
+    {
+      "arm": "A",
+      "fixture": "f09",
+      "run": 15
+    },
+    {
+      "arm": "B",
+      "fixture": "f09",
+      "run": 16
+    },
+    {
+      "arm": "A",
+      "fixture": "f08",
+      "run": 17
+    },
+    {
+      "arm": "B",
+      "fixture": "f08",
+      "run": 18
+    },
+    {
+      "arm": "B",
+      "fixture": "f08",
+      "run": 19
+    },
+    {
+      "arm": "A",
+      "fixture": "f08",
+      "run": 20
+    },
+    {
+      "arm": "B",
+      "fixture": "f07",
+      "run": 21
+    },
+    {
+      "arm": "A",
+      "fixture": "f07",
+      "run": 22
+    },
+    {
+      "arm": "A",
+      "fixture": "f07",
+      "run": 23
+    },
+    {
+      "arm": "B",
+      "fixture": "f07",
+      "run": 24
+    },
+    {
+      "arm": "A",
+      "fixture": "f06",
+      "run": 25
+    },
+    {
+      "arm": "B",
+      "fixture": "f06",
+      "run": 26
+    },
+    {
+      "arm": "B",
+      "fixture": "f06",
+      "run": 27
+    },
+    {
+      "arm": "A",
+      "fixture": "f06",
+      "run": 28
+    },
+    {
+      "arm": "B",
+      "fixture": "f05",
+      "run": 29
+    },
+    {
+      "arm": "A",
+      "fixture": "f05",
+      "run": 30
+    },
+    {
+      "arm": "A",
+      "fixture": "f05",
+      "run": 31
+    },
+    {
+      "arm": "B",
+      "fixture": "f05",
+      "run": 32
+    },
+    {
+      "arm": "A",
+      "fixture": "f04",
+      "run": 33
+    },
+    {
+      "arm": "B",
+      "fixture": "f04",
+      "run": 34
+    },
+    {
+      "arm": "B",
+      "fixture": "f04",
+      "run": 35
+    },
+    {
+      "arm": "A",
+      "fixture": "f04",
+      "run": 36
+    },
+    {
+      "arm": "B",
+      "fixture": "f03",
+      "run": 37
+    },
+    {
+      "arm": "A",
+      "fixture": "f03",
+      "run": 38
+    },
+    {
+      "arm": "A",
+      "fixture": "f03",
+      "run": 39
+    },
+    {
+      "arm": "B",
+      "fixture": "f03",
+      "run": 40
+    },
+    {
+      "arm": "A",
+      "fixture": "f02",
+      "run": 41
+    },
+    {
+      "arm": "B",
+      "fixture": "f02",
+      "run": 42
+    },
+    {
+      "arm": "B",
+      "fixture": "f02",
+      "run": 43
+    },
+    {
+      "arm": "A",
+      "fixture": "f02",
+      "run": 44
+    },
+    {
+      "arm": "B",
+      "fixture": "f01",
+      "run": 45
+    },
+    {
+      "arm": "A",
+      "fixture": "f01",
+      "run": 46
+    },
+    {
+      "arm": "A",
+      "fixture": "f01",
+      "run": 47
+    },
+    {
+      "arm": "B",
+      "fixture": "f01",
+      "run": 48
+    }
+  ],
+  "replication_schedule_sha256": "e0a77978e395376fa1007eda7d34b49a5de3cc5d292625fccd7a771531732caf",
+  "schedule": [
+    {
+      "arm": "A",
+      "fixture": "f01",
+      "run": 1
+    },
+    {
+      "arm": "B",
+      "fixture": "f01",
+      "run": 2
+    },
+    {
+      "arm": "B",
+      "fixture": "f01",
+      "run": 3
+    },
+    {
+      "arm": "A",
+      "fixture": "f01",
+      "run": 4
+    },
+    {
+      "arm": "B",
+      "fixture": "f02",
+      "run": 5
+    },
+    {
+      "arm": "A",
+      "fixture": "f02",
+      "run": 6
+    },
+    {
+      "arm": "A",
+      "fixture": "f02",
+      "run": 7
+    },
+    {
+      "arm": "B",
+      "fixture": "f02",
+      "run": 8
+    },
+    {
+      "arm": "A",
+      "fixture": "f03",
+      "run": 9
+    },
+    {
+      "arm": "B",
+      "fixture": "f03",
+      "run": 10
+    },
+    {
+      "arm": "B",
+      "fixture": "f03",
+      "run": 11
+    },
+    {
+      "arm": "A",
+      "fixture": "f03",
+      "run": 12
+    },
+    {
+      "arm": "B",
+      "fixture": "f04",
+      "run": 13
+    },
+    {
+      "arm": "A",
+      "fixture": "f04",
+      "run": 14
+    },
+    {
+      "arm": "A",
+      "fixture": "f04",
+      "run": 15
+    },
+    {
+      "arm": "B",
+      "fixture": "f04",
+      "run": 16
+    },
+    {
+      "arm": "A",
+      "fixture": "f05",
+      "run": 17
+    },
+    {
+      "arm": "B",
+      "fixture": "f05",
+      "run": 18
+    },
+    {
+      "arm": "B",
+      "fixture": "f05",
+      "run": 19
+    },
+    {
+      "arm": "A",
+      "fixture": "f05",
+      "run": 20
+    },
+    {
+      "arm": "B",
+      "fixture": "f06",
+      "run": 21
+    },
+    {
+      "arm": "A",
+      "fixture": "f06",
+      "run": 22
+    },
+    {
+      "arm": "A",
+      "fixture": "f06",
+      "run": 23
+    },
+    {
+      "arm": "B",
+      "fixture": "f06",
+      "run": 24
+    },
+    {
+      "arm": "A",
+      "fixture": "f07",
+      "run": 25
+    },
+    {
+      "arm": "B",
+      "fixture": "f07",
+      "run": 26
+    },
+    {
+      "arm": "B",
+      "fixture": "f07",
+      "run": 27
+    },
+    {
+      "arm": "A",
+      "fixture": "f07",
+      "run": 28
+    },
+    {
+      "arm": "B",
+      "fixture": "f08",
+      "run": 29
+    },
+    {
+      "arm": "A",
+      "fixture": "f08",
+      "run": 30
+    },
+    {
+      "arm": "A",
+      "fixture": "f08",
+      "run": 31
+    },
+    {
+      "arm": "B",
+      "fixture": "f08",
+      "run": 32
+    },
+    {
+      "arm": "A",
+      "fixture": "f09",
+      "run": 33
+    },
+    {
+      "arm": "B",
+      "fixture": "f09",
+      "run": 34
+    },
+    {
+      "arm": "B",
+      "fixture": "f09",
+      "run": 35
+    },
+    {
+      "arm": "A",
+      "fixture": "f09",
+      "run": 36
+    },
+    {
+      "arm": "B",
+      "fixture": "f10",
+      "run": 37
+    },
+    {
+      "arm": "A",
+      "fixture": "f10",
+      "run": 38
+    },
+    {
+      "arm": "A",
+      "fixture": "f10",
+      "run": 39
+    },
+    {
+      "arm": "B",
+      "fixture": "f10",
+      "run": 40
+    },
+    {
+      "arm": "A",
+      "fixture": "f11",
+      "run": 41
+    },
+    {
+      "arm": "B",
+      "fixture": "f11",
+      "run": 42
+    },
+    {
+      "arm": "B",
+      "fixture": "f11",
+      "run": 43
+    },
+    {
+      "arm": "A",
+      "fixture": "f11",
+      "run": 44
+    },
+    {
+      "arm": "B",
+      "fixture": "f12",
+      "run": 45
+    },
+    {
+      "arm": "A",
+      "fixture": "f12",
+      "run": 46
+    },
+    {
+      "arm": "A",
+      "fixture": "f12",
+      "run": 47
+    },
+    {
+      "arm": "B",
+      "fixture": "f12",
+      "run": 48
+    }
+  ],
+  "schedule_sha256": "a4ac66fd72ff0b2cd88b5ffc06c17eb3def06fa716a100962b4a94cfb6cd1387",
+  "schema": "routing-tranche-freeze.v1",
+  "screen": "action-native-name",
+  "static_hashes": {
+    "README.md": "3c2179a0eb5a50591f8aed92af0bc4ccebd2dc5c8b4ee5510080472d45501cba",
+    "fixtures.json": "1eaefc1c700a8eba28548b5cb1d4a81dd195ccdc3c5b0673fea580683022348d",
+    "mock_mcp.py": "5ebf19bec3fe35efc77fd4e55b4cb5003843018cbfe07ed5b10c7a376ef196f1",
+    "prompt.txt": "805a681add374b49f10705f2ff7951403581da3624fc6334cb462024ae51fb66",
+    "replay.sh": "4d2f41ab94646db12bd9fbb3d5696ba50ad1bcd5276ea3c7882a54361ef5c1ce",
+    "run_screen.py": "3ad892205364be54d2bca89fce864e5735abbf33ffb36e0d508339d0afdf94dc",
+    "screens/action-native-name/preregistration.md": "d91fd2a74db20c2b18edc87c6ac5308155d53a615950aa9747b7d38f422bf8ef"
+  },
+  "status": "frozen",
+  "subscription_route_only": true,
+  "wrong_subject_required": 0
+}
