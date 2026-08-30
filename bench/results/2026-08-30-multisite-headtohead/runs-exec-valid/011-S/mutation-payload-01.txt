@@ -1,0 +1,1 @@
+{"edits":[{"file":"src/acme/retry_policy.clj","within":{"root":true},"from":"retry-delay-ms","to":"backoff-delay-ms","matches":6},{"file":"src/acme/retry_policy.clj","within":{"root":true},"from":"\"Returns the legacy retry delay summary.\"","to":"\"Returns the adaptive backoff delay summary.\"","matches":1}]}

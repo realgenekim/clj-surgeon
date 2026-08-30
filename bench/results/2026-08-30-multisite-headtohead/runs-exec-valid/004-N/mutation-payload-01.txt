@@ -1,0 +1,26 @@
+*** Begin Patch
+*** Update File: src/acme/retry_policy.clj
+@@
+-(def ^:private retry-delay-ms 125)
++(def ^:private backoff-delay-ms 125)
+@@
+-  (+ retry-delay-ms
++  (+ backoff-delay-ms
+@@
+-         (* retry-delay-ms factor))))
++         (* backoff-delay-ms factor))))
+@@
+-    {:minimum-ms retry-delay-ms
++    {:minimum-ms backoff-delay-ms
+@@
+-           :delay-ms (+ retry-delay-ms
++           :delay-ms (+ backoff-delay-ms
+@@
+-(defn policy-summary
+-  "Returns the legacy retry delay summary."
++(defn policy-summary
++  "Returns the adaptive backoff delay summary."
+@@
+-       ",base-ms=" retry-delay-ms
++       ",base-ms=" backoff-delay-ms
+*** End Patch

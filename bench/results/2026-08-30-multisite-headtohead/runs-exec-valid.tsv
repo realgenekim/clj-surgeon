@@ -1,0 +1,13 @@
+episode	arm	environment_valid	semantic_correct	route_adherent	payload_bytes	payload_tokens	wall_seconds	turns_to_success	retries	provider_output_tokens
+1	N	True	True	True	607	171	9.254324	1	0	258
+2	S	True	True	True	1133	318	21.263092	1	0	740
+3	S	True	True	True	465	132	17.172115	1	0	532
+4	N	True	True	True	651	183	9.159303	1	0	269
+5	S	True	True	True	1133	318	21.540913	1	0	715
+6	N	True	True	True	607	171	10.380677	1	0	263
+7	N	True	True	True	607	171	8.530506	1	0	257
+8	S	True	True	True	2258	632	29.323731	2	1	1157
+9	N	True	True	True	607	171	8.290067	1	0	256
+10	S	True	True	True	1133	318	23.269862	1	0	832
+11	S	True	True	True	311	84	14.596589	1	0	461
+12	N	True	True	True	607	171	8.949124	1	0	256

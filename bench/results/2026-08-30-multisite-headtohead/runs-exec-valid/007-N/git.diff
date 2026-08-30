@@ -1,0 +1,61 @@
+diff --git a/src/acme/retry_policy.clj b/src/acme/retry_policy.clj
+index 6119ae5..2ca09b6 100644
+--- a/src/acme/retry_policy.clj
++++ b/src/acme/retry_policy.clj
+@@ -1,6 +1,6 @@
+ (ns acme.retry-policy)
+ 
+-(def ^:private retry-delay-ms 125)
++(def ^:private backoff-delay-ms 125)
+ 
+ (def ^:private retry-limit 6)
+ 
+@@ -14,7 +14,7 @@
+ ;; Its surrounding arithmetic is intentionally unrelated to the rename.
+ (defn initial-backoff
+   [attempt]
+-  (+ retry-delay-ms
++  (+ backoff-delay-ms
+      (* 25 (normalize-attempt attempt))))
+ 
+ (defn bounded-limit
+@@ -35,7 +35,7 @@
+   [attempt]
+   (let [factor (bit-shift-left 1 (normalize-attempt attempt))]
+     (min max-delay-ms
+-         (* retry-delay-ms factor))))
++         (* backoff-delay-ms factor))))
+ 
+ (defn retry-budget
+   [configured]
+@@ -55,7 +55,7 @@
+ (defn retry-window
+   [attempt]
+   (let [base (capped-backoff attempt)]
+-    {:minimum-ms retry-delay-ms
++    {:minimum-ms backoff-delay-ms
+      :selected-ms base
+      :maximum-ms (with-jitter base attempt)}))
+ 
+@@ -80,7 +80,7 @@
+   [configured]
+   (mapv (fn [attempt]
+           {:attempt attempt
+-           :delay-ms (+ retry-delay-ms
++           :delay-ms (+ backoff-delay-ms
+                         (capped-backoff attempt))})
+         (range (bounded-limit configured))))
+ 
+@@ -106,10 +106,10 @@
+ ;; The fifth caller also owns the only requested prose replacement.
+ ;; No other string or comment is part of the task.
+ (defn policy-summary
+-  "Returns the legacy retry delay summary."
++  "Returns the adaptive backoff delay summary."
+   [configured]
+   (str "attempts=" (bounded-limit configured)
+-       ",base-ms=" retry-delay-ms
++       ",base-ms=" backoff-delay-ms
+        ",cap-ms=" max-delay-ms))
+ 
+ (defn policy-snapshot

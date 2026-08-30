@@ -1,0 +1,630 @@
+{
+  "arms": {
+    "N": {
+      "confirmatory_eligible": 6,
+      "environment_valid": 6,
+      "median_payload_bytes": 607.0,
+      "median_payload_tokens": 171.0,
+      "median_turns_to_success": 1.0,
+      "median_wall_seconds": 9.054213624913245,
+      "one_call_successes": 6,
+      "route_adherent": 6,
+      "scheduled": 6,
+      "semantic_correct": 6,
+      "total_retries": 0
+    },
+    "S": {
+      "confirmatory_eligible": 6,
+      "environment_valid": 6,
+      "median_payload_bytes": 1133.0,
+      "median_payload_tokens": 318.0,
+      "median_turns_to_success": 1.0,
+      "median_wall_seconds": 21.40200266696047,
+      "one_call_successes": 5,
+      "route_adherent": 6,
+      "scheduled": 6,
+      "semantic_correct": 6,
+      "total_retries": 1
+    }
+  },
+  "deltas": {
+    "payload_tokens": {
+      "S_minus_N": 147.0,
+      "percent_of_N": 85.96491228070175
+    },
+    "wall_seconds": {
+      "S_minus_N": 12.347789042047225,
+      "percent_of_N": 136.3761620122536
+    }
+  },
+  "episodes": [
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 1,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 607,
+      "payload_calls": [
+        {
+          "bytes": 607,
+          "call": 1,
+          "sha256": "dd251fb539105cc063c63f9fbc64d42b25701974fcb1ad906f6ffd70936a31e7",
+          "tokens": 171
+        }
+      ],
+      "payload_tokens": 171,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 5888,
+        "input_tokens": 12684,
+        "output_tokens": 258
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 9.254324041772634
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 2,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 1133,
+      "payload_calls": [
+        {
+          "bytes": 1133,
+          "call": 1,
+          "sha256": "25355a4b51123203de276dd1a3b0f69f35c8dc06035133b3fb4e1305fbf09f09",
+          "tokens": 318
+        }
+      ],
+      "payload_tokens": 318,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 20736,
+        "input_tokens": 34234,
+        "output_tokens": 740
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 21.26309245894663
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 3,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 465,
+      "payload_calls": [
+        {
+          "bytes": 465,
+          "call": 1,
+          "sha256": "9e815a315a117fc3c252133d677e34104f43487e71db1f869b9b7744c3fd25cc",
+          "tokens": 132
+        }
+      ],
+      "payload_tokens": 132,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 13824,
+        "input_tokens": 24307,
+        "output_tokens": 532
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 17.172114874934778
+    },
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 4,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 651,
+      "payload_calls": [
+        {
+          "bytes": 651,
+          "call": 1,
+          "sha256": "f40d2d697ff9e8d331028d45e397c24a5474598940a53e3bfe78d8ea5557aa27",
+          "tokens": 183
+        }
+      ],
+      "payload_tokens": 183,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 0,
+        "input_tokens": 12685,
+        "output_tokens": 269
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 9.159302915912122
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 5,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 1133,
+      "payload_calls": [
+        {
+          "bytes": 1133,
+          "call": 1,
+          "sha256": "296de4700e3a3d52d5330886118a28543518439f4e5498a9df19b130a2b8d4f9",
+          "tokens": 318
+        }
+      ],
+      "payload_tokens": 318,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 13824,
+        "input_tokens": 25387,
+        "output_tokens": 715
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 21.54091287497431
+    },
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 6,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 607,
+      "payload_calls": [
+        {
+          "bytes": 607,
+          "call": 1,
+          "sha256": "dd251fb539105cc063c63f9fbc64d42b25701974fcb1ad906f6ffd70936a31e7",
+          "tokens": 171
+        }
+      ],
+      "payload_tokens": 171,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 5888,
+        "input_tokens": 12689,
+        "output_tokens": 263
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 10.380677417153493
+    },
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 7,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 607,
+      "payload_calls": [
+        {
+          "bytes": 607,
+          "call": 1,
+          "sha256": "dd251fb539105cc063c63f9fbc64d42b25701974fcb1ad906f6ffd70936a31e7",
+          "tokens": 171
+        }
+      ],
+      "payload_tokens": 171,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 5888,
+        "input_tokens": 12693,
+        "output_tokens": 257
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 8.530505624832585
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 8,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 2,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure",
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 2258,
+      "payload_calls": [
+        {
+          "bytes": 1125,
+          "call": 1,
+          "sha256": "fa274a97e2ef41e3f979876390dfb3209bfee43bd1c9f40f0b629c57787e60da",
+          "tokens": 314
+        },
+        {
+          "bytes": 1133,
+          "call": 2,
+          "sha256": "110b09ebaa0b225d2bb6bae4503e7119243b154daf00e6ec6332dcc5e0b1d20b",
+          "tokens": 318
+        }
+      ],
+      "payload_tokens": 632,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 20736,
+        "input_tokens": 32883,
+        "output_tokens": 1157
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 1,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 2,
+      "wall_seconds": 29.323730999836698
+    },
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 9,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 607,
+      "payload_calls": [
+        {
+          "bytes": 607,
+          "call": 1,
+          "sha256": "dd251fb539105cc063c63f9fbc64d42b25701974fcb1ad906f6ffd70936a31e7",
+          "tokens": 171
+        }
+      ],
+      "payload_tokens": 171,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 0,
+        "input_tokens": 12672,
+        "output_tokens": 256
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 8.29006658308208
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 10,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 1133,
+      "payload_calls": [
+        {
+          "bytes": 1133,
+          "call": 1,
+          "sha256": "2a6ecbb71f664254fff32491efd9c23784399660053132be7059bd3fb586dd2e",
+          "tokens": 318
+        }
+      ],
+      "payload_tokens": 318,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 17664,
+        "input_tokens": 24860,
+        "output_tokens": 832
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 23.269862374989316
+    },
+    {
+      "arm": "S",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 11,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "mcp__clj_surgeon__edit_clojure"
+      ],
+      "payload_bytes": 311,
+      "payload_calls": [
+        {
+          "bytes": 311,
+          "call": 1,
+          "sha256": "64d02caa39369fb009004bf9ad3ec52da7cf875df15823b4175fa0a96f9edc8d",
+          "tokens": 84
+        }
+      ],
+      "payload_tokens": 84,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 13824,
+        "input_tokens": 24216,
+        "output_tokens": 461
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 14.596589124994352
+    },
+    {
+      "arm": "N",
+      "catalog_valid": true,
+      "changed_paths": [
+        "src/acme/retry_policy.clj"
+      ],
+      "environment_valid": true,
+      "episode": 12,
+      "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+      "hook_models": [
+        "gpt-5.6-sol"
+      ],
+      "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+      "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+      "mutation_calls": 1,
+      "mutation_tools": [
+        "apply_patch"
+      ],
+      "payload_bytes": 607,
+      "payload_calls": [
+        {
+          "bytes": 607,
+          "call": 1,
+          "sha256": "dd251fb539105cc063c63f9fbc64d42b25701974fcb1ad906f6ffd70936a31e7",
+          "tokens": 171
+        }
+      ],
+      "payload_tokens": 171,
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "provider_usage": {
+        "cached_input_tokens": 5888,
+        "input_tokens": 12672,
+        "output_tokens": 256
+      },
+      "reasoning_effort": "high",
+      "requested_model": "gpt-5.6-sol",
+      "retries": 0,
+      "route_adherent": true,
+      "schema": "multisite-headtohead-episode.v1",
+      "semantic_correct": true,
+      "server_source_unchanged_from_base": true,
+      "turns_to_success": 1,
+      "wall_seconds": 8.94912433391437
+    }
+  ],
+  "kill_criterion_triggered": false,
+  "payload_gate_cleared": false,
+  "power_bound": {
+    "method": "two-sided pooled two-sample t approximation, alpha=0.05, equal variance normal shift",
+    "minimum_detectable_standardized_effect": 1.795540920603629,
+    "n_per_arm": 6,
+    "power": 0.8
+  },
+  "schedule": [
+    "N",
+    "S",
+    "S",
+    "N",
+    "S",
+    "N",
+    "N",
+    "S",
+    "N",
+    "S",
+    "S",
+    "N"
+  ],
+  "schema": "multisite-headtohead-aggregate.v1",
+  "secondary": {
+    "exact_label_permutation_p_payload_tokens": 0.06060606060606061,
+    "exact_label_permutation_p_wall_seconds": 0.012987012987012988
+  },
+  "verdict": "unsupported-on-this-fixture",
+  "wall_gate_cleared": false
+}

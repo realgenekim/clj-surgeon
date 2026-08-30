@@ -1,0 +1,46 @@
+{
+  "arm": "S",
+  "catalog_valid": true,
+  "changed_paths": [
+    "src/acme/retry_policy.clj"
+  ],
+  "environment_valid": true,
+  "episode": 10,
+  "expected_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+  "final_source_sha256": "08ae69de42b1f17dfe854a2e8c63503cb90290c94b2438d95981d7cecde89348",
+  "hook_models": [
+    "gpt-5.6-sol"
+  ],
+  "initial_fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+  "initial_source_sha256": "115934ddf76dcc97d0e871da17ef17f430099fc18b2bfe8ef65a177dc5940dfa",
+  "mutation_calls": 1,
+  "mutation_tools": [
+    "mcp__clj_surgeon__edit_clojure"
+  ],
+  "payload_bytes": 1133,
+  "payload_calls": [
+    {
+      "bytes": 1133,
+      "call": 1,
+      "sha256": "2a6ecbb71f664254fff32491efd9c23784399660053132be7059bd3fb586dd2e",
+      "tokens": 318
+    }
+  ],
+  "payload_tokens": 318,
+  "process_exit_code": 0,
+  "process_timed_out": false,
+  "provider_usage": {
+    "cached_input_tokens": 17664,
+    "input_tokens": 24860,
+    "output_tokens": 832
+  },
+  "reasoning_effort": "high",
+  "requested_model": "gpt-5.6-sol",
+  "retries": 0,
+  "route_adherent": true,
+  "schema": "multisite-headtohead-episode.v1",
+  "semantic_correct": true,
+  "server_source_unchanged_from_base": true,
+  "turns_to_success": 1,
+  "wall_seconds": 23.269862374989316
+}
