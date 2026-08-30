@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js",
+    "mcp",
+    "list"
+  ],
+  "ended_ns": 1788100822120903000,
+  "exit_code": 0,
+  "started_ns": 1788100822064904000,
+  "stderr": "",
+  "stdout": "No MCP servers configured yet. Try `codex mcp add my-tool -- my-command`.\n",
+  "timed_out": false
+}

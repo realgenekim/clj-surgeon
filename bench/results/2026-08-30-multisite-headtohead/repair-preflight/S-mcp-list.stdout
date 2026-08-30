@@ -1,0 +1,2 @@
+Name         Url                         Bearer Token Env Var  Status   Auth       
+clj-surgeon  http://127.0.0.1:54518/mcp  -                     enabled  Unsupported

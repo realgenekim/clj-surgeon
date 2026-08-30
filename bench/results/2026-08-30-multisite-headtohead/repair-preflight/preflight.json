@@ -1,0 +1,36 @@
+{
+  "addendum_sha256": "7065e93ba36dba9e913d87807e0aa52dc11da7aca2c9543cc941d8f0514b6049",
+  "base_runner_sha256": "c578374f13d2a09bc3bc940a9a7d53cc35c4be8028fcf0856298a4a2f088b128",
+  "child_openai_environment_variables": [],
+  "completed_at_ns": 1788100828275469000,
+  "fixture_commit": "62e631a8ff8f40ef7b35fb677a19efdd57695baf",
+  "killed_cohort_commit": "2236337c7922f219c53a3ed259086d360e7f7ce9",
+  "native": {
+    "config_sha256": "e1e38fd0c8c1d7ab8549afeba392ba35b5942946b4458603eb81a8ab89ad3bf2",
+    "debug_models_sha256": "b38374223d6db5fd9592308f36b5801801ded9bb4f20504bf808488d133843e9",
+    "mcp_list_sha256": "2a262cfcb9a3ff1a657e48f4b9aee2dd2039c0c3e936eee37825fc9364f99cf8",
+    "mcp_server_present": false,
+    "resolved_apply_patch_tool_type": "freeform"
+  },
+  "removed_config_line": "update_plan_enabled = false",
+  "runner_sha256": "319c39beddda89f340d759d538af6dbc4ec71e7e259ab83637337e838e25ab88",
+  "schema": "multisite-repair-preflight.v1",
+  "status": "ok",
+  "surgeon": {
+    "config_sha256": "38bd93455c6429a7e25520a1489424463bcd912af1c2bb56fe75caa33c8065a0",
+    "debug_models_sha256": "fa51d903bdc6f9b1edb1b65c5ee78a067020cf9d2031c53ad1ff0e447fb8dade",
+    "mcp_list_sha256": "b3be49600e3487bfaa171b1cdb46cbb20c2a1e77fbd1904ca8ac7d39ab7ffaa7",
+    "mcp_server_present": true,
+    "resolved_apply_patch_tool_type": null
+  },
+  "surgeon_only_config_lines": [
+    "model_catalog_json = \"/private/tmp/clj-surgeon-multisite.qwGr8P/bench/results/2026-08-30-multisite-headtohead/model-catalog-surgeon.json\"",
+    "[mcp_servers.clj-surgeon]",
+    "url = \"http://127.0.0.1:54518/mcp\"",
+    "required = true",
+    "enabled_tools = [\"edit_clojure\"]",
+    "default_tools_approval_mode = \"approve\"",
+    "startup_timeout_sec = 10",
+    "tool_timeout_sec = 45"
+  ]
+}
