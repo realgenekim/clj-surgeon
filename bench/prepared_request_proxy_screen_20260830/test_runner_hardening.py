@@ -363,5 +363,261 @@ class ReapingAndEvidenceTest(unittest.TestCase):
             self.assertNotIn("independent-route-disagreement", score["integrity_errors"])
 
 
+class VerificationIsolationTest(unittest.TestCase):
+    def test_verifier_cache_is_confined_to_a_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            run_dir = root / "run"
+            workspace.mkdir()
+            run_dir.mkdir()
+            (workspace / "deps.edn").write_text("{}\n", encoding="utf-8")
+
+            def fake_capture(argv, cwd, timeout=120, env=None):
+                cache = cwd / ".cpcache"
+                cache.mkdir()
+                (cache / "generated.cp").write_text("cache\n", encoding="utf-8")
+                return {"argv": argv, "exit_code": 0, "stdout": "", "stderr": ""}
+
+            with mock.patch.object(runner, "run_capture", side_effect=fake_capture), mock.patch.object(
+                runner, "workspace_evidence_tree_sha256", return_value="frozen-tree"
+            ):
+                result = runner.run_isolated_verification(
+                    "safety", workspace, run_dir
+                )
+
+            self.assertFalse((workspace / ".cpcache").exists())
+            self.assertTrue(
+                (run_dir / "verification-workspace" / ".cpcache" / "generated.cp").exists()
+            )
+            self.assertEqual(result["input_tree_sha256"], "frozen-tree")
+
+    def test_symlink_cannot_reconnect_verifier_to_measured_workspace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            run_dir = root / "run"
+            workspace.mkdir()
+            run_dir.mkdir()
+            model_cache = workspace / "model-cache"
+            model_cache.mkdir()
+            (workspace / ".cpcache").symlink_to(model_cache, target_is_directory=True)
+            with self.assertRaisesRegex(RuntimeError, "refuses symlinked measured workspace"):
+                runner.run_isolated_verification("safety", workspace, run_dir)
+            self.assertEqual(list(model_cache.iterdir()), [])
+
+
+class EarlyStopArchiveTest(unittest.TestCase):
+    def complete_ledger(self, completed_scores):
+        completed_keys = {
+            (row["phase"], row["run"], row["arm"]) for row in completed_scores
+        }
+        expected = [
+            ("safety", number, arm)
+            for number, arm in enumerate(runner.SAFETY_SCHEDULE, start=1)
+        ] + [
+            ("efficacy", number, arm)
+            for number, arm in enumerate(runner.EFFICACY_SCHEDULE, start=1)
+        ]
+        ledger = []
+        for row in completed_scores:
+            identity = {
+                "phase": row["phase"],
+                "run": row["run"],
+                "arm": row["arm"],
+            }
+            ledger.append({"event": "process_start", **identity})
+            ledger.append({"event": "process_complete", **identity})
+        last = completed_scores[-1]
+        if last["phase"] == "safety" and last.get("safety_mutation"):
+            reason = "safety-mutation-or-tree-change"
+        elif last["phase"] == "safety" and not last.get("environment_valid"):
+            reason = "safety-environment-invalid"
+        elif last["phase"] == "safety":
+            reason = "safety-read-incomplete"
+        else:
+            reason = "efficacy-environment-invalid"
+        ledger.extend(
+            {
+                "event": "not_launched",
+                "phase": phase,
+                "run": number,
+                "arm": arm,
+                "reason": reason,
+            }
+            for phase, number, arm in expected
+            if (phase, number, arm) not in completed_keys
+        )
+        return ledger
+
+    def test_complete_early_stop_ledger_compiles_invalid_not_evaluated(self):
+        completed = [
+            {
+                **score(
+                    "safety",
+                    "C",
+                    environment_valid=False,
+                    semantic_correct=False,
+                    safety_read_complete=False,
+                ),
+                "run": 1,
+            }
+        ]
+        aggregate = runner.compile_stopped_aggregate(
+            completed,
+            self.complete_ledger(completed),
+            {
+                "schema": "prepared-request-proxy-screen-safety-stop.v1",
+                "status": "stopped-before-efficacy",
+                "failed_safety_run": 1,
+                "arm": "C",
+                "reason": "safety-environment-invalid",
+            },
+        )
+        self.assertEqual(aggregate["verdict"], "invalid")
+        self.assertEqual(aggregate["primary"]["status"], "not-evaluated")
+        self.assertEqual(len(aggregate["not_launched"]), 11)
+        self.assertEqual(aggregate["safety"]["attempts"], 1)
+
+    def test_missing_or_duplicate_early_stop_slot_refuses(self):
+        completed = [{**score("safety", "C"), "run": 1}]
+        ledger = self.complete_ledger(completed)
+        ledger.pop()
+        with self.assertRaisesRegex(RuntimeError, "incomplete or contradictory"):
+            runner.compile_stopped_aggregate(
+                completed,
+                ledger,
+                {
+                    "schema": "prepared-request-proxy-screen-safety-stop.v1",
+                    "status": "stopped-before-efficacy",
+                    "failed_safety_run": 1,
+                    "arm": "C",
+                    "reason": "safety-read-incomplete",
+                },
+            )
+
+        ledger = self.complete_ledger(completed)
+        duplicate = next(row for row in ledger if row.get("event") == "not_launched")
+        ledger.append(copy.deepcopy(duplicate))
+        with self.assertRaisesRegex(RuntimeError, "incomplete or contradictory"):
+            runner.compile_stopped_aggregate(
+                completed,
+                ledger,
+                {
+                    "schema": "prepared-request-proxy-screen-safety-stop.v1",
+                    "status": "stopped-before-efficacy",
+                    "failed_safety_run": 1,
+                    "arm": "C",
+                    "reason": "safety-read-incomplete",
+                },
+            )
+
+    def test_lifecycle_order_identity_invalid_rows_and_stop_mismatch_refuse(self):
+        completed = [
+            {
+                **score(
+                    "safety",
+                    "C",
+                    environment_valid=False,
+                    semantic_correct=False,
+                    safety_read_complete=False,
+                ),
+                "run": 1,
+            }
+        ]
+        valid_stop = {
+            "schema": "prepared-request-proxy-screen-safety-stop.v1",
+            "status": "stopped-before-efficacy",
+            "failed_safety_run": 1,
+            "arm": "C",
+            "reason": "safety-environment-invalid",
+        }
+
+        mismatched = self.complete_ledger(completed)
+        mismatched[1]["run"] = 8
+        reversed_lifecycle = self.complete_ledger(completed)
+        reversed_lifecycle[0], reversed_lifecycle[1] = (
+            reversed_lifecycle[1],
+            reversed_lifecycle[0],
+        )
+        invalid_row = self.complete_ledger(completed)
+        invalid_row.insert(2, {"event": "_invalid_json_line"})
+        for ledger in (mismatched, reversed_lifecycle, invalid_row):
+            with self.subTest(ledger=ledger[:3]), self.assertRaisesRegex(
+                RuntimeError, "incomplete or contradictory"
+            ):
+                runner.compile_stopped_aggregate(completed, ledger, valid_stop)
+
+        wrong_stop = {**valid_stop, "failed_safety_run": 4, "arm": "T"}
+        with self.assertRaisesRegex(RuntimeError, "receipt contradicts"):
+            runner.compile_stopped_aggregate(
+                completed, self.complete_ledger(completed), wrong_stop
+            )
+
+        efficacy_first = [
+            {
+                **score(
+                    "efficacy",
+                    "C",
+                    environment_valid=False,
+                    semantic_correct=False,
+                ),
+                "run": 1,
+            }
+        ]
+        with self.assertRaisesRegex(RuntimeError, "incomplete or contradictory"):
+            runner.compile_stopped_aggregate(
+                efficacy_first,
+                self.complete_ledger(efficacy_first),
+                {
+                    "schema": "prepared-request-proxy-screen-integrity-stop.v1",
+                    "status": "invalid",
+                    "failed_efficacy_run": 1,
+                    "arm": "C",
+                    "reason": "efficacy-environment-invalid",
+                },
+            )
+
+    def test_boolean_run_identity_and_fabricated_green_stop_refuse(self):
+        invalid = [
+            {
+                **score(
+                    "safety",
+                    "C",
+                    environment_valid=False,
+                    semantic_correct=False,
+                    safety_read_complete=False,
+                ),
+                "run": True,
+            }
+        ]
+        with self.assertRaisesRegex(RuntimeError, "invalid typed identity"):
+            runner.compile_stopped_aggregate(
+                invalid,
+                self.complete_ledger(invalid),
+                {
+                    "schema": "prepared-request-proxy-screen-safety-stop.v1",
+                    "status": "stopped-before-efficacy",
+                    "failed_safety_run": True,
+                    "arm": "C",
+                    "reason": "safety-environment-invalid",
+                },
+            )
+
+        green = [{**score("safety", "C"), "run": 1}]
+        with self.assertRaisesRegex(RuntimeError, "receipt contradicts"):
+            runner.compile_stopped_aggregate(
+                green,
+                self.complete_ledger(green),
+                {
+                    "schema": "prepared-request-proxy-screen-safety-stop.v1",
+                    "status": "stopped-before-efficacy",
+                    "failed_safety_run": 1,
+                    "arm": "C",
+                    "reason": "safety-read-incomplete",
+                },
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
