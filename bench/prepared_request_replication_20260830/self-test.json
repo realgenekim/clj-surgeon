@@ -1,6 +1,6 @@
 {
-  "assertions": 12,
-  "completed_at_ns": 1788100317956562000,
+  "assertions": 14,
+  "completed_at_ns": 1788100455391724000,
   "schema": "prepared-request-replication-self-test.v1",
   "status": "ok"
 }

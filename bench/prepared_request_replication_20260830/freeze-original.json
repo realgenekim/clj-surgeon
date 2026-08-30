@@ -1,6 +1,6 @@
 {
   "attempts_per_arm": 10,
-  "frozen_at_ns": 1788100455572890000,
+  "frozen_at_ns": 1788100318076173000,
   "model": "gpt-5.6-sol",
   "non_replication_kill_below_risk_difference": 0.2,
   "primary_prediction": {
@@ -43,15 +43,13 @@
     "fixture/initial/src/acme/checkout_client.clj": "153b4d2c616b4dceb74e0c8f727d19d64e90b8a0e593ba1757bb6ebbaf708f81",
     "fixture/initial/src/acme/checkout_policy.clj": "a29b72a323302c1453c496bb52df82662abff095ec60a9b106672adaffa7fb14",
     "fixture/initial/test/acme/fixture_test.clj": "f6fe8867750eaedbab4cb5ff65b2ce42ea645c19aa8736ad2551e7b66d2a59ed",
-    "freeze-original.json": "bbf081230bfaea55bf86fd79bff419a4368f1431cbfd5442edd06566c2f163a5",
     "inspect-template.json": "0385575ae60ffeefc0228b538a6d8e904a92754689495b1a39e7ce2b927f6e14",
     "mcp_proxy.py": "9e8bba37cc6301f9fa798977575d6b63c64909517bdf85ff9babc020448e8971",
-    "preflight-repair-addendum.md": "c6e5cbfe19b07e1bf04b996f24dcadbde9d3ed3b186858ae37346ccdc804cdff",
     "preregistration.md": "3a25f223663063479949f72eaf1e4b3ee4a2b50ed5509986e59fe6c0ed365047",
     "prompt.txt": "13e208bc31513ea01eb92dcbabdca1e47a4adb3168483a42822d5daecd2dfb62",
     "quota-preflight.json": "1ad1129807db971b4bf1acd334a0e2f4d8d6467620db3717f599dfdf032a5338",
     "replay.sh": "647503f478a3ac35b25b2f5ffcc48b1066859dd7160b28b283382189707e0324",
-    "run_experiment.py": "a688be5191f35216029c7cb562de071039c6364199f8296a5d1c6dd7e462b4f3"
+    "run_experiment.py": "8ea68d5290b28ca78d0710b5fa3e24b13987aa4067bc8751e3b106df44f3ff56"
   },
   "status": "frozen",
   "wrong_subject_required": 0

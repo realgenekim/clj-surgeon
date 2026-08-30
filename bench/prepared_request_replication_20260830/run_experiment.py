@@ -52,6 +52,8 @@ STATIC_NAMES = {
     "replay.sh",
     "README.md",
     "quota-preflight.json",
+    "freeze-original.json",
+    "preflight-repair-addendum.md",
 }
 
 
@@ -153,6 +155,13 @@ def reset_workspace(path: Path) -> str:
     if path.exists():
         shutil.rmtree(path)
     shutil.copytree(INITIAL, path)
+    # The production MCP service runs as the dedicated `surgeon` account while
+    # Codex/native patch runs as dev-a. These are disposable synthetic clones;
+    # make only their fixture tree mutually writable so both routes are real.
+    for directory in [path, *sorted(candidate for candidate in path.rglob("*") if candidate.is_dir())]:
+        directory.chmod(0o777)
+    for file_path in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
+        file_path.chmod(0o666)
     init = run_capture(["git", "init", "-q"], path)
     add = run_capture(["git", "add", "."], path)
     commit = run_capture(
@@ -805,10 +814,12 @@ def self_test(write_receipt: bool = True) -> None:
         assert unrelated_bytes_ok(workspace)
         assert "__INSPECT_REQUEST__" not in render_prompt(workspace)
         assert inspect_arguments(workspace)["workspace_root"] == str(workspace.resolve())
+        assert (workspace.stat().st_mode & 0o777) == 0o777
+        assert ((workspace / "src/acme/checkout_policy.clj").stat().st_mode & 0o666) == 0o666
     finally:
         if workspace.exists():
             shutil.rmtree(workspace)
-    receipt = {"schema": "prepared-request-replication-self-test.v1", "status": "ok", "assertions": 12, "completed_at_ns": time.time_ns()}
+    receipt = {"schema": "prepared-request-replication-self-test.v1", "status": "ok", "assertions": 14, "completed_at_ns": time.time_ns()}
     if write_receipt:
         atomic_json(ROOT / "self-test.json", receipt)
     print(json.dumps(receipt, sort_keys=True))
