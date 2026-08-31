@@ -20,6 +20,8 @@
    [clojure.string :as str]))
 
 (def tool-description
+  ;; @spec MCP-OP-PREP-ACT-019
+  ;; @spec MCP-OP-PREP-ACT-020
   (str
     "Read Clojure structure in one bounded snapshot. Batch all known forms, "
     "outlines, exact structural matches, and X-ray requests. Use "
@@ -50,7 +52,7 @@
     "hole with one exact owner, and submit that complete guarded request. Do not "
     "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
-    "never selection authority, and continuation is never write authority. "
+    "never selection authority, and continuation is never write authority. A served prepared confirmation requires the Mcp-Session-Id for Streamable HTTP or the same stdio connection. Callers without session affinity must submit prepared_request.arguments as ordinary explicit edit arguments. Use ok to distinguish success from refusal. Never infer the outcome from descriptor or digest presence. "
     "read_complete=true is "
     "terminal. Never writes."))
 

@@ -17,8 +17,7 @@
 (def ^:private max-public-result-bytes 32768)
 
 (def ^:private refusal-remedies
-  {"invalid-prepared-confirmation" "Correct only the named invalid fields."
-   "prepared-confirmation-unknown" "Run one eligible inspect_clojure read again."
+  {"prepared-confirmation-unknown" "Reuse the serving MCP session or submit ordinary explicit edit arguments."
    "prepared-confirmation-expired" "Run one eligible inspect_clojure read again."
    "prepared-confirmation-evicted" "Run one eligible inspect_clojure read again."
    "prepared-confirmation-consumed" "Run one eligible inspect_clojure read again; do not retry the old commit blind."
@@ -29,20 +28,31 @@
    "prepared-preview-output-limit" "Use ordinary explicit review or narrow the prepared selection."})
 
 (defn confirmation-refusal
+  ;; @spec MCP-OP-PREP-ACT-008
+  ;; @spec MCP-OP-PREP-ACT-021
   ([error-type failed-stage]
    (confirmation-refusal error-type failed-stage {}))
   ([error-type failed-stage data]
-   (merge {:ok false
-           :error_type error-type
-           :error (str "Prepared confirmation refused at " failed-stage)
-           :failed_stage failed-stage
-           :source_unchanged true
-           :mutation_attempted false
-           :mutation_succeeded false
-           :write_authority false
-           :remedy (get refusal-remedies error-type
-                        "Run one eligible inspect_clojure read again.")}
-          data)))
+   (let [remedy (if (= "invalid-prepared-confirmation" error-type)
+                  (str "Correct these invalid fields: "
+                       (String.
+                         (prepared-request/canonical-json-bytes
+                           (vec (or (:invalid_fields data) [])))
+                         "UTF-8")
+                       ".")
+                  (get refusal-remedies error-type
+                       "Run one eligible inspect_clojure read again."))]
+     (assoc
+       (merge {:ok false
+               :error_type error-type
+               :error (str "Prepared confirmation refused at " failed-stage)
+               :failed_stage failed-stage
+               :source_unchanged true
+               :mutation_attempted false
+               :mutation_succeeded false
+               :write_authority false}
+              data)
+       :remedy remedy))))
 
 ;; @spec MCP-OP-PREP-ACT-002
 ;; @spec MCP-OP-PREP-ACT-017

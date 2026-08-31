@@ -21,3 +21,13 @@ bounded structural read or already-decided compact edit.
 
 Do not reopen a reference already consumed in this task. Return to the compact
 route as soon as the advanced condition is resolved.
+
+## Prepared confirmation session affinity
+
+A prepared confirmation is bound to the MCP session that served it. For
+Streamable HTTP, retain and reuse `Mcp-Session-Id`. For stdio, use the same stdio connection.
+If the caller cannot preserve session affinity, submit the served
+`prepared_request.arguments` as ordinary explicit edit arguments.
+
+Use ok to distinguish success from refusal.
+Never infer the outcome from descriptor or digest presence.

@@ -1132,6 +1132,8 @@
   (handle-operation "apply_clojure_changes" exchange params callback))
 
 (def edit-tool-description
+  ;; @spec MCP-OP-PREP-ACT-019
+  ;; @spec MCP-OP-PREP-ACT-020
   (str
     "Commit one atomic Clojure edit transaction with no preflight read when the "
     "decision is complete. edits are exact literal replacements guarded by the "
@@ -1155,7 +1157,7 @@
     "Declare the exact target lib/alias and per-file old lib/alias removals. Surgeon "
     "discovers or chooses none of these authoritative values. A served "
     "prepared_confirmation may instead be submitted as {confirm, fill} on the "
-    "same MCP session; fill must contain every and only the served caller_holes. "
+    "same MCP session; fill must contain every and only the served caller_holes. Keep the Mcp-Session-Id for Streamable HTTP or use the same stdio connection. Callers without session affinity must submit prepared_request.arguments as ordinary explicit edit arguments. Use ok to distinguish success from refusal. Never infer the outcome from descriptor or digest presence. "
     "Add literal preview=true to compile one complete bounded inert diff without "
     "consuming commit authority. Preview hashes, diffs, future hashes, and result "
     "objects are never commit inputs; commit repeats {confirm, fill} without "
