@@ -546,6 +546,27 @@ assembly and recovery work; routing and adoption lift are explicitly outside
 the claim. The permanent leaf is
 [Prepared Guarded Edit Request](intent/prepared-request/prepared-request-design.md).
 
+An eligible prepared result may also register its exact canonical descriptor
+under a bounded, process-local, MCP-session-bound SHA-256 confirmation. The
+hash is not reversible and is not treated as stateless authority. A later
+`edit_clojure` call may submit only the confirmation hash plus every declared
+hole value. The server recovers the exact served descriptor from the same
+session, rechecks the frozen target-file hash, reconstructs the complete
+ordinary request, and enters the existing edit transaction. The confirmation
+is single-use for commit and expires quickly; restart, expiry, eviction,
+unknown-session lookup, collision, hole mismatch, or source drift refuses before
+write with a complete typed reason.
+
+The same confirmation call may explicitly request an inert dry-run preview.
+Preview compiles the filled ordinary edit against the same frozen source and
+returns one complete bounded diff plus before/after hashes and an honest
+verification forecast. It performs no write, receipt, formatter, verifier, or
+rollback effect. It is never accepted by commit and grants no authority; a
+later commit repeats the hash and fills, recaptures source, and runs the full
+ordinary transaction. Ineligible inspect results remain byte-identical and
+carry no confirmation or preview cue. The permanent leaf is
+[Prepared Request Confirm and Preview](intent/prepared-request-actions/prepared-request-actions-design.md).
+
 Five independently testable modules compose the read-mission surface:
 
 1. A complete selector diagnostic names the failed request, file, requested
