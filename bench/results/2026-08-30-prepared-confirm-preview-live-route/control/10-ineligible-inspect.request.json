@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inspect_clojure","arguments":{"requests":[{"id":"forms","operation":"forms","file":"src/ineligible.clj","forms":["ns"],"expect":{"forms":1}}],"expect":{"requests":1,"files":1}}}}

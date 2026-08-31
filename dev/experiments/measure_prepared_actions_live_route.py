@@ -526,7 +526,10 @@ def main():
     parser.add_argument("--candidate-worktree", type=Path, required=True)
     parser.add_argument("--result-dir", type=Path, required=True)
     args = parser.parse_args()
-    if args.result_dir.exists():
+    control_worktree = args.control_worktree.resolve()
+    candidate_worktree = args.candidate_worktree.resolve()
+    result_dir = args.result_dir.resolve()
+    if result_dir.exists():
         raise RuntimeError("result directory must not exist")
 
     try:
@@ -538,15 +541,15 @@ def main():
     encoding = tiktoken.get_encoding(TOKENIZER_ENCODING)
 
     identity = {
-        "control": assert_identity(args.control_worktree, CONTROL_HEAD, CONTROL_TREE),
+        "control": assert_identity(control_worktree, CONTROL_HEAD, CONTROL_TREE),
         "candidate": assert_identity(
-            args.candidate_worktree, CANDIDATE_HEAD, CANDIDATE_TREE
+            candidate_worktree, CANDIDATE_HEAD, CANDIDATE_TREE
         ),
     }
-    args.result_dir.mkdir(parents=True)
-    control = capture_arm("control", args.control_worktree, args.result_dir, encoding)
+    result_dir.mkdir(parents=True)
+    control = capture_arm("control", control_worktree, result_dir, encoding)
     candidate = capture_arm(
-        "candidate", args.candidate_worktree, args.result_dir, encoding
+        "candidate", candidate_worktree, result_dir, encoding
     )
     validity = validate(control, candidate)
     if not validity["all"]:
@@ -645,9 +648,9 @@ def main():
             "not_measured": "routing lift, adoption, model wall, or provider billing tokens",
         },
     }
-    report_path = args.result_dir / "report.json"
+    report_path = result_dir / "report.json"
     report_path.write_bytes(json_bytes(report) + b"\n")
-    manifest_sha = artifact_manifest(args.result_dir)
+    manifest_sha = artifact_manifest(result_dir)
     print(
         json.dumps(
             {
@@ -664,4 +667,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
