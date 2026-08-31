@@ -132,7 +132,10 @@ basis, a saved plan, or a new handle.
 
 One pure projection maps completed read result data to the complete prepared
 request or nil. The projection must not read source again, call a semantic
-provider, infer a replacement, or persist state.
+provider, infer a replacement, or persist state. A separately ratified sibling
+integration may register the exact descriptor only after the final result
+budget preserves it; that state belongs to the confirmation leaf and does not
+change this projector.
 
 Each prepared edit repeats explicit file and owner identity. Inspect request
 IDs remain in the ordinary read result. The descriptor carries no request ID
@@ -160,7 +163,7 @@ template:
 - has no mutation or write authority;
 - does not invent or transform replacement text;
 - does not choose a verification profile;
-- does not retain a basis or snapshot handle;
+- contains no retained basis or snapshot handle;
 - does not widen file or owner scope; and
 - does not bypass the public edit schema or compiler.
 
@@ -396,7 +399,10 @@ a later decision explicitly amends or supersedes it.
 - No executable `next_call` from an ordinary read.
 - No replacement inference, generation, or repair.
 - No prepared request on a refusal.
-- No retained basis, plan ID, or opaque selection handle.
+- No retained basis, plan ID, or opaque selection handle inside
+  `prepared_request`. The separately ratified confirmation sibling may expose
+  the descriptor's canonical SHA-256 outside this object under its own bounded
+  session, expiry, replay, and authority laws.
 - No EDN request encoding.
 - No identity compression or positional subject authority.
 - No verifier selection.
