@@ -1,0 +1,12 @@
+{:schema "clj-surgeon.substantiation-baseline.v1"
+ :marker "2026-08-30T02:09:33.141926Z"
+ :authority
+ {:branch "experiment/consumption-gap-20260830"
+  :commit "1648d5db3e5f8d107efd9b383012a857ac827bba"
+  :classifier_sha256 "0597202eec1714486b749be313fdb108fb2521f5f43bcb44a34e85cfac8bbac7"}
+ :projection_rates
+ {:emitted_byte_ms 3.5237}
+ :coverage
+ {:eligible_episodes 119
+  :classifiable_episodes 0
+  :verdict :instrumentation-repair-required}}

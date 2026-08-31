@@ -1,0 +1,20 @@
+{:schema "clj-surgeon.substantiation-feature-registry.v1"
+ :features
+ {"read-normalization"
+  {:stages ["operation-omitted" "ids-omitted" "ids-generated"
+            "mixed-ids-refused"]
+   :evidence-class :measured}
+  "prepared-request"
+  {:stages ["emitted" "consumed" "committed" "refused"]
+   :evidence-class :measured}
+  "complete-refusal"
+  {:stages ["fired" "same-file-reread" "direct-corrected-retry"
+            "other-next-action" "abandoned"]
+   :evidence-class :measured}
+  "write-refusal-001"
+  {:stages ["fired" "rows-returned" "continuation-returned"
+            "continuation-consumed"]
+   :evidence-class :measured}
+  "elaborator.*"
+  {:stages ["receipt"]
+   :evidence-class :measured}}}

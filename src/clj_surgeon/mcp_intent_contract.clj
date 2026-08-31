@@ -46,35 +46,35 @@
         test-witnesses (source-witnesses test-sources)
         missing
         (mapcat
-          (fn [[intent status]]
-            (case status
-              :active-gap
-              (when-not (contains? test-witnesses intent)
-                [{:type :missing-test-witness
-                  :intent intent
-                  :source-kind :test}])
+         (fn [[intent status]]
+           (case status
+             :active-gap
+             (when-not (contains? test-witnesses intent)
+               [{:type :missing-test-witness
+                 :intent intent
+                 :source-kind :test}])
 
-              :implemented
-              (cond-> []
-                (not (contains? implementation-witnesses intent))
-                (conj {:type :missing-implementation-witness
-                       :intent intent
-                       :source-kind :implementation})
+             :implemented
+             (cond-> []
+               (not (contains? implementation-witnesses intent))
+               (conj {:type :missing-implementation-witness
+                      :intent intent
+                      :source-kind :implementation})
 
-                (not (contains? test-witnesses intent))
-                (conj {:type :missing-test-witness
-                       :intent intent
-                       :source-kind :test}))
+               (not (contains? test-witnesses intent))
+               (conj {:type :missing-test-witness
+                      :intent intent
+                      :source-kind :test}))
 
-              :deferred []))
-          (sort-by key specs))
+             :deferred []))
+         (sort-by key specs))
         violations
         (vec
-          (concat
-            missing
-            (unknown-witness-violations
-              known :implementation implementation-witnesses)
-            (unknown-witness-violations known :test test-witnesses)))]
+         (concat
+          missing
+          (unknown-witness-violations
+           known :implementation implementation-witnesses)
+          (unknown-witness-violations known :test test-witnesses)))]
     {:ok (empty? violations)
      :specs specs
      :implementation-witnesses implementation-witnesses
@@ -109,11 +109,14 @@
           (io/file root
                    "docs/intent/prepared-request-actions/prepared-request-actions-specs.md")
           (io/file root
-                   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")]]
+                   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")
+          (io/file root
+                   "docs/intent/substantiation-telemetry/substantiation-telemetry-specs.md")]]
      (audit-contract
-       {:spec-text (str/join "\n" (map slurp spec-files))
-        :implementation-sources
-        (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
-               (read-sources root ["Makefile"] ["Makefile"]))
-        :test-sources
-        (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])}))))
+      {:spec-text (str/join "\n" (map slurp spec-files))
+       :implementation-sources
+       (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
+              (read-sources root ["bench"] [".clj" ".cljc"])
+              (read-sources root ["Makefile"] ["Makefile"]))
+       :test-sources
+       (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])}))))

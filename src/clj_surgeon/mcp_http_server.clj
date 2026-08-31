@@ -7,6 +7,7 @@
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as mcp-server]
+   [clj-surgeon.mcp-substantiation :as substantiation]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure-mcp.logging :as mcp-logging]
@@ -98,8 +99,8 @@
                                (verification-profile? profile)))
                            profiles))
       (throw
-        (ex-info "Invalid project verification profiles"
-                 {:error-type :invalid-project-verification-profiles})))
+       (ex-info "Invalid project verification profiles"
+                {:error-type :invalid-project-verification-profiles})))
     profiles))
 
 (defn resolve-verification-profiles
@@ -108,7 +109,7 @@
   (cond
     explicit
     {:profiles (or (verification-profiles-from-config
-                     {:verification-profiles explicit})
+                    {:verification-profiles explicit})
                    default-verification-profiles)
      :source :process}
 
@@ -129,10 +130,10 @@
         (edn/read-string (slurp config-file))
         (catch Exception error
           (throw
-            (ex-info "Invalid .clj-surgeon.edn"
-                     {:error-type :invalid-project-verification-profiles
-                      :file (.getPath config-file)}
-                     error)))))))
+           (ex-info "Invalid .clj-surgeon.edn"
+                    {:error-type :invalid-project-verification-profiles
+                     :file (.getPath config-file)}
+                    error)))))))
 
 (defn workspace-context
   "Build one root-specific context extension. Verification profiles are read
@@ -143,14 +144,14 @@
   {:verification-profile-selection-fn
    (fn []
      (resolve-verification-profiles
-       verification-profiles
-       (read-project-config workspace-root)))
+      verification-profiles
+      (read-project-config workspace-root)))
    :verification-profiles-fn
    (fn []
      (:profiles
-       (resolve-verification-profiles
-         verification-profiles
-         (read-project-config workspace-root))))
+      (resolve-verification-profiles
+       verification-profiles
+       (read-project-config workspace-root))))
    :formatter-fn
    (fn []
      (formatter-from-config (read-project-config workspace-root)))})
@@ -160,9 +161,9 @@
   [origin]
   (or (nil? origin)
       (boolean
-        (re-matches
-          #"https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?"
-          origin))))
+       (re-matches
+        #"https?://(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?"
+        origin))))
 
 (defn- origin-filter
   []
@@ -189,10 +190,15 @@
                       "Cross-origin MCP requests are forbidden"))))))
 
 (defn- health-servlet
-  []
+  [substantiation-state]
   (proxy [HttpServlet] []
     (doGet [^HttpServletRequest _request ^HttpServletResponse response]
-      (let [readiness (runtime/readiness)]
+      (let [runtime-health (runtime/readiness)
+            substantiation-health (substantiation/health substantiation-state)
+            readiness (assoc (merge runtime-health
+                                    (dissoc substantiation-health :ok))
+                             :ok (and (:ok runtime-health)
+                                      (not= false (:ok substantiation-health))))]
         (.setStatus response (if (:ok readiness) 200 503))
         (.setContentType response "application/json")
         (.setCharacterEncoding response "UTF-8")
@@ -203,9 +209,9 @@
 (defn- configure-logging!
   [log-file]
   (mcp-logging/configure-logging!
-    {:log-file (str (or log-file mcp-server/default-log-file))
-     :enable-logging? true
-     :log-level :info}))
+   {:log-file (str (or log-file mcp-server/default-log-file))
+    :enable-logging? true
+    :log-level :info}))
 
 (defn- write-ready-file!
   [ready-file readiness]
@@ -217,7 +223,7 @@
 
 (defn start-http-server!
   "Start one nonblocking, loopback-only, repository-scoped MCP server."
-  [{:keys [project-dir receipt-dir telemetry-dir run-id port ready-file
+  [{:keys [project-dir receipt-dir telemetry-dir substantiation-dir run-id port ready-file
            nrepl-port port-file log-file cclsp-url verification-profiles
            semantic-resolver verify! read-source write-source!]
     telemetry-mode :telemetry}]
@@ -232,6 +238,10 @@
         (telemetry/start! {:mode (or telemetry-mode :metrics)
                            :directory telemetry-dir
                            :run-id run-id})
+        substantiation-state
+        (when substantiation-dir
+          (substantiation/start! {:directory substantiation-dir
+                                  :run-id run-id}))
         port-file (str (or port-file (io/file project-dir ".nrepl-port")))
         nrepl (when-not (= nrepl-port :none)
                 (mcp-server/start-embedded-nrepl! nrepl-port port-file))
@@ -239,6 +249,7 @@
         _ (mcp-tool/init! {:project-root project-dir
                            :receipt-dir receipt-dir
                            :telemetry telemetry-state
+                           :substantiation substantiation-state
                            :cclsp-url cclsp-url
                            :semantic-resolver semantic-resolver
                            :verify! verify!
@@ -262,7 +273,7 @@
         jetty (Server. (InetSocketAddress. host port))
         context (ServletContextHandler. "/")]
     (.addServlet context transport endpoint)
-    (.addServlet context (health-servlet) "/healthz")
+    (.addServlet context (health-servlet substantiation-state) "/healthz")
     (.addFilter context (origin-filter) "/*"
                 (EnumSet/of DispatcherType/REQUEST))
     (.setHandler jetty context)
@@ -284,33 +295,36 @@
                        (:source verification-selection)}]
         (write-ready-file! ready-file readiness)
         (telemetry/emit!
-          telemetry-state :server.start
-          (cond->
-            {:version "experimental"
-             :transport "streamable-http"
-             :host host
-             :port actual-port
-             :mcp_ready_ms (.getUptime (ManagementFactory/getRuntimeMXBean))
-             :nrepl_port (:port nrepl)}
-            (= :full (:mode telemetry-state))
-            (assoc :project_root project-dir)))
+         telemetry-state :server.start
+         (cond->
+          {:version "experimental"
+           :transport "streamable-http"
+           :host host
+           :port actual-port
+           :mcp_ready_ms (.getUptime (ManagementFactory/getRuntimeMXBean))
+           :nrepl_port (:port nrepl)}
+           (= :full (:mode telemetry-state))
+           (assoc :project_root project-dir)))
         (assoc readiness
                :jetty jetty
                :mcp mcp
                :transport-provider transport
                :nrepl nrepl
                :telemetry telemetry-state
+               :substantiation substantiation-state
                :ready-file ready-file))
       (catch Exception error
+        (substantiation/stop! substantiation-state)
         (when nrepl (nrepl-server/stop-server nrepl))
         (.close mcp)
         (throw error)))))
 
 (defn stop-http-server!
-  [{:keys [^Server jetty mcp nrepl telemetry ready-file]}]
+  [{:keys [^Server jetty mcp nrepl telemetry substantiation ready-file]}]
   (try
     (telemetry/emit! telemetry :server.stop {})
     (finally
+      (substantiation/stop! substantiation)
       (when mcp (mcp-server/unregister-live-server! mcp))
       (when mcp (.close mcp))
       (when jetty (.stop jetty))

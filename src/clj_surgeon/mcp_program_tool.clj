@@ -6,6 +6,7 @@
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-runtime :as runtime]
+   [clj-surgeon.mcp-substantiation :as substantiation]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.structural-lens :as structural-lens]
    [rewrite-clj.node :as node]
@@ -16,21 +17,21 @@
 
 (def transform-tool-description
   (str
-    "Compile one capability-limited Clojure transform into exact guarded edits. "
-    "expression uses the structural path DSL and must end in transform. "
-    "Start with (form 'owner) when one top-level owner bounds the change; for example, "
-    "(-> (form 'retry-policy) initializer (match :retry-delays) right "
-    "(transform (fn [delays] (mapv (partial + 100) delays)))). "
-    "Start with [] when the relation spans every matching owner in the file; for example, "
-    "(-> [] (match :retry-delays) right "
-    "(transform (fn [delays] (mapv (partial + 100) delays)))). "
-    "expect.matches is the authoritative exact cardinality guard; omit redundant "
-    "expect-count from the expression. expect.max_changed_characters bounds the sum "
-    "of replaced source spans. Preview is the default and never writes. Set commit=true "
-    "for one atomic compare-and-swap write; a successful commit returns "
-    "verification_complete=true and next_action=none, which are terminal evidence. "
-    "Comment-bearing selected subtrees refuse one-shot commit. SCI cannot perform "
-    "I/O, start processes, load namespaces, mutate host state, or use Java interop."))
+   "Compile one capability-limited Clojure transform into exact guarded edits. "
+   "expression uses the structural path DSL and must end in transform. "
+   "Start with (form 'owner) when one top-level owner bounds the change; for example, "
+   "(-> (form 'retry-policy) initializer (match :retry-delays) right "
+   "(transform (fn [delays] (mapv (partial + 100) delays)))). "
+   "Start with [] when the relation spans every matching owner in the file; for example, "
+   "(-> [] (match :retry-delays) right "
+   "(transform (fn [delays] (mapv (partial + 100) delays)))). "
+   "expect.matches is the authoritative exact cardinality guard; omit redundant "
+   "expect-count from the expression. expect.max_changed_characters bounds the sum "
+   "of replaced source spans. Preview is the default and never writes. Set commit=true "
+   "for one atomic compare-and-swap write; a successful commit returns "
+   "verification_complete=true and next_action=none, which are terminal evidence. "
+   "Comment-bearing selected subtrees refuse one-shot commit. SCI cannot perform "
+   "I/O, start processes, load namespaces, mutate host state, or use Java interop."))
 
 (def transform-tool-schema
   {:type "object"
@@ -100,7 +101,7 @@
                  "expression must end in one (transform pure-function)")
         (let [selection-query (pop query)
               found (structural-lens/evaluate-query
-                      source selection-query {:file file})
+                     source selection-query {:file file})
               match-count (:match-count found)]
           (cond
             (:error found)
@@ -122,24 +123,24 @@
             (let [transformer (second terminal)
                   edits
                   (mapv
-                    (fn [index match]
-                      (let [before (:source match)
-                            form-node (z/node (z/of-string before))
-                            before-value (node/sexpr form-node)
-                            after-value (transformer before-value)
-                            after (pr-str after-value)
-                            preorder (get-in match [:address :preorder])]
-                        {:id (str "transform/" (inc index))
-                         :file file
-                         :address (:address match)
-                         :line (:line match)
-                         :end-line (:end-line match)
-                         :end-preorder (+ preorder (node-size form-node) -1)
-                         :before before
-                         :after after
-                         :comment-bearing? (contains-comment? form-node)}))
-                    (range)
-                    (:matches found))
+                   (fn [index match]
+                     (let [before (:source match)
+                           form-node (z/node (z/of-string before))
+                           before-value (node/sexpr form-node)
+                           after-value (transformer before-value)
+                           after (pr-str after-value)
+                           preorder (get-in match [:address :preorder])]
+                       {:id (str "transform/" (inc index))
+                        :file file
+                        :address (:address match)
+                        :line (:line match)
+                        :end-line (:end-line match)
+                        :end-preorder (+ preorder (node-size form-node) -1)
+                        :before before
+                        :after after
+                        :comment-bearing? (contains-comment? form-node)}))
+                   (range)
+                   (:matches found))
                   generated-characters (reduce + 0 (map #(count (:after %)) edits))]
               (cond
                 (> generated-characters max-generated-characters)
@@ -156,8 +157,8 @@
                 :else
                 (let [compiled
                       (transaction/compile-addressed-transaction
-                        {file source}
-                        (mapv #(dissoc % :comment-bearing?) edits))]
+                       {file source}
+                       (mapv #(dissoc % :comment-bearing?) edits))]
                   (if-not (:ok compiled)
                     (assoc compiled :ok false :source-unchanged true)
                     {:ok true
@@ -172,9 +173,9 @@
                      (boolean (some :comment-bearing? edits))}))))))))
     (catch Exception error
       (merge
-        (refusal :transform-program-failed
-                 (str "Transform program failed: " (.getMessage error)))
-        (select-keys (ex-data error) [:error-type :expression :symbol])))))
+       (refusal :transform-program-failed
+                (str "Transform program failed: " (.getMessage error)))
+       (select-keys (ex-data error) [:error-type :expression :symbol])))))
 
 (defn- compiled-edits
   [compiled]
@@ -196,62 +197,62 @@
     :else
     (let [plans
           (mapv
-            (fn [index {:keys [file expression expect]}]
-              (let [expected-matches (:matches expect)
-                    budget (:max_changed_characters expect)
-                    source (get sources file)
-                    invalid
-                    (cond
-                      (not (and (string? file) (seq file)))
-                      (refusal :invalid-transform-program
-                               "program.file must be a non-empty string")
+           (fn [index {:keys [file expression expect]}]
+             (let [expected-matches (:matches expect)
+                   budget (:max_changed_characters expect)
+                   source (get sources file)
+                   invalid
+                   (cond
+                     (not (and (string? file) (seq file)))
+                     (refusal :invalid-transform-program
+                              "program.file must be a non-empty string")
 
-                      (not (string? source))
-                      (refusal :transform-source-missing
-                               "program.file is not present in the frozen source map")
+                     (not (string? source))
+                     (refusal :transform-source-missing
+                              "program.file is not present in the frozen source map")
 
-                      (not (and (string? expression) (seq expression)))
-                      (refusal :invalid-transform-program
-                               "program.expression must be a non-empty string")
+                     (not (and (string? expression) (seq expression)))
+                     (refusal :invalid-transform-program
+                              "program.expression must be a non-empty string")
 
-                      (not (and (integer? expected-matches)
-                                (<= 1 expected-matches max-transform-matches)))
-                      (refusal :invalid-transform-expectation
-                               "program.expect.matches must be a bounded positive integer")
+                     (not (and (integer? expected-matches)
+                               (<= 1 expected-matches max-transform-matches)))
+                     (refusal :invalid-transform-expectation
+                              "program.expect.matches must be a bounded positive integer")
 
-                      (not (and (integer? budget)
-                                (<= 1 budget max-generated-characters)))
-                      (refusal :invalid-transform-expectation
-                               "program.expect.max_changed_characters must be a bounded positive integer"))]
-                (if invalid
-                  (assoc invalid :program-index index :program-file file)
-                  (let [planned (compile-expression source file expression
-                                                    expected-matches)]
-                    (cond
-                      (not (:ok planned))
-                      (assoc planned :program-index index :program-file file)
+                     (not (and (integer? budget)
+                               (<= 1 budget max-generated-characters)))
+                     (refusal :invalid-transform-expectation
+                              "program.expect.max_changed_characters must be a bounded positive integer"))]
+               (if invalid
+                 (assoc invalid :program-index index :program-file file)
+                 (let [planned (compile-expression source file expression
+                                                   expected-matches)]
+                   (cond
+                     (not (:ok planned))
+                     (assoc planned :program-index index :program-file file)
 
-                      (> (:changed-characters planned) budget)
-                      (refusal :change-budget-exceeded
-                               "Compiled program exceeds expect.max_changed_characters"
-                               {:program-index index
-                                :program-file file
-                                :changed-characters (:changed-characters planned)
-                                :max-changed-characters budget
-                                :match-count (:match-count planned)})
+                     (> (:changed-characters planned) budget)
+                     (refusal :change-budget-exceeded
+                              "Compiled program exceeds expect.max_changed_characters"
+                              {:program-index index
+                               :program-file file
+                               :changed-characters (:changed-characters planned)
+                               :max-changed-characters budget
+                               :match-count (:match-count planned)})
 
-                      (:comment-bearing-selection? planned)
-                      (refusal :lossless-commit-refused
-                               (str "Committed programs refuse selected subtrees containing "
-                                    "comments; use a narrower selection or a literal edit")
-                               {:program-index index
-                                :program-file file
-                                :match-count (:match-count planned)})
+                     (:comment-bearing-selection? planned)
+                     (refusal :lossless-commit-refused
+                              (str "Committed programs refuse selected subtrees containing "
+                                   "comments; use a narrower selection or a literal edit")
+                              {:program-index index
+                               :program-file file
+                               :match-count (:match-count planned)})
 
-                      :else
-                      (assoc planned :program-index index
-                             :program-file file))))))
-            (range) programs)
+                     :else
+                     (assoc planned :program-index index
+                            :program-file file))))))
+           (range) programs)
           failed (first (remove :ok plans))]
       (if failed
         failed
@@ -276,7 +277,7 @@
 
             :else
             (let [compiled (transaction/compile-addressed-transaction
-                             sources edits)]
+                            sources edits)]
               (if-not (:ok compiled)
                 (assoc compiled :ok false :source-unchanged true)
                 {:ok true
@@ -359,21 +360,21 @@
                            (or (= :source-hash-mismatch (:error-type committed))
                                (= true (:rolled-back committed))))
                     (merge
-                      committed
-                      {:ok true
-                       :operation :transform!
-                       :file file
-                       :match-count (:match-count planned)
-                       :edit-count (:edit-count planned)
-                       :changed-characters (:changed-characters planned)
-                       :diff (:diff compiled)
-                       :receipt (transaction/build-receipt compiled)
-                       :verification_complete true
-                       :next_action "none"})))))))))
+                     committed
+                     {:ok true
+                      :operation :transform!
+                      :file file
+                      :match-count (:match-count planned)
+                      :edit-count (:edit-count planned)
+                      :changed-characters (:changed-characters planned)
+                      :diff (:diff compiled)
+                      :receipt (transaction/build-receipt compiled)
+                      :verification_complete true
+                      :next_action "none"})))))))))
     (catch Exception error
       (merge
-        (refusal :transform-tool-failure (.getMessage error))
-        (select-keys (ex-data error) [:error-type :file])))))
+       (refusal :transform-tool-failure (.getMessage error))
+       (select-keys (ex-data error) [:error-type :file])))))
 
 (defn execute-request!
   "Route and execute one transform request."
@@ -399,14 +400,17 @@
 
 (defn handle-transform-clojure
   "clojure-mcp callback handler retained as a Var for hot reload."
-  [_exchange params callback]
+  [exchange params callback]
   (mcp-operation/invoke!
+   (merge
     {:execute #(if-let [config @runtime-config]
                  (execute-request! config params)
                  (refusal :server-not-initialized
                           "transform_clojure server is not initialized"))
      :summarize summary
-     :callback callback}))
+     :callback callback}
+    (substantiation/observer
+     (:substantiation @runtime-config) exchange "transform_clojure" params))))
 
 (def transform-clojure-tool
   {:id :transform-clojure
