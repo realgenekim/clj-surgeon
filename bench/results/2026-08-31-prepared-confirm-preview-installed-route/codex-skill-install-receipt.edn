@@ -1,0 +1,6 @@
+{:artifact :codex-skill
+ :mode :stable-copy
+ :source-commit "05f5a1962e5a0c5aa0365c673994eca9024c1a44"
+ :source-hash "cc4f6cc7d378947214d91b6e2260214c4b5061792c8b687a1e44afdec8679c59"
+ :destination "/Users/genekim/.codex/skills/clj-surgeon"
+ :package "/Users/genekim/.local/share/clj-surgeon/versions/05f5a1962e5a0c5aa0365c673994eca9024c1a44/skill-cc4f6cc7d378947214d91b6e2260214c4b5061792c8b687a1e44afdec8679c59"}

@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"edit_clojure","arguments":{"confirm":"05c1832c5461deeba58d809d9d020b9906bc5033f227ef2dc25b6753dc04e382","fill":{"arguments.edits[0].to":"(def alpha :new)"}}}}

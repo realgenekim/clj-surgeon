@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inspect_clojure","arguments":{"workspace_root":"/private/tmp/clj-surgeon-prepared-actions-installed-proof-20260831-final/workspace","requests":[{"id":"forms","operation":"forms","file":"src/demo.clj","forms":["alpha"],"expect":{"forms":1}}],"expect":{"requests":1,"files":1}}}}

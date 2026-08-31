@@ -1,0 +1,4 @@
+id: aa9c8d9d-5b9a-4446-9d25-69800f034b55
+event: message
+data: {"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"edit_clojure\n  refused · prepared-confirmation-consumed · 0.09 ms\n\n✓ source unchanged\n→ Run one eligible inspect_clojure read again; do not retry the old commit blind."}],"isError":true,"structuredContent":{"elapsed_ms":0.090833,"source_unchanged":true,"failed_stage":"registry-lookup","error_type":"prepared-confirmation-consumed","mutation_succeeded":false,"remedy":"Run one eligible inspect_clojure read again; do not retry the old commit blind.","mutation_attempted":false,"ok":false,"error":"Prepared confirmation refused at registry-lookup","operation":"edit_clojure","write_authority":false}}}
+
