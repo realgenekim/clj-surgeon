@@ -128,7 +128,13 @@
               (assoc b :ok false)
               (assoc-in b [:results 0 :forms] "notvec")
               (assoc-in b [:results 0 :forms 0 :name] "")
-              (assoc b :workspace_root "relative/root")]]
+              (assoc b :workspace_root "relative/root")
+              (let [forms (mapv nth-form (range 7))
+                    chars (reduce + (map (comp count :source) forms))]
+                (-> b (assoc-in [:results 0 :forms] forms)
+                    (assoc-in [:results 0 :form_count] 7)
+                    (assoc-in [:results 0 :source_character_count] chars)
+                    (assoc :source_character_count chars)))]]
     (is (= true (:eligible? (explain b)) (attaches? b))
         "base: explainer and product agree eligible")
     (doseq [m muts]
