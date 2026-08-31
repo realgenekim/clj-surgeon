@@ -166,6 +166,15 @@
               :commit-runtime #{'assert-file-hash!
                                 'commit-compiled!
                                 'execute-writes!
+                                ;; @spec MCP-OP-EDIT-031
+                                'execute-creations!
+                                'execute-deletions!
+                                'create-directory!
+                                'delete-file!
+                                'default-create-directory!
+                                'default-delete-file!
+                                'rollback-creations!
+                                'rollback-deletions!
                                 'recover-transaction!
                                 'refuse!
                                 'slurp

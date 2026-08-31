@@ -189,6 +189,28 @@
   [^Path root relative]
   (mcp-paths/resolve-source-path root relative))
 
+;; @spec MCP-OP-EDIT-031
+(defn- resolve-created-paths
+  "Confine every create_files target to one absent path inside the real root.
+
+  This is where creation's lexical, escape, and non-existence guards live, so
+  each refusal names the offending project-relative path itself."
+  [^Path root create-files]
+  (loop [remaining create-files
+         resolved []]
+    (if-let [{:keys [file content]} (first remaining)]
+      (let [target (mcp-paths/resolve-new-source-path root file)]
+        (if-not (:ok target)
+          (assoc target :ok false :source-unchanged true :raw-path file)
+          (recur (next remaining)
+                 (conj resolved
+                       {:file (:path target)
+                        :content content
+                        :relative-file file
+                        :directories (mapv str
+                                           (:missing-parent-directories target))}))))
+      {:ok true :create-files resolved})))
+
 (defn- resolve-transaction-paths
   [project-root spec]
   (loop [changes (:changes spec)
@@ -208,9 +230,18 @@
                        (map (fn [raw path]
                               {:raw raw :path (:path path)})
                             raw-paths paths)))))
-      {:ok true
-       :spec (assoc spec :changes resolved)
-       :path-facts path-facts})))
+      (let [creations (when (seq (:create-files spec))
+                        (resolve-created-paths project-root
+                                               (:create-files spec)))]
+        (if (and creations (not (:ok creations)))
+          creations
+          {:ok true
+           :spec (cond-> (assoc spec :changes resolved)
+                   creations
+                   (assoc :create-files
+                          (mapv #(dissoc % :relative-file)
+                                (:create-files creations))))
+           :path-facts path-facts})))))
 
 (defn- resolve-extraction-paths
   [root {:keys [file to caller-changes ignored-caller-files expect] :as request}]
@@ -665,7 +696,7 @@
    public-operation]
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
-                              [:edits :programs :delete_owners
+                              [:edits :programs :delete_owners :create_files
                                :symbol_migration :require_change])
         compact-effect-identity?
         (and (not (contains? normalized-params :programs))
@@ -1067,7 +1098,7 @@
   (if (some (fn [field]
               (or (contains? params field)
                   (contains? params (name field))))
-            [:edits :programs :delete_owners])
+            [:edits :programs :delete_owners :create_files])
     "edit_clojure"
     "apply_clojure_changes"))
 
@@ -1143,7 +1174,11 @@
     "Clojure/EDN edit. matches defaults to one and is enforced in every file. Optional programs are "
     "independent computed relations: file, an expression ending in transform, "
     "and expect {matches, max_changed_characters}. delete_owners groups exact "
-    "named top-level forms by file and removes them without source bodies. Start a program with "
+    "named top-level forms by file and removes them without source bodies. "
+    "create_files creates absent .clj, .cljs, .cljc, or .edn files in the same "
+    "transaction from exact {file, content} pairs. The target must not exist, "
+    "the content must parse, it is written verbatim, and undo deletes it. A "
+    "create-only transaction is legal. Start a program with "
     "(form 'owner) for one owner or [] for the whole file. All edits, programs, and deletions "
     "compile against the same original snapshot; none observes another's output. "
     "Any stale count, overlap, budget, comment-bearing computed selection, parse, "

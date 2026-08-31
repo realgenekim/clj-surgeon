@@ -19,7 +19,8 @@
 (def receipt-version 1)
 
 (def ^:private supported-extensions [".clj" ".cljs" ".cljc" ".edn"])
-(def ^:private spec-keys #{:intents :changes :expect})
+(def ^:private spec-keys #{:intents :changes :expect :create-files})
+(def ^:private create-file-keys #{:file :content :directories})
 (def ^:private intent-keys #{:files :from :to :expect-count})
 (def ^:private expectation-keys
   #{:intent-count :edit-count :changed-file-count})
@@ -556,6 +557,64 @@
    :edit-count (:edits expectation)
    :changed-file-count (:files expectation)})
 
+(defn- validate-create-files!
+  ;; @spec MCP-OP-EDIT-031
+  "Validate the exact create_files decision. Pure: performs no filesystem I/O.
+
+   Every guard here refuses the whole transaction and names the offending
+   path, so no creation is ever written on a partially valid request."
+  [create-files]
+  (when-not (or (nil? create-files) (vector? create-files))
+    (refuse! :invalid-create-files
+             "Spec :create-files must be a vector"))
+  (let [validated
+        (mapv
+          (fn [creation]
+            (when-not (map? creation)
+              (refuse! :invalid-create-files
+                       "Each :create-files entry must be a map"))
+            (let [unknown (vec (sort (remove create-file-keys (keys creation))))]
+              (when (seq unknown)
+                (refuse! :invalid-create-files
+                         (str "Unknown :create-files arguments: "
+                              (str/join ", " unknown))
+                         {:unknown unknown})))
+            (let [{:keys [file content directories]} creation]
+              (when-not (and (string? file) (not (str/blank? file)))
+                (refuse! :invalid-create-files
+                         "Each :create-files entry needs a non-blank :file"))
+              (when-not (supported-file? file)
+                (refuse! :unsupported-file
+                         (str "Unsupported Clojure or EDN target file: "
+                              (pr-str file))
+                         {:file file}))
+              (when-not (string? content)
+                (refuse! :invalid-created-source
+                         (str "Created content must be text for " file)
+                         {:file file}))
+              ;; The created content passes through the same complete-source
+              ;; parser that every edited future file must satisfy.
+              (validate-complete-source! file content :invalid-created-source)
+              (when-not (or (nil? directories) (vector? directories))
+                (refuse! :invalid-create-files
+                         (str "Created :directories must be a vector for " file)
+                         {:file file}))
+              (doseq [directory (or directories [])]
+                (when-not (and (string? directory) (not (str/blank? directory)))
+                  (refuse! :invalid-create-files
+                           (str "Created :directories must be paths for " file)
+                           {:file file})))
+              {:file file
+               :content content
+               :directories (vec (or directories []))}))
+          (or create-files []))
+        normalized (mapv (comp normalized-path :file) validated)]
+    (when-not (= (count normalized) (count (distinct normalized)))
+      (refuse! :duplicate-file
+               "Transaction contains duplicate or aliased created file paths"
+               {:files (mapv :file validated)}))
+    validated))
+
 (defn- validate-spec!
   [spec]
   (when-not (map? spec)
@@ -567,21 +626,37 @@
                     (str/join ", " unknown))
                {:unknown unknown})))
   (let [has-intents? (contains? spec :intents)
-        has-changes? (contains? spec :changes)]
+        has-changes? (contains? spec :changes)
+        create-files (validate-create-files! (:create-files spec))]
     (when (and has-intents? has-changes?)
       (refuse! :mixed-transaction-modes
                "Use either :intents or :changes, not both"))
-    (if has-changes?
+    (cond
+      ;; @spec MCP-OP-EDIT-031
+      ;; A create-only transaction is legal and carries no edit expectation.
+      (and (seq create-files)
+           (empty? (:changes spec))
+           (empty? (:intents spec)))
+      {:mode :changes
+       :intents []
+       :expect {:intent-count 0 :edit-count 0 :changed-file-count 0}
+       :create-files create-files}
+
+      has-changes?
       {:mode :changes
        :intents (validate-changes! (:changes spec))
-       :expect (validate-change-aggregate-expectation! (:expect spec))}
+       :expect (validate-change-aggregate-expectation! (:expect spec))
+       :create-files create-files}
+
+      :else
       (do
         (when-not (and (vector? (:intents spec)) (seq (:intents spec)))
           (refuse! :invalid-intents
                    "Spec :intents must be a non-empty vector"))
         {:mode :intents
          :intents (mapv validate-intent! (:intents spec) (range))
-         :expect (validate-aggregate-expectation! (:expect spec))}))))
+         :expect (validate-aggregate-expectation! (:expect spec))
+         :create-files create-files}))))
 
 (defn- ordered-scoped-files
   [intents]
@@ -1225,7 +1300,7 @@
 
 (defn- compile-transaction*
   [sources spec options]
-  (let [{:keys [mode intents expect]} (validate-spec! spec)
+  (let [{:keys [mode intents expect create-files]} (validate-spec! spec)
         files (ordered-scoped-files intents)
         _ (doseq [file files]
             (validate-complete-source! file (get sources file) :invalid-source))
@@ -1259,7 +1334,25 @@
                    :file-count (count compiled-files)}}
       (= :changes mode)
       (assoc :change-count (:intent-count actual)
-             :changes (mapv #(dissoc % :edits) compiled-intents)))))
+             :changes (mapv #(dissoc % :edits) compiled-intents))
+
+      ;; @spec MCP-OP-EDIT-031
+      ;; Creations ride the same frozen compile as the edits. They are kept
+      ;; out of :original-sources and :future-sources because those maps model
+      ;; files that already exist and are replaced in place.
+      (seq create-files)
+      (assoc :created-files
+             (mapv (fn [{:keys [file content]}]
+                     {:file file
+                      :result-hash (structural-lens/source-hash content)
+                      :content content})
+                   create-files)
+             :created-file-count (count create-files)
+             :created-directories
+             (->> create-files
+                  (mapcat :directories)
+                  distinct
+                  vec)))))
 
 (defn compile-transaction
   "Compile explicit exact structural intents against an in-memory file map.
@@ -1794,9 +1887,16 @@
   (mapv #(recovery-result read-source write-source! originals %)
         (reverse file-plans)))
 
+(def ^:private recovered-statuses
+  ;; @spec MCP-OP-EDIT-031
+  ;; :original and :restored belong to edited files; :absent and :deleted to
+  ;; creations that were removed again; :present and :restored to deletions an
+  ;; inverse transaction had already applied.
+  #{:original :restored :absent :deleted :present})
+
 (defn- recovered?
   [recovery]
-  (every? #(#{:original :restored} (:status %)) recovery))
+  (every? #(contains? recovered-statuses (:status %)) recovery))
 
 (defn- execute-writes!
   [read-source write-source! futures file-plans]
@@ -1806,6 +1906,127 @@
     (assert-file-hash! read-source file source-hash :source-hash-mismatch)
     (write-source! file (get futures file))
     (assert-file-hash! read-source file result-hash :read-back-hash-mismatch)))
+
+(defn- default-exists?
+  [file]
+  (.exists (io/file file)))
+
+(defn- default-delete-file!
+  [file]
+  (Files/deleteIfExists (.toPath (io/file file))))
+
+(defn- default-create-directory!
+  [directory]
+  (Files/createDirectory
+    (.toPath (io/file directory))
+    (make-array java.nio.file.attribute.FileAttribute 0)))
+
+;; @spec MCP-OP-EDIT-031
+(defn- execute-creations!
+  "Create every absent target after the edits have committed and read back.
+
+   Directories are created shallowest-first and both directories and files are
+   recorded as they land, so recovery removes exactly what this call made."
+  [read-source write-source! exists? create-directory!
+   directories created-files written-directories written-files]
+  (doseq [directory directories]
+    (when-not (exists? directory)
+      (create-directory! directory)
+      (swap! written-directories conj directory)
+      (when-not (exists? directory)
+        (refuse! :target-parent-create-failed
+                 (str "Could not verify created directory " directory)
+                 {:directory directory}))))
+  (doseq [{:keys [file content result-hash]} created-files]
+    (when (exists? file)
+      (refuse! :target-already-exists
+               (str "Creation target appeared during commit: " file)
+               {:file file :path file}))
+    (write-source! file content)
+    (swap! written-files conj {:file file :content content})
+    (assert-file-hash! read-source file result-hash :read-back-hash-mismatch)))
+
+;; @spec MCP-OP-EDIT-031
+(defn- execute-deletions!
+  "Remove every file and directory an inverse transaction retires."
+  [read-source exists? delete-file! deleted-files directories deleted]
+  (doseq [{:keys [file result-hash]} deleted-files]
+    (when (exists? file)
+      (assert-file-hash! read-source file result-hash :result-hash-mismatch))
+    (delete-file! file)
+    (swap! deleted conj file)
+    (when (exists? file)
+      (refuse! :target-delete-failed
+               (str "Could not verify deleted file " file)
+               {:file file :path file})))
+  ;; A directory that has since gained unrelated files is left in place. The
+  ;; hash-fenced file deletion is the inverse; the directory is a convenience.
+  (doseq [directory (reverse directories)]
+    (when (exists? directory)
+      (try (delete-file! directory) (catch Exception _ nil)))))
+
+;; @spec MCP-OP-EDIT-031
+(defn- rollback-creations!
+  "Remove only the files and directories this commit actually created.
+
+   A created file whose bytes are no longer ours is never removed; it is
+   reported as unknown bytes so the caller refuses instead of guessing."
+  [read-source exists? delete-file! written-files written-directories]
+  (into
+    (mapv
+      (fn [{:keys [file content]}]
+        (let [current (when (exists? file)
+                        (try (read-source file) (catch Exception _ ::unreadable)))]
+          (cond
+            (nil? current)
+            {:file file :status :absent}
+
+            (= content current)
+            (do (try (delete-file! file) (catch Exception _ nil))
+                {:file file :status (if (exists? file) :delete-failed :deleted)})
+
+            :else
+            {:file file :status :unexpected-source})))
+      (reverse written-files))
+    (mapv
+      (fn [directory]
+        (if-not (exists? directory)
+          {:directory directory :status :absent}
+          (try
+            (delete-file! directory)
+            {:directory directory
+             :status (if (exists? directory) :delete-failed :deleted)}
+            (catch Exception error
+              {:directory directory
+               :status :not-empty-or-changed
+               :error (.getMessage error)}))))
+      (reverse written-directories))))
+
+;; @spec MCP-OP-EDIT-031
+(defn- rollback-deletions!
+  "Restore every file an inverse transaction had already deleted."
+  [read-source write-source! exists? deleted-files deleted]
+  (let [by-file (into {} (map (juxt :file identity)) deleted-files)]
+    (mapv
+      (fn [file]
+        (let [{:keys [result-source]} (get by-file file)]
+          (cond
+            (exists? file)
+            {:file file :status :present}
+
+            (string? result-source)
+            (try
+              (write-source! file result-source)
+              {:file file
+               :status (if (= result-source (read-source file))
+                         :restored
+                         :restore-hash-mismatch)}
+              (catch Exception error
+                {:file file :status :restore-failed :error (.getMessage error)}))
+
+            :else
+            {:file file :status :restore-source-unavailable})))
+      (reverse deleted))))
 
 (defn- verified-hashes
   [read-source file-plans]
@@ -1819,63 +2040,101 @@
 (defn commit-compiled!
   "Commit a successfully compiled transaction through injected source I/O.
    Ordinary handled failures restore files that still equal either the original
-   or transaction result. Unexpected bytes are never overwritten."
+   or transaction result. Unexpected bytes are never overwritten.
+
+   A compiled transaction may also carry :created-files, which are written only
+   after every edit has committed and read back, and :deleted-files, which an
+   inverse transaction uses to retire what a forward creation made."
   ([compiled]
    (commit-compiled! compiled
                      {:read-source slurp
                       :write-source! file-ops/atomic-write!}))
-  ([compiled {:keys [read-source write-source!]}]
-   (try
-     (when-not (and (:ok compiled)
-                    (map? (:original-sources compiled))
-                    (map? (:future-sources compiled))
-                    (ifn? read-source)
-                    (ifn? write-source!))
-       (refuse! :invalid-compiled-transaction
-                "Commit requires one complete compiled transaction and source I/O"))
-     (let [file-plans (changed-file-plans compiled)
-           originals (:original-sources compiled)
-           futures (:future-sources compiled)]
-       ;; The all-file preflight is outside the recovery block because it has
-       ;; not written anything.
-       (doseq [{:keys [file source-hash]} file-plans]
-         (assert-file-hash! read-source file source-hash
-                            :source-hash-mismatch))
-       (try
-         (execute-writes! read-source write-source! futures file-plans)
-         (let [hashes (verified-hashes read-source file-plans)]
-           {:ok true
-            :operation :change!
-            :transaction-version transaction-version
-            :committed true
-            :changed-file-count (count file-plans)
-            :verified {:whole-files true
-                       :file-count (count file-plans)
-                       :read-back-hashes hashes}})
-         (catch Exception cause
-           (let [recovery (recover-transaction!
-                            read-source write-source! originals file-plans)
-                 rolled-back? (recovered? recovery)
-                 cause-data (ex-data cause)]
-             (merge
-               {:error (if rolled-back?
-                         "Transaction write failed; all files restored"
-                         "Transaction write failed; manual recovery required")
-                :error-type (if rolled-back?
-                              :transaction-write-failed
-                              :transaction-recovery-required)
-                :cause-error (.getMessage cause)
-                :cause-error-type (or (:error-type cause-data)
-                                      :transaction-write-exception)
-                :rolled-back rolled-back?
-                :recovery recovery}
-               (select-keys cause-data
-                            [:file :expected-hash :actual-hash]))))))
-     (catch clojure.lang.ExceptionInfo e
-       (merge {:error (.getMessage e)} (ex-data e)))
-     (catch Exception e
-       {:error (.getMessage e)
-        :error-type :transaction-write-exception}))))
+  ([compiled {:keys [read-source write-source!] :as io}]
+   (let [exists? (or (:exists? io) default-exists?)
+         delete-file! (or (:delete-file! io) default-delete-file!)
+         create-directory! (or (:create-directory! io) default-create-directory!)]
+     (try
+       (when-not (and (:ok compiled)
+                      (map? (:original-sources compiled))
+                      (map? (:future-sources compiled))
+                      (ifn? read-source)
+                      (ifn? write-source!))
+         (refuse! :invalid-compiled-transaction
+                  "Commit requires one complete compiled transaction and source I/O"))
+       (let [file-plans (changed-file-plans compiled)
+             originals (:original-sources compiled)
+             futures (:future-sources compiled)
+             created-files (vec (:created-files compiled))
+             planned-directories (vec (:created-directories compiled))
+             deleted-files (vec (:deleted-files compiled))
+             removed-directories (vec (:removed-directories compiled))
+             written-directories (atom [])
+             written-files (atom [])
+             deleted (atom [])]
+         ;; The all-file preflight is outside the recovery block because it has
+         ;; not written anything.
+         (doseq [{:keys [file source-hash]} file-plans]
+           (assert-file-hash! read-source file source-hash
+                              :source-hash-mismatch))
+         (doseq [{:keys [file]} created-files]
+           (when (exists? file)
+             (refuse! :target-already-exists
+                      (str "Creation target already exists: " file)
+                      {:file file :path file})))
+         (try
+           (execute-writes! read-source write-source! futures file-plans)
+           (execute-creations! read-source write-source! exists? create-directory!
+                               planned-directories created-files
+                               written-directories written-files)
+           (execute-deletions! read-source exists? delete-file!
+                               deleted-files removed-directories deleted)
+           (let [hashes (verified-hashes read-source file-plans)
+                 created-hashes (into {} (map (juxt :file :result-hash))
+                                      created-files)]
+             (cond->
+               {:ok true
+                :operation :change!
+                :transaction-version transaction-version
+                :committed true
+                :changed-file-count (count file-plans)
+                :verified {:whole-files true
+                           :file-count (+ (count file-plans) (count created-files))
+                           :read-back-hashes (merge hashes created-hashes)}}
+               (seq created-files)
+               (assoc :created-file-count (count created-files))
+
+               (seq deleted-files)
+               (assoc :deleted-file-count (count deleted-files))))
+           (catch Exception cause
+             (let [recovery (-> (recover-transaction!
+                                  read-source write-source! originals file-plans)
+                                (into (rollback-creations!
+                                        read-source exists? delete-file!
+                                        @written-files @written-directories))
+                                (into (rollback-deletions!
+                                        read-source write-source! exists?
+                                        deleted-files @deleted)))
+                   rolled-back? (recovered? recovery)
+                   cause-data (ex-data cause)]
+               (merge
+                 {:error (if rolled-back?
+                           "Transaction write failed; all files restored"
+                           "Transaction write failed; manual recovery required")
+                  :error-type (if rolled-back?
+                                :transaction-write-failed
+                                :transaction-recovery-required)
+                  :cause-error (.getMessage cause)
+                  :cause-error-type (or (:error-type cause-data)
+                                        :transaction-write-exception)
+                  :rolled-back rolled-back?
+                  :recovery recovery}
+                 (select-keys cause-data
+                              [:file :expected-hash :actual-hash]))))))
+       (catch clojure.lang.ExceptionInfo e
+         (merge {:error (.getMessage e)} (ex-data e)))
+       (catch Exception e
+         {:error (.getMessage e)
+          :error-type :transaction-write-exception})))))
 
 (defn- reverse-edit
   [{:keys [intent-index address path line end-line before after]}]
@@ -1945,7 +2204,21 @@
                            :guarded-file-count (count files)}}
         receipt (cond-> receipt
                   logical-match-count?
-                  (assoc :match-count-kind :binding-occurrences))]
+                  (assoc :match-count-kind :binding-occurrences)
+
+                  ;; @spec MCP-OP-EDIT-031
+                  ;; A created file has no inverse edit, so its content is the
+                  ;; only evidence that can prove the bytes about to be deleted
+                  ;; are still ours. It is recorded here for that reason alone.
+                  (seq (:created-files compiled))
+                  (assoc :created-files
+                         (mapv (fn [{:keys [file result-hash content]}]
+                                 {:file file
+                                  :result-hash result-hash
+                                  :result-source content})
+                               (:created-files compiled))
+                         :created-directories
+                         (vec (:created-directories compiled))))]
     (assoc receipt :receipt-hash (receipt-hash receipt))))
 
 (defn- invalid-receipt!
@@ -1967,8 +2240,28 @@
       {:supported-transaction-version transaction-version}))
   (when-not (= :change! (:operation receipt))
     (invalid-receipt! "Receipt operation must be :change!"))
-  (when-not (and (vector? (:files receipt)) (seq (:files receipt)))
-    (invalid-receipt! "Receipt :files must be a non-empty vector"))
+  ;; @spec MCP-OP-EDIT-031
+  (let [created (:created-files receipt)]
+    (when-not (or (nil? created) (vector? created))
+      (invalid-receipt! "Receipt :created-files must be a vector"))
+    (when-not (or (nil? (:created-directories receipt))
+                  (vector? (:created-directories receipt)))
+      (invalid-receipt! "Receipt :created-directories must be a vector"))
+    (when-not (and (vector? (:files receipt))
+                   (or (seq (:files receipt)) (seq created)))
+      (invalid-receipt!
+        "Receipt :files must be a non-empty vector unless it creates files"))
+    (doseq [{:keys [file result-hash result-source]} created]
+      (when-not (and (string? file)
+                     (string? result-hash)
+                     (re-matches #"[0-9a-f]{64}" result-hash)
+                     (string? result-source)
+                     (= result-hash (structural-lens/source-hash result-source)))
+        (invalid-receipt! "Receipt created-file entry is incomplete"
+                          {:file file})))
+    (let [created-paths (mapv :file created)]
+      (when-not (= (count created-paths) (count (distinct created-paths)))
+        (invalid-receipt! "Receipt created-file paths must be distinct"))))
   (when-not (= (:receipt-hash receipt) (receipt-hash receipt))
     (invalid-receipt! "Receipt hash does not match its contents"
                       {:expected-hash (:receipt-hash receipt)
@@ -1996,11 +2289,17 @@
             (invalid-receipt!
               "Receipt logical match-count evidence does not match its intents"))
         inverse-edit-count? (contains? receipt :inverse-edit-count)
+        ;; @spec MCP-OP-EDIT-031
+        ;; A create-only transaction has no inverse edit; its inverse is a
+        ;; deletion, so zero is the only correct inverse edit count.
+        creates-files? (boolean (seq (:created-files receipt)))
         _ (when (and logical-match-count? (not inverse-edit-count?))
             (invalid-receipt!
               "Receipt binding-occurrence evidence requires an inverse edit count"))
         _ (when (and inverse-edit-count?
-                     (not (pos-int? (:inverse-edit-count receipt))))
+                     (not (if creates-files?
+                            (nat-int? (:inverse-edit-count receipt))
+                            (pos-int? (:inverse-edit-count receipt)))))
             (invalid-receipt!
               "Receipt inverse edit count must be a positive integer"))
         actual-inverse-count
@@ -2077,17 +2376,38 @@
                    :edits inverse-edits
                    :result-source restored})))
             (:files receipt))
-          files (mapv :file compiled-files)]
-      {:ok true
-       :operation :undo-change!
-       :transaction-version transaction-version
-       :intent-count (:intent-count receipt)
-       :match-count (:match-count receipt)
-       :changed-file-count (count files)
-       :files (mapv #(dissoc % :result-source) compiled-files)
-       :original-sources (select-keys sources files)
-       :future-sources (into {} (map (juxt :file :result-source) compiled-files))
-       :validated {:whole-files-parsed true :file-count (count files)}})
+          files (mapv :file compiled-files)
+          ;; @spec MCP-OP-EDIT-031
+          ;; The inverse of a creation is a hash-fenced deletion. The current
+          ;; bytes must still equal the forward result before it may be removed.
+          created (vec (:created-files receipt))
+          _ (doseq [{:keys [file result-hash]} created]
+              (let [current (get sources file)]
+                (when-not (string? current)
+                  (refuse! :invalid-source
+                           (str "Created file is missing for undo: " file)
+                           {:file file}))
+                (let [actual-hash (structural-lens/source-hash current)]
+                  (when-not (= result-hash actual-hash)
+                    (refuse! :result-hash-mismatch
+                             (str "Created file does not match transaction result: "
+                                  file)
+                             {:file file :expected-hash result-hash
+                              :actual-hash actual-hash})))))]
+      (cond->
+        {:ok true
+         :operation :undo-change!
+         :transaction-version transaction-version
+         :intent-count (:intent-count receipt)
+         :match-count (:match-count receipt)
+         :changed-file-count (count files)
+         :files (mapv #(dissoc % :result-source) compiled-files)
+         :original-sources (select-keys sources files)
+         :future-sources (into {} (map (juxt :file :result-source) compiled-files))
+         :validated {:whole-files-parsed true :file-count (count files)}}
+        (seq created)
+        (assoc :deleted-files created
+               :removed-directories (vec (:created-directories receipt)))))
     (catch clojure.lang.ExceptionInfo e
       (merge {:error (.getMessage e)} (ex-data e)))
     (catch Exception e
@@ -2107,7 +2427,8 @@
 
 (defn- assert-receipt-does-not-alias-source!
   [receipt-path spec]
-  (when (some #{receipt-path} (spec-files spec))
+  (when (some #{receipt-path} (concat (spec-files spec)
+                                      (keep :file (:create-files spec))))
     (refuse! :invalid-receipt-path
              "Receipt path must not alias a source file"
              {:path receipt-path})))
@@ -2161,8 +2482,14 @@
                             [:intent-count :match-count
                              :change-count :changed-file-count])
         files (when (:ok compiled)
-                (mapv #(select-keys % [:file :source-hash :result-hash])
-                      (changed-file-plans compiled)))]
+                ;; @spec MCP-OP-EDIT-031
+                (into (mapv #(select-keys % [:file :source-hash :result-hash])
+                            (changed-file-plans compiled))
+                      (mapv (fn [{:keys [file result-hash]}]
+                              {:file file
+                               :result-hash result-hash
+                               :absent-before true})
+                            (:created-files compiled))))]
     (operation-algebra/observe-change-terminal
       {:point point
        :capabilities capabilities
@@ -2375,7 +2702,8 @@
                       {:receipt receipt-path})))
           _ (validate-receipt! saved)
           files (mapv :file (:files saved))
-          sources (read-sources files)
+          created (mapv :file (:created-files saved))
+          sources (read-sources (into files created))
           inverse (compile-inverse saved sources)]
       (if (:error inverse)
         inverse

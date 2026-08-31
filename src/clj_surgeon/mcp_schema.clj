@@ -287,6 +287,22 @@
       :required ["file" "forms"]}}
     "verify" verification-schema}})
 
+;; @spec MCP-OP-EDIT-031
+(def editor-create-files-schema
+  {:type "array"
+   :minItems 1
+   :maxItems 32
+   :description "Optional absent files created inside the same frozen transaction. Every target must not already exist and its content must parse as Clojure or EDN."
+   :items
+   {:type "object"
+    :additionalProperties false
+    :properties
+    {"file" {:type "string" :minLength 1
+             :description "One project-relative .clj, .cljs, .cljc, or .edn path that does not exist yet."}
+     "content" {:type "string" :minLength 1
+                :description "The complete file content, written verbatim."}}
+    :required ["file" "content"]}})
+
 (def editor-programs-schema
   {:type "array"
    :minItems 1
@@ -376,11 +392,13 @@
 (def editor-hybrid-schema
   (-> editor-gesture-schema
       (assoc-in [:properties "programs"] editor-programs-schema)
+      (assoc-in [:properties "create_files"] editor-create-files-schema)
       (assoc-in [:properties "symbol_migration"] symbol-migration-schema)
       (assoc-in [:properties "require_change"] require-change-schema)
       (assoc :anyOf [{:required ["edits"]}
                      {:required ["programs"]}
                      {:required ["delete_owners"]}
+                     {:required ["create_files"]}
                      {:required ["symbol_migration" "require_change"]}])
       (assoc :allOf
              [{:not
@@ -535,12 +553,14 @@
   [schema]
   (let [edit (get-in schema [:properties "edits" :items])
         deletion (get-in schema [:properties "delete_owners" :items])
-        program (get-in schema [:properties "programs" :items])]
+        program (get-in schema [:properties "programs" :items])
+        creation (get-in schema [:properties "create_files" :items])]
     {:request (update (closed-object-shape schema)
                       :allowed disj "workspace_root")
      :edit (closed-object-shape edit)
      :within (closed-object-shape (get-in edit [:properties "within"]))
      :deletion (closed-object-shape deletion)
+     :creation (closed-object-shape creation)
      :program (closed-object-shape program)
      :program-expect
      (closed-object-shape (get-in program [:properties "expect"]))}))
