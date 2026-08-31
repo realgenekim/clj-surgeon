@@ -1,0 +1,33 @@
+{:schema :clj-surgeon.model-variant-fill-cases/v1
+ :fixture "bench/fixtures/model_variant_battery.clj"
+ :cases
+ [{:id :literal
+   :owner fill-literal
+   :decision "Change :cold -> :warm."
+   :source "(defn fill-literal [] :cold)"
+   :expected "(defn fill-literal [] :warm)"}
+  {:id :qualified-call
+   :owner fill-qualified-call
+   :decision "Change legacy/transform -> modern/transform."
+   :source "(defn fill-qualified-call [x] (legacy/transform x))"
+   :expected "(defn fill-qualified-call [x] (modern/transform x))"}
+  {:id :map-value
+   :owner fill-map-value
+   :decision "Change :draft -> :ready; preserve :retries."
+   :source "(defn fill-map-value [] {:status :draft :retries 2})"
+   :expected "(defn fill-map-value [] {:status :ready :retries 2})"}
+  {:id :selected-arity
+   :owner fill-selected-arity
+   :decision "Change the zero-arity return :old -> :new; preserve the one-arity behavior."
+   :source "(defn fill-selected-arity ([] :old) ([x] x))"
+   :expected "(defn fill-selected-arity ([] :new) ([x] x))"}
+  {:id :thread-tail
+   :owner fill-thread-tail
+   :decision "Change persist -> audit/persist; preserve the preceding thread steps."
+   :source "(defn fill-thread-tail [x] (-> x normalize persist))"
+   :expected "(defn fill-thread-tail [x] (-> x normalize audit/persist))"}
+  {:id :branch-call
+   :owner fill-branch-call
+   :decision "Change render -> ui/render; preserve the nil branch."
+   :source "(defn fill-branch-call [x] (if (nil? x) :missing (render x)))"
+   :expected "(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x)))"}]}
