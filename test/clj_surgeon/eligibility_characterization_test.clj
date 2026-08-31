@@ -38,13 +38,40 @@
   (is (not (attaches? (-> (base-fixture)
                           (assoc-in [:results 0 :file_hash] "abc"))))))
 
+(defn- nth-form [i]
+  (let [src (str "(def f" i " 1)")]
+    {:name (str "f" i) :form_type "def" :file file :file_hash fhash
+     :platforms ["clj"] :source src
+     :hash (lens/source-hash src) :line 1 :end_line 1
+     :source_anchor {:file file :source_sha256 fhash :owner (str "f" i)
+                     :range {:start {:line 0 :character 0}
+                             :end {:line 0 :character (dec (count src))}}
+                     :selection_range {:start {:line 0 :character 5}
+                                       :end {:line 0 :character (+ 5 (count (str "f" i)))}}}}))
+
 (deftest seven-forms-refused
-  (is (not (attaches? (assoc-in (base-fixture) [:results 0 :forms] (vec (for [i (range 7)] (assoc (get-in (base-fixture) [:results 0 :forms 0]) :name (str "f" i)))))))
-      "single mutation must forfeit the descriptor: seven-forms"))
+  ;; single-axis: seven internally-valid distinct forms; ONLY :count-1-6 fails
+  (let [forms (mapv nth-form (range 7))
+        chars (reduce + (map (comp count :source) forms))
+        b (-> (base-fixture)
+              (assoc-in [:results 0 :forms] forms)
+              (assoc-in [:results 0 :form_count] 7)
+              (assoc-in [:results 0 :source_character_count] chars)
+              (assoc :source_character_count chars))]
+    (is (not (attaches? b))
+        "a seventh form alone must forfeit the descriptor")))
 
 (deftest dup-owners-refused
-  (is (not (attaches? (update-in (base-fixture) [:results 0 :forms] (fn [fs] (conj fs (first fs))))))
-      "single mutation must forfeit the descriptor: dup-owners"))
+  ;; single-axis: counts and chars stay consistent so ONLY :owners-distinct fails
+  (let [b (base-fixture)
+        f (get-in b [:results 0 :forms 0])
+        b2 (-> b
+               (assoc-in [:results 0 :forms] [f f])
+               (assoc-in [:results 0 :form_count] 2)
+               (assoc-in [:results 0 :source_character_count] (* 2 (count form-src)))
+               (assoc :source_character_count (* 2 (count form-src))))]
+    (is (not (attaches? b2))
+        "duplicate owners alone must forfeit the descriptor")))
 
 (deftest char-mismatch-refused
   (is (not (attaches? (assoc (base-fixture) :source_character_count 999)))
@@ -81,3 +108,12 @@
 (deftest relative-root-refused
   (is (not (attaches? (assoc (base-fixture) :workspace_root "relative/root")))
       "single mutation must forfeit the descriptor: relative-root"))
+
+
+(deftest dev-explainer-agrees-with-product
+  ;; binds dev/explain_eligibility.clj to product truth: agreement on the
+  ;; eligible boolean for the base; drift here fails loud.
+  (load-file "/tmp/cathedral/dev/explain_eligibility.clj")
+  (let [explain (resolve 'explain-eligibility/explain)]
+    (is (= true (:eligible? (explain (base-fixture))))
+        "the dev explainer must agree the base is eligible")))

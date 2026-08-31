@@ -3,6 +3,7 @@
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-compact-edit-fields-test]
+   [clj-surgeon.eligibility-characterization-test]
    [clj-surgeon.mcp-compact-edit-test]
    [clj-surgeon.mcp-compact-location-test]
    [clj-surgeon.mcp-compact-relations-test]
@@ -45,6 +46,7 @@
           'clj-surgeon.mcp-extraction-plan-test
           'clj-surgeon.mcp-change-buffer-test
           'clj-surgeon.mcp-cold-verify-test
+          'clj-surgeon.eligibility-characterization-test
           'clj-surgeon.mcp-compact-edit-test
           'clj-surgeon.mcp-compact-edit-fields-test
           'clj-surgeon.mcp-compact-location-test
