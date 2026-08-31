@@ -28,6 +28,7 @@ REPLACEMENT = "(def alpha :new)"
 TIMING_KEYS = {
     "elapsed_ms",
     "execution_ms",
+    "inspection_elapsed_ms",
     "operation_elapsed_ms",
     "server_execution_ms",
     "wall_ms",
@@ -452,7 +453,7 @@ def validate(control, candidate):
             and preview.get("committed") is False
             and preview.get("source_unchanged") is True
             and isinstance(preview.get("diff"), str)
-            and preview.get("diff")
+            and bool(preview.get("diff"))
         ),
         "preview_source_byte_identical": (
             candidate["preview_source_hashes"].get("before")

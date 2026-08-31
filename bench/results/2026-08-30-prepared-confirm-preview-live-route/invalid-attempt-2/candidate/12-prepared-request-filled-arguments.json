@@ -1,0 +1,1 @@
+{"workspace_root":"/private/tmp/clj-surgeon-prepared-actions-measure.LMXvWN/bench/results/2026-08-30-prepared-confirm-preview-live-route/valid-run/candidate/workspace","edits":[{"file":"src/demo.clj","within":{"form":"alpha"},"from":"(def alpha :old)","to":"(def alpha :new)","matches":1}]}
