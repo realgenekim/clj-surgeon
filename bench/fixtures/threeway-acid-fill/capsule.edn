@@ -1,0 +1,10 @@
+{:id :threeway-acid-fill
+ :decision-boundary :complete-single-owner-decision-supplied
+ :provenance {:kind :real-task-derived
+              :source "decision-batch-edit anonymized multi-surface viewer edit"
+              :minimized "one nine-line owner; retained duplicate :body text decoy and reader shorthand"}
+ :targets ["src/bench/app_shell.clj"]
+ :verification {:exact-bytes-primary true
+                :parse-clojure true}
+ :expected {:changed-files 1 :owners 1 :literal-edits 2}}
+

@@ -1,0 +1,2 @@
+In src/bench/app_shell.clj, replace the complete ide-shell owner so its stylesheet is /command-center.css and its body tag is :body.ide-shell-page. Preserve the attached comment, the reader shorthand, the string decoy containing :body, and every unrelated byte. The file, owner, complete decision, and expected count of one owner are supplied.
+
