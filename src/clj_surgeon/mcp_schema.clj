@@ -390,9 +390,54 @@
                  {:required ["require_change"]
                   :not {:required ["symbol_migration"]}}]}}])))
 
+(def elaborator-object-schema
+  {:type "object"
+   :additionalProperties false
+   :properties {"decision" {:type "string" :minLength 1
+                            :description "One nonblank decision of at most 512 UTF-8 bytes and at most one quarter of the old body; the runtime enforces byte counts exactly."}}
+   :required ["decision"]})
+
+(def elaborated-edit-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"file" {:type "string" :minLength 1}
+    "within" {:type "object"
+              :additionalProperties false
+              :properties {"form" {:type "string" :minLength 1}}
+              :required ["form"]}
+    "from" {:type "string" :minLength 1
+            :description "An exact nonblank guard containing at least 1,024 UTF-8 bytes; the runtime enforces the byte boundary."}
+    "to" {:type "null"}
+    "matches" {:type "integer" :enum [1]}}
+   :required ["file" "within" "from" "to" "matches"]})
+
+(def elaborated-editor-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1}
+    "edits" {:type "array"
+             :minItems 1
+             :maxItems 1
+             :items elaborated-edit-schema}
+    "elaborate" elaborator-object-schema}
+   :required ["workspace_root" "edits" "elaborate"]})
+
 (def editor-tool-schema
-  (-> editor-hybrid-schema
-      (update :properties dissoc "verify")))
+  (let [ordinary (-> editor-hybrid-schema
+                     (update :properties dissoc "verify"))]
+    {:type "object"
+     :additionalProperties false
+     :properties
+     (-> (:properties ordinary)
+         (assoc "edits"
+                {:oneOf [(get-in ordinary [:properties "edits"])
+                         (get-in elaborated-editor-schema
+                                 [:properties "edits"])]})
+         (assoc "elaborate" elaborator-object-schema))
+     :anyOf (:anyOf ordinary)
+     :oneOf [ordinary elaborated-editor-schema]}))
 
 (def extraction-schema
   {:type "object"

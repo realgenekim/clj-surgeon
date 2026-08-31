@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-elaborator-supervisor :as elaborator-supervisor]
    [clj-surgeon.mcp-formatter :as mcp-formatter]
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-runtime :as runtime]
@@ -225,6 +226,7 @@
         nrepl (when-not (= nrepl-port :none)
                 (mcp-server/start-embedded-nrepl! nrepl-port port-file))
         _ (configure-logging! log-file)
+        spark-supervisor (elaborator-supervisor/start-background!)
         _ (mcp-tool/init! {:project-root project-dir
                            :receipt-dir receipt-dir
                            :telemetry telemetry-state
@@ -236,6 +238,7 @@
                            :verification-profiles (:profiles verification-selection)
                            :verification-profile-source
                            (:source verification-selection)
+                           :elaborator-supervisor spark-supervisor
                            :workspace-context-factory
                            (fn [workspace-root]
                              (workspace-context verification-profiles
@@ -288,18 +291,22 @@
                :mcp mcp
                :transport-provider transport
                :nrepl nrepl
+               :elaborator-supervisor spark-supervisor
                :telemetry telemetry-state
                :ready-file ready-file))
       (catch Exception error
+        (elaborator-supervisor/stop! spark-supervisor)
         (when nrepl (nrepl-server/stop-server nrepl))
         (.close mcp)
         (throw error)))))
 
 (defn stop-http-server!
-  [{:keys [^Server jetty mcp nrepl telemetry ready-file]}]
+  [{:keys [^Server jetty mcp nrepl telemetry ready-file elaborator-supervisor]}]
   (try
     (telemetry/emit! telemetry :server.stop {})
     (finally
+      (when elaborator-supervisor
+        (clj-surgeon.mcp-elaborator-supervisor/stop! elaborator-supervisor))
       (when mcp (mcp-server/unregister-live-server! mcp))
       (when mcp (.close mcp))
       (when jetty (.stop jetty))

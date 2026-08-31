@@ -1,5 +1,15 @@
 (ns clj-surgeon.mcp-embedded-elaborator-test
   (:require
+   [cheshire.core :as json]
+   [clj-surgeon.experiments.mcp-candidate-admission :as admission]
+   [clj-surgeon.mcp-elaborator-intent :as intent]
+   [clj-surgeon.mcp-elaborator-policy :as policy]
+   [clj-surgeon.mcp-elaborator-supervisor :as supervisor]
+   [clj-surgeon.mcp-schema :as schema]
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure.java.io :as io]
+   [clojure.set :as set]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
 
 (def ^:private missing-api {})
@@ -467,7 +477,12 @@
                     :read_back_hash "e" :bound_read_back_hash "e"
                     :verifier_hash "f" :bound_verifier_hash "f"})]
       (is (= false (:verified result)))
-      (is (= "receipt-hash-mismatch" (:error_type result)))))
+      (is (= "receipt-hash-mismatch" (:error_type result))))
+    (is (= false
+           (:verified
+             (call-api
+               'clj-surgeon.mcp-elaborator-receipt/receipt-consistency
+               {})))))
   (testing "only the owned process group can be selected"
     (let [result (call-api
                    'clj-surgeon.mcp-elaborator-adapter/validate-owned-process
@@ -490,3 +505,370 @@
     (is (= true (:receipted plan)))
     (is (= true (:suppressed_while_circuit_open plan)))
     (is (= :no-decay-means-no-spend (:default_decision plan)))))
+
+(defn- delete-tree!
+  [root]
+  (when (.exists (io/file root))
+    (doseq [file (reverse (file-seq (io/file root)))]
+      (io/delete-file file true))))
+
+(defn- wait-for-state
+  [spark-supervisor expected timeout-ms]
+  (let [deadline (+ (System/currentTimeMillis) timeout-ms)]
+    (loop []
+      (let [current (supervisor/state spark-supervisor)]
+        (cond
+          (= expected (:status current)) current
+          (>= (System/currentTimeMillis) deadline) current
+          :else (do (Thread/sleep 10) (recur)))))))
+
+(defn- fake-config
+  ([temporary mode]
+   (fake-config temporary mode 100))
+  ([temporary mode budget]
+   (let [source (io/file "test/fixtures/embedded_elaborator/fake_app_server.py")
+         fake (io/file temporary (str "fake-" mode ".py"))
+         schema-file (.getCanonicalPath (io/file "deps.edn"))
+         auth-file (io/file temporary "auth.json")]
+     (io/copy source fake)
+     (.setExecutable fake true true)
+     (spit auth-file "{\"tokens\":{\"account_id\":\"fake-account\"}}")
+     {:enabled? true
+      :codex-path (.getCanonicalPath fake)
+      :auth-file (.getCanonicalPath auth-file)
+      :schema-file schema-file
+      :expected-cli-sha256 (intent/sha256 (slurp fake))
+      :expected-schema-sha256 (intent/sha256 (slurp schema-file))
+      :auth-identity-sha256 (intent/sha256 "fake-account")
+      :ledger-file (.getCanonicalPath (io/file temporary "ledger.jsonl"))
+      :rolling-24h-call-budget budget})))
+
+(defn- recursive-map-keys
+  [value]
+  (->> (tree-seq coll? seq value)
+       (filter map?)
+       (mapcat keys)
+       set))
+
+;; Green-only boundary witnesses added after frozen red 2145b753.
+;; @spec MCP-OP-ELAB-001
+;; @spec MCP-OP-ELAB-002
+;; @spec MCP-OP-ELAB-006
+(deftest public-schema-and-hardening-config-admit-only-the-one-hole-branch
+  (let [valid {"workspace_root" "/private/tmp/elaborator-fixture"
+               "edits" [{"file" "src/demo.clj"
+                         "within" {"form" "large-owner"}
+                         "from" old-1024
+                         "to" nil
+                         "matches" 1}]
+               "elaborate" {"decision" "d"}}]
+    (is (= (slurp "docs/observations/2026-08-30-spark-isolation-screen/hardening.config.toml")
+           policy/hardening-config))
+    (is (= "432cf51484e3c8bde2dad6874fa824a5c3429ace9072bd27cec40c179140cddf"
+           (intent/sha256 policy/hardening-config)))
+    (is (:ok (admission/authorize schema/editor-tool-schema valid)))
+    (let [unicode-old (apply str (repeat 256 "💥"))
+          unicode-valid (assoc-in valid ["edits" 0 "from"] unicode-old)]
+      (is (= 1024 (intent/utf8-bytes unicode-old)))
+      (is (:ok (admission/authorize schema/editor-tool-schema unicode-valid)))
+      (is (:ok (intent/validate-request
+                 (assoc-in (request old-1024 "d") [:edits 0 :from]
+                           unicode-old)))))
+    (is (false? (:ok (admission/authorize
+                       schema/editor-tool-schema
+                       (assoc-in valid ["elaborate" "model"] "other")))))
+    (is (false? (:ok (admission/authorize
+                       schema/editor-tool-schema
+                       (assoc-in valid ["edits" 0 "to"] ":literal")))))
+    (is (false? (:ok (admission/authorize
+                       schema/editor-tool-schema
+                       (dissoc valid "elaborate")))))
+    (is (= "null" (get-in schema/elaborated-edit-schema
+                          [:properties "to" :type])))
+    (is (= 1 (get-in schema/elaborated-editor-schema
+                     [:properties "edits" :maxItems])))))
+
+;; @spec MCP-OP-ELAB-003
+(deftest capture-admits-one-exact-nested-guard-without-sending-owner-identity
+  (let [nested (str "(defn large-owner []\n" old-1024 "\n)")
+        result (intent/capture-intent
+                 (request old-1024 "d")
+                 (assoc capture :owner_source nested))]
+    (is (:ok result) (pr-str result))
+    (is (= {:old_body old-1024 :decision "d"} (:model_input result)))
+    (is (not (str/includes? (intent/canonical-json (:model_input result))
+                            "large-owner")))))
+
+;; @spec MCP-OP-ELAB-006
+(deftest boot-failure-does-not-own-health-and-callers-never-start-it
+  (let [started (System/nanoTime)
+        spark-supervisor (supervisor/start-background! {:enabled? false})
+        elapsed-ms (/ (- (System/nanoTime) started) 1000000.0)
+        state (wait-for-state spark-supervisor :unavailable 1000)]
+    (is (< elapsed-ms 100.0))
+    (is (= :unavailable (:status state)))
+    (is (= :operator-config-absent (:reason state)))
+    (is (= false (:readiness_depends_on_child
+                   (call-api 'clj-surgeon.mcp-elaborator-adapter/boot-plan))))
+    (is (nil? (supervisor/stop! spark-supervisor)))))
+
+;; @spec MCP-OP-ELAB-006
+;; @spec MCP-OP-ELAB-009
+(deftest shutdown-wins-the-background-boot-race-and-cleans-an-unpublished-child
+  (let [temporary (str (java.nio.file.Files/createTempDirectory
+                         "embedded-elaborator-stop-race-"
+                         (make-array java.nio.file.attribute.FileAttribute 0)))
+        spark-supervisor (supervisor/start-background!
+                           (fake-config temporary "slow-boot"))]
+    (try
+      (Thread/sleep 75)
+      (let [cleanup (supervisor/stop! spark-supervisor)]
+        (is (= :stopped (:status (supervisor/state spark-supervisor))))
+        (is (:cleanup_ok cleanup) (pr-str cleanup))
+        (is (empty? (:remaining cleanup)))
+        (is (not (.exists (io/file (:cwd cleanup))))))
+      (Thread/sleep 300)
+      (is (= :stopped (:status (supervisor/state spark-supervisor))))
+      (finally
+        (supervisor/stop! spark-supervisor)
+        (delete-tree! temporary)))))
+
+;; @spec MCP-OP-ELAB-006
+;; @spec MCP-OP-ELAB-008
+(deftest ordinary-and-unavailable-edit-paths-do-not-contact-or-wait-for-spark
+  (let [ordinary (mcp-tool/execute-request!
+                   {:project-root "." :public-operation "edit_clojure"}
+                   {:edits []})]
+    (is (false? (:ok ordinary)))
+    (is (not= "elaborator-unavailable" (:error_type ordinary))))
+  (let [root (.getCanonicalPath (io/file "."))
+        unavailable (mcp-tool/execute-request!
+                      {:project-root root :public-operation "edit_clojure"}
+                      (assoc (request old-1024 "d") :workspace_root root))]
+    (is (false? (:ok unavailable)))
+    (is (= "elaborator-unavailable" (:error_type unavailable)))
+    (is (= true (:source_unchanged unavailable)))
+    (is (= true (:ordinary_path_available unavailable)))))
+
+;; @spec MCP-OP-ELAB-004
+;; @spec MCP-OP-ELAB-005
+;; @spec MCP-OP-ELAB-006
+;; @spec MCP-OP-ELAB-007
+;; @spec MCP-OP-ELAB-008
+;; @spec MCP-OP-ELAB-009
+;; @spec MCP-OP-ELAB-010
+;; @spec MCP-OP-ELAB-011
+;; @spec MCP-OP-ELAB-012
+(deftest supervised-jsonl-fake-proves-boot-turn-ledger-reentry-and-cleanup
+  (let [temporary (str (java.nio.file.Files/createTempDirectory
+                         "embedded-elaborator-test-"
+                         (make-array java.nio.file.attribute.FileAttribute 0)))
+        fake (.getCanonicalPath
+               (io/file "test/fixtures/embedded_elaborator/fake_app_server.py"))
+        schema-file (.getCanonicalPath (io/file "deps.edn"))
+        auth-file (io/file temporary "auth.json")
+        ledger-file (str (io/file temporary "ledger.jsonl"))
+        workspace (io/file temporary "workspace")
+        source-dir (io/file workspace "src")
+        source-file (io/file source-dir "demo.clj")
+        owner-source (str "(def large-owner \"" old-2048 "\")")
+        _auth (spit auth-file "{\"tokens\":{\"account_id\":\"fake-account\"}}")
+        config {:enabled? true
+                :codex-path fake
+                :auth-file (.getCanonicalPath auth-file)
+                :schema-file schema-file
+                :expected-cli-sha256 (intent/sha256 (slurp fake))
+                :expected-schema-sha256 (intent/sha256 (slurp schema-file))
+                :auth-identity-sha256 (intent/sha256 "fake-account")
+                :ledger-file ledger-file
+                :rolling-24h-call-budget 100}
+        spark-supervisor (supervisor/start-background! config)]
+    (try
+      (.mkdirs source-dir)
+      (spit source-file (str "(ns demo)\n" owner-source "\n"))
+      (let [ready (wait-for-state spark-supervisor :available 5000)]
+        (is (= :available (:status ready)) (pr-str ready))
+        (is (= policy/model-slug (:model ready)))
+        (let [turn (supervisor/elaborate!
+                     spark-supervisor
+                     {:model_input {:old_body owner-source
+                                    :decision "Return the completed body."}
+                      :intent_sha256 (apply str (repeat 64 "1"))})]
+          (is (:ok turn) (pr-str turn))
+          (is (= ":complete" (:replacement turn)))
+          (is (= 1 (:turn_count turn)))
+          (is (= 1 (:candidate_count turn)))
+          (is (= 12 (:input_tokens turn)))
+          (is (= 3 (:output_tokens turn))))
+        (let [ordinary-request (atom nil)
+              edit-request {:workspace_root (.getCanonicalPath workspace)
+                            :edits [{:file "src/demo.clj"
+                                     :within {:form "large-owner"}
+                                     :from owner-source
+                                     :to nil
+                                     :matches 1}]
+                            :elaborate {:decision "Return the completed body."}}
+              result (supervisor/execute-edit!
+                       spark-supervisor
+                       {:project-root (.getCanonicalPath workspace)}
+                       edit-request
+                       (fn [completed]
+                         (reset! ordinary-request completed)
+                         {:ok true
+                          :receipt_hash (apply str (repeat 64 "e"))
+                          :verification_complete true
+                          :verification {:ok true
+                                         :profile "exact"
+                                         :profile-sha256
+                                         (apply str (repeat 64 "f"))
+                                         :acceptance :exact-exit
+                                         :process-outcome :pass
+                                         :exit 0
+                                         :cwd "/must/not/project"
+                                         :argv ["must-not-persist"]}}))]
+          (is (:ok result) (pr-str result))
+          (is (= ":complete" (get-in @ordinary-request [:edits 0 :to])))
+          (is (= owner-source (get-in @ordinary-request [:edits 0 :from])))
+          (is (= "src/demo.clj" (get-in @ordinary-request [:edits 0 :file])))
+          (is (not (contains? @ordinary-request :elaborate)))
+          (is (= policy/model-slug (get-in result [:elaboration :elaborated_by :model])))
+          (is (not (contains? (:elaboration result) :replacement)))
+          (is (= "exact" (get-in result [:elaboration :ordinary
+                                         :verification_receipt :profile])))
+          (is (nil? (get-in result [:elaboration :ordinary
+                                    :verification_receipt :cwd])))
+          (is (nil? (get-in result [:elaboration :ordinary
+                                    :verification_receipt :argv]))))
+        (let [rows (mapv #(json/parse-string % true)
+                         (remove empty? (str/split-lines (slurp ledger-file))))]
+          (is (= 3 (count rows)))
+          (is (every? #(= "clj-surgeon.embedded-elaborator-ledger.v1"
+                          (:schema %)) rows))
+          (is (every? #(not-any? (set (keys %))
+                                 [:source :decision :file :owner
+                                  :workspace_root :replacement :auth :email])
+                      rows))
+          (is (every? #(empty? (set/intersection
+                                 #{:source :decision :file :owner :workspace_root
+                                   :replacement :auth :email :token :accessToken}
+                                 (recursive-map-keys %)))
+                      rows)))
+        (let [cleanup (supervisor/stop! spark-supervisor)]
+          (is (:cleanup_ok cleanup) (pr-str cleanup))
+          (is (empty? (:remaining cleanup)))
+          (is (:signal_allowed cleanup))))
+      (finally
+        (supervisor/stop! spark-supervisor)
+        (delete-tree! temporary)))))
+
+;; @spec MCP-OP-ELAB-004
+;; @spec MCP-OP-ELAB-007
+;; @spec MCP-OP-ELAB-008
+;; @spec MCP-OP-ELAB-009
+(deftest hostile-jsonl-is-rejected-and-boot-failure-cleans-owned-groups
+  (doseq [[mode expected-error] [["action" "non-text-item"]
+                                 ["reroute" "reroute"]]]
+    (let [temporary (str (java.nio.file.Files/createTempDirectory
+                           (str "embedded-elaborator-" mode "-")
+                           (make-array java.nio.file.attribute.FileAttribute 0)))
+          spark-supervisor (supervisor/start-background!
+                             (fake-config temporary mode))]
+      (try
+        (is (= :available (:status (wait-for-state spark-supervisor
+                                                   :available 5000))))
+        (let [result (supervisor/elaborate!
+                       spark-supervisor
+                       {:model_input {:old_body old-1024 :decision "d"}
+                        :intent_sha256 (apply str (repeat 64 "4"))})]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= expected-error (:error_type result)) (pr-str result))
+          (is (nil? (:replacement result)))
+          (is (= 1 (:turn_count result)))
+          (is (= false (:replay result))))
+        (let [cleanup (supervisor/stop! spark-supervisor)]
+          (is (:cleanup_ok cleanup) (pr-str cleanup))
+          (is (empty? (:remaining cleanup))))
+        (finally
+          (supervisor/stop! spark-supervisor)
+          (delete-tree! temporary)))))
+  (doseq [mode ["missing-model" "metadata-model" "other-provider"]]
+    (let [temporary (str (java.nio.file.Files/createTempDirectory
+                           "embedded-elaborator-boot-failure-"
+                           (make-array java.nio.file.attribute.FileAttribute 0)))
+          spark-supervisor (supervisor/start-background!
+                             (fake-config temporary mode))]
+      (try
+        (let [failed (wait-for-state spark-supervisor :unavailable 5000)]
+          (is (= :boot-admission-failed (:reason failed)) (pr-str failed))
+          (is (true? (get-in failed [:cleanup :cleanup_ok])) (pr-str failed))
+          (is (empty? (get-in failed [:cleanup :remaining]))))
+        (finally
+          (supervisor/stop! spark-supervisor)
+          (delete-tree! temporary))))))
+
+;; @spec MCP-OP-ELAB-008
+;; @spec MCP-OP-ELAB-009
+;; @spec MCP-OP-ELAB-010
+(deftest oversize-stall-and-crashed-leader-kill-the-retained-owned-process-group
+  (doseq [mode ["oversize-stall" "crash-descendant" "meter-backward"]]
+    (let [temporary (str (java.nio.file.Files/createTempDirectory
+                           (str "embedded-elaborator-" mode "-")
+                           (make-array java.nio.file.attribute.FileAttribute 0)))
+          config (fake-config temporary mode)
+          spark-supervisor (supervisor/start-background! config)]
+      (try
+        (is (= :available (:status (wait-for-state spark-supervisor
+                                                   :available 5000))))
+        (let [started (System/nanoTime)
+              result (supervisor/elaborate!
+                       spark-supervisor
+                       {:model_input {:old_body old-1024 :decision "d"}
+                        :intent_sha256 (apply str (repeat 64 "8"))})
+              elapsed-ms (/ (- (System/nanoTime) started) 1000000.0)
+              stopped (supervisor/state spark-supervisor)
+              rows (mapv #(json/parse-string % true)
+                         (remove empty? (str/split-lines
+                                          (slurp (:ledger-file config)))))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= 1 (:turn_count result)))
+          (is (= false (:replay result)))
+          (is (< elapsed-ms 4000.0) (str mode " took " elapsed-ms "ms"))
+          (is (= :unavailable (:status stopped)))
+          (is (true? (get-in stopped [:cleanup :cleanup_ok])) (pr-str stopped))
+          (is (empty? (get-in stopped [:cleanup :remaining])))
+          (is (= 2 (count (filter #(= "clj-surgeon.embedded-elaborator-ledger.v1"
+                                      (:schema %)) rows)))))
+        (finally
+          (supervisor/stop! spark-supervisor)
+          (delete-tree! temporary))))))
+
+;; @spec MCP-OP-ELAB-010
+;; @spec MCP-OP-ELAB-011
+(deftest ledger-restart-recovery-makes-the-80-90-alarm-and-circuit-durable
+  (let [temporary (str (java.nio.file.Files/createTempDirectory
+                         "embedded-elaborator-quota-"
+                         (make-array java.nio.file.attribute.FileAttribute 0)))
+        config (fake-config temporary "quota" 2)
+        first-supervisor (supervisor/start-background! config)]
+    (try
+      (is (= :available (:status (wait-for-state first-supervisor
+                                                 :available 5000))))
+      (is (:cleanup_ok (supervisor/stop! first-supervisor)))
+      (let [second-supervisor (supervisor/start-background! config)]
+        (try
+          (let [failed (wait-for-state second-supervisor :unavailable 5000)
+                rows (mapv #(json/parse-string % true)
+                           (remove empty? (str/split-lines
+                                            (slurp (:ledger-file config)))))]
+            (is (= :boot-admission-failed (:reason failed)) (pr-str failed))
+            (is (true? (get-in failed [:cleanup :cleanup_ok])))
+            (is (= 2 (count (filter #(= "clj-surgeon.embedded-elaborator-ledger.v1"
+                                        (:schema %)) rows))))
+            (is (= 1 (count (filter #(= "quota-alarm" (:event %)) rows))))
+            (is (= 100.0 (:rolling_24h_used_percent
+                           (first (filter #(= "quota-alarm" (:event %)) rows))))))
+          (finally
+            (supervisor/stop! second-supervisor))))
+      (finally
+        (supervisor/stop! first-supervisor)
+        (delete-tree! temporary)))))

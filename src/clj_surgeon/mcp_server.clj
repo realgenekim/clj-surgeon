@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-server
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-elaborator-supervisor :as elaborator-supervisor]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -305,7 +306,8 @@
         port-file (str (normalize-option port-file
                                          (io/file project-dir ".nrepl-port")))
         nrepl (when-not (= nrepl-port :none)
-                (start-embedded-nrepl! nrepl-port port-file))]
+                (start-embedded-nrepl! nrepl-port port-file))
+        spark-supervisor (elaborator-supervisor/start-background!)]
     (mcp-logging/configure-logging!
       {:log-file (str (normalize-option log-file default-log-file))
        :enable-logging? true
@@ -313,17 +315,23 @@
     (mcp-tool/init! {:project-root project-dir
                      :receipt-dir receipt-dir
                      :tool-profile (normalize-option tool-profile :full)
-                     :telemetry telemetry-state})
-    (build-stdio-server)
-    (armor-stdout!)
-    (telemetry/emit!
-      telemetry-state :server.start
-      (cond->
-        {:version "experimental"
-         :jvm_uptime_ms started-ms
-         :mcp_ready_ms (.getUptime (ManagementFactory/getRuntimeMXBean))
-         :nrepl_port (:port nrepl)}
-        (= :full (:mode telemetry-state))
-        (assoc :project_root project-dir)))
-    (warn "clj-surgeon MCP: ready — telemetry" (name (:mode telemetry-state)))
-    @(promise)))
+                     :telemetry telemetry-state
+                     :elaborator-supervisor spark-supervisor})
+    (try
+      (build-stdio-server)
+      (armor-stdout!)
+      (telemetry/emit!
+        telemetry-state :server.start
+        (cond->
+          {:version "experimental"
+           :jvm_uptime_ms started-ms
+           :mcp_ready_ms (.getUptime (ManagementFactory/getRuntimeMXBean))
+           :nrepl_port (:port nrepl)}
+          (= :full (:mode telemetry-state))
+          (assoc :project_root project-dir)))
+      (warn "clj-surgeon MCP: ready — telemetry" (name (:mode telemetry-state)))
+      @(promise)
+      (catch Exception error
+        (elaborator-supervisor/stop! spark-supervisor)
+        (when nrepl (nrepl-server/stop-server nrepl))
+        (throw error)))))

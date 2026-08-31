@@ -23,6 +23,7 @@
     "integer" (integer? value)
     "number" (number? value)
     "boolean" (instance? Boolean value)
+    "null" (nil? value)
     false))
 
 (def supported-schema-keywords

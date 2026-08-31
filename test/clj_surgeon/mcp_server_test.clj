@@ -60,13 +60,20 @@
            (get-in tools [3 :schema :required])))
     (is (= false (get-in tools [2 :schema :additionalProperties])))
     (is (= #{"workspace_root" "edits" "programs" "delete_owners"
-             "symbol_migration" "require_change"}
+             "symbol_migration" "require_change" "elaborate"}
            (set (keys (get-in tools [2 :schema :properties])))))
     (is (= [{:required ["edits"]}
             {:required ["programs"]}
             {:required ["delete_owners"]}
             {:required ["symbol_migration" "require_change"]}]
            (get-in tools [2 :schema :anyOf])))
+    (is (= 2 (count (get-in tools [2 :schema :oneOf]))))
+    (is (= false (get-in tools [2 :schema :oneOf 0
+                                :additionalProperties])))
+    (is (nil? (get-in tools [2 :schema :oneOf 0
+                             :properties "elaborate"])))
+    (is (= ["workspace_root" "edits" "elaborate"]
+           (get-in tools [2 :schema :oneOf 1 :required])))
     (is (str/includes? (:description (nth tools 2))
                        "exact old subtree"))
     (is (= false (get-in tools [0 :schema :additionalProperties])))
