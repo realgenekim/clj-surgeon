@@ -278,7 +278,7 @@
         (is (= false (get-in tools [0 :inputSchema :additionalProperties])))
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
         (is (= #{:basis :decisions :verify :changes :expect :edits :programs
-                 :delete_owners :extraction :workspace_root
+                 :delete_owners :create_files :extraction :workspace_root
                  :symbol_migration :require_change}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?

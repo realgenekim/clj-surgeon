@@ -136,7 +136,8 @@
         result-proved?
         (and (seq files) (every? :result-hash files))
         original-proved?
-        (and (seq files) (every? :original-hash files))
+        (and (seq files)
+             (every? #(or (:original-hash %) (:absent-before %)) files))
         publication-count (:publication-count receipt)
         violations
         (cond-> []
@@ -208,8 +209,13 @@
                 (mapv #(select-keys % [:file :result-hash]) source-files)
 
                 :restored
-                (mapv (fn [{:keys [file source-hash]}]
-                        {:file file :original-hash source-hash})
+                ;; @spec MCP-OP-EDIT-031
+                ;; A file the transaction created has no original hash. Absence
+                ;; is its original state, and restoring it means deleting it.
+                (mapv (fn [{:keys [file source-hash absent-before]}]
+                        (if absent-before
+                          {:file file :absent-before true}
+                          {:file file :original-hash source-hash}))
                       source-files)
 
                 nil)
