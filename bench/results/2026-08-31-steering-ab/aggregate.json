@@ -1,0 +1,170 @@
+{
+  "schema": "clj-surgeon.steering-ab-aggregate.v1",
+  "preregistration_commit": "b36999d4e4029088a2d3ea00a835fc6dd21dfb4e",
+  "product_base": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b",
+  "pilot": {
+    "cells": [
+      {
+        "id": "P-C1",
+        "qualifies": false,
+        "route": "ordinary-full",
+        "infrastructure_failure": false
+      },
+      {
+        "id": "P-C2",
+        "qualifies": false,
+        "route": "ordinary-full",
+        "infrastructure_failure": false
+      }
+    ],
+    "control_qualifying": 0,
+    "broken_fixture": false
+  },
+  "main": {
+    "by_arm": {
+      "C": {
+        "n": 6,
+        "primary_qualifying": 0,
+        "primary_rate": 0,
+        "exact": 6,
+        "wrong_subject": 0,
+        "median_emission_bytes": 2154.5,
+        "median_wall_ms": 74121.2875,
+        "route_counts": {
+          "confirm_fill": 0,
+          "descriptor_request": 0,
+          "ordinary_full": 3,
+          "ordinary_anchor": 3
+        },
+        "routes": [
+          {
+            "id": "02",
+            "route": "ordinary-full"
+          },
+          {
+            "id": "03",
+            "route": "ordinary-anchor"
+          },
+          {
+            "id": "05",
+            "route": "ordinary-anchor"
+          },
+          {
+            "id": "08",
+            "route": "ordinary-full"
+          },
+          {
+            "id": "10",
+            "route": "ordinary-anchor"
+          },
+          {
+            "id": "11",
+            "route": "ordinary-full"
+          }
+        ]
+      },
+      "S": {
+        "n": 6,
+        "primary_qualifying": 1,
+        "primary_rate": 0.16666666666666666,
+        "exact": 6,
+        "wrong_subject": 0,
+        "median_emission_bytes": 2015.5,
+        "median_wall_ms": 82427.91750000001,
+        "route_counts": {
+          "confirm_fill": 1,
+          "descriptor_request": 0,
+          "ordinary_full": 2,
+          "ordinary_anchor": 3
+        },
+        "routes": [
+          {
+            "id": "01",
+            "route": "ordinary-full"
+          },
+          {
+            "id": "04",
+            "route": "confirm-fill"
+          },
+          {
+            "id": "06",
+            "route": "ordinary-anchor"
+          },
+          {
+            "id": "07",
+            "route": "ordinary-full"
+          },
+          {
+            "id": "09",
+            "route": "ordinary-anchor"
+          },
+          {
+            "id": "12",
+            "route": "ordinary-anchor"
+          }
+        ]
+      }
+    },
+    "steering_lift_percentage_points": 16.667,
+    "exactness_gate": true,
+    "wrong_subject_gate": true,
+    "primary_actionable": true,
+    "kill_rule_triggered": true
+  },
+  "bonus": [
+    {
+      "id": "B-C1",
+      "arm": "C",
+      "route": "ordinary-full",
+      "qualifies": false,
+      "exact": true,
+      "emission_bytes": 3551,
+      "wall_ms": 3303.578
+    },
+    {
+      "id": "B-S1",
+      "arm": "S",
+      "route": "ordinary-anchor",
+      "qualifies": false,
+      "exact": true,
+      "emission_bytes": 3556,
+      "wall_ms": 8407.155
+    }
+  ],
+  "qualitative_signal_mentions": [],
+  "exploratory_route_detail": {
+    "note": "Post-frozen descriptive split of the non-primary ordinary route; primary confirm/descriptor scoring is unchanged.",
+    "ordinary_full": 5,
+    "ordinary_anchor": 6,
+    "by_arm": {
+      "C": {
+        "confirm_fill": 0,
+        "descriptor_request": 0,
+        "ordinary_full": 3,
+        "ordinary_anchor": 3
+      },
+      "S": {
+        "confirm_fill": 1,
+        "descriptor_request": 0,
+        "ordinary_full": 2,
+        "ordinary_anchor": 3
+      }
+    }
+  },
+  "prepared_adoptions": [
+    {
+      "id": "04",
+      "arm": "S",
+      "edit_calls": 2,
+      "first_attempt_status": "failed",
+      "first_fill_keys": [
+        "to"
+      ],
+      "successful_fill_keys": [
+        "arguments.edits[0].to"
+      ],
+      "caller_emission_bytes": 3527,
+      "wall_ms": 138048.234
+    }
+  ]
+}

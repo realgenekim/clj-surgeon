@@ -1,0 +1,98 @@
+{
+  "schema": "clj-surgeon.steering-ab-cell.v1",
+  "id": "01",
+  "phase": "main",
+  "arm": "S",
+  "model": {
+    "requested": "gpt-5.6-sol",
+    "reasoning": "high",
+    "reported": "gpt-5.6-sol",
+    "provider": "openai",
+    "fallback_allowed": false,
+    "reroutes": []
+  },
+  "session": {
+    "thread_id": "01a057f9-cdf2-7b61-9584-5252db15cef3",
+    "same_thread_two_turns": true,
+    "observed_mcp_session_sha256": [
+      "905ded86adcc16b3de760ead880784c3f6db9f023e20fc9b383b67bb22019127",
+      "959bb8360cc9e697e22c332a13ca96386afaf3c125b843b9fd0bf164347d46e6"
+    ],
+    "model_tool_mcp_session_sha256": [
+      "959bb8360cc9e697e22c332a13ca96386afaf3c125b843b9fd0bf164347d46e6"
+    ],
+    "one_model_tool_session": true
+  },
+  "signal": {
+    "exposed": true,
+    "prepared_alternative": {
+      "digest": "7a3afb9774ca64734383ff11757b0c1b42ba83af209ccfa501d04cabda25fd25",
+      "typed_bytes": 3551,
+      "confirm_fill_bytes": 1773,
+      "saved_tokens_estimate": 444
+    },
+    "threshold": 100
+  },
+  "edit1": {
+    "ordinary_full_from_to": true,
+    "exact_after_receipt": true,
+    "turn_status": "completed",
+    "wall_ms": 22504.865
+  },
+  "edit2": {
+    "route": "ordinary-full",
+    "primary_qualifies": false,
+    "used_confirm_fill": false,
+    "requested_descriptor": false,
+    "caller_emission_bytes": 3551,
+    "wall_ms": 72380.023,
+    "exact": true,
+    "final_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "expected_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "wrong_subject": false,
+    "tool_calls": [
+      {
+        "tool": "edit_clojure",
+        "status": "completed",
+        "arguments": {
+          "workspace_root": "/private/tmp/clj-surgeon-steering-ab-20260831/bench/results/2026-08-31-steering-ab/raw/cell-002/workspace",
+          "edits": [
+            {
+              "file": "src/bench/steering.clj",
+              "within": {
+                "form": "wall-policy"
+              },
+              "from": "(def wall-policy\n  {:phase :before\n   :step-01 {:mode :observe :weight 1 :label \"alpha\"}\n   :step-02 {:mode :observe :weight 2 :label \"bravo\"}\n   :step-03 {:mode :observe :weight 3 :label \"charlie\"}\n   :step-04 {:mode :observe :weight 4 :label \"delta\"}\n   :step-05 {:mode :observe :weight 5 :label \"echo\"}\n   :step-06 {:mode :observe :weight 6 :label \"foxtrot\"}\n   :step-07 {:mode :observe :weight 7 :label \"golf\"}\n   :step-08 {:mode :observe :weight 8 :label \"hotel\"}\n   :step-09 {:mode :observe :weight 9 :label \"india\"}\n   :step-10 {:mode :observe :weight 10 :label \"juliet\"}\n   :step-11 {:mode :observe :weight 11 :label \"kilo\"}\n   :step-12 {:mode :observe :weight 12 :label \"lima\"}\n   :step-13 {:mode :observe :weight 13 :label \"mike\"}\n   :step-14 {:mode :observe :weight 14 :label \"november\"}\n   :step-15 {:mode :observe :weight 15 :label \"oscar\"}\n   :step-16 {:mode :observe :weight 16 :label \"papa\"}\n   :step-17 {:mode :observe :weight 17 :label \"quebec\"}\n   :step-18 {:mode :observe :weight 18 :label \"romeo\"}\n   :step-19 {:mode :observe :weight 19 :label \"sierra\"}\n   :step-20 {:mode :observe :weight 20 :label \"tango\"}\n   :step-21 {:mode :observe :weight 21 :label \"uniform\"}\n   :step-22 {:mode :observe :weight 22 :label \"victor\"}\n   :step-23 {:mode :observe :weight 23 :label \"whiskey\"}\n   :step-24 {:mode :observe :weight 24 :label \"xray\"}\n   :step-25 {:mode :observe :weight 25 :label \"yankee\"}\n   :step-26 {:mode :observe :weight 26 :label \"zulu\"}\n   :step-27 {:mode :observe :weight 27 :label \"amber\"}\n   :step-28 {:mode :observe :weight 28 :label \"birch\"}})",
+              "to": "(def wall-policy\n  {:phase :after\n   :step-01 {:mode :observe :weight 1 :label \"alpha\"}\n   :step-02 {:mode :observe :weight 2 :label \"bravo\"}\n   :step-03 {:mode :observe :weight 3 :label \"charlie\"}\n   :step-04 {:mode :observe :weight 4 :label \"delta\"}\n   :step-05 {:mode :observe :weight 5 :label \"echo\"}\n   :step-06 {:mode :observe :weight 6 :label \"foxtrot\"}\n   :step-07 {:mode :observe :weight 7 :label \"golf\"}\n   :step-08 {:mode :observe :weight 8 :label \"hotel\"}\n   :step-09 {:mode :observe :weight 9 :label \"india\"}\n   :step-10 {:mode :observe :weight 10 :label \"juliet\"}\n   :step-11 {:mode :observe :weight 11 :label \"kilo\"}\n   :step-12 {:mode :observe :weight 12 :label \"lima\"}\n   :step-13 {:mode :observe :weight 13 :label \"mike\"}\n   :step-14 {:mode :observe :weight 14 :label \"november\"}\n   :step-15 {:mode :observe :weight 15 :label \"oscar\"}\n   :step-16 {:mode :observe :weight 16 :label \"papa\"}\n   :step-17 {:mode :observe :weight 17 :label \"quebec\"}\n   :step-18 {:mode :observe :weight 18 :label \"romeo\"}\n   :step-19 {:mode :observe :weight 19 :label \"sierra\"}\n   :step-20 {:mode :observe :weight 20 :label \"tango\"}\n   :step-21 {:mode :observe :weight 21 :label \"uniform\"}\n   :step-22 {:mode :observe :weight 22 :label \"victor\"}\n   :step-23 {:mode :observe :weight 23 :label \"whiskey\"}\n   :step-24 {:mode :observe :weight 24 :label \"xray\"}\n   :step-25 {:mode :observe :weight 25 :label \"yankee\"}\n   :step-26 {:mode :observe :weight 26 :label \"zulu\"}\n   :step-27 {:mode :observe :weight 27 :label \"amber\"}\n   :step-28 {:mode :observe :weight 28 :label \"birch\"}})",
+              "matches": 1
+            }
+          ]
+        },
+        "successful_mutation": true
+      }
+    ],
+    "ordinary_full_form": true,
+    "ordinary_anchor": false
+  },
+  "qualitative_signal_mentions": [],
+  "final_messages": [
+    "DONE"
+  ],
+  "app_server_stderr": "2026-08-31T13:19:43.242582Z ERROR codex_app_server: Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.\n    1. /private/tmp/clj-surgeon-steering-ab-20260831/.codex\n       To load project-local config, hooks, and exec policies, add /Users/genekim/src.local/clj-surgeon as a trusted project in /private/var/folders/wc/ltz22xt962q_f899cgl31drm0000gn/T/steering-ab-codex.s89dMF/codex-home/config.toml.\n\n2026-08-31T13:19:43.275547Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400\n2026-08-31T13:19:44.096852Z ERROR rmcp::transport::streamable_http_client: fail to delete session: unexpected server response: DELETE returned HTTP 400 session_id=\"d6d22c30-1df7-40b3-870b-3c153aeb9589\"\n2026-08-31T13:19:44.130898Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400",
+  "environment": {
+    "codex_cli_version": null,
+    "user_agent": "clj-surgeon-steering-ab/0.149.1 (Mac OS 26.5.2; arm64) supacode/0.10.8 (clj-surgeon-steering-ab; 1.0.0)",
+    "platform": "unix/macos",
+    "account_type": "chatgpt",
+    "plan_type": "pro",
+    "mcp_registry_tools": [
+      "edit_clojure",
+      "inspect_clojure"
+    ],
+    "source_base": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b"
+  },
+  "shutdown": {
+    "code": 0,
+    "signal": null
+  }
+}

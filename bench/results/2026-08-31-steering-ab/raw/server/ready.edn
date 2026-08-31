@@ -1,0 +1,1 @@
+{:transport :streamable-http, :project-root "/private/tmp/clj-surgeon-steering-ab-20260831", :server :clj-surgeon, :port 56990, :host "127.0.0.1", :pid 87165, :ok true, :verification-profile-source :built-in, :url "http://127.0.0.1:56990/mcp"}

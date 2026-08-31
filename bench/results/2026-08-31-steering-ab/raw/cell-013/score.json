@@ -1,0 +1,98 @@
+{
+  "schema": "clj-surgeon.steering-ab-cell.v1",
+  "id": "12",
+  "phase": "main",
+  "arm": "S",
+  "model": {
+    "requested": "gpt-5.6-sol",
+    "reasoning": "high",
+    "reported": "gpt-5.6-sol",
+    "provider": "openai",
+    "fallback_allowed": false,
+    "reroutes": []
+  },
+  "session": {
+    "thread_id": "01a0580b-bfc6-7621-86e8-3e2141795419",
+    "same_thread_two_turns": true,
+    "observed_mcp_session_sha256": [
+      "4af9deb1d87e4e57242e0c16e07159a2f213b807c3ea085f12a3d08cae572c8c",
+      "a869c01ea37d54510d776da34da5b228d94102800db39c261807270175a57d18"
+    ],
+    "model_tool_mcp_session_sha256": [
+      "a869c01ea37d54510d776da34da5b228d94102800db39c261807270175a57d18"
+    ],
+    "one_model_tool_session": true
+  },
+  "signal": {
+    "exposed": true,
+    "prepared_alternative": {
+      "digest": "5d7539787ea2130864498960b792f1c42bc73f4f8c825d10215c07ccf35b3ebe",
+      "typed_bytes": 3551,
+      "confirm_fill_bytes": 1773,
+      "saved_tokens_estimate": 444
+    },
+    "threshold": 100
+  },
+  "edit1": {
+    "ordinary_full_from_to": true,
+    "exact_after_receipt": true,
+    "turn_status": "completed",
+    "wall_ms": 21366.174
+  },
+  "edit2": {
+    "route": "ordinary-anchor",
+    "primary_qualifies": false,
+    "used_confirm_fill": false,
+    "requested_descriptor": false,
+    "caller_emission_bytes": 245,
+    "wall_ms": 24694.22,
+    "exact": true,
+    "final_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "expected_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "wrong_subject": false,
+    "tool_calls": [
+      {
+        "tool": "edit_clojure",
+        "status": "completed",
+        "arguments": {
+          "workspace_root": "/private/tmp/clj-surgeon-steering-ab-20260831/bench/results/2026-08-31-steering-ab/raw/cell-013/workspace",
+          "edits": [
+            {
+              "file": "src/bench/steering.clj",
+              "within": {
+                "form": "wall-policy"
+              },
+              "from": ":before",
+              "to": ":after",
+              "matches": 1
+            }
+          ]
+        },
+        "successful_mutation": true
+      }
+    ],
+    "ordinary_full_form": false,
+    "ordinary_anchor": true
+  },
+  "qualitative_signal_mentions": [],
+  "final_messages": [
+    "DONE"
+  ],
+  "app_server_stderr": "2026-08-31T13:39:19.404180Z ERROR codex_app_server: Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.\n    1. /private/tmp/clj-surgeon-steering-ab-20260831/.codex\n       To load project-local config, hooks, and exec policies, add /Users/genekim/src.local/clj-surgeon as a trusted project in /private/var/folders/wc/ltz22xt962q_f899cgl31drm0000gn/T/steering-ab-codex.cbi3Vt/codex-home/config.toml.\n\n2026-08-31T13:39:19.452828Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400\n2026-08-31T13:39:20.108887Z ERROR rmcp::transport::streamable_http_client: fail to delete session: unexpected server response: DELETE returned HTTP 400 session_id=\"f9ee21cf-1066-440b-8776-559d3ef11899\"\n2026-08-31T13:39:20.154767Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400",
+  "environment": {
+    "codex_cli_version": null,
+    "user_agent": "clj-surgeon-steering-ab/0.149.1 (Mac OS 26.5.2; arm64) supacode/0.10.8 (clj-surgeon-steering-ab; 1.0.0)",
+    "platform": "unix/macos",
+    "account_type": "chatgpt",
+    "plan_type": "pro",
+    "mcp_registry_tools": [
+      "edit_clojure",
+      "inspect_clojure"
+    ],
+    "source_base": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b"
+  },
+  "shutdown": {
+    "code": 0,
+    "signal": null
+  }
+}

@@ -243,6 +243,7 @@ async function startProxy({ arm, episode, upstreamUrl, workspace }) {
     prepared: null,
     signalExposed: false,
     upstreamSessionHashes: new Set(),
+    modelToolSessionHashes: new Set(),
   };
   const startNs = process.hrtime.bigint();
   const record = (kind, detail) => events.push({
@@ -259,6 +260,9 @@ async function startProxy({ arm, episode, upstreamUrl, workspace }) {
       const requestValue = body.length ? JSON.parse(body.toString("utf8")) : null;
       const session = request.headers["mcp-session-id"];
       if (session) state.upstreamSessionHashes.add(sha256(session));
+      if (session && requestValue?.method === "tools/call") {
+        state.modelToolSessionHashes.add(sha256(session));
+      }
       record("client-request", {
         method: requestValue?.method,
         id: requestValue?.id,
@@ -536,9 +540,18 @@ function scoreEpisode({ id, phase, arm, model, effort, workspace, sourcePath, pr
     && call.arguments && typeof call.arguments === "object"
     && Array.isArray(call.arguments.edits)
     && !Object.hasOwn(call.arguments, "confirm"));
+  const successfulCall = normalized.find(successfulMutation);
+  const successfulArguments = successfulCall?.arguments;
+  const ordinaryFullForm = successfulCall?.tool === "edit_clojure"
+    && Array.isArray(successfulArguments?.edits)
+    && successfulArguments.edits.length === 1
+    && successfulArguments.edits[0].from === edit2From
+    && successfulArguments.edits[0].to === edit2To;
   const route = usedConfirmFill
     ? "confirm-fill"
-    : requestedDescriptor ? "descriptor-request" : ordinaryMutation ? "ordinary-full" : "other";
+    : requestedDescriptor
+      ? "descriptor-request"
+      : ordinaryMutation ? (ordinaryFullForm ? "ordinary-full" : "ordinary-anchor") : "other";
   const emissionBytes = normalized.reduce((sum, call) => sum + canonicalBytes(call.arguments), 0);
   const finalSource = readFileSync(sourcePath, "utf8");
   const exact = sha256(finalSource) === freeze.fixture.source_final_sha256;
@@ -571,8 +584,9 @@ function scoreEpisode({ id, phase, arm, model, effort, workspace, sourcePath, pr
     session: {
       thread_id: threadStart.thread.id,
       same_thread_two_turns: true,
-      upstream_mcp_session_sha256: [...proxy.state.upstreamSessionHashes],
-      one_upstream_session: proxy.state.upstreamSessionHashes.size === 1,
+      observed_mcp_session_sha256: [...proxy.state.upstreamSessionHashes],
+      model_tool_mcp_session_sha256: [...proxy.state.modelToolSessionHashes],
+      one_model_tool_session: proxy.state.modelToolSessionHashes.size === 1,
     },
     signal: {
       exposed: proxy.state.signalExposed,
@@ -590,6 +604,8 @@ function scoreEpisode({ id, phase, arm, model, effort, workspace, sourcePath, pr
       primary_qualifies: usedConfirmFill || requestedDescriptor,
       used_confirm_fill: usedConfirmFill,
       requested_descriptor: requestedDescriptor,
+      ordinary_full_form: ordinaryFullForm,
+      ordinary_anchor: ordinaryMutation && !ordinaryFullForm,
       caller_emission_bytes: emissionBytes,
       wall_ms: turn2.wall_ms,
       exact,
@@ -818,6 +834,12 @@ function aggregateScores(pilot, main, bonus, stoppedAfterPilot) {
       wrong_subject: cells.filter((cell) => cell.edit2.wrong_subject).length,
       median_emission_bytes: median(cells.map((cell) => cell.edit2.caller_emission_bytes)),
       median_wall_ms: median(cells.map((cell) => cell.edit2.wall_ms)),
+      route_counts: {
+        confirm_fill: cells.filter((cell) => cell.edit2.route === "confirm-fill").length,
+        descriptor_request: cells.filter((cell) => cell.edit2.route === "descriptor-request").length,
+        ordinary_full: cells.filter((cell) => cell.edit2.route === "ordinary-full").length,
+        ordinary_anchor: cells.filter((cell) => cell.edit2.route === "ordinary-anchor").length,
+      },
       routes: cells.map((cell) => ({ id: cell.id, route: cell.edit2.route })),
     }];
   }));
@@ -864,6 +886,93 @@ function aggregateScores(pilot, main, bonus, stoppedAfterPilot) {
   };
 }
 
+function refineExistingRoute(score) {
+  if (!score.edit2?.tool_calls) return score;
+  const calls = score.edit2.tool_calls;
+  const usedConfirmFill = calls.some((call) => call.tool === "edit_clojure"
+    && call.arguments && typeof call.arguments === "object"
+    && typeof call.arguments.confirm === "string"
+    && call.arguments.fill && typeof call.arguments.fill === "object");
+  const requestedDescriptor = calls.some((call) =>
+    call.tool === "inspect_clojure" && inspectRequestsWallPolicy(call.arguments));
+  const successfulCall = calls.find((call) => call.successful_mutation);
+  const successfulArguments = successfulCall?.arguments;
+  const ordinaryMutation = successfulCall?.tool === "edit_clojure"
+    && Array.isArray(successfulArguments?.edits)
+    && !Object.hasOwn(successfulArguments, "confirm");
+  const ordinaryFullForm = ordinaryMutation
+    && successfulArguments.edits.length === 1
+    && successfulArguments.edits[0].from === edit2From
+    && successfulArguments.edits[0].to === edit2To;
+  score.edit2.route = usedConfirmFill
+    ? "confirm-fill"
+    : requestedDescriptor
+      ? "descriptor-request"
+      : ordinaryMutation ? (ordinaryFullForm ? "ordinary-full" : "ordinary-anchor") : "other";
+  score.edit2.ordinary_full_form = ordinaryFullForm;
+  score.edit2.ordinary_anchor = ordinaryMutation && !ordinaryFullForm;
+  return score;
+}
+
+function rescoreExisting() {
+  const readCell = (index) => {
+    const cellDir = join(rawRoot, `cell-${String(index).padStart(3, "0")}`);
+    const path = join(cellDir, "score.json");
+    const score = refineExistingRoute(JSON.parse(readFileSync(path, "utf8")));
+    const proxyEvents = readFileSync(join(cellDir, "proxy-transcript.jsonl"), "utf8")
+      .trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const observed = new Set(proxyEvents
+      .filter((event) => event.kind === "client-request" && event.session_sha256)
+      .map((event) => event.session_sha256));
+    const modelTool = new Set(proxyEvents
+      .filter((event) => event.kind === "client-request"
+        && event.method === "tools/call" && event.session_sha256)
+      .map((event) => event.session_sha256));
+    score.session = {
+      ...score.session,
+      observed_mcp_session_sha256: [...observed],
+      model_tool_mcp_session_sha256: [...modelTool],
+      one_model_tool_session: modelTool.size === 1,
+    };
+    delete score.session.upstream_mcp_session_sha256;
+    delete score.session.one_upstream_session;
+    writeJson(path, score);
+    return score;
+  };
+  const pilot = [readCell(0), readCell(1)];
+  const mainScores = Array.from({ length: 12 }, (_, index) => readCell(index + 2));
+  const bonus = [readCell(14), readCell(15)];
+  const aggregate = aggregateScores(pilot, mainScores, bonus, false);
+  aggregate.exploratory_route_detail = {
+    note: "Post-frozen descriptive split of the non-primary ordinary route; primary confirm/descriptor scoring is unchanged.",
+    ordinary_full: mainScores.filter((score) => score.edit2.route === "ordinary-full").length,
+    ordinary_anchor: mainScores.filter((score) => score.edit2.route === "ordinary-anchor").length,
+    by_arm: {
+      C: aggregate.main.by_arm.C.route_counts,
+      S: aggregate.main.by_arm.S.route_counts,
+    },
+  };
+  aggregate.prepared_adoptions = mainScores
+    .filter((score) => score.edit2.route === "confirm-fill")
+    .map((score) => {
+      const calls = score.edit2.tool_calls.filter((call) => call.tool === "edit_clojure");
+      return {
+        id: score.id,
+        arm: score.arm,
+        edit_calls: calls.length,
+        first_attempt_status: calls[0]?.status || null,
+        first_fill_keys: Object.keys(calls[0]?.arguments?.fill || {}),
+        successful_fill_keys: Object.keys(calls.find((call) => call.successful_mutation)?.arguments?.fill || {}),
+        caller_emission_bytes: score.edit2.caller_emission_bytes,
+        wall_ms: score.edit2.wall_ms,
+      };
+    });
+  writeJson(join(resultRoot, "aggregate.json"), aggregate);
+  writeFileSync(join(resultRoot, "report.md"), renderReport(aggregate));
+  writeManifest();
+  return aggregate;
+}
+
 function renderReport(aggregate) {
   if (aggregate.pilot.broken_fixture) {
     return `# Receipt steering A/B result\n\nVerdict: fixture broken by the preregistered sub-ceiling rule; both control pilot cells independently selected the prepared route. The confirmatory cohort did not run.\n`;
@@ -874,22 +983,45 @@ function renderReport(aggregate) {
   const kill = aggregate.main.kill_rule_triggered === null
     ? "not evaluated"
     : aggregate.main.kill_rule_triggered ? "triggered" : "not triggered";
+  const adoption = aggregate.prepared_adoptions?.[0];
+  const emissionDelta = signal.median_emission_bytes - control.median_emission_bytes;
+  const emissionDeltaPct = (signal.median_emission_bytes / control.median_emission_bytes - 1) * 100;
+  const wallDelta = signal.median_wall_ms - control.median_wall_ms;
+  const wallDeltaPct = (signal.median_wall_ms / control.median_wall_ms - 1) * 100;
   return [
     "# Receipt steering A/B result",
+    "",
+    "## Verdict",
     "",
     `Primary: S ${signal.primary_qualifying}/${signal.n}; C ${control.primary_qualifying}/${control.n}; lift ${aggregate.main.steering_lift_percentage_points} percentage points.`,
     `Safety gates: ${gate}. Exactness S ${signal.exact}/${signal.n}, C ${control.exact}/${control.n}; wrong-subject ${signal.wrong_subject + control.wrong_subject}.`,
     `Preregistered <25pp kill: ${kill}.`,
     "",
-    `Median edit-2 caller emission: S ${signal.median_emission_bytes} bytes; C ${control.median_emission_bytes} bytes.`,
-    `Median edit-2 wall: S ${signal.median_wall_ms} ms; C ${control.median_wall_ms} ms.`,
+    "The data-only receipt signal did not clear the frozen steering bar. It changed the prepared-route choice in one of six signal cells and zero of six controls, but that 16.7-point lift is below 25 points. No product promotion is supported.",
+    "",
+    "## Secondary outcomes",
+    "",
+    `Median edit-2 caller emission: S ${signal.median_emission_bytes} bytes; C ${control.median_emission_bytes} bytes; delta ${emissionDelta} bytes (${emissionDeltaPct.toFixed(1)}%).`,
+    `Median edit-2 wall: S ${(signal.median_wall_ms / 1000).toFixed(3)} s; C ${(control.median_wall_ms / 1000).toFixed(3)} s; delta ${(wallDelta / 1000).toFixed(3)} s (${wallDeltaPct.toFixed(1)}%).`,
+    adoption
+      ? `The sole prepared adopter (${adoption.id}) emitted ${adoption.caller_emission_bytes} bytes over ${adoption.edit_calls} edit calls and took ${(adoption.wall_ms / 1000).toFixed(3)} s. Its first fill key was ${JSON.stringify(adoption.first_fill_keys)} and refused; it recovered with ${JSON.stringify(adoption.successful_fill_keys)}.`
+      : "No main-cohort cell adopted the prepared route.",
+    "",
+    "## Route detail",
     "",
     `Sol routes S: ${signal.routes.map((row) => `${row.id}=${row.route}`).join(", ")}.`,
     `Sol routes C: ${control.routes.map((row) => `${row.id}=${row.route}`).join(", ")}.`,
     "",
+    "Six of the eleven non-prepared main cells compressed the supplied whole-form change to a tiny owner-scoped anchor edit. This is a post-frozen descriptive split, not a change to the primary score. It matters to interpretation: the 444-token signal priced confirm+fill against the canonical 3,551-byte full-form call, while many callers independently found an even smaller ordinary path.",
+    "",
     `Spark bonus: ${aggregate.bonus.map((row) => `${row.id}=${row.route}`).join(", ") || "not run"}.`,
     "",
     `Qualitative signal mentions: ${aggregate.qualitative_signal_mentions.length}.`,
+    "",
+    "## Identity and claim boundary",
+    "",
+    `Published product base: ${aggregate.product_base}. Preregistration: ${aggregate.preregistration_commit}.`,
+    "This experiment answers only whether the four-field in-flow receipt signal steered the next path choice on this supplied wall-sized edit. It does not establish a general latency win or authorize a product field.",
     "",
   ].join("\n");
 }
@@ -1022,10 +1154,15 @@ async function proxySelfTest() {
 
 async function main() {
   const selfTestOnly = process.argv.includes("--self-test");
+  const rescoreOnly = process.argv.includes("--rescore-existing");
   const self = selfTest();
   if (selfTestOnly) {
     const proxy = await proxySelfTest();
     process.stdout.write(`${JSON.stringify({ ...self, proxy })}\n`);
+    return;
+  }
+  if (rescoreOnly) {
+    process.stdout.write(`${JSON.stringify(rescoreExisting().main, null, 2)}\n`);
     return;
   }
   requireFact(existsSync(sourceAuth), `subscription auth file not found: ${sourceAuth}`);

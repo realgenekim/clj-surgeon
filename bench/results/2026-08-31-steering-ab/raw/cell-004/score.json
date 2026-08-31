@@ -1,0 +1,117 @@
+{
+  "schema": "clj-surgeon.steering-ab-cell.v1",
+  "id": "03",
+  "phase": "main",
+  "arm": "C",
+  "model": {
+    "requested": "gpt-5.6-sol",
+    "reasoning": "high",
+    "reported": "gpt-5.6-sol",
+    "provider": "openai",
+    "fallback_allowed": false,
+    "reroutes": []
+  },
+  "session": {
+    "thread_id": "01a057fc-bd44-70b0-a0b5-c2b22f9274c3",
+    "same_thread_two_turns": true,
+    "observed_mcp_session_sha256": [
+      "249bcb838cee3d61b2161df3a1ba7840e04b40096cf64efc75c4ed73716696e4",
+      "c65eb68b836f0f85a5fb69260aa70777143a6f9b2486ca07ea44505a88a9a02d"
+    ],
+    "model_tool_mcp_session_sha256": [
+      "c65eb68b836f0f85a5fb69260aa70777143a6f9b2486ca07ea44505a88a9a02d"
+    ],
+    "one_model_tool_session": true
+  },
+  "signal": {
+    "exposed": false,
+    "prepared_alternative": {
+      "digest": "db735d6defea84116f1954cc487d1c9ccd6ba3bdb534ef2a18dea778a80e1eeb",
+      "typed_bytes": 3551,
+      "confirm_fill_bytes": 1773,
+      "saved_tokens_estimate": 444
+    },
+    "threshold": 100
+  },
+  "edit1": {
+    "ordinary_full_from_to": true,
+    "exact_after_receipt": true,
+    "turn_status": "completed",
+    "wall_ms": 21411.314
+  },
+  "edit2": {
+    "route": "ordinary-anchor",
+    "primary_qualifies": false,
+    "used_confirm_fill": false,
+    "requested_descriptor": false,
+    "caller_emission_bytes": 504,
+    "wall_ms": 58856.667,
+    "exact": true,
+    "final_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "expected_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d",
+    "wrong_subject": false,
+    "tool_calls": [
+      {
+        "tool": "edit_clojure",
+        "status": "failed",
+        "arguments": {
+          "workspace_root": "/private/tmp/clj-surgeon-steering-ab-20260831/bench/results/2026-08-31-steering-ab/raw/cell-004/workspace",
+          "edits": [
+            {
+              "file": "src/bench/steering.clj",
+              "within": {
+                "form": "wall-policy"
+              },
+              "from": ":phase :before",
+              "to": ":phase :after",
+              "matches": 1
+            }
+          ]
+        },
+        "successful_mutation": false
+      },
+      {
+        "tool": "edit_clojure",
+        "status": "completed",
+        "arguments": {
+          "workspace_root": "/private/tmp/clj-surgeon-steering-ab-20260831/bench/results/2026-08-31-steering-ab/raw/cell-004/workspace",
+          "edits": [
+            {
+              "file": "src/bench/steering.clj",
+              "within": {
+                "form": "wall-policy"
+              },
+              "from": ":before",
+              "to": ":after",
+              "matches": 1
+            }
+          ]
+        },
+        "successful_mutation": true
+      }
+    ],
+    "ordinary_full_form": false,
+    "ordinary_anchor": true
+  },
+  "qualitative_signal_mentions": [],
+  "final_messages": [
+    "DONE"
+  ],
+  "app_server_stderr": "2026-08-31T13:22:55.661987Z ERROR codex_app_server: Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.\n    1. /private/tmp/clj-surgeon-steering-ab-20260831/.codex\n       To load project-local config, hooks, and exec policies, add /Users/genekim/src.local/clj-surgeon as a trusted project in /private/var/folders/wc/ltz22xt962q_f899cgl31drm0000gn/T/steering-ab-codex.AXuduD/codex-home/config.toml.\n\n2026-08-31T13:22:55.704265Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400\n2026-08-31T13:22:56.423862Z ERROR rmcp::transport::streamable_http_client: fail to delete session: unexpected server response: DELETE returned HTTP 400 session_id=\"ef780c9f-d3c9-4b10-a2a9-07574f6f6a7f\"\n2026-08-31T13:22:56.469617Z ERROR rmcp::transport::streamable_http_client: fail to get common stream: unexpected server response: GET returned HTTP 400",
+  "environment": {
+    "codex_cli_version": null,
+    "user_agent": "clj-surgeon-steering-ab/0.149.1 (Mac OS 26.5.2; arm64) supacode/0.10.8 (clj-surgeon-steering-ab; 1.0.0)",
+    "platform": "unix/macos",
+    "account_type": "chatgpt",
+    "plan_type": "pro",
+    "mcp_registry_tools": [
+      "edit_clojure",
+      "inspect_clojure"
+    ],
+    "source_base": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b"
+  },
+  "shutdown": {
+    "code": 0,
+    "signal": null
+  }
+}
