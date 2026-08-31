@@ -211,6 +211,28 @@ session receives the same `prepared-confirmation-unknown` response as a digest
 that was never served. Cross-session denial is exact behavior, but not an
 existence oracle.
 
+## Caller affinity and outcome discrimination
+
+W1 is available only to callers that retain the MCP session which served the
+confirmation. A Streamable HTTP caller must retain the `Mcp-Session-Id` from
+initialization and use that session for both the eligible `inspect_clojure`
+read and the later `edit_clojure` confirmation. A stdio caller must use the
+same connection. A caller that creates a new MCP session for each tool call
+must not use confirmation. It must submit the ordinary explicit
+`edit_clojure` arguments from the served `prepared_request`.
+
+Callers distinguish every confirmation outcome by the required boolean `ok`
+field. `ok=true` means the lookup or public operation succeeded and the
+caller may consume the returned success data. `ok=false` means the result is
+a typed refusal; the caller reads `error_type`, the structured evidence, and
+the visible remedy. Callers must not infer success or refusal from the presence
+of a descriptor, confirmation digest, or other optional field.
+
+The public tool descriptions and the clj-surgeon skill must state this affinity
+and outcome rule. They must give sessionless callers the ordinary explicit
+arguments route without implying that confirmation exists outside the current
+session.
+
 ## Confirm request and fill law
 
 `edit_clojure` gains one disjoint alternate request shape:
@@ -256,8 +278,8 @@ three-preview limit remain.
 
 | Error type | Condition | Required remedy |
 |---|---|---|
-| `invalid-prepared-confirmation` | Malformed hash, request shape, or fill value. | Correct only the named invalid fields; no registry lookup occurred. |
-| `prepared-confirmation-unknown` | No live entry or local tombstone exists in this boot and session, including a digest served only to another session. | Run one eligible `inspect_clojure` read again. |
+| `invalid-prepared-confirmation` | Malformed hash, request shape, or fill value. | Name every structured `invalid_fields` entry in the visible refusal and correct only those fields; no registry lookup occurred. |
+| `prepared-confirmation-unknown` | No live entry or local tombstone exists in this boot and session, including a digest served only to another session. | Reuse the serving MCP session or submit ordinary explicit edit arguments. Do not say whether another session served the digest. |
 | `prepared-confirmation-expired` | Monotonic TTL elapsed. | Read again; never refresh from the confirm call. |
 | `prepared-confirmation-evicted` | A known entry left the bounded registry. | Read again. |
 | `prepared-confirmation-consumed` | Commit already reached the single-use consume boundary. | Read again; never retry the old commit blind. |
@@ -344,6 +366,10 @@ public operation on commit and introduces only `edit_clojure-preview` for the
 inert lifecycle. `edit_clojure` still rejects `verify`; use
 `apply_clojure_changes` when verification must share rollback authority.
 
+The affinity guidance changes only caller instructions and visible refusal
+text. It does not add a portable capability, global registry, cross-session
+lookup, fallback lookup by root or digest, or alternate write entrance.
+
 ## Telemetry and claims
 
 Product telemetry may record only confirmation eligibility/emission, digest,
@@ -377,6 +403,8 @@ commits or stale retries.
 | Preview authority | None; repeat full confirm/fill for commit | Commit by preview hash | Preview can stale immediately and never replaces transaction fences. |
 | Preview payload | Complete bounded diff + hashes | Truncated diff; unbounded full source | Partial source can mislead; unbounded results harm callers. |
 | Verification | Honest no-verifier forecast | Guess/run exact verifier | `edit_clojure` explicitly lacks verifier authority. |
+| Sessionless callers | Ordinary explicit edit arguments | Portable confirmation; cross-session lookup; repeated dead-end confirmation reads | Explicit arguments preserve the existing transaction without weakening session isolation. |
+| Outcome discrimination | Required `ok` boolean, then `error_type` on refusal | Descriptor presence; digest presence; prose parsing | One stable discriminator applies to pure lookup results and public tool results. |
 | Implementation owner | Sol/SURGEON1 lane; SURGEON2 verifies | SURGEON2 self-implementation | Session state, routing, and pure preview integration are not a small diff; preserve independent review. |
 
 ## Implementation boundary
