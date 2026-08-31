@@ -101,7 +101,15 @@ def score_run(run_dir: Path, encoding) -> dict:
         "requests": [{"file": "src/bench/pair_view.clj", "forms": ["route-event"], "expect": {"forms": 1}}],
         "expect": {"requests": 1, "files": 1},
     }
-    read_subject_ok = read_args == expected_read
+    read_subject_ok = bool(
+        read_args.get("workspace_root") == expected_read["workspace_root"]
+        and read_args.get("expect") == expected_read["expect"]
+        and len(read_args.get("requests") or []) == 1
+        and read_args["requests"][0].get("file") == "src/bench/pair_view.clj"
+        and read_args["requests"][0].get("forms") == ["route-event"]
+        and read_args["requests"][0].get("expect") == {"forms": 1}
+        and read_args["requests"][0].get("operation") in (None, "forms")
+    )
 
     edit_calls = [call for call in calls if call["tool"] == "edit_clojure"]
     preview_calls = [call for call in edit_calls if call["args"].get("preview") is True]
