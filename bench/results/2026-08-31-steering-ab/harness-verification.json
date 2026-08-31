@@ -1,0 +1,24 @@
+{
+  "schema": "clj-surgeon.steering-ab-harness-verification.v1",
+  "verified_before_first_model_call": true,
+  "harness_sha256": "8f2418d50230bc766905aaadbbf695338bb17d57db1fad47a3c510fcf6a74772",
+  "codex_cli_version": "codex-cli 0.149.1",
+  "self_test": {
+    "ok": true,
+    "typed_bytes": 3551,
+    "confirm_fill_bytes": 1773,
+    "saved_tokens_estimate": 444,
+    "proxy_internal_prepares": 2,
+    "control_receipt_byte_transparent": true,
+    "signal_receipt_data_only_augmented": true
+  },
+  "local_published_head_transport_smoke": {
+    "ok": true,
+    "report_sha256": "28e11bd5e2dbafa44b6d7fe8676d7fc2372ad7e6029120734da9f68c0d1cbce1",
+    "prepared_descriptor_served": true,
+    "preview_source_unchanged": true,
+    "confirm_fill_committed": true,
+    "verification_complete": true,
+    "consumed_replay_refused": true
+  }
+}
