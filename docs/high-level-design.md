@@ -557,6 +557,13 @@ is single-use for commit and expires quickly; restart, expiry, eviction,
 unknown-session lookup, collision, hole mismatch, or source drift refuses before
 write with a complete typed reason.
 
+A caller may use confirmation only while it retains the MCP session that
+served the descriptor. A caller that cannot retain that session must submit the
+ordinary explicit edit arguments. Confirmation refusals must make these two
+safe recovery routes visible without revealing whether another session served
+the digest. When structured refusal evidence names invalid request fields, the
+visible refusal must name the same fields.
+
 The same confirmation call may explicitly request an inert dry-run preview.
 Preview compiles the filled ordinary edit against the same frozen source and
 returns one complete bounded diff plus before/after hashes and an honest
