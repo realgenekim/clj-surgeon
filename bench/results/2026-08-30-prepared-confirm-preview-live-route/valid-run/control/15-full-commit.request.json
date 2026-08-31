@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"edit_clojure","arguments":{"workspace_root":"/private/tmp/clj-surgeon-prepared-actions-measure.LMXvWN/bench/results/2026-08-30-prepared-confirm-preview-live-route/valid-run/control/workspace","edits":[{"file":"src/demo.clj","within":{"form":"alpha"},"from":"(def alpha :old)","to":"(def alpha :new)","matches":1}]}}}
