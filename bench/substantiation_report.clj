@@ -55,10 +55,68 @@
   #{"inspect_clojure" "edit_clojure" "apply_clojure_changes"
     "transform_clojure"})
 
+(def ^:private allowed-request-fields
+  #{"workspace_root" "operation" "requests" "file" "files" "owner" "forms"
+    "within" "expect" "edits" "changes" "programs" "delete_owners" "basis"
+    "site_ids" "decisions" "candidate_query_sha256" "preview" "verify"
+    "receipt_out" "extraction"})
+
+(def ^:private allowed-result-fields
+  #{"ok" "operation" "elapsed_ms" "read_complete" "source_unchanged"
+    "mutation_attempted" "committed" "verification_complete" "next_action"
+    "error_type" "results" "prepared_request" "available_owners"
+    "available_owners_omitted" "write_refusal_evidence" "changes" "edits"
+    "files" "matches" "result_count" "receipt_hash" "read_back_hashes"})
+
+(def ^:private allowed-operations
+  #{"inspect_clojure" "edit_clojure" "apply_clojure_changes"
+    "transform_clojure" "forms" "form" "namespace" "root" "source"
+    "dependencies" "callers" "locations" "prepare-change" "basis" "other"})
+
+(def ^:private allowed-refusal-types
+  #{"mixed-request-ids" "expect-count-mismatch" "batch-form-selection-failed"
+    "invalid-mcp-request" "invalid-request" "stale-source"
+    "substantiation-ledger-unhealthy" "substantiation-start-append-failed"
+    "other"})
+
+(def ^:private allowed-semantic-kinds
+  #{"form" "forms" "namespace" "root" "source" "dependencies" "callers"
+    "locations" "other"})
+
+(def ^:private allowed-subject-kinds
+  #{"file" "path" "owner" "form" "namespace" "locator" "subject"})
+
 (declare invalid!)
 
 (defn- sha256? [value]
   (and (string? value) (boolean (re-matches #"[0-9a-f]{64}" value))))
+
+(defn- uuid-string? [value]
+  (and (string? value)
+       (boolean
+         (re-matches
+           #"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+           value))))
+
+(defn- instant? [value]
+  (and (string? value)
+       (try
+         (Instant/parse value)
+         true
+         (catch java.time.format.DateTimeParseException _ false))))
+
+(defn- nonnegative-integer? [value]
+  (and (integer? value) (not (neg? value))))
+
+(defn- finite-nonnegative? [value]
+  (and (number? value)
+       (Double/isFinite (double value))
+       (not (neg? (double value)))))
+
+(defn- closed-string-vector? [value allowed]
+  (and (vector? value)
+       (every? #(and (string? %) (contains? allowed %)) value)
+       (= value (vec (sort (distinct value))))))
 
 (defn- closed-map!
   [value required allowed message data]
@@ -74,7 +132,8 @@
 (defn- validate-subject-token! [subject data]
   (closed-map! subject #{:kind :token} #{:kind :token}
                "Substantiation subject token is not closed" data)
-  (when-not (and (string? (:kind subject)) (sha256? (:token subject)))
+  (when-not (and (contains? allowed-subject-kinds (:kind subject))
+                 (sha256? (:token subject)))
     (invalid! "Substantiation subject token is invalid" data)))
 
 (defn- validate-feature! [feature data]
@@ -85,17 +144,58 @@
   (closed-map! (:dimensions feature) #{} allowed-dimension-fields
                "Substantiation feature dimensions are not closed" data)
   (when-not (and (string? (:feature_id feature))
+                 (boolean (re-matches #"[a-z0-9][a-z0-9-]{0,63}"
+                                      (:feature_id feature)))
                  (string? (:stage feature))
+                 (boolean (re-matches #"[a-z0-9][a-z0-9-]{0,63}"
+                                      (:stage feature)))
                  (every? #(and (integer? %) (not (neg? %)))
                          (vals (:counts feature)))
-                 (every? #(or (boolean? %) (string? %) (nil? %))
-                         (vals (:dimensions feature))))
+                 (every? boolean?
+                         (vals (dissoc (:dimensions feature)
+                                       :skeleton_token :query_token))))
     (invalid! "Substantiation feature values are invalid" data))
   (doseq [[key value] (:dimensions feature)
           :when (str/ends-with? (name key) "token")]
     (when-not (sha256? value)
       (invalid! "Substantiation feature token is invalid"
                 (assoc data :dimension key)))))
+
+(defn- validate-request-shape! [shape data]
+  (closed-map! shape allowed-request-shape-fields allowed-request-shape-fields
+               "Substantiation request shape is not closed" data)
+  (when-not (and (closed-string-vector? (:field_presence shape)
+                                        allowed-request-fields)
+                 (vector? (:subject_tokens shape))
+                 (every? nonnegative-integer?
+                         ((juxt :request_count :edit_count :change_count) shape)))
+    (invalid! "Substantiation request shape values are invalid" data))
+  (doseq [subject (:subject_tokens shape)]
+    (validate-subject-token! subject data)))
+
+(defn- validate-result-shape! [shape data]
+  (closed-map! shape allowed-result-shape-fields allowed-result-shape-fields
+               "Substantiation result shape is not closed" data)
+  (when-not
+    (and (closed-string-vector? (:field_presence shape) allowed-result-fields)
+         (vector? (:subject_tokens shape))
+         (every? nonnegative-integer?
+                 ((juxt :owner_token_count :location_row_count
+                        :duplicate_group_count :source_character_count
+                        :result_count) shape))
+         (closed-string-vector? (:semantic_kinds shape) allowed-semantic-kinds)
+         (every? boolean?
+                 ((juxt :source_body_present :dependency_evidence_present
+                        :hash_evidence_present :evidence_complete :ok :committed
+                        :verification_complete :source_unchanged :read_complete)
+                  shape))
+         (contains? #{"reached" "not-reached"} (:location_cap_state shape))
+         (or (nil? (:error_type shape))
+             (contains? allowed-refusal-types (:error_type shape)))
+         (finite-nonnegative? (:elapsed_ms shape)))
+    (invalid! "Substantiation result shape values are invalid" data))
+  (doseq [subject (:subject_tokens shape)]
+    (validate-subject-token! subject data)))
 
 (defn- validate-event-shape! [event expected-sequence]
   (let [data {:sequence expected-sequence}
@@ -107,28 +207,28 @@
                    (or (nil? (:turn_token transport))
                        (sha256? (:turn_token transport)))
                    (sha256? (:key_id transport))
+                   (string? (:client_name transport))
+                   (string? (:client_version transport))
                    (= "unknown" (:caller_model transport))
                    (= "not-exposed" (:caller_model_source transport)))
       (invalid! "Substantiation transport identity is invalid" data))
-    (when-not (contains? public-tools (:tool event))
-      (invalid! "Substantiation public tool is invalid" data))
+    (when-not (and (uuid-string? (:event_id event))
+                   (uuid-string? (:call_id event))
+                   (instant? (:observed_at event))
+                   (contains? #{"start" "finish"} (:phase event))
+                   (contains? public-tools (:tool event))
+                   (contains? allowed-operations (:operation event))
+                   (vector? (:features event)))
+      (invalid! "Substantiation event values are invalid" data))
     (if start?
       (do
         (when (contains? event :result_shape)
           (invalid! "Start event contains result shape" data))
-        (closed-map! (:request_shape event)
-                     allowed-request-shape-fields allowed-request-shape-fields
-                     "Substantiation request shape is not closed" data)
-        (doseq [subject (get-in event [:request_shape :subject_tokens])]
-          (validate-subject-token! subject data)))
+        (validate-request-shape! (:request_shape event) data))
       (do
         (when (contains? event :request_shape)
           (invalid! "Finish event contains request shape" data))
-        (closed-map! (:result_shape event)
-                     allowed-result-shape-fields allowed-result-shape-fields
-                     "Substantiation result shape is not closed" data)
-        (doseq [subject (get-in event [:result_shape :subject_tokens])]
-          (validate-subject-token! subject data))))
+        (validate-result-shape! (:result_shape event) data)))
     (doseq [feature (:features event)]
       (validate-feature! feature data))))
 
