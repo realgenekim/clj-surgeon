@@ -30,6 +30,7 @@
    [clj-surgeon.mcp-server-test]
    [clj-surgeon.mcp-substantiation-report-test]
    [clj-surgeon.mcp-substantiation-test]
+   [clj-surgeon.mcp-substantiation-w1-witness-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
