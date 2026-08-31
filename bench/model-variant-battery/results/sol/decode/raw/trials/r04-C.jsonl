@@ -1,0 +1,4 @@
+1788150659439397000	{"type":"thread.started","thread_id":"01a05615-b925-7613-ac51-18dca38acc83"}
+1788150659441949000	{"type":"turn.started"}
+1788150662778955000	{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}
+1788150662783661000	{"type":"turn.completed","usage":{"input_tokens":18723,"cached_input_tokens":9984,"cache_write_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0}}

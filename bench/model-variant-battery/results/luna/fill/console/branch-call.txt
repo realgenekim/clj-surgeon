@@ -1,0 +1,25 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-branch-call
+  decision: Change render -> ui/render; preserve the nil branch.
+
+SPARK REPLACEMENT
+(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x))
+
+RESULT
+  refused
+  {:error
+ "Invalid :do replacement: Unexpected EOF. [at line 1, column 64]",
+ :change-index 0,
+ :change-id :spark-bang,
+ :error-type :invalid-intent-form,
+ :field ":do replacement"}
+
+WALL TIME
+  source 159 ms / spark 4408.9 ms / apply 163.9 ms / total 4874.4 ms
+
+ACTION FILE DELTA
+(no file changes)
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150586675-38817.json

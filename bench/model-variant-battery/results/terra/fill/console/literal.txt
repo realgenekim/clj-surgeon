@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-literal
+  decision: Change :cold -> :warm.
+
+SPARK REPLACEMENT
+(defn fill-literal [] :warm)
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "5af3418bce0fb3743246c8697ed58b4988af95adb5d334f9dfa2340d0bcd0717",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788150435134-26237.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "0305868afc393601dcbb83c10c0013727ef165658767de82f9367574b1834e2f"}},
+ :match-count 1}
+
+WALL TIME
+  source 297.2 ms / spark 1523.7 ms / apply 180.3 ms / total 2300.1 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    01fce5a18a5b3035db9db9202dd6f8ec3b700fa9d88911bf32c764aaa47fbb08 -> 0305868afc393601dcbb83c10c0013727ef165658767de82f9367574b1834e2f
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150435392-26237.json

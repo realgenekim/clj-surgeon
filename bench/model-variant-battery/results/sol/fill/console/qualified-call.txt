@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-qualified-call
+  decision: Change legacy/transform -> modern/transform.
+
+SPARK REPLACEMENT
+(defn fill-qualified-call [x] (modern/transform x))
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "be014368bba26942c1bcd730c060f54b3a26f92aaaaf8901ce5e19dcacf43394",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788150721505-47760.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "73f9e50e8dcfe7b50afc54c907bc60a3fc0cd40d46da27d216436fae20381aae"}},
+ :match-count 1}
+
+WALL TIME
+  source 158.9 ms / spark 3929.3 ms / apply 261.6 ms / total 4502.4 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    0305868afc393601dcbb83c10c0013727ef165658767de82f9367574b1834e2f -> 73f9e50e8dcfe7b50afc54c907bc60a3fc0cd40d46da27d216436fae20381aae
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150721854-47760.json

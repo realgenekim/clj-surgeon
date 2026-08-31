@@ -1,0 +1,24 @@
+{
+  "intent": {
+    "file": "bench/fixtures/model_variant_battery.clj",
+    "owner": "fill-selected-arity",
+    "decision": "Change the zero-arity return :old -> :new; preserve the one-arity behavior."
+  },
+  "replacement": "(defn fill-selected-arity ([] :new) ([x] x))",
+  "outcome": "applied",
+  "timing_ms": {
+    "source": 181,
+    "spark": 1493.9,
+    "apply": 174.1,
+    "total": 1984.3
+  },
+  "detail": "{:intent-count 1,\n :receipt-hash\n \"0f7fdcc74bba9c07af678119866cf5f5b3095da0abe37cbed1b9bf5392b986ce\",\n :inverse {:operation :undo-change!, :guarded-file-count 1},\n :changed-file-count 1,\n :operation :change!,\n :committed true,\n :receipt-file\n \"/private/tmp/bang-rig/state/apply-1788150442242-26629.edn\",\n :ok true,\n :change-count 1,\n :transaction-version 1,\n :verified\n {:whole-files true,\n  :file-count 1,\n  :read-back-hashes\n  {\"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj\"\n   \"ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80\"}},\n :match-count 1}",
+  "action_file_delta": [
+    {
+      "path": "bench/fixtures/model_variant_battery.clj",
+      "before": "1a8193448861f005d281e186ffeaefe26f01a7d02c71e6255344fbcbcce76ad2",
+      "after": "ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80"
+    }
+  ],
+  "at": "2026-08-31T04:27:22.482Z"
+}

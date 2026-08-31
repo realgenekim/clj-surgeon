@@ -1,0 +1,18 @@
+{
+  "intent": {
+    "file": "bench/fixtures/model_variant_battery.clj",
+    "owner": "fill-branch-call",
+    "decision": "Change render -> ui/render; preserve the nil branch."
+  },
+  "replacement": "(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x))",
+  "outcome": "refused",
+  "timing_ms": {
+    "source": 159,
+    "spark": 4408.9,
+    "apply": 163.9,
+    "total": 4874.4
+  },
+  "detail": "{:error\n \"Invalid :do replacement: Unexpected EOF. [at line 1, column 64]\",\n :change-index 0,\n :change-id :spark-bang,\n :error-type :invalid-intent-form,\n :field \":do replacement\"}",
+  "action_file_delta": [],
+  "at": "2026-08-31T04:29:46.675Z"
+}

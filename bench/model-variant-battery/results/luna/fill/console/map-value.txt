@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-map-value
+  decision: Change :draft -> :ready; preserve :retries.
+
+SPARK REPLACEMENT
+(defn fill-map-value [] {:status :ready :retries 2})
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "64aab492088c477f962063f1272cef2c28c4f0a5bafc26cb04cd4362bf9090dd",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788150577475-38359.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "1a8193448861f005d281e186ffeaefe26f01a7d02c71e6255344fbcbcce76ad2"}},
+ :match-count 1}
+
+WALL TIME
+  source 174.2 ms / spark 1341.4 ms / apply 169.9 ms / total 1820.8 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    73f9e50e8dcfe7b50afc54c907bc60a3fc0cd40d46da27d216436fae20381aae -> 1a8193448861f005d281e186ffeaefe26f01a7d02c71e6255344fbcbcce76ad2
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150577711-38359.json

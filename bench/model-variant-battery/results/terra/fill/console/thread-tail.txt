@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-thread-tail
+  decision: Change persist -> audit/persist; preserve the preceding thread steps.
+
+SPARK REPLACEMENT
+(defn fill-thread-tail [x] (-> x normalize audit/persist))
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "3cffa7979760f62a17d7636a209333f34e0167d7e73d876364ae993ac9da1ee9",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788150444318-27176.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5"}},
+ :match-count 1}
+
+WALL TIME
+  source 225 ms / spark 1500.3 ms / apply 142.2 ms / total 2011 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80 -> 42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150444537-27176.json

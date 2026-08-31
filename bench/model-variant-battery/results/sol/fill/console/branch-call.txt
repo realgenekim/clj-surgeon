@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-branch-call
+  decision: Change render -> ui/render; preserve the nil branch.
+
+SPARK REPLACEMENT
+(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x)))
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "a7f39ee5a87dd0598526a574941d4777cfaa6b54b28fa04ed2ba06498573c8ec",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788150735689-48389.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "ce7b25edf9fb3e6df1aeb4602de1adde8f9fdb92570bdf700daff3cf43588f5a"}},
+ :match-count 1}
+
+WALL TIME
+  source 169.7 ms / spark 3850.7 ms / apply 181.9 ms / total 4360.7 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5 -> ce7b25edf9fb3e6df1aeb4602de1adde8f9fdb92570bdf700daff3cf43588f5a
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788150735949-48389.json

@@ -1,0 +1,24 @@
+{
+  "intent": {
+    "file": "bench/fixtures/model_variant_battery.clj",
+    "owner": "fill-qualified-call",
+    "decision": "Change legacy/transform -> modern/transform."
+  },
+  "replacement": "(defn fill-qualified-call [x] (modern/transform x))",
+  "outcome": "applied",
+  "timing_ms": {
+    "source": 165.8,
+    "spark": 2218.3,
+    "apply": 190.8,
+    "total": 2709.3
+  },
+  "detail": "{:intent-count 1,\n :receipt-hash\n \"be014368bba26942c1bcd730c060f54b3a26f92aaaaf8901ce5e19dcacf43394\",\n :inverse {:operation :undo-change!, :guarded-file-count 1},\n :changed-file-count 1,\n :operation :change!,\n :committed true,\n :receipt-file\n \"/private/tmp/bang-rig/state/apply-1788150437887-26351.edn\",\n :ok true,\n :change-count 1,\n :transaction-version 1,\n :verified\n {:whole-files true,\n  :file-count 1,\n  :read-back-hashes\n  {\"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj\"\n   \"73f9e50e8dcfe7b50afc54c907bc60a3fc0cd40d46da27d216436fae20381aae\"}},\n :match-count 1}",
+  "action_file_delta": [
+    {
+      "path": "bench/fixtures/model_variant_battery.clj",
+      "before": "0305868afc393601dcbb83c10c0013727ef165658767de82f9367574b1834e2f",
+      "after": "73f9e50e8dcfe7b50afc54c907bc60a3fc0cd40d46da27d216436fae20381aae"
+    }
+  ],
+  "at": "2026-08-31T04:27:18.143Z"
+}
