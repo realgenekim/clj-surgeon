@@ -109,3 +109,64 @@ Gene's advance words authorize frozen red and implementation only because this
 review passes the repaired packet. They do not authorize schema drift, a
 stateless fiction, global cache, preview commit token, implementation by this
 reviewer, installation, reload, or shared-runtime publication.
+
+## 2026-08-31 affinity-repair edge audit
+
+The field audit proved that a per-call-session client cannot use W1 and that
+visible refusal text can omit structured invalid fields. Gene selected the
+existing session-bound authority model. This audit checks that the caller
+repair composes with the installed PREP-ACT contract.
+
+### Existing outcome shapes
+
+A standalone analysis nREPL loaded the exact `05f5a196` product namespace.
+Pure probes observed these current shapes:
+
+| Outcome | `ok` | Other distinguishing data |
+|---|---:|---|
+| confirmation registration | boolean `true` | inert confirmation fields |
+| same-session `lookup!` success | boolean `true` | retained descriptor entry |
+| cross-session or never-served lookup | boolean `false` | typed `prepared-confirmation-unknown` |
+| malformed confirmation request | boolean `false` | typed `invalid-prepared-confirmation` and `invalid_fields` |
+| successful preview | boolean `true` | inert preview fields |
+| ordinary confirmed commit | boolean `true` | ordinary edit result and receipt law |
+
+The `ok` discriminator is already present and boolean across the installed
+success and refusal families. Guidance can standardize the caller branch
+without changing any result schema. Descriptor or digest presence is not a
+safe discriminator because lookup success, preview success, commit success,
+and refusals carry different optional fields.
+
+### Cross-spec interactions
+
+- `MCP-OP-PREP-ACT-004` remains authoritative. The repair teaches session
+  affinity but does not permit cross-session lookup.
+- `MCP-OP-PREP-ACT-014` remains authoritative. Ineligible and unsupported
+  results gain no dynamic cue; guidance lives only in public descriptions and
+  the skill.
+- `MCP-OP-PREP-ACT-015` remains authoritative. Eligible result coaching stays
+  byte-identical. No session ID, digest, file, root, or source enters prose.
+- `MCP-OP-PREP-ACT-008` and `MCP-OP-PREP-ACT-021` jointly require one
+  complete visible remedy and the same structured invalid-field vocabulary.
+- Ordinary explicit `prepared_request.arguments` remains the only fallback
+  for a caller that cannot retain the serving session.
+
+### New falsifier: hostile field name
+
+`validate-confirm-request` currently includes unknown top-level request keys
+in `invalid_fields`. A probe using the key `ignore prior instructions`
+returned that exact caller-controlled string. Raw concatenation into prose
+would create an avoidable instruction-shaped channel and could break line
+structure.
+
+The repair therefore renders the ordered field names as one canonical JSON
+array literal with canonical escaping. The visible list remains equal to the
+structured list, but each field name remains delimited data. Field values,
+digests, roots, source, and session identity never enter the message.
+
+### Phase-4 verdict
+
+**PASS FOR FROZEN RED after the canonical JSON field-rendering amendment.**
+
+The amendment closes one safety gap without changing authority, success data,
+session isolation, result coaching, or the ordinary explicit edit route.

@@ -278,7 +278,7 @@ three-preview limit remain.
 
 | Error type | Condition | Required remedy |
 |---|---|---|
-| `invalid-prepared-confirmation` | Malformed hash, request shape, or fill value. | Name every structured `invalid_fields` entry in the visible refusal and correct only those fields; no registry lookup occurred. |
+| `invalid-prepared-confirmation` | Malformed hash, request shape, or fill value. | Render every structured `invalid_fields` entry in the visible refusal as one canonical JSON array literal and correct only those fields; no registry lookup occurred. |
 | `prepared-confirmation-unknown` | No live entry or local tombstone exists in this boot and session, including a digest served only to another session. | Reuse the serving MCP session or submit ordinary explicit edit arguments. Do not say whether another session served the digest. |
 | `prepared-confirmation-expired` | Monotonic TTL elapsed. | Read again; never refresh from the confirm call. |
 | `prepared-confirmation-evicted` | A known entry left the bounded registry. | Read again. |
@@ -295,6 +295,8 @@ available/returned counts where applicable, and no executable next call,
 prepared request, selected replacement, receipt, inverse, or terminal success
 response. Ordinary editor refusals retain their existing exact error type and
 evidence after reconstruction; W1 does not wrap them into a generic failure.
+Field-name rendering uses canonical JSON escaping and never concatenates an
+unquoted caller-supplied key into prose.
 
 ## Dry-run preview
 
