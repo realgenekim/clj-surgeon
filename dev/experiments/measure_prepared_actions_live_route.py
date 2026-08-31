@@ -420,8 +420,8 @@ def validate(control, candidate):
             and candidate_unknown.get("source_unchanged") is True
         ),
         "candidate_unknown_names_both_safe_routes": (
-            "Reuse the MCP session" in candidate_unknown_text
-            and "prepared_request.arguments" in candidate_unknown_text
+            "Reuse the serving MCP session" in candidate_unknown_text
+            and "ordinary explicit edit arguments" in candidate_unknown_text
         ),
         "refusals_source_byte_identical": all(
             arm["before"] == arm["after_refusals"] for arm in (control, candidate)

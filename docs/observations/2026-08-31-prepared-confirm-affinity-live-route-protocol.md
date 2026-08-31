@@ -30,8 +30,8 @@ processes. `semantic_correct=true` requires:
 1. both refusals retain the same stable error type and structured evidence;
 2. the candidate renders the hostile field once as one canonical escaped JSON
    array, with no interpolation into instructions;
-3. the candidate unknown remedy names both safe routes: reuse the MCP session,
-   or submit the served `prepared_request.arguments` explicitly;
+3. the candidate unknown remedy names both safe routes: reuse the serving MCP
+   session, or submit ordinary explicit edit arguments;
 4. all refusal calls leave fixture bytes unchanged;
 5. the ordinary inspect and edit paths remain byte-identical after removing
    only elapsed-time fields, receipt/undo identifiers, and private arm roots.
