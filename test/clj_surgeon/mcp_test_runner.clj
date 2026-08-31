@@ -20,6 +20,7 @@
    [clj-surgeon.mcp-paths-test]
    [clj-surgeon.mcp-prepared-confirmation-test]
    [clj-surgeon.mcp-prepared-request-test]
+   [clj-surgeon.mcp-prepared-wire-test]
    [clj-surgeon.mcp-process-test]
    [clj-surgeon.mcp-program-tool-test]
    [clj-surgeon.mcp-read-request-normalization-test]
@@ -61,6 +62,7 @@
           'clj-surgeon.mcp-process-test
           'clj-surgeon.mcp-prepared-request-test
           'clj-surgeon.mcp-prepared-confirmation-test
+          'clj-surgeon.mcp-prepared-wire-test
           'clj-surgeon.mcp-program-tool-test
           'clj-surgeon.mcp-read-request-normalization-test
           'clj-surgeon.mcp-schema-test
