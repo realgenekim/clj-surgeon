@@ -833,26 +833,26 @@
                   (let [path ["create_files" index]
                         _ (validate-fields! creation editor-creation-fields
                                             required-editor-creation-fields
-                                            path)]
-                    (let [file (nonblank-string! (field creation "file")
-                                                   (conj path "file"))
-                          content (nonblank-string! (field creation "content")
-                                                    (conj path "content"))]
-                      ;; The created content passes the same complete-input
-                      ;; parser every edited future file must satisfy, and the
-                      ;; refusal names the offending path, not a field index.
-                      (try
-                        (parser/parse-string-all content)
-                        (catch Exception error
-                          (refuse!
-                            :invalid-created-source (conj path "content")
-                            (str "Created content does not parse as Clojure or"
-                                 " EDN: " file)
-                            {:error-type :invalid-created-source
-                             :path file
-                             :file file
-                             :cause-error (.getMessage error)})))
-                      {:file file :content content})))
+                                            path)
+                        file (nonblank-string! (field creation "file")
+                                               (conj path "file"))
+                        content (nonblank-string! (field creation "content")
+                                                  (conj path "content"))]
+                    ;; The created content passes the same complete-input
+                    ;; parser every edited future file must satisfy, and the
+                    ;; refusal names the offending path, not a field index.
+                    (try
+                      (parser/parse-string-all content)
+                      (catch Exception error
+                        (refuse!
+                          :invalid-created-source (conj path "content")
+                          (str "Created content does not parse as Clojure or"
+                               " EDN: " file)
+                          {:error-type :invalid-created-source
+                           :path file
+                           :file file
+                           :cause-error (.getMessage error)})))
+                    {:file file :content content}))
                 (nonempty-array! (field params "create_files")
                                  ["create_files"])
                 (range)))
