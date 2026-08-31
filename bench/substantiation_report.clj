@@ -494,6 +494,9 @@
      :features counts
      :feature_count_sums sums
      :client_strata client-strata
+     :prepared_request
+     {:actionable_adoption_denominator :unavailable
+      :reason :caller-session-affinity-not-observable}
      :coverage {:complete_calls completed
                 :ledger_gaps 0
                 :classifier_episodes (count episodes)}

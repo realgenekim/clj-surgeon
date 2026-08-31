@@ -180,6 +180,9 @@
     (is (= :observed-before-after
            (get-in compiled [:claims :historical_comparison])))
     (is (= :projected (get-in compiled [:claims :decode_seconds])))
+    (is (= {:actionable_adoption_denominator :unavailable
+            :reason :caller-session-affinity-not-observable}
+           (:prepared_request compiled)))
     (is (false? (:promotion_authority compiled)))
     (is (thrown-with-msg?
           clojure.lang.ExceptionInfo

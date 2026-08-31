@@ -166,6 +166,7 @@
      :alarm (atom nil)
      :active? (atom true)
      :prepared (atom {})
+     :confirmations (atom {})
      :continuations (atom {})
      :lock (Object.)
      :append-fn append-fn
@@ -438,6 +439,19 @@
           (arguments descriptor)
           (hole-paths descriptor)))
 
+(def ^:private prepared-confirmation-consumed-key
+  ::prepared-confirmation-consumed)
+
+(defn mark-prepared-confirmation-consumed
+  "Attach one process-local fact after the official registry consumes a digest.
+  Clojure metadata never crosses the public MCP result boundary."
+  [result digest]
+  (with-meta result
+    (assoc (meta result) prepared-confirmation-consumed-key digest)))
+
+(defn- consumed-confirmation-digest [result]
+  (get (meta result) prepared-confirmation-consumed-key))
+
 (defn- feature
   ([feature-id stage] (feature feature-id stage {} {}))
   ([feature-id stage counts dimensions]
@@ -498,6 +512,8 @@
 (defn- result-features [state context result]
   (let [descriptor (or (:prepared_request result)
                        (get result "prepared_request"))
+        confirmation (or (:prepared_confirmation result)
+                         (get result "prepared_confirmation"))
         error-type (some-> (or (:error_type result) (get result "error_type"))
                            field-name)
         requests (vec (or (get-in context [:params :requests])
@@ -508,10 +524,24 @@
         descriptor-token
         (when descriptor
           (private-token (:secret state) (canonical-json (skeleton descriptor))))
-        consumed (some #(when (and (= "prepared-request" (:feature_id %))
-                                   (= "consumed" (:stage %)))
-                          (get-in % [:dimensions :skeleton_token]))
-                       (:request-features context))
+        session-token (get-in context [:identity :session-token])
+        confirmation-token
+        (when-let [digest (or (:descriptor_sha256 confirmation)
+                              (get confirmation "descriptor_sha256"))]
+          (private-token (:secret state) digest))
+        consumed-confirmation-token
+        (when-let [digest (consumed-confirmation-digest result)]
+          (private-token (:secret state) digest))
+        confirmation-key [session-token consumed-confirmation-token]
+        official-consumed
+        (when consumed-confirmation-token
+          (get @(:confirmations state) confirmation-key))
+        request-consumed
+        (some #(when (and (= "prepared-request" (:feature_id %))
+                          (= "consumed" (:stage %)))
+                 (get-in % [:dimensions :skeleton_token]))
+              (:request-features context))
+        consumed (or request-consumed official-consumed)
         ids-omitted (some #(and (= "read-normalization" (:feature_id %))
                                 (= "ids-omitted" (:stage %)))
                           (:request-features context))
@@ -527,7 +557,12 @@
     (when descriptor-token
       (swap! (:prepared state) assoc descriptor-token
              {:descriptor descriptor
-              :session-token (get-in context [:identity :session-token])}))
+              :session-token session-token}))
+    (when (and descriptor-token confirmation-token)
+      (swap! (:confirmations state) assoc
+             [session-token confirmation-token] descriptor-token))
+    (when official-consumed
+      (swap! (:confirmations state) dissoc confirmation-key))
     (when continuation-token
       (swap! (:continuations state) assoc continuation-token
              (get-in context [:identity :session-token])))
@@ -536,6 +571,10 @@
       (conj (feature "prepared-request" "emitted"
                      {:descriptors 1 :holes (count (hole-paths descriptor))}
                      {:eligible true :skeleton_token descriptor-token}))
+
+      official-consumed
+      (conj (feature "prepared-request" "consumed" {:descriptors 1}
+                     {:skeleton_token official-consumed}))
 
       (and ids-omitted (true? (:ok result)))
       (conj (feature "read-normalization" "ids-generated"
