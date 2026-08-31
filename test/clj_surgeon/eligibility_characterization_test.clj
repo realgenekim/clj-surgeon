@@ -4,7 +4,8 @@
   Flywheel-built: fixture by the caller (judgment), case tests by oss-120b (fan-out)."
   (:require [clojure.test :refer [deftest is]]
             [clj-surgeon.mcp-prepared-request :as prep]
-            [clj-surgeon.structural-lens :as lens]))
+            [clj-surgeon.structural-lens :as lens]
+            [clj-surgeon.eligibility-explainer :as ee]))
 
 (def ^:private file "src/x.clj")
 (def ^:private fhash (apply str (repeat 64 "a")))
@@ -113,8 +114,7 @@
   ;; candidate-owned explainer (test support), loaded via classpath — hermetic.
   ;; General agreement: for the base AND every mutation, the explainer's
   ;; :eligible? must equal the product's attach decision.
-  (require '[clj-surgeon.eligibility-explainer :as ee])
-  (let [explain (resolve 'clj-surgeon.eligibility-explainer/explain)
+  (let [explain ee/explain
         b (base-fixture)
         f (get-in b [:results 0 :forms 0])
         muts [(assoc-in b [:results 0 :file_hash] "abc")
