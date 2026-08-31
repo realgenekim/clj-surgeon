@@ -1,0 +1,36 @@
+bang rig is warm
+{
+  "ok": true,
+  "alive": true,
+  "warm": true,
+  "model": "gpt-5.3-codex-spark",
+  "daemon_pid": 96849,
+  "app_server_pid": 96854,
+  "thread_id": "01a056c7-eafd-7e33-bc90-a83a21bfe66b",
+  "probe_thread_id": "01a056c7-f4b2-7f91-9869-376b9a1c7d0f",
+  "worktree": "/private/tmp/bang-rig/worktree",
+  "last_bang": {
+    "intent": {
+      "file": "src/clj_surgeon/dogfood_twins.clj",
+      "owner": "alpha",
+      "decision": "Change the string value \"delta\" to \"epsilon\". Keep the def name alpha."
+    },
+    "replacement": "(def alpha \"epsilon\")",
+    "outcome": "applied",
+    "timing_ms": {
+      "source": 277.2,
+      "spark": 945,
+      "apply": 149.4,
+      "total": 1656.6
+    },
+    "detail": "{:intent-count 1,\n :receipt-hash\n \"f34ccc2b47c2426522543fd7bbbcdfdbf4c69784923203d9193d2ff4c2b2ef1f\",\n :inverse {:operation :undo-change!, :guarded-file-count 1},\n :changed-file-count 1,\n :operation :change!,\n :committed true,\n :receipt-file\n \"/private/tmp/bang-rig/state/apply-1788162215365-88994.edn\",\n :ok true,\n :change-count 1,\n :transaction-version 1,\n :verified\n {:whole-files true,\n  :file-count 1,\n  :read-back-hashes\n  {\"/private/tmp/bang-rig/worktree/src/clj_surgeon/dogfood_twins.clj\"\n   \"7d8a47e0590762982b280d848fa5cceffc959060d4d6fa9ddcd0f5c1b3109c4c\"}},\n :match-count 1}",
+    "action_file_delta": [
+      {
+        "path": "src/clj_surgeon/dogfood_twins.clj",
+        "before": "acf5469d6dfd49bc967869b75fe22ec21809039d2c8f001a9eff51b9823dc634",
+        "after": "7d8a47e0590762982b280d848fa5cceffc959060d4d6fa9ddcd0f5c1b3109c4c"
+      }
+    ],
+    "at": "2026-08-31T07:43:35.577Z"
+  }
+}

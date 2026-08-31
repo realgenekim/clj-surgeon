@@ -1,0 +1,24 @@
+{
+  "intent": {
+    "file": "bench/fixtures/model_variant_battery.clj",
+    "owner": "fill-thread-tail",
+    "decision": "Change persist -> audit/persist; preserve the preceding thread steps."
+  },
+  "replacement": "(defn fill-thread-tail [x] (-> x normalize audit/persist))",
+  "outcome": "applied",
+  "timing_ms": {
+    "source": 161.3,
+    "spark": 977.6,
+    "apply": 181.6,
+    "total": 1465
+  },
+  "detail": "{:intent-count 1,\n :receipt-hash\n \"3cffa7979760f62a17d7636a209333f34e0167d7e73d876364ae993ac9da1ee9\",\n :inverse {:operation :undo-change!, :guarded-file-count 1},\n :changed-file-count 1,\n :operation :change!,\n :committed true,\n :receipt-file\n \"/private/tmp/bang-rig/state/apply-1788162349782-97408.edn\",\n :ok true,\n :change-count 1,\n :transaction-version 1,\n :verified\n {:whole-files true,\n  :file-count 1,\n  :read-back-hashes\n  {\"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj\"\n   \"42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5\"}},\n :match-count 1}",
+  "action_file_delta": [
+    {
+      "path": "bench/fixtures/model_variant_battery.clj",
+      "before": "ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80",
+      "after": "42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5"
+    }
+  ],
+  "at": "2026-08-31T07:45:50.042Z"
+}

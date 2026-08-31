@@ -1,0 +1,14 @@
+probe: model=gpt-5.3-codex-spark reasoning=low profile=clean replicates=5 conditions=[C B]
+probe: out=/private/tmp/clj-surgeon-elaborator-fallback-battery-20260831/bench/model-variant-battery/results/spark/decode/raw
+trial r01-C    rc=0 wall=3269ms prompt=53B
+trial r01-B    rc=0 wall=3737ms prompt=126B
+trial r02-C    rc=0 wall=3404ms prompt=53B
+trial r02-B    rc=0 wall=3124ms prompt=126B
+trial r03-C    rc=0 wall=3747ms prompt=53B
+trial r03-B    rc=0 wall=3486ms prompt=126B
+trial r04-C    rc=0 wall=3992ms prompt=53B
+trial r04-B    rc=0 wall=3063ms prompt=126B
+trial r05-C    rc=0 wall=3151ms prompt=53B
+trial r05-B    rc=0 wall=3779ms prompt=126B
+probe: complete. fold with:
+  bb bench/score_prefill_decode_ratio.clj /private/tmp/clj-surgeon-elaborator-fallback-battery-20260831/bench/model-variant-battery/results/spark/decode/raw

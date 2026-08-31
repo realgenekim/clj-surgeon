@@ -1,0 +1,24 @@
+{
+  "intent": {
+    "file": "bench/fixtures/model_variant_battery.clj",
+    "owner": "fill-branch-call",
+    "decision": "Change render -> ui/render; preserve the nil branch."
+  },
+  "replacement": "(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x)))",
+  "outcome": "applied",
+  "timing_ms": {
+    "source": 167.8,
+    "spark": 1030,
+    "apply": 177.1,
+    "total": 1510.8
+  },
+  "detail": "{:intent-count 1,\n :receipt-hash\n \"a7f39ee5a87dd0598526a574941d4777cfaa6b54b28fa04ed2ba06498573c8ec\",\n :inverse {:operation :undo-change!, :guarded-file-count 1},\n :changed-file-count 1,\n :operation :change!,\n :committed true,\n :receipt-file\n \"/private/tmp/bang-rig/state/apply-1788162351355-97522.edn\",\n :ok true,\n :change-count 1,\n :transaction-version 1,\n :verified\n {:whole-files true,\n  :file-count 1,\n  :read-back-hashes\n  {\"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj\"\n   \"ce7b25edf9fb3e6df1aeb4602de1adde8f9fdb92570bdf700daff3cf43588f5a\"}},\n :match-count 1}",
+  "action_file_delta": [
+    {
+      "path": "bench/fixtures/model_variant_battery.clj",
+      "before": "42afb7d83bea75642658330eea970b70f0fe170af4ebebff17de4028d3dc2aa5",
+      "after": "ce7b25edf9fb3e6df1aeb4602de1adde8f9fdb92570bdf700daff3cf43588f5a"
+    }
+  ],
+  "at": "2026-08-31T07:45:51.596Z"
+}

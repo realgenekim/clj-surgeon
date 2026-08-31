@@ -1,0 +1,39 @@
+INTENT
+  file: bench/fixtures/model_variant_battery.clj
+  owner: fill-selected-arity
+  decision: Change the zero-arity return :old -> :new; preserve the one-arity behavior.
+
+SPARK REPLACEMENT
+(defn fill-selected-arity ([] :new) ([x] x))
+
+RESULT
+  applied
+  {:intent-count 1,
+ :receipt-hash
+ "0f7fdcc74bba9c07af678119866cf5f5b3095da0abe37cbed1b9bf5392b986ce",
+ :inverse {:operation :undo-change!, :guarded-file-count 1},
+ :changed-file-count 1,
+ :operation :change!,
+ :committed true,
+ :receipt-file
+ "/private/tmp/bang-rig/state/apply-1788162348305-97295.edn",
+ :ok true,
+ :change-count 1,
+ :transaction-version 1,
+ :verified
+ {:whole-files true,
+  :file-count 1,
+  :read-back-hashes
+  {"/private/tmp/bang-rig/worktree/bench/fixtures/model_variant_battery.clj"
+   "ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80"}},
+ :match-count 1}
+
+WALL TIME
+  source 162.8 ms / spark 866.1 ms / apply 167.3 ms / total 1327 ms
+
+ACTION FILE DELTA
+  bench/fixtures/model_variant_battery.clj
+    1a8193448861f005d281e186ffeaefe26f01a7d02c71e6255344fbcbcce76ad2 -> ba69d56d55eabeac36ab16f2cee2bafab8dd6c9096c69afb3d6102da7b2e2a80
+
+RECEIPT
+/private/tmp/bang-rig/state/bang-1788162348536-97295.json
