@@ -7,6 +7,7 @@
    [clj-surgeon.mcp-compact-location-test]
    [clj-surgeon.mcp-compact-relations-test]
    [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-embedded-elaborator-test]
    [clj-surgeon.mcp-extraction-plan-test]
    [clj-surgeon.mcp-extraction-test]
    [clj-surgeon.mcp-hot-verify-test]
@@ -39,6 +40,7 @@
   (let [result
         (run-tests
           'clj-surgeon.mcp-contract-test
+          'clj-surgeon.mcp-embedded-elaborator-test
           'clj-surgeon.mcp-extraction-test
           'clj-surgeon.mcp-extraction-plan-test
           'clj-surgeon.mcp-change-buffer-test
