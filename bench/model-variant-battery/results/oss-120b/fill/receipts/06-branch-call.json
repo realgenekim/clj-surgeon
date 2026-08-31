@@ -1,0 +1,63 @@
+{
+  "committed": true,
+  "guarded_edit": {
+    "changes": 1,
+    "committed": true,
+    "edits": 1,
+    "files": 1,
+    "next_action": "none",
+    "ok": true,
+    "operation": "edit_clojure",
+    "read_back_hashes": {
+      "bench/model-variant-battery/fixture.clj": "ce7b25edf9fb3e6df1aeb4602de1adde8f9fdb92570bdf700daff3cf43588f5a"
+    },
+    "receipt_hash": "4c2c897902408f8638759ddde85645a42930ebc96cb786d6bead5f8a918d77c1",
+    "undo_receipt": "/Users/genekim/.local/state/clj-surgeon/workspaces/ab865f6d0af58051fc2272b9aa1d3e94979aca783cb218a455bdf207d89ee860/receipts/5a485e57-4ec1-4ac1-a1a7-7f3b4b904a06.edn",
+    "verification_complete": true,
+    "workspace_root": "/private/tmp/clj-surgeon-fuel-table-completion-20260831"
+  },
+  "http_status": 200,
+  "intent": {
+    "decision": "Change render -> ui/render; preserve the nil branch.",
+    "file": "bench/model-variant-battery/fixture.clj",
+    "owner": "fill-branch-call"
+  },
+  "model_error": null,
+  "model_requested": "openai/gpt-oss-120b",
+  "model_returned": "openai/gpt-oss-120b",
+  "provider_cost_usd": 0.0001393,
+  "provider_requested": "Cerebras",
+  "provider_returned": "Cerebras",
+  "replacement": "(defn fill-branch-call [x] (if (nil? x) :missing (ui/render x)))",
+  "schema": "clj-surgeon.or-bang-metered/v1",
+  "source_sha256": "662273c8d09674d01a41c9bc07dd6530c40eb8062c7fe6c3d555b2139d86663d",
+  "timing_s": {
+    "apply": 0.131,
+    "elaborate": 0.366,
+    "read": 0.078,
+    "total": 0.644
+  },
+  "usage": {
+    "completion_tokens": 126,
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "reasoning_tokens": 93
+    },
+    "cost": 0.0001393,
+    "cost_details": {
+      "upstream_inference_completions_cost": 9.45e-05,
+      "upstream_inference_cost": 0.0001393,
+      "upstream_inference_prompt_cost": 4.48e-05
+    },
+    "is_byok": false,
+    "prompt_tokens": 128,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cache_write_tokens": 0,
+      "cached_tokens": 0,
+      "video_tokens": 0
+    },
+    "total_tokens": 254
+  }
+}

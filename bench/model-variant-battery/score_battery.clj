@@ -1,11 +1,10 @@
 #!/usr/bin/env bb
 
-(ns score-model-variant-battery
+(ns score-battery
   (:require
    [babashka.fs :as fs]
    [cheshire.core :as json]
    [clojure.edn :as edn]
-   [clojure.java.io :as io]
    [clojure.string :as str]))
 
 (def eof (Object.))
@@ -171,54 +170,94 @@
         (and (map? candidate) (symbol? (nth form 2 nil))) (nth form 2)
         :else nil))))
 
-(defn fill-trial [fixture case receipt-file]
+(defn receipt-timing-ms [receipt]
+  (or (:timing_ms receipt)
+      (into {}
+            (map (fn [[key seconds]] [key (* 1000.0 seconds)]))
+            (:timing_s receipt))))
+
+(defn path-string [path]
+  (if (keyword? path)
+    (subs (str path) 1)
+    (str path)))
+
+(defn fill-trial [case receipt-file]
   (let [receipt (json/parse-string (slurp (str receipt-file)) true)
         replacement (:replacement receipt)
         actual (read-one-form replacement)
         expected (read-one-form (:expected case))
         requested (symbol (get-in receipt [:intent :owner]))
         owner (top-level-owner actual)
-        paths (map :path (:action_file_delta receipt))
-        wrong-path? (boolean (some #(not= fixture %) paths))
+        intended-file (get-in receipt [:intent :file])
+        paths (or (seq (map (comp path-string :path) (:action_file_delta receipt)))
+                  (seq (map path-string (keys (get-in receipt [:guarded_edit :read_back_hashes]))))
+                  [])
+        wrong-path? (boolean (some #(not= intended-file %) paths))
         wrong-subject? (or (and actual (not= requested owner)) wrong-path?)
         schema-fumble? (and (nil? replacement)
                             (boolean (re-find #"(?i)Spark garbage" (or (:detail receipt) ""))))
         parse-fumble? (and (string? replacement) (nil? actual))
+        outcome (or (:outcome receipt)
+                    (if (:committed receipt) "applied" "refused"))
         exact? (and actual
                     (= requested owner)
                     (= expected actual)
                     (not wrong-subject?))]
     {:id (name (:id case))
      :owner (str requested)
-     :outcome (:outcome receipt)
+     :outcome outcome
      :exact (boolean exact?)
-     :one-shot (= "applied" (:outcome receipt))
+     :one-shot (= "applied" outcome)
      :wrong-subject (boolean wrong-subject?)
      :schema-fumble (boolean schema-fumble?)
      :parse-fumble (boolean parse-fumble?)
      :replacement-sha256 (when replacement (sha256 replacement))
-     :timing-ms (:timing_ms receipt)
+     :timing-ms (receipt-timing-ms receipt)
+     :provider-cost-usd (:provider_cost_usd receipt)
+     :usage (:usage receipt)
      :action-paths (vec paths)}))
 
 (defn fill-score [root model-dir]
   (let [manifest (edn/read-string (slurp (str (fs/path root "fill-cases.edn"))))
-        fixture (:fixture manifest)
-        trials (mapv (fn [case]
-                       (fill-trial fixture case
-                                   (fs/path model-dir "fill" "receipts"
-                                            (str (name (:id case)) ".json"))))
-                     (:cases manifest))
-        model-walls (keep #(get-in % [:timing-ms :spark]) trials)
-        total-walls (keep #(get-in % [:timing-ms :total]) trials)]
+        cases-by-owner (into {} (map (juxt (comp str :owner) identity)) (:cases manifest))
+        receipt-files (sort (fs/glob (fs/path model-dir "fill" "receipts") "*.json"))
+        trials (mapv (fn [receipt-file]
+                       (let [receipt (json/parse-string (slurp (str receipt-file)) true)
+                             owner (get-in receipt [:intent :owner])]
+                         (fill-trial (or (get cases-by-owner owner)
+                                         (throw (ex-info "Receipt owner absent from manifest"
+                                                         {:owner owner :receipt (str receipt-file)})))
+                                     receipt-file)))
+                     receipt-files)
+        model-walls (keep #(or (get-in % [:timing-ms :spark])
+                               (get-in % [:timing-ms :elaborate])) trials)
+        read-walls (keep #(or (get-in % [:timing-ms :source])
+                              (get-in % [:timing-ms :read])) trials)
+        apply-walls (keep #(get-in % [:timing-ms :apply]) trials)
+        total-walls (keep #(get-in % [:timing-ms :total]) trials)
+        costs (keep :provider-cost-usd trials)]
     {:n-total (count trials)
      :exact (count (filter :exact trials))
      :one-shot (count (filter :one-shot trials))
      :wrong-subject (count (filter :wrong-subject trials))
      :schema-fumbles (count (filter :schema-fumble trials))
      :parse-fumbles (count (filter :parse-fumble trials))
+     :read-wall-ms-median (rounded (median read-walls) 1)
      :model-wall-ms-median (rounded (median model-walls) 1)
+     :apply-wall-ms-median (rounded (median apply-walls) 1)
      :total-wall-ms-median (rounded (median total-walls) 1)
+     :provider-cost-usd-total (when (seq costs) (reduce + costs))
+     :prompt-tokens-total (reduce + 0 (keep #(get-in % [:usage :prompt_tokens]) trials))
+     :completion-tokens-total (reduce + 0 (keep #(get-in % [:usage :completion_tokens]) trials))
+     :total-tokens (reduce + 0 (keep #(get-in % [:usage :total_tokens]) trials))
      :trials trials}))
+
+(defn score-fills-only [root model-dir]
+  (let [receipt-file (first (sort (fs/glob (fs/path model-dir "fill" "receipts") "*.json")))
+        receipt (json/parse-string (slurp (str receipt-file)) true)]
+    {:schema "clj-surgeon.model-variant-battery-score/v1"
+     :model (or (:model_requested receipt) (str (fs/file-name model-dir)))
+     :fill (fill-score root model-dir)}))
 
 (defn score-model [root model-dir]
   (let [decode (decode-score (fs/path model-dir "decode" "raw"))]
@@ -259,17 +298,22 @@
        "Per-bang timing and normalized oracle decisions are in `score.json`."])))
 
 (defn -main [& args]
-  (let [[model-dir option] args]
+  (let [[model-dir option output-file] args]
     (when-not model-dir
       (binding [*out* *err*]
-        (println "usage: score_battery.clj MODEL_RESULT_DIR [--markdown]"))
+        (println "usage: score_battery.clj MODEL_RESULT_DIR [--markdown|--fills-only] [OUTPUT]"))
       (System/exit 2))
     (let [model-path (fs/absolutize model-dir)
           root (-> model-path fs/parent fs/parent)
-          score (score-model root model-path)]
-      (if (= "--markdown" option)
-        (println (markdown score))
-        (println (json/generate-string score {:pretty true}))))))
+          score (if (= "--fills-only" option)
+                  (score-fills-only root model-path)
+                  (score-model root model-path))
+          rendered (if (= "--markdown" option)
+                     (markdown score)
+                     (json/generate-string score {:pretty true}))]
+      (if output-file
+        (spit output-file (str rendered "\n"))
+        (println rendered)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))

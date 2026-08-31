@@ -1,0 +1,63 @@
+{
+  "committed": true,
+  "guarded_edit": {
+    "changes": 1,
+    "committed": true,
+    "edits": 1,
+    "files": 1,
+    "next_action": "none",
+    "ok": true,
+    "operation": "edit_clojure",
+    "read_back_hashes": {
+      "bench/model-variant-battery/fixture.clj": "0305868afc393601dcbb83c10c0013727ef165658767de82f9367574b1834e2f"
+    },
+    "receipt_hash": "92e38274943040fb0cef969126b7ef1c98c8c964a53e211400a76b9ec22d7423",
+    "undo_receipt": "/Users/genekim/.local/state/clj-surgeon/workspaces/ab865f6d0af58051fc2272b9aa1d3e94979aca783cb218a455bdf207d89ee860/receipts/4fb25fa2-45ac-421e-bfe8-3c4ad97006c4.edn",
+    "verification_complete": true,
+    "workspace_root": "/private/tmp/clj-surgeon-fuel-table-completion-20260831"
+  },
+  "http_status": 200,
+  "intent": {
+    "decision": "Change :cold -> :warm.",
+    "file": "bench/model-variant-battery/fixture.clj",
+    "owner": "fill-literal"
+  },
+  "model_error": null,
+  "model_requested": "openai/gpt-oss-120b",
+  "model_returned": "openai/gpt-oss-120b",
+  "provider_cost_usd": 9.585e-05,
+  "provider_requested": "Cerebras",
+  "provider_returned": "Cerebras",
+  "replacement": "(defn fill-literal [] :warm)",
+  "schema": "clj-surgeon.or-bang-metered/v1",
+  "source_sha256": "1a68cf1b9a06d0d97dd69968640cd0b7592880ade2eab53308a6aa4be9c888f6",
+  "timing_s": {
+    "apply": 0.125,
+    "elaborate": 4.449,
+    "read": 0.193,
+    "total": 4.831
+  },
+  "usage": {
+    "completion_tokens": 76,
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "reasoning_tokens": 57
+    },
+    "cost": 9.585e-05,
+    "cost_details": {
+      "upstream_inference_completions_cost": 5.7e-05,
+      "upstream_inference_cost": 9.585e-05,
+      "upstream_inference_prompt_cost": 3.885e-05
+    },
+    "is_byok": false,
+    "prompt_tokens": 111,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cache_write_tokens": 0,
+      "cached_tokens": 0,
+      "video_tokens": 0
+    },
+    "total_tokens": 187
+  }
+}

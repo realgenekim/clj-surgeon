@@ -1,0 +1,77 @@
+{"at":"2026-08-31T02:47:22.217Z","event":"spawn","daemon_pid":53063,"app_server_pid":53068,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T02:47:25.172Z","event":"warm","thread_id":"01a055b6-de53-7802-bf3f-a475e9224b1a"}
+{"at":"2026-08-31T02:47:25.176Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T02:48:27.691Z","event":"spawn","daemon_pid":56630,"app_server_pid":56635,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T02:48:30.319Z","event":"warm","thread_id":"01a055b7-db66-75f1-ae7f-829c005123c6"}
+{"at":"2026-08-31T02:48:30.321Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T02:49:43.281Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T02:49:43.291Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T02:50:37.301Z","event":"spawn","daemon_pid":63360,"app_server_pid":63367,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T02:50:39.717Z","event":"warm","thread_id":"01a055b9-d5bb-79f2-b470-3cfeb0d1c27f"}
+{"at":"2026-08-31T02:50:39.718Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:00:22.771Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:00:22.816Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:00:24.089Z","event":"spawn","daemon_pid":97701,"app_server_pid":97706,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:00:29.468Z","event":"warm","thread_id":"01a055c2-c9e4-7c00-9c71-f8bdb733aafb","probe_thread_id":"01a055c2-d2d8-7e60-b695-0f9e2a4f48c7"}
+{"at":"2026-08-31T03:00:29.470Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:02:05.402Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:02:05.413Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:02:06.812Z","event":"spawn","daemon_pid":2632,"app_server_pid":2637,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:02:12.027Z","event":"warm","thread_id":"01a055c4-5b1f-71b0-8d43-98f31c34f9e1","probe_thread_id":"01a055c4-6646-71d0-8392-3c0307a2e528"}
+{"at":"2026-08-31T03:02:12.030Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:03:40.798Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:03:40.812Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:03:42.260Z","event":"spawn","daemon_pid":8657,"app_server_pid":8662,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:03:47.621Z","event":"warm","thread_id":"01a055c5-cff2-7700-9bd8-c6c396589666","probe_thread_id":"01a055c5-daf2-7701-b311-64d598fcb63b"}
+{"at":"2026-08-31T03:03:47.624Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:05:25.681Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:05:25.690Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:05:27.125Z","event":"spawn","daemon_pid":15362,"app_server_pid":15367,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:05:32.474Z","event":"warm","thread_id":"01a055c7-6993-7d83-8177-90ae6b6f9f98","probe_thread_id":"01a055c7-73b0-7d30-a681-9387b8942f03"}
+{"at":"2026-08-31T03:05:32.478Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:08:12.350Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:08:12.365Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:08:13.960Z","event":"spawn","daemon_pid":24669,"app_server_pid":24727,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:08:19.691Z","event":"warm","thread_id":"01a055c9-f5bf-7d93-b19a-b54a78b6e726","probe_thread_id":"01a055ca-0220-74b3-859c-c0a675c735c1"}
+{"at":"2026-08-31T03:08:19.694Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:14:25.235Z","event":"non-text-item-dropped","turn_id":"01a055cf-9f4a-7d03-9aa7-4c7e95a5d9a2","type":"contextCompaction"}
+{"at":"2026-08-31T03:14:27.040Z","event":"non-text-item-dropped","turn_id":"01a055cf-9f4a-7d03-9aa7-4c7e95a5d9a2","type":"contextCompaction"}
+{"at":"2026-08-31T03:14:45.604Z","event":"request-failed","error":"rejected non-text items: contextCompaction,contextCompaction"}
+{"at":"2026-08-31T03:15:22.133Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T03:15:22.147Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T03:15:23.450Z","event":"spawn","daemon_pid":50757,"app_server_pid":50762,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T03:15:28.061Z","event":"warm","thread_id":"01a055d0-82f9-7a61-916e-fd8231b03b5f","probe_thread_id":"01a055d0-8bda-7f72-8e30-1521d4aa932f"}
+{"at":"2026-08-31T03:15:28.066Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T03:16:59.583Z","event":"lifecycle-item-allowed","turn_id":"01a055d1-fa3a-7b43-bcd0-cb0abf84c5fc","type":"contextCompaction"}
+{"at":"2026-08-31T03:16:59.977Z","event":"request-failed","error":"turn status failed"}
+{"at":"2026-08-31T03:17:32.091Z","event":"lifecycle-item-allowed","turn_id":"01a055d2-7934-7e80-acdc-4a9e4c2d2839","type":"contextCompaction"}
+{"at":"2026-08-31T03:17:33.004Z","event":"request-failed","error":"turn status failed"}
+{"at":"2026-08-31T04:07:24.168Z","event":"request-failed","error":"turn status failed"}
+{"at":"2026-08-31T04:07:25.018Z","event":"request-failed","error":"turn status failed"}
+{"at":"2026-08-31T04:07:25.924Z","event":"request-failed","error":"turn status failed"}
+{"at":"2026-08-31T04:07:57.138Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T04:07:57.151Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T04:07:58.426Z","event":"spawn","daemon_pid":46411,"app_server_pid":46416,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T04:08:00.518Z","event":"bootstrap-failed","error":"Error: turn status failed\n    at runTurn (file:///private/tmp/bang-rig/rig-server.mjs:192:44)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async bootstrap (file:///private/tmp/bang-rig/rig-server.mjs:227:3)\n    at async file:///private/tmp/bang-rig/rig-server.mjs:313:3"}
+{"at":"2026-08-31T04:08:09.556Z","event":"spawn","daemon_pid":46669,"app_server_pid":46674,"model":"gpt-5.3-codex-spark"}
+{"at":"2026-08-31T04:08:11.349Z","event":"bootstrap-failed","error":"Error: turn status failed\n    at runTurn (file:///private/tmp/bang-rig/rig-server.mjs:192:44)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async bootstrap (file:///private/tmp/bang-rig/rig-server.mjs:227:3)\n    at async file:///private/tmp/bang-rig/rig-server.mjs:313:3"}
+{"at":"2026-08-31T04:18:36.070Z","event":"spawn","daemon_pid":86495,"app_server_pid":86500,"model":"gpt-5.6-terra"}
+{"at":"2026-08-31T04:18:44.491Z","event":"warm","thread_id":"01a0560a-646b-7bf2-a964-debf426c19af","probe_thread_id":"01a0560a-7164-7133-ae70-711b7cac15a9"}
+{"at":"2026-08-31T04:18:44.496Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T04:24:51.250Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T04:24:51.267Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T04:26:55.754Z","event":"spawn","daemon_pid":25888,"app_server_pid":25893,"model":"gpt-5.6-terra"}
+{"at":"2026-08-31T04:27:03.782Z","event":"warm","thread_id":"01a05612-01d9-7d63-bdfa-0a7c1a0c681f","probe_thread_id":"01a05612-0e88-7732-88a3-967f909afeb0"}
+{"at":"2026-08-31T04:27:03.788Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T04:27:26.901Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T04:27:26.910Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T04:29:23.696Z","event":"spawn","daemon_pid":35786,"app_server_pid":35832,"model":"gpt-5.6-luna"}
+{"at":"2026-08-31T04:29:30.219Z","event":"warm","thread_id":"01a05614-43c6-7760-96b8-7e6876d3d404","probe_thread_id":"01a05614-4df5-7211-a9ca-ef6a1a764c4a"}
+{"at":"2026-08-31T04:29:30.221Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T04:29:46.756Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T04:29:46.766Z","event":"app-server-exit","code":0,"signal":null}
+{"at":"2026-08-31T04:31:46.545Z","event":"spawn","daemon_pid":47511,"app_server_pid":47516,"model":"gpt-5.6-sol"}
+{"at":"2026-08-31T04:31:53.346Z","event":"warm","thread_id":"01a05616-71b9-7b22-bafe-7c37b32cd5ef","probe_thread_id":"01a05616-8216-73a3-bade-96dc57bb4547"}
+{"at":"2026-08-31T04:31:53.349Z","event":"ready","socket":"/private/tmp/bang-rig/state/bang.sock"}
+{"at":"2026-08-31T04:32:16.028Z","event":"shutdown","reason":"client"}
+{"at":"2026-08-31T04:32:16.037Z","event":"app-server-exit","code":0,"signal":null}

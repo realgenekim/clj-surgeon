@@ -1,0 +1,349 @@
+{
+  "schema" : "clj-surgeon.model-variant-battery-score/v1",
+  "model" : "openai/gpt-oss-120b",
+  "fill" : {
+    "parse-fumbles" : 0,
+    "apply-wall-ms-median" : 100.5,
+    "n-total" : 8,
+    "provider-cost-usd-total" : 9.432499999999999E-4,
+    "read-wall-ms-median" : 85.0,
+    "prompt-tokens-total" : 970,
+    "exact" : 8,
+    "total-wall-ms-median" : 650.0,
+    "completion-tokens-total" : 805,
+    "one-shot" : 8,
+    "schema-fumbles" : 0,
+    "trials" : [ {
+      "timing-ms" : {
+        "apply" : 125.0,
+        "elaborate" : 4449.0,
+        "read" : 193.0,
+        "total" : 4831.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 76,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 57
+        },
+        "cost" : 9.585E-5,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 5.7E-5,
+          "upstream_inference_cost" : 9.585E-5,
+          "upstream_inference_prompt_cost" : 3.885E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 111,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 187
+      },
+      "exact" : true,
+      "id" : "literal",
+      "provider-cost-usd" : 9.585E-5,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "3c9e7fb0b298a98343d39f3e94cc0fd9912fbf7f900d0cb25dae08ffe75054f4",
+      "wrong-subject" : false,
+      "owner" : "fill-literal",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 100.0,
+        "elaborate" : 1848.0,
+        "read" : 92.0,
+        "total" : 2107.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 70,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 46
+        },
+        "cost" : 9.38E-5,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 5.25E-5,
+          "upstream_inference_cost" : 9.38E-5,
+          "upstream_inference_prompt_cost" : 4.13E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 118,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 188
+      },
+      "exact" : true,
+      "id" : "qualified-call",
+      "provider-cost-usd" : 9.38E-5,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "4b1abcd69d3abe3c7493810425d4a0bbff308dd4b317b89abda44e640e208874",
+      "wrong-subject" : false,
+      "owner" : "fill-qualified-call",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 134.0,
+        "elaborate" : 711.0,
+        "read" : 71.0,
+        "total" : 976.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 75,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 49
+        },
+        "cost" : 9.93E-5,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 5.625E-5,
+          "upstream_inference_cost" : 9.93E-5,
+          "upstream_inference_prompt_cost" : 4.305E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 123,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 198
+      },
+      "exact" : true,
+      "id" : "map-value",
+      "provider-cost-usd" : 9.93E-5,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "9d2f7d5fe2886db16a939672f6563bd623a0b85c118c031e4988d7fe56187782",
+      "wrong-subject" : false,
+      "owner" : "fill-map-value",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 75.0,
+        "elaborate" : 267.0,
+        "read" : 160.0,
+        "total" : 573.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 111,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 86
+        },
+        "cost" : 1.284E-4,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 8.325E-5,
+          "upstream_inference_cost" : 1.284E-4,
+          "upstream_inference_prompt_cost" : 4.515E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 129,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 240
+      },
+      "exact" : true,
+      "id" : "selected-arity",
+      "provider-cost-usd" : 1.284E-4,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "8d230beb810c67365ab863eb6218aa0e366d4f9d21657a61a4cfd3f710048164",
+      "wrong-subject" : false,
+      "owner" : "fill-selected-arity",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 99.0,
+        "elaborate" : 323.0,
+        "read" : 70.0,
+        "total" : 554.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 102,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 76
+        },
+        "cost" : 1.192E-4,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 7.65E-5,
+          "upstream_inference_cost" : 1.192E-4,
+          "upstream_inference_prompt_cost" : 4.27E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 122,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 224
+      },
+      "exact" : true,
+      "id" : "thread-tail",
+      "provider-cost-usd" : 1.192E-4,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "6ac68a248b8f2c6e07cf89f0240ea40ef35a40a862d135c0576badf5695252dd",
+      "wrong-subject" : false,
+      "owner" : "fill-thread-tail",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 131.0,
+        "elaborate" : 366.0,
+        "read" : 78.0,
+        "total" : 644.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 126,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 93
+        },
+        "cost" : 1.393E-4,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 9.45E-5,
+          "upstream_inference_cost" : 1.393E-4,
+          "upstream_inference_prompt_cost" : 4.48E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 128,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 254
+      },
+      "exact" : true,
+      "id" : "branch-call",
+      "provider-cost-usd" : 1.393E-4,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "39a08e9838e5f884875dc2f1407c851a2ed96e8709a9dd44a1f02bf56b7e52ad",
+      "wrong-subject" : false,
+      "owner" : "fill-branch-call",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 85.0,
+        "elaborate" : 367.0,
+        "read" : 106.0,
+        "total" : 623.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 117,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 98
+        },
+        "cost" : 1.266E-4,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 8.775E-5,
+          "upstream_inference_cost" : 1.266E-4,
+          "upstream_inference_prompt_cost" : 3.885E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 111,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 228
+      },
+      "exact" : true,
+      "id" : "literal",
+      "provider-cost-usd" : 1.266E-4,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "3c9e7fb0b298a98343d39f3e94cc0fd9912fbf7f900d0cb25dae08ffe75054f4",
+      "wrong-subject" : false,
+      "owner" : "fill-literal",
+      "parse-fumble" : false
+    }, {
+      "timing-ms" : {
+        "apply" : 101.0,
+        "elaborate" : 419.0,
+        "read" : 75.0,
+        "total" : 656.0
+      },
+      "schema-fumble" : false,
+      "outcome" : "applied",
+      "usage" : {
+        "completion_tokens" : 128,
+        "completion_tokens_details" : {
+          "audio_tokens" : 0,
+          "image_tokens" : 0,
+          "reasoning_tokens" : 95
+        },
+        "cost" : 1.408E-4,
+        "cost_details" : {
+          "upstream_inference_completions_cost" : 9.6E-5,
+          "upstream_inference_cost" : 1.408E-4,
+          "upstream_inference_prompt_cost" : 4.48E-5
+        },
+        "is_byok" : false,
+        "prompt_tokens" : 128,
+        "prompt_tokens_details" : {
+          "audio_tokens" : 0,
+          "cache_write_tokens" : 0,
+          "cached_tokens" : 0,
+          "video_tokens" : 0
+        },
+        "total_tokens" : 256
+      },
+      "exact" : true,
+      "id" : "branch-call",
+      "provider-cost-usd" : 1.408E-4,
+      "action-paths" : [ "bench/model-variant-battery/fixture.clj" ],
+      "one-shot" : true,
+      "replacement-sha256" : "39a08e9838e5f884875dc2f1407c851a2ed96e8709a9dd44a1f02bf56b7e52ad",
+      "wrong-subject" : false,
+      "owner" : "fill-branch-call",
+      "parse-fumble" : false
+    } ],
+    "total-tokens" : 1775,
+    "wrong-subject" : 0,
+    "model-wall-ms-median" : 393.0
+  }
+}
