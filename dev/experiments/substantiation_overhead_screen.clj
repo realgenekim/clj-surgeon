@@ -32,8 +32,8 @@
 
 (defn- temp-directory [prefix]
   (.toFile
-   (Files/createTempDirectory
-    prefix (make-array FileAttribute 0))))
+    (Files/createTempDirectory
+      prefix (make-array FileAttribute 0))))
 
 (defn- delete-tree! [file]
   (when (.exists (io/file file))
@@ -71,13 +71,13 @@
                 :elapsed_ms 1.0}
         samples
         (mapv
-         (fn [index]
-           (:elapsed-ms
-            (time-call
-             (if (< index 5000)
-               #(request-shape state request)
-               #(result-shape state result)))))
-         (range 10000))]
+          (fn [index]
+            (:elapsed-ms
+              (time-call
+                (if (< index 5000)
+                  #(request-shape state request)
+                  #(result-shape state result)))))
+          (range 10000))]
     {:samples samples
      :p95-ms (percentile samples 0.95)}))
 
@@ -88,26 +88,26 @@
     (try
       (let [samples
             (vec
-             (mapcat
-              (fn [_]
-                (let [started
-                      (time-call
-                       #(substantiation/begin-call!
-                         state nil "inspect_clojure"
-                         {:requests [{:file "src/demo.clj"
-                                      :forms ["alpha"]}]}))
-                      context (:value started)
-                      finished
-                      (time-call
-                       #(substantiation/complete-call!
-                         state context
-                         {:ok true
-                          :operation "inspect_clojure"
-                          :read_complete true
-                          :results []
-                          :elapsed_ms 1.0}))]
-                  [(:elapsed-ms started) (:elapsed-ms finished)]))
-              (range 500)))
+              (mapcat
+                (fn [_]
+                  (let [started
+                        (time-call
+                          #(substantiation/begin-call!
+                             state nil "inspect_clojure"
+                             {:requests [{:file "src/demo.clj"
+                                          :forms ["alpha"]}]}))
+                        context (:value started)
+                        finished
+                        (time-call
+                          #(substantiation/complete-call!
+                             state context
+                             {:ok true
+                              :operation "inspect_clojure"
+                              :read_complete true
+                              :results []
+                              :elapsed_ms 1.0}))]
+                    [(:elapsed-ms started) (:elapsed-ms finished)]))
+                (range 500)))
             lines (str/split-lines (slurp (:file state)))
             event-bytes (mapv #(alength (.getBytes ^String % "UTF-8")) lines)
             ledger-bytes (.length (io/file (:file state)))]
@@ -131,7 +131,7 @@
         _ (when session-id (.header builder "Mcp-Session-Id" session-id))
         request (-> builder
                     (.POST (HttpRequest$BodyPublishers/ofString
-                            (json/generate-string value)))
+                             (json/generate-string value)))
                     (.build))]
     (.send client request (HttpResponse$BodyHandlers/ofString))))
 
@@ -251,13 +251,13 @@
 
 (defn- timed-read! [client url session-id id]
   (time-call
-   #(-> (post-json
-         client url session-id
-         (tool-call id "inspect_clojure"
-                    {:requests [{:file "src/demo.clj" :forms ["alpha"]
-                                 :expect {:forms 1}}]
-                     :expect {:requests 1 :files 1}}))
-        response-json)))
+    #(-> (post-json
+           client url session-id
+           (tool-call id "inspect_clojure"
+                      {:requests [{:file "src/demo.clj" :forms ["alpha"]
+                                   :expect {:forms 1}}]
+                       :expect {:requests 1 :files 1}}))
+         response-json)))
 
 (defn- run-live-arm! [arm block samples]
   (let [root (temp-directory (str "clj-surgeon-substantiation-live-"
@@ -266,11 +266,11 @@
         substantiation-dir (io/file root "substantiation")
         running
         (http-server/start-http-server!
-         (cond-> {:project-dir (.getCanonicalPath root)
-                  :port 0
-                  :telemetry :off
-                  :nrepl-port :none}
-           (= arm :on) (assoc :substantiation-dir substantiation-dir)))
+          (cond-> {:project-dir (.getCanonicalPath root)
+                   :port 0
+                   :telemetry :off
+                   :nrepl-port :none}
+            (= arm :on) (assoc :substantiation-dir substantiation-dir)))
         client (HttpClient/newHttpClient)]
     (try
       (let [session-id (initialize! client (:url running))
@@ -279,27 +279,27 @@
             timings
             (mapv (fn [index]
                     (:elapsed-ms
-                     (timed-read! client (:url running) session-id
-                                  (+ 100 index))))
+                      (timed-read! client (:url running) session-id
+                                   (+ 100 index))))
                   (range samples))
             parity
             (when (zero? block)
               (into {}
                     (map-indexed
-                     (fn [index [label tool arguments]]
-                       (when (= label :ordinary-write-success)
-                         (spit (io/file root "src/dogfood/fidelity.clj")
-                               fidelity-source))
-                       (let [response
-                             (-> (post-json client (:url running) session-id
-                                            (tool-call (+ 1000 index)
-                                                       tool arguments))
-                                 response-json)]
-                         [label {:raw response
-                                 :normalized
-                                 (normalize-public response
-                                                   (.getCanonicalPath root))}]))
-                     (parity-requests root))))
+                      (fn [index [label tool arguments]]
+                        (when (= label :ordinary-write-success)
+                          (spit (io/file root "src/dogfood/fidelity.clj")
+                                fidelity-source))
+                        (let [response
+                              (-> (post-json client (:url running) session-id
+                                             (tool-call (+ 1000 index)
+                                                        tool arguments))
+                                  response-json)]
+                          [label {:raw response
+                                  :normalized
+                                  (normalize-public response
+                                                    (.getCanonicalPath root))}]))
+                      (parity-requests root))))
             ledger
             (when (= arm :on)
               {:directory (.getCanonicalPath substantiation-dir)
