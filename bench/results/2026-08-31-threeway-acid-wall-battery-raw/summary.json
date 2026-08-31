@@ -1,0 +1,509 @@
+{
+  "schema": "clj-surgeon.threeway-acid-wall-summary/v1",
+  "headline_metric": "complete caller turn wall: intent stated through verified commit receipt and caller completion",
+  "split_definition": {
+    "caller_emission_ms": "episode wall outside recorded tool intervals; includes inference, request emission, receipt interpretation, and final response",
+    "transport_or_local_tool_ms": "client-observed action wall minus product server wall; native local tool execution is reported here",
+    "server_ms": "sum of product tool.call total_ms telemetry; zero for native"
+  },
+  "classes": {
+    "fill": {
+      "arms": {
+        "A": {
+          "n": 3,
+          "outcome_exact": 3,
+          "wrong_subject": 0,
+          "median_wall_ms": 143008.0,
+          "wall_range_ms": [
+            96570.0,
+            255080.0
+          ],
+          "raw_wall_ms": [
+            96570.0,
+            255080.0,
+            143008.0
+          ],
+          "median_caller_emission_ms": 142834.98321342468,
+          "median_transport_or_local_tool_ms": 109.33768661413575,
+          "median_server_ms": 74.384571,
+          "median_argument_bytes": 1646,
+          "median_output_tokens": 3550,
+          "median_actions": 6,
+          "first_refusal_types": [
+            "invalid-prepared-confirmation",
+            null,
+            null
+          ],
+          "held_session": true
+        },
+        "B": {
+          "n": 3,
+          "outcome_exact": 2,
+          "wrong_subject": 0,
+          "median_wall_ms": 59246.0,
+          "wall_range_ms": [
+            41644.0,
+            63088.0
+          ],
+          "raw_wall_ms": [
+            59246.0,
+            63088.0,
+            41644.0
+          ],
+          "median_caller_emission_ms": 59083.22114562988,
+          "median_transport_or_local_tool_ms": 67.22662873828125,
+          "median_server_ms": 86.95791200000001,
+          "median_argument_bytes": 1080,
+          "median_output_tokens": 1125,
+          "median_actions": 3,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            null
+          ],
+          "held_session": true
+        },
+        "C": {
+          "n": 3,
+          "outcome_exact": 0,
+          "wrong_subject": 0,
+          "median_wall_ms": 99896.0,
+          "wall_range_ms": [
+            77345.0,
+            115962.0
+          ],
+          "raw_wall_ms": [
+            115962.0,
+            99896.0,
+            77345.0
+          ],
+          "median_caller_emission_ms": 99895.4010925293,
+          "median_transport_or_local_tool_ms": 0.6330013275146484,
+          "median_server_ms": 0.0,
+          "median_argument_bytes": 0,
+          "median_output_tokens": 2241,
+          "median_actions": 3,
+          "first_refusal_types": [
+            null,
+            null,
+            null
+          ],
+          "held_session": null
+        }
+      },
+      "comparisons": {
+        "A_vs_B": {
+          "median_paired_speedup": 0.29120049228015216,
+          "ratio_of_arm_medians": 0.4142845155515775,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 0.35353011921146,
+            "lower_95": 0.10615493920706509,
+            "upper_95": 1.1773690995750752,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              0.6135031583307445,
+              0.24732632899482515,
+              0.29120049228015216
+            ]
+          }
+        },
+        "A_vs_C": {
+          "median_paired_speedup": 0.5408438688744686,
+          "ratio_of_arm_medians": 0.6985343477287984,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 0.6335861701416926,
+            "lower_95": 0.1512122943265453,
+            "upper_95": 2.6547539456541847,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              1.2008077042559802,
+              0.3916261564999216,
+              0.5408438688744686
+            ]
+          }
+        }
+      }
+    },
+    "wall": {
+      "arms": {
+        "A": {
+          "n": 3,
+          "outcome_exact": 3,
+          "wrong_subject": 0,
+          "median_wall_ms": 89522.0,
+          "wall_range_ms": [
+            61847.0,
+            266886.0
+          ],
+          "raw_wall_ms": [
+            266886.0,
+            61847.0,
+            89522.0
+          ],
+          "median_caller_emission_ms": 89293.50893211365,
+          "median_transport_or_local_tool_ms": 87.92477688635253,
+          "median_server_ms": 140.566291,
+          "median_argument_bytes": 1682,
+          "median_output_tokens": 2093,
+          "median_actions": 3,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            "invalid-mcp-request"
+          ],
+          "held_session": true
+        },
+        "B": {
+          "n": 3,
+          "outcome_exact": 3,
+          "wrong_subject": 0,
+          "median_wall_ms": 56562.0,
+          "wall_range_ms": [
+            46869.0,
+            102113.0
+          ],
+          "raw_wall_ms": [
+            56562.0,
+            102113.0,
+            46869.0
+          ],
+          "median_caller_emission_ms": 56353.20898246765,
+          "median_transport_or_local_tool_ms": 66.18547553234865,
+          "median_server_ms": 139.77578599999998,
+          "median_argument_bytes": 2457,
+          "median_output_tokens": 1207,
+          "median_actions": 3,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            null
+          ],
+          "held_session": true
+        },
+        "C": {
+          "n": 3,
+          "outcome_exact": 0,
+          "wrong_subject": 0,
+          "median_wall_ms": 83624.0,
+          "wall_range_ms": [
+            77904.0,
+            335990.0
+          ],
+          "raw_wall_ms": [
+            83624.0,
+            77904.0,
+            335990.0
+          ],
+          "median_caller_emission_ms": 83623.54915046692,
+          "median_transport_or_local_tool_ms": 0.7071495056152344,
+          "median_server_ms": 0.0,
+          "median_argument_bytes": 0,
+          "median_output_tokens": 1984,
+          "median_actions": 3,
+          "first_refusal_types": [
+            null,
+            null,
+            null
+          ],
+          "held_session": null
+        }
+      },
+      "comparisons": {
+        "A_vs_B": {
+          "median_paired_speedup": 0.5235472844663881,
+          "ratio_of_arm_medians": 0.6318223453452783,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 0.56794431647554,
+            "lower_95": 0.044087384900486304,
+            "upper_95": 7.316395548181184,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              0.2119331849553742,
+              1.6510582566656427,
+              0.5235472844663881
+            ]
+          }
+        },
+        "A_vs_C": {
+          "median_paired_speedup": 1.2596245573754588,
+          "ratio_of_arm_medians": 0.9341167534237395,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 1.1399372526266722,
+            "lower_95": 0.05178455713838646,
+            "upper_95": 25.09352231116783,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              0.3133322841962486,
+              1.2596245573754588,
+              3.7531556488907754
+            ]
+          }
+        }
+      }
+    },
+    "repair": {
+      "arms": {
+        "A": {
+          "n": 5,
+          "outcome_exact": 5,
+          "wrong_subject": 0,
+          "median_wall_ms": 114972.0,
+          "wall_range_ms": [
+            68265.0,
+            263136.0
+          ],
+          "raw_wall_ms": [
+            114972.0,
+            68265.0,
+            140804.0,
+            263136.0,
+            83052.0
+          ],
+          "median_caller_emission_ms": 114721.83668327332,
+          "median_transport_or_local_tool_ms": 80.27337672668455,
+          "median_server_ms": 161.707767,
+          "median_argument_bytes": 7763,
+          "median_output_tokens": 2690,
+          "median_actions": 4,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "expect-count-mismatch",
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            "invalid-mcp-request"
+          ],
+          "held_session": true
+        },
+        "B": {
+          "n": 5,
+          "outcome_exact": 4,
+          "wrong_subject": 0,
+          "median_wall_ms": 96811.0,
+          "wall_range_ms": [
+            65773.0,
+            117139.0
+          ],
+          "raw_wall_ms": [
+            87787.0,
+            100492.0,
+            117139.0,
+            65773.0,
+            96811.0
+          ],
+          "median_caller_emission_ms": 96586.75182914734,
+          "median_transport_or_local_tool_ms": 66.56180708081052,
+          "median_server_ms": 157.287096,
+          "median_argument_bytes": 5799,
+          "median_output_tokens": 2365,
+          "median_actions": 3,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            "expect-count-mismatch",
+            "invalid-mcp-request"
+          ],
+          "held_session": true
+        },
+        "C": {
+          "n": 5,
+          "outcome_exact": 5,
+          "wrong_subject": 0,
+          "median_wall_ms": 450168.0,
+          "wall_range_ms": [
+            312691.0,
+            536965.0
+          ],
+          "raw_wall_ms": [
+            536965.0,
+            450168.0,
+            481197.0,
+            325790.0,
+            312691.0
+          ],
+          "median_caller_emission_ms": 450163.46551704407,
+          "median_transport_or_local_tool_ms": 6.809234619140625,
+          "median_server_ms": 0.0,
+          "median_argument_bytes": 0,
+          "median_output_tokens": 10488,
+          "median_actions": 32,
+          "first_refusal_types": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "held_session": null
+        }
+      },
+      "comparisons": {
+        "A_vs_B": {
+          "median_paired_speedup": 0.8319294906394704,
+          "ratio_of_arm_medians": 0.8420398009950248,
+          "confidence_interval": {
+            "n": 5,
+            "geometric_mean": 0.7710099912513044,
+            "lower_95": 0.330344570731407,
+            "upper_95": 1.799504091419352,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              0.763551125491424,
+              1.4720867208672086,
+              0.8319294906394704,
+              0.24995819652195062,
+              1.1656672927804268
+            ]
+          }
+        },
+        "A_vs_C": {
+          "median_paired_speedup": 3.765002648942831,
+          "ratio_of_arm_medians": 3.9154576766517066,
+          "confidence_interval": {
+            "n": 5,
+            "geometric_mean": 3.4526473386581955,
+            "lower_95": 1.5862928872077529,
+            "upper_95": 7.5148629495066785,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              4.670398009950249,
+              6.594418809052955,
+              3.417495241612454,
+              1.23810501033686,
+              3.765002648942831
+            ]
+          }
+        }
+      }
+    },
+    "flagship": {
+      "arms": {
+        "A": {
+          "n": 3,
+          "outcome_exact": 0,
+          "wrong_subject": 0,
+          "median_wall_ms": 56527.0,
+          "wall_range_ms": [
+            53454.0,
+            124979.0
+          ],
+          "raw_wall_ms": [
+            56527.0,
+            124979.0,
+            53454.0
+          ],
+          "median_caller_emission_ms": 53861.81001853943,
+          "median_transport_or_local_tool_ms": 53.61216446057142,
+          "median_server_ms": 2238.770411,
+          "median_argument_bytes": 520,
+          "median_output_tokens": 1221,
+          "median_actions": 1,
+          "first_refusal_types": [
+            null,
+            "invalid-mcp-request",
+            null
+          ],
+          "held_session": true
+        },
+        "B": {
+          "n": 3,
+          "outcome_exact": 0,
+          "wrong_subject": 0,
+          "median_wall_ms": 109342.0,
+          "wall_range_ms": [
+            73908.0,
+            130353.0
+          ],
+          "raw_wall_ms": [
+            109342.0,
+            73908.0,
+            130353.0
+          ],
+          "median_caller_emission_ms": 106812.63398361206,
+          "median_transport_or_local_tool_ms": 68.92007380334462,
+          "median_server_ms": 2475.883784,
+          "median_argument_bytes": 1180,
+          "median_output_tokens": 2587,
+          "median_actions": 2,
+          "first_refusal_types": [
+            "invalid-mcp-request",
+            "invalid-mcp-request",
+            "invalid-mcp-request"
+          ],
+          "held_session": true
+        },
+        "C": {
+          "n": 3,
+          "outcome_exact": 1,
+          "wrong_subject": 1,
+          "median_wall_ms": 603784.0,
+          "wall_range_ms": [
+            423398.0,
+            811208.0
+          ],
+          "raw_wall_ms": [
+            603784.0,
+            811208.0,
+            423398.0
+          ],
+          "median_caller_emission_ms": 603580.2534427643,
+          "median_transport_or_local_tool_ms": 203.74655723571777,
+          "median_server_ms": 0.0,
+          "median_argument_bytes": 0,
+          "median_output_tokens": 13053,
+          "median_actions": 25,
+          "first_refusal_types": [
+            null,
+            null,
+            null
+          ],
+          "held_session": null
+        }
+      },
+      "comparisons": {
+        "A_vs_B": {
+          "median_paired_speedup": 1.9343322659967803,
+          "ratio_of_arm_medians": 1.9343322659967803,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 1.4076956462776418,
+            "lower_95": 0.21311942299138623,
+            "upper_95": 9.298106220140808,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              1.9343322659967803,
+              0.5913633490426392,
+              2.438601414300146
+            ]
+          }
+        },
+        "A_vs_C": {
+          "median_paired_speedup": 7.920791708758933,
+          "ratio_of_arm_medians": 10.681338121605604,
+          "confidence_interval": {
+            "n": 3,
+            "geometric_mean": 8.188980026219806,
+            "lower_95": 4.39275911249798,
+            "upper_95": 15.265893747516023,
+            "method": "paired log-ratio Student-t 95% CI",
+            "raw_ratios": [
+              10.681338121605604,
+              6.4907544467470535,
+              7.920791708758933
+            ]
+          }
+        }
+      }
+    }
+  },
+  "all_episodes_exact": false,
+  "wrong_subject_total": 1,
+  "historic_flagship_native_ms": {
+    "promoted_median": 122278.0,
+    "readme_headline_pair": 207898.0
+  }
+}

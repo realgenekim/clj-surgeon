@@ -1,0 +1,59 @@
+{
+  "schema": "clj-surgeon.threeway-acid-wall-receipt/v1",
+  "status": "invalid-preregistered-no-speed-headline",
+  "frozen_benchmark_commit": "57ea69ea6fffcdd85ed63577c472a635062250b0",
+  "branch": "bench/threeway-acid-20260831",
+  "caller": {
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "seat": "dev-a",
+    "auth": "subscription",
+    "weekly_quota_before_launch_percent": 100,
+    "meter_alarms_before_launch": []
+  },
+  "arms": {
+    "A": "05f5a1962e5a0c5aa0365c673994eca9024c1a44",
+    "B": "19ab864889799b0028a5f7cb66c63b957ff7b973",
+    "C": "native apply_patch/shell only"
+  },
+  "starts": {
+    "scheduled": 42,
+    "completed": 42,
+    "process_exit_zero": 42,
+    "replacement_rows": 0
+  },
+  "preflight": {
+    "model_calls": 0,
+    "receipt_sha256": "a1bac526ee8fd1a490f4920e7d2c21c00e2b85479d44c8b4298cca969496aaf0",
+    "A_registry_sha256": "17540407199dcc9c5105bc14c80e8067d20cc4a3d49e00dd77c908348d4991da",
+    "B_registry_sha256": "66acbe89c88735a5f63f64a214440726223069a90ed8da8e312358a39355241f"
+  },
+  "result": {
+    "all_episodes_exact": false,
+    "wrong_subject_total": 1,
+    "archive_sha256": "b101f6dd0480740a6fda49993226d07f6c3cfab805726e5dfbaab6cb70a31cf0",
+    "manifest_sha256": "9a076f725be4a28b4f11a64aa319adf2c0aa33e1bf84fc6c1ebbdccf7b072aff",
+    "summary_sha256": "9a0ef212e9c34a954396f6fee3d0733bf3e4c03d7cecdece6a855fa094926784",
+    "episodes_sha256": "70986675b9cbe6ce2f9811bbd7ca1a1069b652ae904c234886f73f4793b5d72a",
+    "frozen_scorer_sha256": "845e9a15b1f702c6fa93bed5b28c116ad8d6f89beae1f82c7e287458e0993ba4"
+  },
+  "replay": {
+    "remote_and_relocated_summary_identical": true,
+    "remote_and_relocated_episodes_identical": true,
+    "absolute_workspace_prefix_relocation_required": true
+  },
+  "prelaunch_refusals": [
+    {
+      "type": "mistyped-expanded-frozen-sha",
+      "completed_ordinal": 0,
+      "model_calls": 0,
+      "receipt_sha256": "83ff5348edee546c63f8686d8eb9364394ee436e947f3943e64e35766a25038a"
+    },
+    {
+      "type": "divergent-arm-B-object-not-yet-advertised",
+      "completed_ordinal": 0,
+      "model_calls": 0,
+      "receipt_sha256": "9dac1fb0768725af305d787ec35b55724cb3ab493499ee73a052fc57125f4890"
+    }
+  ]
+}

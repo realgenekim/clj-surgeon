@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "model": "gpt-5.6-sol",
+  "reasoning": "high",
+  "product_a": "05f5a1962e5a0c5aa0365c673994eca9024c1a44",
+  "product_b": "19ab864889799b0028a5f7cb66c63b957ff7b973",
+  "published_head": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b",
+  "model_calls": 0
+}

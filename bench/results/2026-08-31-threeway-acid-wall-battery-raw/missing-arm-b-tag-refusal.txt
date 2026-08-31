@@ -1,0 +1,11 @@
+Three-way caller-wall acid battery token-free provisioning refusal
+
+- Provisioning dispatch SHA-256: 75ab4aaff6543d483aeec1beecc6ca355925510a3c2052e5b8a298b386573b80
+- Requested tag: refs/tags/stable-closed-relations-7.35x-native-20260829
+- Requested peeled commit: 19ab864889799b0028a5f7cb66c63b957ff7b973
+- Exact fetch error: fatal: couldn't find remote ref refs/tags/stable-closed-relations-7.35x-native-20260829
+- Benchmark checkout: detached and clean at 57ea69ea6fffcdd85ed63577c472a635062250b0
+- Completed cohort ordinal: 0
+- Model calls: 0
+- The unchanged token-free preflight was not rerun after this provisioning failure.
+- The frozen 42-start cohort was not launched.

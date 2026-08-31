@@ -1,0 +1,10 @@
+Three-way caller-wall acid battery prelaunch operational receipt
+
+- Prior dispatch SHA-256: 44e36b108b1e56c91576d1d6d88902ff6b05b2d679196727210ebc50b5749a55
+- Nonexistent expanded SHA: 57ea69eacb7220a4620272945196c4d40f5cb766
+- Exact fetch error: fatal: remote error: upload-pack: not our ref 57ea69eacb7220a4620272945196c4d40f5cb766
+- Completed cohort ordinal: 0
+- Model calls: 0
+- Correcting dispatch SHA-256: a2699ab781c30382d63d6d8b3231bdf59181e2464466c2d927f0410dee08c95b
+- Authoritative corrected commit: 57ea69ea6fffcdd85ed63577c472a635062250b0
+- This receipt is outside the token-free preflight and 42-start cohort directories.
