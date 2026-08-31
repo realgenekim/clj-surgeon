@@ -33,7 +33,7 @@ test -z "$(git -C "$repo_root" diff "$base_commit" -- src resources deps.edn bb.
   echo "product source differs from the frozen published commit" >&2
   exit 2
 }
-test "$(awk 'END {print NR-1}' "$schedule")" -eq 16
+test "$(awk 'NR > 1 && NF {count++} END {print count+0}' "$schedule")" -eq 16
 
 mkdir -p "$result_dir/workspaces" "$result_dir/mcp-telemetry"
 git -C "$repo_root" rev-parse HEAD > "$result_dir/harness-commit.txt"
