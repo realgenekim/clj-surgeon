@@ -128,7 +128,25 @@ as cold-flake characterization rather than erased.
 
 ## Idle cell and promotion boundary
 
-The same live supervisor remains running for the 60-minute first-bang and
-immediate mid-stream comparison. The 240-minute point is explicitly deferred;
-no keepalive cadence is enabled. D2 and installation remain outside this
-branch and require the separately reserved Gene install card.
+The same live supervisor remained continuously idle for the real 60-minute
+point. It emitted no background turn or keepalive during that interval.
+
+| Idle | First bang | Immediate mid-stream | First minus mid-stream | Result |
+|---:|---:|---:|---:|---|
+| 0 minutes | 2,693.062 ms | 2,553.399 ms | +139.663 ms | both accepted |
+| 60 minutes | 2,762.367 ms | 3,013.798 ms | -251.431 ms | both accepted |
+
+Every call used one fresh thread, one turn, one candidate, the exact runtime
+identity, and zero tool items or reroutes. The deliberately strict echo
+comparator remained false and was not replayed. The named 300-minute Spark
+meter reset during idle from the prior 60% window to a new 0% window, then
+advanced 0% -> 1% -> 2%; the reset timestamps changed consistently, so the
+product meter gate remained closed. The local alarm and circuit remained off.
+Final shutdown reported `cleanup_ok=true`, exit 0, and zero remaining members
+in the exact owned process group.
+
+There is no idle-decay signal at 60 minutes, so no keepalive cadence is enabled.
+The 240-minute point is explicitly deferred as allowed by the implementation
+order. D2 and installation remain outside this branch and require the
+separately reserved Gene install card; D1's wall-time stop already blocks
+promotion independently.
