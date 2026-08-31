@@ -2,6 +2,7 @@
 parent: high-level-design
 prefix: MCP-OP-SUBST
 status: 'ratified in advance (Gene, 2026-08-30, verbatim: "Go on all!!!")'
+client_metadata_privacy: 'decided A (conn, 2026-08-30, under Gene window authority; subject to Gene override at review)'
 ---
 
 # Substantiation telemetry
@@ -127,8 +128,8 @@ Each line is canonical JSON with these closed fields:
  :transport
  {:session_token "hmac"
   :turn_token nil
-  :client_name "codex-mcp-client"
-  :client_version "..."
+  :client_name "session-hmac"
+  :client_version "session-hmac"
   :caller_model "unknown"
   :caller_model_source "not-exposed"}
  :tool "inspect_clojure"
@@ -172,10 +173,14 @@ file or owner name is forbidden because a small repository vocabulary is easy
 to enumerate.
 
 Transport session identity is HMAC-tokenized. MCP 0.17.2 exposes client name,
-client version, and session ID. It does not expose the model. The ledger shall
-therefore record caller model as `unknown` and source as `not-exposed` unless a
-future transport supplies an authenticated model field. Caller-provided tool
-arguments may never assert model identity.
+client version, and session ID, but initialize metadata is client-controlled.
+The ledger therefore records session-local HMAC tokens for all three values;
+raw client name or version text is forbidden. It records caller model as
+`unknown` and source as `not-exposed` unless a future transport supplies an
+authenticated model field. Caller-provided tool arguments may never assert
+model identity. This is SUBST-CLIENT-1 Option A, decided by the conn on
+2026-08-30 under Gene's window authority and subject to Gene override at
+review.
 
 ## Call/result facts
 

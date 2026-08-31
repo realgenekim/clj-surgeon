@@ -113,6 +113,14 @@
        (Double/isFinite (double value))
        (not (neg? (double value)))))
 
+(defn- safe-identifier? [value]
+  (and (string? value)
+       (<= (count value) 128)
+       (boolean
+         (re-matches
+           #"[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)*"
+           value))))
+
 (defn- closed-string-vector? [value allowed]
   (and (vector? value)
        (every? #(and (string? %) (contains? allowed %)) value)
@@ -143,12 +151,8 @@
                "Substantiation feature counts are not closed" data)
   (closed-map! (:dimensions feature) #{} allowed-dimension-fields
                "Substantiation feature dimensions are not closed" data)
-  (when-not (and (string? (:feature_id feature))
-                 (boolean (re-matches #"[a-z0-9][a-z0-9-]{0,63}"
-                                      (:feature_id feature)))
-                 (string? (:stage feature))
-                 (boolean (re-matches #"[a-z0-9][a-z0-9-]{0,63}"
-                                      (:stage feature)))
+  (when-not (and (safe-identifier? (:feature_id feature))
+                 (safe-identifier? (:stage feature))
                  (every? #(and (integer? %) (not (neg? %)))
                          (vals (:counts feature)))
                  (every? boolean?
@@ -207,8 +211,8 @@
                    (or (nil? (:turn_token transport))
                        (sha256? (:turn_token transport)))
                    (sha256? (:key_id transport))
-                   (string? (:client_name transport))
-                   (string? (:client_version transport))
+                   (sha256? (:client_name transport))
+                   (sha256? (:client_version transport))
                    (= "unknown" (:caller_model transport))
                    (= "not-exposed" (:caller_model_source transport)))
       (invalid! "Substantiation transport identity is invalid" data))
@@ -246,7 +250,9 @@
   (loop [remaining events
          expected-sequence 1
          previous-sha nil
-         call-phases {}]
+         call-phases {}
+         event-ids #{}
+         call-identities {}]
     (if-let [event (first remaining)]
       (let [fields (set (keys event))
             missing (set/difference required-event-fields fields)
@@ -257,7 +263,10 @@
                            (dissoc event :event_sha256)))
             call-id (:call_id event)
             phase (:phase event)
-            prior-phase (get call-phases call-id)]
+            prior-phase (get call-phases call-id)
+            call-identity {:tool (:tool event)
+                           :transport (:transport event)}
+            prior-identity (get call-identities call-id)]
         (when (seq missing)
           (invalid! "Substantiation event is missing closed fields"
                     {:sequence expected-sequence :missing missing}))
@@ -276,6 +285,10 @@
         (when-not (= calculated event-sha)
           (invalid! "Substantiation event digest mismatch"
                     {:sequence expected-sequence}))
+        (when (contains? event-ids (:event_id event))
+          (invalid! "Substantiation event ID is reused"
+                    {:sequence expected-sequence
+                     :event-id (:event_id event)}))
         (when-not (or (and (= "start" phase) (nil? prior-phase))
                       (and (= "finish" phase) (= "start" prior-phase)))
           (invalid! "Substantiation call lifecycle is invalid"
@@ -283,11 +296,19 @@
                      :call-id call-id
                      :phase phase
                      :prior-phase prior-phase}))
+        (when (and (= "finish" phase) (not= prior-identity call-identity))
+          (invalid! "Substantiation call identity drifted"
+                    {:sequence expected-sequence
+                     :call-id call-id}))
         (validate-event-shape! event expected-sequence)
         (recur (next remaining)
                (inc expected-sequence)
                event-sha
-               (assoc call-phases call-id phase)))
+               (assoc call-phases call-id phase)
+               (conj event-ids (:event_id event))
+               (if (= "start" phase)
+                 (assoc call-identities call-id call-identity)
+                 call-identities)))
       (do
         (when-let [unmatched (seq (keep (fn [[call-id phase]]
                                           (when (= "start" phase) call-id))
