@@ -220,7 +220,13 @@
                     [(if (or (string? key) (keyword? key))
                        (normalize-string (str key) root)
                        key)
-                     (normalize-public child root)])))
+                     (if (= key :descriptor_sha256)
+                       (if (and (string? child)
+                                (re-matches #"[0-9a-f]{64}" child))
+                         "<SESSION-BOUND-DIGEST>"
+                         (fail! "Invalid prepared confirmation digest"
+                                {:value child}))
+                       (normalize-public child root))])))
           value)
 
     (vector? value) (mapv #(normalize-public % root) value)

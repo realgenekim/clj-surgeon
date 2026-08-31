@@ -13,12 +13,21 @@ or shared-runtime action.
 - Execute product namespaces from a clean detached worktree at that exact
   commit. Load only the immutable screen namespace from the measurement branch
   through an absolute extra path.
-- Screen semantics differ from the accepted `de70e06f` instrument only in the
-  two candidate identity literals. The repository commit hook reformatted
+- Before the first run, screen semantics differed from the accepted `de70e06f`
+  instrument only in the two candidate identity literals. The repository commit hook reformatted
   indentation; `git diff --ignore-all-space 7dcf1fab --
   dev/experiments/substantiation_overhead_screen.clj` shows only those two
   literals. Every sample count, schedule, semantic stratum, normalization rule,
-  and threshold remains unchanged.
+  and threshold was unchanged.
+
+The first exact-hash run then failed parity only because W1 introduced a
+session-bound `descriptor_sha256`; its off/on private sessions correctly minted
+different digests. The pre-W1 receipt had no such field. The earned repair
+normalizes only a present, valid 64-lower-hex digest value to
+`<SESSION-BOUND-DIGEST>`. It refuses malformed values and preserves field
+presence, so a missing descriptor in either arm remains a parity failure. No
+threshold, sample, schedule, or other exclusion changed. The failed run is
+retained and unscored.
 
 ## Unchanged frozen gates
 
