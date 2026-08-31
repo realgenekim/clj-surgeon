@@ -336,7 +336,14 @@
 
 (defn- subject-tokens [state value]
   (mapv (fn [[_path kind subject]]
-          {:kind kind
+          {:kind (cond
+                   (str/includes? kind "namespace") "namespace"
+                   (str/includes? kind "owner") "owner"
+                   (str/includes? kind "form") "form"
+                   (str/includes? kind "file") "file"
+                   (str/includes? kind "path") "path"
+                   (str/includes? kind "locator") "locator"
+                   :else "subject")
            :token (private-token (:secret state) subject)})
         (collect-subjects value)))
 

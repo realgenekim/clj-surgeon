@@ -108,6 +108,31 @@
              :marker {:start-sequence 1 :end-sequence 2 :sha256 "marker"}
              :ledger-bytes 100})))))
 
+(deftest refuses-rehashed-nested-value-forgeries
+  (let [{:keys [events]} (recorded-events)
+        cases
+        [[:unknown-operation
+          #(assoc-in % [0 :operation] "src/private.clj")]
+         [:unknown-request-field-presence
+          #(update-in % [0 :request_shape :field_presence]
+                      conj "src/private.clj")]
+         [:request-count-source-string
+          #(assoc-in % [0 :request_shape :request_count] "src/private.clj")]
+         [:unknown-result-field-presence
+          #(update-in % [1 :result_shape :field_presence]
+                      conj "src/private.clj")]
+         [:unknown-result-semantic-kind
+          #(assoc-in % [1 :result_shape :semantic_kinds]
+                     ["src/private.clj"])]
+         [:unknown-result-error-type
+          #(assoc-in % [1 :result_shape :error_type] "src/private.clj")]
+         [:result-boolean-source-string
+          #(assoc-in % [1 :result_shape :ok] "src/private.clj")]]]
+    (doseq [[case-id mutate] cases]
+      (testing (name case-id)
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (report/validate-chain (rechain (mutate events)))))))))
+
 (deftest report-retains-zero-features-and-refuses-promotion-authority
   (let [{:keys [events]} (recorded-events)
         registry (edn/read-string
@@ -266,6 +291,7 @@
                   state nil "inspect_clojure"
                   {:operation "secret-operation"
                    :secret-field-name "secret-value"
+                   :secret-file-name "secret-file-value"
                    :requests []})
         _ (substantiation/complete-call!
             state context
@@ -282,8 +308,12 @@
     (is (= "other" (get-in finish [:result_shape :error_type])))
     (is (= ["operation" "requests"]
            (get-in start [:request_shape :field_presence])))
+    (is (= ["file"]
+           (mapv :kind (get-in start [:request_shape :subject_tokens]))))
     (is (not (.contains ledger "secret-field-name")))
     (is (not (.contains ledger "secret-value")))
+    (is (not (.contains ledger "secret-file-name")))
+    (is (not (.contains ledger "secret-file-value")))
     (is (not (.contains ledger "secret-refusal-type")))
     (is (not (.contains ledger "secret-result-value")))))
 
