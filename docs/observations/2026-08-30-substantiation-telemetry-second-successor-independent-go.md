@@ -157,6 +157,27 @@ is still recorded as nonzero; this receipt does not relabel it green.
 
 ## Measurement boundary
 
+### Merge-queue addendum
+
+Conn R1 was overturned by the adopted adversarial review at `2f391902`.
+This receipt is therefore provisional feature-local evidence, not a claim that
+the candidate may publish before queue head W1/W2.
+
+W1 changes the official prepared-consumption request from complete raw edit
+parameters to `{confirm, fill}` and reconstructs the canonical edit arguments
+later. Telemetry currently classifies consumption from raw public edit
+parameters. After telemetry rebases onto the published W1 lineage, its next
+independent verification must include a permanent cross-feature witness that:
+
+1. serves a prepared descriptor;
+2. consumes it through the official W1 confirm route;
+3. commits through the ordinary edit transaction; and
+4. records that route as prepared consumption exactly once.
+
+A mechanical rebase, feature-local green, or raw-parameter-only consumption
+witness cannot satisfy this gate. Failure to count the official W1 route is
+telemetry publication NO-GO.
+
 The evidence authorizes only the already-ratified, zero-model live HTTP
 differential in MCP-OP-SUBST-018. That measurement must still enforce its own
 public-result parity and p50/p95 limits. A semantic or overhead miss remains
