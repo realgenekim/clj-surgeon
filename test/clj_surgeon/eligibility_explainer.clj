@@ -1,4 +1,4 @@
-(ns explain-eligibility
+(ns clj-surgeon.eligibility-explainer
   "Dev-mode diagnostic: names every failing eligible-descriptor condition.
   Born in caller #1's tweezer session 2026-08-30 (four opaque refusals, one
   labeled checklist). Rung-3 residue: a recurring question converted to a

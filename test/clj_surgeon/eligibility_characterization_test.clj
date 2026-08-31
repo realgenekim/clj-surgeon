@@ -109,11 +109,28 @@
   (is (not (attaches? (assoc (base-fixture) :workspace_root "relative/root")))
       "single mutation must forfeit the descriptor: relative-root"))
 
-
-(deftest dev-explainer-agrees-with-product
-  ;; binds dev/explain_eligibility.clj to product truth: agreement on the
-  ;; eligible boolean for the base; drift here fails loud.
-  (load-file "/tmp/cathedral/dev/explain_eligibility.clj")
-  (let [explain (resolve 'explain-eligibility/explain)]
-    (is (= true (:eligible? (explain (base-fixture))))
-        "the dev explainer must agree the base is eligible")))
+(deftest explainer-agrees-with-product-on-all-rows
+  ;; candidate-owned explainer (test support), loaded via classpath — hermetic.
+  ;; General agreement: for the base AND every mutation, the explainer's
+  ;; :eligible? must equal the product's attach decision.
+  (require '[clj-surgeon.eligibility-explainer :as ee])
+  (let [explain (resolve 'clj-surgeon.eligibility-explainer/explain)
+        b (base-fixture)
+        f (get-in b [:results 0 :forms 0])
+        muts [(assoc-in b [:results 0 :file_hash] "abc")
+              (-> b (assoc-in [:results 0 :forms] [f f]) (assoc-in [:results 0 :form_count] 2)
+                  (assoc-in [:results 0 :source_character_count] 28) (assoc :source_character_count 28))
+              (assoc b :source_character_count 999)
+              (assoc b :operation "other")
+              (assoc b :request_count 2)
+              (assoc b :file_hashes {"src/x.clj" "zzz"})
+              (assoc b :next_action "retry")
+              (assoc b :ok false)
+              (assoc-in b [:results 0 :forms] "notvec")
+              (assoc-in b [:results 0 :forms 0 :name] "")
+              (assoc b :workspace_root "relative/root")]]
+    (is (= true (:eligible? (explain b)) (attaches? b))
+        "base: explainer and product agree eligible")
+    (doseq [m muts]
+      (is (= false (boolean (:eligible? (explain m))) (attaches? m))
+          "mutation: explainer and product agree ineligible"))))
