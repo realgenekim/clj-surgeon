@@ -231,30 +231,39 @@
         owner (:name form)
         anchor (:source_anchor form)
         form-range (:range anchor)
-        selection-range (:selection_range anchor)]
-    (and (map? form)
-         (string? source)
-         (seq source)
-         (string? owner)
-         (not (str/blank? owner))
-         (string? (:form_type form))
-         (not (str/blank? (:form_type form)))
-         (not= "ns" (:form_type form))
-         (= expected-platforms (:platforms form))
-         (= file (:file form) (:file anchor))
-         (= file-hash (:file_hash form) (:source_sha256 anchor))
-         (exact-sha256? (:hash form))
-         (= (:hash form) (structural-lens/source-hash source))
-         (= owner (:owner anchor))
-         (pos-int? (:line form))
-         (pos-int? (:end_line form))
-         (<= (:line form) (:end_line form))
-         (range? form-range)
-         (range? selection-range)
-         (range-contained? form-range selection-range)
-         (selection-names-owner? form-range selection-range source owner)
-         (= (dec (:line form)) (get-in form-range [:start :line]))
-         (= (dec (:end_line form)) (get-in form-range [:end :line])))))
+        selection-range (:selection_range anchor)
+        ;; Named, ordered, short-circuiting checks — the house pattern
+        ;; established by the eligible-descriptor refactor. Thunks preserve
+        ;; the original and-chain's first-failure semantics exactly.
+        checks [[:form-map #(map? form)]
+                [:source-string #(string? source)]
+                [:source-non-empty #(seq source)]
+                [:owner-string #(string? owner)]
+                [:owner-non-blank #(not (str/blank? owner))]
+                [:form-type-string #(string? (:form_type form))]
+                [:form-type-non-blank #(not (str/blank? (:form_type form)))]
+                [:form-type-not-ns #(not= "ns" (:form_type form))]
+                [:platforms-expected #(= expected-platforms (:platforms form))]
+                [:file-consistent #(= file (:file form) (:file anchor))]
+                [:file-hash-consistent
+                 #(= file-hash (:file_hash form) (:source_sha256 anchor))]
+                [:form-hash-exact #(exact-sha256? (:hash form))]
+                [:form-hash-matches
+                 #(= (:hash form) (structural-lens/source-hash source))]
+                [:owner-matches-anchor #(= owner (:owner anchor))]
+                [:line-positive #(pos-int? (:line form))]
+                [:end-line-positive #(pos-int? (:end_line form))]
+                [:line-order #(<= (:line form) (:end_line form))]
+                [:form-range-valid #(range? form-range)]
+                [:selection-range-valid #(range? selection-range)]
+                [:selection-contained #(range-contained? form-range selection-range)]
+                [:selection-names-owner
+                 #(selection-names-owner? form-range selection-range source owner)]
+                [:line-matches-range
+                 #(= (dec (:line form)) (get-in form-range [:start :line]))]
+                [:end-line-matches-range
+                 #(= (dec (:end_line form)) (get-in form-range [:end :line]))]]]
+    (nil? (some (fn [[_label check]] (when-not (check) true)) checks))))
 
 (defn- descriptor
   [result forms]
