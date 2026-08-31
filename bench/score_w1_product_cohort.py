@@ -103,8 +103,11 @@ def score_run(run_dir: Path, encoding) -> dict:
     }
     read_subject_ok = read_args == expected_read
 
-    preview_call = calls[1] if arm == "C" and len(calls) > 1 else None
-    commit_call = calls[-1] if calls else None
+    edit_calls = [call for call in calls if call["tool"] == "edit_clojure"]
+    preview_calls = [call for call in edit_calls if call["args"].get("preview") is True]
+    commit_calls = [call for call in edit_calls if "preview" not in call["args"]]
+    preview_call = preview_calls[0] if arm == "C" and preview_calls else None
+    commit_call = commit_calls[-1] if commit_calls else None
     if arm == "C":
         preview_shape_ok = bool(
             preview_call
@@ -148,7 +151,7 @@ def score_run(run_dir: Path, encoding) -> dict:
         tool_sequence_ok and read_subject_ok and preview_shape_ok and commit_shape_ok
         and preview_ok and commit_ok and no_other_actions
     )
-    wrong_subject = 0 if read_subject_ok and ordinary_subject_ok and tree_exact else 1
+    wrong_subject = 0 if read_subject_ok and ordinary_subject_ok else 1
     exact = bool(tree_exact and commit_ok and route_adherent and wrong_subject == 0)
 
     usage = {}
@@ -159,9 +162,9 @@ def score_run(run_dir: Path, encoding) -> dict:
             usage = event.get("usage") or usage
 
     read_call = calls[0] if calls else {}
-    mutation_calls = calls[1:] if len(calls) > 1 else []
+    mutation_calls = edit_calls
     preview_changed_commit = bool(
-        arm == "C" and preview_call and commit_call
+        arm == "C" and preview_ok and preview_call and commit_call
         and preview_call["args"].get("fill") != commit_call["args"].get("fill")
     )
 
@@ -292,4 +295,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

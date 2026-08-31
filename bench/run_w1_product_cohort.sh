@@ -111,6 +111,7 @@ make_prompt() {
 }
 
 while IFS=$'\t' read -r ordinal pair arm; do
+  [ -n "$ordinal" ] || continue
   [ "$ordinal" = ordinal ] && continue
   run_id=$(printf '%02d-p%02d-%s' "$ordinal" "$pair" "$arm")
   run_dir="$result_dir/$run_id"
@@ -124,7 +125,7 @@ while IFS=$'\t' read -r ordinal pair arm; do
     printf 'url = "%s"\n' "$mcp_url"
     printf '%s\n' 'required = true'
     printf '%s\n' 'enabled_tools = ["inspect_clojure", "edit_clojure"]'
-    printf '%s\n' 'default_tools_approval_mode = "writes"'
+    printf '%s\n' 'default_tools_approval_mode = "approve"'
     printf '%s\n' 'startup_timeout_sec = 5'
     printf '%s\n' 'tool_timeout_sec = 60'
   } > "$codex_home/config.toml"
