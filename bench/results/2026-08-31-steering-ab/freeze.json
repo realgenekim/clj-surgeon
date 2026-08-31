@@ -1,0 +1,72 @@
+{
+  "schema": "clj-surgeon.steering-ab-freeze.v1",
+  "frozen_at_date": "2026-08-31",
+  "product_base": "469141bdd3144a94a4e4ea2ed99c7ecd6ca26f5b",
+  "branch": "experiment/steering-ab-20260831",
+  "caller": {
+    "model": "gpt-5.6-sol",
+    "reasoning": "high",
+    "allow_provider_model_fallback": false
+  },
+  "bonus_caller": {
+    "model": "gpt-5.3-codex-spark",
+    "reasoning": "low",
+    "allow_provider_model_fallback": false
+  },
+  "signal": {
+    "field": "prepared_alternative",
+    "data_only": true,
+    "threshold_saved_tokens_estimate": 100,
+    "typed_bytes": 3551,
+    "confirm_fill_bytes": 1773,
+    "saved_tokens_estimate": 444,
+    "formula": "floor((typed_bytes-confirm_fill_bytes)/4)"
+  },
+  "fixture": {
+    "edit1_from": {
+      "bytes_with_final_newline": 49,
+      "sha256": "62aa33cd92ab2ae42fb7708e2c6ae39895bcae68799201915dfb17d9f5e6a7a1"
+    },
+    "edit1_to": {
+      "bytes_with_final_newline": 49,
+      "sha256": "4022c4cbc799a320746b9cedffac9562e5ba2e2a5dbbfd8228c88a33ffd80972"
+    },
+    "edit2_from": {
+      "bytes_with_final_newline": 1576,
+      "sha256": "6ae6822d98e1485af5708d0ba9feb3b9435a5d0229c905c15cbe72c55288e272"
+    },
+    "edit2_to": {
+      "bytes_with_final_newline": 1575,
+      "sha256": "6c8d87798e526d12c04cbfe5056ea33dc96f229ba51210d2f5661254261067ea"
+    },
+    "source_before_sha256": "d6d30c660508acb8093d6573c9b34fd32d8d4e97433f77e2205e441452459a75",
+    "source_after_edit1_sha256": "6492a58f587090deb894df7557188cea40e0b8a9ffc00ce6ff21f340ff2089f7",
+    "source_final_sha256": "5975a066af7d54b97053bb39884524c06a8392cedf5173713285f5c71faa969d"
+  },
+  "pilot": [
+    {"id": "P-C1", "arm": "C"},
+    {"id": "P-C2", "arm": "C"}
+  ],
+  "main_schedule": [
+    {"id": "01", "arm": "S"},
+    {"id": "02", "arm": "C"},
+    {"id": "03", "arm": "C"},
+    {"id": "04", "arm": "S"},
+    {"id": "05", "arm": "C"},
+    {"id": "06", "arm": "S"},
+    {"id": "07", "arm": "S"},
+    {"id": "08", "arm": "C"},
+    {"id": "09", "arm": "S"},
+    {"id": "10", "arm": "C"},
+    {"id": "11", "arm": "C"},
+    {"id": "12", "arm": "S"}
+  ],
+  "bonus_schedule": [
+    {"id": "B-C1", "arm": "C"},
+    {"id": "B-S1", "arm": "S"}
+  ],
+  "pilot_break_rule": "both control cells qualify on primary",
+  "kill_rule": "signal steering lift < 25 percentage points at n=6 per arm",
+  "exactness_gate": "S=6/6 and C=6/6",
+  "wrong_subject_gate": 0
+}
