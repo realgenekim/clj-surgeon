@@ -2,6 +2,26 @@
   (:require
    [clojure.test :refer [deftest is testing]]))
 
+;; @spec MCP-OP-SUBST-001
+;; @spec MCP-OP-SUBST-002
+;; @spec MCP-OP-SUBST-003
+;; @spec MCP-OP-SUBST-004
+;; @spec MCP-OP-SUBST-005
+;; @spec MCP-OP-SUBST-006
+;; @spec MCP-OP-SUBST-007
+;; @spec MCP-OP-SUBST-008
+;; @spec MCP-OP-SUBST-009
+;; @spec MCP-OP-SUBST-010
+;; @spec MCP-OP-SUBST-011
+;; @spec MCP-OP-SUBST-012
+;; @spec MCP-OP-SUBST-013
+;; @spec MCP-OP-SUBST-014
+;; @spec MCP-OP-SUBST-015
+;; @spec MCP-OP-SUBST-016
+;; @spec MCP-OP-SUBST-017
+;; @spec MCP-OP-SUBST-018
+;; @spec MCP-OP-SUBST-019
+
 (defn- invoke-or-empty
   [symbol & args]
   (try

@@ -2,6 +2,7 @@
   (:require
    [cheshire.core :as json]
    [clj-surgeon.mcp-runtime :as runtime]
+   [clj-surgeon.mcp-substantiation :as substantiation]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clojure-mcp.core :as mcp-core]
@@ -287,12 +288,13 @@
   :receipt-dir    durable inverse-receipt directory
   :telemetry      off, metrics, or full (default metrics)
   :telemetry-dir  local JSONL directory outside repositories
+  :substantiation-dir  private append-only substantiation directory
   :run-id         optional benchmark correlation ID
   :tool-profile   :full (default) or :edit
   :nrepl-port     0 for ephemeral development nREPL; :none disables it
   :port-file      embedded nREPL discovery file (default .nrepl-port)
   :log-file       clojure-mcp diagnostic log"
-  [{:keys [project-dir receipt-dir telemetry-dir run-id tool-profile nrepl-port
+  [{:keys [project-dir receipt-dir telemetry-dir substantiation-dir run-id tool-profile nrepl-port
            port-file log-file]
     telemetry-mode :telemetry}]
   (let [project-dir (str (normalize-option project-dir
@@ -301,6 +303,9 @@
         (telemetry/start! {:mode (normalize-option telemetry-mode :metrics)
                            :directory telemetry-dir
                            :run-id run-id})
+        substantiation-state
+        (when-let [directory (normalize-option substantiation-dir nil)]
+          (substantiation/start! {:directory directory :run-id run-id}))
         started-ms (.getUptime (ManagementFactory/getRuntimeMXBean))
         port-file (str (normalize-option port-file
                                          (io/file project-dir ".nrepl-port")))
@@ -313,7 +318,8 @@
     (mcp-tool/init! {:project-root project-dir
                      :receipt-dir receipt-dir
                      :tool-profile (normalize-option tool-profile :full)
-                     :telemetry telemetry-state})
+                     :telemetry telemetry-state
+                     :substantiation substantiation-state})
     (build-stdio-server)
     (armor-stdout!)
     (telemetry/emit!

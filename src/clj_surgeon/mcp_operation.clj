@@ -52,13 +52,20 @@
   The request clock surrounds domain execution only. Summary rendering and
   serialization both complete before callback publication, so failures cannot
   expose a partial public result."
-  [{:keys [clock-nanos execute summarize serialize callback]
+  [{:keys [clock-nanos execute summarize serialize callback
+           before-execute after-result]
     :or {clock-nanos #(System/nanoTime)
          serialize json/generate-string}}]
-  (let [started-ns (clock-nanos)
-        domain-result (execute)
+  (let [observation (when before-execute (before-execute))
+        started-ns (clock-nanos)
+        domain-result (if-let [blocked-result (:blocked-result observation)]
+                        blocked-result
+                        (execute))
         finished-ns (clock-nanos)
-        result (finalize-result domain-result started-ns finished-ns)
+        finalized-result (finalize-result domain-result started-ns finished-ns)
+        result (if (and after-result (not (:blocked-result observation)))
+                 (after-result observation finalized-result)
+                 finalized-result)
         summary (summarize result)
         body (serialize result)]
     (callback [summary] (not (:ok result)) result)

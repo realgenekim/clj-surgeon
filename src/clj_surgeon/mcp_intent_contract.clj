@@ -107,11 +107,14 @@
           (io/file root
                    "docs/intent/prepared-request/prepared-request-specs.md")
           (io/file root
-                   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")]]
+                   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")
+          (io/file root
+                   "docs/intent/substantiation-telemetry/substantiation-telemetry-specs.md")]]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources
         (merge (read-sources root ["src"] [".clj" ".cljc" ".cljs"])
+               (read-sources root ["bench"] [".clj" ".cljc"])
                (read-sources root ["Makefile"] ["Makefile"]))
         :test-sources
         (read-sources root ["test"] [".clj" ".cljc" ".cljs" ".pl"])}))))

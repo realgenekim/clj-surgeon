@@ -14,6 +14,7 @@ CLAUDE_SKILL_DEST := $(CLAUDE_HOME)/skills/clj-surgeon
 CODEX_GLOBAL_INSTRUCTIONS ?= $(CODEX_HOME)/AGENTS.md
 CLAUDE_GLOBAL_INSTRUCTIONS ?= $(CLAUDE_HOME)/CLAUDE.md
 SOURCE_COMMIT := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse HEAD 2>/dev/null || printf unknown)
+SOURCE_TREE := $(shell git -C "$(CLJ_SURGEON_HOME)" rev-parse 'HEAD^{tree}' 2>/dev/null || printf unknown)
 CLI_SOURCE_HASH := $(shell cd "$(CLJ_SURGEON_HOME)" && { find src -type f -print; printf '%s\n' bb.edn deps.edn; } | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
 SKILL_SOURCE_HASH := $(shell cd "$(SKILL_SOURCE)" && find . -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$$file"; done | shasum -a 256 | awk '{print $$1}')
 VERSION_ROOT := $(INSTALL_ROOT)/versions/$(SOURCE_COMMIT)
@@ -46,7 +47,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test substantiation-self-test substantiation-report retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -59,6 +60,7 @@ help:
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Reload live Clojure and publish changed tool schemas"
+	@echo "  make substantiation-report     Compile one digest-fenced weekly evidence report"
 	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
 	@echo "  make cclsp-client-audit        Refuse direct repo cclsp registrations and launchers"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
@@ -184,7 +186,7 @@ mcp-reload:
 	  test -f "$$port_file" || { echo "No live MCP nREPL port at $$port_file; run make mcp-start" >&2; exit 1; }; \
 	  port=$$(cat "$$port_file"); \
 	  result=$$(clj-nrepl-eval --port "$$port" \
-	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.owner-hypotheses clj-surgeon.show-form clj-surgeon.mcp-process clj-surgeon.forward-refs clj-surgeon.fix-declares clj-surgeon.binding-rename clj-surgeon.operation-algebra clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-workspace-sources clj-surgeon.mcp-schema clj-surgeon.mcp-compact-edit-fields clj-surgeon.mcp-compact-relations clj-surgeon.mcp-extraction clj-surgeon.mcp-contract clj-surgeon.mcp-extraction-plan clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-operation clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-program-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
+	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.owner-hypotheses clj-surgeon.show-form clj-surgeon.mcp-process clj-surgeon.forward-refs clj-surgeon.fix-declares clj-surgeon.binding-rename clj-surgeon.operation-algebra clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-workspace-sources clj-surgeon.mcp-schema clj-surgeon.mcp-compact-edit-fields clj-surgeon.mcp-compact-relations clj-surgeon.mcp-extraction clj-surgeon.mcp-contract clj-surgeon.mcp-extraction-plan clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-operation clj-surgeon.mcp-substantiation clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-program-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (clj-surgeon.mcp-tool/enable-substantiation! \"$(MCP_STATE_DIR)/substantiation\") (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
 	  case "$$result" in *":ok true"*) ;; *) echo "$$result" >&2; exit 1 ;; esac; \
 	  echo "$$result"; \
 	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \
@@ -303,6 +305,7 @@ mcp-start: cclsp-start
 	    :port '$(MCP_PORT)' \
 	    :telemetry :full \
 	    :telemetry-dir '"$(MCP_STATE_DIR)/telemetry"' \
+	    :substantiation-dir '"$(MCP_STATE_DIR)/substantiation"' \
 	    :run-id '"dogfood"' \
 	    :cclsp-url '"$(CCLSP_URL)"' \
 	    :ready-file '"$(MCP_READY_FILE)"' \
@@ -663,6 +666,27 @@ performance-regression-sentinel-test:
 	     (when (pos? (+ (:fail result) (:error result))) \
 	       (System/exit 1)))'
 	bash test/performance_regression_sentinel_runner_test.sh
+
+substantiation-self-test:
+	clojure $(MCP_JAVA_OPTS) -Sdeps '{:aliases {:substantiation-test {:extra-paths ["test" "bench"]}}}' \
+	  -M:substantiation-test -e \
+	  '(require (quote clojure.test) \
+	            (quote clj-surgeon.mcp-substantiation-test) \
+	            (quote clj-surgeon.mcp-substantiation-report-test)) \
+	   (let [result (clojure.test/run-tests \
+	                 (quote clj-surgeon.mcp-substantiation-test) \
+	                 (quote clj-surgeon.mcp-substantiation-report-test))] \
+	     (when (pos? (+ (:fail result) (:error result))) (System/exit 1)))'
+
+substantiation-report:
+	@test -n "$(LEDGER)" || { echo "LEDGER is required"; exit 2; }
+	@test -n "$(OUTPUT_ROOT)" || { echo "OUTPUT_ROOT is required"; exit 2; }
+	@test -n "$(INSTALLED_COMMIT)" || { echo "INSTALLED_COMMIT is required"; exit 2; }
+	@test -n "$(INSTALLED_TAG)" || { echo "INSTALLED_TAG is required"; exit 2; }
+	clojure $(MCP_JAVA_OPTS) -Sdeps '{:aliases {:substantiation-report {:extra-paths ["bench"]}}}' \
+	  -M:substantiation-report -m substantiation-report-io \
+	  "$(LEDGER)" "$(OUTPUT_ROOT)" "$(INSTALLED_COMMIT)" "$(INSTALLED_TAG)" \
+	  "$(SOURCE_COMMIT)" "$(SOURCE_TREE)"
 
 retain-benchmark-result:
 	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }

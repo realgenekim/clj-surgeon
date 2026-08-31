@@ -17,6 +17,7 @@
    [clj-surgeon.mcp-program-tool :as program-tool]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-schema :as mcp-schema]
+   [clj-surgeon.mcp-substantiation :as substantiation]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
@@ -177,6 +178,16 @@
     (reset! runtime-config configured)
     (inspect-tool/init! configured)
     (program-tool/init! configured)))
+
+(defn enable-substantiation!
+  "Start substantiation evidence for the live tool configuration once."
+  [directory]
+  (locking runtime-config
+    (when-let [config @runtime-config]
+      (when-not (:substantiation config)
+        (let [state (substantiation/start! {:directory directory})]
+          (reset! runtime-config (assoc config :substantiation state))
+          state)))))
 
 (defn- real-root
   ^Path [root]
@@ -919,56 +930,59 @@
     "apply_clojure_changes"))
 
 (defn- handle-operation
-  [operation params callback]
+  [exchange operation params callback]
   (mcp-operation/invoke!
-   {:execute
-    (fn []
-      (write-refusal/bound-public-refusal
-       (with-exact-terminal-response
-         (assoc
-          (cond
-            (and (= "edit_clojure" operation)
-                 (or (contains? params :verify)
-                     (contains? params "verify")))
-            {:ok false
-             :error_type "invalid-mcp-request"
-             :error "edit_clojure does not authorize transaction verification"
-             :source_unchanged true
-             :mutation_attempted false
-             :write_authority false
-             :remedy "Use apply_clojure_changes when verification must share rollback authority."}
+   (merge
+    {:execute
+     (fn []
+       (write-refusal/bound-public-refusal
+        (with-exact-terminal-response
+          (assoc
+           (cond
+             (and (= "edit_clojure" operation)
+                  (or (contains? params :verify)
+                      (contains? params "verify")))
+             {:ok false
+              :error_type "invalid-mcp-request"
+              :error "edit_clojure does not authorize transaction verification"
+              :source_unchanged true
+              :mutation_attempted false
+              :write_authority false
+              :remedy "Use apply_clojure_changes when verification must share rollback authority."}
 
-            @runtime-config
-            (execute-request!
-             (assoc @runtime-config :public-operation operation)
-             params)
+             @runtime-config
+             (execute-request!
+              (assoc @runtime-config :public-operation operation)
+              params)
 
-            :else
-            {:ok false
-             :error_type "server-not-initialized"
-             :error (str operation " server is not initialized")
-             :source_unchanged true
-             :remedy "Restart the configured clj-surgeon MCP server."})
-          :operation operation))
-       concise-summary))
-    :summarize concise-summary
-    :callback callback}))
+             :else
+             {:ok false
+              :error_type "server-not-initialized"
+              :error (str operation " server is not initialized")
+              :source_unchanged true
+              :remedy "Restart the configured clj-surgeon MCP server."})
+           :operation operation))
+        concise-summary))
+     :summarize concise-summary
+     :callback callback}
+    (substantiation/observer
+     (:substantiation @runtime-config) exchange operation params))))
 
 (defn handle-clj-change
   "Legacy inferred callback retained for compatibility with installed callers."
-  [_exchange params callback]
-  (handle-operation (request-operation params) params callback))
+  [exchange params callback]
+  (handle-operation exchange (request-operation params) params callback))
 
 ;; @spec MCP-OP-PREP-REQ-007
 (defn handle-edit-clojure
   "Stable callback that preserves edit_clojure entrance authority and identity."
-  [_exchange params callback]
-  (handle-operation "edit_clojure" params callback))
+  [exchange params callback]
+  (handle-operation exchange "edit_clojure" params callback))
 
 (defn handle-apply-clojure-changes
   "Stable callback that preserves apply_clojure_changes entrance authority and identity."
-  [_exchange params callback]
-  (handle-operation "apply_clojure_changes" params callback))
+  [exchange params callback]
+  (handle-operation exchange "apply_clojure_changes" params callback))
 
 (def edit-tool-description
   (str

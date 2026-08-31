@@ -26,6 +26,8 @@
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
+   [clj-surgeon.mcp-substantiation-report-test]
+   [clj-surgeon.mcp-substantiation-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
@@ -59,6 +61,8 @@
           'clj-surgeon.mcp-paths-test
           'clj-surgeon.mcp-process-test
           'clj-surgeon.mcp-prepared-request-test
+          'clj-surgeon.mcp-substantiation-test
+          'clj-surgeon.mcp-substantiation-report-test
           'clj-surgeon.mcp-program-tool-test
           'clj-surgeon.mcp-read-request-normalization-test
           'clj-surgeon.mcp-schema-test
