@@ -1,10 +1,13 @@
 (ns clj-surgeon.mcp-prepared-confirmation-test
   (:require
    [clj-surgeon.mcp-contract :as contract]
+   [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-prepared-request :as prepared-request]
+   [clj-surgeon.mcp-tool :as mcp-tool]
+   [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]])
+   [clojure.test :refer [deftest is]])
   (:import
    (io.modelcontextprotocol.common McpTransportContext)
    (io.modelcontextprotocol.server McpAsyncServerExchange)))
@@ -21,8 +24,9 @@
 (defn- call [api name & args]
   (apply (get api name) args))
 
-(defmacro with-confirmation-api [[api] & body]
-  `(if-let [~api (load-api)]
+(defmacro ^{:clj-kondo/lint-as 'clojure.core/let} with-confirmation-api
+  [[api expression] & body]
+  `(if-let [~api ~expression]
      (do ~@body)
      (is false "ratified prepared-confirmation production entrance is absent")))
 
@@ -68,7 +72,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-001
 (deftest confirmation-publication-is-budget-atomic-and-stateful
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock)
           prepared (prepared-result)
@@ -96,7 +100,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-002
 (deftest registry-is-bounded-expiring-deterministic-and-source-free
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock :per-session-live 2 :global-live 3
                           :per-session-tombstones 2 :global-tombstones 3)
@@ -114,7 +118,7 @@
                       #{:descriptor :descriptor-bytes :workspace-root :file-hashes
                         :fill :identity :source-hash}
                       (set (:tombstone-fields stats))))))
-      (reset! clock 300002)
+      (reset! clock 300003)
       (is (= 0 (:live-count (call api 'registry-stats store))))
       (call api 'end-session! store "session-A")
       (is (= {:live-count 0 :tombstone-count 0}
@@ -123,7 +127,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-003
 (deftest digest-collision-removes-both-and-disables-the-boot
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock :digest-fn (constantly digest-a))]
       (is (= true (:ok (call api 'register! store "session-A"
@@ -136,11 +140,13 @@
                             "prepared-confirmation-hash-collision"))
         (is (= {:enabled false :live-count 0}
                (select-keys (call api 'registry-stats store)
-                            [:enabled :live-count])))))))
+                            [:enabled :live-count])))
+        (call api 'reset-registry! store)
+        (is (= false (:enabled (call api 'registry-stats store))))))))
 
 ;; @spec MCP-OP-PREP-ACT-004
 (deftest sdk-session-key-is-the-only-join-and-cross-session-is-unknown
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock)
           exchange (McpAsyncServerExchange.
@@ -159,13 +165,14 @@
 
 ;; @spec MCP-OP-PREP-ACT-005
 (deftest compact-shape-and-holes-are-exact-before-lookup
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [valid {:confirm digest-a
                  :fill {"arguments.edits[0].to" "(def alpha :new)"}}
           invalids [(assoc valid :workspace_root "/forged")
                     (assoc valid :preview false)
                     (assoc valid :preview nil)
                     (assoc valid :confirm "ABC")
+                    (assoc valid :fill {})
                     (assoc-in valid [:fill "arguments.edits[0].to"] " ")
                     (assoc-in valid [:fill "arguments.edits[0].to"] 7)
                     (assoc valid :preview_sha256 digest-b)]]
@@ -183,14 +190,15 @@
 
 ;; @spec MCP-OP-PREP-ACT-006
 (deftest reconstruction-fills-only-declared-nulls-and-rechecks-all-files
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [replacement "(def alpha :new)"
           rebuilt (call api 'reconstruct-arguments
                         (descriptor)
                         {"arguments.edits[0].to" replacement})]
       (is (= replacement (get-in rebuilt [:edits 0 :to])))
       (is (= "/canonical/workspace" (:workspace_root rebuilt)))
-      (is (= true (:ok (contract/validate-tool-params rebuilt))))
+      (is (= true (:ok (contract/validate-tool-params
+                         (dissoc rebuilt :workspace_root)))))
       (is (= true (:ok (call api 'validate-snapshot
                              {"src/a.clj" digest-a "src/b.clj" digest-b}
                              {"src/a.clj" digest-a "src/b.clj" digest-b}))))
@@ -202,7 +210,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-007
 (deftest commit-consumes-once-before-every-terminal-transaction-outcome
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock)
           registered (call api 'register! store "session-A" (descriptor)
@@ -216,7 +224,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-008
 (deftest refusal-vocabulary-is-closed-source-free-and-nonexecutable
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [types ["invalid-prepared-confirmation"
                  "prepared-confirmation-unknown"
                  "prepared-confirmation-expired"
@@ -232,7 +240,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-009
 (deftest preview-is-pure-compiler-only-with-throwing-effect-capabilities
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [effects (atom [])
           thrower (fn [name]
                     (fn [& _]
@@ -261,7 +269,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-010
 (deftest preview-success-has-one-closed-inert-complete-shape
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [result (call api 'preview-result
                        {:descriptor-sha256 digest-a
                         :fill {"arguments.edits[0].to" "(def alpha :new)"}
@@ -285,7 +293,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-011
 (deftest preview-bounds-are-exact-and-never-return-partial-diffs
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [base {:ok true :diff "x"}
           bytes-16384 (apply str (repeat 16384 "x"))
           bytes-16385 (str bytes-16384 "x")
@@ -309,7 +317,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-012
 (deftest verification-forecast-is-the-exact-honest-no-verifier-fact
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (is (= {:will_run false
             :profile nil
             :reason "edit_clojure-does-not-authorize-transaction-verification"}
@@ -317,7 +325,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-013
 (deftest preview-never-authorizes-commit-refreshes-ttl-or-exceeds-three-uses
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock)
           registered (call api 'register! store "session-A" (descriptor)
@@ -338,7 +346,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-014
 (deftest unsupported-and-ineligible-siblings-are-identical-and-classic-route-stays-valid
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 0)
           store (registry api clock)
           prepared (prepared-result)
@@ -350,12 +358,17 @@
                       (call api 'attach-confirmation!
                             store "session-A" ineligible (constantly 1))))
       (is (= true (:ok (contract/validate-tool-params
-                         (get-in prepared [:prepared_request :arguments])))))
+                         (dissoc
+                           (call api 'reconstruct-arguments
+                                 (:prepared_request prepared)
+                                 {"arguments.edits[0].to"
+                                  "(def alpha :new)"})
+                           :workspace_root)))))
       (is (= 0 (:live-count (call api 'registry-stats store)))))))
 
 ;; @spec MCP-OP-PREP-ACT-015
 (deftest coaching-is-byte-identical-and-telemetry-is-strictly-allowlisted
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [expected (str "If you independently decide to edit these exact selections, fill the "
                         "null replacement at every path listed in `caller_holes`. Then submit "
                         "`prepared_request.arguments` once to `edit_clojure`. Otherwise, ignore "
@@ -371,7 +384,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-016
 (deftest promotion-claims-remain-projected-until-complete-measurement
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (is (= {:w1 "projected" :w2 "unpromoted" :install_authorized false}
            (call api 'promotion-status {})))
     (is (= "projected" (:w1 (call api 'promotion-status
@@ -379,7 +392,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-017
 (deftest clock-digest-boot-session-capacity-and-effect-seams-are-injected
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (let [clock (atom 41)
           digests (atom [])
           store (registry api clock
@@ -398,7 +411,7 @@
 
 ;; @spec MCP-OP-PREP-ACT-018
 (deftest implementation-never-authorizes-install-or-shared-runtime-publication
-  (with-confirmation-api [api]
+  (with-confirmation-api [api (load-api)]
     (is (= false (:install_authorized
                    (call api 'promotion-status
                          {:frozen-red true :implementation true
@@ -409,3 +422,81 @@
                          {:frozen-red true :implementation true
                           :surgeon2-verification true :measurement true
                           :gene-install-approval false}))))))
+
+(defn- delete-tree! [file]
+  (when (.exists file)
+    (doseq [child (reverse (file-seq file))]
+      (.delete child))))
+
+(defn- invoke-handler [handler exchange params]
+  (let [result (promise)]
+    (handler exchange params
+             (fn [content error? structured]
+               (deliver result {:content content
+                                :error? error?
+                                :structured structured})))
+    (deref result 10000 {:timeout true})))
+
+(deftest real-handler-preview-stales-and-fresh-confirmation-commits-once
+  ;; Real-program-derived minimized owner form from the prepared-request route.
+  (let [root-path (java.nio.file.Files/createTempDirectory
+                    "prepared-confirm-integration-"
+                    (make-array java.nio.file.attribute.FileAttribute 0))
+        root (.toFile root-path)
+        source-file (io/file root "src/demo.clj")
+        receipt-dir (io/file root "receipts")
+        exchange-a (McpAsyncServerExchange.
+                     "sdk-session-A" nil nil nil McpTransportContext/EMPTY)
+        exchange-b (McpAsyncServerExchange.
+                     "sdk-session-B" nil nil nil McpTransportContext/EMPTY)
+        inspect-request
+        {:requests [{:id "forms"
+                     :operation "forms"
+                     :file "src/demo.clj"
+                     :forms ["alpha"]
+                     :expect {:forms 1}}]
+         :expect {:requests 1 :files 1}}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file "(ns demo)\n(def alpha :old)\n")
+      (mcp-tool/init! {:project-root (.getPath root)
+                       :receipt-dir (.getPath receipt-dir)})
+      (let [inspected (invoke-handler inspect-tool/handle-inspect
+                                      exchange-a inspect-request)
+            confirmation (get-in inspected [:structured :prepared_confirmation])
+            digest (:descriptor_sha256 confirmation)
+            fill {"arguments.edits[0].to" "(def alpha :new)"}
+            compact {:confirm digest :fill fill}
+            cross-session (invoke-handler mcp-tool/handle-edit-clojure
+                                          exchange-b compact)
+            preview (invoke-handler mcp-tool/handle-edit-clojure
+                                    exchange-a (assoc compact :preview true))]
+        (is (re-matches #"[0-9a-f]{64}" digest))
+        (is (= "prepared-confirmation-unknown"
+               (get-in cross-session [:structured :error_type])))
+        (is (= "edit_clojure-preview"
+               (get-in preview [:structured :operation])))
+        (is (= "(ns demo)\n(def alpha :old)\n" (slurp source-file)))
+        (spit source-file "(ns demo)\n\n(def alpha :old)\n")
+        (let [stale (invoke-handler mcp-tool/handle-edit-clojure
+                                    exchange-a compact)]
+          (is (= "prepared-confirmation-snapshot-drift"
+                 (get-in stale [:structured :error_type])))
+          (is (= "(ns demo)\n\n(def alpha :old)\n" (slurp source-file))))
+        (let [fresh-inspected (invoke-handler inspect-tool/handle-inspect
+                                              exchange-a inspect-request)
+              fresh-digest (get-in fresh-inspected
+                                   [:structured :prepared_confirmation
+                                    :descriptor_sha256])
+              fresh {:confirm fresh-digest :fill fill}
+              committed (invoke-handler mcp-tool/handle-edit-clojure
+                                        exchange-a fresh)
+              replay (invoke-handler mcp-tool/handle-edit-clojure
+                                     exchange-a fresh)]
+          (is (= true (get-in committed [:structured :ok])))
+          (is (= "(ns demo)\n\n(def alpha :new)\n" (slurp source-file)))
+          (is (= "prepared-confirmation-consumed"
+                 (get-in replay [:structured :error_type])))))
+      (finally
+        (mcp-tool/init! nil)
+        (delete-tree! root)))))

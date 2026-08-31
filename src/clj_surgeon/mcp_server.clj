@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-server
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
@@ -188,6 +189,8 @@
            (if (identical? server (:server state))
              (:previous state)
              state)))
+  ;; @spec MCP-OP-PREP-ACT-002
+  (prepared-confirmation/reset-registry!)
   {:ok true :status :unregistered})
 
 (defn sync-tools!

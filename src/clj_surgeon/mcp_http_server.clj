@@ -4,6 +4,7 @@
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-formatter :as mcp-formatter]
    [clj-surgeon.mcp-hot-verify :as hot-verify]
+   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-server :as mcp-server]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -173,7 +174,17 @@
                ^FilterChain chain]
       (let [origin (.getHeader ^HttpServletRequest request "Origin")]
         (if (allowed-origin? origin)
-          (.doFilter chain request response)
+          (try
+            (.doFilter chain request response)
+            (finally
+              (when (= "DELETE" (.getMethod ^HttpServletRequest request))
+                ;; @spec MCP-OP-PREP-ACT-002
+                ;; @spec MCP-OP-PREP-ACT-004
+                (when-let [session-id
+                           (.getHeader ^HttpServletRequest request
+                                       "Mcp-Session-Id")]
+                  (prepared-confirmation/end-session!
+                    prepared-confirmation/process-registry session-id)))))
           (.sendError ^HttpServletResponse response 403
                       "Cross-origin MCP requests are forbidden"))))))
 

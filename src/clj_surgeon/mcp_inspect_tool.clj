@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-operation :as mcp-operation]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-prepared-request :as prepared-request]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-source-anchor :as source-anchor]
@@ -321,6 +322,20 @@
 
 ;; @spec MCP-OP-SCHEMA-001
 ;; @spec MCP-OP-PREP-REQ-009
+;; @spec MCP-OP-PREP-ACT-001
+(def ^:private prepared-confirmation-output-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"descriptor_sha256" {:type "string" :pattern "^[0-9a-f]{64}$"}
+    "expires_in_ms" {:type "integer" :enum [300000]}
+    "session_bound" {:type "boolean" :enum [true]}
+    "commit_single_use" {:type "boolean" :enum [true]}
+    "executable" {:type "boolean" :enum [false]}
+    "write_authority" {:type "boolean" :enum [false]}}
+   :required ["descriptor_sha256" "expires_in_ms" "session_bound"
+              "commit_single_use" "executable" "write_authority"]})
+
 (def inspect-output-schema
   {:type "object"
    :additionalProperties true
@@ -364,7 +379,8 @@
     "inspection_elapsed_ms" {:type "number" :minimum 0}
     "job_elapsed_ms" {:type "number" :minimum 0}
     "next_call" {:type "object"}
-    "prepared_request" prepared-request/prepared-request-schema}
+    "prepared_request" prepared-request/prepared-request-schema
+    "prepared_confirmation" prepared-confirmation-output-schema}
    :required ["ok" "operation" "elapsed_ms"]
    :anyOf [{:required ["read_complete"]}
            {:required ["basis" "surface" "decision-site-ids"
@@ -998,9 +1014,23 @@
 ;; @spec MCP-OP-ASYNC-003
 ;; @spec MCP-OP-ASYNC-004
 ;; @spec MCP-OP-ASYNC-005
+(defn attach-prepared-confirmation!
+  "Publish and retain confirmation only after both complete result gates pass."
+  [exchange ordinary-result projected-result]
+  ;; @spec MCP-OP-PREP-ACT-001
+  ;; @spec MCP-OP-PREP-ACT-004
+  ;; @spec MCP-OP-PREP-ACT-014
+  (let [prepared-result (enforce-result-budget ordinary-result projected-result)
+        session-key (prepared-confirmation/exchange-session-key exchange)]
+    (prepared-confirmation/attach-confirmation!
+      prepared-confirmation/process-registry session-key prepared-result
+      (fn [candidate]
+        (let [normalized (assoc candidate :elapsed_ms 0.0)]
+          (mcp-result-byte-count (inspect-summary normalized) normalized))))))
+
 (defn handle-inspect
   "Structured clojure-mcp callback handler, retained as a Var for hot reload."
-  [_exchange params callback]
+  [exchange params callback]
   (mcp-operation/invoke!
     {:execute
      #(let [ordinary-result
@@ -1013,8 +1043,8 @@
                :read_complete false
                :source_unchanged true
                :next_action "restart_server"})]
-        (enforce-result-budget
-          ordinary-result
+        (attach-prepared-confirmation!
+          exchange ordinary-result
           (prepared-request/project-result ordinary-result)))
      :summarize inspect-summary
      :callback callback}))

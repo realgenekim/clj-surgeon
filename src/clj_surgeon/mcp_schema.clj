@@ -390,9 +390,28 @@
                  {:required ["require_change"]
                   :not {:required ["symbol_migration"]}}]}}])))
 
+;; @spec MCP-OP-PREP-ACT-005
+;; @spec MCP-OP-PREP-ACT-015
+(def prepared-confirmation-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"confirm" {:type "string" :pattern "^[0-9a-f]{64}$"}
+    "fill" {:type "object"
+            :minProperties 1
+            :additionalProperties {:type "string" :minLength 1}}
+    "preview" {:type "boolean" :enum [true]}}
+   :required ["confirm" "fill"]})
+
 (def editor-tool-schema
-  (-> editor-hybrid-schema
-      (update :properties dissoc "verify")))
+  (let [ordinary (-> editor-hybrid-schema
+                     (update :properties dissoc "verify"))]
+    {:type "object"
+     :additionalProperties false
+     :properties (merge (:properties ordinary)
+                        (:properties prepared-confirmation-schema))
+     :anyOf (conj (:anyOf ordinary) {:required ["confirm" "fill"]})
+     :oneOf [ordinary prepared-confirmation-schema]}))
 
 (def extraction-schema
   {:type "object"

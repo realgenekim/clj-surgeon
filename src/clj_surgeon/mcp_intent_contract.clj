@@ -107,6 +107,8 @@
           (io/file root
                    "docs/intent/prepared-request/prepared-request-specs.md")
           (io/file root
+                   "docs/intent/prepared-request-actions/prepared-request-actions-specs.md")
+          (io/file root
                    "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")]]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
