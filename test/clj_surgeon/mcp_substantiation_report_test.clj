@@ -127,8 +127,38 @@
          [:unknown-result-error-type
           #(assoc-in % [1 :result_shape :error_type] "src/private.clj")]
          [:result-boolean-source-string
-          #(assoc-in % [1 :result_shape :ok] "src/private.clj")]]]
+          #(assoc-in % [1 :result_shape :ok] "src/private.clj")]
+         [:raw-client-name
+          #(assoc-in % [0 :transport :client_name] "src/private.clj")]
+         [:raw-client-version
+          #(assoc-in % [0 :transport :client_version] "private prose")]]]
     (doseq [[case-id mutate] cases]
+      (testing (name case-id)
+        (is (thrown? clojure.lang.ExceptionInfo
+                     (report/validate-chain (rechain (mutate events)))))))))
+
+(deftest accepts-future-features-and-refuses-reused-or-drifting-identities
+  (let [{:keys [events]} (recorded-events)
+        future-feature
+        (rechain
+          (assoc-in events [0 :features]
+                    [{:feature_id "elaborator.wall-fill"
+                      :stage "future-stage"
+                      :counts {:requests 1}
+                      :dimensions {:eligible true}}]))
+        duplicate-event-id
+        (rechain (assoc-in events [1 :event_id] (:event_id (first events))))
+        drifts
+        [[:session-token
+          #(assoc-in % [1 :transport :session_token] (apply str (repeat 64 "a")))]
+         [:key-id
+          #(assoc-in % [1 :transport :key_id] (apply str (repeat 64 "b")))]
+         [:tool
+          #(assoc-in % [1 :tool] "edit_clojure")]]]
+    (is (= future-feature (report/validate-chain future-feature)))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (report/validate-chain duplicate-event-id)))
+    (doseq [[case-id mutate] drifts]
       (testing (name case-id)
         (is (thrown? clojure.lang.ExceptionInfo
                      (report/validate-chain (rechain (mutate events)))))))))

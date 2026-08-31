@@ -85,8 +85,10 @@
                     :request {:caller-model "forged-model"
                               :caller-model-source "forged"}})]
     (is (string? (:session-token identity)))
-    (is (= "codex" (:client-name identity)))
-    (is (= "1.2.3" (:client-version identity)))
+    (is (re-matches #"[0-9a-f]{64}" (:client-name identity)))
+    (is (re-matches #"[0-9a-f]{64}" (:client-version identity)))
+    (is (not= "codex" (:client-name identity)))
+    (is (not= "1.2.3" (:client-version identity)))
     (is (= "unknown" (:caller-model identity)))
     (is (= "not-exposed" (:caller-model-source identity)))))
 

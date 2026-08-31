@@ -2,6 +2,7 @@
 parent: substantiation-telemetry-design
 prefix: MCP-OP-SUBST
 status: 'ratified in advance (Gene, 2026-08-30, verbatim: "Go on all!!!")'
+client_metadata_privacy: 'decided A (conn, 2026-08-30, under Gene window authority; subject to Gene override at review)'
 ---
 
 # Substantiation telemetry specifications
@@ -13,7 +14,7 @@ removed.
 
 - [x] **MCP-OP-SUBST-001**: When substantiation telemetry is enabled, every public MCP tool call shall append exactly one canonical start record before execution and one canonical finish record after domain completion under one server-owned call ID; sequence shall be strict, every record shall bind the prior record SHA-256, and a missing, duplicate, reordered, reused-ID, or broken-chain record shall make report input invalid rather than disappear from the denominator.
 
-- [x] **MCP-OP-SUBST-002**: A substantiation record shall contain only closed enums, booleans, counts, timings, allowlisted field presence, and session-local HMAC-SHA-256 identity tokens. It shall never contain source, prose, path, owner or namespace text, matcher, replacement, command, URL, credential, account, receipt, raw request, raw response, public content hash, or hidden reasoning. A plain digest of a low-cardinality subject shall refuse privacy validation.
+- [x] **MCP-OP-SUBST-002**: A substantiation record shall contain only closed enums, booleans, counts, timings, allowlisted field presence, and session-local HMAC-SHA-256 identity tokens. It shall never contain source, prose, path, owner or namespace text, matcher, replacement, command, URL, credential, account, receipt, raw request, raw response, raw client metadata, public content hash, or hidden reasoning. A plain digest of a low-cardinality subject shall refuse privacy validation.
 
 - [x] **MCP-OP-SUBST-003**: At server start, substantiation telemetry shall create a new private append-only segment and in-memory random HMAC key, publish only its key ID, refuse an existing segment, and never edit, truncate, compact, or reuse an active segment. Retention shall not delete an active or marker-referenced segment.
 
@@ -21,7 +22,7 @@ removed.
 
 ## Caller and call shape
 
-- [x] **MCP-OP-SUBST-005**: The observer shall derive transport session token, client name, and client version only from the server exchange. It shall record caller model with its provenance when an authenticated transport exposes it and otherwise record exactly `unknown` with source `not-exposed`; request fields shall never assert caller, session, turn, model, or telemetry authority.
+- [x] **MCP-OP-SUBST-005**: The observer shall derive transport session, client name, and client version only from the server exchange and shall record each as a session-local HMAC identity token, never raw metadata. It shall record caller model with its provenance when an authenticated transport exposes it and otherwise record exactly `unknown` with source `not-exposed`; request fields shall never assert caller, session, turn, model, or telemetry authority. This client-metadata clarification is SUBST-CLIENT-1 Option A, conn-decided on 2026-08-30 under Gene's window authority and subject to Gene override at review.
 
 - [x] **MCP-OP-SUBST-006**: For inspect, edit, apply, and transform calls, the pure projector shall emit operation, source-free subject tokens, request/result cardinalities, allowed semantic-kind and field-presence enums, refusal type, success/commit/verification/source-unchanged facts, and elapsed time sufficient for the registered counters, while the public request, execution, structured result, summary, callback, and schema remain unchanged when the ledger is healthy.
 

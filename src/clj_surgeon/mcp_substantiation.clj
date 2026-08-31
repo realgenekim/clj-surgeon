@@ -280,12 +280,14 @@
         client-info (exchange-value exchange "getClientInfo" nil)
         exchange-client-name (when client-info (exchange-value client-info "name" nil))
         exchange-client-version (when client-info (exchange-value client-info "version" nil))
-        secret (or (:secret state) (.getBytes "identity-fallback" "UTF-8"))]
+        secret (or (:secret state) (.getBytes "identity-fallback" "UTF-8"))
+        client-name (str (or exchange-client-name client-name "unknown"))
+        client-version (str (or exchange-client-version client-version "unknown"))]
     {:session-token (private-token secret (or exchange-session "unknown-session"))
      :turn-token nil
      :key-id (or (:key-id state) (sha256 (hex secret)))
-     :client-name (str (or exchange-client-name client-name "unknown"))
-     :client-version (str (or exchange-client-version client-version "unknown"))
+     :client-name (private-token secret client-name)
+     :client-version (private-token secret client-version)
      :caller-model "unknown"
      :caller-model-source "not-exposed"}))
 

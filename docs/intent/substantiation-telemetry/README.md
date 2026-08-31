@@ -1,6 +1,7 @@
 ---
 parent: substantiation-telemetry-design
 status: 'ratified in advance (Gene, 2026-08-30, verbatim: "Go on all!!!")'
+client_metadata_privacy: 'decided A (conn, 2026-08-30, under Gene window authority; subject to Gene override at review)'
 ---
 
 # Substantiation telemetry ratification record
