@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-server
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -137,7 +138,7 @@
                 (accept [_ sink]
                   (try
                     (tool-fn
-                      exchange arguments
+                      exchange (contract/json-containers->clj arguments)
                       (fn [content error? structured]
                         (.success sink
                                   (structured-call-result

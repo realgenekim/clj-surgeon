@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-prepared-wire-test
   (:require
    [cheshire.core :as json]
+   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -136,6 +137,10 @@
             :capabilities {}
             :clientInfo {:name "prepared-wire-regression" :version "1"}}})
 
+;; @spec MCP-OP-PREP-ACT-004
+;; @spec MCP-OP-PREP-ACT-005
+;; @spec MCP-OP-PREP-ACT-006
+;; @spec MCP-OP-PREP-ACT-009
 (deftest prepared-confirm-preview-commit-and-replay-cross-the-real-stdio-wire
   ;; Field-failure regression for SURGEON2 probe 9541fd00: the MCP SDK supplies
   ;; java.util.Map at both the request and nested fill boundaries.
@@ -193,6 +198,10 @@
                                 (subs % 6)))))]
     (json/parse-string payload true)))
 
+;; @spec MCP-OP-PREP-ACT-004
+;; @spec MCP-OP-PREP-ACT-005
+;; @spec MCP-OP-PREP-ACT-006
+;; @spec MCP-OP-PREP-ACT-009
 (deftest prepared-confirm-preview-commit-and-replay-cross-the-real-http-wire
   ;; The HTTP process is separate from the test JVM so its SDK session table,
   ;; confirmation registry, project root, and transport lifecycle are fresh.
@@ -235,3 +244,25 @@
       (finally
         (stop-child! child)
         (delete-tree! project)))))
+
+;; @spec MCP-OP-PREP-ACT-005
+(deftest sdk-json-containers-normalize-at-the-confirm-boundary
+  (let [nested-fill (doto (java.util.LinkedHashMap.)
+                      (.put "arguments.edits[0].to"
+                            (java.util.ArrayList. ["(def alpha :new)"])))
+        nested-request (doto (java.util.LinkedHashMap.)
+                         (.put "confirm" (apply str (repeat 64 "a")))
+                         (.put "fill" nested-fill))
+        normalized (prepared-confirmation/public-keyword-map nested-request)
+        valid-fill (doto (java.util.LinkedHashMap.)
+                     (.put "arguments.edits[0].to" "(def alpha :new)"))
+        valid-request (doto (java.util.LinkedHashMap.)
+                        (.put "confirm" (apply str (repeat 64 "a")))
+                        (.put "fill" valid-fill))
+        validated (prepared-confirmation/validate-confirm-request valid-request)]
+    (is (= {:confirm (apply str (repeat 64 "a"))
+            :fill {"arguments.edits[0].to" ["(def alpha :new)"]}}
+           normalized))
+    (is (= true (:ok validated)))
+    (is (= {"arguments.edits[0].to" "(def alpha :new)"}
+           (:fill validated)))))

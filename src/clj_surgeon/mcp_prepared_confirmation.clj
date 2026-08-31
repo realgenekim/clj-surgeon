@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-prepared-confirmation
   "Bounded session state and pure projections for prepared confirmation/preview."
   (:require
+   [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-prepared-request :as prepared-request]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.set :as set]
@@ -369,14 +370,16 @@
             candidate
             registered))))))
 
-(defn- public-keyword-map
+(defn public-keyword-map
+  "Recursively normalize SDK JSON containers and keywordize public envelope keys."
   [value]
-  (if-not (map? value)
-    value
-    (into (array-map)
-          (map (fn [[key child]]
-                 [(keyword (if (keyword? key) (name key) (str key))) child]))
-          value)))
+  (let [value (contract/json-containers->clj value)]
+    (if-not (map? value)
+      value
+      (into (array-map)
+            (map (fn [[key child]]
+                   [(keyword (if (keyword? key) (name key) (str key))) child]))
+            value))))
 
 ;; @spec MCP-OP-PREP-ACT-005
 ;; @spec MCP-OP-PREP-ACT-008
