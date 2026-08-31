@@ -13,9 +13,12 @@ or shared-runtime action.
 - Execute product namespaces from a clean detached worktree at that exact
   commit. Load only the immutable screen namespace from the measurement branch
   through an absolute extra path.
-- Screen source differs from the accepted `de70e06f` instrument only in the
-  two candidate identity literals. Every sample count, schedule, semantic
-  stratum, normalization rule, and threshold remains unchanged.
+- Screen semantics differ from the accepted `de70e06f` instrument only in the
+  two candidate identity literals. The repository commit hook reformatted
+  indentation; `git diff --ignore-all-space 7dcf1fab --
+  dev/experiments/substantiation_overhead_screen.clj` shows only those two
+  literals. Every sample count, schedule, semantic stratum, normalization rule,
+  and threshold remains unchanged.
 
 ## Unchanged frozen gates
 
