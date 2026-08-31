@@ -6,6 +6,7 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-combinable-transaction :as combinable]
    [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-contract :as contract]
@@ -174,6 +175,7 @@
   "Set the live tool configuration. Passing nil disarms the handler."
   [config]
   (prepared-confirmation/reset-registry!)
+  (combinable/reset-registry!)
   (let [configured (when config
                      (assoc config :workspace-router
                             (workspace/router config)))]
@@ -1139,9 +1141,15 @@
                     :error (str operation " server is not initialized")
                     :source_unchanged true
                     :remedy "Restart the configured clj-surgeon MCP server."})]
-             (if (= "edit_clojure-preview" (:operation result))
-               result
-               (assoc result :operation operation))))
+             (cond-> (if (= "edit_clojure-preview" (:operation result))
+                       result
+                       (assoc result :operation operation))
+               ;; @spec MCP-OP-EDIT-032
+               (= "edit_clojure" operation)
+               (->> (combinable/attach-note!
+                      combinable/process-registry
+                      (prepared-confirmation/exchange-session-key exchange)
+                      params)))))
          concise-summary))
      :summarize concise-summary
      :callback callback}))

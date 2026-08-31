@@ -175,10 +175,13 @@
                        (committed-result "/workspace/demo" receipt-b))))
           "two edits-only transactions are not the pair this verb fuses")
       (swap! clock + 4000)
-      (is (nil? (:combinable_note
-                 (call api 'attach-note! store "session-A" create-only-params
-                       (committed-result "/workspace/demo" receipt-c))))
-          "only the immediately prior committed transaction is considered"))))
+      (is (= receipt-b
+             (:prior_receipt_hash
+              (:combinable_note
+               (call api 'attach-note! store "session-A" create-only-params
+                     (committed-result "/workspace/demo" receipt-c)))))
+          (str "a repeated shape still refreshes the memo, so the pair names "
+               "the immediately prior receipt and never an older one")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Every suppression
