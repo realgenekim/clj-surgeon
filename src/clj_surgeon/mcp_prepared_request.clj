@@ -284,34 +284,46 @@
         file-hash (:file_hash row)
         source-characters (when (vector? forms)
                             (reduce + 0 (map #(count (:source %)) forms)))
-        owners (when (vector? forms) (mapv :name forms))]
-    (when (and (map? result)
-               (true? (:ok result))
-               (true? (:read_complete result))
-               (= "none" (:next_action result))
-               (= "inspect_clojure" (:operation result))
-               (= 1 (:request_count result))
-               (= 1 (:file_count result))
-               (= 1 (count rows))
-               (= "forms" (:operation row))
-               (project-relative-file? file)
-               file-suffix
-               (exact-sha256? file-hash)
-               (vector? forms)
-               (<= 1 (count forms) 6)
-               (= (count forms) (:form_count row))
-               (= source-characters (:source_character_count row))
-               (= source-characters (:source_character_count result))
-               (= (count owners) (count (distinct owners)))
-               (every? #(form-evidence?
-                          file file-hash (get supported-platforms file-suffix) %)
-                       forms)
-               (canonical-root? (:workspace_root result))
-               (= {file file-hash} (:file_hashes result))
-               (or (not (contains? result :snapshot_guards))
-                   (= (:file_hashes result) (:snapshot_guards result)))
-               (absent-artifacts? result)
-               (absent-artifacts? row))
+        owners (when (vector? forms) (mapv :name forms))
+        ;; Named, ordered, short-circuiting eligibility checks. Thunks preserve
+        ;; the original and-chain's first-failure semantics exactly: later
+        ;; predicates may assume every earlier one held. A future diagnostic
+        ;; surface can name the first failing condition without re-deriving it.
+        checks [[:result-map #(map? result)]
+                [:ok #(true? (:ok result))]
+                [:read-complete #(true? (:read_complete result))]
+                [:next-action-none #(= "none" (:next_action result))]
+                [:operation-inspect #(= "inspect_clojure" (:operation result))]
+                [:one-request #(= 1 (:request_count result))]
+                [:one-file #(= 1 (:file_count result))]
+                [:one-row #(= 1 (count rows))]
+                [:row-forms-operation #(= "forms" (:operation row))]
+                [:project-relative-file #(project-relative-file? file)]
+                [:known-suffix (fn [] file-suffix)]
+                [:exact-file-hash #(exact-sha256? file-hash)]
+                [:forms-vector #(vector? forms)]
+                [:form-count-1-6 #(<= 1 (count forms) 6)]
+                [:form-count-consistent #(= (count forms) (:form_count row))]
+                [:row-characters-consistent
+                 #(= source-characters (:source_character_count row))]
+                [:result-characters-consistent
+                 #(= source-characters (:source_character_count result))]
+                [:owners-distinct #(= (count owners) (count (distinct owners)))]
+                [:every-form-evidence
+                 #(every? (fn [form]
+                            (form-evidence?
+                              file file-hash
+                              (get supported-platforms file-suffix) form))
+                          forms)]
+                [:canonical-root #(canonical-root? (:workspace_root result))]
+                [:file-hashes-consistent #(= {file file-hash} (:file_hashes result))]
+                [:snapshot-guards-consistent
+                 #(or (not (contains? result :snapshot_guards))
+                      (= (:file_hashes result) (:snapshot_guards result)))]
+                [:no-artifacts-result #(absent-artifacts? result)]
+                [:no-artifacts-row #(absent-artifacts? row)]]
+        first-failure (some (fn [[label check]] (when-not (check) label)) checks)]
+    (when (nil? first-failure)
       (let [value (descriptor result forms)]
         (when (<= (count (canonical-json-bytes value)) 4096)
           value)))))
