@@ -253,6 +253,7 @@
               :plan-id "plan-1"
               :plan-sha256 sha-a
               :target {:path "/repo-wt" :head head-a :tree tree-a}
+              :lifecycle-lease-prestate :absent
               :handoff (get-in base-snapshot [:handoffs "/repo-wt"])}]
     (assert-context [(map? plan)
                      (= "plan-1" (:plan-id plan))
