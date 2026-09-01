@@ -1040,6 +1040,12 @@ concrete effects cannot become equal merely through normalization. SHA-256 is
 the public compact identifier for that exact internal projection ; it is not
 used to discard or deduplicate effects.
 
+For the current branch, the projection intentionally excludes create effects.
+A request that includes `create_files` therefore publishes a successful result
+without `canonical_effect_identity` and with explicit suppression metadata:
+`canonical_effect_identity_suppressed_reason="create-files-present"` until the
+versioned create-aware identity contract (MCP-OP-EDIT-033) is approved.
+
 The public successful compact result contains the closed object
 `canonical_effect_identity={version,sha256,files,effects}`. It contains no
 source body, replacement body, absolute path, request ID, receipt path, or
@@ -1088,6 +1094,7 @@ permutation cannot make it one snapshot-compiled batch.
 | Generated, literal, or deletion actions overlap, duplicate, exceed a budget, or fail ordinary generic validation | composition/generic compilation | Complete pre-write refusal ; every source remains unchanged. |
 | A source guard changes before the first write | commit guard | Existing stale-source refusal ; no recompilation against newer bytes. |
 | A race or configured verifier failure occurs after writing begins | existing effect path | Existing failure-atomic rollback and read-back proof ; no blind retry. |
+| Receipt publication fails after writes begin, or write channel staging has an unrecoverable error | existing effect path, publication-specific inverse | Rollback edits and all creations with full proof; no `source_unchanged=true` if any restore proof is incomplete. |
 | Rollback cannot prove restoration | existing effect path | Recovery-required outcome ; never claim `source_unchanged=true`. |
 
 The transaction promises failure atomicity with rollback, not simultaneous
@@ -1247,6 +1254,7 @@ existing lossless transaction contract.
 | Compact location tolerance | Three compact-only injective relations over one frozen snapshot, lowered to explicit generic selectors | Global namespace fallback ; root-scope default; fuzzy owner selection; source-blind inference | The accepted spellings recover observed model mistakes while every zero/many, stale, nested, or competing case remains a pre-write refusal and generic CLI/direct semantics do not widen. |
 | Compact edit field tolerance | One source-blind closed algebra that preserves `from`/`to` and lowers exactly one complete `old`/`new` or `before`/`after` pair | Prompt-only correction ; fuzzy key repair; accept equal duplicate pairs; widen generic changes | The three observed spellings encode the same exact guarded relation, while all 61 other six-field subsets remain pre-source refusals. |
 | Closed compact relations | Require one paired `symbol_migration` plus `require_change`, lower through one captured source map, then delegate to the existing compact and generic transaction path | Flat rows only ; standalone require language; private capture protocol; new plan or executor; heuristic migration | The pair states one complete repeated decision without granting discovery or write authority. Identical file sets make source-aware require lowering possible inside the existing one-capture transaction. |
+| Canonical effect identity with create files | Suppress identity publication when `create_files` is present and attach an explicit suppression reason (`canonical_effect_identity_suppressed_reason="create-files-present"`) | Continue publishing identities for mixed create requests despite collision risk; treat suppression as implementation detail only | Suppression is visible and prevents hash collisions until a versioned create-aware projection can be made lossless. |
 
 # #Open Questions & Future Decisions
 
