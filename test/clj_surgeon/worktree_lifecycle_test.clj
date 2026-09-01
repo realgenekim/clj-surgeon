@@ -392,10 +392,9 @@
                      (not (contains? value :source))])
     (is (= "{:a {:b 2}, :ordered [3 2 1], :z 1}\n"
            (invoke 'clj-surgeon.worktree-lifecycle/canonical-edn value)))
-    (is (= sha-a
+    (is (= "fef86d69f410bf8c3331479b1c5b73a1d169be8e21c82ebf6b2d2f5960be1710"
            (invoke 'clj-surgeon.worktree-lifecycle/sha256
-                   (apply str (repeat 64 "placeholder"))
-                   sha-a)))))
+                   (apply str (repeat 64 "placeholder")))))))
 
 (deftest apply-input-and-replay-authority-are-plan-bound
   ;; @spec WTL-PLAN-005 WTL-PLAN-006
