@@ -38,6 +38,9 @@
    [clj-surgeon.structural-lens-test]
    [clj-surgeon.syntax-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]
+   [clj-surgeon.worktree-lifecycle-cli-test]
+   [clj-surgeon.worktree-lifecycle-io-test]
+   [clj-surgeon.worktree-lifecycle-test]
    [clj-surgeon.xray-test]
    [clojure.test :refer [run-tests]]))
 
@@ -78,6 +81,9 @@
                    'clj-surgeon.install-test
                    'clj-surgeon.intent-transaction-test
                    'clj-surgeon.workspace-onboarding-test
+                   'clj-surgeon.worktree-lifecycle-test
+                   'clj-surgeon.worktree-lifecycle-io-test
+                   'clj-surgeon.worktree-lifecycle-cli-test
                    'clj-surgeon.recovery-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))
