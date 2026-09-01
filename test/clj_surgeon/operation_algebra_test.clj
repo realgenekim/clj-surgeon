@@ -178,7 +178,10 @@
                                 'recover-transaction!
                                 'refuse!
                                 'slurp
+                                ;; @spec MCP-OP-EDIT-035
+                                'create-source!
                                 'write-source!
+                                'file-ops/atomic-create!
                                 'file-ops/atomic-write!}
               :receipt-stage #{'.delete
                                'refuse!
