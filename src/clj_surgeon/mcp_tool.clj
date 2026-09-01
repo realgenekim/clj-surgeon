@@ -209,6 +209,7 @@
                        {:file (:path target)
                         :content content
                         :relative-file file
+                        :workspace-root (.toString root)
                         :directories (mapv str
                                            (:missing-parent-directories target))}))))
       {:ok true :create-files resolved})))
@@ -700,8 +701,10 @@
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners :create_files
                                :symbol_migration :require_change])
+        ;; @spec MCP-OP-EDIT-033
         compact-effect-identity?
         (and (not (contains? normalized-params :programs))
+             (not (contains? normalized-params :create_files))
              (some #(contains? normalized-params %)
                    [:edits :delete_owners :symbol_migration :require_change]))
         config (cond
@@ -830,7 +833,10 @@
                                         (:compact-field-normalization validated))
                                  (:input-normalization validated)
                                  (assoc :input_normalization
-                                        (:input-normalization validated)))]
+                                        (:input-normalization validated))
+                                 (contains? normalized-params :create_files)
+                                 (assoc :canonical_effect_identity_suppressed_reason
+                                        "create-files-present"))]
                 (when-not (:ok classified)
                   (delete-empty-dir! directory (not existed?)))
                 (record-result! telemetry params classified total-start

@@ -20,7 +20,7 @@
 
 (def ^:private supported-extensions [".clj" ".cljs" ".cljc" ".edn"])
 (def ^:private spec-keys #{:intents :changes :expect :create-files})
-(def ^:private create-file-keys #{:file :content :directories})
+(def ^:private create-file-keys #{:file :content :directories :workspace-root})
 (def ^:private intent-keys #{:files :from :to :expect-count})
 (def ^:private expectation-keys
   #{:intent-count :edit-count :changed-file-count})
@@ -579,7 +579,7 @@
                          (str "Unknown :create-files arguments: "
                               (str/join ", " unknown))
                          {:unknown unknown})))
-            (let [{:keys [file content directories]} creation]
+            (let [{:keys [file content directories workspace-root]} creation]
               (when-not (and (string? file) (not (str/blank? file)))
                 (refuse! :invalid-create-files
                          "Each :create-files entry needs a non-blank :file"))
@@ -604,9 +604,18 @@
                   (refuse! :invalid-create-files
                            (str "Created :directories must be paths for " file)
                            {:file file})))
-              {:file file
-               :content content
-               :directories (vec (or directories []))}))
+              (when-not (or (nil? workspace-root)
+                            (and (string? workspace-root)
+                                 (not (str/blank? workspace-root))))
+                (refuse! :invalid-create-files
+                         (str "Created :workspace-root must be a path for " file)
+                         {:file file}))
+              (cond->
+                {:file file
+                 :content content
+                 :directories (vec (or directories []))}
+                workspace-root
+                (assoc :workspace-root workspace-root))))
           (or create-files []))
         normalized (mapv (comp normalized-path :file) validated)]
     (when-not (= (count normalized) (count (distinct normalized)))
@@ -1342,10 +1351,13 @@
       ;; files that already exist and are replaced in place.
       (seq create-files)
       (assoc :created-files
-             (mapv (fn [{:keys [file content]}]
-                     {:file file
-                      :result-hash (structural-lens/source-hash content)
-                      :content content})
+             (mapv (fn [{:keys [file content workspace-root]}]
+                     (cond->
+                       {:file file
+                        :result-hash (structural-lens/source-hash content)
+                        :content content}
+                       workspace-root
+                       (assoc :workspace-root workspace-root)))
                    create-files)
              :created-file-count (count create-files)
              :created-directories
@@ -1927,7 +1939,7 @@
 
    Directories are created shallowest-first and both directories and files are
    recorded as they land, so recovery removes exactly what this call made."
-  [read-source write-source! exists? create-directory!
+  [read-source create-source! exists? create-directory!
    directories created-files written-directories written-files]
   (doseq [directory directories]
     (when-not (exists? directory)
@@ -1937,12 +1949,15 @@
         (refuse! :target-parent-create-failed
                  (str "Could not verify created directory " directory)
                  {:directory directory}))))
-  (doseq [{:keys [file content result-hash]} created-files]
+  (doseq [{:keys [file content result-hash workspace-root]} created-files]
     (when (exists? file)
       (refuse! :target-already-exists
                (str "Creation target appeared during commit: " file)
                {:file file :path file}))
-    (write-source! file content)
+    ;; @spec MCP-OP-EDIT-036
+    (file-ops/revalidate-create-target! workspace-root file)
+    ;; @spec MCP-OP-EDIT-035
+    (create-source! file content)
     (swap! written-files conj {:file file :content content})
     (assert-file-hash! read-source file result-hash :read-back-hash-mismatch)))
 
@@ -2048,8 +2063,9 @@
   ([compiled]
    (commit-compiled! compiled
                      {:read-source slurp
-                      :write-source! file-ops/atomic-write!}))
-  ([compiled {:keys [read-source write-source!] :as io}]
+                      :write-source! file-ops/atomic-write!
+                      :create-source! file-ops/atomic-create!}))
+  ([compiled {:keys [read-source write-source! create-source!] :as io}]
    (let [exists? (or (:exists? io) default-exists?)
          delete-file! (or (:delete-file! io) default-delete-file!)
          create-directory! (or (:create-directory! io) default-create-directory!)]
@@ -2083,7 +2099,8 @@
                       {:file file :path file})))
          (try
            (execute-writes! read-source write-source! futures file-plans)
-           (execute-creations! read-source write-source! exists? create-directory!
+           (execute-creations! read-source (or create-source! write-source!)
+                               exists? create-directory!
                                planned-directories created-files
                                written-directories written-files)
            (execute-deletions! read-source exists? delete-file!
@@ -2644,9 +2661,21 @@
                                  :hash (:receipt-hash receipt)}
                                 result)))
                           (catch Exception publish-error
-                            (let [inverse
+                            (let [;; @spec MCP-OP-EDIT-034
+                                  ;; Creations are current sources during a
+                                  ;; publication rollback, just as edited
+                                  ;; future sources are current sources.
+                                  rollback-sources
+                                  (into (:future-sources compiled)
+                                        (map (fn [{:keys [file]}]
+                                               [file
+                                                (try
+                                                  (slurp file)
+                                                  (catch Exception _ nil))]))
+                                        (:created-files compiled))
+                                  inverse
                                   (compile-inverse
-                                    receipt (:future-sources compiled))
+                                    receipt rollback-sources)
                                   rollback (if (:ok inverse)
                                              (commit-compiled! inverse)
                                              inverse)
