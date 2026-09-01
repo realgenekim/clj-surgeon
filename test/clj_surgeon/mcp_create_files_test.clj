@@ -443,30 +443,45 @@
         outside-root (temp-dir)
         source-file (io/file root "src/demo.clj")
         planned-parent (io/file root "src/late")
-        outside-file (io/file outside-root "escaped.clj")
+        outside-directory (io/file outside-root "nested")
+        outside-file (io/file outside-directory "escaped.clj")
+        create-directory-var (ns-resolve 'clj-surgeon.intent-transaction
+                                         'default-create-directory!)
+        create-directory! @create-directory-var
+        outside-directory-observed? (atom false)
         original "(ns demo)\n(def value :old)\n"
         attrs (make-array FileAttribute 0)]
     (try
       (io/make-parents source-file)
       (spit source-file original)
-      (let [result (mcp-tool/execute-request!
-                     (assoc (config root)
-                            :prepare-compiled!
-                            (fn [_ compiled]
-                              (Files/createSymbolicLink
-                                (.toPath planned-parent)
-                                (.toPath outside-root)
-                                attrs)
-                              compiled))
-                     {"edits" [{"file" "src/demo.clj"
-                                "within" {"form" "value"}
-                                "from" ":old"
-                                "to" ":new"}]
-                      "create_files" [{"file" "src/late/escaped.clj"
-                                       "content" "(ns escaped)\n"}]})]
+      (let [result
+            (with-redefs-fn
+              {create-directory-var
+               (fn [directory]
+                 (create-directory! directory)
+                 (when (.exists outside-directory)
+                   (reset! outside-directory-observed? true)))}
+              #(mcp-tool/execute-request!
+                 (assoc (config root)
+                        :prepare-compiled!
+                        (fn [_ compiled]
+                          (Files/createSymbolicLink
+                            (.toPath planned-parent)
+                            (.toPath outside-root)
+                            attrs)
+                          compiled))
+                 {"edits" [{"file" "src/demo.clj"
+                            "within" {"form" "value"}
+                            "from" ":old"
+                            "to" ":new"}]
+                  "create_files" [{"file" "src/late/nested/escaped.clj"
+                                   "content" "(ns escaped)\n"}]}))]
         (is (false? (:ok result)))
+        (is (false? @outside-directory-observed?)
+            "confinement refusal must precede every directory creation")
         (is (= original (slurp source-file)))
-        (is (not (.exists outside-file))))
+        (is (not (.exists outside-file)))
+        (is (not (.exists outside-directory))))
       (finally
         (Files/deleteIfExists (.toPath planned-parent))
         (delete-tree! root)
