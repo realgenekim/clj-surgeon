@@ -779,8 +779,9 @@ still require the independent strict promotion cohort.
 ### Close terminal worktrees without erasing experiments
 
 The repository owns a two-stage lifecycle for experimental work. Stage one
-closes a worktree only after classifying its outcome as `landed`, `rejected`,
-or `parked` and proving that the outcome has a durable breadcrumb. Stage two,
+closes a worktree only after classifying its outcome as `landed`,
+`negative-experiment`, or `parked` and proving that the outcome has a durable
+breadcrumb. Stage two,
 which is intentionally separate, may later retire a branch after its remaining
 evidence and ownership obligations have been reviewed. The first product slice
 does not delete branches.
@@ -789,7 +790,7 @@ does not delete branches.
 flowchart LR
     W[Worktree: disposable execution room] --> O{Declared outcome}
     O -->|landed| L[Prove ancestor of explicit landing ref]
-    O -->|rejected| R[Prove pushed receipt and retained evidence]
+    O -->|negative-experiment| R[Prove pushed receipt and retained evidence]
     O -->|parked| P[Prove durable ref, owner, next action, and expiry]
     L --> S[Seal versioned close receipt]
     R --> S
@@ -801,8 +802,9 @@ flowchart LR
 
 Git is authoritative for the exact worktree path, commit and tree, dirty and
 untracked state, lock state, ref reachability, and ancestry. Supacode is
-authoritative for whether the worktree is focused, pinned, live, or already
-archived in the user interface. Repository receipts, fetched remote refs,
+authoritative for whether the worktree is focused, pinned, or already archived
+in the user interface. Git's worktree lock is the active-agent lease.
+Repository receipts, fetched remote refs,
 annotated tags, durable issues, and content-addressed archives are the
 authorities for experimental memory. `/private/tmp`, a local branch name, and
 an open tab are not durable authorities.
@@ -819,14 +821,15 @@ session.
 The audit classifies every registered worktree as `active`, `clean-safe`,
 `needs-seal`, `dirty-blocked`, or `missing-prunable`. Automation is permitted
 only for `clean-safe`; the other classes explain the missing proof. Current,
-focused, pinned, locked, or live worktrees refuse. Dirty or untracked
+focused, pinned, or agent-leased worktrees refuse. Dirty or untracked
 worktrees refuse. Detached work refuses unless its exact commit is durably
 reachable and its outcome breadcrumb is sealed. A landed outcome requires
-ancestor proof against a caller-supplied landing ref. A rejected outcome
-requires a pushed observation or Captain's Log and durable retention for any
-raw evidence needed by that document. A parked outcome requires a pushed ref,
-owner, durable issue, next action, and expiry. Missing worktree registrations
-are prunable only when residual files have been resolved explicitly.
+ancestor proof against a caller-supplied landing ref. A negative-experiment
+outcome requires a pushed observation or Captain's Log and durable retention
+for any raw evidence needed by that document. A parked outcome requires a
+pushed ref, owner, durable issue, next action, and expiry. Missing worktree
+registrations are prunable only when residual files have been resolved
+explicitly.
 
 The existing benchmark retention path remains the model for raw evidence: one
 manifest binds files and hashes before local scratch data is removed. Global
@@ -982,12 +985,12 @@ counterexample that the native contract tests missed.
 - Every registered worktree receives one typed lifecycle classification from a
   reproducible snapshot, and only `clean-safe` worktrees are eligible for
   automated closure.
-- A lifecycle apply refuses current, focused, pinned, locked, live, dirty,
+- A lifecycle apply refuses current, focused, pinned, agent-leased, dirty,
   untracked, drifted, or insufficiently anchored work without changing the
   Supacode surface, Git registration, branch, or evidence.
 - A closed worktree can be reconstructed from its sealed receipt and durable
-  refs or archives; rejected results remain discoverable even after their
-  execution rooms are gone.
+  refs or archives; negative-experiment results remain discoverable even after
+  their execution rooms are gone.
 - Every public MCP operation returns a finite, non-negative `elapsed_ms` on
   success and refusal and renders the same value in its human summary.
 - A newly registered public MCP operation cannot pass the ordinary test suite
