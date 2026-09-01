@@ -61,6 +61,10 @@
   (get-in editor-gesture-contract [:deletion :allowed]))
 (def ^:private required-editor-deletion-fields
   (get-in editor-gesture-contract [:deletion :required]))
+(def ^:private editor-creation-fields
+  (get-in editor-gesture-contract [:creation :allowed]))
+(def ^:private required-editor-creation-fields
+  (get-in editor-gesture-contract [:creation :required]))
 (def ^:private supported-source-extensions #{"clj" "cljs" "cljc" "edn"})
 
 (def ^:private prewrite-error-types
@@ -102,6 +106,9 @@
     :source-hash-mismatch
     :extraction-decisions-required
     :invalid-canonical-effect-input
+    :invalid-create-files
+    :invalid-created-source
+    :duplicate-path
     :unknown-arguments})
 
 (defn- field-name
@@ -814,6 +821,46 @@
                         (conj path "expect" "max_changed_characters"))}}))
                 (nonempty-array! (field params "programs") ["programs"])
                 (range)))
+            ;; @spec MCP-OP-EDIT-031
+            ;; Creation paths are deliberately not lowered into "changes".
+            ;; Their lexical, confinement, and existence guards all belong to
+            ;; the path layer, so every creation refusal names the offending
+            ;; path itself rather than a request field position.
+            creations
+            (when (present? params "create_files")
+              (mapv
+                (fn [creation index]
+                  (let [path ["create_files" index]
+                        _ (validate-fields! creation editor-creation-fields
+                                            required-editor-creation-fields
+                                            path)
+                        file (nonblank-string! (field creation "file")
+                                               (conj path "file"))
+                        content (nonblank-string! (field creation "content")
+                                                  (conj path "content"))]
+                    ;; The created content passes the same complete-input
+                    ;; parser every edited future file must satisfy, and the
+                    ;; refusal names the offending path, not a field index.
+                    (try
+                      (parser/parse-string-all content)
+                      (catch Exception error
+                        (refuse!
+                          :invalid-created-source (conj path "content")
+                          (str "Created content does not parse as Clojure or"
+                               " EDN: " file)
+                          {:error-type :invalid-created-source
+                           :path file
+                           :file file
+                           :cause-error (.getMessage error)})))
+                    {:file file :content content}))
+                (nonempty-array! (field params "create_files")
+                                 ["create_files"])
+                (range)))
+            _ (when (and (seq creations)
+                         (not= (count creations)
+                               (count (distinct (map :file creations)))))
+                (refuse! :duplicate-path ["create_files"]
+                         "Created file paths must be unique"))
             direct
             (cond->
               {"changes" changes
@@ -827,6 +874,9 @@
         (cond-> {:ok true :params direct}
           (seq programs)
           (assoc :programs programs)
+
+          (seq creations)
+          (assoc :create-files creations)
 
           (seq edits)
           (assoc :compact-location-normalization
@@ -854,8 +904,19 @@
 (defn- validate-editor-tool-params [params]
   (let [compiled (editor-gestures->direct-params params)]
     (if (:ok compiled)
-      (let [validated (validate-direct-tool-params (:params compiled))]
+      ;; @spec MCP-OP-EDIT-031
+      ;; A create-only transaction carries no change, so the aggregate change
+      ;; validator, which requires at least one guarded change, does not apply.
+      (let [create-only? (and (seq (:create-files compiled))
+                              (empty? (get-in compiled [:params "changes"]))
+                              (empty? (:programs compiled)))
+            validated (if create-only?
+                        {:ok true :params {:changes [] :expect nil}}
+                        (validate-direct-tool-params (:params compiled)))]
         (cond-> validated
+          (and (:ok validated) (seq (:create-files compiled)))
+          (assoc-in [:params :create-files] (:create-files compiled))
+
           (and (:ok validated) (seq (:programs compiled)))
           (assoc-in [:params :programs] (:programs compiled))
 
@@ -907,7 +968,7 @@
       (validate-extraction-tool-params params)
 
       (some #(present? params %)
-            ["edits" "programs" "delete_owners"])
+            ["edits" "programs" "delete_owners" "create_files"])
       (validate-editor-tool-params params)
 
       :else
@@ -915,34 +976,40 @@
 
 (defn tool-params->transaction
   "Compile normalized apply_clojure_changes parameters to transaction EDN."
-  [{:keys [changes expect]}]
-  {:changes
-   (mapv
-     (fn [{:keys [id files forms owner find inside replace delete insert-before insert-after
-                  rename-binding assoc-entry expect]}]
-       (cond->
-         {:id (keyword id)
-          :in files
-          :find find
-          :do (cond
-                replace [:replace replace]
-                delete [:delete true]
-                insert-before [:insert-left insert-before]
-                insert-after [:insert-right insert-after]
-                rename-binding [:rename-binding
-                                {:from (symbol (:from rename-binding))
-                                 :to (symbol (:to rename-binding))
-                                 :preserve-external-key
-                                 (:preserve-external-key rename-binding)}]
-                :else [:assoc-entry assoc-entry])
-          :expect expect}
-         (nil? find) (dissoc :find)
-         inside (assoc :inside inside)
-         forms (assoc :forms
-                      (mapv #(if (map? %) % (symbol %)) forms))
-         owner (assoc :owner owner)))
-     changes)
-   :expect expect})
+  [{:keys [changes expect create-files]}]
+  (cond->
+    {:changes
+     (mapv
+       (fn [{:keys [id files forms owner find inside replace delete
+                    insert-before insert-after rename-binding assoc-entry
+                    expect]}]
+         (cond->
+           {:id (keyword id)
+            :in files
+            :find find
+            :do (cond
+                  replace [:replace replace]
+                  delete [:delete true]
+                  insert-before [:insert-left insert-before]
+                  insert-after [:insert-right insert-after]
+                  rename-binding [:rename-binding
+                                  {:from (symbol (:from rename-binding))
+                                   :to (symbol (:to rename-binding))
+                                   :preserve-external-key
+                                   (:preserve-external-key rename-binding)}]
+                  :else [:assoc-entry assoc-entry])
+            :expect expect}
+           (nil? find) (dissoc :find)
+           inside (assoc :inside inside)
+           forms (assoc :forms
+                        (mapv #(if (map? %) % (symbol %)) forms))
+           owner (assoc :owner owner)))
+       changes)
+     :expect expect}
+    ;; @spec MCP-OP-EDIT-031
+    (seq create-files)
+    (assoc :create-files
+           (mapv #(select-keys % [:file :content]) create-files))))
 
 (defn- normalized-root
   ^Path [root]
@@ -1305,6 +1372,10 @@
        :next_action (if verification-complete?
                       "none"
                       "inspect_verification_job")}
+      ;; @spec MCP-OP-EDIT-031
+      (pos? (long (or (:created-file-count result) 0)))
+      (assoc :created (:created-file-count result))
+
       (:caller-proof result)
       (assoc :caller_proof
              (-> (:caller-proof result)

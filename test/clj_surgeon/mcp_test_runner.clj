@@ -2,11 +2,13 @@
   (:require
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
+   [clj-surgeon.mcp-combinable-transaction-test]
    [clj-surgeon.mcp-compact-edit-fields-test]
    [clj-surgeon.mcp-compact-edit-test]
    [clj-surgeon.mcp-compact-location-test]
    [clj-surgeon.mcp-compact-relations-test]
    [clj-surgeon.mcp-contract-test]
+   [clj-surgeon.mcp-create-files-test]
    [clj-surgeon.mcp-extraction-plan-test]
    [clj-surgeon.mcp-extraction-test]
    [clj-surgeon.mcp-hot-verify-test]
@@ -41,6 +43,7 @@
   (let [result
         (run-tests
           'clj-surgeon.mcp-contract-test
+          'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test
           'clj-surgeon.mcp-extraction-plan-test
           'clj-surgeon.mcp-change-buffer-test
@@ -48,6 +51,7 @@
           'clj-surgeon.mcp-compact-edit-test
           'clj-surgeon.mcp-compact-edit-fields-test
           'clj-surgeon.mcp-compact-location-test
+          'clj-surgeon.mcp-combinable-transaction-test
           'clj-surgeon.mcp-compact-relations-test
           'clj-surgeon.mcp-http-server-test
           'clj-surgeon.mcp-hot-verify-test
