@@ -109,9 +109,12 @@ admits bulk apply and is recorded in the plan and receipt.
 ## Inventory Snapshot
 
 `worktree-audit` captures one versioned snapshot over the union of Git and
-Supacode identities. Paths are absolute, canonical, and compared as bytes after
-one percent-decoding of Supacode IDs. A collision, symlink alias, relative path,
-or non-canonical request refuses rather than selecting one identity.
+Supacode identities. Existing paths are absolute, canonical, and compared as
+bytes after one percent-decoding of Supacode IDs. A collision, symlink alias,
+relative path, or non-canonical request refuses rather than selecting one
+identity. A Supacode-only identity whose checkout is missing cannot be
+realpathed; it retains its strictly decoded lexical absolute path and remains
+audit-only as `missing-prunable`.
 
 The snapshot records:
 
@@ -124,8 +127,8 @@ The snapshot records:
               :object-format :sha1-or-sha256}
  :controller-worktree canonical-absolute
  :git-worktrees [{:path canonical-absolute
-                  :head hex40
-                  :tree hex40
+                  :head git-oid-matching-object-format
+                  :tree git-oid-matching-object-format
                   :branch full-ref-or-nil
                   :detached boolean
                   :locked boolean
@@ -252,9 +255,11 @@ fails: it states intent, not completion.
 Every apply or recovery captures one controller clock and requires the expiry
 to remain in the future immediately before Git removal. It also re-reads the
 same Beads store and requires the issue to remain open with the same assigned
-owner and revision-compatible parking record. Closure, reassignment, remote
-movement, or expiry refuses before UI/Git mutation when still possible and
-produces a typed partial outcome after an earlier external step.
+owner. The revision may advance only by the controller's byte-identical
+idempotent parking append for this plan; any unrelated issue change refuses.
+Closure, reassignment, remote movement, or expiry refuses before UI/Git
+mutation when still possible and produces a typed partial outcome after an
+earlier external step.
 
 ## Plan and Receipt Contracts
 
@@ -266,9 +271,12 @@ Dry-run writes a closed, canonical EDN plan under the common Git directory:
 
 The plan binds the target-specific fingerprint: canonical path, HEAD, tree,
 branch/detached state, status, lock, Supacode identity and state, outcome
-evidence blobs and hashes, exact remote/ref/object tuples, active handoff and
-lifecycle leases, removal preflight, and the controller commit/tree plus exact
-controller artifact hashes. The controller worktree itself must be clean.
+evidence blobs and hashes, exact remote/ref/object tuples, active handoff,
+lifecycle-lease prestate `absent`, the derived expected lease identity for this
+plan, removal preflight, and the controller commit/tree plus exact controller
+artifact hashes. The controller worktree itself must be clean. Apply creates
+the expected lease only after proving that the bound prestate is still absent;
+a foreign or different lease is drift, not part of the plan.
 Unrelated worktree creation or removal does not invalidate the plan. A change
 to any target-specific authority does.
 
@@ -306,7 +314,9 @@ Each transition uses atomic create/replace and synchronizes the file and parent
 directory before the next external step. Supacode and Beads operations use the
 plan hash as an idempotency key and verify exact postconditions. A divergent
 same-key issue record refuses. Git removal is resumed only from observed exact
-registration/path state.
+registration/path state. For a non-parked outcome, the two parking transitions
+are still written with result `:not-applicable`; the journal never hides a
+state by silently skipping it.
 
 After success, apply atomically writes an immutable final receipt under:
 
@@ -396,7 +406,8 @@ REMOVE GIT WORKTREE
   use git worktree remove without force
   failure -> restore prior UI state when this invocation archived it
   success -> verify path and registration absent, branch/ref/evidence unchanged,
-             UI archived, and durable archive hash still exact
+             planned terminal UI state (:absent or :archived), and durable
+             archive hash still exact
 
 FINALIZE RECEIPT
   write final receipt atomically
@@ -419,10 +430,11 @@ slice.
 
 - The target must belong to the same Git common directory as the controller.
 - The target may not equal the controller worktree or the primary worktree.
-- The lexical absolute target must equal its canonical real path and contain no
-  symlink component. Supacode IDs receive exactly one strict percent decode;
-  malformed, double-encoded, NUL-containing, non-UTF-8, or byte-colliding
-  identities refuse.
+- An existing lexical absolute target must equal its canonical real path and
+  contain no symlink component. A missing Supacode-only identity remains
+  lexical and audit-only. Supacode IDs receive exactly one strict percent
+  decode; malformed, double-encoded, NUL-containing, non-UTF-8, or
+  byte-colliding identities refuse.
 - Git object IDs are validated against the repository's advertised object
   format. Annotated tags bind both their advertised tag object and peeled
   commit; symbolic-only or ambiguous remote refs refuse.
