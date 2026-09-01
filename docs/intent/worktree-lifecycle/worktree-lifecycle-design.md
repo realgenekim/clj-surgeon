@@ -18,8 +18,9 @@ and applies that same plan only if every relevant fact remains unchanged. It
 never guesses an outcome from branch age or naming. The caller declares one of
 three outcomes: `landed`, `negative-experiment`, or `parked`.
 
-The first slice removes worktrees only. It never deletes a branch, tag, remote
-ref, observation, issue, archive, or retained result.
+The controller removes present worktrees and resolves exact stale Git worktree
+registrations whose checkout paths are already absent. It never deletes a
+branch, tag, remote ref, observation, issue, archive, or retained result.
 
 ## Component Boundary
 
@@ -71,6 +72,9 @@ Make target, but no wrapper may contain lifecycle policy.
 | Active agent lease | Git's worktree lock plus its owner/purpose reason | Process-name matching or worktree age |
 | Negative-experiment meaning | A remote-published observation or Captain's Log plus its exact blob, experiment commit/tree pointer, and declared raw-evidence disposition | The experiment branch name alone |
 | Parked ownership and next action | An open durable Beads issue plus the structured parking record appended by the controller | Chat history or an untracked TODO |
+| Missing checkout | An exact no-follow filesystem lookup of the registered path, whose existing parent is canonical and contains no symlink component | Git's `prunable` prose, a missing Supacode tab, or a failed shell `cd` |
+| Missing-registration preservation | The exact branch-backed registration HEAD and local full branch tip at that object, plus one unambiguous configured remote/effective-fetch-URL/full-ref advertisement whose commit equals or descends from that HEAD according to the selected proof kind | A detached HEAD, local branch, reflog, branch name, or similar file listing |
+| Missing-registration ownership | Git worktree lock, lifecycle lease, unconsumed handoff, and exact Supacode focused, pinned, live, and `:main` facts for the identity | Process-name scans, worktree age, or an unpinned inactive tab |
 
 If an authority is unavailable, malformed, duplicated, or contradictory, the
 controller records `unknown` and refuses to classify the target as
@@ -109,11 +113,13 @@ admits bulk apply and is recorded in the plan and receipt.
 ## Inventory Snapshot
 
 `worktree-audit` captures one versioned snapshot over the union of Git and
-Supacode identities. Existing paths are absolute, canonical, and compared as
-bytes after one percent-decoding of Supacode IDs. A collision, symlink alias,
-relative path, or non-canonical request refuses rather than selecting one
-identity. A Supacode-only identity whose checkout is missing cannot be
-realpathed; it retains its strictly decoded lexical absolute path and remains
+Supacode identities. Every path has an absolute normalized lexical identity.
+An existing path also has a canonical real identity; an absent path instead
+binds its nearest existing canonical ancestor and stable filesystem identity.
+Paths are compared as bytes after one percent-decoding of Supacode IDs. A
+collision, symlink alias, relative path, or non-canonical request refuses
+rather than selecting one identity. A Supacode-only identity whose checkout is
+missing retains its strictly decoded lexical absolute path and remains
 audit-only as `missing-prunable`.
 
 The snapshot records:
@@ -126,7 +132,13 @@ The snapshot records:
               :primary-worktree canonical-absolute
               :object-format :sha1-or-sha256}
  :controller-worktree canonical-absolute
- :git-worktrees [{:path canonical-absolute
+ :git-worktrees [{:path-lexical normalized-absolute
+                  :path-state :present-or-absent-or-unknown
+                  :path-real canonical-absolute-or-nil
+                  :nearest-existing-parent
+                  nil-or-{:path canonical-absolute
+                          :device integer-or-nil
+                          :inode integer-or-nil}
                   :head git-oid-matching-object-format
                   :tree git-oid-matching-object-format
                   :branch full-ref-or-nil
@@ -134,15 +146,19 @@ The snapshot records:
                   :locked boolean
                   :lock-reason string-or-nil
                   :prunable string-or-nil
-                  :status :clean-or-dirty-or-unknown
-                  :removal-preflight {:eligible boolean
+                  :status :clean-or-dirty-or-unknown-or-not-applicable
+                  :removal-preflight
+                  :not-applicable-or-{:eligible boolean
                                       :submodules :none-or-present-or-unknown
                                       :reasons [keyword]}}]
  :supacode {:available boolean
             :worktrees [{:id encoded-id
-                         :path canonical-absolute
+                         :path-lexical normalized-absolute
+                         :path-state :present-or-absent-or-unknown
+                         :path-real canonical-absolute-or-nil
                          :status :main-or-pinned-or-unpinned-or-archived
-                         :focused boolean}]}
+                         :focused boolean
+                         :live boolean-or-unknown}]}
  :remotes {:available boolean
            :rows [{:remote string
                    :remote-url-sha256 hex64
@@ -159,17 +175,19 @@ Unknown top-level fields are not accepted by the pure compiler.
 The compiler returns exactly one classification per identity in the union:
 
 - `active`: the primary worktree, controller worktree, focused worktree,
-  pinned worktree, agent-locked worktree, or a worktree whose lifecycle lease
-  belongs to a different plan.
+  pinned worktree, live worktree, contradictory `:main` surface, agent-locked
+  worktree, or a worktree whose lifecycle lease belongs to a different plan.
 - `dirty-blocked`: the path exists but tracked/untracked status is dirty, Git
   status is unavailable, identity aliases collide, or checkout linkage cannot
   be trusted. A known non-removable or unknown submodule state is also blocked
   before any Supacode mutation.
 - `missing-prunable`: Supacode retains an identity with no Git registration, or
-  Git registration/check-out linkage is missing or broken. This class is
-  audit-only in the first slice. A Git worktree that is authoritatively absent
-  from a successful stable Supacode bracket is not missing; its UI state is
-  `absent`.
+  Git registration/check-out linkage is missing or broken. This class has no
+  ordinary close authority. A separate registration-prune request may select
+  only the narrower Git-registered, path-absent case after proving durable
+  content and no active ownership. A Git worktree that is authoritatively
+  absent from a successful stable Supacode bracket is not missing; its UI state
+  is `absent`.
 - `needs-seal`: the checkout is clean and unprotected, but no still-valid
   reviewed close plan proves one terminal outcome.
 - `clean-safe`: the checkout is clean and unprotected and one unconsumed plan
@@ -180,6 +198,132 @@ Precedence is `active`, `dirty-blocked`, `missing-prunable`, `needs-seal`, then
 Every non-safe classification carries stable reason keywords and the observed
 facts needed to repair it.
 
+For a Git-registered row whose path is authoritatively absent, status and
+ordinary checkout-removal preflight are `:not-applicable`; their absence does
+not reclassify the row as `dirty-blocked`. An unknown path state remains
+blocked. A missing row can gain prune-plan eligibility only under the separate
+contract below.
+
+## Missing Registration Resolution
+
+A registration-prune request is a second plan kind, not a fourth experimental
+outcome. It removes stale Git administrative registration after the checkout
+path is already absent; it does not claim that a `landed`,
+`negative-experiment`, or `parked` close occurred. Supacode-only identities and
+registrations whose lexical paths exist as any filesystem object remain
+audit-only.
+
+The request is closed data for exactly one target:
+
+```clojure
+{:schema :clj-surgeon.worktree-registration-prune-request/v1
+ :target absolute-lexical-missing-path
+ :preservation preservation-proof}
+
+;; preservation-proof is exactly one of:
+{:kind :branch-tip-on-remote
+ :local-ref full-local-branch-ref
+ :remote string
+ :remote-url-sha256 hex64
+ :ref full-ref
+ :object git-oid
+ :peeled-object nil}
+
+{:kind :commit-on-remote
+ :local-ref full-local-branch-ref
+ :remote string
+ :remote-url-sha256 hex64
+ :ref full-ref
+ :object git-oid
+ :peeled-object git-oid-or-nil}
+```
+
+The preservation map is a tagged union whose `:kind` is exactly
+`:branch-tip-on-remote` or `:commit-on-remote`. Both variants require a
+branch-backed registration, registration branch equal to `:local-ref`, and the
+local branch tip equal to registered HEAD. The first additionally requires the
+advertised remote ref object to equal registered HEAD. The second requires the
+registered HEAD to be an ancestor of the advertised remote endpoint, using the
+peeled commit for an annotated tag. The endpoint must be a locally available
+commit for the bounded proof. A detached registration is audit-only in this
+slice.
+
+Both proofs bind one unambiguous configured remote name, the digest of its
+exact effective fetch URL bytes, full local and remote refs, advertised object,
+and peeled object where applicable. Zero or multiple effective fetch URLs,
+duplicate remote names, symbolic-only refs, non-commit endpoints, or movement
+refuse. Request objects are expected values checked against fresh `ls-remote`
+evidence, never caller authority. The proofs preserve Git content; neither
+infers experiment meaning or deletes the preserved local branch.
+
+Planning requires all of the following in one stable snapshot:
+
+- one exact Git registration for the target and no identity collision;
+- an absent final path proven by a no-follow filesystem lookup, with every
+  existing ancestor canonical and non-symlink and the nearest existing parent
+  captured;
+- no Git worktree lock, lifecycle lease, unconsumed handoff, focused Supacode
+  surface, pinned Supacode surface, live Supacode surface, or contradictory
+  `:main` surface for the target;
+- one current preservation proof; and
+- a different clean controller worktree in the same common Git directory.
+
+The plan binds the complete stale registration row, absent-path proof,
+preservation proof, ownership facts, Supacode state, and controller identity.
+Peer registrations are diagnostic only and are not plan authority. Apply uses
+the same per-target OS lock, lifecycle lease, canonical plan file, monotone
+journal, archive/restore boundary, immutable receipt, and recovery rules as
+ordinary close. Immediately before the effect it repeats every target-specific
+proof.
+
+If the target Supacode surface exists and is unpinned and unfocused, apply
+archives and verifies it. It then invokes exactly:
+
+```text
+git worktree remove <registered-missing-path>
+```
+
+The command runs without `--force`. The controller never invokes global
+`git worktree prune` and never deletes or rewrites Git administrative files
+directly. Git's exact remove command refuses when an unrelated directory has
+reappeared without the registered worktree linkage; the controller also checks
+path absence immediately before invoking it. A recreated path, changed
+registration, new owner claim, moved preservation ref, unavailable Supacode
+state, or live/focused/pinned UI refuses. The no-follow absence check binds the
+nearest existing ancestor's canonical path and stable identity, walks every
+existing component without following links, and repeats after Supacode archive
+immediately before the closed Git command. Git's backlink validation is the
+final guard against a filesystem object that reappears after that check.
+
+The supported Git boundary is release-gated by executable fixtures on the
+oldest supported Git version: an absent target removes only its registration;
+an unrelated file, directory, or dangling symlink at the target refuses; a
+locked registration refuses; and an exact peer remains registered. A Git
+version without that witnessed behavior is unavailable authority, not a reason
+to fall back to global prune or direct administration deletion.
+
+Success requires the selected registration to be absent, the target path to
+remain absent, the local branch and preservation ref to remain exact, and the
+planned terminal Supacode state to hold. A planned absent surface remains
+absent; a planned exact unpinned surface becomes that same identity archived,
+not an `archived-or-absent` disjunction. Peer changes are recorded as
+diagnostics but neither invalidate nor complete this target's plan. A boundary
+witness must prove that the exact command never removes a peer.
+
+Once journal state `prepared` durably records the exact selected row, later
+authoritative absence of that row may satisfy the remove transition when path
+absence, preservation, ownership, and exact UI postconditions still hold. The
+receipt records `:registration-pruned` with
+`:effect-observed :controller-or-external`; it does not claim controller
+causation. Absence before `prepared` is typed `:already-resolved` and causes no
+UI mutation. If removal fails after this invocation archived Supacode, the
+controller restores the prior surface or returns a typed partial outcome.
+
+One plan always owns one target. Batch cleanup is orchestration over independent
+reviewed plans, locks, journals, rechecks, and receipts; a multi-target plan is
+not part of this slice. One refusal stops only its target and cannot authorize
+another target.
+
 ## Outcome Seals
 
 ### Landed
@@ -188,6 +332,23 @@ The caller supplies one full durable landing ref. The target HEAD must be an
 ancestor of that exact ref, and the ref/object pair must appear in the captured
 remote advertisement. A local branch, short hash, default branch assumption,
 or tag name without its advertised object is insufficient.
+
+#### Deferred rebase-landed proof
+
+Ancestor proof correctly refuses work that reached the landing branch only
+after rebase, squash, or cherry-pick changed its commit identity. A future
+landed-seal variant may use an explicitly versioned patch-equivalence algorithm
+over caller-supplied frozen target and landing ranges. `git cherry` and
+`git patch-id --stable` are candidate mechanisms, not authorities. The design
+must first define bases and ranges, squash/fixup, whitespace, tool-version
+pinning, merges, empty commits, renames, mode changes, binary changes, reverts,
+duplicate patches, attribution, and collision refusal. Until that contract is
+ratified and witnessed, the controller continues to refuse non-ancestor landed
+claims.
+
+The motivating deferred field case is `cc-surgeon-create` at `c44ac759`, whose
+content landed as main `64eac2ee` without ancestor identity. Those pointers are
+a backlog witness, not current close authority.
 
 ### Negative experiment
 
@@ -269,14 +430,24 @@ Dry-run writes a closed, canonical EDN plan under the common Git directory:
 <common-git-dir>/clj-surgeon/worktree-lifecycle/v1/plans/<plan-id>.edn
 ```
 
-The plan binds the target-specific fingerprint: canonical path, HEAD, tree,
-branch/detached state, status, lock, Supacode identity and state, outcome
-evidence blobs and hashes, exact remote/ref/object tuples, active handoff,
+The plan declares exactly one operation kind: `:close-worktree` or
+`:prune-missing-registration`. Both use the same storage, hashing, lease,
+journal, receipt, privacy, and replay envelopes. Their target fingerprints and
+postconditions remain operation-specific; a plan cannot change kinds during
+recovery.
+
+For `:close-worktree`, the plan binds the target's canonical present path,
+status, and removal preflight. For `:prune-missing-registration`, it binds the
+normalized lexical path, authoritative `:absent` state, nearest-existing-parent
+identity, and `:not-applicable` checkout status and preflight. Both bind HEAD,
+tree, branch or detached state as applicable, lock and lease facts, exact
+Supacode identity and state, exact remote/ref/object tuples, active handoff,
 lifecycle-lease prestate `absent`, the derived expected lease identity for this
-plan, removal preflight, and the controller commit/tree plus exact controller
-artifact hashes. The controller worktree itself must be clean. Apply creates
-the expected lease only after proving that the bound prestate is still absent;
-a foreign or different lease is drift, not part of the plan.
+plan, and the controller commit/tree plus exact controller artifact hashes.
+An ordinary close plan also binds outcome-evidence blobs and hashes. The
+controller worktree itself must be clean. Apply creates the expected lease only
+after proving that the bound prestate is still absent; a foreign or different
+lease is drift, not part of the plan.
 Unrelated worktree creation or removal does not invalidate the plan. A change
 to any target-specific authority does.
 
@@ -359,13 +530,16 @@ command never silently revokes an active lease. A legacy request explicitly
 sets `:handoff :legacy` and is accepted only one target at a time from a
 different controller worktree.
 
-Dry-run is the default for `finish-worktree`. Standard output is one versioned
-EDN result; concise progress and remedies go to standard error. Success exits
-zero. Refusal, unavailable authority, invalid request, partial recovery, and
-execution failure use distinct nonzero exits and stable `:error-type` values.
-`make help` shows all forms, the closed request schema, and the
-outcome-specific fields. A request file prevents Make or shell quoting from
-becoming an authority boundary for owner, next-action, path, or ref values.
+Dry-run is the default for `finish-worktree`. It accepts either the ordinary
+close-request schema or the registration-prune-request schema and emits the
+corresponding one-target plan kind. Apply accepts only the persisted plan.
+Standard output is one versioned EDN result; concise progress and remedies go
+to standard error. Success exits zero. Refusal, unavailable authority, invalid
+request, partial recovery, and execution failure use distinct nonzero exits
+and stable `:error-type` values. `make help` shows both closed request schemas,
+their evidence fields, and the no-global-prune guarantee. A request file
+prevents Make or shell quoting from becoming an authority boundary for owner,
+next-action, path, or ref values.
 
 The audit command never archives, deletes, locks, unlocks, prunes, fetches,
 pushes, creates issues, or changes focus. It may query remote advertisements
@@ -423,12 +597,22 @@ repeat invocation to finish the receipt and parked completion marker.
 
 `git worktree remove` is never called with `--force`. A locked, dirty,
 submodule-bearing, malformed, or otherwise non-removable checkout remains for
-human repair. Missing registrations are reported but not pruned by the first
-slice.
+human repair.
+
+The registration-prune state machine uses the same transitions. Parking is
+`:not-applicable`; archive transitions own an exact stale Supacode surface;
+remove transitions own only `git worktree remove <registered-missing-path>`;
+and finalization proves that the selected registration disappeared while the
+path, branches, refs, preservation proof, and receipt remain exact. Peer rows
+are diagnostic, because unrelated worktree changes remain outside this
+one-target authority. Recovery never promotes an ordinary close plan into a
+prune plan and may converge on externally observed absence only after
+`prepared` under the exact rules above.
 
 ## Safety and Privacy
 
-- The target must belong to the same Git common directory as the controller.
+- The target registration must belong to the same Git common directory as the
+  controller.
 - The target may not equal the controller worktree or the primary worktree.
 - An existing lexical absolute target must equal its canonical real path and
   contain no symlink component. A missing Supacode-only identity remains
@@ -445,9 +629,9 @@ slice.
   source bodies, prompts, transcripts, tokens, or environment dumps.
 - Every subprocess receives an explicit working directory and closed argv.
   Shell interpolation is not an authority boundary.
-- The controller never invokes branch deletion, `git worktree prune`, force
-  removal, stash, reset, checkout-discard, remote deletion, or archive
-  replacement.
+- The controller never invokes branch deletion, global `git worktree prune`,
+  force removal, direct Git-administration deletion, stash, reset,
+  checkout-discard, remote deletion, or archive replacement.
 
 ## Global Skill Boundary
 
@@ -466,11 +650,14 @@ than receiving a generic destructive fallback.
 | Negative outcome name | `negative-experiment` | `rejected`, `failed-experiment`, `no-go`, `closed-negative` | The candidate did not earn adoption, but the experiment may have succeeded by disproving it. |
 | Mutation boundary | Reviewed plan followed by exact-state apply | One command that plans and deletes; interactive confirmation | A saved plan makes drift and replay mechanically testable without depending on a terminal prompt. |
 | Safe automation unit | One explicitly handed-off target | Bulk delete every apparently safe worktree | Existing unlocked rooms predate the lease rule; individual declaration limits blast radius. |
-| Active-work authority | Agent lock -> explicit handoff -> controller lifecycle lease, plus current/focused/pinned protections | Process-name scans; age; open-tab count; treating unlock alone as consent | Explicit state transitions are stable and recoverable. The alternatives guess activity or classify stale UI as live forever. |
+| Active-work authority | Agent lock -> explicit handoff -> controller lifecycle lease, plus current/focused/pinned/live protections | Process-name scans; age; open-tab count; treating unlock alone as consent | Explicit state transitions are stable and recoverable. The alternatives guess activity or classify stale UI as live forever. |
 | Durable negative breadcrumb | Published human document plus exact experiment commit/tree and evidence disposition | Branch name alone; local receipt only; archive with no explanation | A future reader needs both the lesson and a machine-resolvable route to the exact experiment. |
 | Parked breadcrumb | Pushed branch plus append-only structured Beads record | Chat reminder; local TODO; permanent worktree | The task ledger already owns durable work and can state who resumes what and when. |
 | Operational receipt location | Fsynced journal and immutable receipts in the common Git directory, outside every removable worktree | Write into target; dirty the controller checkout; make a tag per close | Transition evidence survives target removal without changing source history or creating tag litter. |
-| Missing registration handling | Audit-only in the first slice | Global `git worktree prune`; forced removal | A broken registration can still have residual files or an active ownership claim. |
+| Missing registration handling | Separate one-target prune plan after exact absence, preservation, and ownership proofs | Global `git worktree prune`; force removal; direct deletion under `.git/worktrees`; treating missing as ordinary close success | A stale registration and a present worktree have different authorities. Git's exact non-force remove can retire one registration without granting branch or filesystem deletion authority. |
+| Missing content preservation | Branch-backed target whose local ref stays at registered HEAD, plus exact tip equality to one advertised remote ref or target ancestry to one advertised remote commit | Detached HEAD; local branch alone; reflog; branch name; similar file listing | Cleanup must prove a durable remote route while retaining the local branch as a recovery anchor. |
+| Batch cleanup | Compose independent one-target plans and receipts | One multi-target plan or one global prune command | Per-target review and recheck keep a stale row from expanding another target's authority. |
+| Rebase-landed seal | Deferred versioned patch-equivalence variant; ancestor proof remains current | Treat equal-looking trees or commit messages as landed; make `git cherry` authoritative | Patch equivalence may recover valid rebases, but bases, ranges, squash, merge, binary, rename, revert, attribution, tooling, and collision semantics need a separate ratified contract. |
 | Cross-client reuse | Global skills invoke the repository command | Copy shell policy into Claude and Codex skills | Repository policy evolves with its tests; global orchestration stays small and non-destructive. |
 
 ## Open Questions & Future Decisions
@@ -484,16 +671,22 @@ than receiving a generic destructive fallback.
    another clean worktree.
 4. Active ownership transfers through an explicit handoff and lifecycle lease,
    not unlock state or process inference.
+5. A missing Git registration is resolved only by a separate exact
+   registration-prune plan; it is never ordinary close success.
 
 ### Deferred
 
 1. Branch, tag, and remote-ref retirement after a separately measured corpus
    and design review.
-2. Automated repair or pruning of missing/broken worktree registrations.
-3. Upload or central projection of local operational receipts beyond the
+2. Multi-target scheduling over independent registration-prune plans.
+3. Rebase-landed proof using an explicitly versioned patch-equivalence
+   algorithm; `git cherry` and stable patch IDs remain candidate mechanisms,
+   with base/range, squash, merge, binary, rename, mode, revert,
+   duplicate-patch, attribution, tool-version, and collision law unresolved.
+4. Upload or central projection of local operational receipts beyond the
    repository's common Git directory.
-4. Expired parked-work escalation and reporting across repositories.
-5. Global skill publication until the repository command passes a real
+5. Expired parked-work escalation and reporting across repositories.
+6. Global skill publication until the repository command passes a real
    read-only audit and at least one deliberately selected close trial.
 
 ## References
@@ -501,4 +694,5 @@ than receiving a generic destructive fallback.
 - [High-Level Design](../../high-level-design.md#close-terminal-worktrees-without-erasing-experiments)
 - [Testing Guidelines](../../testing-guidelines.md)
 - [`bench/retain_benchmark_result.sh`](../../../bench/retain_benchmark_result.sh)
+- [`git worktree` documentation](https://git-scm.com/docs/git-worktree.html)
 - Supacode CLI worktree list, status, and archive contract
