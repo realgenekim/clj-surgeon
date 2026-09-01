@@ -24,10 +24,10 @@ atomic create-if-absent publication, and commit-time ancestor confinement.
 
 | Phase | Commit | Evidence |
 |---|---|---|
-| LLD and EARS | `03777826` | Contract and decision updates committed before tests or code |
-| Frozen red | `f4592bd0` | Four permanent blocker probes committed before implementation |
-| Implementation | `5b1fddfa` | Focused create-files suite green: 17 tests, 95 assertions, 0 failures, 0 errors |
-| Full gate and report | this commit | `make test` exit 0 and touched-file clj-kondo clean |
+| LLD and EARS | `41e00f59` | Contract and decision updates committed before tests or code |
+| Frozen red | `aa57e9dd` | Four permanent blocker probes committed before implementation |
+| Implementation | `27292d08` | Focused create-files suite green: 17 tests, 95 assertions, 0 failures, 0 errors |
+| Full gate and report | `bda4489b` | `make test` exit 0 and touched-file clj-kondo clean |
 
 All commits are local on `repair/create-files-blockers`. No push was performed.
 
@@ -173,3 +173,20 @@ operations.
 - The canonical identity projection is intentionally not extended for
   creations. The conservative suppression rung remains in force until a new
   projection version is ratified.
+
+## Delta re-review + N1 fix
+
+The independent post-rebase delta review returned GO with all five SOL
+blockers closed. Before installation, advisory N1 was accepted: the transaction
+revalidated a late symlink before file publication, but created all missing
+directories first, allowing a transient mkdir through an attacker-chosen
+ancestor before refusal and rollback.
+
+Commit `28eefd02` froze a deterministic observer at that boundary. Before the
+fix, the focused suite reported 17 tests, 97 assertions, 1 failure, and 0
+errors because it observed the outside-workspace directory. Commit `add4aba5`
+now revalidates no-follow ancestor confinement immediately before every
+planned `create-directory!` as well as before create-if-absent publication.
+The same focused suite reports 17 tests, 97 assertions, 0 failures, and 0
+errors, and the observer proves no outside directory exists at any
+deterministically observable point.
