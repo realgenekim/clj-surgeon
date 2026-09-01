@@ -1937,18 +1937,32 @@
 (defn- execute-creations!
   "Create every absent target after the edits have committed and read back.
 
-   Directories are created shallowest-first and both directories and files are
-   recorded as they land, so recovery removes exactly what this call made."
+   Directories are revalidated and created shallowest-first. Directories and
+   files are recorded only as they land, so recovery removes exactly what this
+   call made."
   [read-source create-source! exists? create-directory!
    directories created-files written-directories written-files]
   (doseq [directory directories]
-    (when-not (exists? directory)
-      (create-directory! directory)
-      (swap! written-directories conj directory)
+    (let [directory-path (.normalize
+                           (.toAbsolutePath (.toPath (io/file directory))))
+          workspace-root
+          (some (fn [{:keys [file workspace-root]}]
+                  (when (and workspace-root
+                             (.startsWith
+                               (.normalize
+                                 (.toAbsolutePath (.toPath (io/file file))))
+                               directory-path))
+                    workspace-root))
+                created-files)]
+      ;; @spec MCP-OP-EDIT-036
+      (file-ops/revalidate-create-target! workspace-root directory)
       (when-not (exists? directory)
-        (refuse! :target-parent-create-failed
-                 (str "Could not verify created directory " directory)
-                 {:directory directory}))))
+        (create-directory! directory)
+        (swap! written-directories conj directory)
+        (when-not (exists? directory)
+          (refuse! :target-parent-create-failed
+                   (str "Could not verify created directory " directory)
+                   {:directory directory})))))
   (doseq [{:keys [file content result-hash workspace-root]} created-files]
     (when (exists? file)
       (refuse! :target-already-exists
