@@ -9,6 +9,22 @@ description: >-
 Optimize complete verified task time. Do not load this skill for an ordinary
 bounded structural read or already-decided compact edit.
 
+## Trip-wire: `{:error "Unknown op: ."}` means YOUR SYNTAX, not a broken tool
+
+Every call is **`:op <name>` plus key-value pairs** — there are no positional
+arguments. `clj-surgeon outline file.clj` (positional guess) fails with
+`Unknown op: .`, and an agent that guesses instead of reading this skill will
+conclude the tool is broken and silently fall back to native edits — the exact
+silent-adoption-killer the routing experiments measured. (Field-verified on the
+bridge seat 2026-08-31: CLI + wrapper work perfectly when called as documented.)
+
+Known-good smoke test:
+
+```bash
+clj-surgeon :op :ls :file src/my/ns.clj
+```
+
+
 ## Load only the required reference
 
 - Read [advanced MCP routes](references/mcp-advanced.md) for semantic
