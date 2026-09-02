@@ -1,4 +1,4 @@
-# RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 06:05Z, pre-compaction)
+# RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 12:25Z; read the UPDATE blocks bottom-up, the newest supersedes)
 
 STANDING ORDERS (memory files): headlines first (table: arm, wall, correct? + one learning + one
 caveat); record every experiment in clj-surgeon docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md
@@ -125,3 +125,10 @@ to skiff for surgeon1. b2 replication: ~/acid/chain-4b.sh after "l1 done", rando
 diff). Monitor bfmmu5zhr relays n1/k2/v1/l1 (+ chain log); add b2 when restarting. n1 g1: N 231/259/521, A 426/714/722, all green.
 Pending: scorer's refusal-reason table for b1 (b1-score.md "refusal reasons"); n1 g2 -> freeze -> judges (prompt from
 quality-review-b1/prompt.md, 12 impls) -> rescore -> scorer -> log -> fleet -> mayor.
+
+UPDATE 12:25Z — n1 DONE (12 arms, verified 7893): walls N 231/259/521/363/402/427 (mean 367), A 426/714/722/592/754/851 (mean 677);
+all gates green; logged 1163443. Diffs frozen complete (12/12); judges running (quality-review-n1/, 12 impls, key.txt); scorer
+(Anvil agent, ~/b1_score.py + b1_refusals.py) writes n1-score.md with typed refusals + tokens carried; rescore-anvil-n1.txt.
+Chain: k2 "A K A K A K" RUNNING (07:20Z) -> v1 -> l1 -> b2 (chain-4b, randomised). Bisect settled (3ed0f84): gap fix introduces
+ambiguous-insertion-gap; beads filed by mayor: clj-surgeon-f5e (P1), -vcz (P2, credible not proven), -xio (P1 invalid-intent-form
+tax). Mayor's sol fixed the analyzer flake (33e03075). NEXT: n1 tables -> log -> fleet round -> mayor (this is Gene's wake-up headline).
