@@ -540,7 +540,9 @@
   [snapshot request controller-identity plan-id]
   (let [snapshot-result (validate-snapshot snapshot)
         request-result (validate-prune-request request)
-        target (git-row snapshot (:target request))
+        target-rows (filterv #(= (:target request) (row-path %))
+                             (:git-worktrees snapshot))
+        target (first target-rows)
         supacode-rows (filterv #(= (:target request) (row-path %))
                                (get-in snapshot [:supacode :worktrees]))
         proof-result (when target
@@ -552,6 +554,7 @@
       (not (:ok snapshot-result)) snapshot-result
       (not (:ok request-result)) request-result
       (nil? target) (refuse :target-not-registered)
+      (not= 1 (count target-rows)) (refuse :ambiguous-target-registration)
       (not= :absent (:path-state target)) (refuse :target-path-not-absent)
       (:detached target) (refuse :detached-registration)
       (:locked target) (refuse :target-locked)
@@ -561,6 +564,10 @@
       (refuse :handoff-exists)
       (seq (get-in snapshot [:lifecycle-leases (:target request)]))
       (refuse :lifecycle-lease-exists)
+      (= (:target request) (:controller-worktree snapshot))
+      (refuse :controller-target-collision)
+      (not= true (get-in snapshot [:supacode :available]))
+      (refuse :supacode-unavailable)
       (> (count supacode-rows) 1) (refuse :ambiguous-supacode-identity)
       (and (= 1 (count supacode-rows))
            (let [row (first supacode-rows)]

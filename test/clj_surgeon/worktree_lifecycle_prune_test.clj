@@ -147,6 +147,16 @@
            (invoke 'clj-surgeon.worktree-lifecycle/classify-target
                    prune-snapshot "/repo-stale" nil)))))
 
+(deftest duplicate-registration-identity-refuses-planning
+  ;; @spec WTL-PRUNE-001 WTL-PRUNE-004
+  (let [snapshot (assoc prune-snapshot :git-worktrees
+                        [missing-row missing-row])]
+    (is (= :ambiguous-target-registration
+           (:error-type
+             (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
+                     snapshot prune-request controller-identity
+                     "prune-duplicate"))))))
+
 (deftest preservation-proof-is-exact-and-remote-bound
   ;; @spec WTL-PRUNE-003
   (is (= true
