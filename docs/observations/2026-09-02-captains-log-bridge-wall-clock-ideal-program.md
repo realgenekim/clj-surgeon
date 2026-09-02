@@ -384,3 +384,16 @@ narrative. The small rung (two files, focused suite, ~90 s per arm) plus proven-
 arms is how eight per cell becomes affordable. Standing order from Gene applied from here:
 one unit at a time on a new apparatus, a 2-minute poll that checks receipts advance, fail
 fast.
+
+## Receipt 04:22Z — s4 (first triple with arm C) and the third blind review
+
+s4, Anvil sequential, all correct: C (wave build, string-symbol outline OFF) 328 s, A 273 s,
+N 263 s. Third blind review (s3, key shuffled): A 18, native 16, B 16; B's clarity 2 of 5
+again. Three reviews now: native 18, 19, 16 · A 17, 17.5, 18 · B 14.5, 15, 16. Native and A
+are tied within noise; **B is last in all three, always on clarity.** That is the first
+between-arm effect tonight larger than its noise. The s4 review, which scores C blind against
+A and native from the same triple, decides whether the string-symbol payload is the cause.
+
+Standing order from Gene applied from here: after every result, poll Sol and Opus
+independently for interpretations and the next wave of experiments, and run several in
+parallel on Anvil. First poll launched on the packet through s4.
