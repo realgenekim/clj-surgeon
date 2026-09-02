@@ -954,3 +954,35 @@ Server identity: the rollouts record no MCP URL at all, so routing is provable o
 runner's `-c mcp_servers.clj-surgeon.url` line (7893 for A/P/U/V/W); the W start lines'
 41eee738 label was the runner's fall-through case, now fixed. Surgeon should report a build id
 in healthz and stamp it in telemetry so a receipt can witness the server, not the runner.
+
+## Receipt 08:50Z — fleet round 4 on the e3 result: a correction I owe, and the verdicts
+
+**Correction (Opus caught it, Sol missed it):** at n=3 the Hawthorne control captured the action
+reduction. Total actions: A 30.3, U report-only 22.3, V budget 21.7. Asking the agent merely to
+COUNT its turns removed 26 percent of actions; the budget added 2 percent on top. My group-1
+line "the effect in V is the budget, not the counting" is dead. The lever, if it is one, is
+making the agent count returns, and the budget arithmetic buys nothing but overruns. Sol read
+the same table and called report-only inert because U did not move quality, acceptance or
+wall; both are right about their own axis, and the disagreement is the finding: counting
+moves actions and nothing else moved.
+
+Verdicts, both reviewers converging. Turn-budget doctrine: ship only with a mandatory
+conformance gate (acceptance suite plus baseline test count must hold before a run counts as
+"under budget"), keep the mechanism sentence ("returns, not execution, are the clock"), drop
+the `N = 6 + 2f + u` formula until v1 shows the budget beats bare counting, forbid spending
+saved turns on omitted verification, never state the budget in seconds. Rubric: the spec must
+declare the appended-reassignment form permitted or prohibited, "one live definition per
+symbol" becomes a binary acceptance assertion rather than a clarity score, and judges cite the
+spec clause or return unverified. acid-7 (hbms server-resolved) fails in 11 of 12 e3 arms and
+every native row: the prompt never said the flag must be server-resolved, all twelve agents
+read it client-side, so it measures spec ambiguity; report acceptance both with and without it
+from here on. Dead claims list (Opus): the conformance headline, every wall claim about prompt
+variants, "planning buys quality". Survives: 87 percent of wall is model time; 9 s/action is a
+mean; the wave build's clarity deficit is the only between-arm effect above the noise floor.
+
+Next cohorts proposed. Opus: the large rung, a 12-plus-owner cross-file mechanical change,
+A vs N x6 instrumented for tokens carried, because every queued cohort re-measures the medium
+rung the corpus predicted is below the crossover; tonight A carries 23 percent more tokens
+than native, which reads backwards against the product's mechanism. Sol: cross-task
+generalisation, A vs V x6 on a materially different task. Both filed; the large rung is being
+designed now (task prompt plus acceptance suite) so it can run after v1.
