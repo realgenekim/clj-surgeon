@@ -553,3 +553,18 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - **z7c** running on Anvil (chain-z7c, gate n=6 on R3). Score per z7b shape when `chain-z7c … done`.
 - Gene report regeneration after z7c.
 
+
+## RESUME DELTA 2026-09-02T21:57Z
+
+- **Gene report regenerated** (a40b3f6, inb-600289): rf2 win, z7c FLAT at n=6 on wall (Z 339 vs N 348 s
+  from z7c.log end lines; acceptance 12/12 PASS), fold round two, store NO-GO round, finder false positive.
+- **z7c scorer** agent acb7ca2bc88bb917d writing `~/acid/receipts/z7c-score.md` (returns, gate completeness).
+- **sl1-R** queued on the cohort lock behind z7c's post-scoring (chain-sl1r armed, Q5Z-SHA 2753f23, 7895 attested).
+- **Fold branch f115cc2d pushed** (my unit run 1016/12599/0); inb-d603ce updated; merge is Gene's.
+- **Store branch 3aac4338** (rebased on f115cc2d; nine Sol items + generational key inside the lock;
+  participation keeps key AND projection check because domain/speakers.clj writes via append-all!).
+  My unit run: see `~/tmp/store-unit-2.log`. Sol second review: `scratchpad/fold-review/sol-store2-review.md`
+  (waiter bq9sdz222). Push on both green, then inbox item for Gene; Postgres paths are UNVERIFIED on this box
+  (documented as owner work; a PG-backed revision refuses to boot without the index).
+- Session 4 (lens over 19 owners as one Surgeon transaction, watcher on) after fold+store land.
+
