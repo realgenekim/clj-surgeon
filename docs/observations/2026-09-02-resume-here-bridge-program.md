@@ -372,3 +372,20 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   lands: suites, commit, push, checkout at ~/acid/surgeon-q5z, server 7895 via a restart-7895-at.sh
   clone of the 7894 script, Q5Z-SHA, hand-drive at N=5, then GO-SL1.
 
+
+## RESUME DELTA 2026-09-02T19:07Z
+
+- admit-gate pushed at f5965ad (hazard notes + lifted_by); in-process gate on 7899 reloaded.
+  After z8 done: `bash ~/acid/restart-7894-at.sh f5965ad`, `echo f5965ad > ~/acid/GATE-SHA`.
+- rf2: 57e3ca0 pushed; follow-up in the worktree (receipt v2 + bound + in-verb compile) awaiting the
+  builder's report → my suites → commit/push → tell mayor the sha → G2 third pass on the apply
+  receipt → G5b result (running: verb named in task terms, not mandated; G5 plain was 0/1).
+- q5z: suites green on the verb; lib-only extension for anchor R being built → suites → commit/push
+  → Anvil: `git clone` the branch to ~/acid/surgeon-q5z, clone restart-7894-at.sh into
+  restart-7895-at.sh (root surgeon-q5z, port 7895), Q5Z-SHA, hand-drive at N=5 on
+  ~/acid/fan/repo-5 (G1), then GO-SL1 and GO-SL1R.
+- z7 scoring (two Z diffs touch 1 and 0 files: check abandonment); z8 running (control not flat:
+  gate 250/254/337 vs native 118/126/175).
+- Tweezer worktrees: ~/src/clj-surgeon-tweezer (nREPL 40179), ~/src/clj-surgeon-g5, -g5b, -g2,
+  -rf2-scratch (scratch; prune when done).
+
