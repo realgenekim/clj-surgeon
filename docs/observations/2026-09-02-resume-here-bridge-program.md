@@ -389,3 +389,18 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Tweezer worktrees: ~/src/clj-surgeon-tweezer (nREPL 40179), ~/src/clj-surgeon-g5, -g5b, -g2,
   -rf2-scratch (scratch; prune when done).
 
+
+## RESUME DELTA 2026-09-02T19:27Z
+
+- admit-gate f5965ad WITHDRAWN again: z8 showed 3 of 6 commits at partial on rung L; fix from
+  z8's real payloads in progress (gate agent). After it lands: my suites → commit/push →
+  `restart-7894-at.sh <sha>` → GATE-SHA → re-submit → re-run z7 (rung R3 gate) on the fixed gate.
+- rf2: follow-up (receipt allowlist ≤ 4 KB, in-verb compile) in the worktree, my suites running →
+  commit/push → `echo <sha> > ~/acid/RF2-SHA` → rung R3b installer (running) → `touch ~/acid/GO-RF2`.
+- q5z 6b5252c pushed; 7895 serves it; G1 at N=5 FAILED on the wire (adapter arity); fix in
+  progress → suites → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → redo G1 at N=5
+  (`~/acid/wt/q5z-hand-5`, `~/acid/receipts/q5z-mcp-call.py`, `rescore-FAN.sh <wt> 5`) → GO-SL1,
+  GO-SL1R.
+- Closure catalogue agent running → `docs/closure-catalogue.md` → commit + tech-tree pointer.
+- Docs updated: vision.md "The law of decisions", CLAUDE.md evening amendments, tweezer-loop fixes.
+
