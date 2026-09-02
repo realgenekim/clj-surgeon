@@ -2269,3 +2269,15 @@ reporting. **Native:** 4 errors 3 failures because three `db-correct` tests read
 base count, and the path is a string literal the rules protect: a hole in the anchor's own
 acceptance, dispatched to the installer to amend and re-measure. The anchor re-arms after both.
 
+
+## 20:55Z — rf2 ran: the mandated rewiring verb, walls
+
+rf2 (rung R3b, the rf1 extraction on `surgeon-rf2` at a66b626; C = `:extract!` with
+`:rewire-callers` mandated, N = native, both stripped, n=3): **C 246, 230, 253 s (mean 243); N
+291, 339, 378 s (mean 336); ratio 0.72; no overlap, every C run faster than every N run.** Both
+arms' gate lines carry the identical extra 25 failures + 5 errors: the rf2 branch's own tests
+that read the repo's live source as fixtures, moved by the extraction in both arms; the set
+cancels and the scorer compares against base-minus-self-referential. The pre-registered readout
+(native bytes landing after the verb; returns after the receipt) and Sol's promotion criteria
+are with the scorer; z7c (gate at n=6) launches next on the lock.
+
