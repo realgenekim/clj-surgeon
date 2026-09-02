@@ -532,3 +532,24 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   writing rf2-score.md.
 - **z7c** (gate n=6 on R3) preflight green at 21:09:54Z, running under chain-z7c.
 
+
+## RESUME DELTA 2026-09-02T21:29Z
+
+- **rf2 SCORED — clean win** (log 75573fa; `~/acid/receipts/rf2-score.md`): C 243 s vs N 336 s, no
+  overlap, A=B=0 in 3/3, five promotion criteria PASS. Product claim now has an Anvil receipt.
+- **q5z fix committed 2753f23** (pushed, branch only). Anvil `surgeon-q5z` checked out at it;
+  `restart-7895-at.sh 2753f23` ran inside a hung ssh (pid 381392 on Anvil); monitor b4c9a1whi
+  waits for it, then checks ready.edn git-sha == 2753f23, Q5Z-SHA, and chain-sl1r. If Q5Z-SHA
+  still reads 13d86bb after the pid exits: `echo 2753f23 > ~/acid/Q5Z-SHA` and
+  `setsid nohup bash ~/acid/chain-sl1r.sh` (GO-SL1R exists; chain preflight fails closed).
+- **The finder** (log 75573fa): 14 `inspect_clojure` match patterns over curtain-call folds.clj
+  found task-chase double-append (~721); sent to the fold builder a8fea285fa6efe9e5 (round two,
+  with the tagged identity). Census verb idea filed inb-f5ee92.
+- **Store branch** `bridge/store-idempotency` 70c823cf UNPUSHED (worktree
+  `~/src/curtaincall-cfp-store`): my review found the forever key refuses re-announce after
+  unannounce; builder a93309b7f3a7f903b is applying the generation-key fix; Sol red-team of the
+  diff running (`scratchpad/fold-review/sol-store-review.md`, waiter bfg99t98m); my own unit run
+  of 70c823cf in `~/tmp/store-unit.log` (waiter bs1ruu5m0). Push only after both.
+- **z7c** running on Anvil (chain-z7c, gate n=6 on R3). Score per z7b shape when `chain-z7c … done`.
+- Gene report regeneration after z7c.
+
