@@ -50,6 +50,17 @@
 (def analyzer-pressure-deferred-reason
   :clj-kondo-pressure-deferred)
 
+(defmethod test/report :summary
+  [event]
+  (let [test-count (:test event)
+        assertion-count (+ (:pass event) (:fail event) (:error event))
+        skip-count (get event :skip 0)]
+    (binding [*out* test/*test-out*]
+      (println
+        (format
+          "\nRan %d tests containing %d assertions; %d skips, %d failures, %d errors."
+          test-count assertion-count skip-count (:fail event) (:error event))))))
+
 (defmethod test/report ::analyzer-unavailable
   [{:keys [reason] :as event}]
   (if (= analyzer-pressure-deferred-reason reason)
@@ -115,6 +126,19 @@
     (is (= {:test 1 :pass 0 :fail 0 :error 1}
            @drift-counters))
     (is (str/includes? drift-output "provider-schema-drift"))))
+
+(deftest analyzer-summary-makes-skip-count-legible
+  (let [writer (java.io.StringWriter.)]
+    (binding [test/*test-out* writer]
+      (test/do-report {:type :summary
+                       :test 5
+                       :pass 8
+                       :fail 0
+                       :error 0
+                       :skip 4}))
+    (is (str/includes?
+          (str writer)
+          "Ran 5 tests containing 8 assertions; 4 skips, 0 failures, 0 errors."))))
 
 (deftest all-promised-move-snapshots-cold-lint-in-one-analyzer
   (let [root (fs/create-temp-dir {:prefix "clj-surgeon-move-contract-"})]
