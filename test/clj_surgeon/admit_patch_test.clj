@@ -297,7 +297,7 @@
                         "+b\n")
             result (admit/execute-request!
                      (stub-config root)
-                     {:patch escape :mode "commit" :verify "none"})]
+                     {:patch escape :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (some? (:error-type result)))
         (is (true? (:source-unchanged result))))
@@ -353,7 +353,7 @@
           (let [result (admit/execute-request!
                          (stub-config root)
                          {:patch non-source-target-patch
-                          :mode mode :verify "none"})]
+                          :mode mode :verify "none" :allow_partial true})]
             (is (false? (:ok result))
                 "a preview that returned ok would advertise a commit that refuses")
             (is (= :unsupported-patch-target (:error-type result)))
@@ -392,7 +392,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch stale-context-patch :mode "commit" :verify "none"})]
+                     {:patch stale-context-patch :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :patch-does-not-apply (:error-type result)))
         (is (= util-source (slurp (io/file root "src/app/util.clj")))))
@@ -443,7 +443,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch file-creation-patch :mode "commit" :verify "none"})]
+                     {:patch file-creation-patch :mode "commit" :verify "none" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (= "created" (:pre_image_binding result)))
@@ -671,7 +671,7 @@
                                    :admit-test-runner
                                    (fn [_ _] (reset! touched true) {:ran true})})
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none"})]
+                      :mode "commit" :verify "none" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (false? @touched))
@@ -756,9 +756,9 @@
       (doseq [[label params]
               [["preview" {:patch clean-multi-file-patch :verify "none"}]
                ["commit" {:patch clean-multi-file-patch
-                          :mode "commit" :verify "none"}]
+                          :mode "commit" :verify "none" :allow_partial true}]
                ["hazard refusal" {:patch duplicate-definition-patch
-                                  :mode "commit" :verify "none"}]]]
+                                  :mode "commit" :verify "none" :allow_partial true}]]]
         (testing label
           (let [result (admit/execute-request! (stub-config root) params)]
             (is (empty? (remove (set (keys result)) receipt-keys))
@@ -776,7 +776,7 @@
       (let [result (admit/execute-request!
                      (stub-config root)
                      {:patch duplicate-definition-patch
-                      :mode "commit" :verify "none"})]
+                      :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (false? (:committed result)))
         (is (true? (:source-unchanged result)))
@@ -801,7 +801,7 @@
       (let [result (admit/execute-request!
                      (stub-config root)
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none"})]
+                      :mode "commit" :verify "none" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (= :admit-patch! (:operation result)))
@@ -830,7 +830,7 @@
                             (fn [] (spit (io/file root "src/app/util.clj")
                                          drifted)))
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none"})]
+                      :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :source-hash-mismatch (:error-type result)))
         (is (true? (:source-unchanged result)))
@@ -847,7 +847,7 @@
       (write-sources! root base-sources)
       (doseq [params [{:patch clean-multi-file-patch :verify "none"}
                       {:patch duplicate-definition-patch
-                       :mode "commit" :verify "none"}]]
+                       :mode "commit" :verify "none" :allow_partial true}]]
         (admit/execute-request!
           (assoc (stub-config root)
                  :telemetry {:mode :metrics
@@ -870,11 +870,11 @@
     (try
       (write-sources! root base-sources)
       (doseq [params [{:patch "garbage" :verify "none"}
-                      {:patch stale-context-patch :mode "commit" :verify "none"}
+                      {:patch stale-context-patch :mode "commit" :verify "none" :allow_partial true}
                       {:patch non-source-target-patch
-                       :mode "commit" :verify "none"}
+                       :mode "commit" :verify "none" :allow_partial true}
                       {:patch duplicate-definition-patch
-                       :mode "commit" :verify "none"}]]
+                       :mode "commit" :verify "none" :allow_partial true}]]
         (testing (pr-str params)
           (let [result (admit/execute-request! (stub-config root) params)]
             (is (false? (:ok result)))
@@ -921,7 +921,7 @@
           (testing label
             (let [result (admit/execute-request!
                            (stub-config root)
-                           {:patch patch :mode "commit" :verify "none"})]
+                           {:patch patch :mode "commit" :verify "none" :allow_partial true})]
               (is (false? (:ok result)))
               (is (keyword? (:error-type result)))
               (is (false? (:committed result)))
@@ -936,7 +936,7 @@
                            (stub-config root)
                            {:patch (str "--- a/src/app/link.clj\n"
                                         "+++ b/src/app/link.clj\n" hunk)
-                            :mode mode :verify "none"})]
+                            :mode mode :verify "none" :allow_partial true})]
               (is (false? (:ok result)))
               (is (= :path-outside-project (:error-type result)))
               (is (= before (slurp victim))))))
@@ -949,7 +949,7 @@
                            "@@ -1,1 +1,1 @@\n-(ns app.core\n+(ns app.core2\n")
                 result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})]
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
             (is (false? (:ok result)))
             (is (= :duplicate-patch-target (:error-type result))
                 "an ambiguous target is refused, not discovered by a failed write")
@@ -975,7 +975,7 @@
       (let [result (admit/execute-request!
                      (stub-config root)
                      {:patch (str good-core stale-util)
-                      :mode "commit" :verify "none"})]
+                      :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :patch-does-not-apply (:error-type result)))
         (is (true? (:source-unchanged result)))
@@ -998,7 +998,7 @@
                                 :admit-before-commit!
                                 (fn [] (spit (io/file root target) drifted)))
                          {:patch clean-multi-file-patch
-                          :mode "commit" :verify "none"})]
+                          :mode "commit" :verify "none" :allow_partial true})]
             (is (false? (:ok result)))
             (is (= :source-hash-mismatch (:error-type result)))
             (is (true? (:source-unchanged result)))
@@ -1030,7 +1030,8 @@
           (let [result (admit/execute-request!
                          (stub-config root)
                          {:patch clean-multi-file-patch :mode "commit"
-                          :verify "none" :expect_pre_sha256 binding})]
+                          :verify "none" :allow_partial true
+                          :expect_pre_sha256 binding})]
             (is (:ok result))
             (is (true? (:committed result)))
             (is (= "bound" (:pre_image_binding result)))))
@@ -1110,7 +1111,7 @@
                        "+  (dec s))\n")
             result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})]
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :duplicate-definition (:error-type result)))
         (is (false? (:committed result)))
@@ -1175,7 +1176,7 @@
                           (apply str (repeat characters \z)))
                 result (admit/execute-request!
                          (stub-config root)
-                         {:patch huge :mode "commit" :verify "none"})]
+                         {:patch huge :mode "commit" :verify "none" :allow_partial true})]
             (is (false? (:ok result))
                 "an oversized payload must not escape as an exception")
             (is (= :patch-too-large (:error-type result)))
@@ -1320,7 +1321,7 @@
                        "@@ -2500,1 +2500,1 @@\n-NOPE\n+NOPE2\n")
             result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})
             bytes (write-refusal/json-bytes result)]
         (is (< (count patch) admit/max-patch-bytes)
             "the fixture is admitted, so the refusal is the thing under test")
@@ -1349,7 +1350,7 @@
       (let [result (admit/execute-request!
                      (stub-config configured)
                      {:patch clean-multi-file-patch :mode "commit"
-                      :verify "none"
+                      :verify "none" :allow_partial true
                       :workspace_root (.getPath elsewhere)})]
         (is (:ok result))
         (is (= (.getCanonicalPath elsewhere) (:workspace-root result))
@@ -1604,7 +1605,7 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch clean-multi-file-patch
-                        :mode "commit" :verify "none"})]
+                        :mode "commit" :verify "none" :allow_partial true})]
           (is (= :unverified (:verification_status result)))
           (is (= [:verification-not-requested] (:verification_reasons result)))
           (is (:ok result) "nothing was asked for, so nothing is owed")))
@@ -1780,7 +1781,7 @@
             "and over it measured in bytes, which is the meter that matters")
         (let [result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none"})]
+                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
           (is (false? (:ok result)))
           (is (= :patch-too-large (:error-type result)))
           (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
@@ -1915,7 +1916,7 @@
           (let [result (admit/execute-request!
                          (stub-config root)
                          {:patch clean-multi-file-patch
-                          :mode "commit" :verify "none"})]
+                          :mode "commit" :verify "none" :allow_partial true})]
             (is (true? (:committed result)))
             (is (= expected (:lock_scope result))
                 "the guarantee a commit actually had is on the receipt")
@@ -1945,7 +1946,7 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch clean-multi-file-patch
-                        :mode "commit" :verify "none"})]
+                        :mode "commit" :verify "none" :allow_partial true})]
           (is (false? (:ok result)))
           (is (= :workspace-lock-unavailable (:error-type result))
               "not an unexplained tool failure")
@@ -1964,7 +1965,7 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch clean-multi-file-patch
-                        :mode "commit" :verify "none"})]
+                        :mode "commit" :verify "none" :allow_partial true})]
           (is (false? (:ok result)))
           (is (= :workspace-lock-unavailable (:error-type result)))
           (is (= core-source (slurp (io/file root "src/app/core.clj")))))
@@ -2220,7 +2221,7 @@
                          "*** End Patch\n")
               result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none"})]
+                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
           (is (:ok result) (pr-str (:error result)))
           (is (= ["src/app/core.clj"] (mapv :file (:files result)))
               "the receipt names the project-relative path")
@@ -2235,7 +2236,7 @@
                              "-(def x 1)\n+(def x 2)\n*** End Patch\n")
                   result (admit/execute-request!
                            (stub-config root)
-                           {:patch patch :mode "commit" :verify "none"})]
+                           {:patch patch :mode "commit" :verify "none" :allow_partial true})]
               (is (false? (:ok result)))
               (is (= :invalid-relative-source-path (:error-type result))
                   "normalisation never widens confinement")
@@ -2257,6 +2258,14 @@
       (.mkdirs (io/file root ".clj-surgeon"))
       (spit (io/file root ".clj-surgeon" "focused-test.edn")
             (pr-str {:command ["x" "{snapshot}" "{report}" "{namespaces}"]}))
+      ;; @spec MCP-OP-ADMIT-119
+      ;; This workspace ships a profile, so `allow_partial` cannot waive its
+      ;; commit -- the waiver is for a tree with no profile at all. The commit
+      ;; has to earn a complete verification, which is what the stub runner
+      ;; gives once the sources have suites to attribute results to.
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"
+                                  "test/app/util_test.clj" "(ns app.util-test)\n"))
       (git "init" "-q" ".")
       (git "add" "-A")
       (git "commit" "-qm" "base")
@@ -2265,7 +2274,7 @@
       (let [result (admit/execute-request!
                      (stub-config root)
                      {:patch clean-multi-file-patch
-                      :mode "commit" :verify "none"})
+                      :mode "commit" :verify "focused"})
             status (->> (str/split-lines (str (:out (git "status" "--short"))))
                         (remove str/blank?)
                         (map str/trim)
@@ -2354,7 +2363,7 @@
                 "preview still writes nothing"))
           (let [result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})]
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
             (is (:ok result))
             (is (true? (:committed result)))
             (is (str/includes? (slurp (io/file root "src/app/clock.clj"))
@@ -2372,7 +2381,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})]
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
         (is (false? (:ok result)))
         (is (= :target-already-exists (:error-type result)))
         (is (= core-source (slurp (io/file root "src/app/core.clj")))
@@ -2394,7 +2403,7 @@
                          "*** End Patch\n")
               result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none"})]
+                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
           (is (false? (:ok result)))
           (is (= :duplicate-definition (:error-type result)))
           (is (not (.exists (io/file root "src/app/dup.clj"))))))
@@ -2405,7 +2414,7 @@
                          "*** End Patch\n")
               result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none"})]
+                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
           (is (false? (:ok result)))
           (is (= :unreadable-post-image (:error-type result)))
           (is (not (.exists (io/file root "src/app/bad.clj"))))))
@@ -2426,7 +2435,7 @@
           (write-sources! root base-sources)
           (let [result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})]
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
             (is (:ok result) (pr-str (:error result)))
             (is (= [:delete] (mapv :operation (:files result))))
             (is (= ["src/app/util.clj::app.util" "src/app/util.clj::clamp"]
@@ -2451,7 +2460,7 @@
                             "\n(defn go [x] (util/clamp x 0 9))\n")})
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})
             hazard (hazard-of result :namespace-form-removed)]
         (is (false? (:ok result)))
         (is (= :namespace-form-removed (:error-type result)))
@@ -2469,7 +2478,7 @@
         (let [result (admit/execute-request!
                        (stub-config root)
                        {:patch "*** Begin Patch\n*** Delete File: src/app/util.clj\n*** End Patch\n"
-                        :mode "commit" :verify "none"})]
+                        :mode "commit" :verify "none" :allow_partial true})]
           (is (:ok result))
           (is (empty? (:hazards result)))
           (is (not (.exists (io/file root "src/app/util.clj")))))
@@ -2497,7 +2506,7 @@
             "a move still reports the edit it carries"))
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})]
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
         (is (:ok result))
         (is (true? (:committed result)))
         (is (not (.exists (io/file root "src/app/util.clj")))
@@ -2526,7 +2535,7 @@
       (write-sources! root base-sources)
       (let [result (admit/execute-request!
                      (stub-config root)
-                     {:patch patch :mode "commit" :verify "none"})]
+                     {:patch patch :mode "commit" :verify "none" :allow_partial true})]
         (is (:ok result) (pr-str (:error result)))
         (is (true? (:committed result)))
         (is (= [:add :update :delete] (mapv :operation (:files result))))
@@ -2566,7 +2575,7 @@
                            "+(defn h [] 99)\n")
                 result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})]
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
             (is (false? (:ok result))
                 "this used to commit a no-op and report success")
             (is (= :hunk-truncated (:error-type result)))
@@ -2586,7 +2595,7 @@
                            "-(defn g [] 2)\n+(defn g [] 8)\n")
                 result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})]
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})]
             (is (false? (:ok result))
                 "half a change is not a success")
             (is (= :hunk-truncated (:error-type result)))
@@ -2653,7 +2662,7 @@
           (doseq [mode ["preview" "commit"]]
             (let [result (admit/execute-request!
                            (stub-config root)
-                           {:patch patch :mode mode :verify "none"})]
+                           {:patch patch :mode mode :verify "none" :allow_partial true})]
               (is (false? (:ok result))
                   "a receipt that reports success for no change is a false green")
               (is (= :no-op-patch (:error-type result)))
@@ -3192,7 +3201,7 @@
         (write-sources! root {"src/app/a.clj" src})
         (let [result (admit/execute-request!
                        (stub-config root)
-                       {:patch patch :mode "commit" :verify "none"})]
+                       {:patch patch :mode "commit" :verify "none" :allow_partial true})]
           (is (:ok result) (str "refused: " (:error result)))
           (is (true? (:committed result)))
           (is (= 1 (count (:hazards result)))
@@ -3241,7 +3250,7 @@
           (write-sources! root {"src/app/a.clj" pre})
           (let [result (admit/execute-request!
                          (stub-config root)
-                         {:patch patch :mode "commit" :verify "none"})
+                         {:patch patch :mode "commit" :verify "none" :allow_partial true})
                 lift (get-in result [:next_call :lifted_by])]
             (is (false? (:ok result)))
             (is (= :require-removed (:error-type result)))
@@ -3277,3 +3286,200 @@
           hazard (hazard-of (require-delta pre post) :require-removed)]
       (is (= :refusal (:class hazard)))
       (is (= [:fully-qualified] (mapv :via (:reference-sites hazard)))))))
+
+;; ---------------------------------------------------------------------------
+;; Rung L: the ladder out of the gate
+;; ---------------------------------------------------------------------------
+
+(def ^:private z8-absolute-prefix "/home/tester/acid/wt/z8-g1-Z-0/")
+
+(defn- z8-patch
+  "One of the three rung-L patches that committed at a non-complete status.
+
+  Verbatim cohort bytes but for the absolute path prefix, which is re-homed
+  onto this test's workspace root; the gate relativizes any absolute path that
+  lies inside its root, so the grammar, hunks and content the gate sees are the
+  cohort's own."
+  [root]
+  (str/replace (slurp (io/file field-diff-dir
+                               "z8-commit-z8-g1-Z-0-67.patch"))
+               z8-absolute-prefix
+               (str (.getPath root) "/")))
+
+;; @spec MCP-OP-ADMIT-120
+(deftest a-partial-status-from-rung-l-cannot-commit
+  (testing "the field call, verbatim: mode commit, verify none"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch (z8-patch root)
+                        :mode "commit" :verify "none"})]
+          (is (false? (:ok result))
+              "z8 committed this exact call at verification_status unverified")
+          (is (false? (:committed result)))
+          (is (false? (:mutation_attempted result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (= :unverified (:verification_status result)))
+          (is (not (.exists (io/file root "src/marvin_voice_remote/clock.clj")))
+              "the file the cohort wrote must not appear"))
+        (finally (delete-tree! root)))))
+  (testing "the refusal proposes the verify that could lift it"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch (z8-patch root)
+                        :mode "commit" :verify "none"})]
+          (is (= "focused" (get-in result [:next_call :arguments :verify]))))
+        (finally (delete-tree! root)))))
+  (testing "a focused run that comes back partial cannot commit either"
+    ;; clock.clj is deliberately unmapped in the rung-L profile, so the focused
+    ;; selection is empty and the status is partial on no-mapped-test-namespace
+    ;; -- the reason 13 of z8's 17 refusals carried.
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :focused-test {:command ["sh" "-c" "exit 0" "runner"
+                                                 "{snapshot}" "{report}"
+                                                 "{namespaces}"]}
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch (z8-patch root)
+                        :mode "commit" :verify "focused"})]
+          (is (= :partial (:verification_status result)))
+          (is (false? (:committed result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (not (.exists (io/file root "src/marvin_voice_remote/clock.clj")))))
+        (finally (delete-tree! root)))))
+  (testing "allow_partial does not rescue it while a profile exists"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root base-sources)
+        (write-focused-profile! root {:command ["sh" "-c" "exit 0" "runner"
+                                                "{snapshot}" "{report}"
+                                                "{namespaces}"]})
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch (z8-patch root) :mode "commit"
+                        :verify "focused" :allow_partial true})]
+          (is (false? (:committed result)))
+          (is (= :verification-incomplete (:error-type result))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-118
+;; @spec MCP-OP-ADMIT-119
+;; @spec MCP-OP-ADMIT-120
+(deftest no-commit-is-possible-at-any-non-complete-status
+  (let [statuses [:partial :unverified]
+        ;; Every reason the runner, the evidence check, the namespace plan or
+        ;; the profile resolver can put on `[:tests :reason]`, plus nil.
+        reasons [nil
+                 :no-focused-test-profile
+                 :focused-test-profile-has-no-command
+                 :test-command-not-snapshot-bound
+                 :test-command-not-report-bound
+                 :no-mapped-test-namespace
+                 :no-snapshot-venue
+                 :focused-namespace-missing
+                 :verification-runner-failed
+                 :report-file-absent
+                 :unreadable-test-report
+                 :report-namespaces-do-not-match
+                 :no-test-evidence
+                 :tests-not-run
+                 :tests-failed
+                 :runner-exit-nonzero
+                 :verification-not-requested]]
+    (testing "no status short of complete may commit, whatever the reason"
+      (doseq [status statuses
+              reason reasons
+              verify ["focused" "none"]
+              allow? [true false]
+              absent? [true false]]
+        (let [verification {:verification_status status
+                            :verification_reasons (if reason [reason] [])
+                            :tests (cond-> {:profile_absent absent?}
+                                     reason (assoc :reason reason))}
+              refusal (admit/incomplete-commit-refusal-reason
+                        verification verify allow?)
+              waived? (and allow? absent?)]
+          (if waived?
+            (is (nil? refusal)
+                (str "the one waiver: " status " " reason))
+            (is (some? refusal)
+                (str "must refuse: status=" status " reason=" reason
+                     " verify=" verify " allow_partial=" allow?
+                     " profile_absent=" absent?))))))
+    (testing "complete always commits"
+      (doseq [verify ["focused" "none"]
+              allow? [true false]
+              absent? [true false]]
+        (is (nil? (admit/incomplete-commit-refusal-reason
+                    {:verification_status :complete
+                     :tests {:profile_absent absent?}}
+                    verify allow?)))))))
+
+;; @spec MCP-OP-ADMIT-118
+(deftest a-profile-that-names-no-command-is-not-an-absent-profile
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (write-focused-profile! root {:namespaces {"app.core" ["app.core-test"]}})
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"))
+      (let [result (admit/execute-request!
+                     {:project-root (.getPath root)
+                      :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "focused" :allow_partial true})]
+        (is (= :focused-test-profile-has-no-command
+               (get-in result [:tests :reason]))
+            "a tree that ships a profile and no command is its own state")
+        (is (false? (get-in result [:tests :profile_absent])))
+        (is (= :unverified (:verification_status result)))
+        (is (false? (:committed result))
+            "allow_partial is written for an absent profile, not a broken one")
+        (is (= :verification-incomplete (:error-type result))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-114
+(deftest the-z7-sewing-patch-the-gate-refused-now-admits
+  ;; Cohort z7 (rung R3) refused 13 of 14 gate calls with `require-removed`.
+  ;; This is one of the two payloads recoverable from those rollouts, verbatim
+  ;; but for the absolute path prefix: an extraction that lifts the exact
+  ;; verification profile into its own namespace and sews the requires shut.
+  (let [root (temp-dir)
+        pre-image (io/file field-diff-dir "z7-pre-image")
+        files ["src/clj_surgeon/mcp_change_buffer.clj"
+               "src/clj_surgeon/mcp_formatter.clj"
+               "src/clj_surgeon/mcp_tool.clj"
+               "test/clj_surgeon/mcp_change_buffer_test.clj"]]
+    (try
+      (doseq [f files]
+        (let [target (io/file root f)]
+          (.mkdirs (.getParentFile target))
+          (io/copy (io/file pre-image f) target)))
+      (let [patch (str/replace (slurp (io/file field-diff-dir
+                                               "z7-g2-Z-2-sewing.patch"))
+                               #"/home/tester/acid/wt/z7-g\d-Z-\d/"
+                               (str (.getPath root) "/"))
+            result (admit/execute-request!
+                     {:project-root (.getPath root)
+                      :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                     {:patch patch :mode "preview" :verify "none"})
+            notes (filterv #(= :require-removed (:type %)) (:hazards result))]
+        (is (:ok result) (str "the field refused this: " (:error result)))
+        (is (= 5 (count (:files result))))
+        (is (= 2 (count notes)))
+        (is (every? #(= :note (:class %)) notes)
+            "both are dead-require removals the extraction's sewing made")
+        (is (= #{["clj-surgeon.mcp-process"] ["clj-surgeon.mcp-change-buffer"]}
+               (set (map :libraries notes))))
+        (is (empty? (form-identity/refusal-hazards (:hazards result)))
+            "nothing in this patch is refusal-class any more"))
+      (finally (delete-tree! root)))))

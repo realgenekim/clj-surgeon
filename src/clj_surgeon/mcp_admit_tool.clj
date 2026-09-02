@@ -521,8 +521,17 @@
   (let [{:keys [command timeout-ms profile-source] :as profile}
         (resolve-focused-test config)]
     (cond
-      (not (and (map? profile) (vector? command) (seq command)))
+      ;; @spec MCP-OP-ADMIT-118
+      ;; These two are NOT the same state and must never share a reason. One
+      ;; is a tree that declares no focused suite; the other is a tree that
+      ;; declares one and misconfigures it. The commit waiver exists only for
+      ;; the first, and while they shared a name the second inherited it.
+      (nil? profile)
       {:ran false :reason :no-focused-test-profile :namespaces (vec namespaces)}
+
+      (not (and (map? profile) (vector? command) (seq command)))
+      {:ran false :reason :focused-test-profile-has-no-command
+       :profile-source profile-source :namespaces (vec namespaces)}
 
       (not-any? #{"{snapshot}"} command)
       {:ran false :reason :test-command-not-snapshot-bound
@@ -647,7 +656,9 @@
   delta carried a commit past a suite that never ran."
   #{:verification-runner-failed :report-file-absent
     ;; @spec MCP-OP-ADMIT-111
-    :focused-namespace-missing})
+    :focused-namespace-missing
+    ;; @spec MCP-OP-ADMIT-118
+    :focused-test-profile-has-no-command})
 
 ;; @spec MCP-OP-ADMIT-082
 (defn verification-status
@@ -704,7 +715,11 @@
         profile-provenance {:profile_source (or (:profile-source profile) :none)
                             :profile_source_namespaces
                             (or (:namespaces-source profile) :path-convention)
-                            :focused_namespaces per-file}
+                            :focused_namespaces per-file
+                            ;; @spec MCP-OP-ADMIT-119
+                            ;; The commit waiver's precondition, observed
+                            ;; directly at the only place that can see it.
+                            :profile_absent (nil? profile)}
         lint (lint-runner config clojure-images)
         snapshot (temp-tree! "clj-surgeon-admit-snapshot")]
     (try
@@ -1137,13 +1152,29 @@
   that ships no focused-test profile at all cannot produce test evidence and
   is not hiding a failure. A profile that exists and did not deliver is
   exactly the case the caller must not be able to wave through, so the waiver
-  is denied there."
-  [verification verify allow-partial?]
-  (when (and (= "focused" verify)
-             (not= :complete (:verification_status verification)))
-    (let [reason (get-in verification [:tests :reason])]
-      (when-not (and allow-partial? (= :no-focused-test-profile reason))
-        (or reason :verification-incomplete)))))
+  is denied there -- and it is denied on the OBSERVED absence of a profile,
+  never on a runner reason that happens to say `no-focused-test-profile`,
+  because a tree that ships a profile declaring no `:command` reported that
+  same reason and would have inherited a waiver written for a different state.
+
+  The requirement does not depend on `verify`, and that is the whole lesson of
+  rung L. Leaving `verify: \"none\"` as an explicit waiver looked principled --
+  the caller declined the check, the receipt said `unverified`, nothing was
+  hidden. What it actually bought was a third rung on a ladder: cohort z8's
+  agents were told `mode commit, verify focused`, met a refusal, tried
+  `allow_partial: true`, met a refusal, and then sent `verify: \"none\"` and
+  got their write. Three of the six commits on that rung landed that way, and
+  every one of the three was the only `verify: \"none\"` call in its run. A
+  gate a caller can turn off is a caller's gate. Verification may still be
+  declined -- in `preview`, which is where an unverified answer belongs."
+  [verification _verify allow-partial?]
+  (when (not= :complete (:verification_status verification))
+    (let [reason (or (get-in verification [:tests :reason])
+                     (first (:verification_reasons verification))
+                     :verification-incomplete)
+          profile-absent? (true? (get-in verification [:tests :profile_absent]))]
+      (when-not (and allow-partial? profile-absent?)
+        reason))))
 
 (defn- execute-in-context!
   [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
@@ -1339,10 +1370,16 @@
                             (let [verification
                                   (if (= "focused" verify)
                                     (verify-snapshot! config images verify)
+                                    ;; @spec MCP-OP-ADMIT-119
                                     {:verification_status :unverified
                                      :verification_reasons
                                      [:verification-not-requested]
-                                     :verification_complete false})
+                                     :verification_complete false
+                                     :tests {:ran false :passed 0 :failed 0
+                                             :skipped 0 :namespaces []
+                                             :profile_absent
+                                             (nil? (resolve-focused-test
+                                                     config))}})
                                   blocked (::blocking verification)
                                   verification (dissoc verification ::blocking)]
                               (cond
@@ -1392,8 +1429,14 @@
                                                "repair "
                                                (name reason)
                                                " before committing.")
+                                          ;; @spec MCP-OP-ADMIT-120
+                                          ;; Propose the verify that can lift
+                                          ;; this, not the one that just
+                                          ;; failed to.
                                           :next_call
-                                          (next-call context "preview"
+                                          (next-call (assoc context
+                                                            :verify "focused")
+                                                     "preview"
                                                      :verification-incomplete)}))
 
                                 (= "preview" mode)
