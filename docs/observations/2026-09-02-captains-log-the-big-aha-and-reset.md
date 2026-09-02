@@ -1044,3 +1044,63 @@ What survived: scoping is real (l1 230 bytes vs 569), gap preservation is struct
 gestures stay exempt (`require_change` 0 formatter calls, drift 0), tests fail first, both suites
 on exactly the base failure sets.
 
+
+## 17:23Z — z5-replay and z4: the gate commits without evidence; admit-gate withdrawn from review
+
+Receipts on Anvil: `z5-replay.md`, `z4-score.md`, `z3-score.md` § acid-7/acid-9 (scorer; new
+scripts `z5-mcp-call.py`, `z5-show.py`, `z5-acid-detail.sh`, `z4-score.py`; port 7888 never
+contacted; fresh worktrees `z5-replay-N1`/`-N2` at ab267f9, no live arm touched).
+
+**z5-replay, prediction FAILED both ways.** Prediction on record (a595796): both
+stale-onset-defective native diffs refused. Round 1, the frozen diffs as-is: refused
+`:hunk-truncated` at the SECOND file section on `index 9c3f3ec..5eef8df 100644`; the
+dual-grammar parser survives the first `index` line and dies on the next. Not a finding about the
+change; a second parser hole on real git bytes. Round 2, four `index` lines stripped: both
+ADMITTED, `ok true`, `hazards 0`, `verification_status partial`, `verification_reasons
+["no-test-evidence"]`, `tests.ran true, tests-run 0, exit 1, report_written false`. Round 3,
+commit mode: `committed true` on the same payload. **The gate wrote a defective change to disk
+with zero test evidence and reported ok.** And independently: the focused profile is blind to
+this defect; run by hand in the committed worktree, `68 tests, 530 assertions, 0 failures`.
+Fixing the collector would not have made this a catch.
+
+**z4, rung L, the 21-owner hoist, n=4 per arm.**
+
+| arm | wall (sd) | returns | actions | tokens | admit calls / refusals | verification | apply_patch fallback | acceptance | churn |
+|---|---|---|---|---|---|---|---|---|---|
+| Z mandated | 170.2 (85.7) | 9.25 | 7.25 | 416k | 9 / 3 (33 %) | partial ×6, unverified ×3, **complete ×0** | 0/4 | 4/4 | +59/−34 |
+| F optional | 156.2 (24.7) | 9.25 | 7.50 | 378k | 0 | – | 1.75 | 4/4 | +59/−34 |
+| N native | 148.8 (29.0) | 9.25 | 7.50 | 369k | – | – | 1.75 | 4/4 | +59/−34 |
+
+Total convergence: identical returns, canonical churn in all twelve diffs, 12/12 acceptance,
+Welch p 0.64 and 0.69. On a tightly specified mechanical refactor the tooling stops mattering.
+Every one of Z's four commits landed at `partial`/`no-test-evidence`: four writes to disk with
+no passing test behind them. Refusals: `patch-does-not-apply` ×2 (a `reducer_session.clj` hunk),
+`invalid-admit-request` ×1 (`expect_pre_sha256` must name exactly the touched files). Free-choice
+adoption 0/4, and none of the four even ran the discovery probe; **0 of 8 across z3 and z4.**
+Predictions: 1 PASS (wall within 1 sd), 4 FAIL (refusals 33 %, adoption 0, post-write 0.50 not
+below 0.50, hazards 0). stale-onset: all twelve UNDETERMINED, correctly; rung L touches no
+`onsetReady` code.
+
+**acid-7 / acid-9 named.** acid-7: the server must render the heartbeat interval as a literal
+(`?hbms=3100` → `3100`; default `2500`); every Z run rendered neither (4/4; F 2/4; N 1/4).
+acid-9: both buttons' `.disabled` derived from `recording`; two Z runs gated on `enabled` or
+wired only CANCEL. stale_onset asks "is what you wrote correct" (control-flow ordering inside
+`onsetReady`); acid-7/9 ask "did you write all of it, on the server side". The Z arms wrote
+correct code and less of the spec surface. One quality number covering both does not exist in
+this data; the two meters are not near each other.
+
+**Decisions.** (1) `bridge/admit-gate` 1ca44b4 WITHDRAWN from the mayor's review queue: a
+verifier that writes on `partial` can falsely authorize; unshipped (my branch, my port), so no
+cord. Fix dispatched on the branch: commit is a typed refusal `:verification-incomplete` on
+anything but complete; "runner invoked, exit non-zero, no report" is `:verification-runner-failed`
+carrying the runner tail, never partial; git extended headers accepted (binary a typed refusal);
+the two frozen native diffs become real-bytes fixtures; the `expect_pre_sha256` refusal lists both
+file sets; root cause of the missing evidence on z4/z5 to be established from the Anvil
+worktrees (candidate: `bin/gate-report.clj` is installed per arm by the runner and absent from a
+fresh worktree; the payload must name the missing thing). (2) Hazard-catching cannot come from a
+test profile: the defect the predicate names passes the focused suite. The stale-onset predicate
+belongs inside the gate as a structural hazard detector over the patched forms, a typed refusal,
+the rung-5 ratchet, and the homoiconic square. Filed for the next gate round, after the fail-open
+fix. (3) z3's mandated-arm win stands as stated (its five commits were `complete`), with the new
+caveat that the same server admits on `partial` elsewhere; the win is on cost, not yet on safety.
+
