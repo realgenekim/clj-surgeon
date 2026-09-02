@@ -67,6 +67,15 @@ Fan-out is the per-form write API's worst case, not its best: one patch does wha
 writes do, and two shipped diffs shipped nine times the line churn because the tool
 re-prints every form it edits and reformats the untouched remainder.
 
+## The cheapest win of the summer (measured after you woke)
+
+Half of what agents do on a task, nothing asked for: git diff in 80 of 81 runs, git status,
+bd create-claim-close arcs on throwaway worktrees, hand-run syntax probes. One paragraph
+forbidding them (native, rung M, nine against twelve) cut wall 27 percent, actions 24
+percent, tokens 32 percent, ritual sub-commands 91 percent, with acceptance flat (p 0.91).
+Naming substitutes instead of forbidding did nothing. Decision for you: put the paragraph in
+delegation prompts for throwaway worktrees; the text is in the big-aha log.
+
 ## The ideal tool shape (design position, logged at your request, receipt a3d2375)
 
 Not a better per-form editor. Three shapes, each with the measurement that would confirm

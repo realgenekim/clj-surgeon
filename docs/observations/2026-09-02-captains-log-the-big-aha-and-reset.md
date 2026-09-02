@@ -505,3 +505,33 @@ report is credited complete; two adjacent top-level reader conditionals defining
 on disjoint platforms are a false duplicate; the receipt does not disclose lock scope. All
 three routed as round four; then the branch is committed and pushed as a branch for
 surgeon1 and the mayor to review, and 7894 stands up on Anvil for arm Z.
+
+## rt2, pooled with rt1: the forbid paragraph is the cheapest win of the summer (14:21Z)
+
+| metric (rung M) | forbid H (n=9) | native N (n=12) | delta | Welch p |
+|---|---|---|---|---|
+| total actions | 15.2 | 20.1 | -24 percent | 0.0065 |
+| non-test actions | 6.8 | 11.2 | -39 percent | under 0.0001 |
+| wall s | 259 | 353 | -27 percent | under 0.0001 (d = -2.0) |
+| input tokens | 0.88 M | 1.30 M | -32 percent | 0.0012 |
+| unmandated sub-commands | 1.44 | 15.25 | -91 percent | under 0.0001 (d = -2.8) |
+| acceptance failed | 1.78 | 1.83 | flat | 0.91 |
+
+All nine forbid runs sit between 1 and 2 unmandated sub-commands; native's range is 9 to 30.
+Paired by wave, the forbid arm beat its own wave's native on all four throughput measures
+in all three shared waves. Classes: bd, git, repl-probe and js-check erased; post-patch
+confirmation cut from 8.2 to 1.3 per run. Name-the-substitutes (n=3) stays at 12.0, having
+moved only the classes it said do not exist. Under the conservative per-run two-sd screen
+only the sub-command cut clears; on a means test at n=9 against 12 every throughput metric
+separates; acceptance is the tightest null of the night. Killing ritual costs no correctness.
+
+Doctrine verdict: ship the forbid-and-explain paragraph in delegation prompts for throwaway
+worktrees, scoped to where its three premises hold (no reviewer, no beads workflow, a gate
+that performs the JS check), sold as "kills ritual, cheaper as a side effect, costs no
+correctness". For scale: this is a larger wall reduction on native than anything Surgeon
+ever measured in either direction, from one paragraph. The paragraph, verbatim as run:
+
+> This worktree is throwaway and has no reviewer and no beads workflow: do not run bd, do
+> not run git status or git diff, do not re-read a file you just patched, do not hand-run
+> clojure -M -e syntax probes; the apply_patch result is your verification of the edit and
+> the pages gate performs the JS check. Every extra command costs a full model turn.
