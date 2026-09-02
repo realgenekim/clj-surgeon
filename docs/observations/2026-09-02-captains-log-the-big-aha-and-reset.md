@@ -269,3 +269,31 @@ upgrades "slower" to "harmful", now stated with the rigour the closing round ask
 Why it matters beyond the number: the acceptance suite passed all six defective diffs, so the
 defect class is invisible to markers and visible only to a parsed pre-and-post comparison,
 which is the gate's job; the arm Z cohort measures whether the gate catches it in situ.
+
+## Close-losers round two, and a correction to the churn mechanism (13:26Z)
+
+All three red-team findings fixed with witnesses MCP-OP-CLOSE-001..016 that drive the
+production entry path: keys normalised once at the refusal's entry (the strongest proof was an
+existing test that had been committing the exact closed loser through the real path and
+passing; it is now the refusal's witness); the drift oracle is positional (every untouched gap
+must sit at its reference offset, a changed span length is :unlocatable and fails closed);
+all four restaging actions enumerated; the refusal's next_call replays to success (CLOSE-016).
+Suite: 391 tests, 4016 assertions, one pre-existing failure.
+
+**Correction to the 241e1bb receipt ("Surgeon's printer re-emits the whole file").** The
+builder's direct probe shows the compiler splices and preserved every byte outside the span
+for both loser shapes. The whole-file reformat came from mcp-tool's prepare-compiled! running
+`standard-clojure-style fix` on the entire staged file, a formatter Surgeon itself invokes,
+installed only when the request is not an editor gesture. That reproduces the measured 3 of 3
+against 0 of 4 separation exactly, Y-5's zero churn included. The earlier receipt ruled a
+formatter out by counting the agent's tool calls, and was blind to Surgeon's own subprocess:
+the receipt-blind-to-subject class, in my own analysis. Bead 46o's fix is therefore smaller
+than "splice, never re-print": stop whole-file formatting on the changes route, or format
+only the edited span. Preview mode remains unproven (both change contexts hardcode commit) and
+the design doc says so rather than claiming it.
+
+Two decisions above the builder's level, for Gene and surgeon1: the drift gate now refuses any
+changes-route commit on a file the formatter would reformat, which closes the churn but the
+real fix may be to stop restaging; and a namespace-owner insertion has no complete redirect
+because from/to take one form and require_change is bound to symbol_migration, so those
+refusals name the missing field rather than hand back a runnable call.
