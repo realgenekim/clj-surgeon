@@ -14,6 +14,16 @@
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute)))
 
+(deftest outline-schema-advertises-the-non-default-string-symbol-projection
+  (let [outline-route (get-in inspect-tool/typed-inspect-schema
+                              [:properties "requests" :items :oneOf 2])]
+    (is (= {:type "boolean" :default false}
+           (select-keys
+             (get-in outline-route
+                     [:properties "include_string_symbols"])
+             [:type :default])))
+    (is (not-any? #{"include_string_symbols"} (:required outline-route)))))
+
 (defn- temp-dir
   []
   (.toFile

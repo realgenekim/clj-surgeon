@@ -63,6 +63,51 @@
     (is (= :boolean (:reason result)))
     (is (= ["requests" 0 "include_source"] (:path result)))))
 
+(deftest validates-optional-string-symbol-outline-projection
+  (let [request {"requests" [{"id" "outline" "operation" "outline"
+                              "file" "src/example.clj"
+                              "include_string_symbols" true}]
+                 "expect" {"requests" 1 "files" 1}}
+        result (inspect/validate-inspect-params request)]
+    (is (:ok result))
+    (is (true? (get-in result
+                       [:params :requests 0 :include-string-symbols]))))
+  (let [request {"requests" [{"id" "outline" "operation" "outline"
+                              "file" "src/example.clj"
+                              "include_string_symbols" "true"}]
+                 "expect" {"requests" 1 "files" 1}}
+        result (inspect/validate-inspect-params request)]
+    (is (false? (:ok result)))
+    (is (= :boolean (:reason result)))
+    (is (= ["requests" 0 "include_string_symbols"] (:path result)))))
+
+(deftest outline-string-symbols-are-gated-and-default-output-is-identical
+  (let [source (str "(ns example)\n"
+                    "(defn- page [] \"function onsetReady(e){}\")\n")
+        base-request {"requests" [{"id" "outline" "operation" "outline"
+                                   "file" "src/example.clj"}]
+                      "expect" {"requests" 1 "files" 1}}
+        evaluate (fn [raw]
+                   (inspect/evaluate-snapshots
+                     (get-in (inspect/validate-inspect-params raw) [:params])
+                     {"src/example.clj"
+                      (snapshot "src/example.clj" source)}))
+        absent (evaluate base-request)
+        explicit-off (evaluate
+                       (assoc-in base-request
+                                 ["requests" 0 "include_string_symbols"] false))
+        requested (evaluate
+                    (assoc-in base-request
+                              ["requests" 0 "include_string_symbols"] true))]
+    (is (= absent explicit-off)
+        "absent and explicit false produce identical structured bytes")
+    (is (= [{:name "onsetReady" :kind "function" :line 2 :owner "page"}]
+           (get-in requested
+                   [:results 0 :outline :forms 0 :string_symbols])))
+    (is (str/includes? (inspect/concise-summary
+                         (assoc requested :elapsed_ms 0))
+                       "1 string symbol"))))
+
 (deftest rejects-schema-and-cardinality-errors-with-exact-paths
   (doseq [[label request reason path]
           [[:top-not-map [] :expected-object []]

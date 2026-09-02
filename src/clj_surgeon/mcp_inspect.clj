@@ -26,7 +26,7 @@
 (def ^:private common-request-fields #{"id" "operation" "file"})
 (def ^:private operation-fields
   {"forms" (into common-request-fields ["forms" "expect" "include_source"])
-   "outline" common-request-fields
+   "outline" (conj common-request-fields "include_string_symbols")
    "match" (into common-request-fields ["match" "inside" "expect"])
    "xray" (conj common-request-fields "expression")})
 (def ^:private operation-required
@@ -225,7 +225,11 @@
                                (conj path "include_source")))))
 
           "outline"
-          {:id id :operation operation :file file}
+          (cond-> {:id id :operation operation :file file}
+            (present? request "include_string_symbols")
+            (assoc :include-string-symbols
+                   (boolean! (field request "include_string_symbols")
+                             (conj path "include_string_symbols"))))
 
           "match"
           (cond-> {:id id :operation operation :file file
@@ -516,7 +520,10 @@
    :file_hash (:hash snapshot)
    :source_character_count 0
    :outline (json-data
-              (outline/outline-source (:file request) (:source snapshot)))})
+              (outline/outline-source
+                (:file request) (:source snapshot) {}
+                {:include-string-symbols
+                 (:include-string-symbols request)}))})
 
 (defn- match-result
   [request snapshot]
@@ -775,7 +782,11 @@
       (let [forms (:forms outline)]
         (str "  " (:id result) ": " (:lines outline) " lines · "
              (:form_count outline) " forms · first " (:name (first forms))
-             " · last " (:name (last forms)))))
+             " · last " (:name (last forms))
+             (when (some #(contains? % :string_symbols) forms)
+               (str " · "
+                    (plural (reduce + 0 (map #(count (:string_symbols %)) forms))
+                            "string symbol"))))))
 
     "match"
     (when (:id result)
