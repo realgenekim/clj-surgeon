@@ -1707,3 +1707,20 @@ All six gates green. The 85 s difference is 1.0 sd of the floor and means nothin
 cohort's purpose is the typed-refusal ledger (does ambiguous-insertion-gap appear on the
 fixed main at all, and does anything new appear), plus churn and create_files usage, being
 scored now with six diffs at the judges. l1r, the single mandate rerun, launches next.
+
+## Receipt 09:06Z — attestation ratchet installed in the canonical runner (Sol's distrust, closed at the mechanism)
+
+Every arm now writes a machine-generated attestation before codex starts
+(<run>-g<g>-<arm>-<slot>-attest.edn): run, arm, slot, group, start time, worktree and its
+HEAD, base, prompt path and sha256, model, MCP url and port, the runner's expected server
+sha, and for MCP arms the identity READ FROM THE SERVER: healthz JSON, the pid owning the
+port from ss, the ready.edn project-root and pid for that port, and that project-root's git
+HEAD, plus the runner's own sha256. Any value that cannot be obtained is the literal
+"unverified", never empty. The arm REFUSES (ATTEST-MISMATCH on the receipt line, no codex)
+when the port shows no pid, or when the server's project HEAD does not begin with the sha
+the runner expected. Dry-tested: happy path on 7893 (port pid, ready pid and HEAD all
+agree), refusal on a forced wrong sha, refusal on a dead port. Live example of the thing
+being ratcheted against: port 7888 has a listener with no visible pid, which both the
+existing PORT-NOT-MINE check and the new attestation refuse. Runner v5 grew from 32 to 79
+lines; the running copy v3 is untouched until l1r finishes. Also confirmed by the same
+agent: 7889 is alive on main 2311cc09, pid 1939050, project-root surgeon-main.
