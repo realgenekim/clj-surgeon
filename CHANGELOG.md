@@ -8,6 +8,15 @@ is cut.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored the SCI computed-program capability boundary after the no-default
+  `case` compatibility change exposed constructor shorthand and dot interop.
+  Executable constructor, method, field, and explicit-dot forms now refuse
+  before evaluation; quoted structural data and macro-expanded `case` remain
+  supported. Permanent regressions capture the host-object and stderr-I/O
+  exploit shapes and the pre-change causal control.
+
 ### Added
 
 - Experimental `inspect_clojure` MCP read batches. One typed call can retrieve

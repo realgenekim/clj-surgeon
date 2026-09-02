@@ -130,7 +130,7 @@
         (is (str/includes? (:usage error) ":xray"))))))
 
 (def macro-expansion-only-symbols
-  '[lazy-seq loop loop* recur unchecked-inc
+  '[lazy-seq loop loop* recur case* throw new unchecked-inc
     chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
 
 (deftest quoted-macro-expansion-symbols-remain-searchable-structural-data
@@ -159,13 +159,15 @@
   (testing "syntax quote remains inert and preserves its qualified symbol"
     (let [compiled (dsl/compile-xray "(-> (form 'data) (match `loop))")]
       (is (= [[:form 'data] [:find 'clojure.core/loop]] (:query compiled)))))
-  (testing "qualification cannot make an executable guarded symbol legal"
-    (let [error (try
-                  (dsl/compile-xray "(clojure.core/loop)")
-                  nil
-                  (catch Exception exception (ex-data exception)))]
-      (is (= :disallowed-symbol (:reason error)))
-      (is (= 'clojure.core/loop (:symbol error))))))
+  (doseq [internal-symbol macro-expansion-only-symbols]
+    (testing (str "qualification cannot make executable " internal-symbol " legal")
+      (let [qualified (symbol "clojure.core" (name internal-symbol))
+            error (try
+                    (dsl/compile-xray (str "(" qualified ")"))
+                    nil
+                    (catch Exception exception (ex-data exception)))]
+        (is (= :disallowed-symbol (:reason error)))
+        (is (= qualified (:symbol error)))))))
 
 (deftest sci-supports-idiomatic-pure-map-comprehension
   ;; Clean-context candidate-v9 agents first wrote these ordinary Clojure core

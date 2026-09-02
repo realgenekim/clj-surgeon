@@ -63,14 +63,19 @@
   (set (map name macro-expansion-symbols)))
 
 (defn- forbidden-source-symbol [form]
-  (letfn [(walk [node]
+  (letfn [(forbidden-symbol? [node]
+            (when (symbol? node)
+              (let [source-name (name node)]
+                (or (contains? forbidden-source-symbols source-name)
+                    (str/starts-with? source-name ".")
+                    (str/ends-with? source-name ".")))))
+          (walk [node]
             (cond
               (and (seq? node)
                    (#{'quote 'clojure.core/quote} (first node)))
               nil
 
-              (and (symbol? node)
-                   (contains? forbidden-source-symbols (name node)))
+              (forbidden-symbol? node)
               node
 
               (coll? node)
@@ -408,7 +413,7 @@
           (invalid! expression :expected-one-form))
         (when-let [symbol (forbidden-source-symbol form)]
           (invalid! expression :disallowed-symbol
-                    (ex-info "Macro-expansion-only symbol used as executable source"
+                    (ex-info "Capability-internal or host-interop symbol used as executable source"
                              {:symbol symbol})))
         (:val (sci/eval-string+ context expression {:ns user-ns})))
       (catch Exception exception

@@ -67,6 +67,32 @@ suite passes 99 tests with 961 assertions. The tests cover these boundaries:
 - agent-facing help, README, vision, changelog, and both skills.
 - installed skill fits in one standard 240-line read.
 
+### 2026-09-01 SCI host-interop Andon repair
+
+The compatibility expansion for no-default `case` added the internal SCI
+symbols `case*`, `throw`, and `new`, plus an `IllegalArgumentException` class
+mapping. Direct source use of the three internal symbols remained refused, but
+Clojure constructor shorthand such as `IllegalArgumentException.` did not
+contain the source symbol `new`. SCI lowered that shorthand after source
+validation, constructing a real host exception. Dot invocation could then call
+`printStackTrace`, perform observable stderr I/O, and still return a valid edit
+query.
+
+The repaired boundary rejects executable source symbols whose names begin or
+end with `.` before SCI evaluation. This covers constructor shorthand, method
+shorthand, field shorthand, and the explicit `.` form. Quoted forms remain
+inert structural data and are not rejected. `case*`, `throw`, and `new` remain
+available only to macro expansion; direct and qualified executable source use
+remains refused.
+
+`case` without a default remains supported. A matching clause returns the
+normal query. An unmatched value reaches the macro-generated throw path and is
+reported as `:evaluation-failed`; callers cannot author `throw` directly.
+Permanent regressions cover direct and qualified internal symbols, simple and
+qualified constructors, dot method and field forms, host objects in otherwise
+valid replacement queries, captured stderr side effects, quoted inert data,
+and the pre-change empty-class-map causal control.
+
 ## Stage B clean-agent result
 
 The 24-run matched-skill A/B was byte-exact in every run, but clean agents used

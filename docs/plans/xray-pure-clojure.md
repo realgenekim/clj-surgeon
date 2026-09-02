@@ -103,6 +103,9 @@ builder signatures, and a direct remedy when expression authoring failed.
 
 - SCI uses the existing pure capability allowlist. It exposes no I/O,
   processes, namespaces, mutable references, classes, or host interop.
+- Before SCI evaluation, executable symbols beginning or ending with `.` are
+  refused as host interop. Quoted constructor and dot forms remain inert
+  structural data.
 - Expression validation occurs before source I/O. Project-alias initialization
   can inspect the nearest `.clj-surgeon.edn` first.
 - The returned EDN never contains the analyzer function.

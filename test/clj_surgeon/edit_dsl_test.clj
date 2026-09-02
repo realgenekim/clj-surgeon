@@ -3,7 +3,8 @@
    [clj-surgeon.edit-dsl :as dsl]
    [clj-surgeon.structural-lens :as lens]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing]]
+   [sci.core :as sci]))
 
 (deftest native-expression-compiles-to-the-existing-case-query
   (is (= [[:form 'transition]
@@ -252,6 +253,87 @@
         (is (seq (:allowed-capabilities error)))
         (is (some #{"(match path pattern)"} (:allowed-forms error)))
         (is (re-find #"thread-first" (:remedy error)))))))
+
+(deftest sci-class-mapping-is-the-causal-constructor-capability
+  ;; Causal control for the 2026-09-01 Andon review. The pre-ddd074f5 context
+  ;; had no class mapping and refused the same shorthand that the widened
+  ;; context lowered through `new` into a real host object.
+  (let [expression "(IllegalArgumentException. \"boom\")"
+        evaluate (fn [classes]
+                   (:val (sci/eval-string+
+                           (sci/init {:classes classes
+                                      :allow '[new]})
+                           expression)))
+        pre-merge-error (try
+                          (evaluate {})
+                          nil
+                          (catch Exception exception exception))]
+    (is (some? pre-merge-error))
+    (is (re-find #"Unable to resolve classname"
+                 (ex-message pre-merge-error)))
+    (is (instance? IllegalArgumentException
+                   (evaluate {'IllegalArgumentException
+                              IllegalArgumentException})))))
+
+(deftest sci-refuses-host-interop-before-evaluation
+  (doseq [{:keys [label expression symbol]}
+          [{:label "constructor shorthand"
+            :expression "(IllegalArgumentException. \"boom\")"
+            :symbol 'IllegalArgumentException.}
+           {:label "qualified constructor shorthand"
+            :expression "(java.lang.IllegalArgumentException. \"boom\")"
+            :symbol 'java.lang.IllegalArgumentException.}
+           {:label "host object in a valid replacement query"
+            :expression "(-> (form 'f) (replace (IllegalArgumentException. \"boom\")))"
+            :symbol 'IllegalArgumentException.}
+           {:label "method shorthand in a valid replacement query"
+            :expression "(-> (form 'f) (replace (.toUpperCase \"boom\")))"
+            :symbol '.toUpperCase}
+           {:label "explicit dot form in a valid replacement query"
+            :expression "(-> (form 'f) (replace (. \"boom\" toUpperCase)))"
+            :symbol '.}
+           {:label "field shorthand in a valid replacement query"
+            :expression "(-> (form 'f) (replace (.-detail (IllegalArgumentException. \"boom\"))))"
+            :symbol '.-detail}]]
+    (testing label
+      (let [error (try
+                    (dsl/compile-query expression)
+                    nil
+                    (catch Exception exception (ex-data exception)))]
+        (is (= :invalid-edit-expression (:error-type error)))
+        (is (= :disallowed-symbol (:reason error)))
+        (is (= symbol (:symbol error))))))
+  (testing "observable host side effects never run"
+    (let [expression (str "(do (.printStackTrace "
+                          "(IllegalArgumentException. \"SCI-PRINT-SIDE-EFFECT\")) "
+                          "(form 'f))")
+          previous-err System/err
+          output (java.io.ByteArrayOutputStream.)
+          capture (java.io.PrintStream. output true "UTF-8")
+          error (try
+                  (System/setErr capture)
+                  (try
+                    (dsl/compile-query expression)
+                    nil
+                    (catch Exception exception (ex-data exception)))
+                  (finally
+                    (.flush capture)
+                    (System/setErr previous-err)
+                    (.close capture)))]
+      (is (= :invalid-edit-expression (:error-type error)))
+      (is (= :disallowed-symbol (:reason error)))
+      (is (= '.printStackTrace (:symbol error)))
+      (is (= "" (.toString output "UTF-8"))))))
+
+(deftest sci-keeps-case-expansion-and-bounds-its-throw-path
+  (is (= [[:form 'f]]
+         (dsl/compile-query "(case :match :match (form 'f))")))
+  (let [error (try
+                (dsl/compile-query "(case :miss :match (form 'f))")
+                nil
+                (catch Exception exception (ex-data exception)))]
+    (is (= :invalid-edit-expression (:error-type error)))
+    (is (= :evaluation-failed (:reason error)))))
 
 (deftest sci-provides-pure-clojure-for-structural-computation
   (is (= [[:form 'transition]
