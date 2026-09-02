@@ -107,7 +107,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 
 | id | experiment | prediction | cost | depends on |
 |---|---|---|---|---|
-| E1 | arm Z = native + `admit_clojure_patch` vs native, rungs M and L, n=6 paired | post-write shell calls to zero; wall within 1 sd of native; stale-onset and shadowed-kwCheck caught at the gate | 24 arm-runs, two Anvil evenings | gate branch green |
+| E1 | RUNNING since 14:42Z: arm Z = native + `admit_clojure_patch` (7894, f2d93ab) vs native, rungs M and L, n=6 paired | post-write shell calls to zero; wall within 1 sd of native; stale-onset and shadowed-kwCheck caught at the gate | 24 arm-runs, two Anvil evenings | gate branch green |
 | E2 | rung L, native vs shipped, driven by Claude as caller | if Claude also declines or layers, the finding is about the tool; if it substitutes, it was about Sol | 12 arm-runs + Claude login on Anvil | Gene's decision |
 | E3 | fan-out intent verb vs native on rung L and a purpose-built 21-owner parameter-threading rung | one write call; non-test actions at or below 10.5; churn within 20 percent; wall positive only on high fan-out | 12 arm-runs | q5z built |
 | E4 | T2: intent by the strong model, hunks by the typist, verification by the gate, rung L | wins on strong-model tokens; wall break-even unless N exceeds about twenty | 12 arm-runs | E1, E3 |

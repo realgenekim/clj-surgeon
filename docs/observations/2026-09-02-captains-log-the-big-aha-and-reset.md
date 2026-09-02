@@ -546,3 +546,18 @@ authored forge-bridge with Gene as co-author, pushed as branches only; merge bel
 and surgeon1. Neither touches the SCI fence, path confinement or the kernel commit path; the
 Andon on the kernel's check-then-write commit stays open. Next: 7894 on Anvil from f2d93ab
 with report-file test evidence, then E1, the gate against native on both rungs.
+
+## Arm Z live: E1 launched (14:44Z; z1 started 14:42:54Z)
+
+The gate serves on Anvil port 7894 from the pushed branch f2d93ab (pid 550992), with the
+focused-test command as a report-writing kaocha wrapper that overlays the gate's snapshot
+before running (the gate refuses any command without a {snapshot} token, and a negative
+control showed a break injected only in the snapshot produced four failures, so the overlay
+is real). End-to-end proof: preview with tests from the report file, bound commit under the
+cross-process lock, duplicate definition refused in 32 ms before lint or tests. z1 is rung M,
+Z (native prompt plus one admit call per Clojure change, receipt terminal) against native,
+six a side over two waves, every arm attested with the server sha read from the server; z2
+on rung L follows. Caveat: the gate's JVM shares cores 10 and 11 with one native slot per
+wave, so walls carry that; actions, refusals and receipts do not. Predictions on record:
+post-write shell calls to zero in the Z arm; wall within one sd of native; the stale-onset
+and shadowed-declaration classes caught at the gate in situ.
