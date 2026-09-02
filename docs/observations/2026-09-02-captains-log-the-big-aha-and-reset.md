@@ -344,3 +344,28 @@ config or a repo file; verification_status on every receipt; detector depth. Two
 rounds have now found, in a verification gate, both halves of the class the night was about:
 a receipt that can say verified without evidence, and a write that can say committed and be
 lost. The doctrine's gate held both times.
+
+## The read-less hypothesis is falsified; the mechanism is insertion strategy (13:30Z)
+
+All 18 of 18 E5 runs had the `if(playing){speechStartAt=0` line in context before their
+first onsetReady write; include_string_symbols was used zero times; no run learned the reset
+from an inspect result; every agent in both arms read the JavaScript string with rg or sed.
+My hypothesis is dead. What distinguishes the runs is the shape of the insertion:
+
+| strategy | runs | defective |
+|---|---|---|
+| in-block: guard inside the existing if(playing) branch, after the reset | 10 | 0 |
+| top-guard: at the head of onsetReady (or a wrapper), condition re-derived as micGate and playing | 8 | 6 |
+
+Fisher's exact one-sided on the strategies: p 0.0015. The two safe top-guards differ from
+the six defective ones by exactly one statement, speechStartAt=0 carried into the guard body.
+Shipped is defective more often because it chooses the fragile shape more often, 7 of 9
+against native's 1 of 9 (p 0.0076), not because it read less: every defective guard names
+"playing" in its own condition, which is derivable only from the line the hypothesis said it
+never saw. And among the six defective runs the first write was a Surgeon write in three and
+a native apply_patch in three. So the tool's presence shifts which strategy the agent
+chooses, the boundary insert over the in-branch edit, even when the agent then types the
+guard natively. That is the cheap-affordance story restated correctly: not the tool's hand,
+the tool's framing. For the gate this means the hazard to detect is generic and structural:
+a new early return placed before an existing state reset in the same function, which a
+parsed pre-and-post comparison can see and a text diff cannot.
