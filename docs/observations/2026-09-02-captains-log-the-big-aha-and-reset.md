@@ -1289,3 +1289,27 @@ scale, which is bead q5z, the fan-out intent verb shelved as a dead end this mor
 resurrects a dead end, it is that one. The gate program (z6/z7/z8) runs in parallel as the one
 measured win.
 
+
+## 17:56Z — fleet round two: the disagreement reduced to two observables, both pre-registered
+
+Each brain attacked the other's answer (bridge scratchpad `fleet/opus-answer.md` § Round two,
+`fleet/sol-round2.md`).
+
+| item | Sol | Opus |
+|---|---|---|
+| P(rf2 beats native, n=6, ritual-stripped prompts both arms) | **60 %** | **35 %** |
+| the one assumption behind the gap | atomic closure succeeds routinely and its receipt substitutes for most independent checking | a first-shipped `:rewire-callers` mints refusals or fallback (base rate: 10 refusals in 4 runs on a mature path; dead-require pruning not decidable) and the audit grows with the unread rewrites |
+| **settling observable A** (rf2 rollouts) | native `apply_patch` calls landing functional bytes after the extract: **0 in 3 of 3 → Sol** | **≥ 1 in 2 of 3 → Opus** |
+| **settling observable B** (rf2 rollouts) | returns between the `extract!` ok receipt and the first compile/test: **≤ 1 → Sol** | **≥ 3 → Opus** |
+| ritual strip on native, prediction | 15–17 returns, **285–305 s** (0.87–0.94×); a single `wait` removes polling calls, not suite runtime | 15–16 returns, **255–275 s** (0.82×) |
+| same claim? | overlap, not identical: Sol's is an acceptance rule (cost identity, terms measurable only after the run); Opus's carries a sign (mutations lose, verdicts win), "not established by four distrustful runs" | concedes Sol's axis: reads that do not CONVERGE (indirect, macro-mediated, generated, ambiguous ownership), not reads that are long; concedes "conservative mechanical closure, not ALL consequences" |
+| discriminating experiment | native vs atomic mutator with a prompt-authorized covering receipt on an unseen high-unread-fan-out transformation | three arms on one task: native / tool-mutates-with-receipt / native-mutates + tool-verifies-only; Opus predicts verify-only ≥ native > mutate; Sol predicts mutate+covering-verdict wins |
+| decisive next test | **three unseen extractions** (small / medium / awkward fan-out): does the closure and receipt generalise, or is rf2 compiled for R3; the 20-ns require cohort "repeats an already-measured sweet spot" | **scale slope** (one shape, N = 20+ namespaces, 100+ sites): "does a square exist at all" is prior to "does this verb generalise"; a monotone prediction is identifiable at n=1 per point |
+
+**Decisions.** (1) Observables A and B are the pre-registered readout of rf2; wall is reported
+but does not adjudicate the mechanism. (2) rs1 (ritual strip, native only, 3 runs) runs before
+z6; both predictions above are on record. (3) Order after rf2: the scale slope first (bead q5z,
+the fan-out intent verb, resurrected), then Sol's three unseen extractions as the overfitting
+guard. (4) The three-arm discriminator is already assembled from parts: z7 (gate on R3) is the
+verify-only arm, rf2 is the mutate-with-receipt arm, N is native; read them together.
+
