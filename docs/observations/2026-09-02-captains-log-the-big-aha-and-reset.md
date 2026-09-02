@@ -2917,3 +2917,33 @@ finding: `speaker.reminder-schedule-configured` writes settings under a slug-key
 tripwire regex counts. Nomination (not selection): Surgeon transaction for the mechanical 16 on the
 real worktree after LENS-003, second transaction for the two conditional arms, tripwire edited by
 hand (numbers, the `(= arm-count guards)` assertion, a row for the 24th write). n=1, a specimen.
+
+## 23:11Z — the merge call: curtain-call main auto-deploys to live Postgres, so fold and store merges are outward-facing; owner ops routed to the mayor by Gene
+
+Gene: *"What is needed from me. You make the call, as noted."* Checked before ruling: `.github/workflows/
+build-and-deploy.yml` deploys on push to main; `docs/postgres-store.md` says Cloud Run runs
+`STORE_BACKEND=postgres` and "dev IS production". Ruling: I do not merge either branch blind. Fold is
+replay-equal on the judge-sandbox log only, and its change is product-visible by design (a name-only
+unannounce no longer removes id-bearing rows — a speaker unpublished by name in the old world could
+reappear). Store refuses to boot until the unique index exists in the live DB — merging first would take
+the site down. Two owner-cred items, pre-staged: (1) create the index from the REPL and paste the real
+`pg_get_indexdef`; (2) run a `make fold-diff-checkpoint` (being built now on `bridge/fold-diff-tool`,
+worktree `~/src/curtaincall-cfp-folddiff` from 96387535) that re-folds the production log against the
+checkpoint production already stores and prints every differing projection path. Gene: *"You can ask
+mayor to run curtain call and do nrepl ops to check Postgres"* — routed to the mayor on the bridge
+channel with the exact DDL, and filed as a maven inbox item. Merge order: fold after (2) is reviewed,
+store after (1) and the paste. The lens migration commit proceeds on its stacked branch (no deploy).
+
+## 23:11Z — census verb landed on `bridge/census-verb` (f325529 + 7244141); zero `:raw` sites in curtain-call
+
+Builder: five classes with evidence, four-condition guard rule, claypoole `upmap` plan phase, receipt
+1,986 B with per-phase elapsed, typed refusals with next_call, real-wire witness on a scratch port,
+fails-first by ablation (the naive write-only match reproduces the exact task-chase false positive; the
+"guard found but not required" variant lands it in `:unknown`, never `:raw`). Suites under the lock:
+test-fast 710/6001 (same 5 pre-existing), mcp-test 383/4024 (same 1). Pool 1 → 4 on 48 arm-files:
+319 → 197 ms; one file shows no win (noise); receipt byte-identical across pool sizes (witnessed).
+Real repo: 117 arms, 11 sites, **0 raw**, 9 door, 1 set, 1 `:unknown` (`comms.template-saved`, a
+hand-rolled upsert whose binding shadows the fn param — surfaced as review work, not passed silently).
+Note: it registers as the FIFTH tool because alias_migration (q5z) is not on main yet — the mayor's
+merge queue holds both; rebase whichever lands second. My own verification run is in progress.
+
