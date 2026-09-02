@@ -25,6 +25,10 @@ required_outcome(transform_clojure, preview).
 required_outcome(transform_clojure, committed).
 required_outcome(transform_clojure, typed_refusal).
 
+required_outcome(admit_clojure_patch, preview).
+required_outcome(admit_clojure_patch, committed).
+required_outcome(admit_clojure_patch, typed_refusal).
+
 declared(Tool, Outcome) :- required_outcome(Tool, Outcome).
 witnessed(Tool, Outcome) :- required_outcome(Tool, Outcome).
 

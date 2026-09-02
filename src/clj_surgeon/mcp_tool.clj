@@ -4,6 +4,7 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-admit-tool :as admit-tool]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-combinable-transaction :as combinable]
@@ -181,7 +182,8 @@
                             (workspace/router config)))]
     (reset! runtime-config configured)
     (inspect-tool/init! configured)
-    (program-tool/init! configured)))
+    (program-tool/init! configured)
+    (admit-tool/init! configured)))
 
 (defn- real-root
   ^Path [root]
@@ -1235,7 +1237,8 @@
     :full [inspect-tool/inspect-tool
            clj-change-tool
            edit-clojure-tool
-           program-tool/transform-clojure-tool]
+           program-tool/transform-clojure-tool
+           admit-tool/admit-clojure-patch-tool]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

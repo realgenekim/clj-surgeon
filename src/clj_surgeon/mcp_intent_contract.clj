@@ -103,6 +103,8 @@
          [(io/file root
                    "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md")
           (io/file root
+                   "docs/intent/mcp-operation-contract/admit-clojure-patch-design.md")
+          (io/file root
                    "docs/intent/read-request-normalization/read-request-normalization-specs.md")
           (io/file root
                    "docs/intent/prepared-request/prepared-request-specs.md")
