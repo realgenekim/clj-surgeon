@@ -93,3 +93,32 @@ every fix a ratchet in the apparatus.
 
 A cohort on Anvil is now six attested arms, frozen and scored, in twenty minutes, with the
 floor known. The next question about any Clojure agent tool costs an evening, not a summer.
+
+## The winners, and where each one lives (added 12:11Z on Gene's request)
+
+| winner | what it does | lives in | measured or reasoned |
+|---|---|---|---|
+| `:ls-tree` | table of contents for a whole source tree: every namespace, requires, public forms with arglists and line spans; grep-filterable across repos; seconds | **CLI only** (babashka, cold, no server) | the foundation of "questions grep answers wrong"; ran on voice-remote in under a second |
+| `:ls-deps`, `:deps`, `:topo`, `:ls-extract` | dependency tree, intra-namespace call graph, topological order, minimal extractable unit | **CLI only** | the study step of a refactor, answered by the parser not by grep |
+| `:extract!` | move forms to a new namespace, plan then execute | **both**: CLI op, and the MCP `apply_clojure_changes` extraction verb | no native equivalent |
+| `:mv` + `:fix-declares!` | reorder a form relative to another, then drop the declares the reorder made unnecessary | **CLI only** | no native equivalent; dry-run first |
+| `:rename-ns!` | structural namespace rename across the tree | **CLI only** | no native equivalent |
+| `require_change` | add or change a require across many namespaces | **MCP only** (`apply_clojure_changes` verb) | nine namespaces, zero churn, measured (l1 Y-5) |
+| `within` + `from`/`to` | surgical edit inside one known form | **MCP only** (`edit_clojure` / `apply_clojure_changes`) | zero churn, measured (l1 A-0, A-4, Y-0) |
+| `inspect_clojure` outline, forms, owners, prepare-change | per-file perception | **MCP** | the read side of the gate and the fan-out verb |
+
+**Confirmed, and a gap.** The MCP server holds the write winners (`require_change`,
+`within`+`from`/`to`, extraction) and per-file perception; the study winners
+(`:ls-tree`, the dependency views, `:mv`, `:rename-ns!`, `:fix-declares!`) live only in
+the babashka CLI. The killer read, `:ls-tree`, is therefore invisible to an agent that has
+the MCP and not the CLI. Filed: expose `:ls-tree` as an `inspect_clojure` workspace
+operation (the same output, over the workspace root, with the grep filter), and the
+refactor operations as `apply_clojure_changes` verbs, so the winners are reachable from
+the route agents actually hold.
+
+**The shape is right for development and testing.** The MCP server is a long-lived JVM with
+a warm project image, telemetry on every call, typed refusals, a per-worktree dev instance
+(`make mcp-dev-start`) and a hot reload; that is exactly the substrate the gate needs
+(re-parse, kondo delta, focused suite, one receipt) and the only substrate on which
+proof-before-write is possible. The CLI is the right shape for `:ls-tree`: cold, seconds,
+no server, safe to run from a shell or a Makefile. Keep both; put the winners in both.
