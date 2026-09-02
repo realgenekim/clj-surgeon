@@ -1,7 +1,7 @@
 (ns clj-surgeon.mcp-formatter
   "Format staged candidate sources before a transaction writes live files."
   (:require
-   [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-exact-verify :as exact-verify]
    [clojure.java.io :as io]
    [clojure.string :as str]))
 
@@ -33,7 +33,7 @@
    are never passed to the formatter."
   ([project-root command future-sources]
    (format-candidates! project-root command future-sources
-                       change-buffer/run-process!))
+                       exact-verify/run-process!))
   ([project-root command future-sources run-process!]
    (if-not (and (vector? command)
                 (seq command)
@@ -53,7 +53,7 @@
          (let [temp-files (mapv #(str (:temp %)) staged)
                result (run-process!
                         project-root
-                        (change-buffer/expand-command command temp-files))]
+                        (exact-verify/expand-command command temp-files))]
            (if (and (:finished? result) (zero? (:exit result)))
              (let [formatted (into (sorted-map)
                                    (map (fn [{:keys [file temp]}]

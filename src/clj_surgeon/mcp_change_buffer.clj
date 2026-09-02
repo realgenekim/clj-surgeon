@@ -5,9 +5,9 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
+   [clj-surgeon.mcp-exact-verify :as exact-verify]
    [clj-surgeon.mcp-hot-verify :as hot-verify]
    [clj-surgeon.mcp-paths :as mcp-paths]
-   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -17,16 +17,13 @@
    [clojure.string :as str]
    [rewrite-clj.zip :as z])
   (:import
-   (java.nio.charset StandardCharsets)
    (java.nio.file LinkOption Path Paths)
-   (java.security MessageDigest)
    (java.util UUID)))
 
 (def max-bases 32)
 (def basis-ttl-ms (* 60 60 1000))
 (def max-sites 24)
 (def max-visible-characters (* 32 1024))
-(def exact-verification-visible-bytes 12000)
 (def max-snapshot-characters (* 4 1024 1024))
 (defonce basis-store (atom {}))
 
@@ -1229,168 +1226,11 @@
        :remedy "Copy next_call and set exactly one keep, replace, delete, or compact edit per site."}
       {:ok true})))
 
-(defn expand-command
-  [command files]
-  (let [expanded (vec (mapcat #(if (= "{files}" %) files [%]) command))
-        executable (first expanded)
-        search-paths ["/opt/homebrew/opt/node@20/bin"
-                      "/opt/homebrew/bin"
-                      "/usr/local/bin"
-                      "/usr/bin"
-                      "/bin"]
-        resolved (when-not (str/includes? executable "/")
-                   (some (fn [directory]
-                           (let [candidate (io/file directory executable)]
-                             (when (and (.isFile candidate) (.canExecute candidate))
-                               (.getPath candidate))))
-                         search-paths))]
-    (assoc expanded 0 (or resolved executable))))
-
-(defn- bytes->hex
-  [bytes]
-  (apply str (map #(format "%02x" (bit-and 0xff %)) bytes)))
-
-(defn- sha256-text
-  [text]
-  (-> (doto (MessageDigest/getInstance "SHA-256")
-        (.update (.getBytes ^String text StandardCharsets/UTF_8)))
-      .digest
-      bytes->hex))
-
-(defn run-process!
-  ([project-root command]
-   (run-process! project-root command 120000))
-  ([project-root command timeout-ms]
-   (let [started (System/nanoTime)]
-     (try
-       (process-env/run-bounded!
-         {:command command
-          :cwd project-root
-          :timeout-ms timeout-ms
-          :merge-error? true
-          :visible-byte-limit exact-verification-visible-bytes})
-       (catch Exception error
-         {:finished? false
-          :launch-error true
-          :exit nil
-          :elapsed_ms (/ (double (- (System/nanoTime) started)) 1000000.0)
-          :output (or (.getMessage error) (.getName (class error)))
-          :output-bytes 0
-          :output-sha256 (sha256-text "")
-          :output-truncated false
-          :admission-error (ex-data error)})))))
-
-(defn- admission-unverified?
-  [{:keys [admission admission-error]}]
-  (let [status (or (:status admission)
-                   (get-in admission-error [:admission :status]))
-        error-type (or (:error-type admission)
-                       (:error-type admission-error))]
-    (or (#{:delegated :admission-timeout :pressure-deferred} status)
-        (#{:clj-kondo-admission-unavailable
-           :clj-kondo-executable-unavailable
-           :clj-kondo-admission-timeout
-           :clj-kondo-pressure-deferred
-           :process-interrupted}
-         error-type))))
-
-(defn compile-exact-profile
-  "Compile one project-owned exact profile into an immutable execution value."
-  [profile profiles profile-source]
-  ;; @spec MCP-OP-VERIFY-001
-  ;; @spec MCP-OP-VERIFY-002
-  ;; @spec MCP-OP-VERIFY-003
-  ;; @spec MCP-OP-VERIFY-004
-  ;; @spec MCP-OP-VERIFY-005
-  (let [definition (get profiles profile)
-        command (first (:commands definition))
-        valid-command? (and (vector? command)
-                            (seq command)
-                            (every? #(and (string? %) (not (str/blank? %))) command))]
-    (cond
-      (not= "exact" profile)
-      {:ok false :error-type :unknown-verification-profile
-       :source-unchanged true}
-
-      (not= :project profile-source)
-      {:ok false :error-type :exact-profile-not-project-owned
-       :source-unchanged true}
-
-      (not (and (map? definition)
-                (= #{:acceptance :timeout-ms :commands}
-                   (set (keys definition)))
-                (= :exact-exit (:acceptance definition))
-                (integer? (:timeout-ms definition))
-                (<= 1 (:timeout-ms definition) 120000)
-                (= 1 (count (:commands definition)))
-                valid-command?
-                (not-any? #{"{files}"} command)))
-      {:ok false :error-type :invalid-exact-verification-profile
-       :source-unchanged true}
-
-      :else
-      {:ok true
-       :profile profile
-       :profile-source profile-source
-       :profile-sha256 (sha256-text (pr-str (into (sorted-map) definition)))
-       :acceptance :exact-exit
-       :timeout-ms (:timeout-ms definition)
-       :argv (expand-command command [])})))
-
-(defn classify-exact-process-outcome
-  [{:keys [finished? launch-error exit admission] :as process}]
-  (cond
-    (admission-unverified? process)
-    {:process-outcome (if (= :admission-timeout (:status admission))
-                        :admission-timeout
-                        :admission-unavailable)}
-    launch-error {:process-outcome :launch-failure}
-    (not finished?) {:process-outcome :timeout}
-    (zero? exit) {:process-outcome :pass}
-    (>= exit 128) {:process-outcome :crash-or-signal-style-exit}
-    :else {:process-outcome :ordinary-nonzero}))
-
-(defn run-exact-verification!
-  "Execute one compiled exact profile and return terminal bounded evidence."
-  [project-root compiled-profile]
-  ;; @spec MCP-OP-VERIFY-003
-  ;; @spec MCP-OP-VERIFY-005
-  ;; @spec MCP-OP-VERIFY-006
-  ;; @spec MCP-OP-VERIFY-007
-  ;; @spec MCP-OP-VERIFY-009
-  ;; @spec MCP-OP-VERIFY-010
-  ;; @spec MCP-OP-ANALYZER-004
-  (let [cwd (.getCanonicalPath (io/file project-root))
-        process (run-process! cwd (:argv compiled-profile)
-                              (:timeout-ms compiled-profile))
-        outcome (:process-outcome (classify-exact-process-outcome process))
-        evidence (merge
-                   (select-keys compiled-profile
-                                [:profile :profile-source :profile-sha256
-                                 :acceptance :timeout-ms :argv])
-                   {:cwd cwd
-                    :process-outcome outcome
-                    :exit (:exit process)
-                    :elapsed_ms (:elapsed_ms process)
-                    :output-bytes (:output-bytes process)
-                    :output-sha256 (:output-sha256 process)
-                    :output-truncated (:output-truncated process)}
-                   (select-keys process [:admission :admission-error]))]
-    (case outcome
-      :pass (assoc evidence :ok true)
-      :ordinary-nonzero
-      (assoc evidence :ok false
-             :error-type :verification-failed
-             :diagnostics (:output process))
-      (assoc evidence :ok false
-             :error-type :verification-unverified
-             :diagnostics (:output process)))))
-
 (defn- run-check!
   [project-root command]
   (let [{:keys [finished? exit elapsed_ms output] :as process}
-        (run-process! project-root command)]
-    (if (admission-unverified? process)
+        (exact-verify/run-process! project-root command)]
+    (if (exact-verify/admission-unverified? process)
       {:ok false
        :command (first command)
        :exit exit
@@ -1415,14 +1255,14 @@
 
 (defn- diagnostic-command
   [command files]
-  (into (expand-command command files)
+  (into (exact-verify/expand-command command files)
         ["--cache" "false" "--config" diagnostic-output-config]))
 
 (defn- run-diagnostic-check!
   [project-root command files]
   (let [{:keys [finished? exit elapsed_ms output] :as process}
-        (run-process! project-root (diagnostic-command command files))]
-    (if (admission-unverified? process)
+        (exact-verify/run-process! project-root (diagnostic-command command files))]
+    (if (exact-verify/admission-unverified? process)
       {:ok false
        :command (first command)
        :exit exit
@@ -1498,7 +1338,7 @@
                             future (if diagnostic?
                                      (run-diagnostic-check! project-root command files)
                                      (run-check! project-root
-                                                 (expand-command command files)))
+                                                 (exact-verify/expand-command command files)))
                             check (if diagnostic?
                                     (if-let [baseline-check
                                              (nth (:checks baseline)
@@ -1527,7 +1367,7 @@
                   (cold-verify/launch!
                     project-root profile
                     (update (:cold profile-spec) :command
-                            #(expand-command % files))))]
+                            #(exact-verify/expand-command % files))))]
        {:ok (and command-ok? hot-ok? (or (nil? cold) (:ok cold)))
         :profile profile
         :checks checks

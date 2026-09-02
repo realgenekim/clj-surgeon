@@ -5,6 +5,7 @@
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-exact-verify :as exact-verify]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-combinable-transaction :as combinable]
    [clj-surgeon.mcp-compact-location :as compact-location]
@@ -317,7 +318,7 @@
   ;; @spec MCP-OP-VERIFY-009
   ;; @spec MCP-OP-VERIFY-010
   (let [exact-profile (when (= "exact" verify)
-                        (change-buffer/compile-exact-profile
+                        (exact-verify/compile-exact-profile
                           verify (:verification-profiles config)
                           (:verification-profile-source config)))
         sources (workspace-sources/read-all root)
@@ -384,7 +385,7 @@
                       (when verify
                         (cond
                           exact-profile
-                          (change-buffer/run-exact-verification!
+                          (exact-verify/run-exact-verification!
                             project-root exact-profile)
 
                           (:verify! config)
@@ -568,7 +569,7 @@
   [config root resolved receipt verify compact-location-plan relation-plan
    compact-effect-identity? public-operation]
   (let [exact-profile (when (= "exact" verify)
-                        (change-buffer/compile-exact-profile
+                        (exact-verify/compile-exact-profile
                           verify (:verification-profiles config)
                           (:verification-profile-source config)))
         files (->> (get-in resolved [:spec :changes])
@@ -656,7 +657,7 @@
           result
           (let [verification (cond
                                exact-profile
-                               (change-buffer/run-exact-verification!
+                               (exact-verify/run-exact-verification!
                                  project-root exact-profile)
 
                                (:verify! config)

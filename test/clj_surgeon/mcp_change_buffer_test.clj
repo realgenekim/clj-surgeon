@@ -2,6 +2,7 @@
   (:require
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
+   [clj-surgeon.mcp-exact-verify :as exact-verify]
    [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -669,9 +670,9 @@
                  :timeout-ms 120000
                  :commands [["clj-kondo" "--lint" "src/app.clj"
                              "--fail-level" "error"]]}
-        compiled (change-buffer/compile-exact-profile
+        compiled (exact-verify/compile-exact-profile
                    "exact" {"exact" profile} :project)
-        reordered (change-buffer/compile-exact-profile
+        reordered (exact-verify/compile-exact-profile
                     "exact"
                     {"exact" (array-map
                                :commands (:commands profile)
@@ -688,7 +689,7 @@
            (:argv compiled)))
     (is (= :exact-profile-not-project-owned
            (:error-type
-             (change-buffer/compile-exact-profile
+             (exact-verify/compile-exact-profile
                "exact" {"exact" profile} :process))))))
 
 (deftest exact-process-evidence-is-complete-bounded-and-honest
@@ -707,14 +708,14 @@
                       :acceptance :exact-exit
                       :timeout-ms 120000
                       :argv ["/usr/bin/printf" "%s" output]}
-        pass (change-buffer/run-exact-verification! root pass-profile)
-        failed (change-buffer/run-exact-verification!
+        pass (exact-verify/run-exact-verification! root pass-profile)
+        failed (exact-verify/run-exact-verification!
                  root (assoc pass-profile :argv ["/usr/bin/false"]))
-        timeout (change-buffer/run-exact-verification!
+        timeout (exact-verify/run-exact-verification!
                   root (assoc pass-profile
                               :timeout-ms 1
                               :argv ["/bin/sleep" "1"]))
-        launch (change-buffer/run-exact-verification!
+        launch (exact-verify/run-exact-verification!
                  root (assoc pass-profile
                              :argv ["/definitely/missing-verifier"]))]
     (is (:ok pass) (pr-str pass))
@@ -733,10 +734,10 @@
     (is (= :launch-failure (:process-outcome launch)))
     (is (= :crash-or-signal-style-exit
            (:process-outcome
-             (change-buffer/classify-exact-process-outcome
+             (exact-verify/classify-exact-process-outcome
                {:finished? true :exit 137}))))
     (is (not (contains?
-               (change-buffer/classify-exact-process-outcome
+               (exact-verify/classify-exact-process-outcome
                  {:finished? true :exit 137})
                :signal)))))
 
@@ -754,7 +755,7 @@
                    :output-truncated false
                    :admission {:status :admission-timeout
                                :error-type :clj-kondo-admission-timeout}})]
-    (let [result (change-buffer/run-exact-verification!
+    (let [result (exact-verify/run-exact-verification!
                    (.getCanonicalPath (io/file "."))
                    {:profile "exact"
                     :profile-source :project
