@@ -1861,3 +1861,31 @@ resolve the classpath, then `clojure.main`); and a false `:ok false` from an err
 namespace the extraction never touched, now `:ok :unverified` when the check cannot see its
 subject. The receipt-cannot-see-its-subject rule, applied to the receipt.
 
+
+## 19:32Z — the closure catalogue: where the math is in our favour, measured, and where it is not
+
+`docs/closure-catalogue.md`: 735 candidates over 592 namespaces and 183,704 var usages, three
+repos, clj-kondo analysis, cost model = rf1's own arithmetic (blind, it predicts 140 s for rf1's
+task against the measured 141–152 s). Top-5 real wins: cfp `store` → `event-store` (170 files,
+2,056 sites, ~29 min native → ~1.4 min, the pinned anchor); cfp `events` rename (170 files, two
+spellings, a `sed` silently misses the plain uses); Surgeon's own `validate-tool-params`
+extraction (59-form closure in a 1,415-line file, 193 sites, 7 callers, rf1's shape at 6× the
+cluster; the verb exists); cfp `web.http` rename (28 files, two spellings); mvr `channel` split
+(9 files, 502 sites, 3.8×, the honest demonstration on a 40-file app).
+
+**Three findings that outrank the ranking.** (1) The biggest fan-out in our repos is class D,
+parameter threading: 315 of 735 candidates, up to 123 caller files, ~3,700 s of native work, and
+none of it closable, because what to pass at each site is a judgment from that caller's scope.
+**Do not build `param_thread`.** (2) Our repos are alias-uniform: of 364 closable candidates, 238
+have one alias spelling; the files-that-must-be-READ term is 2–3 whether 9 files or 170 are
+affected; median closable ratio **3.4×**, 24 % clear 5×. **The slope that would make the tool
+10× does not exist in real code we own**; it has to be synthesised, which is exactly what sl1
+does, and the anchors will show 3–5×, minutes not hours. Class E (library swaps across many ns
+forms) is already won by `require_change` in one call. (3) **Surgeon cannot read the repos where
+the fan-out lives**: on main, `:ls` refuses with `:forward-reference-analysis-failed` and an empty
+diagnostic on 9 of cfp's 10 biggest src files and 6 of mvr's, while succeeding 10/10 on its own
+tree: clj-kondo's findings exit codes read as failure, the defect rf2 fixed and main still
+carries. The verb succeeds on the tree it was built in and fails on the repo it would be sold
+into, and that asymmetry is invisible from inside Surgeon. Promotion of the rf2 `:ls` fix to
+main is therefore the first prerequisite of every cfp win on the list.
+
