@@ -319,3 +319,21 @@ inb-51135b, inb-ab0a24. Gene: merge curtain-call `bridge/safe-refactor-1` (inb-e
 **First action after compaction.** Read the task notifications / the three agents' output files
 listed above, then follow the "on report" lines. Log every receipt with `date -u` headers.
 
+
+## RESUME DELTA 2026-09-02T18:11Z
+
+- 7894 GREEN at 2cc52fa (receipt `~/acid/receipts/7894-start.edn`). rs1 launched 18:08:05Z (3 native,
+  strip prompt). GO-Z6 created; chain-z6 runs z6 → z7 → z8 after rs1. Monitor b30yfi3as relays
+  rs1/z6/z7/z8/chain/restart lines (old z3/z4/rf1 monitor stopped).
+- Formatter branch `bridge/format-form-scope` pushed 62981ee, handed to mayor.
+- Slope program: spec committed `docs/observations/2026-09-02-slope-spec-sl1.md`; q5z builder on
+  ~/src/clj-surgeon-q5z (`bridge/q5z-alias-migration`); FAN apparatus installer on Anvil
+  (gen-fan.py, rescore-FAN.sh, mkprompt-FAN.sh, rung FAN, chain-sl1 on GO-SL1 needing 7895
+  attested == ~/acid/Q5Z-SHA). On q5z report: my suites, commit, push; install a server on 7895
+  from the branch (copy restart-7894-at.sh's pattern to a restart-7895-at.sh, root
+  ~/acid/surgeon-q5z), write Q5Z-SHA, touch GO-SL1.
+- rf2 builder on ~/src/clj-surgeon-rf2: on report, suites, commit, push; server on 7896; rf2 = R3
+  "N C N|C N C" n=3 first (kill-or-promote per a40fc3e readout), strip prompts both arms.
+- rs1 scoring when done: returns and wall vs rf1 native (22.0 / 326.5 s) against Sol 285–305 s
+  and Opus 255–275 s; log; it re-bases the rf2 target.
+
