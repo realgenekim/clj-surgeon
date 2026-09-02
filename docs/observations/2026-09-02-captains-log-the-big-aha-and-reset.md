@@ -718,3 +718,44 @@ Anvil. Blast radius: none (a branch, never main; any NO-GO lands as further comm
 prose fed to bash goes through quoted heredocs, and commands never sit in backticks inside
 notes. Same family as the hand-typed timestamps: text and instruction confused at the
 boundary where they take effect.
+
+## Cohort rf1, pre-registered: refactoring Surgeon with Surgeon, on Anvil (16:20Z)
+
+Gene, verbatim: "A big refactor on surgeon??? In the surgeon sweet spot?!? Do on anvil and see
+what we learn!!! Time is worth it! Advancing multiple objectives!!!! Learn as much as you can
+on actually important refactoring!!! How utterly meta! Captain log!!! What do you hypothesize
+going in???"
+
+The task: a real extraction from clj-surgeon's own hot files (candidates by git churn and
+ls-extract exclusive-dependency size: mcp_tool.clj, intent_transaction.clj, mcp_change_buffer),
+per the safe-refactor playbook: study with ls-tree and ls-deps, extract with :extract then
+:extract!, compile-check, focused tests, on a worktree of main 2311cc09. Arms: N native, A
+shipped (7893), B main (7889); three per wave at four cores because the Surgeon suites are
+heavy; two waves; scored on actions, typed refusals, tokens, churn against the canonical
+move, and an arm-independent acceptance (forms moved verbatim, new namespace loads, callers
+updated, test-fast and the focused mcp namespaces at the base's failure set). Runs after z3
+and z4 in the chain.
+
+Hypotheses, written before the first arm starts:
+H1. This is the first square where Surgeon beats native on returns: extraction has no native
+    equivalent, so A and B complete the move in fewer non-test actions than N (predict 0.6x
+    or less), because :extract! does in one call what native does in six to ten patches.
+H2. Wall follows returns for once: A and B at or below N (predict within the floor, direction
+    A faster), the first cohort of the summer where the tool is not slower.
+H3. Churn: :extract! moves forms verbatim, so A and B ship less line churn than native,
+    UNLESS the whole-file formatter fires on the changes route (the 46o defect), in which case
+    B shows the l1 churn signature and the drift gate on close-losers would have refused it.
+    Prediction: at least one Surgeon run shows formatter churn; native shows none.
+H4. Refusals: extraction-decisions-required and invalid-intent-form appear on A and B;
+    native draws zero; the mandate-free prompt (Surgeon expected but not ordered) keeps the
+    fallback rate below the s1 mandate's.
+H5. Correctness: all arms pass the focused suites; native is more likely to leave a stale
+    alias or a missed caller that the compiler, not the tests, catches; Surgeon's extraction
+    receipt names the callers it rewired.
+H6. The meta finding: agents refactoring Surgeon with Surgeon will hit refusals on Surgeon's
+    own source shapes (large forms, reader conditionals in the MCP layer, the Prolog oracle
+    files) that the medium and large rungs never exercised; every such refusal is a bead,
+    and that is the dogfood ledger the mayor kept.
+If H1 and H2 hold, the winners list is confirmed on the tool's own code, and the brag is
+real: Surgeon refactored itself faster than a native agent could. If H1 fails, the refactor
+square is not a square either, and the skill section shrinks to the study ops.
