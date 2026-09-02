@@ -3015,3 +3015,19 @@ interior INTENT comments byte for byte; refusals were typed and fast (0.16 s, 0.
 "Maybe we single task this … Overloading buster box?"): load 2.3 falling from ~3.8 peak, 3.4 GB
 available, one busy JVM (my unit run); cap set at two concurrent builders + one suite behind the lock.
 
+
+## 23:36Z — LENS-004 pushed: `bridge/settings-lens` aebb7b9a; session 4 complete end to end
+
+Builder a0ad6890cb421cb67 (9ed7b0ef): tripwire rewritten to the migrated tree — guards 1
+(`export.generated`), path literals 4, `update-settings` call sites inside arms 18 = 19 − 1, the 24th
+write `speaker.reminder-schedule-configured` pinned at 1 under its slug-keyed guard as a follow-up;
+focused gate 38/388/0; registry LENS-004; the builder correctly refused to add the code-side
+`;; INTENT: LENS-004` tag to folds.clj (told not to touch it; the tag would also falsify "zero churn
+outside the replaced forms" in the message), leaving one residual failure in
+`every-active-intent-is-traceable`. I added the one comment line above the lens myself and ran the
+suite: **1053 tests, 13134 assertions, 0 failures**; committed aebb7b9a, pushed; inbox item for
+Gene's merge (after fold and store). The whole session, receipts: characterization first (LENS-001),
+the lens (LENS-002), the identity no-op (LENS-003), dry plans both ways with the watcher on, comparison
+receipt, then the migration as two Surgeon transactions (LENS-004). Native's patch stays as the
+specimen on `bridge/settings-lens-native` 74a3d7e6.
+
