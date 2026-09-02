@@ -2072,3 +2072,28 @@ map has not made the class impossible. (2) My closing cell bundled a suite read-
 inbox write and the session marker: the "no unrelated command in a metered cell" rule I wrote
 this evening, broken by its author within two hours. The meter caught it; that is what it is for.
 
+
+## 20:23Z — the slope's first point: at N=5 the tool is right in 25 s and native is wrong in 55 s; two apparatus faults on launch
+
+**sl1-5** (rung FAN, generated repo, N=5 requiring namespaces, arms native vs `alias_migration` on
+7895 at 13d86bb): T ended in **25 s**, N in **55 s**; my hand `rescore-FAN` from the two worktrees:
+**T VERDICT=PASS on every predicate; N FAILS p2 (form tree ≠ canonical) on all five files while
+passing p6c (alias policy)**. Native's failure is being diagnosed (a `:refer` left in place, a
+require added instead of replaced, or a site missed, versus a cosmetic form difference the oracle
+should tolerate; if the latter, the oracle is wrong, not native, and the log will say so).
+
+**Two apparatus faults, both mine to own.** (1) `chain-sl1` built the run name in the same
+`local` statement that assigned the point (`local point=$1 run=sl1-$point`), so bash expanded
+`$point` before the assignment: every run was named `sl1-`, N=5 ran under that name, and every
+later point refused `RUN-NAME-TAKEN`. Split the local, renamed the artifacts, set the remaining
+points, re-armed. The same class as the hand-typed timestamp: a value read before it exists.
+(2) The anchor's arms died at boot in 2 s: curtaincall-cfp's own checkout carries an agent
+config that REQUIRES the retired `cclsp` MCP server, which answers 500 on Anvil, and codex refuses
+to start a session without it. A real repo brings its own harness assumptions; the runner must
+neutralise repo-local MCP config in the arm worktree and say so on the start line. Fix
+dispatched; the anchor re-arms after it. Nothing measured was affected: N=5's two arms ran
+cleanly and are scored from their worktrees.
+
+Also: z7b's chain held the cohort lock ten minutes past its driver's exit because it scores six
+diffs with two suites each before releasing; that is by design and was not intervened on.
+
