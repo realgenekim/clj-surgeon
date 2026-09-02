@@ -185,3 +185,15 @@ UPDATE 09:14Z (real UTC) — PROGRAM RUNS COMPLETE. l1r folded (log receipt); b2
 regression on main 2311cc09. Anvil quiet; v3 refreshed from v5 (attestation ratchet live). Monitors stopped. Nothing launches
 unless Gene decides (brief: pull the Surgeon one-liner from fleet prompts; second-caller cohort; doctrine v2 inb-beecb9;
 ratifications). If resuming: read the brief, then the last five log receipts; do not launch cohorts; answer Gene's decisions.
+
+UPDATE 12:16Z (real UTC) — MORNING PHASE (Gene awake, giving orders in the terminal). Doctrine closed: claude-skills main 230ab5d
+(house rules + surgeon skill); routing plate rewritten by mayor (94e43f3b, block c3c0d0f5, installed on bridge); safe-refactor
+Surgeon section = claude-skills branch bridge/safe-refactor-surgeon 688b224, merge request inb-c6c362. clj-surgeon main docs:
+vision.md battlefield + CLAUDE.md test doctrine/battles/math (53b8f92, 070bb44), big-aha log (070bb44, +winners df432c4,
++typist fd60409), tech tree docs/tech-tree.md (492a94e). Bridge Surgeon MCP KEPT (Gene); laptop disable is the mayor's.
+BUILDERS IN FLIGHT (Opus, no commits): (a) admit_clojure_patch gate on ~/src/clj-surgeon branch bridge/admit-gate (LID:
+HLD amend, intent spec MCP-OP-ADMIT, witness tests, code, make test, two receipts); (b) close-losers typed refusals on
+worktree ~/src/clj-surgeon-losers branch bridge/close-losers (MCP-OP-CLOSE; owner-kind-namespace insertion refuses,
+splice or refuse re-print, byte-drift refusal). When they return: read diffs, run make test myself, adversarial pass (no
+SCI fence changes allowed), commit on branch, tell mayor, then E1 (arm Z) on Anvil per tech-tree backlog. Docs worktree:
+~/src/clj-surgeon-main (branch main-docs, pushes HEAD:main).
