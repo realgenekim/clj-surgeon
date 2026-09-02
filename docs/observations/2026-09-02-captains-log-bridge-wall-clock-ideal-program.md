@@ -273,3 +273,49 @@ aggregate `expect` object of `inspect_clojure` (first-keystroke friction: a fiel
 derivable from the request array), and Sol's honest reading of a client cancellation as a
 server refusal means refusal receipts and client failures need distinguishable words in
 the skill. Both routed to SURGEON1 as design questions, not decided here.
+
+## Receipt 03:05Z — acid test run 2: three correct arms, and the hill is not where I pointed
+
+Same frozen task (the bridge4 controls flag from ab267f9), Codex Sol, one fresh session per
+arm, sequential, `--dangerously-bypass-approvals-and-sandbox` with the worktree as the fence.
+All three arms pass the full suite and leave the golden unchanged.
+
+| arm | wall | Surgeon calls | refused | client-cancelled | kaocha | golden |
+|---|---|---|---|---|---|---|
+| N native, no MCP | **191 s** | 0 | 0 | 0 | 578 / 7800 / 0 | unchanged |
+| A shipped Surgeon (7888) | 303 s | 9 (4 inspect, 5 write) | 3 | 0 | 578 / 7798 / 0 | unchanged |
+| B wave build (7889) | 319 s | 7 (2 inspect, 5 write) | 1 | 0 | 579 / 7800 / 0 | unchanged |
+
+Phase clock from the codex rollouts joined to server timings:
+
+| arm | discovery → first write | editing | ceremony after last write | Surgeon tool wall |
+|---|---|---|---|---|
+| A | 109 s | 109 s | 84 s | 12.1 s |
+| B | 71 s | 127 s | 122 s | 8.6 s |
+| N | ~51 s | ~85 s | ~55 s | 0 |
+
+What the wave build did: refusals 3 → 1 (the overlap and batch-selection refusals are gone;
+the one left is the `cond->` pair shape, design-only tonight), reads 4 → 2 (the string-aware
+outline found `onsetReady` in one call; discovery fell 38 s). What it did not do: move the
+wall. Refusal round-trips cost A about 52 s and B about 17 s, a 35 s saving that was
+absorbed by 43 s more editing and 38 s more ceremony. Tool wall is 3 to 4 percent either way.
+
+**Retained negative, stated plainly:** on this task class, a four-file flag feature of ~90
+insertions, native Sol beat both Surgeon arms by about two minutes, and the refusal fixes
+did not change complete wall. The corpus predicted the crossover ("on a small two-file,
+three-change control, native remains faster; the tool earns its ceremony when exact
+mechanical state spans enough owners and files") and the standing rule it recorded is the
+one to apply: abstain until one guarded burst removes meaningful model work. The falsifier I
+wrote before the run fired: the cost lives in intent expression and post-decision ceremony.
+
+Caveats that keep this from being a verdict: N = 1 per arm; the 7888 arm serves the pre-merge
+code only because its JVM has not been reloaded since the merge; B's ceremony included two
+extra kaocha runs Sol chose to make. A counterbalanced cohort runs overnight.
+
+Also merged tonight on Gene's authority ("merging your surgeon changes in"): the four wave
+branches into main (`882b17b`; test-fast 653 / 5591 / 0, intent audit true, focused suites
+green), archived under `refs/archive/2026-09-02/delivered/` and deleted; and the bridge4
+trial into voice-remote main (`6d4cecf`, kaocha 579 / 7833 / 0). One lesson from the merge
+itself: a squash refused by a dirty beads export, followed by an archive-and-delete that had
+already run, was recoverable only because the archive ref had been pushed and confirmed
+first. The skill's order of operations is the reason nothing was lost.
