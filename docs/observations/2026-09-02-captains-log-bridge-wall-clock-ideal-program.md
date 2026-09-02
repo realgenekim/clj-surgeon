@@ -1822,3 +1822,28 @@ fields is a return with negative value; two thirds of tonight's refusals were th
 burden and defect capture; only shape two can make wall go positive, and only on fan-out
 tasks. If the roadmap has room for one, build the gate: the smallest change that turns every
 native edit into a verified one.
+
+## Receipt 11:45Z — Gene's morning orders: losers closed in doctrine, the Surgeon line pulled from agent prompts
+
+Gene, verbatim from the terminal: "Close all surgeon paths that are losers. Change skill and
+house rules." and, for the mayor: "Pull 'Surgeon is available and expected' from every Clojure
+agent prompt today. It is a standing 2x tax with no measured return, on every delegated
+Clojure job in the fleet, and it is a one-line doctrine edit. Leave the server running for
+agents that choose it; stop telling them to. The data says they will decline it, and decline
+it correctly. Cost: one edit to the delegation one-liner and a note in house rules.
+Reversible the moment q5z and az8 land."
+
+Done on bridge: claude-skills branch bridge/surgeon-losers-closed, commit 230ab5d (house
+rules Clojure block rewritten with the ruling quoted; clj-surgeon skill reduced to the
+measured winners with a closed-as-losers list), merge request to skiff at inbox inb-9bf478
+with the patch text; bridge memory retired. Winners kept: require_change, within plus
+from/to, extract, rename-ns, fix-declares. Losers closed: owner-kind-namespace insertion,
+per-form fan-out writes, the CLI wrapper as substitute, substitution mandates.
+
+Gene's further orders, verbatim: "Last mission: you have authority to do experiments to
+build whatever you think would help LLMs build better code. Make this a tool we can brag
+about, and exploits unique advantages of homoiconic properties of clojure. Also comment on
+bitter lesson caution in repo. And vision of ideal vim/emacs and 'think compile bang!' —
+what makes it elusive? Lastly, what could we have done in our methodology to have not spent
+weeks on dead ends?" Design is in deliberate planning with Sol and Opus (three plans each,
+critique, choose); the commentary and the post-mortem follow as their own receipts.
