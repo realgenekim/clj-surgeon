@@ -89,3 +89,20 @@ UPDATE 06:50Z — RECORD CORRECTION: all Anvil A/P rows before e3 (s2..k1, incl.
 unverified; mayor: another seat's production e7f72e2). The runner's server_sha field is the LOCAL checkout sha, not the
 server's. Shipped-64eac2e rows = Buster acid2/A + e3 arms on 7893 only. Acceptance headline "shipped beats native" is
 withdrawn until e3 rescore (rescore-anvil-cal2k1s7.txt running; e3 rescore next). Log receipt 06:50Z.
+
+UPDATE 08:05Z (supersedes above where they conflict)
+- e3 COMPLETE (12 arms, A/U/V/W x3, all gates green, all on 7893). Group 1 scored + logged (9ed0a39 quality, 3f6fa0c
+  actions/acceptance, 7e872f3 fleet round 3). Group 2 scoring in flight: blind judges Sol (scratchpad quality-review-e3g2/
+  review-sol.md) + Opus (review-opus.md; key.txt maps impl-N -> worktree), Anvil scorer writes ~/acid/receipts/e3-g2-score.md
+  (script ~/e3_final.py pins rollouts by worktree path; trust it over edit_wall.py/count_actions.py for doubled arms).
+  Group-2 acceptance: rescore-anvil-e3g2.txt. When all three land: log the group-2 table + per-arm means n=3 + one learning.
+- Chains on Anvil: ~/acid/chain-next.sh (running): b1 "G O A|G O A|G O A" at 4 cores (started 06:13Z) -> n1 "A N A N A N|N A
+  N A N A" (clean shipped vs native, 2-core) -> k2 "A K A K A K". Then ~/acid/chain-after-k2.sh: v1 "A A A A A A|V V V A A A".
+  Runner v5 now writes per-slot diffs/logs and slot= on end/gate lines (v3 refreshed from v5 by chain-next after e3).
+  Monitor bq3bcj15n relays e3/b1 lines; when b1 done, RESTART a monitor listing n1 k2 v1 too (its file list is fixed).
+- For each cohort when done: bash ~/anvil-freeze.sh <run> (idempotent per-worktree diffs) -> scp diffs -> shuffle into
+  quality-review-<run>/ with key.txt + prompt.md (copy from quality-review-e3g1) -> Sol judge (codex exec read-only) +
+  Opus judge agent -> rescore.sh on Anvil -> scorer (message the Anvil scorer agent or a new Opus agent with e3_final.py)
+  -> log receipt -> fleet round (Sol + Opus) -> queue next -> tell mayor (policy-10 shape).
+- Aborted first e3 launch (7888): rollouts ended 05:49:10-18Z, zero-byte diffs, no survivors; exposure ~1 min as disclosed.
+  Pre-e3 A/P rows (s2..k1) DID call 7888 for their full runs (14 arm-runs); disclosed to mayor 06:50Z.
