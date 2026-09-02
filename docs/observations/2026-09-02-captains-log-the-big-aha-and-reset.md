@@ -1570,3 +1570,26 @@ and the result is flat. Consistent with the mechanism, fatal to the rung M claim
 test: native runs two JVM suites on R3, and z7's first gate arm executed zero suites itself and
 ended at 281 s against rs1's 328.
 
+
+## 18:46Z — gate session by hand: the sewing through admit_clojure_patch, one false refusal fixed live, then one verified commit in 21 s
+
+The gate server started in-process from an nREPL on `bridge/admit-gate` (2cc52fa), rooted at the
+tweezer worktree on 7899 (`:project-root` attested in ready.edn), with the R3 focused profile and
+wrapper installed in the tree. Session 2's sewing (alias require, one site, one dead require)
+reverted and resubmitted as git's own unified diff, mode commit, verify focused.
+
+| call | result |
+|---|---|
+| 1 | REFUSED in 750 ms, hazard `require-removed`: "The ns form no longer requires clj-surgeon.mcp-compact-location", class refusal, next_call offering only preview, no override. The require is dead (clj-kondo unused-namespace); every extraction's sewing removes one. **False refusal in the winner square.** |
+| live patch | `form-identity/require-hazards` wrapped: a `:require-removed` hazard stays a refusal only if the patched image still references the lib or its alias; otherwise class `:note`, message says so. |
+| 2 | ADMITTED: `committed true`, `verification_status complete`, 20.9 s, 38 tests in `clj-surgeon.mcp-tool-test` via the R3 wrapper, lint delta 0 introduced, drift 0 bytes, owners −5 ~2, the dead-require note carried in `hazards`. The write equals session 2's sewing exactly. |
+
+**Shape.** Extract in one call (session 2, with the header fixes) + gate in one call = a verified
+structural move in two returns plus study. rf2's rewiring verb makes the extract self-sewing, so
+the cold path is: plan → extract-with-rewire → gate-commit → done. The next ladder step is G5,
+whether a cold agent takes that path unprompted.
+
+**Two gate findings for the branch:** (1) dead-require removal must be admissible when no
+reference remains (fix dispatched with a witness); (2) `next_call` on a hazard refusal must name
+the override or the evidence that would lift it, else the refusal is not actionable.
+
