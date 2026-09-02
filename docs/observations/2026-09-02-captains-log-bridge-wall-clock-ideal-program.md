@@ -1724,3 +1724,26 @@ being ratcheted against: port 7888 has a listener with no visible pid, which bot
 existing PORT-NOT-MINE check and the new attestation refuse. Runner v5 grew from 32 to 79
 lines; the running copy v3 is untouched until l1r finishes. Also confirmed by the same
 agent: 7889 is alive on main 2311cc09, pid 1939050, project-root surgeon-main.
+
+## Receipt 09:08Z — b2 scored: main 2311cc09 shows no detected regression on the refusal ledger
+
+| metric (n=3 each) | B main 2311cc09 | A shipped | sd vs floor |
+|---|---|---|---|
+| wall s | 496 | 581 | -1.0 |
+| total actions | 27.7 | 28.7 | -0.3 |
+| MCP calls (writes) | 7.3 (4.7) | 12.7 (8.3) | -1.9 |
+| typed refusals | 3.3 | 5.3 | -1.4 |
+| ambiguous-insertion-gap | 1 (one run) | 1 (one run) | |
+| overlapping-intents | 0 | 0 | |
+| batch-form-selection-failed | 0 | 4 (two runs) | |
+| new refusal reasons on B | none | | |
+| acceptance failed | 1.33 (one clean sweep) | 2.33 | -1.0 |
+| churn, create_files, owner-kind-namespace writes | none, none, none | none, none, none | |
+
+Reading: the merged insertion-gap fix does not eliminate ambiguous-insertion-gap (once on
+each arm), but B looks nothing like b1's O build, which drew it in three of three runs, and
+B's refusal vocabulary is a subset of what shipped builds emitted tonight; it removes one
+class (batch-form-selection-failed) that shipped still emits. Nothing clears two sd, so this
+is a no-detected-regression signature at n=3, not a measured improvement; the gate that
+requires demonstrated improvement needs a wider run. From the ledger, 2311cc09 is safe to
+promote; the slice-0 hold decision belongs to skiff.
