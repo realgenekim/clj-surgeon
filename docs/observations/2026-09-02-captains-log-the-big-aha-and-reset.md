@@ -2985,3 +2985,33 @@ the file path). Intent MCP-OP-EXTRACT-023 with `@spec` tags (the repo's conventi
 homebrew clj-kondo path expectation). My own mcp-test run in progress; push after. Disposition for the
 mayor: 23j closes on the rf2 merge, pointer 5e6cdd2.
 
+
+## 23:33Z — Surgeon friction ledger from session 4 and the production migration (Gene: "Are you tweezering in this? Are you getting any useful data on surgeon usage / friction etc")
+
+Watched (session 4 dry plan): 11 returns, ~299 s wall, ~7 s in tool, 0 hand repairs, verdict YES.
+Unwatched but receipted (the production migration on the lens branch): two transactions, 7.46 s + 1.06 s,
+18 arms, comments and spelling preserved, 0 churn outside the forms; LENS-004 commit 9ed7b0ef.
+Friction, with the refusal text, each a ratchet candidate:
+1. Outline names every `defmethod` "fold-event" with no dispatch value; the owner vocabulary collapses
+   ~117 arms into one name (`missing form fold-event "schedule.locked" … available owners (22/22)`); the
+   `{kind: defmethod, name, dispatch}` owner shape is documented only in `apply_clojure_changes`' schema.
+   A cold agent pays one refusal to learn it. Ratchet: outline emits `dispatch` for defmethods and the
+   refusal's hypotheses name the defmethod owner form.
+2. The transaction receipt does not report matched-but-unaddressed sites when a prior `match` on the
+   same snapshot hash found more (19 matched, 16 addressed); the exclusion rationale was in my head.
+   Ratchet: `unaddressed_matches` in the receipt when a match basis is supplied.
+3. `inspect_clojure` refuses `missing-fields` without the aggregate `expect {requests, files}`, even
+   for one request; the refusal names nothing. Ratchet: the refusal names the missing field.
+4. `plan-extraction` refuses `invalid-require-policy` when `require_policy` is omitted — no default,
+   refusal names nothing. Ratchet: default `minimal` or name the field.
+5. `plan-extraction` on main derives target-ns from the server root and copies the source ns docstring
+   (23j/3s5) — fixed on rf2 (EXTRACT-014/023), found by this session's live probe.
+6. A 4-element `match` pattern `[:events slug :settings _]` silently misses 5-element paths (21 of 23);
+   `_` matches exactly one subtree and nothing says so at the miss. Ratchet: match receipts could
+   report near-misses by prefix, or the docs say "one subtree per `_`" next to the pattern field.
+Wins, concrete: one `match` returned all 19 guard forms with source + hash + preorder address + enclosing
+form in 0.6 s (one read for the whole migration's content); defmethod-addressed `find`/`replace` kept
+interior INTENT comments byte for byte; refusals were typed and fast (0.16 s, 0.01 s). Load note (Gene:
+"Maybe we single task this … Overloading buster box?"): load 2.3 falling from ~3.8 peak, 3.4 GB
+available, one busy JVM (my unit run); cap set at two concurrent builders + one suite behind the lock.
+
