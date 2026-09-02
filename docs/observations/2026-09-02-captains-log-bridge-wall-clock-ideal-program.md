@@ -1568,3 +1568,26 @@ minutes and the Surgeon arms took twice that, the mandate three times. The full 
 actions, taxonomy and refusal ledger are being scored; eleven diffs are with the judges.
 Two shipped diffs are 66 KB against 16 KB for the rest, which usually means reformatting of
 untouched forms; the judges will say.
+
+## Receipt 08:57Z — l1 blind quality: all eleven correct; three Surgeon-arm diffs reformatted untouched code
+
+| arm | Opus | Sol | mean |
+|---|---|---|---|
+| native N (4) | 18.5, 19.5, 19, 19.5 (19.1) | 19.5, 19.5, 19.5, 20 (19.6) | 19.4 |
+| shipped A (4) | 20, 19, 14, 14.5 (16.9) | 20, 19.5, 13.5, 13.5 (16.6) | 16.8 |
+| mandate Y (3) | 19, 14.5, 18.5 (17.3) | 19.5, 15, 17.5 (17.3) | 17.3 |
+
+Both judges, independently: every diff is functionally correct (22 currentTimeMillis
+removals, one remaining in clock.clj, ten requires, the pinned three-owner clock namespace,
+nothing outside src touched, no client-owned Date.now touched). Test quality is
+non-discriminating by construction (the spec forbids editing test/). The two real axes were
+require ordering and scope discipline, and scope discipline is where the arms separate:
+two shipped diffs (the 66 KB ones) rewrote 425 lines across five files, whole ns and import
+forms and body re-indentation, semantically inert (verified by whitespace-stripped
+comparison), a twenty-fold signal-to-noise penalty on a 22-line change; one mandate diff did
+the same to 153 lines of one file. Zero native diffs did. The top diff of the eleven by both
+judges (20 and 20) is a shipped one, so the tool can produce the cleanest result; three of
+seven Surgeon-arm diffs did not. Whether the churn is the tool re-emitting whole forms on
+a rewrite or the agent running a formatter is being attributed from the rollouts now; the
+answer decides whether this is a Surgeon product defect (whole-form re-emission reformats
+the untouched remainder) or agent behaviour.
