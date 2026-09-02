@@ -117,3 +117,11 @@ UPDATE 10:05Z — rung L INSTALLED on Anvil (v5 L) entry = M gate; prompts ~/pro
 + rescore-L.sh; base = 12 tests 39 failures; TESTS_BASELINE for L = 577). chain-3.sh queued: after "v1 done" runs l1 L "A N A N A N|N A N A N A".
 Known L prompt nits (unused by l1): U/V/W variants carry two TURNS formats; planning blocks quote the full-suite price. Mayor merged
 analyzer-flake fix 33e03075 (pulled); sweep of Anvil receipts for that signature: 0 files.
+
+UPDATE 11:40Z — b1 DONE and logged (3b99ea6 actions, 383b2e6 quality, aece0dd fleet round 5). Reading: overlap fix exonerated;
+insertion-gap fix suspect via "productive refusal" (fix removed the re-read that produced DRY code); indentation-regex finding sent
+to skiff for surgeon1. b2 replication: ~/acid/chain-4b.sh after "l1 done", randomised O/G order, one wave. Capture ratchets: runner
++ freeze stage before diff; anvil-freeze.sh now has a completeness gate (INCOMPLETE suffix if any worktree path is absent from the
+diff). Monitor bfmmu5zhr relays n1/k2/v1/l1 (+ chain log); add b2 when restarting. n1 g1: N 231/259/521, A 426/714/722, all green.
+Pending: scorer's refusal-reason table for b1 (b1-score.md "refusal reasons"); n1 g2 -> freeze -> judges (prompt from
+quality-review-b1/prompt.md, 12 impls) -> rescore -> scorer -> log -> fleet -> mayor.
