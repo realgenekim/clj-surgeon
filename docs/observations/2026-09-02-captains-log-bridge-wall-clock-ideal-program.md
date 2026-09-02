@@ -911,3 +911,46 @@ paired by wave (clean shipped-vs-native, server identity verified) -> k2 "A K" x
 CLI on the same build) -> v1 "A x6 | V x3 A x3" (variance floor, budget dose with the
 baseline gate armed). Every diff frozen per worktree; scored on actions, acceptance, two blind
 judges; walls reported with the contention caveat.
+
+## Receipt 08:30Z — e3 complete: prompt variants at n=3 per arm (all on verified 7893)
+
+Group 2 (six-wide, contended walls), two blind judges (20 max), acceptance = failed assertions of 39:
+
+| worktree | wall s | total actions | acceptance failed | Opus | Sol | mean |
+|---|---|---|---|---|---|---|
+| A-2 shipped | 563 | 40 | 1 (acid-9) | 17 | 19 | 18 |
+| U-3 report-only | 485 | 19 | 2 (acid-7) | 16 | 17.5 | 16.75 |
+| V-0 turn budget | 605 | 28 | 2 (acid-7) | 17 | 17.5 | 17.25 |
+| V-4 turn budget | 692 | 19 | 3 (acid-6, -7) | 17 | 18.5 | 17.75 |
+| W-1 deliberate | 586 | 30 | 5 (acid-5, -7, -9) | 18 | 15.5 | 16.75 |
+| W-5 deliberate | 463 | 24 | 4 (acid-6, -7, -9) | 15 | 19 | 17 |
+
+Per-arm means over both groups, n=3 each:
+
+| arm | wall s | total actions | MCP calls | suite runs | acceptance failed | quality (2 judges) |
+|---|---|---|---|---|---|---|
+| A shipped | 495 | 30.3 | 10.7 | 1.33 | 2.33 | 16.9 |
+| U report-only | 513 | 22.3 | 8.3 | 1.00 | 2.33 | 16.7 |
+| V turn budget | 546 | 21.7 | 6.3 | 1.67 | 2.33 | 17.0 |
+| W deliberate | 504 | 27.0 | 7.3 | 2.33 | 3.67 | 17.3 |
+
+Headline: **no prompt variant separates on quality at n=3** (spread 0.6 points on a scale where
+the two identical A arms in group 1 differed by 2.25). The turn budget cut total actions 28
+percent at equal acceptance, but two of its three runs shipped fewer tests than baseline and it
+overran its own stated budget every time. Deliberate planning cost acceptance (3.67 vs 2.33)
+and bought nothing measurable. Within-arm wall spread exceeds between-arm spread for every arm.
+
+Judge finding, the important one: on W-1 the judges disagree by 3.5 points on the same
+artifact. Opus ranks it first because it "touches no shared string at all, everything in one
+appended block that reassigns onsetReady/kwCheck, literally what the spec prescribed"; Sol
+ranks it last for "replacing onsetReady and kwCheck", the pattern both judges penalised in
+group 1's A-4. That is a rubric hole, not noise: the spec must say whether the appended
+reassignment is the prescribed form or a monkeypatch, or the clarity axis measures judge taste.
+Opus also found a correctness split Sol missed: U-3 and A-2 return from the mic gate before
+resetting speechStartAt, the exact echo-moment failure the feature exists to prevent; Sol
+scored A-2 19. Correctness convergence between judges is weaker than group 1 suggested.
+
+Server identity: the rollouts record no MCP URL at all, so routing is provable only from the
+runner's `-c mcp_servers.clj-surgeon.url` line (7893 for A/P/U/V/W); the W start lines'
+41eee738 label was the runner's fall-through case, now fixed. Surgeon should report a build id
+in healthz and stamp it in telemetry so a receipt can witness the server, not the runner.
