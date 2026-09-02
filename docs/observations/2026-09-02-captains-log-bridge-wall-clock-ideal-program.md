@@ -1022,3 +1022,31 @@ suite stored beside this log in `2026-09-02-acid-rung-L/`; the reference solutio
 the arms' path. Designer's caveat: the full suite runs in 19 s here, so agents will be tempted
 to run it instead of the focused one; that temptation is the main variance source in this
 rung. Installing on Anvil now; cohort l1 "A N" x3 pairs queues after v1.
+
+## Receipt 10:40Z — b1 bisect, actions and acceptance (quality pending a capture correction)
+
+Arms on verified servers: G = wave minus the insertion-gap fix (7891), O = wave minus the
+overlap fix (7892), A = shipped (7893); three groups of "G O A", 4 cores per arm.
+
+| arm | wall s (mean, spread) | total actions | MCP calls | refusals | acceptance failed |
+|---|---|---|---|---|---|
+| G no-gap-fix | 542 (483–575) | 29.0 | 7.3 | 2.3 | 2.33 |
+| O no-overlap-fix | 618 (469–863) | 30.3 | 10.7 | 5.3 | 2.33 |
+| A shipped | 636 (436–810) | 29.7 | 10.0 | 4.3 | 2.00 |
+
+Findings from the rollouts (scorer pins by worktree path and start time, 9 of 9 resolved):
+total actions and acceptance do not separate the arms. The only consistent split is that G
+made fewer MCP calls and drew fewer refusals than A in all three groups (MCP 7/8/7 vs 11/8/11;
+refusals 2/3/2 vs 6/3/4); O crosses A in both directions. So the insertion-gap fix carries
+the shipped build's MCP-and-refusal profile, and reverting the overlap fix is behaviourally
+near-invisible at this n. acid-7 fails in 7 of 9 runs, including two shipped runs.
+
+Apparatus finding, again receipt-blind-to-subject: frozen diffs were captured with plain
+`git diff`, which omits untracked new files. O-g3 provably lost its new test namespace
+(worktree survived; corrected diff 14.5 KB vs 10.4 KB) and both judges had scored it "no tests
+at all". Fixed in the runner and the freeze script (`add -A` then `diff --cached base`); an
+audit of all 21 rollouts for created files absent from their diffs is running, and the two
+judges are re-scoring the corrected diff. The b1 quality verdict waits for that audit,
+because groups 1 and 2 worktrees are gone and a truncated diff cannot be recovered there.
+Also: the runner's `TESTS-BELOW-BASELINE` flag on G-g3 was contradicted by the full gate
+(577 in-run, clean on rerun), another orphaned-gate symptom from before the serial fix.
