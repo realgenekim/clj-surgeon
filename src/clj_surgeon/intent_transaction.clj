@@ -1054,8 +1054,26 @@
 
 (defn- overlap?
   [left right]
-  (<= (:address-preorder right) (:end-preorder left)))
+  (letfn [(owner-boundary-insertion-disjoint? [insertion interior]
+            (let [insertion-path (:path insertion)
+                  interior-path (:path interior)]
+              (and (:insert-side insertion)
+                   (= 2 (count insertion-path))
+                   (= (:owner insertion) (:owner interior))
+                   (< (:address-preorder insertion)
+                      (:address-preorder interior))
+                   (< (:end-preorder interior)
+                      (:end-preorder insertion))
+                   (<= (count insertion-path) (count interior-path))
+                   (= insertion-path
+                      (subvec interior-path 0 (count insertion-path))))))]
+    (and (<= (:address-preorder right) (:end-preorder left))
+         (not (or (owner-boundary-insertion-disjoint? left right)
+                  (owner-boundary-insertion-disjoint? right left))))))
 
+;; @spec MCP-OP-INSERT-001
+;; @spec MCP-OP-INSERT-002
+;; @spec MCP-OP-INSERT-006
 (defn- assert-disjoint-edits!
   [file edits]
   (let [ordered (->> edits
@@ -1125,6 +1143,10 @@
      :end (+ (nth offsets (dec end-row)) (dec end-col))
      :row row}))
 
+;; @spec MCP-OP-INSERT-003
+;; @spec MCP-OP-INSERT-004
+;; @spec MCP-OP-INSERT-005
+;; @spec MCP-OP-INSERT-006
 (defn- insertion-gap
   [source target side edit]
   (let [parent (z/up target)
@@ -1146,13 +1168,29 @@
           closing-boundary (if top-level? parent-end (dec parent-end))
           neighbor (if (= :insert-left side) (z/left target) (z/right target))
           neighbor-offsets (when neighbor (node-offsets source neighbor))
+          opposite-neighbor (if (= :insert-left side)
+                              (z/right target)
+                              (z/left target))
+          opposite-offsets (when opposite-neighbor
+                             (node-offsets source opposite-neighbor))
           [gap-start gap-end]
           (if (= :insert-left side)
             [(or (:end neighbor-offsets) opening-boundary)
              target-start]
             [target-end
              (or (:start neighbor-offsets) closing-boundary)])
-          gap (subs source gap-start gap-end)]
+          gap (subs source gap-start gap-end)
+          opposite-gap
+          (if (= :insert-left side)
+            (subs source target-end
+                  (or (:start opposite-offsets) closing-boundary))
+            (subs source
+                  (or (:end opposite-offsets) opening-boundary)
+                  target-start))
+          anchor-indentation
+          (or (second (re-find #"(?m)(?:^|\n)([ \t]*)$"
+                              (subs source 0 target-start)))
+              "")]
       (when-not (re-matches #"[\s,]*" gap)
         (refuse! :ambiguous-insertion-gap
                  "The sibling gap contains comments or detached source"
@@ -1161,7 +1199,10 @@
                   :target (:before edit)
                   :gap gap
                   :remedy "Replace a larger exact span that declares comment placement."}))
-      (if (seq gap) gap " "))))
+      (cond
+        (seq gap) gap
+        (str/includes? opposite-gap "\n") (str "\n" anchor-indentation)
+        :else " "))))
 
 (defn- deletion-offsets
   [source target]
@@ -2575,8 +2616,12 @@
      :authority-error (when (:error algebra-result) algebra-result)}))
 
 (defn execute-change-with-context!
-  ;; @spec OP-ALG-COMMIT-001, OP-ALG-COMMIT-002, OP-ALG-CONTEXT-001,
-  ;; @spec OP-ALG-CONTEXT-002, OP-ALG-IDENTITY-001, OP-ALG-RECEIPT-003,
+  ;; @spec OP-ALG-COMMIT-001,
+  ;; @spec OP-ALG-COMMIT-002,
+  ;; @spec OP-ALG-CONTEXT-001,
+  ;; @spec OP-ALG-CONTEXT-002,
+  ;; @spec OP-ALG-IDENTITY-001,
+  ;; @spec OP-ALG-RECEIPT-003,
   ;; @spec OP-ALG-RUNTIME-001
   "Compile, commit, verify, and publish one durable inverse receipt."
   [context

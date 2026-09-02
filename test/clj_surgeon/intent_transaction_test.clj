@@ -860,6 +860,119 @@
     (is (:ok inverse))
     (is (= {file source} (:future-sources inverse)))))
 
+;; @spec MCP-OP-INSERT-001
+(deftest owner-boundary-insertion-is-disjoint-from-interior-replacements
+  ;; Minimized from the 2026-09-02 bridge4-page-html field refusal.
+  (let [file "src/sample.clj"
+        source (str "(ns sample)\n"
+                    "(defn bridge4-page-html []\n"
+                    "  (str (cancel-js) (over-cancel-buttons)))\n")
+        expected (str "(ns sample)\n"
+                      "(def cancel-js-def :installed)\n"
+                      "(defn bridge4-page-html []\n"
+                      "  (str (new-cancel-js) (new-over-cancel-buttons)))\n")
+        result
+        (transaction/compile-transaction
+          {file source}
+          {:changes
+           [{:id :cancel-js-def
+             :in [file]
+             :forms ['bridge4-page-html]
+             :find (str "(defn bridge4-page-html []\n"
+                        "  (str (cancel-js) (over-cancel-buttons)))")
+             :do [:insert-left ["(def cancel-js-def :installed)"]]
+             :expect {:matches 1}}
+            {:id :cancel-js
+             :in [file]
+             :forms ['bridge4-page-html]
+             :find "(cancel-js)"
+             :do [:replace "(new-cancel-js)"]
+             :expect {:matches 1}}
+            {:id :over-cancel-buttons
+             :in [file]
+             :forms ['bridge4-page-html]
+             :find "(over-cancel-buttons)"
+             :do [:replace "(new-over-cancel-buttons)"]
+             :expect {:matches 1}}]
+           :expect {:changes 3 :edits 3 :files 1}})]
+    (is (:ok result))
+    (is (= expected (get-in result [:future-sources file])))
+    (is (valid-source? expected))))
+
+;; @spec MCP-OP-INSERT-002
+;; @spec MCP-OP-INSERT-006
+(deftest boundary-insertion-still-refuses-ambiguous-overlaps
+  (let [file "src/sample.clj"
+        source (str "(ns sample)\n"
+                    "(defn owner [] (str \"a\" \"b\"))\n")
+        insertion {:id :insert
+                   :in [file]
+                   :forms ['owner]
+                   :find "(defn owner [] (str \"a\" \"b\"))"
+                   :do [:insert-left ["(def before :x)"]]
+                   :expect {:matches 1}}
+        cases
+        [[:whole-owner
+          [insertion
+           {:id :whole-owner :in [file] :forms ['owner]
+            :find "(defn owner [] (str \"a\" \"b\"))"
+            :do [:replace "(defn owner [] :replaced)"] :expect {:matches 1}}]]
+         [:delete-owner
+          [insertion
+           {:id :delete-owner :in [file] :forms ['owner]
+            :do [:delete true] :expect {:matches 1}}]]
+         [:same-boundary
+          [insertion (assoc insertion :id :second-insertion)]]
+         [:non-owner-containing-boundary
+          [{:id :nested-insert :in [file] :forms ['owner]
+            :find "\"b\"" :do [:insert-left ["(side-effect)"]]
+            :expect {:matches 1}}
+           {:id :containing-span :in [file] :forms ['owner]
+            :find "(str \"a\" \"b\")" :do [:replace "(str \"new\")"]
+            :expect {:matches 1}}]]]]
+    (doseq [[label changes] cases]
+      (testing (name label)
+        (let [sources {file source}
+              result (transaction/compile-transaction
+                       sources
+                       {:changes changes
+                        :expect {:changes 2 :edits 2 :files 1}})]
+          (is (= :overlapping-intents (:error-type result)))
+          (is (nil? (:future-sources result)))
+          (is (not (true? (:write-authority result))))
+          (is (= source (get sources file))))))))
+
+;; @spec MCP-OP-INSERT-003
+;; @spec MCP-OP-INSERT-004
+;; @spec MCP-OP-INSERT-005
+(deftest insertion-gap-uses-opposite-newline-style-before-space-fallback
+  ;; Minimized from the 2026-09-02 channel.clj long string-literal insertion.
+  (let [long-literal (str "\"" (apply str (repeat 450 "x")) "\"")
+        source (str "(ns sample)\n"
+                    "(defn render []\n"
+                    "  (str\n"
+                    "    \"prefix\"\n"
+                    "    " long-literal "))\n")
+        expected (str "(ns sample)\n"
+                      "(defn render []\n"
+                      "  (str\n"
+                      "    \"prefix\"\n"
+                      "    " long-literal "\n"
+                      "    (when enabled? (render-extra))))\n")
+        result
+        (transaction/compile-transaction
+          {"src/sample.clj" source}
+          {:changes [{:id :add-render-extra
+                      :in ["src/sample.clj"]
+                      :forms ['render]
+                      :find long-literal
+                      :do [:insert-right ["(when enabled? (render-extra))"]]
+                      :expect {:matches 1}}]
+           :expect {:changes 1 :edits 1 :files 1}})]
+    (is (:ok result))
+    (is (= expected (get-in result [:future-sources "src/sample.clj"])))
+    (is (valid-source? expected))))
+
 (deftest guarded-sibling-insertion-refuses-comment-bearing-or-invalid-gaps
   (doseq [[label operator]
           [[:before-comment :insert-left]
