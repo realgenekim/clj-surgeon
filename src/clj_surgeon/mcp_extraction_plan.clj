@@ -158,6 +158,7 @@
                :source (get sources source-path)
                :forms (:forms params)
                ;; @spec MCP-OP-EXTRACT-014
+               ;; @spec MCP-OP-EXTRACT-023
                ;; Read against the WORKSPACE root, never the server's own
                ;; project: a server answering for another checkout derived
                ;; namespace names from its own layout.

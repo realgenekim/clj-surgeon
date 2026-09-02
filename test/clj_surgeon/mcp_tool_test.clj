@@ -822,6 +822,56 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-EXTRACT-014
+;; @spec MCP-OP-EXTRACT-023
+(deftest apply-extraction-derives-target-ns-from-the-requested-workspace-root-not-the-servers
+  ;; clj-surgeon-23j: the apply_clojure_changes extraction route, reached with
+  ;; a config :project-root naming the SERVER's own project and an explicit
+  ;; workspace_root naming a DIFFERENT checkout, must write the target
+  ;; namespace derived from that requested workspace_root. The requested
+  ;; workspace also sits under an ancestor directory literally named "src",
+  ;; the exact shape (every checkout under ~/src/<repo>) that let an
+  ;; absolute-path "/src/" substring match the wrong ancestor.
+  (let [harness (temp-dir)
+        server-root (io/file harness "server-project")
+        workspace-root (io/file harness "src" "curtaincall-cfp-lens-scratch-fixture")
+        source-file (io/file workspace-root "src/cfp_scheduler_killer/folds.clj")
+        target-file (io/file workspace-root "src/cfp_scheduler_killer/settings_lens.clj")
+        source
+        (str "(ns cfp-scheduler-killer.folds\n"
+             "  \"Pure event-log projection: facts in, derived state out.\")\n\n"
+             "(defn- settings\n"
+             "  \"The event's settings map.\"\n"
+             "  [state event-id]\n"
+             "  (get-in state [:events event-id :settings]))\n\n"
+             "(defn- update-settings\n"
+             "  \"Apply f to the event's settings map.\"\n"
+             "  [state event-id f & args]\n"
+             "  (apply update-in state [:events event-id :settings] f args))\n")]
+    (try
+      (.mkdirs server-root)
+      (.mkdirs (.getParentFile source-file))
+      (spit (io/file workspace-root "deps.edn") "{:paths [\"src\"]}\n")
+      (spit source-file source)
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath server-root)}
+              {"workspace_root" (.getPath workspace-root)
+               "extraction"
+               {"file" "src/cfp_scheduler_killer/folds.clj"
+                "to" "src/cfp_scheduler_killer/settings_lens.clj"
+                "forms" ["settings" "update-settings"]
+                "public_forms" ["settings" "update-settings"]
+                "require_policy" "minimal"}})]
+        (is (:ok result) (pr-str result))
+        (is (= (.getPath (.getCanonicalFile workspace-root))
+               (:workspace_root result)))
+        (is (.exists target-file))
+        (is (str/starts-with? (slurp target-file)
+                              "(ns cfp-scheduler-killer.settings-lens)\n")))
+      (finally
+        (delete-tree! harness)))))
+
 (deftest extraction-creates-and-undoes-a-missing-target-parent
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/sample/core.clj")

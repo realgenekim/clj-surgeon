@@ -302,6 +302,84 @@
         (http-server/stop-http-server! running)
         (delete-tree! project)))))
 
+;; @spec MCP-OP-EXTRACT-014
+;; @spec MCP-OP-EXTRACT-023
+(deftest wire-plan-extraction-derives-target-ns-from-the-requested-workspace-root
+  ;; clj-surgeon-23j, reproduced over the real HTTP transport: an MCP server
+  ;; started from ITS OWN project directory answers a plan-extraction call
+  ;; naming a DIFFERENT workspace_root -- exactly the shape of the live
+  ;; repro (server serving one checkout, workspace_root naming another) --
+  ;; and the workspace also sits under an ancestor directory literally named
+  ;; "src", the shape every checkout under ~/src/<repo> has. target-ns and
+  ;; the previewed ns form must come from the requested workspace_root, not
+  ;; the server's own project, and the source ns docstring must not be
+  ;; copied onto the target ns form.
+  (let [harness (temp-dir)
+        server-project (io/file harness "server-project")
+        workspace-root (io/file harness "src" "curtaincall-cfp-lens-scratch-fixture")
+        source-file (io/file workspace-root "src/cfp_scheduler_killer/folds.clj")
+        source
+        (str "(ns cfp-scheduler-killer.folds\n"
+             "  \"Pure event-log projection: facts in, derived state out.\")\n\n"
+             "(defn- settings\n"
+             "  \"The event's settings map.\"\n"
+             "  [state event-id]\n"
+             "  (get-in state [:events event-id :settings]))\n\n"
+             "(defn- update-settings\n"
+             "  \"Apply f to the event's settings map.\"\n"
+             "  [state event-id f & args]\n"
+             "  (apply update-in state [:events event-id :settings] f args))\n")
+        _created (.mkdirs server-project)
+        _created (.mkdirs (.getParentFile source-file))
+        _deps (spit (io/file workspace-root "deps.edn") "{:paths [\"src\"]}\n")
+        _source (spit source-file source)
+        running (http-server/start-http-server!
+                  {:project-dir (.getPath server-project)
+                   :port 0
+                   :telemetry :off
+                   :nrepl-port :none})]
+    (try
+      (let [client (HttpClient/newHttpClient)
+            initialized
+            (post-json client (:url running) nil
+                       {:jsonrpc "2.0" :id 1 :method "initialize"
+                        :params {:protocolVersion "2025-03-26"
+                                 :capabilities {}
+                                 :clientInfo {:name "extraction-23j-wire-test"
+                                              :version "1"}}})
+            session-id
+            (-> initialized .headers (.firstValue "Mcp-Session-Id")
+                (.orElse nil))
+            _notification
+            (post-json client (:url running) session-id
+                       {:jsonrpc "2.0" :method "notifications/initialized"})
+            called
+            (post-json client (:url running) session-id
+                       {:jsonrpc "2.0" :id 2
+                        :method "tools/call"
+                        :params
+                        {:name "inspect_clojure"
+                         :arguments
+                         {:workspace_root (.getPath workspace-root)
+                          :mode "plan-extraction"
+                          :file "src/cfp_scheduler_killer/folds.clj"
+                          :to "src/cfp_scheduler_killer/settings_lens.clj"
+                          :forms ["settings" "update-settings"]
+                          :require_policy "minimal"}}})
+            result (:result (sse-json called))
+            evidence (:structuredContent result)]
+        (is (= 200 (.statusCode initialized)))
+        (is (false? (:isError result)) (pr-str result))
+        (is (= "cfp-scheduler-killer.settings-lens"
+               (get-in evidence [:plan :target-ns])))
+        (is (= "(ns cfp-scheduler-killer.settings-lens)"
+               (get-in evidence [:plan :new-file-preview :ns-form])))
+        (is (= (.getPath (.getCanonicalFile workspace-root))
+               (:workspace_root evidence))))
+      (finally
+        (http-server/stop-http-server! running)
+        (delete-tree! harness)))))
+
 (deftest one-http-session-observes-live-tool-add-replace-and-remove
   (let [project (temp-dir)
         running (http-server/start-http-server!

@@ -324,6 +324,7 @@
         request (assoc request
                        :source (get sources (:file request))
                        ;; @spec MCP-OP-EXTRACT-014
+                       ;; @spec MCP-OP-EXTRACT-023
                        :target-ns (extract/workspace-target-ns
                                     root (:to request))
                        :workspace-sources sources)

@@ -43,6 +43,7 @@ tests witness the requirement.
 # #Workspace-Scoped Namespace Derivation
 
 - [x] **MCP-OP-EXTRACT-014**: When clj-surgeon derives a target namespace name for a workspace, it shall read the source paths from that workspace root's own `deps.edn` and express the target path relative to that root ; it shall never read the serving process's working directory or a hard-coded source-path list, so a server answering for a different checkout cannot derive a namespace from its own layout.
+- [x] **MCP-OP-EXTRACT-023**: When the `plan-extraction` MCP route or the `apply_clojure_changes` extraction route resolves an explicit `workspace_root` that differs from the serving process's own configured project root, clj-surgeon shall derive `target-ns` and the target namespace form from that resolved `workspace_root` alone, including when the MCP tool is reached over its real HTTP transport, and shall derive it correctly even when a directory named `src` also exists as an ancestor above the workspace root ; it shall never copy the source namespace's docstring onto the target namespace form. (clj-surgeon-23j)
 
 # #Receipts a Cold Reader Can Act On
 

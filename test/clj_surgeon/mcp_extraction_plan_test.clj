@@ -6,7 +6,9 @@
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]
    [clojure.java.io :as io]
-   [clojure.test :refer [deftest is testing]]))
+   [clojure.test :refer [deftest is testing]])
+  (:import
+   (java.nio.file Files)))
 
 (def source
   "(ns sample.core)\n\n(defn moved [x] (inc x))\n")
@@ -251,6 +253,56 @@
                             [:properties "mode" :enum])))))
       (finally
         (delete-tree! root)))))
+
+;; @spec MCP-OP-EXTRACT-014
+;; @spec MCP-OP-EXTRACT-023
+(deftest plan-extraction-derives-target-ns-from-the-requested-workspace-root-not-the-servers
+  ;; clj-surgeon-23j: a server started from ITS OWN project directory,
+  ;; answering a plan-extraction call for a DIFFERENT workspace_root, must
+  ;; derive target-ns from that requested workspace_root -- never from its
+  ;; own configured project-root. The requested workspace also sits under an
+  ;; ancestor directory literally named "src" (as every checkout under
+  ;; ~/src/<repo> does), which is the exact shape that made an absolute-path
+  ;; "/src/" substring match the WRONG ancestor when target-ns was derived
+  ;; against the wrong root.
+  (let [harness (.toFile (Files/createTempDirectory
+                           "clj-surgeon-23j-plan-"
+                           (make-array java.nio.file.attribute.FileAttribute 0)))
+        server-root (io/file harness "server-project")
+        workspace-root (io/file harness "src" "curtaincall-cfp-lens-scratch-fixture")
+        source-file (io/file workspace-root "src/cfp_scheduler_killer/folds.clj")
+        source
+        (str "(ns cfp-scheduler-killer.folds\n"
+             "  \"Pure event-log projection: facts in, derived state out.\")\n\n"
+             "(defn- settings\n"
+             "  \"The event's settings map.\"\n"
+             "  [state event-id]\n"
+             "  (get-in state [:events event-id :settings]))\n\n"
+             "(defn- update-settings\n"
+             "  \"Apply f to the event's settings map.\"\n"
+             "  [state event-id f & args]\n"
+             "  (apply update-in state [:events event-id :settings] f args))\n")]
+    (try
+      (.mkdirs server-root)
+      (.mkdirs (.getParentFile source-file))
+      (spit (io/file workspace-root "deps.edn") "{:paths [\"src\"]}\n")
+      (spit source-file source)
+      (let [result
+            (inspect-tool/execute-inspect!
+              {:project-root (.getPath server-root)}
+              {"workspace_root" (.getPath workspace-root)
+               "mode" "plan-extraction"
+               "file" "src/cfp_scheduler_killer/folds.clj"
+               "to" "src/cfp_scheduler_killer/settings_lens.clj"
+               "forms" ["settings" "update-settings"]
+               "require_policy" "minimal"})]
+        (is (:ok result) (pr-str result))
+        (is (= "cfp-scheduler-killer.settings-lens"
+               (get-in result [:plan :target-ns])))
+        (is (= "(ns cfp-scheduler-killer.settings-lens)"
+               (get-in result [:plan :new-file-preview :ns-form]))))
+      (finally
+        (delete-tree! harness)))))
 
 ;; @spec MCP-OP-PLAN-002
 (deftest oversized-extraction-plan-refuses-without-partial-evidence
