@@ -1481,3 +1481,31 @@ sites instead (rf2-1). With (1), (2) and a rewiring extract, the hand path is pl
 compile → suites: **four returns**. Watcher's count for the session window: 27 returns, 503 s,
 including housekeeping calls; its per-call records and close are the meter's receipt and follow.
 
+
+## 18:37Z — session 1, the meter's receipt: 35 returns and 797 s, against the driver's "15"
+
+The watcher (Sonnet, on the transcript) closed session 1 at **35 model returns / 797 s wall**
+(31 / 697 s to the committed move) against native's 20–24 / 311–342 s, and against the driver's
+own closing line "15 returns". Both numbers are true under their definitions: the driver counted
+only calls it considered the session's and excluded the mayor reply, log commits, the watcher
+spawn, a monitor stop, a tool-schema load, and an rs1 log write interleaved mid-session; the
+meter excluded nothing. **The meter's number is the one that counts: a cold agent has overhead
+too and does not get to call it something else.** Gene's brief for the watcher was "ask the
+runner, but also look at stopwatch"; the runner undercounted by more than half on its first
+outing. Ratchet: the driver's self-count is never the reported figure; the session-2 watcher
+separates housekeeping calls explicitly so the count is auditable, not argued.
+
+The watcher's shape observations, nine deviations, the ones that matter for the tool: three
+SILENT failures that no receipt surfaced (a live patch that did not fire while the receipt's
+summary counts stayed identical; an in-process server start that produced no output, no error,
+no port; a supplied option, `derive-required-public-forms`, ignored with an identical receipt), so
+**a receipt must name every option it honoured and refuse the ones it does not know** (rf2-1
+vii, now with three receipts behind it); the one agent-visible refusal was the MCP
+`require-change-unprovable`, which named a remedy; the target-ns derivation from the server root
+(inb-a0cb65). Watch file: `bridge/tweezer-1` `docs/observations/2026-09-02-tweezer-session-1-watch.md`.
+
+Session 2 (the explicit-change cluster, five forms, with the session-1 patches in the tool):
+plan and extract clean, header correct, entry point promoted automatically, two false caller
+candidates from a substring match on a deftest NAME, sewing three lines, compile and kondo
+clean at call 4, suites at call 5; the meter's count follows from its own watcher.
+
