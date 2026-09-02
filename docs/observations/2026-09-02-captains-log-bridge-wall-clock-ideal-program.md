@@ -860,3 +860,31 @@ all six read `hbms` client-side from URLSearchParams instead of server-resolving
 other flags; a spec ambiguity, not a tool effect. Actions, acceptance and prompt-adherence for
 this group are being scored on Anvil (e3-g1-score.md); walls here are contended and not
 comparable to sequential runs.
+
+## Receipt 07:25Z — e3 group 1: actions, acceptance, prompt adherence (scored from rollouts pinned by worktree path)
+
+| worktree | wall s | non-test actions | total actions | MCP | shell | suite runs | acceptance failed | adherence |
+|---|---|---|---|---|---|---|---|---|
+| A-0 | 434 | 18 | 25 | 10 | 11 | 1 | 2 (acid-7) | n/a |
+| A-4 | 488 | 20 | 26 | 8 | 12 | 1 | 4 (acid-5, acid-7) | n/a |
+| U-1 report-only | 381 | 21 | 27 | 12 | 11 | 1 | 2 (acid-7) | self-count exact (27) |
+| U-5 report-only | 672 | 15 | 21 | 5 | 11 | 1 | 3 (acid-7, acid-9) | self-count exact (21) |
+| V-2 turn budget | 340 | 11 | 18 | 5 | 9 | 1 | 2 (acid-7) | OVER budget (15 stated, 18 measured); shipped 577 tests vs 578 baseline |
+| W-3 deliberate | 464 | 19 | 27 | 5 | 14 | 4 | 2 (acid-7) | 3 plans + choice in one message before the first tool call; self-count off by 3 |
+
+Learnings. (1) The turn-budget rule (V) cut total actions 30 percent against A (18 vs 25.5) and
+took the shortest wall, but paid in quality: one test fewer than baseline, a flag-on heartbeat
+defect both judges named, and it still overran its own budget. (2) The report-only paragraph (U)
+did not change action count (24 vs 25.5), so the effect in V is the budget, not the act of
+counting; U's self-reports were exact to the action, V's and W's drifted, so agents count
+accurately only when counting is all they are asked to do. (3) Deliberate planning (W) spent
+the most actions and four suite runs and scored best with Opus, third with Sol: planning bought
+quality, not speed, in this one draw. (4) acid-7 fails in all six; A-4 (acid-5) and U-5 (acid-9)
+are the only differentiating misses. (5) n=1 for V and W. Walls are six-wide contended.
+
+Tool corrections: edit_wall.py keys windows by (run, arm), drops the slot and knows only the
+alphabet NABCPQKT, so it is wrong for doubled arms and unknown for U/V/W; count_actions.py
+overwrites windows for doubled arms; the receipts' suite_invocations counts grep hits in a run
+log both slots append to. For the 06:25Z retro this swaps rows only within an arm (cal2, k1),
+so the arm means stand. New scorer `~/e3_final.py` on Anvil pins by worktree path and agrees
+with the rollouts' own mcp/patch events 6 of 6. Runner v5 now writes per-slot diffs and logs.
