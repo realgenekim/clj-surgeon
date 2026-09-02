@@ -714,3 +714,17 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   `docs/observations/2026-09-02-anvil-builder-seat-brief.md`. If he starts it, hand it the two builds
   named there via inbox.
 - Then: regenerate the Gene report (skill `skills/gene-report/SKILL.md`).
+
+## RESUME DELTA 2026-09-02T23:42Z
+
+- **fold-diff tool pushed** `bridge/fold-diff-tool` f2d8f6eb (my unit 1052/13017/0); mayor has the commands
+  (inb-3a9818 + seat bridge). Waiting on the mayor's paste: index `pg_get_indexdef` + fold-diff output.
+- **Study ops built** b3c17bb on `bridge/study-ops-mcp` (inside inspect_clojure; `ls-tree` as a mode);
+  my suites running (`~/tmp/study-{test-fast,mcp-test}.log`, waiter bh7hkujz2); push after the baseline-
+  only failure check (5 routing + 1 exact-profile), then tell the mayor; then Gene report §8 rows
+  (fold-diff, study ops) + tech tree E6 "BUILT, adoption unmeasured".
+- No builders running. Load ~1.2. Cap: two builders + one suite.
+- Open for Gene: fold/store/lens merge order; four decisions in the report §9; the Anvil `forge` seat.
+- Next candidate builds (if Gene starts the Anvil seat, hand these over; else run here one at a time):
+  receipt ratchets from the friction ledger; lens follow-ups (program-speaker-updated, reminder-schedule).
+
