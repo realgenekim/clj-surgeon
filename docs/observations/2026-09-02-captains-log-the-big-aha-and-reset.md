@@ -2377,3 +2377,46 @@ people; generic declarative relations before semantics are pinned. Session 4 = t
 owners as one structural transaction, watcher on, replay equality first; it starts when the fold
 builder's round two (Sol's fixes + the tagged identity) lands, since both touch the same file.
 
+
+## 21:24Z — rf2 scored: the rewiring extract verb beats native on every cross-pair; all five promotion criteria met
+
+Receipt: Anvil `~/acid/receipts/rf2-score.md` (scorer `rf2-score.py`; acceptance `rescore-R3.sh`
+run on a quiet box before z7c loaded it; the installer's byte-exact `rf2-readout.sh` and an
+independent rollout scan agree). Rung R3b at RF2-SHA a66b626, both arms stripped, n=3 each.
+
+| arm | wall mean (sd) | returns | actions | tokens | executed suites | bytes_beyond_verb | acceptance |
+|---|---|---|---|---|---|---|---|
+| C `:extract! :rewire-callers` | **243.0 s (11.8)** | 14.67 | 10.0 | 638,982 | 3.0 | **0, 0, 0** | a a2 b c1 c3 d PASS |
+| N stripped native | 336.0 s (43.6) | 17.33 | 12.33 | 868,020 | 4.0 | 1, 3, 23 | identical set |
+
+C = {230, 246, 253}, N = {291, 339, 378}: no overlap, ratio 0.723, d = -2.91 (Welch df 2.29,
+so the p-value is arithmetic, not evidence; the non-overlap is the finding). Pre-registered
+readout: A (native bytes after the verb) = 0 in 3/3 — Sol's 60% prior confirmed, Opus's
+refuted; B (returns between receipt and first check) = 0 in 3/3 — Sol confirmed, Opus refuted.
+Zero `apply_patch` cells in any C run; zero post-receipt re-reads of rewired files; one agent
+says so in words ("Per instruction, I'm not reopening the rewired source files"). Acceptance:
+PASS sets identical, FAIL sets byte-identical across all six (c2 = test data naming both
+qualified forms; e1/e2 = seven rf2-branch tests that read the moved source as fixtures, plus
+base's own routing failure) — the set cancels; `e1` ran with `expected=[]` (RF2-BASE.edn not
+loaded into the predicate) which must be fixed before any absolute acceptance claim. Against
+rf1's bare `:extract!` (31.0 returns, 405.5 s) the rewire flag halves returns and cuts 40% of
+wall; against rs1 (328 s) and z7b (330.7 s) returns are equal and wall is ~87 s lower — the
+first R3 arm out of the ~330 s band. Sol's five promotion criteria (≥2/3 paired wall wins;
+fewer returns to move and total; zero native fallback; equal acceptance; no task-specific code):
+all PASS. Caveats: n=3, one task, one base.
+
+## 21:24Z — q5z class fix committed: 2753f23 on bridge/q5z-alias-migration
+
+Agent a7a9731a5e97c7b4c: `binding`/`with-redefs`/`with-bindings` left-hand sides are sites (Vars,
+not locals; head sets split); quoted fully-qualified symbols migrate even in files that never
+require the lib (`:require-mode :qualified-only`, the `requiring-resolve` case in
+sched_import.clj); `#'`, `(var …)`, syntax-quote and metadata values are sites; `'alias/x` and
+`::alias/k` are typed refusals with next_call; string literals counted as `string_mentions`,
+never rewritten. ALIAS-029..035 with real-bytes witnesses; fails-first 21 failures / 5 tests.
+Anchor scratch at d9afe8e9: 171 files, 1872 sites, kondo delta exactly 0, only the six r4-allowed
+failures. Verified independently on bridge: test-fast 734/6254 (5 pre-existing routing
+failures), mcp-test 399/4467 (1 pre-existing). Anvil: `surgeon-q5z` checked out at 2753f23;
+`restart-7895-at.sh 2753f23` was launched inside an ssh whose wait timed out — the child kept
+running (memory: timeout kills the wait, not the child); a monitor waits on that pid and then
+reads 7895's ready.edn, Q5Z-SHA, and chain-sl1r before the anchor run is called re-armed.
+
