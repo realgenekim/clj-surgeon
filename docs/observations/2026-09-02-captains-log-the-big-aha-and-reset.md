@@ -614,3 +614,14 @@ accepts the apply_patch grammar as well as unified diff, detected by the header;
 name the grammar tried and the offending line; the commit path never stages control files;
 then z3 reruns with the free-choice arm alongside the mandated one. z2 on rung L is running
 with the same defect and will show the same shape; kept as confirmation.
+
+## z2 walls: the same shape on the large rung (15:36Z)
+
+| arm (rung L, six-wide) | walls s | mean |
+|---|---|---|
+| Z native plus gate (grammar defect present) | 305, 369, 435, 254, 258, 543 | 361 |
+| N native | 173, 213, 213, 169, 213, 316 | 216 |
+
+All twelve full gates green at the base counts. The gate arm is 1.7x native here against
+2.2x on the medium rung; whether any Z arm completed the 21-owner hoist, and how much of the
+gap is the same grammar fight, comes from the scorer and the rung-L acceptance suite.
