@@ -658,3 +658,21 @@ in 254 s, ahead of three of six natives. That is the first field evidence that w
 grammar matches, the gate is at parity or better, and it is one run. Round five gains
 creation and deletion (Add File and Delete File in the apply_patch grammar, /dev/null in
 unified diff) with post-image hazards and a namespace-removal check.
+
+## Gate round five: both grammars, and the self-inflicted hazard explained (15:41Z)
+
+Commit 5be1ce9 on bridge/admit-gate (not pushed): the parser accepts Codex's apply_patch
+V4A grammar and unified diff, selected by the first non-blank line; hunks in V4A are located
+by context match with the @@ text as anchor; the same edit in both grammars yields byte-
+identical post-images; a payload in neither grammar returns invalid-patch with the grammars
+tried, the offending line, and the expected headers in next_call. The unreadable-post-image
+hazards of z1 were the gate's own doing: the old parser trusted the @@ counts over the hunk
+body and silently discarded surplus lines, producing an unbalanced file it then reported as
+the author's defect; now :hunk-body-overruns-header, refused before application. The lock
+directory gets a self-ignoring .gitignore so the workspace status shows only the patched
+files. 68 witness tests, 570 assertions; mcp-test 445 with only main's failure. The
+builder's own closing line, kept verbatim in the design doc: "Three adversarial rounds
+hardened this gate against inputs the reviewers wrote, and the field killed it with the
+first input a caller wrote. The cheapest available test at any point in those rounds was
+one real payload." Next: creation and deletion admitted as operations, then the acceptance
+test the rounds lacked, replaying all 109 field payloads through the new parser.
