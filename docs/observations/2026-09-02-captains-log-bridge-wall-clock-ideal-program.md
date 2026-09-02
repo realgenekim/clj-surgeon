@@ -573,3 +573,12 @@ build is worse than both on correctness and clarity while equal on time. The wav
 edit-path changes (boundary-insert overlap, insertion gap) are the suspects, and the
 next experiment is the one that isolates them: wave build with the string outline off
 AND the two edit fixes reverted one at a time.
+
+## Receipt 04:58Z — s5, second judge
+
+Opus on s5 (blind): native 18, C 15, B 15. Sol had native 18.5, B 15, C 14.5. Two judges
+agree on both the order and the gap. Opus's most important defects: B silently changed the
+shared 250 ms tick predicate on the flag-on path (drops `!stopping`), C forks `kwCheck` by
+wholesale copy so future fixes to the real one never reach the flag-on page, and native's
+cancel body exists twice in source. The clarity deficit of the wave-derived arms is now
+supported by two judges on three triples and a measured noise floor.
