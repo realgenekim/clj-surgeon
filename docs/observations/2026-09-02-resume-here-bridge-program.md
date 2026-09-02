@@ -485,3 +485,16 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - On each `<run> done`: scorer (rf2 readout per a40fc3e; sl1-R per rescore-FAN-R; z7c per z7b's shape
   at n=6). Then: log, tell mayor, tech tree, and the wake-up brief for Gene.
 
+
+## RESUME DELTA 2026-09-02T20:42Z
+
+- Slope sl1 SCORED (5546471): tool 6/6, native 2/6, native's cost = site discovery; flagship 2/5.
+- Anchor sl1-R: both arms failed; tool = var-form reference miss (q5z builder fixing on
+  ~/src/clj-surgeon-q5z; on report: suites → commit/push → restart-7895-at.sh <sha> → Q5Z-SHA →
+  re-arm chain-sl1r after the installer's spec amendment); native = spec hole (installer amending
+  R-SPEC/rescore-FAN-R).
+- rf2 (mandated rewiring extract, R3b) RUNNING; z7c (gate n=6) armed behind it. On `rf2 done`:
+  scorer with ~/acid/receipts/rf2-readout.sh (bytes_beyond_verb, returns after receipt) per
+  a40fc3e; on `z7c done`: scorer per z7b's shape at n=6.
+- Wake-up brief evening edition committed (cb8c92f) and filed to Gene's inbox.
+
