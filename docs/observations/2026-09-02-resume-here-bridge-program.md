@@ -652,3 +652,22 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   excluded arms handled (export.generated stays; the two conditional arms migrate once LENS-003 is in).
 - Buster load ~3.2/4 cores; Gene asked about farming to Anvil — declined mid-build, farm if OOM.
 
+
+## RESUME DELTA 2026-09-02T23:06Z
+
+- **Session 4 comparison receipt DONE** (`docs/observations/2026-09-02-session-4-comparison-receipt.md`,
+  6406768): Surgeon 16/19 arms, 0 outside churn, gate green; native 18/19, 149 outside lines, found the
+  24th write (`speaker.reminder-schedule-configured`, slug-keyed). Nomination: Surgeon transaction for the
+  migration commit after LENS-003; Gene decides. vision.md now defines "winner" by composition (47c1eee).
+- Running: LENS-003 builder ae6df9a536b15e3f4 (lens worktree); 23j builder ac9d2922b2d295e87 on
+  `~/src/clj-surgeon-rf2` (target-ns from workspace_root; witness on the wire); census ae28eeb3c06c1aeb1;
+  study ops aa962e1fb576e0072. Watcher session 4 closed (receipt filed).
+- **Migration commit plan (after LENS-003):** on `~/src/curtaincall-cfp-lens`, re-run the 16-change
+  `apply_clojure_changes` (same finds/replaces as the scratch; the transcript holds them; also
+  `.plan/surgeon-settings-lens.patch` is the equivalent patch), then a second transaction for
+  `event.speaker-unannounced` + `event.announced-speaker-adopted` (form-for-form, no hoisting), then a
+  delegated test edit: tripwire numbers, the `(= arm-count guards)` assertion, a row for the 24th write;
+  gate `flock ~/tmp/suite.lock bin/kaocha unit` 0 failures; push; inbox item for Gene. `export.generated`
+  stays. Native patch stays on `bridge/settings-lens-native` (push it as the specimen).
+- Mayor's beads: 23j mine (in progress); 3s5/c37/dk9 fixed on rf2 a66b626 (close on merge); oni P2.
+
