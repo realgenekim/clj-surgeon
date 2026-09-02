@@ -404,3 +404,15 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Closure catalogue agent running → `docs/closure-catalogue.md` → commit + tech-tree pointer.
 - Docs updated: vision.md "The law of decisions", CLAUDE.md evening amendments, tweezer-loop fixes.
 
+
+## RESUME DELTA 2026-09-02T19:45Z
+
+- admit-gate 17125fe pushed and re-submitted (verify-none hole closed, ADMIT-118..120); GATE-SHA =
+  17125fe; 7894 restarting at it (check `~/acid/receipts/7894-restart-4.log` GREEN). Next: z7b
+  (chain armed by the installer on GO-Z7B) = gate vs native on R3 with strip prompts.
+- rf2 bcec265 pushed; RF2-SHA pinned; rung R3b + chain-rf2 being installed → `touch ~/acid/GO-RF2`.
+- q5z wire fix in the worktree (suites running) → commit/push → `restart-7895-at.sh <sha>` →
+  Q5Z-SHA → G1 redo at N=5 (`~/acid/wt/q5z-hand-5` recreate from repo-5; `q5z-mcp-call.py`;
+  `rescore-FAN.sh <wt> 5`) → GO-SL1, GO-SL1R.
+- Catalogue committed (9cf12f0); vision/CLAUDE/tweezer docs updated; memory: a-gate-a-caller-can-turn-off.
+
