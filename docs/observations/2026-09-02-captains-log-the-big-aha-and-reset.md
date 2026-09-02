@@ -2813,3 +2813,30 @@ day-autonomy: build now. Worktree `~/src/clj-surgeon-study` = `bridge/study-ops-
 Opus builder; fails-first witnesses incl. the real wire; bounded allowlisted receipts. Merge note:
 this and `bridge/census-verb` both register a tool in the MCP schema files; rebase the second lander.
 
+
+## 22:55Z — session 4 step A landed: LENS-001 pin (d10a6009) + LENS-002 lens (55d1fd3f); the 19 arms and 23 sites are named
+
+Builder's gates: unit 1040/12908/0 → 1044/13052/0 → 1050/13097/0; compile-check green; kondo clean.
+LENS-001 is a pin (mutation probes: a renamed settings key failed the oracle naming `event.hero-set`
+and the drift report printed the path with both values; one `if-let`→`when-let` tripped the
+tripwire "18 copies, not 19"); every pre-existing golden digest survived byte-for-byte; the golden
+now carries the whole projection beside the digest with a `clojure.data/diff` first-difference
+report (empty relations pruned — `empty-state` carries 40 of them). LENS-002 fails-first in two
+stages; missing event → `identical?` state AND `f` never called (call counter); no key and nil key →
+`f` applied to nil, identical results. The 19 event types: schedule.locked, schedule.unlocked,
+agenda.published, replay.marked, sink.registered, sink.removed, api-key.created, export.generated,
+api-key.revoked, event.hero-set, event.email-notifications-set, event.day-hours-set,
+event.unlisted-set, event.submission-cap-set, event.blind-review-set, event.speaker-unannounced,
+event.speaker-announced, event.announced-speaker-adopted, event.announced-speaker-added. Guards at
+folds.clj 628 636 644 673 680 686 695 709 722 1062 1067 1073 1080 1086 1091 1100 1148 1164 1184;
+settings paths at 629 637 645 674 681 687 696 723 1063 1068 1075 1076 1081 1087 1093 1095 1110 1145
+1157 1173 1175 1189 1201 (+174, the lens itself). Traps for the migration: `export.generated` is a
+guard but writes `:exports`, not settings; `event.program-speaker-updated` (1201) writes settings
+under a different guard (event AND person); 1145 is a read; three arms carry two paths each;
+`announced-speaker-adopted` can no-op on a present event. Suspected src defects reported, not
+fixed: the intent-registry test's `(deftest\s+([^\s\)]+)` regex mis-parses metadata on a deftest
+name; `sink.removed`/`api-key.revoked` materialise `{:webhooks nil}`/`{:api-keys nil}` on an event
+that never had one. Next (Sol's order): dry plans on both sides before any arm — native exact patch
+on `bridge/settings-lens-native` (worktree created at 55d1fd3f, not applied), Surgeon plan via
+`inspect_clojure` over the 19 owners with the watcher on.
+
