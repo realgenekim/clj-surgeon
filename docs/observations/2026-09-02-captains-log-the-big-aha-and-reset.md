@@ -2764,3 +2764,35 @@ folds.clj; pool-1-vs-N identical-answer witness; real-wire witness. Sol consulte
 the plan (`scratchpad/fleet/sol-plan-s4-census-answer.md`): KEEP / ADJUST / STOP per build, what
 must not run unattended, the guard rule he would ship. His answer is folded in before step B starts.
 
+
+## 22:35Z — Sol on the day plan: ADJUST both; dry plans before arms; the census gets `:unknown` and evidence
+
+`scratchpad/fleet/sol-plan-s4-census-answer.md`. (a) The two-arm migration is legitimate as an
+instrument, not as the decision procedure: produce BOTH plans dry first (native exact patch with
+preconditions; Surgeon structural plan) and inspect match cardinality, ambiguity, projected churn,
+and whether Surgeon targets forms or reprints owners — the house rules already record owner-scoped
+`apply_clojure_changes` as a measured loser on fan-out. Native is the production default for this
+migration; the Surgeon arm is research. Unconvincing if: arms not byte-identical at start, prompts
+differ, warm-up charged to one arm, "one transaction" is 19 reprinted owners, native constrained to
+per-form edits, success judged by tests alone (churn and tree equivalence matter), uncounted retries,
+n=1 presented as general, winner chosen by speed. (b) `:guarded` as "an enclosing branch mentions an
+identity key" overclaims: misses let-bound predicates, cond/case, membership idioms, threading,
+helper-carried guards, early returns; falsely blesses same-key-different-value, wrong polarity,
+existence vs nonexistence, `or` paths, shadowing, checks after the write. Ship rule: `:guarded` only
+with dominance + same target + written value's identity expression + correct polarity; trace only
+single-assignment let aliases and standard control forms; explicit membership idioms; no helper or
+macro inference in v1; add `:unknown` with reasons; `:raw` only when positively shown; return evidence
+(write, target path, identity expr, guard, polarity, uncertainty). The census locates review work; it
+does not prove idempotency and is not an enforcement gate. (c) Nothing irreversible on branches; the
+unattended hazards are decision boundaries: never auto-select and push "the correct tree" (nominate
+in a receipt; Gene merges); no force-updates of stacked branches; no broad owner reprints; counts are
+inventory tripwires, not invariants; no fence widening for recall; wire fields versioned.
+**Rulings applied:** census builder re-specced (five classes, four-condition guard rule, evidence
+fields, complete-output pool invariance, `:census-version 1`); lens builder told to compare the full
+projection with a readable first-difference report and to name the count test a tripwire. Step B
+redesigned: after step A, dry plans first (Surgeon `inspect_clojure` prepare-change/plan over the
+19 owners on the lens worktree — read-only; native plan as one exact patch written by an Opus
+agent on `bridge/settings-lens-native`, not applied), then the plans' cardinality/churn decide
+whether the measured arms run at all; both trees stay on experimental branches with a receipt
+nominating a winner; Gene merges.
+
