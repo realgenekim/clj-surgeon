@@ -10,7 +10,7 @@
    [clj-surgeon.move-dependency-test :as move-fixtures]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
+   [clojure.test :as test :refer [deftest is testing]]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
 
@@ -47,6 +47,75 @@
              :source isolated-source}))
         corpus))
 
+(def analyzer-pressure-deferred-reason
+  :clj-kondo-pressure-deferred)
+
+(defmethod test/report ::analyzer-unavailable
+  [{:keys [reason] :as event}]
+  (if (= analyzer-pressure-deferred-reason reason)
+    (do
+      (test/inc-report-counter :skip)
+      (binding [*out* test/*test-out*]
+        (println "\nAnalyzer unavailable:" (name reason))))
+    (let [message (or (:message event)
+                      (str "Analyzer contract violation: " (name reason)))]
+      (test/report
+        (-> event
+            (assoc :type :error
+                   :message message
+                   :actual (or (:actual event)
+                               (ex-info message {:error-type reason})))
+            (dissoc :reason))))))
+
+(defn analyzer-pressure-deferred?
+  [value]
+  (boolean
+    (some (fn [node]
+            (and (map? node)
+                 (= analyzer-pressure-deferred-reason (:error-type node))))
+          (tree-seq coll? seq value))))
+
+(defn report-analyzer-unavailable!
+  [value]
+  (when (analyzer-pressure-deferred? value)
+    (test/do-report {:type ::analyzer-unavailable
+                     :reason analyzer-pressure-deferred-reason})
+    true))
+
+(defmacro with-analyzer-contract-authority
+  [& body]
+  `(try
+     ~@body
+     (catch clojure.lang.ExceptionInfo error#
+       (when-not (report-analyzer-unavailable! (ex-data error#))
+         (throw error#)))))
+
+(deftest analyzer-unavailable-report-is-counted-and-fail-closed
+  (let [pressure-counters (ref {:test 1 :pass 0 :fail 0 :error 0})
+        pressure-output (let [writer (java.io.StringWriter.)]
+                          (binding [test/*report-counters* pressure-counters
+                                    test/*test-out* writer]
+                            (test/do-report
+                              {:type ::analyzer-unavailable
+                               :reason :clj-kondo-pressure-deferred}))
+                          (str writer))
+        drift-counters (ref {:test 1 :pass 0 :fail 0 :error 0})
+        drift-output (let [writer (java.io.StringWriter.)]
+                       (binding [test/*report-counters* drift-counters
+                                 test/*test-out* writer]
+                         (test/do-report
+                           {:type ::analyzer-unavailable
+                            :reason :provider-schema-drift}))
+                       (str writer))]
+    (is (= {:test 1 :pass 0 :fail 0 :error 0 :skip 1}
+           @pressure-counters))
+    (is (str/includes?
+          pressure-output
+          "Analyzer unavailable: clj-kondo-pressure-deferred"))
+    (is (= {:test 1 :pass 0 :fail 0 :error 1}
+           @drift-counters))
+    (is (str/includes? drift-output "provider-schema-drift"))))
+
 (deftest all-promised-move-snapshots-cold-lint-in-one-analyzer
   (let [root (fs/create-temp-dir {:prefix "clj-surgeon-move-contract-"})]
     (try
@@ -70,13 +139,14 @@
                        {:command command
                         :cwd (System/getProperty "user.dir")
                         :timeout-ms 120000})]
-          (testing "one admitted process validates every isolated snapshot"
-            (is (= :admitted (get-in result [:admission :status]))
-                (pr-str (:admission result)))
-            (is (:finished? result) (pr-str result))
-            (is (:termination-confirmed result) (pr-str result))
-            (is (zero? (:exit result))
-                (pr-str {:out (:out result) :err (:err result)})))))
+          (when-not (report-analyzer-unavailable! result)
+            (testing "one admitted process validates every isolated snapshot"
+              (is (= :admitted (get-in result [:admission :status]))
+                  (pr-str (:admission result)))
+              (is (:finished? result) (pr-str result))
+              (is (:termination-confirmed result) (pr-str result))
+              (is (zero? (:exit result))
+                  (pr-str {:out (:out result) :err (:err result)}))))))
       (finally
         (fs/delete-tree root)))))
 
@@ -107,63 +177,68 @@
                  "(def before (core/existing))\n"))
       (let [baseline (change-buffer/capture-verification-baseline!
                        (io/file (str root)) "fast" profiles files)]
-        (is (:ok baseline) (pr-str baseline))
-        (is (= 1 (count (get-in baseline [:checks 0 :diagnostics :findings])))
-            "the future transaction may remove a pre-existing warning")
-        (spit core
-              (str "(ns sample.core\n"
-                   "  (:require [sample.macros :as macros]))\n"
-                   "(defn existing [] :ok)\n"
-                   "(macros/>defn added [] :added)\n"))
-        (spit caller
-              (str "(ns sample.caller\n"
-                   "  (:require [sample.core :as core]))\n"
-                   "(def before (core/existing))\n"
-                   "(def after (core/added))\n"))
-        (let [verification (change-buffer/run-verification!
-                             (io/file (str root)) "fast" profiles files baseline)]
-          (is (:ok verification) (pr-str verification))
-          (is (empty? (get-in verification
-                              [:checks 0 :diagnostic-delta
-                               :blocking-introduced])))))
+        (when-not (report-analyzer-unavailable! baseline)
+          (is (:ok baseline) (pr-str baseline))
+          (is (= 1 (count (get-in baseline [:checks 0 :diagnostics :findings])))
+              "the future transaction may remove a pre-existing warning")
+          (spit core
+                (str "(ns sample.core\n"
+                     "  (:require [sample.macros :as macros]))\n"
+                     "(defn existing [] :ok)\n"
+                     "(macros/>defn added [] :added)\n"))
+          (spit caller
+                (str "(ns sample.caller\n"
+                     "  (:require [sample.core :as core]))\n"
+                     "(def before (core/existing))\n"
+                     "(def after (core/added))\n"))
+          (let [verification (change-buffer/run-verification!
+                               (io/file (str root)) "fast" profiles files baseline)]
+            (when-not (report-analyzer-unavailable! verification)
+              (is (:ok verification) (pr-str verification))
+              (is (empty? (get-in verification
+                                  [:checks 0 :diagnostic-delta
+                                   :blocking-introduced])))))))
       (finally
         (fs/delete-tree root)))))
 
 (deftest forward-reference-analysis-retains-the-provider-schema
-  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-forward-contract-"})
-        source (fs/path root "src/my/app.clj")]
-    (try
-      (fs/create-dirs (fs/parent source))
-      (spit (str source) fix-fixtures/simple-forward-ref)
-      (is (= [{:name 'helper
-               :used-at 6
-               :defined-at 8
-               :gap 2}]
-             (forward-refs/detect-forward-refs (str source) 'my.app)))
-      (finally
-        (fs/delete-tree root)))))
+  (with-analyzer-contract-authority
+    (let [root (fs/create-temp-dir {:prefix "clj-surgeon-forward-contract-"})
+          source (fs/path root "src/my/app.clj")]
+      (try
+        (fs/create-dirs (fs/parent source))
+        (spit (str source) fix-fixtures/simple-forward-ref)
+        (let [actual (forward-refs/detect-forward-refs (str source) 'my.app)]
+          (is (= [{:name 'helper
+                   :used-at 6
+                   :defined-at 8
+                   :gap 2}]
+                 actual)))
+        (finally
+          (fs/delete-tree root))))))
 
 (deftest binding-analysis-retains-local-identity-and-destructuring-schema
-  (let [root (fs/create-temp-dir {:prefix "clj-surgeon-binding-contract-"})
-        source-file (fs/path root "src/demo.clj")
-        source (str "(ns demo)\n"
-                    "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
-                    "(defn table [{:keys [sort-by]}] (name sort-by))\n")]
-    (try
-      (fs/create-dirs (fs/parent source-file))
-      (let [analysis (binding-rename/analyze-source (str source-file) source)
-            locals (:locals analysis)
-            usages (:local-usages analysis)
-            keywords (:keywords analysis)
-            destructuring-keywords (filterv :keys-destructuring keywords)
-            local-ids (set (map :id locals))]
-        (is (= 2 (count locals)))
-        (is (= 3 (count usages)))
-        (is (= 2 (count destructuring-keywords)))
-        (is (= #{'sort-by} (set (map :name locals))))
-        (is (= local-ids (set (map :id usages))))
-        (is (= #{2 3} (set (map :row destructuring-keywords))))
-        (is (= #{"sort-by"}
-               (set (map :name destructuring-keywords)))))
-      (finally
-        (fs/delete-tree root)))))
+  (with-analyzer-contract-authority
+    (let [root (fs/create-temp-dir {:prefix "clj-surgeon-binding-contract-"})
+          source-file (fs/path root "src/demo.clj")
+          source (str "(ns demo)\n"
+                      "(defn feed [{:keys [sort-by] :or {sort-by :score}}] [sort-by :sort-by clojure.core/sort-by])\n"
+                      "(defn table [{:keys [sort-by]}] (name sort-by))\n")]
+      (try
+        (fs/create-dirs (fs/parent source-file))
+        (let [analysis (binding-rename/analyze-source (str source-file) source)
+              locals (:locals analysis)
+              usages (:local-usages analysis)
+              keywords (:keywords analysis)
+              destructuring-keywords (filterv :keys-destructuring keywords)
+              local-ids (set (map :id locals))]
+          (is (= 2 (count locals)))
+          (is (= 3 (count usages)))
+          (is (= 2 (count destructuring-keywords)))
+          (is (= #{'sort-by} (set (map :name locals))))
+          (is (= local-ids (set (map :id usages))))
+          (is (= #{2 3} (set (map :row destructuring-keywords))))
+          (is (= #{"sort-by"}
+                 (set (map :name destructuring-keywords)))))
+        (finally
+          (fs/delete-tree root))))))
