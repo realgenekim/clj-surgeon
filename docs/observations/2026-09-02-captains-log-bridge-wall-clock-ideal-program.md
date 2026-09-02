@@ -528,3 +528,18 @@ discriminating on exactly the defects the Opus judge read by eye: acid-7 (hbms
 server-resolved) fails in most arms, acid-9 (buttons follow recording) in several, acid-6
 (tick rewritten) in two, acid-5 (onset guard resets the speech timer) in one; two diffs
 pass all nine. Full table next.
+
+## Receipt 04:45Z — arm P, planning mode with the price list (first sample)
+
+s6 P: 258 s, correct. Its PLAN.md predicted 193 s and self-reported 200 s actual (+7 s,
+4%); the process wall was 258 s, so the model's accounting misses about a quarter of real
+wall, the boundary time it cannot see. Its per-step price estimates were otherwise sane
+(kaocha 85 s predicted, ~85 s real).
+
+**What planning did to the route:** the plan's step 3 named `src/marvin/channel.clj`, a
+path that does not exist (`src/marvin_voice_remote/`). Every Surgeon call then refused
+(`invalid-workspace-root`, `missing-fields`, `source-file-not-found`), the prompt's
+"native after two refusals" rule fired, and P completed the task natively. So the first
+planning sample is really "planned native": it committed to a wrong fact before reading,
+and the plan's authority carried the error into three refusals. A price list does not fix a
+wrong path; a read does. Q (native + plan) and A run next in s6.
