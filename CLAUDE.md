@@ -115,6 +115,15 @@ updates, and verification gates. It is not a chronological coding diary.
   formatter startup is not the primary extraction bottleneck; generic
   `verify=fast` is not equivalent verification. Reopen a stopped option only
   with new causal evidence.
+- **Venue is part of t (Gene, 2026-09-02: "must do what it takes to keep fast feedback
+  cycles. Nk/t. Maximize K and N to enable large K. Minimize T").** Any experiment that
+  needs a JVM or more than one arm runs on Anvil (`tester@anvil`, 16 cores; runner pattern:
+  fresh worktree per arm, `taskset` four cores per arm, `TMPDIR` under the seat home, gates
+  inline, diffs and receipts frozen by the runner the moment an arm ends). Buster and the
+  skiff keep the connector and light work. Calibrate sequential against parallel once before
+  trusting parallel walls. Evidence: the 2026-09-02 cohort ran 5 min per arm on Buster while
+  making the box unusable and contaminating its own walls; the same triple ran pinned and
+  parallel on Anvil with 23 GiB to spare.
 - Record the method as well as the result in a Captain's Log: option created,
   reversible ratchet, evidence, counterfactual, surprise, falsifier, decision,
   and what becomes cheaper next. The interaction between parallel lanes is a
