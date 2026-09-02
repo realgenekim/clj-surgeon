@@ -66,16 +66,33 @@
                                        (:receipt-sha256 marker))))))))
 
 (defn- valid-journal-result? [plan state result]
-  (case state
-    :prepared (= :ok result)
-    :parking-intent-recorded (parking-intent-result? result)
-    :archive-commanded (contains? #{:commanded :not-applicable} result)
-    :archive-verified (= :ok result)
-    :remove-commanded (contains? #{:commanded :controller-or-external} result)
-    :remove-verified (contains? #{:ok :controller :controller-or-external} result)
-    :final-receipt-written (= :ok result)
-    :parking-completion-verified (parking-completion-result? plan result)
-    false))
+  (if (= :prune-missing-registration (:operation plan))
+    (case state
+      :prepared (= :ok result)
+      :parking-intent-recorded (= :not-applicable result)
+      :archive-commanded
+      (= (if (= :absent (get-in plan [:supacode :initial]))
+           :not-applicable
+           :commanded)
+         result)
+      :archive-verified (= :ok result)
+      :remove-commanded
+      (contains? #{:commanded :controller-or-external} result)
+      :remove-verified
+      (contains? #{:controller :controller-or-external} result)
+      :final-receipt-written (= :ok result)
+      :parking-completion-verified (= :not-applicable result)
+      false)
+    (case state
+      :prepared (= :ok result)
+      :parking-intent-recorded (parking-intent-result? result)
+      :archive-commanded (contains? #{:commanded :not-applicable} result)
+      :archive-verified (= :ok result)
+      :remove-commanded (contains? #{:commanded :controller-or-external} result)
+      :remove-verified (= :ok result)
+      :final-receipt-written (= :ok result)
+      :parking-completion-verified (parking-completion-result? plan result)
+      false)))
 
 (defn validate-process-request [{:keys [directory argv]}]
   (if (and (string? directory)

@@ -80,6 +80,14 @@
         {:ok false :error-type :unexpected-throw :class (class error)}))
     ::missing))
 
+(defn- invoke-private-io [name & args]
+  (try
+    (apply (ns-resolve 'clj-surgeon.worktree-lifecycle-io name) args)
+    (catch clojure.lang.ExceptionInfo error
+      (merge {:ok false} (ex-data error)))
+    (catch Throwable error
+      {:ok false :error-type :unexpected-throw :class (class error)})))
+
 (defn- rehash-plan [plan]
   (let [canonical (public-var 'clj-surgeon.worktree-lifecycle/canonical-edn)
         sha256 (public-var 'clj-surgeon.worktree-lifecycle/sha256)]
@@ -234,6 +242,38 @@
             :plan-sha256 (:plan-sha256 plan)
             :target "/repo-stale"}
            (select-keys lease [:plan-id :plan-sha256 :target])))))
+
+(deftest prune-journal-refuses-ordinary-close-result-semantics
+  ;; @spec WTL-PRUNE-010
+  (let [compiled (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
+                         prune-snapshot prune-request controller-identity
+                         "prune-journal-operation")
+        plan (:plan compiled)
+        base {:schema :clj-surgeon.worktree-lifecycle-journal/v1
+              :plan-id (:plan-id plan)
+              :plan-sha256 (:plan-sha256 plan)
+              :operation :prune-missing-registration}
+        parked-result
+        (assoc base :transitions
+               [{:state :prepared :result :ok}
+                {:state :parking-intent-recorded
+                 :result {:result :recorded
+                          :revision-before 1
+                          :revision-after 2}}])
+        ordinary-remove-result
+        (assoc base :transitions
+               [{:state :prepared :result :ok}
+                {:state :parking-intent-recorded :result :not-applicable}
+                {:state :archive-commanded :result :not-applicable}
+                {:state :archive-verified :result :ok}
+                {:state :remove-commanded :result :commanded}
+                {:state :remove-verified :result :ok}])]
+    (is (= :invalid-lifecycle-journal
+           (:error-type (invoke-private-io 'validate-journal!
+                                           parked-result plan))))
+    (is (= :invalid-lifecycle-journal
+           (:error-type (invoke-private-io 'validate-journal!
+                                           ordinary-remove-result plan))))))
 
 (deftest rehashed-prune-plan-drift-still-refuses
   ;; @spec WTL-PRUNE-005 WTL-PRUNE-010
