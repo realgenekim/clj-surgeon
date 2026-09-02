@@ -2152,3 +2152,26 @@ structural route's semantic awareness yields a correctness result native cannot 
 speed.** Slope row one: N=5, returns 3 vs 3 (ratio 1.00), wall T/N 0.45, acceptance N FAIL / T
 PASS. Points 10 and 20 so far: T 25 s and 26 s, flat; N 65 s at 10.
 
+
+## 20:29Z — the anchor's boot failure was a 7888 hazard in disguise; z7c armed; slope flat for the tool through N=40
+
+`repo-R/.codex/config.toml`, checked into curtaincall-cfp, declares two `required = true` MCP
+servers: the retired `cclsp` (never started; codex refused the session, both arms died in 2 s)
+and **`clj-surgeon` on 127.0.0.1:7888**, another seat's production server, which this apparatus
+is under standing orders never to touch. A real repo brings its own harness assumptions, and one
+of them pointed the arms at the one port they must not reach; only cclsp's failure stood in the
+way. Fix (installer): per-arm neutralisation of repo-local MCP declarations, opt-in per rung,
+originals backed up under the receipts dir, `repo_mcp_config=neutralised:<files>` on the start
+line, the paths excluded from the freeze; the T arm's server is supplied by the runner's own
+command-line override as before. Proven with a one-turn codex boot in a neutralised repo-R
+worktree (`PROBE-EXIT=0`). chain-sl1r re-armed. Also found and removed by the installer: an
+ordering deadlock (a chain waited on another's success marker; it now waits on the process),
+and chain-sl1r holding the lock 38 minutes into scoring two empty diffs while another user's
+JVMs loaded the box (stopped; needed recycling anyway). z7c (gate on R3 at n=6, mirrored arm
+order across waves) armed on GO-Z7C, created now; queues behind rf2 and the slope.
+
+**Slope, walls so far:** T 25, 25, 26, 24 s at N = 5, 10, 20, 40 (flat, as the mechanism
+predicts); N 55, 65, 97 s at 5, 10, 20, rising; N=20's native gate line printed no suite
+summary, which usually means the tree did not load. Acceptance per point from the chain's
+score files when the run completes.
+
