@@ -1916,3 +1916,22 @@ z7 replay: 1 of the 2 recoverable `require-removed` patches now admits with both
 as notes; the other fails to apply against the base (replay fidelity, not the gate). The z8
 scorer's column is corrected in place on Anvil.
 
+
+## 19:43Z — q5z's one arity was three defects, and the third would have wrecked the cohort
+
+The G1 wire call's arity error (`default-receipt-dir` with 0 args; the real dispatch passes
+the project root) was the visible one. Behind it: (2) the adapter read `:verification-profiles`
+straight off the server config, while a routed workspace publishes `-selection-fn`/`-profiles-fn`,
+so any workspace other than the server's own would have used the SERVER's profiles; (3) the
+adapter auto-selected a profile whenever the workspace had any, and every workspace has the
+built-in defaults, whose `fast` runs `npx standard-clojure-style check`: a correct five-file
+migration rolled back for a missing binary, plus ~2 s of wall on every call in a cohort whose
+subject is wall. Verification is now opt-in (`verify` optional; `focused_test {:status
+:not-requested}` otherwise; an unconfigured profile refuses before discovery), both entrances
+share one `resolve-verification-config`, and three real-wire witnesses reproduce my exact JSON
+against a routed workspace on a real Jetty server (commit; refusal with `next_call` replayed
+verbatim to a commit; the routed workspace's own profile resolved). Fails-first on the arity
+alone: 35 failures + 2 errors. The builder's own process finding: clj-kondo reports the arity
+exactly (`called with 0 args but expects 1`); it had linted the five files it created and not
+the one it edited. MCP-OP-ALIAS-027/028. My suites running; then commit, 7895 restart, G1 again.
+
