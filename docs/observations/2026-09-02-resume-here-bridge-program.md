@@ -463,3 +463,14 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   table (returns vs N, ratio monotone) is the sl1 readout; falsifiers in the slope spec.
 - Nothing else in flight on the bridge; all builders idle. Mayor queue: five branches.
 
+
+## RESUME DELTA 2026-09-02T20:24Z
+
+- z7b scored (e49f95c): gate 3/3 complete on R3, 0.76× wall direction, refusals 24→2. Next for the
+  gate: n=6 on R3 (re-arm chain-z7b as z7c with "N Z N Z N Z|Z N Z N Z N" when the box is free).
+- Slope: sl1-5 done (T PASS 25 s; N FAIL p2 55 s, diagnosis queued to the scorer); chain-sl1
+  re-armed (pid 3363906) for 10 20 40 80 C; waiting on the lock with chain-rf2. Anchor sl1-R
+  failed at boot (repo-local cclsp MCP config); installer fixing + re-arming chain-sl1r.
+- Score as they land: sl1-<N>-score.txt (chain), rf2 readout, sl1-R.
+- All five branches in the mayor's queue; curtain-call fold-idempotence with Gene (inb-d603ce).
+
