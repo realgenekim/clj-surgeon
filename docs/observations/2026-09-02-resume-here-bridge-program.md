@@ -197,3 +197,25 @@ worktree ~/src/clj-surgeon-losers branch bridge/close-losers (MCP-OP-CLOSE; owne
 splice or refuse re-print, byte-drift refusal). When they return: read diffs, run make test myself, adversarial pass (no
 SCI fence changes allowed), commit on branch, tell mayor, then E1 (arm Z) on Anvil per tech-tree backlog. Docs worktree:
 ~/src/clj-surgeon-main (branch main-docs, pushes HEAD:main).
+
+UPDATE 12:55Z (real UTC) — HALT (12:44Z, Gene "wrong agent") then RESUME (12:50Z, Gene "resume experimentation and results
+analysis"). Transfer from skiff read and judged (~/transfer-judgement-bridge-2026-09-02.md, not pushed): keep all merges,
+keep beads 0me/h9m/606l (bridge owns), riff re-derived (ls-deps is NOT the fan-out discovery verb; ls-tree inverted is;
+require-case only). IN FLIGHT: gate builder round two (bridge/admit-gate, 8 red-team fixes, uncommitted); close-losers
+branch (~/src/clj-surgeon-losers) my suites = same failure sets as main (+7 tests), red team running; ritual audit agent
+(ritual-audit.md on Anvil); Anvil chain-e5e8: e5 "A N"x3 waves (stale-onset predicate cohort) then e8 "B A B A B A"
+(b2 to n=6); monitor b199gq3gg. MAIN IS RED at test-fast (5 agent_routing assertions vs the rewritten plate) — reported
+to mayor. Arm Z still armed behind ~/acid/GO-Z1 (needs: gate committed+pushed, ~/acid/surgeon-gate checkout, 7894
+server with :focused-test config). NEXT: E5 predicate scorer -> log E5 -> e8 -> losers commit on GO -> gate round-2
+red team -> commit + push branch -> Anvil 7894 -> touch GO-Z1 -> arm Z.
+
+UPDATE 13:17Z (real UTC) — gate round two done by builder (44 witness tests, ADMIT-060..071; verify-before-commit; bound
+commits; linear identity); my mcp-test running (mcp-test-admit2.log); red team round two running (redteam-admit2/).
+close-losers round two with builder (key normalization at entry + production-path witness; drift oracle by expected
+offsets; assoc_entry refused). Anvil: e5 waves 1-2 done (N 298/315/366/308/313/317; A 506/550/599/437/546/615), wave 3
+running; then e8; then rt1 (ritual cohort, H forbid vs J substitute vs N; renamed from r1 to avoid the old r1.log; runner
+now refuses RUN-NAME-TAKEN). Predicate scorer ~/stale_onset.py validated 24/24 vs judges. Ritual audit logged (8bcc8ad).
+Curtain-call safe-refactor draft in Gene's inbox inb-868bb7; Surgeon :ls/:declares defect on that repo reported to mayor.
+Monitor bqnleb8jg. On red-team GO: commit both branches (author forge-bridge), push branches (not main), Anvil
+~/acid/surgeon-gate checkout at the branch + 7894 server with :focused-test {:command [... "{namespaces}" "{snapshot}"]},
+then touch ~/acid/GO-Z1 (chain-z1 armed).
