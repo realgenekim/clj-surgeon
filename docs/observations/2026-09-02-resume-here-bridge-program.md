@@ -702,3 +702,15 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Owed to the mayor on seat bridge: the fold-diff branch name + make target; census + study-ops +
   rf2(+23j) branches for the queue.
 
+
+## RESUME DELTA 2026-09-02T23:37Z
+
+- **Session 4 COMPLETE**: `bridge/settings-lens` aebb7b9a pushed (LENS-001..004; my unit 1053/13134/0);
+  inb-554636 for Gene's merge after fold + store. Native specimen `bridge/settings-lens-native` 74a3d7e6.
+- **rf2 pushed** at 5e6cdd2 (23j witnessed; closes 23j/3s5/c37/dk9 on merge). **Census pushed** 7244141.
+- Running (cap: two builders): study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72. When fold-diff
+  lands: push `bridge/fold-diff-tool`, tell the mayor the make target on seat bridge (inb-3a9818).
+- Gene floated an Anvil Claude seat; position sent (second seat, not a move); brief pre-staged at
+  `docs/observations/2026-09-02-anvil-builder-seat-brief.md`. If he starts it, hand it the two builds
+  named there via inbox.
+- Then: regenerate the Gene report (skill `skills/gene-report/SKILL.md`).
