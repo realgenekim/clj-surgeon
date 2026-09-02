@@ -2906,3 +2906,14 @@ bridge 7888 server from a foreign workspace root — `plan-extraction` returned
 `target-ns "curtaincall-cfp-lens-scratch.src.cfp-scheduler-killer.settings-lens"` (server-root-relative)
 and the new-file preview carried the source ns docstring; rf2's Anvil server ran from its own workspace,
 so the target-ns derivation was never exercised there. Witness + fix on the rf2 branch before merge.
+
+## 23:05Z — session 4 comparison receipt written: Surgeon 0 lines of outside churn vs native 149; native found a 24th write
+
+`docs/observations/2026-09-02-session-4-comparison-receipt.md`. Surgeon: 299 s session / ~7 s in
+tool, 16/19 arms, 83−/58+, **0 lines outside the replaced forms**, gate green on the scratch. Native:
+465 s planning, 11 decisions, 18/19 arms (two by restructuring, one hoist changes evaluation order),
+125−/82+, **149 lines outside guard+path** (86 whitespace), not gate-run, plus one genuine inventory
+finding: `speaker.reminder-schedule-configured` writes settings under a slug-keyed guard that neither
+tripwire regex counts. Nomination (not selection): Surgeon transaction for the mechanical 16 on the
+real worktree after LENS-003, second transaction for the two conditional arms, tripwire edited by
+hand (numbers, the `(= arm-count guards)` assertion, a row for the 24th write). n=1, a specimen.
