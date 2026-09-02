@@ -228,3 +228,13 @@ paragraph -27% wall, acceptance flat; doctrine decision for Gene). Curtain-call 
 fix-shipped-7893.sh) with -X :focused-test {:command ["clojure" "-M:test" "bin/gate-report.clj" "{report}" "{namespaces}"]
 :timeout-ms 300000}; runner v5 copies bin/gate-report.clj into Z worktrees (add next to the FT_EDN copy); verify with one
 admit call via mcp_call.py; then touch ~/acid/GO-Z1 (chain-z1 runs z1 M then z2 L, "Z N" x6 each). Monitor bdsyvspgr covers z1 z2.
+
+UPDATE 15:41Z (real UTC) — E1 (z1 rung M, z2 rung L) DONE and LOST for the gate: 69-75% of admit calls refused on patch GRAMMAR
+(agents emit Codex apply_patch V4A; gate parsed unified diff only), mandate abandoned, one z1 run shipped nothing; z2 also
+hit unsupported file creation. Logged (bffbe10, e3bbd28, be52b8e). Gate branch bridge/admit-gate: f2d93ab pushed + 5be1ce9
+LOCAL (dual grammar, hunk-overrun fix) NOT pushed; builder now adding Add/Delete/Move as real ops + FIELD REPLAY of all 109
+payloads (scratchpad/field-payloads/). After that: review diff, my mcp-test, push branch, restart 7894 from new sha (script
+~/acid/start-gate-7894.sh), z3 = "Z N Z N Z N|X? ..." with a FREE-CHOICE gate arm (prompt: gate optional) beside mandated.
+close-losers 205e13a pushed, awaiting merge review. 7894 pid 550992 on cores 10,11 (shares with one native slot per wave).
+Anvil quiet. Freeze script now resets index + excludes .clj-surgeon and bin/gate-report.clj. Lesson (memory file
+test-with-the-callers-real-bytes): replay real payloads before red teams.
