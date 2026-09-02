@@ -1746,3 +1746,50 @@ which is what the gate does when mandated); (2) a "prompt affordance" line is no
 dropped from rf2's plan; (3) the honest product claim is "a mandated verb + gate makes an agent
 faster and safer on X", never "agents prefer it".
 
+
+## 19:19Z — Captain's log: what is possible, in the numbers of one move
+
+Gene: *"1.3 sec vs __ native"* … *"OMG. 100x faster??? if so, captain log in terms of what's
+possible!!!"*
+
+**The measurement.** The nine-form extraction on Surgeon's own tree, cut plus sew (new
+namespace with a correct header, seven internal sites qualified, 16 external sites in three
+files rewired, dead requires and imports removed):
+
+| | native (rf1, two runs) | the rewiring verb (G1, my hand) |
+|---|---|---|
+| time to the landed move | 141 s, 152 s | **1.3 s of tool time** |
+| model returns to the move | 10, 9 | **1** (plus one to read the receipt) |
+| writes | 4–5 patches | 1 |
+| output | correct | byte-identical to the reference across five files |
+
+**Three honest multipliers, and they are all true at once.** On the mechanical closure, ~110×:
+the tool computes every consequence of the intent (callers, requires, imports, visibility,
+verbatim moves) faster than the model can type one file. At the step level, ~4×: a model return
+costs 20–40 s whether it is a call or a patch, so one call plus one receipt read is ~40 s against
+~150. On the whole task, ~1.15× with the verb alone, because the tail (compile, two suites, the
+report) is untouched and native pays it too; the gate absorbs the tail, and that is the other
+half of the shape.
+
+**What is possible, stated as a law.** An agent's cost is its count of *decisions*, not its
+count of *edits*. On this task there are two decisions: which forms go where, and whether to
+accept the verdict. Everything between them is mechanical closure, and mechanical closure runs
+at machine speed once a verb takes the whole intent and returns a verdict a cold reader can act
+on. The floor on this task is therefore two returns plus the gate: ~4 returns against native's
+22, and 20 s of tool time against ~5 minutes of typing. That is the 5× on the agent's meter that
+the 100× on the machine's meter makes possible.
+
+**The boundaries, because a log that omits them is a brochure.** (1) The verb wins only under
+mandate: free choice today was 0 of 10, with the exact command named. (2) The receipt is the
+product: the cold reader could not act on it twice (fields carried history; 347 KB of file text;
+compile unchecked), and every one of those is a return the verb was supposed to remove. (3) The
+gate's own verification is a cost on tasks with nothing to remove (z8: ~1.9× on a two-minute
+hoist), so the gate pays where the tail is large and costs where it is small. (4) Every number
+above is one task, one tree; the slope experiment is what says whether the 100× on the machine's
+meter grows with the codebase, which is the only way it becomes 10× on the agent's.
+
+**What it makes newly cheap.** A refactor that used to be a day of a careful engineer or a
+supervised agent run becomes: state the intent, read one receipt, let the gate verify. Six such
+moves ran tonight by hand in the time one used to take. With the receipt fixed and the verb
+mandated, that is what an unsupervised agent inherits.
+
