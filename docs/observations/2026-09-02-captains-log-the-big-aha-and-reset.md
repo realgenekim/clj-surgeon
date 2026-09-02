@@ -2474,3 +2474,17 @@ in parallel (`fold-review/sol-store-review.md`). Lesson for the ratchet ladder: 
 only as correct as its identity rule; the builder's own boundary sentence was the oracle and it
 was written with a false premise — the review has to check the premise, not the code.
 
+
+## 21:30Z — 7895 serves 2753f23; anchor chain re-armed; store branch verified independently
+
+Anvil `~/acid/receipts/7895-start.edn`: attested-sha 2753f23 via ready.edn → project-root → git
+rev-parse (written 21:16:59Z, pid 382174, healthz ok). The restart ssh hung for 12 minutes
+because `| tail -3` on the restart script inherited the JVM's stdout pipe; killing that tail let
+the command list finish: `Q5Z-SHA` = 2753f23, `chain-sl1r` armed (waits on the cohort lock held by
+chain-z7c, then preflights against Q5Z-SHA and runs sl1-R). Apparatus note: never pipe a script
+that starts a long-lived server; redirect its output to a file. Store branch 70c823cf verified
+on bridge by my own run: `bin/kaocha unit` 1015 tests, 12605 assertions, 0 failures. Sol's
+red-team of the store diff relaunched from a neutral cwd — the first launch died because
+curtain-call's `.codex/config.toml` demands the retired cclsp MCP server (the same trap the
+anchor needed `strip-repo-mcp.py` for).
+
