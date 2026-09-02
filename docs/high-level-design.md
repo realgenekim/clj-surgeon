@@ -61,6 +61,9 @@ cross-cutting result evidence and concise human presentation.
 - Let a caller state one bounded read mission, resolve only exact mechanical
   clues against one frozen snapshot, and continue an incomplete batch without
   repeating successful reads.
+- Close terminal experiment worktrees without losing the decision, exact
+  candidate identity, negative result, or raw evidence needed to reconstruct
+  the experiment.
 - Refuse stale, ambiguous, malformed, over-budget, or unverifiable work before
   unsafe mutation, or roll back the complete transaction.
 
@@ -81,6 +84,10 @@ cross-cutting result evidence and concise human presentation.
   recovery workflows across CLI and MCP.
 - Retaining a second logic model that finds no counterexample beyond native
   tests.
+- Treating an old worktree, a local-only branch, or a Supacode tab as durable
+  experimental memory.
+- Automatically deleting dirty worktrees, local-only evidence, branches, tags,
+  archives, or remote refs because they are old.
 
 ## Tenets
 
@@ -101,6 +108,10 @@ cross-cutting result evidence and concise human presentation.
 - **Common truth over common facade.** Entrances share compiled facts and
   terminal outcomes while retaining the public contracts and policies that fit
   their callers.
+- **Disposable execution rooms, durable experimental memory.** A worktree is a
+  place to execute work. Branches are checkpoints. Receipts, observations,
+  tags, issues, and content-addressed archives preserve what the experiment
+  taught us.
 
 ## System Design
 
@@ -765,6 +776,67 @@ yellow, invalid and red runs all remain in the append-only
 performance history. The sentinel never promotes a speedup: improvement claims
 still require the independent strict promotion cohort.
 
+### Close terminal worktrees without erasing experiments
+
+The repository owns a two-stage lifecycle for experimental work. Stage one
+closes a worktree only after classifying its outcome as `landed`,
+`negative-experiment`, or `parked` and proving that the outcome has a durable
+breadcrumb. Stage two,
+which is intentionally separate, may later retire a branch after its remaining
+evidence and ownership obligations have been reviewed. The first product slice
+does not delete branches.
+
+```mermaid
+flowchart LR
+    W[Worktree: disposable execution room] --> O{Declared outcome}
+    O -->|landed| L[Prove ancestor of explicit landing ref]
+    O -->|negative-experiment| R[Prove pushed receipt and retained evidence]
+    O -->|parked| P[Prove durable ref, owner, next action, and expiry]
+    L --> S[Seal versioned close receipt]
+    R --> S
+    P --> S
+    S --> U[Archive Supacode surface]
+    U --> G[Remove Git worktree from a control worktree]
+    G --> B[Branch remains a separate checkpoint]
+```
+
+Git is authoritative for the exact worktree path, commit and tree, dirty and
+untracked state, lock state, ref reachability, and ancestry. Supacode is
+authoritative for whether the worktree is focused, pinned, or already archived
+in the user interface. Git's worktree lock is the active-agent lease.
+Repository receipts, fetched remote refs,
+annotated tags, durable issues, and content-addressed archives are the
+authorities for experimental memory. `/private/tmp`, a local branch name, and
+an open tab are not durable authorities.
+
+The lifecycle controller is repository-owned. Its pure classifier consumes one
+explicit inventory snapshot and emits a versioned EDN plan and receipt. The
+ordinary command defaults to dry-run. Apply mode re-reads every authority and
+refuses if the worktree path, commit, tree, status, locks, Supacode state,
+breadcrumb, or landing ref changed after planning. It archives the Supacode
+surface before removing the Git worktree and must execute from a different
+control worktree because removing the current surface can terminate its own
+session.
+
+The audit classifies every registered worktree as `active`, `clean-safe`,
+`needs-seal`, `dirty-blocked`, or `missing-prunable`. Automation is permitted
+only for `clean-safe`; the other classes explain the missing proof. Current,
+focused, pinned, or agent-leased worktrees refuse. Dirty or untracked
+worktrees refuse. Detached work refuses unless its exact commit is durably
+reachable and its outcome breadcrumb is sealed. A landed outcome requires
+ancestor proof against a caller-supplied landing ref. A negative-experiment
+outcome requires a pushed observation or Captain's Log and durable retention
+for any raw evidence needed by that document. A parked outcome requires a
+pushed ref, owner, durable issue, next action, and expiry. Missing worktree
+registrations are prunable only when residual files have been resolved
+explicitly.
+
+The existing benchmark retention path remains the model for raw evidence: one
+manifest binds files and hashes before local scratch data is removed. Global
+Claude Code or Codex skills may later discover and invoke the repository
+command, but they do not reimplement its policy. This keeps the safety contract
+versioned with the repository whose worktrees it governs.
+
 ## Key Design Decisions
 
 ### Share the operation algebra, not the MCP facade
@@ -851,6 +923,22 @@ accepted operationally. Nightly runs are new invocations and are not pooled to
 manufacture confidence. The design does not weaken the confirmation law or
 silently advance a rolling baseline.
 
+### Separate worktree closure from branch retirement
+
+The first lifecycle slice removes only sealed, terminal execution rooms. It
+does not delete their branches. Combining worktree removal and branch deletion
+was rejected because reachability and evidence are different questions: a
+clean checkout can be safely reclaimed while its checkpoint or audit receipt
+still needs to remain discoverable. Age-based reaping was rejected because age
+does not prove completion, publication, or irrelevance. Supacode-only archival
+was rejected because it hides a surface without reclaiming the Git checkout or
+proving that evidence survived.
+
+Every terminal worktree therefore declares one outcome and satisfies its
+outcome-specific seal before apply mode exists. Branch retirement can be added
+as a later, independently reviewed operation with its own reachability and
+retention laws.
+
 ### Keep resolution relations explicit
 
 An executable read correction requires proof from one declared mechanical
@@ -894,6 +982,15 @@ counterexample that the native contract tests missed.
 - A confirmed red exits nonzero, blocks stable publication and remains assigned
   to the manifest's release owner until valid later evidence resolves it.
 - The sentinel never advances its stable tag or promotes a speed claim.
+- Every registered worktree receives one typed lifecycle classification from a
+  reproducible snapshot, and only `clean-safe` worktrees are eligible for
+  automated closure.
+- A lifecycle apply refuses current, focused, pinned, agent-leased, dirty,
+  untracked, drifted, or insufficiently anchored work without changing the
+  Supacode surface, Git registration, branch, or evidence.
+- A closed worktree can be reconstructed from its sealed receipt and durable
+  refs or archives; negative-experiment results remain discoverable even after
+  their execution rooms are gone.
 - Every public MCP operation returns a finite, non-negative `elapsed_ms` on
   success and refusal and renders the same value in its human summary.
 - A newly registered public MCP operation cannot pass the ordinary test suite

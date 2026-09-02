@@ -52,7 +52,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test worktree-lifecycle-test worktree-lifecycle-recovery-test worktree-audit handoff-worktree finish-worktree retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -107,6 +107,18 @@ help:
 	@echo "  make benchmark-agent-skills-self-test Test both skill harnesses without model calls"
 	@echo "  make clj-surgeon-skill-self-test Verify compact routing contract and mirror"
 	@echo "  make performance-regression-sentinel-test Run the zero-model adaptive sentinel contract"
+	@echo "  make worktree-lifecycle-test   Run the zero-model lifecycle contract"
+	@echo "  make worktree-lifecycle-recovery-test  Run JVM file-lock/crash recovery tests"
+	@echo "  make worktree-audit [OUTPUT=/absolute/path.edn] Read-only worktree inventory"
+	@echo "  make handoff-worktree REQUEST=/absolute/close-request.edn Create owner handoff"
+	@echo "  make finish-worktree REQUEST=/absolute/close-request.edn Dry-run one close plan"
+	@echo "  make finish-worktree PLAN=/absolute/path.edn APPLY=1 Apply one reviewed plan; never deletes its branch"
+	@echo "    outcomes: landed | negative-experiment | parked; exactly one target and one outcome"
+	@echo "    prune request: :clj-surgeon.worktree-registration-prune-request/v1; one target; branch-backed only"
+	@echo "    preservation: :branch-tip-on-remote | :commit-on-remote"
+	@echo "    prune removal never force-deletes, never runs global git worktree prune, and never deletes refs"
+	@echo "    negative seal markers: <!-- BEGIN CLJ-SURGEON NEGATIVE-EXPERIMENT SEAL --> ... <!-- END CLJ-SURGEON NEGATIVE-EXPERIMENT SEAL -->"
+	@echo "    handoff: owner writes a handoff, runs the returned unlock command, then another clean worktree plans/applies"
 	@echo "  make retain-benchmark-result RESULT_DIR=... Archive raw logs; retain structured evidence"
 	@echo "  make verify-benchmark-retention Refuse tracked raw benchmark logs"
 	@echo "  make verify-benchmark-evidence Verify archived evidence paths and hashes"
@@ -746,6 +758,48 @@ performance-regression-sentinel-test:
 	     (when (pos? (+ (:fail result) (:error result))) \
 	       (System/exit 1)))'
 	bash test/performance_regression_sentinel_runner_test.sh
+
+worktree-lifecycle-test:
+	clojure $(MCP_JAVA_OPTS) -Sdeps '{:paths ["src" "test"]}' -M -e \
+	  '(require (quote clojure.test) \
+	            (quote clj-surgeon.worktree-lifecycle-test) \
+	            (quote clj-surgeon.worktree-lifecycle-io-test) \
+	            (quote clj-surgeon.worktree-lifecycle-prune-test) \
+	            (quote clj-surgeon.worktree-lifecycle-cli-test)) \
+	   (let [result (clojure.test/run-tests \
+	                  (quote clj-surgeon.worktree-lifecycle-test) \
+	                  (quote clj-surgeon.worktree-lifecycle-io-test) \
+	                  (quote clj-surgeon.worktree-lifecycle-prune-test) \
+	                  (quote clj-surgeon.worktree-lifecycle-cli-test))] \
+	     (when (pos? (+ (:fail result) (:error result))) \
+	       (System/exit 1)))'
+
+worktree-lifecycle-recovery-test:
+	clojure $(MCP_JAVA_OPTS) -Sdeps '{:paths ["src" "test"]}' -M -e \
+	  '(require (quote clojure.test) \
+	            (quote clj-surgeon.worktree-lifecycle-recovery-test)) \
+	   (let [result (clojure.test/run-tests \
+	                  (quote clj-surgeon.worktree-lifecycle-recovery-test))] \
+	     (when (pos? (+ (:fail result) (:error result))) \
+	       (System/exit 1)))'
+
+worktree-audit:
+	@clojure $(MCP_JAVA_OPTS) -M -m clj-surgeon.worktree-lifecycle-io audit "$(OUTPUT)"
+
+handoff-worktree:
+	@test -n "$(REQUEST)" || { echo "REQUEST=/absolute/close-request.edn is required"; exit 2; }
+	@clojure $(MCP_JAVA_OPTS) -M -m clj-surgeon.worktree-lifecycle-io handoff "$(REQUEST)"
+
+finish-worktree:
+	@if [ "$(APPLY)" = "1" ]; then \
+	  test -n "$(PLAN)" || { echo "PLAN=/absolute/path.edn is required with APPLY=1"; exit 2; }; \
+	  test -z "$(REQUEST)" || { echo "REQUEST is not accepted with APPLY=1"; exit 2; }; \
+	  clojure $(MCP_JAVA_OPTS) -M -m clj-surgeon.worktree-lifecycle-io apply "$(PLAN)"; \
+	else \
+	  test -n "$(REQUEST)" || { echo "REQUEST=/absolute/close-request.edn is required for dry-run"; exit 2; }; \
+	  test -z "$(PLAN)" || { echo "PLAN requires APPLY=1"; exit 2; }; \
+	  clojure $(MCP_JAVA_OPTS) -M -m clj-surgeon.worktree-lifecycle-io plan "$(REQUEST)"; \
+	fi
 
 retain-benchmark-result:
 	@test -n "$(RESULT_DIR)" || { echo "RESULT_DIR is required"; exit 2; }
