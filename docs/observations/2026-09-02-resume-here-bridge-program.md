@@ -512,3 +512,23 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Gene report skill: `skills/gene-report/SKILL.md` (trigger "Gene report"); instance
   `docs/observations/2026-09-02-gene-peek-report.md`; regenerate after rf2/z7c scores.
 
+
+## RESUME DELTA 2026-09-02T21:13Z
+
+- **Sol's design review of the curtain-call fold refactor** is logged (961186b): lens first
+  (`settings` / `update-settings`, no path fn), tagged identity `[:person-id id]` / `[:name normalised]`,
+  characterization (replay equality) before every edit, ordered commits, NO-GO list for Gene's
+  product decisions. Session 4 (the lens over 19 owners as one Surgeon transaction, watcher on)
+  starts after the fold builder's round two lands. Fold builder a8fea285fa6efe9e5 has the tagged
+  identity rule; store builder a93309b7f3a7f903b is building STORE-IDEM.
+- **q5z class fix** came back from agent a7a9731a5e97c7b4c UNCOMMITTED in `~/src/clj-surgeon-q5z`
+  on 13d86bb (binding/with-redefs LHS are sites; quoted fully-qualified symbols migrate with
+  `:require-mode :qualified-only`; `::alias/k` typed refusal; string_mentions count; ALIAS-029..035).
+  Anchor scratch: 171 files, 1872 sites, kondo delta 0, only the six r4-allowed failures. My
+  independent suites run in the background (`~/tmp/q5z-test-fast.log`, `~/tmp/q5z-mcp-test.log`).
+  Next: commit + push → `restart-7895-at.sh <sha>` → Q5Z-SHA → `setsid nohup bash ~/acid/chain-sl1r.sh`.
+- **rf2 readout** (`~/acid/receipts/rf2-readout.txt`): verb arms bytes_beyond_verb=0, returns 5–6;
+  native arms 7–13 returns, 1–23 bytes off in mcp_exact_verify.clj. Scorer adba3f32e11ed3105 still
+  writing rf2-score.md.
+- **z7c** (gate n=6 on R3) preflight green at 21:09:54Z, running under chain-z7c.
+
