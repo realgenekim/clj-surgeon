@@ -6,6 +6,8 @@ and the resume-note pointer. Work flows bridge → anvil as inbox items with exa
 commands; anvil pushes branches; bridge re-runs the verify command independently before anything is
 called done. Nothing on anvil merges.
 
+**Seat (Gene, 2026-09-02: "Use anvil seats that exist already.").** The builder seat is `tester@anvil` — no new user. It already holds the acid clones, the bridge's scripts and a Claude config. Consequence: the battery hazard is ours to manage, so builders work in worktrees under `~/build/`, never `~/acid/`, and never start while a `~/acid/GO-*` file or the cohort lock exists. The fleet seats dev-a/b/c, foreman, merger, kentbeck stay untouched; `surgeon` runs the production Surgeon.
+
 **Identity.** Export in the session, never `git config`:
 `GIT_AUTHOR_NAME=forge-anvil GIT_AUTHOR_EMAIL=forge-anvil@anvil GIT_COMMITTER_NAME=forge-anvil
 GIT_COMMITTER_EMAIL=forge-anvil@anvil`; every commit carries

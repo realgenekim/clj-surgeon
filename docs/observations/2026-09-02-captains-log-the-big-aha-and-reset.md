@@ -3144,3 +3144,29 @@ receipt ratchets from the friction ledger, the lens follow-ups, the ls-tree free
 Next, in order: the mayor's production paste decides fold/store; receipt ratchets; the E6 adoption cohort
 for the study ops; the two lens follow-ups; drain the queue before touching the MCP schema files again.
 
+
+## 23:52Z — session 5 (watcher on): the study ops through the MCP, hand-driven on curtain-call against an rg baseline; Anvil seat = tester
+
+Server: the study branch on 127.0.0.1:7897 (make mcp-serve ignores MCP_PORT — it binds 7888 and failed
+"Address already in use"; started with `clojure -X:clj-surgeon/mcp :port 7897`). Baseline (rg, timed):
+q1 table of contents 0.02 s (190 ns files + defn counts); q2 requires of folds.clj 0.00 s; q3 "who
+requires store" 0.01 s → **180 files, WRONG** (prefix siblings, strings, comments; the migration receipt's
+truth is 171). Study ops: q1 `ls-tree` dir src/cfp_scheduler_killer grep "folds|store" format edn limit
+4096 → 1.76 s, **1 of 116 files returned, 115 omitted**, next_call served with limit 163xx; retry at the
+ceiling 16384, text → 0.98 s, **13 of 116 files, 103 omitted, `narrow_scope`, no next_call**. The MCP
+receipt embeds per-file forms with args, so a tree of 116 files cannot fit the ceiling; the CLI text
+format (byte-identical golden) is compact. **A table of contents that returns 13 of 116 files at the
+ceiling is not a table of contents.** q2 `deps` on folds.clj → 0.17 s wall / 83 ms in tool, 140 rows
+`{name type line depends_on}` — an intra-file form dependency graph, read_complete; not the ns requires I
+asked for (my expectation, context-privilege). q3 `topo` on store.clj → 0.13 s / 52 ms, 108 rows —
+topological order of the file's own forms; **no exposed study op answers "who requires this namespace"
+across the tree**, the one question rg answers wrong. Verdict: the intra-file ops are fast (50–90 ms)
+and structured; the tree-level questions an agent actually asks before a refactor — contents, requirers
+— are either bounded out or unexposed. Ratchets for the study branch before any adoption cohort:
+(1) `ls-tree` needs a names-only rendering (`format: "names"` or `include_forms: false`) so 190 files
+fit one receipt; (2) a tree-level "requirers of ns" operation — the alias-migration discovery already
+computes exactly this (171 requiring namespaces in 4.4 s) and should be the shared kernel; (3) `make
+mcp-serve` should honour MCP_PORT. Watcher receipt to follow (`.tweezer/session-5-watch.md`).
+Gene, on the seat: *"Use anvil seats that exist already."* → the builder seat is `tester@anvil`;
+brief amended (worktrees under `~/build/`, never while a GO file or the lock exists; fleet seats untouched).
+
