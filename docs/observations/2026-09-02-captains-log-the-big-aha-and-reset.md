@@ -2449,3 +2449,28 @@ vulnerability finder. **Primitive to build:** a relation-write census verb — e
 collection in state, classified by identity door (distinct-by / upsert / set / raw) — one call on
 any event-sourced repo. Filed to the maven inbox.
 
+
+## 21:28Z — store-idempotency built (70c823cf, unpushed); main-loop review found a product-breaking forever key
+
+Agent a93309b7f3a7f903b delivered STORE-IDEM-001/002 on `bridge/store-idempotency` (base a02d50a3,
+five commits, +655/−50): `append!` checks the declared `:idempotency-key` against a fold-derived
+`:idempotency-keys` index inside the write lock, returns a typed duplicate receipt without folding
+or firing sinks (fire-sinks! dispatches under the same lock, which is why the refusal is sufficient);
+Postgres partial unique index on (COALESCE(event-id,''), key) with 23505 mapped to the same receipt;
+`append-all!` refuses keyed events; announce verbs pass `announced-speaker:<event>:<person>` and
+drop check-then-append; five witnesses fails-first (the race witness appended 3 facts before the
+fix); unit 1015/12605/0. Found-not-fixed by the agent: `record-participation!` still
+check-then-appends (needs a product decision); two divergent `empty-state` literals.
+**Review finding (mine, reading the diff):** the registry boundary says a forever key is legal only
+where the relation has no remove verb and claims announced-speaker qualifies "because there is no
+announced-speaker-removed fact". False: `event.speaker-unannounced` removes from the same
+`:announced-speakers` collection. Announce → unannounce → re-announce would be refused forever, in
+memory and at the PG index — Ann's exact workflow (unpublish, publish again). Fix spec sent: a
+generational key `…:<gen>`, gen = unannounce facts already folded for that identity in that event,
+derived in fold-one; racing announces share a gen (one refused), an unannounce advances it; the PG
+index is unchanged; three fails-first witnesses (announce/unannounce/re-announce → two facts, one
+row; racing re-announces → one; replay rebuilds the counts). Sol red-team of the store diff running
+in parallel (`fold-review/sol-store-review.md`). Lesson for the ratchet ladder: a typed refusal is
+only as correct as its identity rule; the builder's own boundary sentence was the oracle and it
+was written with a false premise — the review has to check the premise, not the code.
+
