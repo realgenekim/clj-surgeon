@@ -2281,3 +2281,30 @@ cancels and the scorer compares against base-minus-self-referential. The pre-reg
 (native bytes landing after the verb; returns after the receipt) and Sol's promotion criteria
 are with the scorer; z7c (gate at n=6) launches next on the lock.
 
+
+## 20:57Z — the anchor amended: native passes; the tool's defect is a class, not a site
+
+**Spec hole, corrected twice.** Not three tests: six deftests across three namespaces, driven by
+four string literals naming `src/cfp_scheduler_killer/store.clj`, two of them ordinary source
+constants under `src/` (`db/correct/bad_patching.clj:153`, `db/correct/person_identity.clj:19`),
+inside files that are themselves in the migration set. Option (b), keep the file and retire the
+ns in place, is not implementable: Clojure resolves a namespace to its path, so a renamed ns
+cannot keep its old file. Amendment (a): r4 gates on the test count and a named allowance of
+exactly those six, reports assertions rather than gating on them (an early error skips its
+remaining assertions, so assertion count would fail a correct arm twice for one cause), and a
+new informational r7 counts path fixtures repointed; the prompt's block 2 carries the carve-out,
+generated from the measured base; `mk-R-base.sh` now measures the fixture sites so a sha refresh
+cannot leave the prompt stale. **The native arm now passes the anchor:** r1–r6 PASS,
+`allowed_hit=6/6` and nothing else, 122 s, 172 files, 4,054 lines. Two scorer defects fixed on
+the way (the runner's own `.codex` neutralisation counted as arm work; a `git add` exclusion
+cannot unstage, so the scorer now resets its index first).
+
+**The tool's defect is a class.** The verb rewrote ordinary call sites in the same files and left
+behind (1) qualified symbols in binding-vector position: `(binding [store/*clock* …])` at
+replay.clj:128 and :238 plus six sites in `cli/judge_sandbox.clj`, `(with-redefs [store/now-iso
+…])` and a six-var `with-redefs` in the tests; and (2) a quoted fully-qualified symbol in data
+position, `(requiring-resolve 'cfp-scheduler-killer.store/state)` at sched_import.clj:127, which
+fails lazily at call time with no compile error, the kind that loads and breaks in production.
+Comments naming the var were correctly left alone. Dispatched to the verb's builder with the
+real forms as fixtures; the anchor re-arms after 7895 restarts at the fix.
+
