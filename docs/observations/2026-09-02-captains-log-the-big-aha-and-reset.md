@@ -1449,3 +1449,35 @@ two JVM suites dominate. (2) rf2's native benchmark re-bases to **14.3 returns /
 strip prompt on both arms. (3) The suite-count instrument correction stands: rf1's 14–18 were
 withdrawn on the counter's own authority; every run executed each suite once.
 
+
+## 18:29Z — tweezer session 1, driver's receipt: three one-line fixes at the REPL, one confirmed false refusal, move at call 14
+
+Branch `bridge/tweezer-1` at 92dc72c (pushed): the rf1 extraction driven by hand at the nREPL of
+the tree (port 40179), Surgeon's own functions called directly, expectation stated before each
+call, the watcher metering the transcript. Native benchmarks: 9–10 returns to the move and 20–24
+total unstripped (rf1), 14.3 total stripped (rs1); 311–342 s.
+
+| call | act | result |
+|---|---|---|
+| 1 | MCP plan-extraction on the bridge server, workspace_root = worktree | one return: nine forms, required public form, four internal owners, four caller files (one a false candidate in `dev/`), a hash-bound next_call; **target-ns derived from the path relative to the server's root, not the workspace** (`clj-surgeon-tweezer.src.clj-surgeon.mcp-exact-verify`): tool defect, unsubmittable as served |
+| 2 | rg the sites + server root | 16 external sites in 3 files; the `dev/` candidate has none |
+| 3 | CLI `:extract!` | cut landed, 170 lines; header defects exactly as rf1: docstring copied, 4 unrelated imports, `:refer` on three forms, promoted form left `defn-`, dead source requires kept |
+| 4 | REPL: source of `compile-target-header` | `:minimal` proves and prunes REQUIRES, then installs them into a rename of the whole source ns form: docstring and every import ride along |
+| 5–7 | REPL: live patch (strip docstring, prune imports to classes the forms mention), one wrong-position guess, one probe, re-run `execute!` | header = the reference's: no docstring, two imports, 167 lines |
+| 8–9 | REPL: start the MCP server in-process | refused to load: `admission-unverified? is not public`, the extract's own `:refer` to a form it left private |
+| 10 | REPL: `plan` source | `compile-plan` supports `:public-forms` and `:derive-required-public-forms` and computes `missing-required-public-forms`; **`plan` drops both keys**, so the capability is unreachable from CLI and REPL alike; the tool knew the promotion was mandatory and shipped a private form |
+| 11 | REPL: patch `plan` to forward the keys, re-run with derivation on | promoted form is `defn`; buffer loads |
+| 12 | MCP `edit_clojure` on 7888: symbol_migration 23 sites with owners + require_change 4 files (add alias; replace in formatter; remove the `:refer` require in the source) | **refused `require-change-unprovable` at files[2]**, the test file, for the `[clojure.test :refer …]` entry the call never touched: rf1's ladder confirmed with a perfect payload, 93 ms |
+| 13–14 | one mechanical sewing pass (23 sites, 4 ns forms, dead requires and imports), retry after my own count check | all five namespaces load; diff vs `rf1-reference.diff` differs in 12 whitespace lines |
+| 15 | both suites once | test-fast 664 tests 0 failures; mcp 377 tests, the 1 known macOS assertion |
+
+**Shape findings, all agent-invisible until the tool's text says them:** (1) `plan` drops the
+visibility keys (one-line fix; the CLI never exposed them, hence rf1's "silently ignored"); (2)
+the header compiler prunes requires but not imports or the docstring (one function); (3) the
+MCP server derives the target ns from its own root, ignoring `workspace_root` (defect; bead);
+(4) `require_change` provability must be scoped to the entries named (rf2-3, confirmed); (5) the
+extract's `:refer` to internal callers is what forces the ladder: rewire the seven internal
+sites instead (rf2-1). With (1), (2) and a rewiring extract, the hand path is plan → extract →
+compile → suites: **four returns**. Watcher's count for the session window: 27 returns, 503 s,
+including housekeeping calls; its per-call records and close are the meter's receipt and follow.
+
