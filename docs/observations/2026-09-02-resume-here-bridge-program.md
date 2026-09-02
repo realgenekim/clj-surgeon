@@ -766,3 +766,15 @@ Plus the standing ones: inb-d603ce / inb-70711c / inb-554636 (Gene's merges), in
 production ops), inb-f5ee92 (census verb, now built), inb-f403aa (study ops, now built), inb-600289
 (the Gene report). Session 5 closed; watcher a9fa65891683c1c40 writes `.tweezer/session-5-watch.md`
 (copy to docs/observations when it lands). Anvil builder seat = tester (brief amended).
+
+## RESUME DELTA 2026-09-02T23:55Z
+
+- Session 5 watcher receipt filed (f32076a): verdict MIXED; E6 (inb-c973d2) gated on S1 + S2.
+- **Prosecuting S1 (inb-a0f37e) + S3 (inb-d8a635) now**: builder a72e392109a38e858 on
+  `~/src/clj-surgeon-study` (bridge/study-ops-mcp @ b3c17bb): names-only ls-tree rendering as the
+  default (+ ns_grep), and `make mcp-serve` honouring MCP_PORT. After its report: my suites under the
+  lock → push → note the mayor → mark inb-a0f37e / inb-d8a635 attempted. Then S2 (tree-level
+  requirers) waits for q5z to merge.
+- Still pending on others: the mayor's production paste (inb-3a9818); Gene's merges and rulings
+  (inb-78e75c contract; inb-041b28 product); whether Gene starts the tester@anvil seat.
+
