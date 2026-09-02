@@ -180,3 +180,8 @@ from fleet prompts (doctrine, his call); second-caller cohort (Claude on Anvil, 
 ratifications. REMAINING WORK: b2 (running since 08:52Z) -> freeze -> rescore -> scorer (typed-refusal ledger: did
 ambiguous-insertion-gap vanish on main 2311cc09? churn?) -> log -> brief -> mayor; then l1r (1 arm) -> fold into l1 means.
 NO new cohort tonight. Monitor bb5prq9bu covers b2 (add l1r if restarted). Gene wakes ~13:00Z.
+
+UPDATE 09:14Z (real UTC) — PROGRAM RUNS COMPLETE. l1r folded (log receipt); b2 scored + judged (a7932cb, 9d6112f): no detected
+regression on main 2311cc09. Anvil quiet; v3 refreshed from v5 (attestation ratchet live). Monitors stopped. Nothing launches
+unless Gene decides (brief: pull the Surgeon one-liner from fleet prompts; second-caller cohort; doctrine v2 inb-beecb9;
+ratifications). If resuming: read the brief, then the last five log receipts; do not launch cohorts; answer Gene's decisions.

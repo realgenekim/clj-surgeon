@@ -1760,3 +1760,19 @@ judges name a global window.fetch swap in one shipped diff as the riskiest mecha
 set, and Opus finds the best tests of the night's medium rung in a main diff (the only one
 asserting the no-new-timer invariant mechanically). All six byte-safe on the default page.
 Nothing here changes the b2 verdict: no detected regression on main 2311cc09.
+
+## Receipt 09:14Z — l1r folded in; the program's runs are complete
+
+The mandate rerun on the large rung: 450 s, gate green, rung-L acceptance 12 tests, 82
+assertions, 0 failures. It ran alone on the box, so its wall is not paired; folded in,
+the mandate arm on rung L is 493, 585, 796, 450, mean 581 (n=4), 2.7x native. Not judged
+(n=1, quality was flat at this rung). Anvil is quiet: no chains, no drivers, load 2.5; my
+instances 7893 (shipped), 7889 (main 2311cc09), 7891, 7892 still serve and can be retired
+when skiff's retirement pass runs. The canonical runner v5 (attestation, per-slot names,
+serial gates, staged diffs, prompt guard, capacity flag) is now copied over v3 so the next
+launch, by anyone, gets the ratchets.
+
+Final tally of the night's cohorts on verified servers: e3 (12), b1 (9), n1 (12), k2 (6),
+v1 (12), s1 (12), l1 (11 plus the rerun), b2 (6): 81 arm-runs scored on actions, typed
+refusals, tokens and acceptance, 74 of them judged blind by two judges. Every receipt is in
+this file with its commit timestamp; the wake-up brief is the summary for Gene.
