@@ -759,3 +759,20 @@ H6. The meta finding: agents refactoring Surgeon with Surgeon will hit refusals 
 If H1 and H2 hold, the winners list is confirmed on the tool's own code, and the brag is
 real: Surgeon refactored itself faster than a native agent could. If H1 fails, the refactor
 square is not a square either, and the skill section shrinks to the study ops.
+
+## Gate, red team round four (16:24Z): NO-GO on one root cause, a silent no-op success
+
+Whole-file operations, confinement, the round one-to-three regressions, the 109-of-109 parse
+and the applied-diff fidelity of field payloads all held. One root cause fails: a hunk body
+line the reader does not recognise truncates the hunk and the rest is silently discarded,
+yet the gate commits with ok true. A context line missing its leading space, a routine
+producer error, commits a no-op whose pre and post hashes are equal and whose receipt says
+success; a removed line beginning with two dashes deletes one line instead of three; two
+requested edits apply as one. That falsifies the design doc's own sentence "nothing is
+dropped, so nothing is silently truncated", and it is the false-green class in its purest
+form, in a tool whose only purpose is to not issue false greens. Field exposure measured at
+zero of 109 payloads, which is why z1 did not show it and why it must be fixed before z3
+anyway. Round six: an unrecognised body line refuses (:hunk-truncated, naming the line), a
+post-image equal to the pre-image refuses (:no-op-patch), one terminating newline is
+stripped so seven of 109 field payloads stop tripping spurious context mismatches, a
+single-space V4A context line counts as blank, and a stale v1 paragraph leaves the doc.
