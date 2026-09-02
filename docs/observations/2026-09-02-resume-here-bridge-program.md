@@ -568,3 +568,21 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   (documented as owner work; a PG-backed revision refuses to boot without the index).
 - Session 4 (lens over 19 owners as one Surgeon transaction, watcher on) after fold+store land.
 
+
+## RESUME DELTA 2026-09-02T22:17Z
+
+- **z7c SCORED** (`~/acid/receipts/z7c-score.md`, log 0260e72): gate wall-neutral at n=6 (0.975×, p 0.79);
+  z7b's 0.76× WITHDRAWN (slow native arm); correctness 6/6, verify none never used. Tech tree E1 and
+  the Gene report corrected. Standing claim: gate = correctness, verb (rf2) = speed.
+- **sl1-R finished** (T 228 s, N 283 s, both "1007 tests, 2 failures"); chain-next.log claims
+  "scored -> sl1-R-score.txt pass" but the file and the .diff files do not exist — scorer agent
+  a94d9638a217446d3 is establishing whether that "pass" is a false green, then writing
+  `~/acid/receipts/sl1-R-score.md`. Log + Gene report §2 row when it lands.
+- **Store branch f568d595** (my run 1038/12872/0): Sol round three GO-WITH-FIX single-instance
+  (`scratchpad/fold-review/sol-store3-review.md`, log ae8efb6). Round four (last) with builder
+  a93309b7f3a7f903b: exact constraint-name extraction; comparable-body domain refusal. Then my
+  `bin/kaocha unit` in `~/src/curtaincall-cfp-store` → push `bridge/store-idempotency` → inbox item
+  for Gene naming owner work (index install + real pg_get_indexdef; max-instances=1 precondition).
+- Gene report printed in the terminal at his request; regenerate after sl1-R and the store push.
+- Then session 4 (the lens over 19 owners, watcher on) on a worktree stacked on fold+store.
+
