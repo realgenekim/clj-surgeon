@@ -507,3 +507,27 @@
     (when (:ok result)
       (some (fn [[alias required]] (when (= (str namespace) (str required)) alias))
             (:aliases result)))))
+
+;; @spec MCP-OP-EXTRACT-016
+(defn required-namespace-facts
+  "Pure: how one namespace form depends on a given namespace.
+
+  Returns {:required? true :alias <str-or-nil> :referred [<str>...]} when the
+  form requires it, {:required? false} when it provably does not, and
+  {:provable? false :reason <kw>} when the header shape cannot be read. The
+  third case matters: a caller whose header cannot be read is UNRESOLVED, not
+  absent, and a receipt must say so rather than imply the file needs nothing."
+  [ns-form namespace]
+  (let [parsed (direct-libspecs ns-form)]
+    (if-not (:ok parsed)
+      {:provable? false :reason (or (:reason parsed) :unreadable-require-clause)}
+      (if-let [entry (some #(when (= (str namespace) (str (:namespace %))) %)
+                           (:entries parsed))]
+        {:provable? true
+         :required? true
+         :alias (some-> (:alias entry) str)
+         :referred (cond
+                     (= :all (:referred entry)) :all
+                     (vector? (:referred entry)) (mapv str (:referred entry))
+                     :else [])}
+        {:provable? true :required? false}))))

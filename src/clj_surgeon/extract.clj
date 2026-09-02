@@ -19,6 +19,7 @@
    [clj-surgeon.extract-rewire :as extract-rewire]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.mcp-process :as process-env]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -245,6 +246,321 @@
 
 ;; @spec MCP-OP-EXTRACT-005
 ;; @spec MCP-OP-EXTRACT-006
+(defn ns-name-of
+  "Pure: the namespace symbol one source declares, as a string, or nil."
+  [source]
+  (some-> (namespace-form-text source)
+          z/of-string z/down z/right z/string))
+
+;; @spec MCP-OP-EXTRACT-015
+(defn header-guarantees
+  "Pure: the properties the extraction's header rewrite GUARANTEES.
+
+  A receipt that reports only counts cannot be acted on by a reader who was not
+  driving the run: in cohort rf1 the receipt named forms-extracted,
+  new-file-lines, callers-to-review and target-requires, and a cold reader still
+  could not tell whether the docstring was copied, the imports pruned, or the
+  visibility derived, because no field said so. Every claim here is a property,
+  not a tally."
+  [{:keys [require-policy doc target-alias refer-emitted
+           target-imports omitted-target-imports promoted-forms
+           target-requires omitted-target-requires]}]
+  {:docstring (cond
+                (= :copy-all require-policy) :copied-from-source
+                (str/blank? (str doc)) :none
+                :else :caller-supplied)
+   :requires-kept (if (= :copy-all require-policy)
+                    :copied-exactly
+                    (vec target-requires))
+   :requires-pruned (if (= :copy-all require-policy)
+                      []
+                      (vec omitted-target-requires))
+   :imports-kept (if (= :copy-all require-policy)
+                   :copied-exactly
+                   (vec target-imports))
+   :imports-pruned (if (= :copy-all require-policy)
+                     []
+                     (vec omitted-target-imports))
+   :visibility-derived (vec promoted-forms)
+   :alias target-alias
+   :refer (if (seq refer-emitted) (vec refer-emitted) :none)})
+
+;; @spec MCP-OP-EXTRACT-016
+(defn classify-callers
+  "Pure: split the files that mention a moved name into three STATES.
+
+  `rewired` were repointed by this extraction. `unresolved` require the source
+  namespace and still need a human or a second call -- including any whose
+  header could not be read. `mentions-only` provably do not require the source
+  namespace, so they need nothing; they are reported separately rather than as
+  outstanding work, because rf1's `callers-to-review` count was read as a list
+  of work the tool had in fact already done."
+  [{:keys [files sources source-ns moved-vars rewired-files]}]
+  (let [moved (set moved-vars)]
+    (reduce
+      (fn [acc file]
+        (cond
+          (contains? rewired-files file) acc
+          :else
+          (let [source (get sources file)
+                facts (when source
+                        (some-> (namespace-form-text source)
+                                (extract-header/required-namespace-facts source-ns)))]
+            (cond
+              (nil? facts)
+              (update acc :unresolved conj
+                      {:file file :reason :no-readable-namespace-form})
+
+              (false? (:provable? facts))
+              (update acc :unresolved conj
+                      {:file file :reason (:reason facts)})
+
+              (not (:required? facts))
+              (update acc :mentions-only conj file)
+
+              (= :all (:referred facts))
+              (update acc :unresolved conj
+                      {:file file :reason :refer-all-cannot-be-proved})
+
+              (seq (filter moved (:referred facts)))
+              (update acc :unresolved conj
+                      {:file file
+                       :reason :moved-vars-are-referred-not-alias-qualified
+                       :vars (vec (sort (filter moved (:referred facts))))})
+
+              :else
+              (update acc :mentions-only conj file)))))
+      {:unresolved [] :mentions-only []}
+      files)))
+
+;; @spec MCP-OP-EXTRACT-017
+(defn private-plan-field?
+  "Pure: a compiled-plan key that is the executor's working state, never output.
+
+  Minted here, so every surface that publishes a plan filters by the same rule."
+  [field]
+  (str/starts-with? (name field) "_"))
+
+;; @spec MCP-OP-EXTRACT-017
+(def receipt-tail-fields
+  "The ONLY compiled-plan keys a reader-facing receipt may carry beyond its
+  ordered head. An allowlist, not a denylist: the 347 KB receipt happened
+  because a new internal key had only to be forgotten to leak, and the leak was
+  three whole caller files plus the whole source file. A key absent from this
+  set cannot reach a reader, whatever it is named."
+  ;; :omitted-target-requires is deliberately absent: requires were already
+  ;; pruned correctly before this change, so the list of ones NOT copied is
+  ;; diagnostic, not a guarantee. Imports ARE listed both ways in :header,
+  ;; because copying four unrelated imports is the defect rf1 measured.
+  [:file :to :source-ns :require-policy :source-referred-forms
+   :form-count :lines-extracted
+   :preview-path :missing-required-public-forms
+   ;; :log is deliberately absent: an action queue -- create-file, nine
+   ;; remove-form entries, add-require -- restating what :new-file-preview and
+   ;; :header already state as the resulting STATE.
+   :source-require-added :rewire-callers :verified :receipt-file :undo])
+
+(defn- compile-expr-for
+  "Pure: the expression that requires every touched namespace."
+  [namespaces]
+  (str "(require " (str/join " " (map #(str "'" %) namespaces))
+       ") (println :compile-ok)"))
+
+(defn- classpath-args-for
+  "Pure: the argv that resolves the project classpath.
+
+  Two steps, not `clojure -M<alias> -e`: an alias may carry :main-opts, and on
+  this very repository `-M:clj-surgeon/mcp-test -e ...` runs the whole test
+  suite instead of compiling. Resolve the classpath, then run clojure.main
+  against it."
+  [alias]
+  (cond-> ["clojure" "-Spath"]
+    (not (str/blank? (str alias))) (conj (str "-A" alias))))
+
+;; @spec MCP-OP-EXTRACT-020
+(defn attribute-compile-failure
+  "Pure: decide whether a failed compile is attributable to THIS change.
+
+  A receipt whose evidence source cannot see its own subject must say
+  `:unverified`, never `false`. A missing dependency, or an error raised inside
+  a namespace this extraction never touched, says the classpath could not load
+  the project at all -- reporting that as `:ok false` would tell a reader to
+  undo work that is in fact correct."
+  [output touched-files]
+  (let [named (set (map #(second %) (re-seq #"\(([A-Za-z0-9_.\-]+\.clj[cs]?):" output)))
+        ours (set (map #(last (str/split (str %) #"/")) touched-files))
+        foreign (seq (remove ours named))]
+    (cond
+      (re-find #"Could not locate .* on classpath" output)
+      {:ok :unverified :reason :classpath-incomplete}
+
+      foreign
+      {:ok :unverified :reason :failure-outside-the-changed-files
+       :raised-in (vec (sort foreign))}
+
+      :else {:ok false})))
+
+(defn- compile-command-for
+  "Pure: the exact command a reader can run, matching what the apply runs."
+  ([namespaces] (compile-command-for namespaces nil))
+  ([namespaces alias]
+   (str "CP=$(" (str/join " " (classpath-args-for alias))
+        ") && java -cp \"$CP\" clojure.main -e \""
+        (compile-expr-for namespaces) "\"")))
+
+;; @spec MCP-OP-EXTRACT-019
+(defn- project-build-file
+  "The nearest build file at a project root, or nil."
+  [root]
+  (some #(let [f (io/file root %)] (when (.exists f) (.getPath f)))
+        ["deps.edn" "project.clj" "bb.edn"]))
+
+;; @spec MCP-OP-EXTRACT-019
+(defn compile-check!
+  "Run the SAME command the receipt prints, as one bounded subprocess, and
+  report what it proved.
+
+  Compiling is the only way this transaction's correctness gets checked, so the
+  apply performs it rather than leaving a reader to discover that nothing was
+  verified. It is a subprocess on purpose: loading the rewritten namespaces into
+  the running process would mutate the very namespaces a server is serving."
+  [{:keys [namespaces root timeout-ms alias touched-files]
+    :or {timeout-ms 30000}}]
+  (let [printed (compile-command-for namespaces alias)
+        base {:namespaces (vec namespaces) :command printed}
+        run! (fn [argv ms]
+               (try
+                 (process-env/run-bounded!
+                   {:command argv :cwd (str root) :timeout-ms ms
+                    :visible-byte-limit (* 256 1024)})
+                 (catch Exception error {:launch-error (.getMessage error)})))]
+    (if-not (project-build-file root)
+      (assoc base :checked false :status :skipped
+             :reason :no-project-build-file)
+      (let [cp (run! (classpath-args-for alias) timeout-ms)
+            classpath (some-> (:out cp) str/trim not-empty)
+            result (if (and (:finished? cp) (zero? (long (or (:exit cp) 1)))
+                            classpath)
+                     (run! ["java" "-cp" classpath "clojure.main" "-e"
+                            (compile-expr-for namespaces)]
+                           timeout-ms)
+                     {:launch-error
+                      (str "could not resolve the project classpath: "
+                           (str/trim (str (:err cp) (:launch-error cp))))})
+            output (str/trim (str (:err result) (:out result)))
+            tail (if (> (count output) 400)
+                   (str "..." (subs output (- (count output) 400)))
+                   output)]
+        (cond
+          (:launch-error result)
+          (assoc base :checked false :status :unverified
+                 :reason :compiler-unavailable :output-tail (:launch-error result))
+
+          (not (:finished? result))
+          (assoc base :checked false :status :unverified
+                 :reason :compile-did-not-finish :output-tail tail)
+
+          (zero? (long (or (:exit result) 1)))
+          (assoc base :checked true :status :run :ok true :exit 0)
+
+          :else
+          ;; @spec MCP-OP-EXTRACT-020
+          (merge base {:checked true :status :run :exit (:exit result)
+                       :output-tail tail}
+                 (attribute-compile-failure output touched-files)))))))
+
+;; @spec MCP-OP-EXTRACT-018
+(defn target-outline
+  "Pure: a BOUNDED description of the new file -- its ns form and the name,
+  kind and line range of each form. Never the file's text: on the rf1 fixture
+  the whole new file is 6.6 KB and the whole source 78 KB, and an agent that
+  gets a receipt too long to read ignores the receipt."
+  [ns-form form-texts]
+  (let [ns-lines (count (str/split-lines ns-form))]
+    {:ns-form ns-form
+     :forms (first
+              (reduce
+                (fn [[acc line] form]
+                  (let [n (count (str/split-lines (:text form)))]
+                    [(conj acc {:name (:name form)
+                                ;; the FINAL kind, after any promotion: a
+                                ;; receipt that still said defn- would deny the
+                                ;; visibility change it just made
+                                :type (or (some-> (:text form) z/of-string
+                                                  z/down z/string)
+                                          (:type form))
+                                :lines [line (+ line (dec n))]})
+                     (+ line n 1)]))
+                [[] (+ ns-lines 2)]
+                form-texts))}))
+
+;; @spec MCP-OP-EXTRACT-015
+;; @spec MCP-OP-EXTRACT-016
+(defn receipt-map
+  "Pure: one receipt a reader who did not drive the run can act on.
+
+  Ordered, and ordered deliberately: what happened (:applied), to what
+  (:target-ns/:target-file), what is now GUARANTEED about the headers
+  (:header/:source-header), what state the callers are in
+  (:*-rewired/:callers-unresolved/:complete), what has NOT been checked
+  (:compile), and only then the tallies. Every caller key names a STATE, never
+  a queue of history: `callers-to-review` was read by a cold model as work it
+  had to do by hand, when the tool had already done all of it.
+
+  Built with array-map so the printed order is the order above; do not assoc
+  onto the result, which would convert it to an unordered map."
+  [{:keys [applied plan candidates would extra]}]
+  (let [root (:_project-root plan)
+        rel #(workspace-relative-path root %)
+        rewired (mapv (fn [{:keys [file old-alias rewrites require-action]}]
+                        {:file (rel file) :old-alias old-alias :sites rewrites
+                         :require-action require-action})
+                      (:_caller-plans plan))
+        source-rewired (->> (:source-rewrites candidates)
+                            (group-by :owner)
+                            (map (fn [[owner entries]]
+                                   {:owner owner
+                                    :vars (vec (sort (map :var entries)))
+                                    :sites (reduce + (map :count entries))}))
+                            (sort-by :owner)
+                            vec)
+        classification (:_caller-classification plan)
+        unresolved (vec (:unresolved classification))
+        namespaces (:_touched-namespaces plan)]
+    (apply array-map
+      (concat
+        [:applied (boolean applied)]
+        (when-not applied [:would would])
+        [:target-ns (:target-ns plan)
+         :target-file (:to plan)
+         :header (:_header plan)
+         :source-header {:requires-removed (vec (:removed-requires candidates))
+                         :imports-removed (vec (:removed-imports candidates))
+                         :narrowing-note (:narrowing-note candidates)}
+         :source-callers-rewired source-rewired
+         :external-callers-rewired rewired
+         :callers-unresolved unresolved
+         :complete (empty? unresolved)
+         :compile (or (:compile plan)
+                      {:checked false
+                       :status :not-run
+                       :will-check (boolean (:_will-check plan))
+                       :namespaces namespaces
+                       :command (compile-command-for namespaces)})
+         :new-file-preview (:_target-outline plan)
+         :quoted-var-references-unrewired (:quoted-var-references plan)
+         :note "quoted-var-references-unrewired: Vars reached by quoting, never rewritten here."
+         :callers-mentions-only (mapv rel (:mentions-only classification))
+         ;; no :summary: every tally it held is a count of a vector printed
+         ;; above it, and a receipt that restates its own contents is longer
+         ;; without being clearer.
+         :history {:note (str "callers-to-review is now the three caller "
+                              "fields above; remaining-source-callers is "
+                              "source-callers-rewired.")}]
+        ;; appended, never assoc'ed: assoc past eight entries would convert the
+        ;; array-map to an unordered one and lose the reading order above
+        (mapcat identity extra)))))
+
 (defn compile-candidates
   "Purely compile and parse the complete source and target after extraction.
 
@@ -381,7 +697,8 @@
   "Purely compile an extraction plan from one source snapshot and a captured
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
-           public-forms derive-required-public-forms doc alias rewire-callers]
+           public-forms derive-required-public-forms doc alias rewire-callers
+           project-root]
     :or {workspace-sources {} require-policy :minimal public-forms []
          derive-required-public-forms false rewire-callers true}}]
   (let [lines (vec (str/split-lines source))
@@ -630,19 +947,16 @@
            :lines-extracted
            (reduce + (map #(- (:end-line %) (dec (:comment-start %)))
                           form-texts))
-           :new-file-preview
-           (let [preview-lines (str/split-lines new-file-content)]
-             (if (> (count preview-lines) 20)
-               (str (str/join "\n" (take 20 preview-lines)) "\n... ("
-                    (count preview-lines) " lines total)")
-               new-file-content))
+           ;; @spec MCP-OP-EXTRACT-018
+           :new-file-preview (target-outline (:ns-form header-result)
+                                             publicized-texts)
            :callers-to-review other-files
            :rewire-callers (boolean rewire-callers)
            ;; @spec MCP-OP-EXTRACT-009
            ;; The dry run previews the SAME compiled plan the executor applies,
            ;; per file, so a caller can review the complete effect before any
            ;; byte moves.
-           :preview
+           :_preview
            (let [candidates
                  (try
                    (compile-candidates
@@ -694,11 +1008,80 @@
            :_form-texts form-texts
            :_source-referred-forms source-referred
            :_moved-sources (mapv :text publicized-texts)
-           :_caller-plans (vec caller-plans)})))))
+           :_caller-plans (vec caller-plans)
+           :_new-file-lines (count (str/split-lines new-file-content))
+           :_will-check true
+           :_project-root project-root
+           :_target-outline (assoc (target-outline (:ns-form header-result)
+                                                   publicized-texts)
+                                   :lines (count (str/split-lines new-file-content)))
+           ;; @spec MCP-OP-EXTRACT-015
+           :_header
+           (header-guarantees
+             {:require-policy (:require-policy header-result)
+              :doc doc
+              :target-alias target-alias
+              :refer-emitted (if (and rewire-callers (seq remaining-callers))
+                               []
+                               source-referred)
+              :target-requires (:target-requires header-result)
+              :omitted-target-requires (:omitted-target-requires header-result)
+              :target-imports (:target-imports header-result)
+              :omitted-target-imports (:omitted-target-imports header-result)
+              :promoted-forms (vec (sort requested-public-forms))})
+           ;; @spec MCP-OP-EXTRACT-016
+           :_caller-classification
+           (classify-callers
+             {:files other-files
+              :sources captured-sources
+              :source-ns source-ns
+              :moved-vars extracted-names
+              :rewired-files (set (map :file caller-plans))})
+           :_touched-namespaces
+           (vec (concat [target-ns source-ns]
+                        (keep #(ns-name-of (:original %)) caller-plans)))})))))
 
-(defn plan
+;; @spec MCP-OP-EXTRACT-016
+(defn- apply-command-for
+  "Pure: the exact :extract! invocation that applies one previewed plan."
+  [{:keys [file forms to public doc alias rewire-callers]}]
+  (str "clj-surgeon :op :extract! :file " file
+       " :forms '" (pr-str (vec forms)) "'"
+       " :to " to
+       (when (seq public) (str " :public '" (pr-str (vec public)) "'"))
+       (when alias (str " :alias " alias))
+       (when doc " :doc \"<your docstring>\"")
+       (when (false? rewire-callers) " :rewire-callers false")))
+
+;; @spec MCP-OP-EXTRACT-009
+;; @spec MCP-OP-EXTRACT-015
+;; @spec MCP-OP-EXTRACT-016
+(defn- dry-run-receipt
+  "Reshape one compiled plan into the SAME receipt the executor emits, with
+  :applied false and the command that would apply it. A preview a reader has to
+  translate into the apply receipt is a second thing to learn."
+  [compiled opts]
+  (if (or (:error compiled) (not (map? compiled)))
+    compiled
+    (let [candidates (get-in compiled [:_preview :source])
+          candidates (if (map? candidates) candidates {})]
+      (receipt-map {:applied false
+                    :plan compiled
+                    :candidates
+                    {:source-rewrites (:call-sites-qualified candidates)
+                     :removed-requires (:removed-requires candidates)
+                     :removed-imports (:removed-imports candidates)
+                     :narrowing-note (:narrowing-note candidates)}
+                    :would (apply-command-for opts)
+                    ;; @spec MCP-OP-EXTRACT-017
+                    :extra (select-keys compiled receipt-tail-fields)}))))
+
+(defn plan-raw
   "Capture one workspace snapshot and delegate extraction decisions to
-  compile-plan. This is the filesystem shell, not the pure planner."
+  compile-plan. This is the filesystem shell, not the pure planner.
+
+  Returns the compiled plan unreshaped, for the executor; `plan` is the
+  reader-facing dry run built on top of it."
   [{:keys [file forms to source-paths require-policy public public-forms doc
            alias rewire-callers]
     :as opts
@@ -725,6 +1108,7 @@
          :target-ns target-ns
          :workspace-sources workspace-sources
          :require-policy require-policy
+         :project-root (str project-root)
          :public-forms (or public public-forms [])
          ;; @spec MCP-OP-EXTRACT-011
          ;; When the caller does not name the promotions, DERIVE them. The
@@ -745,6 +1129,14 @@
        :source-unchanged true
        :target-unchanged true})))
 
+;; @spec MCP-OP-EXTRACT-009
+;; @spec MCP-OP-EXTRACT-016
+(defn plan
+  "Preview one extraction as the SAME receipt the executor emits, with
+  :applied false and the command that would apply it."
+  [opts]
+  (dry-run-receipt (plan-raw opts) opts))
+
 ;; ============================================================
 ;; Effects: Execute the extraction
 ;; ============================================================
@@ -755,7 +1147,7 @@
    The source write is hash-fenced; a failed commit restores the original
    source and removes the newly-created target."
   [{:keys [file to receipt-out] :as opts}]
-  (let [p (plan opts)]
+  (let [p (plan-raw opts)]
     (if (:error p)
       p
       (let [original-source (:_source p)
@@ -838,8 +1230,33 @@
                                      caller-plans))
                 (throw (ex-info "Extraction read-back verification failed"
                                 {:error-type :extraction-read-back-failed})))
-              (let [receipt-file (publish-receipt! receipt-out receipt)]
-                (cond->
+              (let [receipt-file (publish-receipt! receipt-out receipt)
+                    ;; @spec MCP-OP-EXTRACT-019
+                    ;; The last step of the transaction: compile what was
+                    ;; written. A failure is reported honestly and NOT
+                    ;; auto-reverted -- the receipt names how to revert.
+                    compile-result
+                    (if (false? (:compile-check opts))
+                      {:checked false :status :not-run
+                       :namespaces (:_touched-namespaces p)
+                       :reason :disabled-by-caller}
+                      (compile-check!
+                        {:namespaces (:_touched-namespaces p)
+                         :alias (:compile-alias opts)
+                         :touched-files (concat [file to]
+                                                (map :file caller-plans))
+                         :root (project-root-for-source file
+                                                        (:source-paths opts))}))]
+                (receipt-map
+                  {:applied true
+                   :plan (assoc p :compile compile-result)
+                   :candidates candidates
+                   ;; @spec MCP-OP-EXTRACT-017
+                   ;; The apply obeys the SAME allowlist as the dry run; two
+                   ;; surfaces with two rules is how one of them leaks.
+                   :extra
+                   (select-keys
+                   (cond->
                   {:file file
                    :to to
                    :target-requires (:target-requires p)
@@ -870,20 +1287,24 @@
                               :parsed true
                               :atomic-write true
                               :read-back true}
-                   :callers-to-review (:callers-to-review p)
-                   :rewired-callers (:caller-rewrites p)
-                   :removed-source-requires (:removed-requires candidates)
-                   :removed-source-imports (:removed-imports candidates)
-                   :source-call-sites-qualified (:source-rewrites candidates)
-                   :quoted-var-references (:quoted-var-references p)
-                   :summary {:forms-extracted (count form-texts)
-                             :new-file-lines (count (str/split-lines new-content))
-                             :source-require-added
-                             (boolean (seq source-referred-forms))
-                             :callers-to-review (count (:callers-to-review p))
-                             :quoted-var-references
-                             (count (:quoted-var-references p))}}
-                  receipt-file (assoc :receipt-file receipt-file)))
+                   :source-require-added (boolean (seq source-referred-forms))}
+                  receipt-file (assoc :receipt-file receipt-file)
+
+                  (false? (:ok compile-result))
+                  (assoc :undo
+                         (if receipt-file
+                           {:receipt receipt-file
+                            :command (str "clj-surgeon :op :undo-extract! "
+                                          ":receipt " receipt-file)
+                            :note (str "the compile FAILED after the write; "
+                                       "these bytes are on disk and were not "
+                                       "reverted for you")}
+                           {:receipt nil
+                            :note (str "the compile FAILED after the write and "
+                                       "no receipt was requested, so there is "
+                                       "no guarded revert; re-run with "
+                                       ":receipt-out <path>.edn to get one")})))
+                   receipt-tail-fields)}))
               (catch Exception commit-error
                 (let [source-restored?
                       (try

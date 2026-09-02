@@ -583,6 +583,8 @@
                                    :alias          {:desc "Alias for the target namespace; defaults to its last dot-separated segment. Never emitted as :refer"}
                                    :rewire-callers {:desc "true (default) alias-qualifies the source's remaining call sites and repoints every proved caller file; false changes only the source and target"}
                                    :source-paths   {:desc "EDN vector of source roots used to derive the target namespace name"}
+                                   :compile-check  {:desc "true (default) compiles the touched namespaces as the last step of the transaction and reports the result; false skips it"}
+                                   :compile-alias  {:desc "Optional deps.edn alias for the compile check's classpath, e.g. :test"}
                                    :receipt-out    {:desc "Optional new .edn path for a guarded inverse receipt"}}
                        :workflow  ["Run :extract first. Review target-requires, omitted-target-requires, remaining-source-callers, callers-to-review, and authority-labeled quoted-var-references. Unsupported require shapes refuse instead of copying or dropping unproved dependencies."
                                    "Application compiles both complete files from one source snapshot, parses them, hash-fences the source, writes atomically, and verifies read-back."

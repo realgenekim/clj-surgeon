@@ -240,10 +240,10 @@
         (testing "callerless source does not gain a new require"
           (is (not (str/includes? (slurp source) "my.helpers"))))
         (testing "target keeps the used ClojureScript dependency"
-          (is (= ["clojure.string"] (:target-requires result)))
+          (is (= ["clojure.string"] (get-in result [:header :requires-kept])))
           (is (str/includes? (slurp target) "clojure.string")))
         (testing "receipt reports that no source require was necessary"
-          (is (false? (get-in result [:summary :source-require-added])))))
+          (is (false? (:source-require-added result)))))
       (finally (delete-recursive! root)))))
 
 ;; ============================================================
@@ -268,8 +268,8 @@
         (testing "preview contains new ns name"
           (is (str/includes? (:new-file-preview p) "my.distillery")))
         (testing "preview contains extracted forms"
-          (is (str/includes? (:new-file-preview p) "defn distill"))
-          (is (str/includes? (:new-file-preview p) "defn refine"))))
+          (is (some #(= "distill" (:name %)) (:forms (:new-file-preview p))))
+          (is (some #(= "refine" (:name %)) (:forms (:new-file-preview p))))))
       (finally (delete-recursive! root)))))
 
 (deftest test-plan-proves-quoted-var-callers-without-textual-lookalikes
@@ -291,12 +291,12 @@
                                 :forms '[distill refine]
                                 :to target})]
         (is (nil? (:error plan)))
-        (is (= 2 (count (:quoted-var-references plan))))
+        (is (= 2 (count (:quoted-var-references-unrewired plan))))
         (is (= #{"my.app/distill" "my.app/refine"}
-               (set (map :subject (:quoted-var-references plan)))))
+               (set (map :subject (:quoted-var-references-unrewired plan)))))
         (is (= #{:structural-var-quote}
                (set (map :reference-authority
-                         (:quoted-var-references plan))))))
+                         (:quoted-var-references-unrewired plan))))))
       (finally (delete-recursive! root)))))
 
 (deftest test-plan-missing-form
@@ -322,7 +322,7 @@
                              :to target})]
         (testing "new file omits dependencies unused by the moved form"
           (is (empty? (:target-requires p)))
-          (is (= ["clojure.string"] (:omitted-target-requires p)))
+          (is (= ["clojure.string"] (get-in p [:header :requires-pruned])))
           (is (not (str/includes? (:new-file-preview p) "clojure.string")))))
       (finally (delete-recursive! root)))))
 
@@ -350,9 +350,9 @@
         (testing "new file omits unused source requires"
           (let [content (slurp target)]
             (is (not (str/includes? content "clojure.string")))
-            (is (empty? (:target-requires result)))))
+            (is (empty? (get-in result [:header :requires-kept])))))
         (testing "summary correct"
-          (is (= 2 (-> result :summary :forms-extracted)))))
+          (is (= 2 (count (:forms (:new-file-preview result)))))))
       (finally (delete-recursive! root)))))
 
 (deftest test-execute-removes-from-source
@@ -485,11 +485,11 @@
   (let [root (create-temp-project!)
         source (io/file root "src" "my" "app.clj")
         target (io/file root "src" "my" "distillery.clj")
-        real-plan extract/plan
+        real-plan extract/plan-raw
         concurrent-source (str (slurp source) "\n;; concurrent user change\n")]
     (try
       (let [result
-            (with-redefs [extract/plan
+            (with-redefs [extract/plan-raw
                           (fn [opts]
                             (let [planned (real-plan opts)]
                               (spit source concurrent-source)
@@ -519,7 +519,7 @@
                                       :receipt-out (.getPath receipt)})
             future-source (slurp source)
             future-target (slurp target)]
-        (is (= 15 (get-in result [:summary :forms-extracted])))
+        (is (= 15 (count (:forms (:new-file-preview result)))))
         (is (some? (parser/parse-string-all future-source)))
         (is (some? (parser/parse-string-all future-target)))
         (is (str/includes?
@@ -595,9 +595,11 @@
     (try
       (testing "the field fixture is valid before extraction"
         (is (zero? (:exit (cold-require-result root "fixture.views")))))
-      (let [plan (extract/plan {:file (.getPath source)
-                                :forms '[day-tab agenda-page]
-                                :to (.getPath target)})]
+      ;; plan-raw: this assertion inspects the compiler's own working state,
+      ;; which the reader-facing receipt deliberately no longer publishes
+      (let [plan (extract/plan-raw {:file (.getPath source)
+                                    :forms '[day-tab agenda-page]
+                                    :to (.getPath target)})]
         (testing "the target header contains exactly the six used dependencies"
           (is (= (mapv #(format "fixture.dep%02d" %) (range 1 7))
                  (:target-requires plan)))
@@ -619,7 +621,7 @@
                                         :to (.getPath target)
                                         :receipt-out (.getPath receipt)})]
           (testing "both generated namespaces load"
-            (is (= 2 (get-in result [:summary :forms-extracted])))
+            (is (= 2 (count (:forms (:new-file-preview result)))))
             (let [runtime (cold-require-result root
                                                "fixture.views"
                                                "fixture.views.schedule")]
@@ -657,16 +659,16 @@
                                       :forms '[moved]
                                       :to (.getPath target)
                                       :receipt-out (.getPath receipt)})]
-        (is (= [{:owner "caller" :moved-vars ["moved"]}]
-               (:remaining-source-callers result)))
+        (is (= [{:owner "caller" :vars ["moved"] :sites 1}]
+               (:source-callers-rewired result)))
         (is (= ["moved"] (:source-referred-forms result)))
         (is (str/includes? (slurp source) "[fixture.moved :as moved]"))
         (is (not (str/includes? (slurp source) ":refer"))
             "the rewiring qualifies the sites, so a refer list is never emitted")
         (is (str/includes? (slurp source) "(moved/moved)")
             "the remaining caller is alias-qualified")
-        (is (= [{:owner "caller" :var "moved" :count 1}]
-               (:source-call-sites-qualified result)))
+        (is (= [{:owner "caller" :vars ["moved"] :sites 1}]
+               (:source-callers-rewired result)))
         (let [runtime (cold-eval-result
                         root
                         "(require 'fixture.callers) (assert (= :ok (fixture.callers/caller)))")]
@@ -799,7 +801,7 @@
                         :form-ranges (:_form-texts plan)
                         :target-source (:_new-file-content plan)
                         :target-ns "sample.extracted"
-                        :target-alias (:target-alias plan)
+                        :target-alias (get-in plan [:header :alias])
                         :source-referred-forms (:_source-referred-forms plan)
                         :moved-sources (:_moved-sources plan)
                         :remaining-callers (:remaining-source-callers plan)})]
@@ -893,9 +895,11 @@
             (is (str/includes? text "(core/also-stays)"))))
 
         (testing "the receipt names every rewired file"
-          (is (= 2 (count (:rewired-callers result))))
+          (is (= 2 (count (:external-callers-rewired result))))
           (is (= #{:replaced :added}
-                 (set (map :require-action (:rewired-callers result))))))
+                 (set (map :require-action (:external-callers-rewired result)))))
+          (is (= [] (:callers-unresolved result)))
+          (is (true? (:complete result))))
 
         (testing "every rewritten namespace loads in a cold JVM"
           (let [runtime (cold-require-result root "app.core" "app.moved"
@@ -919,30 +923,31 @@
         target (io/file root "src" "app" "moved.clj")
         before (slurp source)]
     (try
-      (let [preview (:preview (extract/plan {:file (.getPath source)
-                                             :forms '[moved-one moved-two]
-                                             :to (.getPath target)
-                                             :alias "moved"
-                                             :doc "Moved out of app.core."}))]
+      ;; the RECEIPT is the preview now: there is no second shape to learn
+      (let [preview (extract/plan {:file (.getPath source)
+                                   :forms '[moved-one moved-two]
+                                   :to (.getPath target)
+                                   :alias "moved"
+                                   :doc "Moved out of app.core."})]
         (testing "the dry run writes nothing"
           (is (= before (slurp source)))
           (is (not (.exists target))))
 
         (testing "the target preview carries the header the executor will write"
-          (is (= ["moved-one" "moved-two"] (get-in preview [:target :form-order])))
-          (is (str/includes? (get-in preview [:target :ns-form])
+          (is (= ["moved-one" "moved-two"] (mapv :name (:forms (:new-file-preview preview)))))
+          (is (str/includes? (get-in preview [:new-file-preview :ns-form])
                              "\"Moved out of app.core.\""))
-          (is (= ["clojure.string"] (get-in preview [:target :requires]))))
+          (is (= ["clojure.string"] (get-in preview [:header :requires-kept]))))
 
         (testing "the source preview names what it will remove and qualify"
-          (is (= ["clojure.string"] (get-in preview [:source :removed-requires])))
-          (is (= [{:owner "stays" :var "moved-two" :count 1}]
-                 (get-in preview [:source :call-sites-qualified]))))
+          (is (= ["clojure.string"] (get-in preview [:source-header :requires-removed])))
+          (is (= [{:owner "stays" :vars ["moved-two"] :sites 1}]
+                 (:source-callers-rewired preview))))
 
         (testing "every caller is previewed with its per-file action"
           (is (= #{[:replaced 1] [:added 1]}
-                 (set (map (juxt :require-action :rewrites)
-                           (:callers preview)))))))
+                 (set (map (juxt :require-action :sites)
+                           (:external-callers-rewired preview)))))))
 
       (testing ":public promotes exactly the named private forms"
         ;; @spec MCP-OP-EXTRACT-011
@@ -1006,7 +1011,7 @@
                   :target-ns "sample.extracted"})]
       (is (nil? (:error plan)) (pr-str (select-keys plan [:error :error-type])))
       (is (= ["first-fn" "second-fn"]
-             (get-in plan [:preview :target :form-order]))))))
+             (mapv :name (:forms (:new-file-preview plan))))))))
 
 ;; @spec MCP-OP-EXTRACT-014
 (deftest a-target-namespace-is-derived-from-the-workspace-not-the-server
@@ -1053,3 +1058,291 @@
                  (.getPath root)
                  (.getPath (io/file root "src" "app" "moved.clj")))))
         (finally (delete-recursive! root))))))
+
+;; ============================================================
+;; rf2 follow-up — the receipt must state what it guarantees, and a reader who
+;; did not drive the run must be able to determine the next call from it.
+;;
+;; Field evidence, metered session: the receipt reported forms-extracted,
+;; new-file-lines, callers-to-review, target-requires — and a driver who KNEW to
+;; check found the header correct. A fresh model given only the receipt text
+;; could not: it read `:remaining-source-callers` and `:callers-to-review 4` as
+;; unfinished work it had to do by hand, when the tool had rewired every one of
+;; them; it could not tell whether the change was applied or previewed; it never
+;; learned the new namespace's name; and `:quoted-var-references 0` was named
+;; but never explained.
+;; ============================================================
+
+(defn- rf1-fixture-plan
+  "The rf1 extraction, compiled against this repository's own real bytes."
+  []
+  (extract/compile-plan
+    {:file "src/clj_surgeon/mcp_change_buffer.clj"
+     :source (slurp "src/clj_surgeon/mcp_change_buffer.clj")
+     :forms '[exact-verification-visible-bytes expand-command bytes->hex
+              sha256-text run-process! admission-unverified?
+              compile-exact-profile classify-exact-process-outcome
+              run-exact-verification!]
+     :to "src/clj_surgeon/mcp_exact_verify.clj"
+     :target-ns "clj-surgeon.mcp-exact-verify"
+     :alias "exact-verify"
+     :derive-required-public-forms true}))
+
+(defn- rf1-fixture-receipt [applied]
+  (let [plan (rf1-fixture-plan)
+        source (get-in plan [:_preview :source])]
+    (extract/receipt-map
+      {:applied applied
+       :plan plan
+       :candidates {:source-rewrites (:call-sites-qualified source)
+                    :removed-requires (:removed-requires source)
+                    :removed-imports (:removed-imports source)}
+       :would "clj-surgeon :op :extract! ..."})))
+
+;; @spec MCP-OP-EXTRACT-015
+(deftest the-receipt-states-the-header-guarantees
+  (let [header (:header (rf1-fixture-receipt true))]
+    (testing "every guarantee key is present"
+      (is (= #{:docstring :requires-kept :requires-pruned
+               :imports-kept :imports-pruned :visibility-derived
+               :alias :refer}
+             (set (keys header)))
+          "requires are stated exactly the way imports are"))
+
+    (testing "requires are guaranteed symmetrically with imports"
+      (let [header (:header (rf1-fixture-receipt true))]
+        (is (= ["clj-surgeon.mcp-process" "clojure.java.io" "clojure.string"]
+               (:requires-kept header)))
+        (is (= 12 (count (:requires-pruned header))))))
+
+    (testing "and each one is correct on the rf1 fixture"
+      (is (= :none (:docstring header))
+          "no :doc was supplied, so the source's docstring was NOT copied")
+      (is (= ["(java.nio.charset StandardCharsets)"
+              "(java.security MessageDigest)"]
+             (:imports-kept header)))
+      (is (= ["(java.nio.file LinkOption Path Paths)" "(java.util UUID)"]
+             (:imports-pruned header))
+          "the four imports rf1's agents deleted by hand are named as pruned")
+      (is (= ["admission-unverified?"] (:visibility-derived header))
+          "the promotion rf1 silently skipped is stated, not implied")
+      (is (= "exact-verify" (:alias header)))
+      (is (= :none (:refer header))
+          "the refer list rf1's agents rewrote in 4 of 4 runs is stated absent"))
+
+    (testing "a caller-supplied docstring is reported as such, not as :none"
+      (is (= :caller-supplied
+             (:docstring (extract/header-guarantees
+                           {:require-policy :minimal :doc "Mine."})))))
+
+    (testing "copy-all does not claim :none for a docstring it copied"
+      (is (= :copied-from-source
+             (:docstring (extract/header-guarantees
+                           {:require-policy :copy-all})))))
+
+    (testing "a refer the extraction really did emit is named, not hidden"
+      (is (= ["a" "b"]
+             (:refer (extract/header-guarantees
+                       {:require-policy :minimal :refer-emitted ["a" "b"]})))))
+
+    (testing "the source header's removals are grouped and stated"
+      (let [source-header (:source-header (rf1-fixture-receipt true))]
+        (is (= ["clj-surgeon.mcp-process"] (:requires-removed source-header)))
+        (is (= ["(java.nio.charset StandardCharsets)"
+                "(java.security MessageDigest)"]
+               (:imports-removed source-header)))))))
+
+;; @spec MCP-OP-EXTRACT-016
+(deftest a-cold-reader-can-determine-the-next-call-from-the-receipt
+  (let [receipt (rf1-fixture-receipt true)]
+    (testing "the receipt leads with what happened and to what"
+      (is (= [:applied :target-ns :target-file :header :source-header
+              :source-callers-rewired :external-callers-rewired
+              :callers-unresolved :complete :compile]
+             (take 10 (keys receipt)))
+          "printed order is the reading order; array-map preserves it")
+      (is (true? (:applied receipt)))
+      (is (= "clj-surgeon.mcp-exact-verify" (:target-ns receipt)))
+      (is (= "src/clj_surgeon/mcp_exact_verify.clj" (:target-file receipt))))
+
+    (testing "caller fields name a state, and nothing is outstanding"
+      (is (= [{:owner "diagnostic-command" :vars ["expand-command"] :sites 1}
+              {:owner "run-check!"
+               :vars ["admission-unverified?" "run-process!"] :sites 2}
+              {:owner "run-diagnostic-check!"
+               :vars ["admission-unverified?" "run-process!"] :sites 2}
+              {:owner "run-verification!" :vars ["expand-command"] :sites 2}]
+             (:source-callers-rewired receipt))
+          "the seven internal sites are reported as REWIRED, not as work to do")
+      (is (= [] (:callers-unresolved receipt)))
+      (is (true? (:complete receipt))
+          ":complete is true exactly when :callers-unresolved is empty")
+      (is (every? #{:file :old-alias :sites :require-action}
+                  (mapcat keys (:external-callers-rewired receipt)))))
+
+    (testing "the history that misled a cold reader is demoted, not top level"
+      (is (nil? (:callers-to-review receipt)))
+      (is (nil? (:remaining-source-callers receipt)))
+      (is (string? (get-in receipt [:history :note]))
+          "history now points at the fields that replaced it")
+      (is (nil? (:summary receipt))
+          "and no tally block restates the vectors above it"))
+
+    (testing "what has NOT been checked says so, and names the next call"
+      (is (false? (get-in receipt [:compile :checked])))
+      (is (= :not-run (get-in receipt [:compile :status])))
+      (is (= ["clj-surgeon.mcp-exact-verify" "clj-surgeon.mcp-change-buffer"]
+             (take 2 (get-in receipt [:compile :namespaces]))))
+      (is (str/includes? (get-in receipt [:compile :command])
+                         "'clj-surgeon.mcp-exact-verify")
+          "the command is executable, not a description of one"))
+
+    (testing "a named-but-unexplained count is renamed and explained"
+      (is (nil? (:quoted-var-references receipt)))
+      (is (= [] (:quoted-var-references-unrewired receipt)))
+      (is (string? (:note receipt)))))
+
+  (testing "a dry run says so and hands back the command that applies it"
+    (let [preview (rf1-fixture-receipt false)]
+      (is (false? (:applied preview)))
+      (is (= [:applied :would :target-ns :target-file :header]
+             (take 5 (keys preview))))
+      (is (= (dissoc (rf1-fixture-receipt true) :applied)
+             (dissoc preview :applied :would))
+          "the dry run prints the SAME map, so there is only one to learn"))))
+
+;; ============================================================
+;; rf2 follow-up — a receipt too long to read is ignored, and an unchecked
+;; apply leaves its own correctness unproven.
+;; Field evidence: the :extract dry run on the rf1 fixture printed 346,519
+;; bytes, of which 337,447 were `_`-prefixed executor working state — three
+;; whole caller files twice over in :_caller-plans (238 KB) and the whole
+;; source in :_source (78 KB) — against 8,205 bytes of signal. This is the rf1
+;; ethnography's `output too long to use` deviation: rf1-g2-A-1 call 06 got a
+;; dry run truncated at 23,888 tokens and ignored it.
+;; ============================================================
+
+;; @spec MCP-OP-EXTRACT-017
+;; @spec MCP-OP-EXTRACT-018
+(deftest the-receipt-is-bounded-and-carries-no-file-text
+  (let [receipt (rf1-fixture-receipt false)
+        encoded (pr-str receipt)
+        strings (filter string? (tree-seq coll? seq receipt))]
+    (testing "no value in a receipt is ever a source file"
+      (is (empty? (filter #(> (count %) 2000) strings))
+          (str "longest string was "
+               (apply max 0 (map count strings)) " chars"))
+      (is (not (str/includes? encoded "Proof-carrying semantic selection"))
+          "the source file's own text must not appear anywhere")
+      (is (not (str/includes? encoded "(defn compile-exact-profile"))
+          "nor the moved forms' bodies"))
+
+    (testing "the encoded receipt fits in one readable output"
+      (is (< (count encoded) 4096)
+          (str "receipt was " (count encoded) " bytes")))
+
+    (testing "no executor working state escapes"
+      (is (empty? (filter extract/private-plan-field? (keys receipt)))))
+
+    (testing "the preview is the ns form plus form names with line ranges"
+      (let [preview (:new-file-preview receipt)]
+        (is (str/starts-with? (:ns-form preview) "(ns clj-surgeon.mcp-exact-verify"))
+        (is (= 9 (count (:forms preview))))
+        (is (= {:name "expand-command" :type "defn" :lines [12 27]}
+               (second (:forms preview))))
+        (is (= "defn" (:type (first (filter #(= "admission-unverified?" (:name %))
+                                            (:forms preview)))))
+            "the resulting kind, after promotion — not the kind it had before")
+        (is (>= 20 (count (:forms preview))))))))
+
+;; @spec MCP-OP-EXTRACT-019
+(deftest apply-reports-a-checked-compile
+  (let [root (create-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")]
+    (try
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[moved-one moved-two]
+                                      :to (.getPath target)
+                                      :alias "moved"})
+            compiled (:compile result)]
+        (is (true? (:checked compiled))
+            (str "the apply must compile what it wrote: " (pr-str compiled)))
+        (is (true? (:ok compiled)) (pr-str compiled))
+        (is (= :run (:status compiled)))
+        (is (= ["app.moved" "app.core"] (take 2 (:namespaces compiled)))
+            "target then source")
+        (is (= #{"app.moved" "app.core" "app.only-moved" "app.mixed"}
+               (set (:namespaces compiled)))
+            "every touched namespace is compiled, callers included")
+        (is (nil? (:undo result)) "a green compile needs no revert instruction"))
+      (finally (delete-recursive! root))))
+
+  (testing "the dry run does not compile, and says the apply will"
+    (let [root (create-caller-project!)
+          source (io/file root "src" "app" "core.clj")]
+      (try
+        (let [compiled (:compile (extract/plan
+                                   {:file (.getPath source)
+                                    :forms '[moved-one moved-two]
+                                    :to (.getPath (io/file root "src" "app" "moved.clj"))
+                                    :alias "moved"}))]
+          (is (false? (:checked compiled)))
+          (is (true? (:will-check compiled)))
+          (is (str/includes? (:command compiled) "clojure.main -e")))
+        (finally (delete-recursive! root))))))
+
+;; @spec MCP-OP-EXTRACT-019
+;; @spec MCP-OP-EXTRACT-020
+(deftest a-compile-failure-after-apply-is-reported-with-undo
+  (testing "a moved form that references a Var the new namespace cannot see"
+    (let [root (java.io.File/createTempFile "extract-compile-fail" "")
+          _ (.delete root)
+          _ (.mkdirs root)
+          source (io/file root "src" "app" "core.clj")
+          target (io/file root "src" "app" "moved.clj")
+          receipt (io/file root "r.edn")]
+      (try
+        (.mkdirs (.getParentFile source))
+        (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+        ;; `helper` STAYS behind, so the moved form cannot resolve it
+        (spit source
+              (str "(ns app.core)\n\n"
+                   "(def helper 41)\n\n"
+                   "(defn moved [] (inc helper))\n"))
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved]
+                                        :to (.getPath target)
+                                        :receipt-out (.getPath receipt)})
+              compiled (:compile result)]
+          (is (true? (:checked compiled)) (pr-str compiled))
+          (is (false? (:ok compiled))
+              (str "the failure IS attributable to a changed file: "
+                   (pr-str compiled)))
+          (is (str/includes? (str (:output-tail compiled)) "helper")
+              "the tail names the unresolved Var")
+
+          (testing "the bytes are on disk and the receipt says how to revert"
+            (is (.exists target) "a failed compile does NOT auto-revert")
+            (is (= (.getPath receipt) (get-in result [:undo :receipt])))
+            (is (str/includes? (get-in result [:undo :command])
+                               ":op :undo-extract!"))
+            (is (str/includes? (get-in result [:undo :note]) "not reverted")))
+
+          (testing "and the named revert actually works"
+            (is (true? (:ok (extract/undo! {:receipt (.getPath receipt)}))))
+            (is (not (.exists target)))))
+        (finally (delete-recursive! root)))))
+
+  (testing "a classpath the runner cannot resolve is :unverified, never false"
+    (is (= {:ok :unverified :reason :classpath-incomplete}
+           (extract/attribute-compile-failure
+             "Could not locate nrepl/core.clj on classpath" ["a.clj"])))
+    (is (= :unverified
+           (:ok (extract/attribute-compile-failure
+                  "Syntax error at (untouched_thing.clj:12)." ["a.clj" "b.clj"])))
+        "an error raised inside a file this change never touched is unverified")
+    (is (= {:ok false}
+           (extract/attribute-compile-failure
+             "Unable to resolve symbol: helper (a.clj:5)." ["src/x/a.clj"]))
+        "an error inside a file we DID change is attributable")))

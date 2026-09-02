@@ -419,7 +419,7 @@
                                     :to target-file
                                     :source-paths ["src"]})]
           (is (some #(str/ends-with? % "caller.cljc")
-                    (:callers-to-review result))
+                    (concat (map :file (:external-callers-rewired result)) (:callers-mentions-only result)))
               ".cljc files should appear in callers-to-review"))
         (finally
           (delete-recursive! root))))))
