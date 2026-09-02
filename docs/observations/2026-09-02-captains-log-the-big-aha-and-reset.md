@@ -2947,3 +2947,23 @@ hand-rolled upsert whose binding shadows the fn param — surfaced as review wor
 Note: it registers as the FIFTH tool because alias_migration (q5z) is not on main yet — the mayor's
 merge queue holds both; rebase whichever lands second. My own verification run is in progress.
 
+
+## 23:18Z — census verified and pushed; LENS-003 landed; the real migration ran as two Surgeon transactions on the lens branch
+
+Census `bridge/census-verb` 7244141: my own suites under the lock — test-fast 710/6001, mcp-test
+383/4024, failures exactly the baseline six (5× terminal-response-routing, 1× exact-profile) — pushed;
+mayor's queue (registers as the fifth tool; rebase against q5z, whichever lands second).
+LENS-003 (a8af3393, builder): `update-settings` returns `state` when `f` returns the `identical?`
+settings value, nil included; red first on the absent-key/nil case (the identity-map case passed
+before the fix only through `assoc`'s reference-equality shortcut — the builder said so); unit
+1053/13117/0; the lens now carries two path sites so the tripwire moved 24 → 25 deliberately.
+Migration on `~/src/curtaincall-cfp-lens` (branch head a8af3393, uncommitted): transaction 1 = the
+validated 16 changes, 7.46 s (formatter 1.7 s), 16 edits, verification complete; transaction 2 = the
+two conditional arms form-for-form onto `(fn [settings] …)` with the no-op returning `settings` itself
+(LENS-003 tags added inside the forms), 1.06 s, 2 edits. Counts after: guards 19 → **1**
+(`export.generated`, writes `:exports`), path occurrences 25 → **4** (lens ×2, the read at
+`announced-speaker-removals`, `event.program-speaker-updated`); diff 95+/116−. Focused gate running
+(characterization + lens + relation-policy); expected failures = the tripwire numbers only. Next: a
+delegated test edit (tripwire numbers, the `(= arm-count guards)` assertion rewritten, a row for the
+24th write `speaker.reminder-schedule-configured`), then `bin/kaocha unit` to 0, commit, push, inbox.
+
