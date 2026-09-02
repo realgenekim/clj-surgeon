@@ -1625,3 +1625,24 @@ untouched remainder of a form defeats its own review-burden argument); a batch w
 that applies one intent across N owners in one call, since fan-out is where the tool is
 supposed to win and where it lost tonight; and the invalid-compact-relation refusal at
 fan-out, which no agent recovered from within its fields.
+
+## Receipt 09:01Z — churn attributed: Surgeon's printer re-emits the whole file under owner kind "namespace" and forms-scoped replace
+
+Refines the "whole-form re-print" finding two receipts up. No formatter was run in any of
+the twelve l1 rollouts (zero cljfmt, zprint, standard-clj, cljstyle, clojure-lsp format
+invocations), so the alternative is dead. The churn is deterministic per file
+(reducer_session.clj reformatted by exactly 158 lines in three different runs,
+reducer_lab.clj by exactly 156 in two), the signature of one canonical re-emitter.
+
+The trigger is the verb shape, not the ns form: every run that used apply_clojure_changes
+with owner {kind "namespace"} plus find and insert or replace (A-1, A-3), or find plus forms
+plus replace (Y-3), reformatted; every run that used the surgical within plus from/to shape
+(A-0, A-4, Y-0) or the dedicated require_change verb (Y-5, nine namespaces, zero churn) did
+not. Separation 3 of 3 against 0 of 4. With owner kind namespace the re-emitted owner is the
+whole file, which is why the churn runs hundreds of lines past the ns form into untouched
+defn bodies as one-space indent shifts (reducer_lab.clj at lines 373, 395, 687), alongside
+import vectors turned to lists and require re-layout. Y-5 proves a zero-churn path exists
+for the exact same nine-namespace require insertion that cost A-1 and A-3 about 425 lines
+each. Bead ask, refined: apply_clojure_changes must splice the edited span into the original
+source text and never re-print the owner, or refuse owner kind namespace for insertion and
+route to require_change. Reproducer: any l1 A-1 or A-3 rollout call #09.
