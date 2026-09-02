@@ -137,6 +137,47 @@
        (some? next-line)
        (str/starts-with? next-line "+++ ")))
 
+;; @spec MCP-OP-ADMIT-103
+(def ^:private git-extended-header-prefixes
+  "The metadata lines `git diff` emits between a `diff --git` and its `---`.
+
+  They carry no content the gate can act on -- blob ids, file modes, rename
+  and copy provenance -- and every one of them is information the patch's own
+  headers and hunks already state. Reading them is not the point; surviving
+  them is. A reader that refuses them dies on the second file section of every
+  real `git diff`, because the first file's `index` line follows a `diff --git`
+  the reader has not yet bound to a file section and the second one does not."
+  ["index "
+   "old mode "
+   "new mode "
+   "deleted file mode "
+   "new file mode "
+   "similarity index "
+   "dissimilarity index "
+   "rename from "
+   "rename to "
+   "copy from "
+   "copy to "])
+
+;; @spec MCP-OP-ADMIT-103
+(defn- git-extended-header?
+  [line]
+  (boolean (some #(str/starts-with? line %) git-extended-header-prefixes)))
+
+;; @spec MCP-OP-ADMIT-103
+(defn- git-diff-header-path
+  "The post-image path a `diff --git a/x b/y` line names, or nil."
+  [line]
+  (when-let [[_ path] (re-find #"^diff --git .* b/(.+)$" line)]
+    (str/trim path)))
+
+;; @spec MCP-OP-ADMIT-104
+(defn- binary-marker?
+  "Does this line say the section describes bytes no text patch can carry?"
+  [line]
+  (boolean (or (re-find #"^Binary files .* differ$" line)
+               (= "GIT binary patch" line))))
+
 (defn- unified-header?
   ([line] (unified-header? line nil))
   ([line next-line]
@@ -229,6 +270,12 @@
          files []
          old-path nil
          current nil
+         ;; The path named by the most recent `diff --git`, held only until
+         ;; that section's `---`/`+++` pair or first hunk arrives. Git's
+         ;; extended headers are legal exactly there and nowhere else, so
+         ;; tolerating them is scoped to the region they belong to rather
+         ;; than granted to the whole payload.
+         git-section nil
          n 1]
     (let [line (first remaining)
           next-line (second remaining)]
@@ -257,6 +304,7 @@
                (cond-> files current (conj current))
                (header-path line)
                nil
+               nil
                (inc n))
 
         (str/starts-with? line "+++ ")
@@ -272,20 +320,20 @@
             ;; so parsing continues rather than closing the payload here.
             (= :dev-null old-path)
             (recur (next remaining) files old-path
-                   {:file new-path :operation :add :hunks []} (inc n))
+                   {:file new-path :operation :add :hunks []} nil (inc n))
 
             (= :dev-null new-path)
             (recur (next remaining) files old-path
-                   {:file old-path :operation :delete :hunks []} (inc n))
+                   {:file old-path :operation :delete :hunks []} nil (inc n))
 
             (not= old-path new-path)
             (recur (next remaining) files old-path
                    {:file old-path :operation :move
-                    :move-to new-path :hunks []} (inc n))
+                    :move-to new-path :hunks []} nil (inc n))
 
             :else
             (recur (next remaining) files old-path
-                   {:file new-path :operation :update :hunks []} (inc n))))
+                   {:file new-path :operation :update :hunks []} nil (inc n))))
 
         (str/starts-with? line "@@")
         (if-not current
@@ -299,7 +347,7 @@
               result
               (let [[hunk rest-lines end-n] result]
                 (recur rest-lines files old-path
-                       (update current :hunks conj hunk) end-n)))))
+                       (update current :hunks conj hunk) nil end-n)))))
 
         ;; Anything that looks like a hunk body but is not inside one means a
         ;; hunk ended where the author did not intend it to.
@@ -312,12 +360,33 @@
                  {:grammar :unified-diff :file (:file current)
                   :patch-line n :offending-line line})
 
-        (or (str/starts-with? line "diff ")
-            (str/starts-with? line "Index: ")
+        ;; @spec MCP-OP-ADMIT-104
+        ;; A binary section carries bytes this grammar cannot express. Skipping
+        ;; it would drop a file from the change and report success for the rest.
+        (and git-section (binary-marker? line))
+        (refusal :binary-patch-unsupported
+                 (str "Line " n " of the patch names a binary change to "
+                      git-section
+                      "; the gate admits Clojure and EDN text only. Apply this "
+                      "file natively and resend the rest.")
+                 {:grammar :unified-diff :file git-section
+                  :patch-line n :offending-line line})
+
+        ;; @spec MCP-OP-ADMIT-103
+        (and git-section (git-extended-header? line))
+        (recur (next remaining) files old-path current git-section (inc n))
+
+        (str/starts-with? line "diff ")
+        (recur (next remaining) files old-path current
+               (or (git-diff-header-path line)
+                   "the file this diff header names")
+               (inc n))
+
+        (or (str/starts-with? line "Index: ")
             (str/starts-with? line "\\")
             (str/blank? line)
             (nil? current))
-        (recur (next remaining) files old-path current (inc n))
+        (recur (next remaining) files old-path current git-section (inc n))
 
         :else
         (refusal :hunk-truncated

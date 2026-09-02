@@ -78,6 +78,8 @@
     "patch" {:type "string" :maxLength max-patch-bytes}
     "mode" {:type "string" :enum ["preview" "commit"]}
     "verify" {:type "string" :enum ["focused" "none"]}
+    ;; @spec MCP-OP-ADMIT-106
+    "allow_partial" {:type "boolean"}
     "expect_pre_sha256" {:type "object"
                          :additionalProperties {:type "string"}}}
    :required ["patch"]})
@@ -137,6 +139,8 @@
    :operation :admit-patch-preview
    :mode mode
    :committed false
+   ;; @spec MCP-OP-ADMIT-105
+   :mutation_attempted false
    :files []
    :owners {:added [] :removed [] :changed []}
    :protected_node_drift {}
@@ -324,16 +328,39 @@
         (catch Exception _ nil)))))
 
 ;; @spec MCP-OP-ADMIT-081
+;; @spec MCP-OP-ADMIT-110
 (defn resolve-focused-test
-  "Server start configuration wins; the repository file is the fallback.
+  "The tree's own statement first, the server's start configuration second,
+  merged one key at a time.
 
-  Precedence is explicit because the two sources answer different questions.
-  The start config is what this server was launched to do; the repository file
-  is what this tree says about itself, and it travels with the tree."
+  The two sources answer different halves of the question, which is why whole
+  map precedence is wrong in both directions. A tree says *which suites cover
+  which sources* -- that is a fact about the code, it travels with the code,
+  and no server can know it. A server says *how to run a suite on this box* --
+  the classpath, the deps, the timeout -- which no tree can know. The gate ran
+  for three cohorts with the server outranking the tree, so a workspace that
+  shipped `{:namespaces {...}}` and nothing else had its coverage statement
+  read and discarded, and the gate fell back to deriving `<ns>-test` by path
+  convention. Flipping whole maps instead would be no better: the profile
+  those trees ship declares no `:command`, so the repository file would have
+  swallowed the only command there was and verification would have stopped
+  entirely."
   [{:keys [focused-test project-root]}]
-  (or (when (map? focused-test)
-        (assoc focused-test :profile-source :server-config))
-      (read-focused-test-file project-root)))
+  (let [server (when (map? focused-test) focused-test)
+        repo (read-focused-test-file project-root)]
+    (when (or server repo)
+      (let [command (or (:command repo) (:command server))
+            timeout (or (:timeout-ms repo) (:timeout-ms server))
+            mapping (or (:namespaces repo) (:namespaces server))]
+        (cond-> {:command command
+                 :profile-source (cond (:command repo) :repository-file
+                                       (:command server) :server-config
+                                       :else :none)
+                 :namespaces-source (cond (:namespaces repo) :repository-file
+                                          (:namespaces server) :server-config
+                                          :else :path-convention)}
+          timeout (assoc :timeout-ms timeout)
+          mapping (assoc :namespaces mapping))))))
 
 (defn source-namespace
   "Derive the namespace a project-relative source path declares."
@@ -352,6 +379,106 @@
         segments (str/split without-extension #"/")
         below-root (if (< 1 (count segments)) (rest segments) segments)]
     (str "test/" (str/join "/" below-root) "_test." ext)))
+
+;; @spec MCP-OP-ADMIT-111
+(defn namespace-source-paths
+  "Project-relative files a test namespace could occupy, in search order."
+  [namespace]
+  (let [stem (-> (str namespace)
+                 (str/replace "-" "_")
+                 (str/replace "." "/"))]
+    (mapv #(str "test/" stem "." %) ["clj" "cljc" "cljs"])))
+
+;; @spec MCP-OP-ADMIT-109
+(defn- profile-test-namespaces
+  "The test namespaces the tree's own profile assigns to one source file.
+
+  A key may name the source path or the source namespace, and a value may be
+  one namespace or many, because a profile is written by a person and both
+  spellings are the obvious one."
+  [mapping file]
+  (when (map? mapping)
+    (let [declared (source-namespace file)
+          raw (some (fn [key] (when (contains? mapping key) (get mapping key)))
+                    [file (keyword file)
+                     declared (keyword declared) (symbol declared)])]
+      (cond
+        (nil? raw) nil
+        (or (string? raw) (symbol? raw)) [(str raw)]
+        (sequential? raw) (vec (distinct (map str raw)))
+        :else nil))))
+
+;; @spec MCP-OP-ADMIT-109
+;; @spec MCP-OP-ADMIT-110
+;; @spec MCP-OP-ADMIT-111
+;; @spec MCP-OP-ADMIT-112
+(defn focused-namespace-plan
+  "Which test namespaces cover each touched source, and which cannot be found.
+
+  Three sources answer for a file, in this order, and the receipt says which
+  one spoke: the tree's own `:namespaces` mapping; the file being a suite
+  itself, which covers itself; and the `<ns>-test` path convention.
+
+  The distinction that carries the refusal is ASSERTION versus DISCOVERY. A
+  mapping entry and a touched suite are assertions -- the tree said this suite
+  exists and covers this source -- so a namespace that resolves to no file is
+  a broken profile, and a broken profile must be a typed refusal rather than a
+  runner that exits one with nothing to show. The path convention is
+  discovery: a source with no sibling suite has no focused coverage, which is
+  the pre-existing `no-mapped-test-namespace` case and not an error."
+  [project-root profile files present]
+  (let [mapping (:namespaces profile)
+        exists? (fn [path]
+                  (or (contains? present path)
+                      (.isFile (io/file (str project-root) path))))
+        resolve-asserted
+        (fn [file namespace]
+          (if (some exists? (namespace-source-paths namespace))
+            {:namespace namespace}
+            {:missing {:file file
+                       :namespace namespace
+                       :paths_tried (namespace-source-paths namespace)}}))]
+    (reduce
+      (fn [plan file]
+        (let [declared (source-namespace file)
+              asserted (or (profile-test-namespaces mapping file)
+                           ;; @spec MCP-OP-ADMIT-112
+                           (when (str/ends-with? (str declared) "-test")
+                             [declared]))]
+          (if asserted
+            (let [resolved (mapv #(resolve-asserted file %) asserted)
+                  found (vec (keep :namespace resolved))
+                  missing (vec (keep :missing resolved))]
+              (cond-> plan
+                (seq found) (update :per-file assoc file found)
+                (seq missing) (update :missing into missing)))
+            (if (exists? (test-namespace-file file))
+              (update plan :per-file assoc file [(str declared "-test")])
+              plan))))
+      {:per-file {} :missing []}
+      files)))
+
+(def ^:private runner-tail-lines
+  "How much of a failed runner's own words the receipt carries."
+  40)
+
+(def ^:private runner-tail-chars 4000)
+
+;; @spec MCP-OP-ADMIT-107
+(defn- runner-output-tail
+  "The last lines the focused runner printed, merged stderr and stdout.
+
+  A receipt that says only `exit 1` hands the reader an exit code and a dead
+  end. Four rung-L commits and a replay were diagnosed months later by reading
+  the runner's argv off a shell script, because the one place the answer was
+  cheap -- the payload -- discarded it."
+  [output]
+  (when (string? output)
+    (let [tail (str/join "\n" (take-last runner-tail-lines
+                                         (str/split-lines output)))]
+      (if (< runner-tail-chars (count tail))
+        (subs tail (- (count tail) runner-tail-chars))
+        tail))))
 
 ;; @spec MCP-OP-ADMIT-041
 ;; @spec MCP-OP-ADMIT-068
@@ -406,10 +533,11 @@
                                       (= "{report}" item) [(.getPath report)]
                                       :else [item]))
                                   command))
-            {:keys [finished? exit]}
+            {:keys [finished? exit output]}
             (change-buffer/run-process! (:project-root config) expanded
                                         (or timeout-ms 300000))
             written? (.isFile report)
+            failed? (or (not finished?) (not (zero? (long (or exit 0)))))
             rows (when written?
                    (try (parse-test-report (slurp report)) (catch Exception _ nil)))]
         (cond-> {:ran (boolean finished?)
@@ -419,8 +547,25 @@
                  :report_written written?
                  :report_written_at (when written? (.lastModified report))
                  :report_started_at started
+                 ;; @spec MCP-OP-ADMIT-107
+                 ;; The three facts a reader needs to diagnose a runner that
+                 ;; produced nothing, none of which the field payloads carried:
+                 ;; which file was supposed to appear, what was run, and where.
+                 :report_file (.getPath report)
+                 :command_argv expanded
+                 :command_cwd (str (:project-root config))
                  :namespaces (vec namespaces)}
-          (not written?) (assoc :reason :no-test-evidence)
+          ;; @spec MCP-OP-ADMIT-107
+          (and (not written?) failed?)
+          (merge {:reason :verification-runner-failed
+                  :runner_exit exit
+                  :runner_output_tail (runner-output-tail output)})
+
+          (and (not written?) (not failed?))
+          (merge {:reason :report-file-absent
+                  :runner_exit exit
+                  :runner_output_tail (runner-output-tail output)})
+
           (and written? (nil? rows)) (assoc :reason :unreadable-test-report)
           rows (merge
                  {:namespace-results rows
@@ -474,6 +619,18 @@
 
       :else {:ok true :evidence :namespace-report})))
 
+;; @spec MCP-OP-ADMIT-107
+(def unverifiable-test-reasons
+  "Test reasons that describe a check which could not run, not one that ran.
+
+  `partial` says one of the two requested checks produced a usable result. A
+  runner that was launched, exited non-zero and wrote nothing produced no
+  result at all, and calling that half a verification is how a clean analyzer
+  delta carried a commit past a suite that never ran."
+  #{:verification-runner-failed :report-file-absent
+    ;; @spec MCP-OP-ADMIT-111
+    :focused-namespace-missing})
+
 ;; @spec MCP-OP-ADMIT-082
 (defn verification-status
   "Fold the two checks into one word a caller can act on.
@@ -487,6 +644,7 @@
     {:status :unverified :reasons [:verification-not-requested]}
     (let [lint-ok (and (:ran lint) (not (false? (:ok lint))))
           tests-ok (:ok evidence)
+          unverifiable (contains? unverifiable-test-reasons (:reason evidence))
           reasons (cond-> []
                     (not lint-ok) (conj (or (:error-type lint)
                                             (:reason lint)
@@ -495,6 +653,8 @@
                                              :no-test-evidence)))]
       {:status (cond
                  (and lint-ok tests-ok) :complete
+                 ;; @spec MCP-OP-ADMIT-107
+                 unverifiable :unverified
                  (or lint-ok tests-ok) :partial
                  :else :unverified)
        :reasons reasons})))
@@ -511,24 +671,43 @@
                                 images)
         lint-runner (or (:admit-lint-runner config) default-lint-runner)
         test-runner (or (:admit-test-runner config) default-test-runner)
-        namespaces (->> clojure-images
-                        (map :file)
-                        (filter #(.exists (io/file (:project-root config)
-                                                   (test-namespace-file %))))
-                        (map #(str (source-namespace %) "-test"))
-                        distinct
-                        vec)
+        ;; @spec MCP-OP-ADMIT-109
+        ;; @spec MCP-OP-ADMIT-110
+        profile (resolve-focused-test config)
+        touched (mapv :file clojure-images)
+        present (set (map :file (remove #(= :delete (:operation %)) images)))
+        plan (focused-namespace-plan (:project-root config) profile
+                                     touched present)
+        per-file (:per-file plan)
+        namespaces (vec (distinct (mapcat #(get per-file %) touched)))
+        ;; @spec MCP-OP-ADMIT-113
+        ;; Which source spoke for the command, which spoke for the coverage,
+        ;; and what that coverage actually resolved to per touched file.
+        profile-provenance {:profile_source (or (:profile-source profile) :none)
+                            :profile_source_namespaces
+                            (or (:namespaces-source profile) :path-convention)
+                            :focused_namespaces per-file}
         lint (lint-runner config clojure-images)
         snapshot (temp-tree! "clj-surgeon-admit-snapshot")]
     (try
       (materialize! snapshot
                     (remove #(= :delete (:operation %)) images)
                     :post)
-      (let [tests (test-runner config {:namespaces namespaces
-                                       :snapshot-root (.getPath snapshot)})
+      (let [tests (if (seq (:missing plan))
+                    ;; @spec MCP-OP-ADMIT-111
+                    ;; The tree named a suite that is not in the tree. Running
+                    ;; the runner here buys an opaque exit code; refusing here
+                    ;; names the file, the namespace and the paths tried.
+                    {:ran false
+                     :reason :focused-namespace-missing
+                     :missing_focused_namespaces (:missing plan)
+                     :namespaces namespaces}
+                    (test-runner config {:namespaces namespaces
+                                         :snapshot-root (.getPath snapshot)}))
             tests (merge {:ran false :passed 0 :failed 0 :skipped 0
                           :tests-run 0 :namespaces namespaces}
-                         tests)
+                         tests
+                         profile-provenance)
             evidence (test-evidence tests namespaces)
             {:keys [status reasons]} (verification-status verify lint evidence)
             lint-blocking (and (:ran lint) (false? (:ok lint)))
@@ -872,12 +1051,34 @@
           admitted (set (keys snapshot))
           declared (set (keys expected))]
       (cond
+        ;; @spec MCP-OP-ADMIT-108
+        ;; The old message stated the rule and withheld every fact needed to
+        ;; obey it, so a caller could only repair it by guessing which side
+        ;; was wrong. Both sets and their difference are named here, because
+        ;; the gate already holds them and the caller does not.
         (not= admitted declared)
-        (refusal context :invalid-admit-request
-                 (str "expect_pre_sha256 must name exactly the files the patch "
-                      "touches")
-                 {:declared (vec (sort declared))
-                  :admitted (vec (sort admitted))})
+        (let [touched (vec (sort admitted))
+              named (vec (sort declared))
+              missing (vec (remove declared touched))
+              unexpected (vec (remove admitted named))]
+          (refusal context :invalid-admit-request
+                   (str "expect_pre_sha256 must name exactly the files the "
+                        "patch touches. This patch touches "
+                        (str/join ", " touched)
+                        "; expect_pre_sha256 named "
+                        (if (seq named) (str/join ", " named) "nothing")
+                        (when (seq missing)
+                          (str "; missing from expect_pre_sha256: "
+                               (str/join ", " missing)))
+                        (when (seq unexpected)
+                          (str "; named but not touched by this patch: "
+                               (str/join ", " unexpected))))
+                   {:declared named
+                    :admitted touched
+                    :files_touched touched
+                    :files_named named
+                    :missing missing
+                    :unexpected unexpected}))
 
         :else
         (let [drifted (->> snapshot
@@ -902,8 +1103,33 @@
 ;; @spec MCP-OP-ADMIT-060
 ;; @spec MCP-OP-ADMIT-061
 ;; @spec MCP-OP-ADMIT-062
+;; @spec MCP-OP-ADMIT-105
+;; @spec MCP-OP-ADMIT-106
+(defn incomplete-commit-refusal-reason
+  "Why this commit may not proceed on the verification it obtained, or nil.
+
+  The gate used to treat `partial` as permission: a clean analyzer delta plus
+  a focused runner that produced nothing scored one usable check out of two,
+  and one out of two wrote the files. Four rung-L commits and a replay landed
+  that way, each carrying `verification_complete: false` on a receipt whose
+  `committed` was already `true` -- an honest field about a write that had
+  happened, which is not the same thing as a gate.
+
+  `allow_partial` is the escape hatch for the one honest case: a repository
+  that ships no focused-test profile at all cannot produce test evidence and
+  is not hiding a failure. A profile that exists and did not deliver is
+  exactly the case the caller must not be able to wave through, so the waiver
+  is denied there."
+  [verification verify allow-partial?]
+  (when (and (= "focused" verify)
+             (not= :complete (:verification_status verification)))
+    (let [reason (get-in verification [:tests :reason])]
+      (when-not (and allow-partial? (= :no-focused-test-profile reason))
+        (or reason :verification-incomplete)))))
+
 (defn- execute-in-context!
-  [config {:keys [patch mode verify expect_pre_sha256]} workspace-root]
+  [config {:keys [patch mode verify expect_pre_sha256 allow_partial]}
+   workspace-root]
   (let [mode (or mode "preview")
         verify (or verify "focused")
         context {:mode mode :workspace-root workspace-root
@@ -1102,6 +1328,7 @@
                                        {:ok false
                                         :operation :admit-patch-refused
                                         :committed false
+                                        :mutation_attempted false
                                         :source-unchanged true
                                         :error-type :verification-failed
                                         :error (str "Snapshot verification failed ("
@@ -1109,6 +1336,42 @@
                                                     "); nothing was written")
                                         :next_call (next-call context "preview"
                                                               blocked)})
+
+                                ;; @spec MCP-OP-ADMIT-105
+                                ;; @spec MCP-OP-ADMIT-106
+                                (and (= "commit" mode)
+                                     (incomplete-commit-refusal-reason
+                                       verification verify
+                                       (true? allow_partial)))
+                                (let [reason
+                                      (incomplete-commit-refusal-reason
+                                        verification verify
+                                        (true? allow_partial))]
+                                  (merge base verification
+                                         {:ok false
+                                          :operation :admit-patch-refused
+                                          :committed false
+                                          :mutation_attempted false
+                                          :source-unchanged true
+                                          :error-type :verification-incomplete
+                                          :error
+                                          (str "Verification did not complete ("
+                                               (name (:verification_status
+                                                       verification))
+                                               ": "
+                                               (str/join ", "
+                                                         (map name
+                                                              (:verification_reasons
+                                                                verification)))
+                                               "); nothing was written. Run "
+                                               "mode preview to see the same "
+                                               "receipt without a write, and "
+                                               "repair "
+                                               (name reason)
+                                               " before committing.")
+                                          :next_call
+                                          (next-call context "preview"
+                                                     :verification-incomplete)}))
 
                                 (= "preview" mode)
                                 (merge base verification
@@ -1138,6 +1401,7 @@
                                                {:ok false
                                                 :operation :admit-patch-refused
                                                 :committed false
+                                                :mutation_attempted true
                                                 :source-unchanged
                                                 (or (= :source-hash-mismatch
                                                        (:error-type committed))
@@ -1154,36 +1418,20 @@
                                               (cond-> (merge base verification
                                                              {:operation :admit-patch!
                                                               :committed true
+                                                              :mutation_attempted true
                                                               :source-unchanged false
                                                               :lock_scope scope
                                                               :next_call nil})
                                                 lock-path
                                                 (assoc :lock_path lock-path))]
-                                          ;; The caller asked for verification
-                                          ;; and did not get any. The write
-                                          ;; happened; ok reports the truth
-                                          ;; about the proof, not about the
-                                          ;; bytes.
-                                          (if (and (= "focused" verify)
-                                                   (= :unverified
-                                                      (:verification_status
-                                                        verification)))
-                                            (assoc receipt
-                                                   :ok false
-                                                   :error-type :verification-unverified
-                                                   :error (str "Committed, but no "
-                                                               "requested check "
-                                                               "produced a usable "
-                                                               "result: "
-                                                               (str/join
-                                                                 ", "
-                                                                 (map name
-                                                                      (:verification_reasons
-                                                                        verification))))
-                                                   :next_call
-                                                   (next-call context "preview"
-                                                              :verification-unverified))
-                                            receipt))))))))))))))))))))))))
+                                          ;; @spec MCP-OP-ADMIT-105
+                                          ;; Nothing reaches here on an
+                                          ;; incomplete verification any more:
+                                          ;; the refusal above stands between
+                                          ;; the check and the write, rather
+                                          ;; than downgrading a receipt for a
+                                          ;; write that already happened.
+                                          receipt)))))))))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Telemetry and payload bounding

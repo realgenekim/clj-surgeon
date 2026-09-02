@@ -742,7 +742,8 @@
 ;; ---------------------------------------------------------------------------
 
 (def receipt-keys
-  #{:ok :operation :mode :committed :files :owners :protected_node_drift
+  #{:ok :operation :mode :committed :mutation_attempted
+    :files :owners :protected_node_drift
     :byte_drift_outside_hunks :hazards :lint_delta :tests :hashes
     :pre_image_binding :verification_status :verification_reasons
     :verification_complete :next_call :source-unchanged})
@@ -1253,12 +1254,18 @@
                                         :namespaces (vec namespaces)})})
                        {:patch clean-multi-file-patch
                         :mode "commit" :verify "focused"})]
-          (is (:ok result) "no check failed, so the commit is allowed")
-          (is (true? (:committed result)))
+          ;; @spec MCP-OP-ADMIT-105
+          ;; This test used to assert the defect: "no check failed, so the
+          ;; commit is allowed". A runner that ran nothing is not a check that
+          ;; did not fail; it is a check that did not happen.
+          (is (false? (:ok result)))
+          (is (false? (:committed result)))
+          (is (= :verification-incomplete (:error-type result)))
           (is (false? (:verification_complete result))
               "process exit status is not a test result")
           (is (= ["app.core-test"] (get-in result [:tests :namespaces])))
-          (is (= :no-test-evidence (get-in result [:tests :reason])))))
+          (is (= :no-test-evidence (get-in result [:tests :reason])))
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (testing "nothing to attribute a test result to is its own reason"
         (let [bare (temp-dir)]
           (try
@@ -1446,7 +1453,9 @@
                        {:patch patch :mode "preview" :verify "focused"})]
           (is (false? (:verification_complete result))
               "stdout a command chose to print is not a test result")
-          (is (= :no-test-evidence (get-in result [:tests :reason])))))
+          ;; @spec MCP-OP-ADMIT-107
+          (is (= :report-file-absent (get-in result [:tests :reason]))
+              "a clean exit that wrote nothing names the report it did not write")))
       (testing "a command with no {report} placeholder is refused the credit"
         (let [result (admit/execute-request!
                        {:project-root (.getPath root)
@@ -1525,13 +1534,32 @@
         (is (= ["repo" "{snapshot}" "{report}" "{namespaces}"]
                (:command from-file)))
         (is (= :repository-file (:profile-source from-file))))
-      (let [from-server (admit/resolve-focused-test
-                          {:project-root (.getPath root)
-                           :focused-test {:command ["server" "{snapshot}"
-                                                    "{report}" "{namespaces}"]}})]
-        (is (= "server" (first (:command from-server))))
-        (is (= :server-config (:profile-source from-server))
-            "the start configuration outranks the repository file"))
+      ;; @spec MCP-OP-ADMIT-110
+      (let [both (admit/resolve-focused-test
+                   {:project-root (.getPath root)
+                    :focused-test {:command ["server" "{snapshot}"
+                                             "{report}" "{namespaces}"]}})]
+        (is (= "repo" (first (:command both)))
+            "the tree outranks the start configuration")
+        (is (= :repository-file (:profile-source both))))
+      ;; @spec MCP-OP-ADMIT-110
+      ;; The shape the field actually ships: the tree states its coverage and
+      ;; declares no command, the server states how to run one. Whole-map
+      ;; precedence in either direction loses one of the two halves.
+      (spit (io/file root ".clj-surgeon" "focused-test.edn")
+            (pr-str {:namespaces {"app.core" ["app.core-test"]}}))
+      (let [merged (admit/resolve-focused-test
+                     {:project-root (.getPath root)
+                      :focused-test {:command ["server" "{snapshot}"
+                                               "{report}" "{namespaces}"]
+                                     :timeout-ms 4321}})]
+        (is (= "server" (first (:command merged)))
+            "the tree declared no command, so the server's survives")
+        (is (= 4321 (:timeout-ms merged)))
+        (is (= {"app.core" ["app.core-test"]} (:namespaces merged))
+            "the tree's coverage statement is read, not discarded")
+        (is (= :server-config (:profile-source merged)))
+        (is (= :repository-file (:namespaces-source merged))))
       (finally (delete-tree! root)))))
 
 ;; @spec MCP-OP-ADMIT-082
@@ -1539,7 +1567,8 @@
   (let [root (temp-dir)]
     (try
       (write-sources! root base-sources)
-      (testing "no requested check produced a result: committed, ok false"
+      ;; @spec MCP-OP-ADMIT-105
+      (testing "no requested check produced a result: refused, nothing written"
         (let [result (admit/execute-request!
                        {:project-root (.getPath root)
                         :admit-lint-runner
@@ -1548,23 +1577,28 @@
                        {:patch clean-multi-file-patch
                         :mode "commit" :verify "focused"})]
           (is (= :unverified (:verification_status result)))
-          (is (true? (:committed result)) "the write still happened")
+          (is (false? (:committed result)) "the write is what is at stake")
+          (is (false? (:mutation_attempted result)))
           (is (false? (:ok result))
               "the caller asked for verification and did not get any")
-          (is (= :verification-unverified (:error-type result)))
+          (is (= :verification-incomplete (:error-type result)))
           (is (= [:clj-kondo-unavailable :no-focused-test-profile]
-                 (:verification_reasons result)))))
+                 (:verification_reasons result)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (write-sources! root base-sources)
-      (testing "one check ran clean and one could not: partial, ok true"
+      ;; @spec MCP-OP-ADMIT-105
+      (testing "one check ran clean and one could not: partial is not enough"
         (let [result (admit/execute-request!
                        {:project-root (.getPath root)
                         :admit-lint-runner (fn [_ _] {:ran true :ok true})}
                        {:patch clean-multi-file-patch
                         :mode "commit" :verify "focused"})]
           (is (= :partial (:verification_status result)))
-          (is (true? (:committed result)))
-          (is (:ok result))
-          (is (false? (:verification_complete result)))))
+          (is (false? (:committed result)))
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (false? (:verification_complete result)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj"))))))
       (write-sources! root base-sources)
       (testing "verification was not requested"
         (let [result (admit/execute-request!
@@ -1749,8 +1783,10 @@
           (is (= [:runner-exit-nonzero] (:verification_reasons result)))
           (is (= 3 (get-in result [:tests :runner_exit])))
           (is (= :runner-exit-nonzero (get-in result [:tests :reason])))
-          (is (true? (:committed result))
-              "a check that could not be trusted still does not block the write")))
+          ;; @spec MCP-OP-ADMIT-105
+          (is (false? (:committed result))
+              "a check that could not be trusted does not carry a write")
+          (is (= :verification-incomplete (:error-type result)))))
       (write-sources! root (assoc base-sources
                                   "test/app/core_test.clj" "(ns app.core-test)\n"))
       (testing "the same report from a command that exited zero"
@@ -2657,3 +2693,401 @@
                           "@@ (defn h\n"
                           "-(defn h [] 3)\n+(defn h [] 99)\n")]
         (is (:ok (patch-apply/apply-patch {"src/app/a.clj" source} anchored)))))))
+
+;; ---------------------------------------------------------------------------
+;; Field bytes: what `git diff` actually emits, and what the gate did with it
+;; ---------------------------------------------------------------------------
+
+(def ^:private field-diff-dir "test-fixtures/field-diffs")
+
+(defn- field-diff
+  [name]
+  (slurp (io/file field-diff-dir name)))
+
+(defn- field-pre-image
+  [file]
+  (slurp (io/file field-diff-dir "pre-image" file)))
+
+(def ^:private field-diff-shape
+  "The two z3 native diffs the z5 replay fed back through the gate, as real
+  `git diff` bytes: file order and hunk count per file section."
+  {"z3-g1-N-1-frozen.diff"
+   [["src/marvin_voice_remote/channel.clj" 8]
+    ["src/marvin_voice_remote/friction_ui.clj" 3]
+    ["test/marvin_voice_remote/channel_test.clj" 1]
+    ["test/marvin_voice_remote/friction_ui_test.clj" 4]]
+   "z3-g2-N-2-frozen.diff"
+   [["src/marvin_voice_remote/channel.clj" 11]
+    ["src/marvin_voice_remote/friction_ui.clj" 2]
+    ["test/marvin_voice_remote/channel_test.clj" 1]
+    ["test/marvin_voice_remote/friction_ui_test.clj" 4]]})
+
+;; @spec MCP-OP-ADMIT-103
+(deftest git-extended-headers-survive-every-file-section
+  (doseq [[name shape] (sort field-diff-shape)]
+    (testing name
+      (let [patch (field-diff name)
+            parsed (patch-apply/parse-patch patch)]
+        (is (:ok parsed)
+            (str "real git bytes must parse: " (:error-type parsed) " "
+                 (:error parsed)))
+        (is (= (mapv first shape) (mapv :file (:files parsed))))
+        (is (= (mapv second shape) (mapv #(count (:hunks %)) (:files parsed))))
+        (let [sources (into {} (map (fn [[file _]] [file (field-pre-image file)]))
+                            shape)
+              applied (patch-apply/apply-patch sources patch)]
+          (is (:ok applied)
+              (str "real git bytes must apply to the real pre-image: "
+                   (:error applied)))
+          (is (= (count shape) (count (:files applied))))
+          (doseq [image (:files applied)]
+            (is (not= (:pre image) (:post image))
+                (str (:file image) " must change"))))))))
+
+;; @spec MCP-OP-ADMIT-104
+(deftest a-binary-file-section-is-a-typed-refusal
+  (let [patch (str "diff --git a/src/app/core.clj b/src/app/core.clj\n"
+                   "index 1b8081f..c0ff307 100644\n"
+                   "--- a/src/app/core.clj\n"
+                   "+++ b/src/app/core.clj\n"
+                   "@@ -1,1 +1,1 @@\n"
+                   "-(ns app.core)\n"
+                   "+(ns app.core2)\n"
+                   "diff --git a/resources/logo.png b/resources/logo.png\n"
+                   "index 0000000..1111111 100644\n"
+                   "Binary files a/resources/logo.png and b/resources/logo.png"
+                   " differ\n")
+        parsed (patch-apply/parse-patch patch)]
+    (is (false? (:ok parsed)))
+    (is (= :binary-patch-unsupported (:error-type parsed))
+        "a binary section is refused, never silently skipped")
+    (is (= "resources/logo.png" (:file parsed)))))
+
+;; ---------------------------------------------------------------------------
+;; The fail-open commit
+;; ---------------------------------------------------------------------------
+
+(def ^:private core-test-sources
+  (assoc base-sources "test/app/core_test.clj" "(ns app.core-test)\n"))
+
+;; @spec MCP-OP-ADMIT-105
+(deftest a-commit-refuses-unless-verification-completed
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root core-test-sources)
+      (testing "a runner that produced no evidence writes nothing"
+        (let [result (admit/execute-request!
+                       (stub-config root
+                                    {:admit-test-runner
+                                     (fn [_ {:keys [namespaces]}]
+                                       {:ran true :tests-run 0 :passed 0
+                                        :failed 0 :skipped 0
+                                        :namespaces (vec namespaces)})})
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused"})]
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (false? (:committed result)))
+          (is (false? (:mutation_attempted result)))
+          (is (true? (:source-unchanged result)))
+          (is (= "preview" (get-in result [:next_call :arguments :mode])))
+          (is (= :verification-incomplete
+                 (get-in result [:next_call :blocked_by])))
+          (is (str/includes? (:error result) "no-test-evidence"))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))
+              "four rung-L commits and the z5 replay landed on this line")))
+      (testing "complete verification still commits"
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused"})]
+          (is (:ok result))
+          (is (true? (:committed result)))
+          (is (true? (:mutation_attempted result)))
+          (is (= :complete (:verification_status result)))
+          (is (not= core-source (slurp (io/file root "src/app/core.clj"))))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-106
+(deftest allow-partial-waives-an-absent-profile-and-nothing-else
+  (testing "no focused-test profile exists: allow_partial commits"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch clean-multi-file-patch :mode "commit"
+                        :verify "focused" :allow_partial true})]
+          (is (:ok result))
+          (is (true? (:committed result)))
+          (is (= :no-focused-test-profile (get-in result [:tests :reason])))
+          (is (not= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root)))))
+  (testing "a profile that exists and produced nothing is not waivable"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :focused-test
+                        {:command ["sh" "-c" "exit 3" "runner"
+                                   "{snapshot}" "{report}" "{namespaces}"]}
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch clean-multi-file-patch :mode "commit"
+                        :verify "focused" :allow_partial true})]
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (false? (:committed result)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-107
+(deftest a-runner-that-wrote-no-report-names-the-report-the-argv-and-its-tail
+  (testing "non-zero exit with no report is a runner failure, never partial"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :focused-test
+                        {:command
+                         ["sh" "-c"
+                          (str "echo \"Could not locate bin/gate-report.clj\""
+                               " 1>&2; exit 7")
+                          "runner" "{snapshot}" "{report}" "{namespaces}"]}
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch clean-multi-file-patch
+                        :mode "commit" :verify "focused"})
+              tests (:tests result)]
+          (is (false? (:ok result)))
+          (is (= :verification-incomplete (:error-type result)))
+          (is (false? (:committed result)))
+          (is (= :unverified (:verification_status result))
+              "a runner that could not run is unverified, never partial")
+          (is (= :verification-runner-failed (:reason tests)))
+          (is (= 7 (:runner_exit tests)))
+          (is (str/includes? (str (:runner_output_tail tests))
+                             "Could not locate bin/gate-report.clj"))
+          (is (str/includes? (str (:report_file tests))
+                             ".clj-surgeon-focused-test-report"))
+          (is (some #{"runner"} (:command_argv tests)))
+          (is (= (.getPath root) (:command_cwd tests)))
+          (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+        (finally (delete-tree! root)))))
+  (testing "a clean exit that wrote no report names the absent report file"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root core-test-sources)
+        (let [result (admit/execute-request!
+                       {:project-root (.getPath root)
+                        :focused-test
+                        {:command ["sh" "-c" "exit 0" "runner"
+                                   "{snapshot}" "{report}" "{namespaces}"]}
+                        :admit-lint-runner (fn [_ _] {:ran true :ok true})}
+                       {:patch clean-multi-file-patch
+                        :mode "preview" :verify "focused"})
+              tests (:tests result)]
+          (is (= :report-file-absent (:reason tests)))
+          (is (= :unverified (:verification_status result)))
+          (is (str/includes? (str (:report_file tests))
+                             ".clj-surgeon-focused-test-report"))
+          (is (vector? (:command_argv tests))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-108
+(deftest an-expect-pre-set-mismatch-names-both-file-sets
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch clean-multi-file-patch :mode "commit"
+                      :verify "none"
+                      :expect_pre_sha256 {"src/app/core.clj" "deadbeef"
+                                          "src/app/other.clj" "cafe"}})]
+        (is (false? (:ok result)))
+        (is (= :invalid-admit-request (:error-type result)))
+        (is (= ["src/app/core.clj" "src/app/util.clj"] (:files_touched result)))
+        (is (= ["src/app/core.clj" "src/app/other.clj"] (:files_named result)))
+        (is (= ["src/app/util.clj"] (:missing result)))
+        (is (= ["src/app/other.clj"] (:unexpected result)))
+        (is (str/includes? (:error result) "src/app/util.clj"))
+        (is (str/includes? (:error result) "src/app/other.clj"))
+        (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-091
+(deftest the-z4-hunk-mismatch-was-the-patch-not-the-matcher
+  ;; The z4 refusal read `Hunk 0 of src/marvin_voice_remote/reducer_session.clj
+  ;; does not match the file; its first line is
+  ;; "            [clojure.data.json :as json]"`. The rollout's bytes carry a
+  ;; bare `@@` hunk whose first context line is that require vector on a line
+  ;; of its own, indented 13 spaces. In the pre-image at ab267f9 the form is
+  ;; inline after `  (:require `, and every genuine continuation is indented
+  ;; 12. The context line appears nowhere in the file, at any indent, so
+  ;; `git apply` refuses it too. This pins that the fix to the git extended
+  ;; headers did not loosen the matcher onto bytes that genuinely disagree.
+  (let [pre (str "(ns marvin-voice-remote.reducer-session\n"
+                 "  (:require [clojure.data.json :as json]\n"
+                 "            [clojure.string :as str]\n"
+                 "            [clojure.walk :as walk]\n"
+                 "            [marvin-voice-remote.reducer.core :as core]))\n")
+        patch (str "*** Begin Patch\n"
+                   "*** Update File: src/marvin_voice_remote/reducer_session.clj\n"
+                   "@@\n"
+                   "             [clojure.data.json :as json]\n"
+                   "             [clojure.string :as str]\n"
+                   "             [clojure.walk :as walk]\n"
+                   "+            [marvin-voice-remote.clock :as clock]\n"
+                   "             [marvin-voice-remote.reducer.core :as core]\n"
+                   "*** End Patch\n")
+        applied (patch-apply/apply-patch
+                  {"src/marvin_voice_remote/reducer_session.clj" pre} patch)]
+    (is (false? (:ok applied)))
+    (is (= :patch-does-not-apply (:error-type applied)))
+    (is (str/includes? (:error applied) "does not match the file"))
+    ;; The raw patch line carries 13 spaces; the leading one is the context
+    ;; marker, so the line the matcher looks for is the 12-space form -- which
+    ;; is exactly the string the field refusal quoted.
+    (is (= "            [clojure.data.json :as json]"
+           (:offending-line applied))
+        "the same bytes the z4 refusal named")
+    (is (not (str/includes? pre "\n            [clojure.data.json :as json]"))
+        "that line is absent from the pre-image: the form is inline")
+    (is (str/includes? pre "  (:require [clojure.data.json :as json]")
+        "in the file it sits on the (:require line, not on one of its own")))
+
+;; ---------------------------------------------------------------------------
+;; The repository's own coverage statement
+;; ---------------------------------------------------------------------------
+
+(defn- write-focused-profile!
+  [root profile]
+  (let [file (io/file root ".clj-surgeon" "focused-test.edn")]
+    (.mkdirs (.getParentFile file))
+    (spit file (pr-str profile))
+    root))
+
+;; @spec MCP-OP-ADMIT-109
+;; @spec MCP-OP-ADMIT-110
+;; @spec MCP-OP-ADMIT-113
+(deftest the-repo-profile-mapping-selects-the-focused-namespaces
+  (let [root (temp-dir)]
+    (try
+      ;; The tree says app.core is covered by app.suite-test -- NOT by the
+      ;; app.core-test the path convention would derive, which also exists.
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"
+                                  "test/app/suite_test.clj" "(ns app.suite-test)\n"))
+      (write-focused-profile! root {:namespaces {"app.core" ["app.suite-test"]}})
+      (let [seen (atom nil)
+            result (admit/execute-request!
+                     {:project-root (.getPath root)
+                      ;; the server supplies only the command, as on Anvil
+                      :focused-test {:command ["server" "{snapshot}" "{report}"
+                                               "{namespaces}"]}
+                      :admit-lint-runner (fn [_ _] {:ran true :ok true})
+                      :admit-test-runner
+                      (fn [_ {:keys [namespaces]}]
+                        (reset! seen (vec namespaces))
+                        {:ran true
+                         :namespace-results
+                         (into {} (map (fn [n] [n {:tests 1 :failures 0
+                                                   :errors 0}]))
+                               namespaces)
+                         :namespaces (vec namespaces)})}
+                     {:patch clean-multi-file-patch
+                      :mode "preview" :verify "focused"})]
+        (is (= ["app.suite-test"] @seen)
+            "the mapping wins over the path convention")
+        (is (= ["app.suite-test"] (get-in result [:tests :namespaces])))
+        (is (= {"src/app/core.clj" ["app.suite-test"]}
+               (get-in result [:tests :focused_namespaces]))
+            "the receipt says which suite covered which touched file")
+        (is (= :repository-file
+               (get-in result [:tests :profile_source_namespaces]))
+            "the coverage statement came from the tree")
+        (is (= :server-config (get-in result [:tests :profile_source]))
+            "the command still came from the server that was launched to run it")
+        (is (= :complete (:verification_status result))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-111
+(deftest a-missing-focused-namespace-is-a-typed-unverified-reason
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      ;; The tree names a suite that is not in the tree. z4's profile named
+      ;; marvin-voice-remote.bridge3-new-test for channel.clj; nothing checked.
+      (write-focused-profile! root
+                              {:namespaces {"app.core" ["app.absent-test"]}})
+      (let [result (admit/execute-request!
+                     {:project-root (.getPath root)
+                      :focused-test {:command ["server" "{snapshot}" "{report}"
+                                               "{namespaces}"]}
+                      :admit-lint-runner (fn [_ _] {:ran true :ok true})
+                      :admit-test-runner
+                      (fn [_ _] (throw (ex-info "runner must not be invoked"
+                                                {})))}
+                     {:patch clean-multi-file-patch
+                      :mode "commit" :verify "focused"})
+            missing (first (get-in result [:tests :missing_focused_namespaces]))]
+        (is (= :focused-namespace-missing (get-in result [:tests :reason])))
+        (is (= :unverified (:verification_status result))
+            "a suite that cannot be found is not half a verification")
+        (is (= "src/app/core.clj" (:file missing)))
+        (is (= "app.absent-test" (:namespace missing)))
+        (is (some #(str/includes? % "test/app/absent_test.clj")
+                  (:paths_tried missing))
+            "the refusal names the path it looked in")
+        ;; @spec MCP-OP-ADMIT-105
+        (is (false? (:ok result)))
+        (is (= :verification-incomplete (:error-type result)))
+        (is (false? (:committed result)))
+        (is (= core-source (slurp (io/file root "src/app/core.clj")))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-109
+;; @spec MCP-OP-ADMIT-112
+;; @spec MCP-OP-ADMIT-113
+(deftest an-unmapped-file-falls-back-to-the-path-convention
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"
+                                  "test/app/util_test.clj" "(ns app.util-test)\n"))
+      ;; The mapping covers core and says nothing about util.
+      (write-focused-profile! root {:namespaces {"app.core" ["app.core-test"]}})
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch clean-multi-file-patch
+                      :mode "preview" :verify "focused"})]
+        (is (= {"src/app/core.clj" ["app.core-test"]
+                "src/app/util.clj" ["app.util-test"]}
+               (get-in result [:tests :focused_namespaces]))
+            "mapped where mapped, convention where not")
+        (is (= ["app.core-test" "app.util-test"]
+               (get-in result [:tests :namespaces]))))
+      (finally (delete-tree! root))))
+  (testing "a touched test file is its own focused namespace"
+    (let [root (temp-dir)]
+      (try
+        (write-sources! root (assoc base-sources
+                                    "test/app/core_test.clj"
+                                    (str "(ns app.core-test)\n"
+                                         "(def marker 1)\n")))
+        (let [patch (str "--- a/test/app/core_test.clj\n"
+                         "+++ b/test/app/core_test.clj\n"
+                         "@@ -1,2 +1,2 @@\n"
+                         " (ns app.core-test)\n"
+                         "-(def marker 1)\n"
+                         "+(def marker 2)\n")
+              result (admit/execute-request!
+                       (stub-config root)
+                       {:patch patch :mode "preview" :verify "focused"})]
+          (is (= {"test/app/core_test.clj" ["app.core-test"]}
+                 (get-in result [:tests :focused_namespaces]))
+              "editing a suite runs that suite, not <suite>-test")
+          (is (= ["app.core-test"] (get-in result [:tests :namespaces]))))
+        (finally (delete-tree! root))))))

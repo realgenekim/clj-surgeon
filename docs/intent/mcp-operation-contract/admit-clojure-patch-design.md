@@ -855,6 +855,22 @@ silent-truncation engine.
 - [x] **MCP-OP-ADMIT-101**: When a V4A hunk body carries a single-space context line, clj-surgeon shall read it as a context line for a blank source line rather than as whitespace to skip.
 - [x] **MCP-OP-ADMIT-102**: If a patch produces a post-image identical to the pre-image for every file it names, then clj-surgeon shall refuse it as a no-op rather than publish a success receipt.
 
+The field, rungs L and M (`z3`, `z4`, `z5`). Four commits on rung L and the z5
+replay commit were written to disk on a verification that never ran, and two
+real `git diff` payloads could not be read past their second file section.
+
+- [x] **MCP-OP-ADMIT-103**: When a unified payload carries git's extended file headers — `index`, `old mode`, `new mode`, `deleted file mode`, `new file mode`, `similarity index`, `dissimilarity index`, `rename from`, `rename to`, `copy from`, `copy to` — between a `diff --git` line and that section's `---`/`+++` pair or first hunk, clj-surgeon shall accept and ignore them; outside that region an unclassifiable line shall still be refused as before. *(z5)*
+- [x] **MCP-OP-ADMIT-104**: If a file section declares binary content (`Binary files … differ`, or `GIT binary patch`), then clj-surgeon shall publish a typed `binary-patch-unsupported` refusal naming the file, rather than skipping the section and reporting success for the rest of the patch. *(z5)*
+- [x] **MCP-OP-ADMIT-105**: If mode is commit and verification was requested and `verification_status` is anything other than complete, then clj-surgeon shall refuse with a typed `verification-incomplete` error, write nothing, publish `committed false`, `mutation_attempted false` and `source-unchanged true`, and name preview and the blocking reason in `next_call`; every receipt shall carry `mutation_attempted`. *(z4, z5)* A runner that wrote a report and then exited non-zero (`runner-exit-nonzero`) remains `partial` rather than unverified — a report exists, it is merely untrustworthy — and is refused under this requirement all the same, because `partial` is no longer permission to write.
+- [x] **MCP-OP-ADMIT-106**: When the caller passes `allow_partial true` and the workspace declares no focused-test profile at all, clj-surgeon shall permit the commit that MCP-OP-ADMIT-105 would otherwise refuse; when a profile exists and did not deliver evidence, `allow_partial` shall not waive the refusal. *(z4, z5)*
+- [x] **MCP-OP-ADMIT-107**: When the focused runner was invoked and no report file appeared, clj-surgeon shall publish a typed reason distinguishing a non-zero or unfinished run (`verification-runner-failed`) from a clean run that produced nothing (`report-file-absent`), carry the runner's exit code, the resolved report path, the expanded command argv, its working directory, and the last 40 lines of the runner's merged output, and shall report `verification_status` as unverified rather than partial in both cases. *(z4, z5)*
+- [x] **MCP-OP-ADMIT-109**: When the workspace ships `.clj-surgeon/focused-test.edn` carrying a `:namespaces` mapping, clj-surgeon shall select each touched file's focused test namespaces from that mapping — keyed by the source path or by the source namespace, valued as one namespace or a collection of them — and shall fall back to the `<ns>-test` path convention only for files the mapping does not cover. *(z4)*
+- [x] **MCP-OP-ADMIT-110**: clj-surgeon shall resolve the focused-test profile from the repository file first and the server start configuration second, merged one key at a time so a tree that declares only `:namespaces` still runs the server's `:command`; and the receipt shall name which source supplied the command (`profile_source`) and which supplied the coverage mapping (`profile_source_namespaces`, or `path-convention` when neither did). *(z4)*
+- [x] **MCP-OP-ADMIT-111**: If a test namespace the tree asserted — through the `:namespaces` mapping, or by the touched file being a suite itself — resolves to no file on the snapshot classpath, then clj-surgeon shall publish the typed reason `focused-namespace-missing` naming the source file, the namespace sought and every path tried, shall not invoke the runner, and shall report `verification_status` as unverified so that a commit refuses under MCP-OP-ADMIT-105. A source file with no sibling suite under the path convention remains the pre-existing `no-mapped-test-namespace` case and is not an error, because the convention discovers coverage where the mapping asserts it. *(z4)*
+- [x] **MCP-OP-ADMIT-112**: When a patch touches a file that is itself a test namespace, clj-surgeon shall run that namespace as its own focused coverage rather than deriving a `<ns>-test-test` that cannot exist. *(z4)*
+- [x] **MCP-OP-ADMIT-113**: Every focused verification receipt shall list `focused_namespaces`, the test namespaces actually selected for each touched file, so the caller can see what was run rather than infer it. *(z4)*
+- [x] **MCP-OP-ADMIT-108**: If `expect_pre_sha256` does not name exactly the files the patch touches, then clj-surgeon's refusal shall list the files the patch touches, the files that were named, and the difference in both directions, so the caller can repair the call without a second preview. *(z4)*
+
 # #Witness Failure Baseline
 
 The witness tests in `test/clj_surgeon/admit_patch_test.clj` were written and
@@ -1490,3 +1506,73 @@ every call, and the call count grows with the file, so the delta was quadratic
 in file size; the same fixture that took 54.9 seconds now takes 0.37 seconds,
 and the bound in ADMIT-067 is stated at two seconds so a regression is caught
 long before it is felt.
+
+## #The rungs, and why the verification never ran
+
+Three cohort runs on Anvil put the gate in front of an agent that had not been
+told to like it. `z3` (rung M, a four-file feature) obtained
+`verification_status: complete` on every admit call. `z4` (rung L, an
+eleven-file refactor) and the `z5` replay obtained it on none, and the shape of
+the failure was identical in both: `tests.ran true`, `tests-run 0`, `exit 1`,
+`report_written false`, `reason no-test-evidence`, `verification_status
+partial`. **Four commits landed on rung L that way, and so did the z5 replay
+commit.** Each receipt honestly reported `verification_complete: false`, and
+each one had already written the files.
+
+Two separate things had to be true for that, and the fix separates them.
+
+**The gate defect: `partial` was permission.** `partial` says one of the two
+requested checks produced a usable result. A clean analyzer delta is one. So a
+focused runner that was launched, exited non-zero, and wrote nothing scored one
+out of two, and one out of two wrote to disk. The commit path then noticed the
+shortfall *after* the transaction and downgraded `ok` on a receipt whose
+`committed` was already `true` — a field about a write that had happened,
+which is not a gate. MCP-OP-ADMIT-105 moves the check in front of the write and
+makes the shortfall a typed refusal; MCP-OP-ADMIT-107 stops a runner that could
+not run from counting as half a verification at all.
+
+**The apparatus defect, on z5, named exactly.** The gate server on 7894 was
+launched with a `:focused-test` profile whose command is
+`["clojure" "-Sdeps" "…" "-M:gate" "bin/gate-report.clj" "{snapshot}" "{report}" "{namespaces}"]`,
+run with the workspace root as its working directory. The cohort runner installs
+`bin/gate-report.clj` into an arm's worktree **only when the arm is `Z` or `F`**,
+and the file exists nowhere in the repository under test — `git ls-tree` at the
+base commit has `bin/kaocha` and no `gate-report.clj`. The z5 replay ran against
+`N`-arm worktrees, which never received it. So the command's own script was
+absent, `clojure -M:gate` exited 1, and no report could appear. **The missing
+file is `bin/gate-report.clj` in `~/acid/wt/z5-replay-N1` and
+`~/acid/wt/z5-replay-N2`; its source is `~/acid/receipts/gate-report.clj`; the
+installer that skips it is the arm test in the cohort runner.**
+
+**On z4 the cause is not recoverable, and that is the finding.** Both z4 `Z`
+worktrees carry `bin/gate-report.clj` and `.clj-surgeon/focused-test.edn`,
+byte-identical to z3's, installed by the same line of the same runner. The
+runner was invoked and exited 1; everything it said about why was thrown away,
+because the receipt kept the exit code and discarded the output. Diagnosing z5
+took a shell script and a `git ls-tree`; diagnosing z4 is no longer possible
+from the artifacts at all. MCP-OP-ADMIT-107 is written so this class of question
+is answered in the payload: the resolved report path, the expanded argv, the
+working directory, and the last forty lines the runner printed.
+
+One adjacent observation, recorded and not acted on: `resolve-focused-test`
+gives the server's start configuration precedence over the workspace's
+`.clj-surgeon/focused-test.edn`, so the `:namespaces` mapping those worktrees
+shipped — the repository's own statement of which suite covers which source —
+was never read. The gate derived `<ns>-test` by path convention instead. On
+rung M the derived namespaces existed and passed. On rung L the patch touched
+eleven sources whose derived suites span the whole reducer stack. That is a
+plausible mechanism for z4's exit 1 and it is not evidence, which is the point.
+
+## #The z4 hunk that did not apply
+
+The other z4 refusal was `patch-does-not-apply: Hunk 0 of
+src/marvin_voice_remote/reducer_session.clj does not match the file; its first
+line is "            [clojure.data.json :as json]"`. It is worth recording that
+this one was right. The rollout's bytes carry a bare `@@` hunk whose first
+context line is that require vector alone on a line, indented thirteen spaces.
+In the pre-image the form is inline after `  (:require `, and every genuine
+continuation is indented twelve. The context line does not occur in the file at
+any indent, so `git apply` would refuse it too; the matcher is not stricter than
+git here, and the agent's own retry — which corrected exactly that context line
+— succeeded. The parser repair in MCP-OP-ADMIT-103 must not loosen this, so it
+is pinned by a witness of its own.

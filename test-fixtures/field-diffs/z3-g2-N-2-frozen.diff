@@ -1,0 +1,256 @@
+diff --git a/src/marvin_voice_remote/channel.clj b/src/marvin_voice_remote/channel.clj
+index 1b8081f..3b5ab56 100644
+--- a/src/marvin_voice_remote/channel.clj
++++ b/src/marvin_voice_remote/channel.clj
+@@ -3028,6 +3028,8 @@
+   [req]
+   (let [seat     (or (seat-param req) "bridge")
+         end-word (or (get-in req [:params :end]) "over")
++        force-end? (= "1" (str (or (get-in req [:params :force_end])
++                                    (get-in req [:params "force_end"]))))
+         dedup-id (get-in req [:params :dedup_id])
+         audio-duration-ms (audio-duration-ms-param req)
+         cached   (when (seq dedup-id) (get-in @bridge4-keyword-seen [:m dedup-id]))]
+@@ -3064,7 +3066,9 @@
+                           (shadow-post-decision! seat :bridge4-keyword-check :terminal dedup-id ""
+                                                  false {:posted? false :reason :blank-stt})
+                           (json-response {:ok true :ended false :transcript ""}))
+-                      (let [{:keys [ended text]} (voice-lab-keyword-finalize transcript end-word)]
++                      (let [{:keys [ended text]} (if force-end?
++                                                   {:ended true :text (clojure.string/trim transcript)}
++                                                   (voice-lab-keyword-finalize transcript end-word))]
+                         (if ended
+                           (do
+                             ;; Remember before returning so a lost response followed by another
+@@ -3113,7 +3117,11 @@
+   ([seat]
+    (bridge4-page-html seat (friction-ui/effective-state :bridge4)))
+   ([seat friction-state]
+-   (let [convo  (get @bridge3-convos seat [])
++   (let [controls? (:controls? friction-state)
++         hbms      (let [parsed (try (some-> (:hbms friction-state) str parse-long)
++                                     (catch Exception _ nil))]
++                     (if (and parsed (pos? parsed)) parsed 2500))
++         convo  (get @bridge3-convos seat [])
+         ;; One id per PAGE LOAD — see bridge3-page-html. bridge4 shares bridge3's
+         ;; stream, so it needs the same reconnect identity to be superseded by.
+          client (sse/new-client-id)
+@@ -3180,6 +3188,8 @@
+           (bridge-surface-nav seat :hf)
+           (friction-ui/note-html friction-state)
+           "<button id=start>Start hands-free</button>"
++          (when controls?
++            "<div id=hfcontrols style=\"display:flex;gap:8px;margin:8px 0\"><button class=c id=over disabled>✔ OVER</button><button class=c id=cancel disabled>✕ CANCEL</button></div>")
+           "<div id=hfstate>Tap once to grant mic + unlock audio, then talk.</div>"
+           "<div id=rectimer role=status aria-live=polite></div>"
+           "<div id=meterwrap><div id=meterfill></div></div>"
+@@ -3234,7 +3244,10 @@
+           ;; --- THE SHARED PLAYER (bd 6iu): js/bridge-player.js carries the whole reply-audio
+           ;; + transport machine; this inline script keeps ONLY the hands-free VAD engine,
+           ;; then calls BridgePlayerBoot(). keyToggleId:'start' = the t-key toggles hands-free.
+-          "<script>window.__MARVIN_BRIDGE__={protocol:2,surface:'bridge4',build:" (json/write-str git-sha) ",submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',capturePolicyVersion:2,nativeHf:true,nativeReplyOfferVersion:1,nativeBargeInVersion:1};var BP={seat:" (json/write-str seat) ",page:'bridge4',build:" (json/write-str git-sha) ",keyToggleId:'start',longTtsBuffer:" (if (:long-tts-buffer? friction-state) "true" "false") "};var SEAT=BP.seat;</script>"
++          "<script>window.__MARVIN_BRIDGE__={protocol:2,surface:'bridge4',build:" (json/write-str git-sha) ",submitPath:'/api/bridge3/dictate',dedupParam:'dedup_id',capturePolicyVersion:2,nativeHf:true,nativeReplyOfferVersion:1,nativeBargeInVersion:1};var BP={seat:" (json/write-str seat) ",page:'bridge4',build:" (json/write-str git-sha) ",keyToggleId:'start',longTtsBuffer:" (if (:long-tts-buffer? friction-state) "true" "false")
++          (when controls?
++            (str ",controls:true,micGate:" (if (:barge-in? friction-state) "false" "true") ",hbms:" hbms))
++          "};var SEAT=BP.seat;</script>"
+           "<script src=\"/js/bridge-player.js?v=" (System/currentTimeMillis) "\"></script>"
+           "<script>"
+           ;; --- URL-tunable hands-free params (read live; defaults documented on the page) ---
+@@ -3333,7 +3346,9 @@
+           "function startKeepAlive(){if(keepAlive)return;keepAlive=setInterval(function(){if(!started)return;try{if(actx&&actx.state!=='running')actx.resume();}catch(e){}},800);}"
+           "function stopKeepAlive(){if(keepAlive){clearInterval(keepAlive);keepAlive=0;}}"
+           "function lockScreen(){try{if('wakeLock' in navigator){navigator.wakeLock.request('screen').then(function(s){wl=s;}).catch(function(){});}}catch(e){}}"
+-          "function onsetReady(e,now){if(playing){speechStartAt=0;if(e>bargeTh()){if(bargeStartAt===0)bargeStartAt=now;return now-bargeStartAt>=P.bargehold;}bargeStartAt=0;return false;}bargeStartAt=0;if(e>P.energy){if(speechStartAt===0)speechStartAt=now;return now-speechStartAt>=P.minspeech;}speechStartAt=0;return false;}"
++          (if controls?
++            "function onsetReady(e,now){if(BP.micGate&&playing){bargeStartAt=0;return false;}if(playing){speechStartAt=0;if(e>bargeTh()){if(bargeStartAt===0)bargeStartAt=now;return now-bargeStartAt>=P.bargehold;}bargeStartAt=0;return false;}bargeStartAt=0;if(e>P.energy){if(speechStartAt===0)speechStartAt=now;return now-speechStartAt>=P.minspeech;}speechStartAt=0;return false;}"
++            "function onsetReady(e,now){if(playing){speechStartAt=0;if(e>bargeTh()){if(bargeStartAt===0)bargeStartAt=now;return now-bargeStartAt>=P.bargehold;}bargeStartAt=0;return false;}bargeStartAt=0;if(e>P.energy){if(speechStartAt===0)speechStartAt=now;return now-speechStartAt>=P.minspeech;}speechStartAt=0;return false;}")
+           "function loopSilence(e,now){"
+           "if(!recording&&!sending&&!stopping){if(onsetReady(e,now)){if(playing){try{audio.pause();}catch(_){}playing=false;queue.length=0;}startRec(now);}}"
+           "else if(recording){if(e>P.energy)lastVoiceAt=now;if(now-lastVoiceAt>=P.silence)stopRec(now);}}"
+@@ -3353,15 +3368,21 @@
+           ;; cancel cue: a DESCENDING two-tone 'bwoop' (520->300Hz), deliberately unlike the
+           ;; ASCENDING/flat send beep-beep so Gene hears 'discarded' vs 'sent' eyes-closed.
+           "function cueCancel(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state!=='running')actx.resume();var t=actx.currentTime;var notes=[520,300];for(var i=0;i<notes.length;i++){var o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=notes[i];o.connect(g);g.connect(actx.destination);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(CUE_GAIN,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);o.start(t);o.stop(t+0.17);t+=0.14;}}catch(e){}}"
+-          "function kwCheck(now){if(window.__MARVIN_NATIVE_CAPTURE__||checking||sending)return;if(chunks.length===0){lastVoiceAt=now;lastKwCheckAt=now;return;}checking=true;lastKwCheckAt=now;setState('\\u23f3 Checking\\u2026');var blob=new Blob(chunks,{type:recMime||'audio/webm'});var fd=new FormData();fd.append('audio',blob,'k'+extFor(recMime));fd.append('dedup_id','b4k-'+Date.now());fd.append('audio_duration_ms',String(Math.max(0,Math.round(now-recStartAt))));"
+-          "fetch('/api/bridge4/keyword-check?seat='+encodeURIComponent(P.seat)+'&end='+encodeURIComponent(P.end),{method:'POST',body:fd}).then(function(r){return r.json().catch(function(){return {};}).then(function(j){"
++          (if controls?
++            "function kwCheck(now,forceEnd){if(window.__MARVIN_NATIVE_CAPTURE__||checking||sending)return;if(chunks.length===0){lastVoiceAt=now;lastKwCheckAt=now;return;}checking=true;lastKwCheckAt=now;setState('\\u23f3 Checking\\u2026');var blob=new Blob(chunks,{type:recMime||'audio/webm'});var fd=new FormData();fd.append('audio',blob,'k'+extFor(recMime));fd.append('dedup_id','b4k-'+Date.now());fd.append('audio_duration_ms',String(Math.max(0,Math.round(now-recStartAt))));"
++            "function kwCheck(now){if(window.__MARVIN_NATIVE_CAPTURE__||checking||sending)return;if(chunks.length===0){lastVoiceAt=now;lastKwCheckAt=now;return;}checking=true;lastKwCheckAt=now;setState('\\u23f3 Checking\\u2026');var blob=new Blob(chunks,{type:recMime||'audio/webm'});var fd=new FormData();fd.append('audio',blob,'k'+extFor(recMime));fd.append('dedup_id','b4k-'+Date.now());fd.append('audio_duration_ms',String(Math.max(0,Math.round(now-recStartAt))));")
++          (if controls?
++            "fetch('/api/bridge4/keyword-check?seat='+encodeURIComponent(P.seat)+'&end='+encodeURIComponent(P.end)+(forceEnd?'&force_end=1':''),{method:'POST',body:fd}).then(function(r){return r.json().catch(function(){return {};}).then(function(j){"
++            "fetch('/api/bridge4/keyword-check?seat='+encodeURIComponent(P.seat)+'&end='+encodeURIComponent(P.end),{method:'POST',body:fd}).then(function(r){return r.json().catch(function(){return {};}).then(function(j){")
+           ;; send-confirmation cue (Gene 2026-07-03, mid-run): when 'over' fires, beep-beep like
+           ;; push-to-talk so he HEARS the send without looking at the screen.
+           "if(remoteMuted){checking=false;setState('\\u23f8 MIC MUTED from Director');}else if(j&&j.ended){try{if(mr){mr.ondataavailable=null;mr.stop();}}catch(e){}recording=false;chunks=[];checking=false;try{beep(2,880);}catch(e){}buzz(20);setState('\\u23f3 Sending\\u2026');setTimeout(function(){if(!recording&&!playing&&!sending&&!checking)setState('\\u25cf Listening\\u2026');},500);}"
+           ;; CANCEL word as the last word (server returns ended:false + raw transcript, since
+           ;; cancel!=end so it never enqueues to the LLM): DISCARD locally — stop the recorder,
+           ;; drop the chunks, reset to Listening, and never touch the dictate path.
+-          "else if(P.cancel&&kwLastWord(j&&j.transcript)===P.cancel){try{if(mr){mr.ondataavailable=null;mr.stop();}}catch(e){}recording=false;chunks=[];checking=false;try{cueCancel();}catch(e){}buzz(30);setState('\\u2715 Canceled \\u2014 \\u25cf Listening\\u2026');setTimeout(function(){if(!recording&&!playing&&!sending&&!checking)setState('\\u25cf Listening\\u2026');},700);}"
++          (if controls?
++            "else if(P.cancel&&kwLastWord(j&&j.transcript)===P.cancel){cancelCapture();}"
++            "else if(P.cancel&&kwLastWord(j&&j.transcript)===P.cancel){try{if(mr){mr.ondataavailable=null;mr.stop();}}catch(e){}recording=false;chunks=[];checking=false;try{cueCancel();}catch(e){}buzz(30);setState('\\u2715 Canceled \\u2014 \\u25cf Listening\\u2026');setTimeout(function(){if(!recording&&!playing&&!sending&&!checking)setState('\\u25cf Listening\\u2026');},700);}")
+           "else{checking=false;lastVoiceAt=lastKwCheckAt=performance.now();setState(kwRec());}"
+           "});}).catch(function(e){checking=false;lastVoiceAt=lastKwCheckAt=performance.now();setState(kwRec());});}"
+           "function startRec(now){if(window.__MARVIN_NATIVE_CAPTURE__)return;recording=true;recStartAt=now;lastVoiceAt=now;speechStartAt=0;if(!mr||mr.state!=='recording')startIdleCycle();setState('\\ud83c\\udf99 Heard you, recording\\u2026');buzz(12);}"
+@@ -3391,6 +3412,8 @@
+           "startBtn.onclick=function(ev){ev=ev||{};clog({k:'hf-toggle',dir:started?'stop':'start',trusted:ev.isTrusted===true,ptr:(ev.pointerType||null),detail:(ev.detail!=null?ev.detail:null)});if(!started)startHandsFree();else stopHandsFree();};"
+           ;; recalibrate in place: restart the 1.5s ambient sample (only meaningful while live).
+           "document.getElementById('recal').onclick=function(){if(!started){setState('Start HF first, then tap recalibrate while the room is quiet');return;}if(nativeHost()&&!(nativeHfStatus&&nativeHfStatus.policyUpdateSupported)){setState('\\u26a0 This TestFlight build cannot apply native recalibration \\u2014 update the app');return;}beginCalibration(true);try{beep(1,520);}catch(e){}buzz(15);setState('\\u2699 Recalibrating\\u2026 stay quiet');};"
++          (when controls?
++            "function cancelCapture(){try{if(mr){mr.ondataavailable=null;mr.stop();}}catch(e){}recording=false;chunks=[];checking=false;try{cueCancel();}catch(e){}buzz(30);setState('\\u2715 Canceled \\u2014 \\u25cf Listening\\u2026');setTimeout(function(){if(!recording&&!playing&&!sending&&!checking)setState('\\u25cf Listening\\u2026');},700);}function cueHeartbeat(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state!=='running')actx.resume();var t=actx.currentTime,o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=740;o.connect(g);g.connect(actx.destination);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(CUE_GAIN,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+0.06);o.start(t);o.stop(t+0.07);}catch(e){}}var lastHeartbeatAt=0;var overBtn=document.getElementById('over'),cancelBtn=document.getElementById('cancel');overBtn.onclick=function(){if(recording&&!checking&&!sending)kwCheck(performance.now(),true);};cancelBtn.onclick=function(){if(recording)cancelCapture();};")
+           ;; (poll/tickers/keyboard/transport: bridge-player.js — keyToggleId:'start' wires
+           ;; the t-key to the hands-free toggle.)
+           ;; iOS: on return to foreground, cancel any stale frame, restart the loop, re-lock,
+@@ -3400,7 +3423,9 @@
+           "window.addEventListener('beforeunload',releaseMic);"
+           ;; live recording-timer refresh (Gene 2026-06-30): tick the 'Recording 0:07 · say over'
+           ;; label ~4x/s while actively recording, but never stomp the Checking/Sending states.
+-          "setInterval(function(){if(recording&&!checking&&!sending&&!stopping)setState(kwRec());},250);"
++          (if controls?
++            "setInterval(function(){var active=recording&&!playing&&!checking&&!sending;overBtn.disabled=!recording;cancelBtn.disabled=!recording;if(recording&&!checking&&!sending&&!stopping)setState(kwRec());var now=performance.now();if(active&&now-lastHeartbeatAt>=BP.hbms){lastHeartbeatAt=now;cueHeartbeat();}if(!active)lastHeartbeatAt=now;},250);"
++            "setInterval(function(){if(recording&&!checking&&!sending&&!stopping)setState(kwRec());},250);")
+           "setInterval(tickNativeRecording,250);tickNativeRecording();"
+           "BridgePlayerBoot();"
+           (str "</script><script src=\"/js/director-capture-control.js?v=" git-sha "\"></script></body></html>")))))
+@@ -3480,7 +3505,9 @@
+      :headers {"Content-Type" "text/html; charset=utf-8"
+                "Cache-Control" "no-cache, no-store, must-revalidate"}
+      :body (code-director-page-html seat mode
+-                                    (friction-ui/effective-state :bridge4 req))}))
++                                    (assoc (friction-ui/effective-state :bridge4 req)
++                                           :hbms (or (get-in req [:query-params "hbms"])
++                                                     (get-in req [:params :hbms]))))}))
+ 
+ (defn handle-bridge4-page
+   "GET /bridge4?seat=X -> the seat-aware multiplayer HANDS-FREE dictation page
+@@ -3490,7 +3517,10 @@
+     {:status 200
+      :headers {"Content-Type" "text/html; charset=utf-8"
+                "Cache-Control" "no-cache, no-store, must-revalidate"}
+-     :body (bridge4-page-html seat (friction-ui/effective-state :bridge4 req))}))
++     :body (bridge4-page-html seat
++                              (assoc (friction-ui/effective-state :bridge4 req)
++                                     :hbms (or (get-in req [:query-params "hbms"])
++                                               (get-in req [:params :hbms]))))}))
+ 
+ ;; ====================================================================================
+ ;; /api/capture-archive/* — RECOVERY over the append-only durable capture archive
+diff --git a/src/marvin_voice_remote/friction_ui.clj b/src/marvin_voice_remote/friction_ui.clj
+index 9c3f3ec..432ef9e 100644
+--- a/src/marvin_voice_remote/friction_ui.clj
++++ b/src/marvin_voice_remote/friction_ui.clj
+@@ -39,6 +39,7 @@
+      (case surface
+        :bridge4
+        {:surface              surface
++        :controls?            (flag-value false (request-param req "controls"))
+         :barge-in?            (flag-value (:barge-in? cfg) (request-param req "barge"))
+         :long-tts-buffer?     (flag-value (:long-tts-buffer? cfg)
+                                           (request-param req "longttsbuffer"))
+@@ -67,8 +68,11 @@
+ ;; INTENT: FRICTION-POLICY-NOTE-UI
+ (defn note-parts
+   "Terse strings derived only from an `effective-state` value."
+-  [{:keys [barge-in? long-tts-buffer? echo-guard-mode]}]
++  [{:keys [controls? barge-in? long-tts-buffer? echo-guard-mode]}]
+   (cond-> []
++    controls?
++    (conj "controls ON (disable: ?controls=0)")
++
+     (boolean? long-tts-buffer?)
+     (conj (str "long-reply buffer " (on-off long-tts-buffer?)
+                (when long-tts-buffer? " (disable: ?longttsbuffer=0)")))
+diff --git a/test/marvin_voice_remote/channel_test.clj b/test/marvin_voice_remote/channel_test.clj
+index b7747ca..a04f80b 100644
+--- a/test/marvin_voice_remote/channel_test.clj
++++ b/test/marvin_voice_remote/channel_test.clj
+@@ -1026,6 +1026,36 @@
+     (is (= {:ended true :text "roger that"} (channel/voice-lab-keyword-finalize "roger that out" "out")))
+     (is (= false (:ended (channel/voice-lab-keyword-finalize "over" "over"))) "lone sentinel never sends")))
+ 
++(deftest bridge4-keyword-check-force-end-and-cancel-control
++  (reset! channel/bridge3-convos {})
++  (testing "force_end finalizes through the normal enqueue path without an end word"
++    (with-redefs [groq/transcribe-audio (fn [_] {:transcript "send this now"})]
++      (let [tmp (java.io.File/createTempFile "b4k-force" ".webm")
++            resp (channel/handle-bridge4-keyword-check
++                   {:params {:seat "b4force" :end "over" :force_end "1"
++                             :dedup_id "forced-logical-1"
++                             :audio {:tempfile tmp :filename "k.webm"}}})
++            body (read-json resp)]
++        (is (true? (:ended body)))
++        (is (= "send this now" (:transcript body)))
++        (is (= ["send this now"]
++               (mapv :text (get-in @channel/channel-state [:messages "b4force"]))))
++        (is (= ["send this now"]
++               (mapv :text (get @channel/bridge3-convos "b4force"))))
++        (.delete tmp))))
++  (testing "cancel remains a non-final transcript when force_end is absent"
++    (with-redefs [groq/transcribe-audio (fn [_] {:transcript "forget that cancel"})]
++      (let [tmp (java.io.File/createTempFile "b4k-cancel" ".webm")
++            resp (channel/handle-bridge4-keyword-check
++                   {:params {:seat "b4cancel" :end "over"
++                             :audio {:tempfile tmp :filename "k.webm"}}})
++            body (read-json resp)]
++        (is (false? (:ended body)))
++        (is (= "forget that cancel" (:transcript body)))
++        (is (empty? (get-in @channel/channel-state [:messages "b4cancel"])))
++        (is (nil? (get @channel/bridge3-convos "b4cancel")))
++        (.delete tmp)))))
++
+ (deftest bridge4-keyword-check-blank-and-bad-seat
+   (testing "blank STT (road-noise pause) => ended=false, no enqueue, NOT an error"
+     (with-redefs [groq/transcribe-audio (fn [_] {:transcript "   "})]
+diff --git a/test/marvin_voice_remote/friction_ui_test.clj b/test/marvin_voice_remote/friction_ui_test.clj
+index b8c411d..1c72fff 100644
+--- a/test/marvin_voice_remote/friction_ui_test.clj
++++ b/test/marvin_voice_remote/friction_ui_test.clj
+@@ -23,6 +23,7 @@
+       (is (= {:barge-in? false :long-tts-buffer? true}
+              (select-keys (friction-ui/effective-state :bridge4 {})
+                           [:barge-in? :long-tts-buffer?])))
++      (is (false? (:controls? (friction-ui/effective-state :bridge4 {}))))
+       (is (= {:barge-in? true :long-tts-buffer? false}
+              (select-keys
+                (friction-ui/effective-state
+@@ -41,6 +42,8 @@
+   (with-redefs [policy/effective (constantly policy/current)]
+     (testing "the bridge4 default states the real enablement and the legacy gap"
+       (let [text (friction-ui/note-text (friction-ui/effective-state :bridge4))]
++        (is (= "Friction: long-reply buffer ON (disable: ?longttsbuffer=0) · barge-in OFF · echo guard unavailable on this legacy surface"
++               text))
+         (is (str/includes? text "long-reply buffer ON (disable: ?longttsbuffer=0)"))
+         (is (str/includes? text "barge-in OFF"))
+         (is (str/includes? text "echo guard unavailable on this legacy surface"))))
+@@ -51,6 +54,12 @@
+                      {:query-params {"barge" "1" "longttsbuffer" "0"}}))]
+         (is (str/includes? text "long-reply buffer OFF"))
+         (is (str/includes? text "barge-in ON (disable: ?barge=0)"))))
++    (testing "controls are opt-in and visible in the note"
++      (let [state (friction-ui/effective-state
++                    :bridge4 {:query-params {"controls" "1"}})]
++        (is (true? (:controls? state)))
++        (is (str/includes? (friction-ui/note-text state)
++                           "controls ON (disable: ?controls=0)"))))
+     (testing "reducer surfaces report observe honestly"
+       (let [text (friction-ui/note-text (friction-ui/effective-state :voice-lab))]
+         (is (str/includes? text "echo guard OBSERVE only"))
+@@ -79,6 +88,18 @@
+         (is (str/includes? html "barge-in ON (disable: ?barge=0)"))
+         (is (str/includes? html "longTtsBuffer:false"))
+         (is (str/includes? html "barge:true"))))
++    (testing "bridge4 controls render only when opted in and inherit the barge gate"
++      (let [gated (:body (channel/handle-bridge4-page
++                           {:params {"seat" "bridge"}
++                            :query-params {"controls" "1"}}))
++            barge (:body (channel/handle-bridge4-page
++                           {:params {"seat" "bridge"}
++                            :query-params {"controls" "1" "barge" "1"}}))]
++        (is (str/includes? gated "id=over"))
++        (is (str/includes? gated "id=cancel"))
++        (is (str/includes? gated "controls:true"))
++        (is (str/includes? gated "micGate:true"))
++        (is (str/includes? barge "micGate:false"))))
+     (testing "Code Director inherits the same server-resolved bridge4 controls"
+       (let [html (:body
+                    (channel/handle-code-director-page
