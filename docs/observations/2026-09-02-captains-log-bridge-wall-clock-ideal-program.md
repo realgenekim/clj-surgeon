@@ -612,3 +612,17 @@ Standing rule adopted and written to memory: fence, allowlist, or confinement ch
 adversarial review before merge. The cord worked exactly as the house rules describe: the
 puller kept repair authority, the freeze was scoped to the release lane, and measurement
 continued.
+
+## Receipt 05:12Z — s7 closes the old chain; the real job starts
+
+s7 (Anvil sequential, all correct): Q 338, P 359, N 273. Planning arms across two triples:
+P 258 / 359, Q 221 / 338; planning mode did not clamp variance. s6 acceptance: A fails
+acid-7 (hbms), Q fails acid-7, P fails acid-9 (buttons). The 7889 remediation fired in the
+gap after s7 (edit_dsl.clj at 64eac2e, restarted 05:08:34Z, healthy) before r1's wave arm
+needed it. r1, the first real job (surgeon recovery-receipt defect), started 05:08Z on the
+v3 runner: N and A in parallel, then B. Fleet round 2 (Sol + Opus) polled on the full packet
+with acceptance, actions, and plan calibration; s7 blind review launched.
+
+Turn-count picture, for the record: wall ≈ 9 s per model action plus suite runs, on every
+arm and both boxes; native ≈ 19 actions, A ≈ 24, B ≈ 29, T 44. The arm is not the clock; the
+number of times the model comes back is.
