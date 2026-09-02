@@ -2541,3 +2541,6 @@ enclosing predicate mentions the written value's identity. Declined by the build
 folding `comms.template-saved` into `upsert-by` (nil-id templates would change projection; no
 fixture facts to prove equality). Corrected the record with Gene by voice.
 
+
+## 21:36Z — fold branch pushed at f115cc2d after my own run (unit 1016/12599/0); inb-d603ce updated for Gene's merge
+
