@@ -2023,3 +2023,38 @@ apparatus parse (`:ok true` read as a keyword by the recorder) stands between th
 **z7b so far:** gate 257 s against natives 344 and 552 s, gate arm at 0 self-run suites, all
 failure sets equal to base. Wave two running.
 
+
+## 20:10Z — the big LID assertion: 121 fold arms, nine not idempotent, one of them inside the emergency fix itself
+
+Branch `bridge/fold-idempotence` on curtaincall-cfp (base 00e8f0fa), three commits, red → red → green.
+`FOLD-IDEM-001`: while the application folds an append-only log into projected state, every
+fold-event arm is idempotent in its fact. `FOLD-IDEM-002`: each set-like relation's identity,
+named. The witness enumerates `(methods fold-event)`, 121 arms, a hand-written corpus of 121
+samples over two seed states, and REFUSES any arm without a sample, so a new arm is a named gap.
+
+**Fails-first, 121 arms, 8 not idempotent:** the five the structural query predicted
+(`submission.speaker-added`, `speaker.blackout-window`, `file.comment-added`,
+`reviewer.recused`, `reviewer.unrecused`) plus three the `(fnil conj [])` pattern is blind to:
+`file.version-added` (`conj` onto a pre-seeded vector, no `fnil`), `export.generated` (a `cons`
+capped at 50), and `review.blind-mode-set` (a counter, `inc` on every application). The chase
+helper passed, as predicted. **Second red:** Gene's own fix keys announced speakers by person-id
+and skips the removal when the entry has none, so an id-less speaker still duplicated; 9 of 121.
+**Green:** one `conj-distinct-by` (replace in place; order is product-visible) plus a
+newest-first sibling, nine sites INTENT-tagged; blind-mode advances its version on a change of
+mode, not on re-application. 121/121, 0 gaps. `bin/kaocha unit` 1010 tests / 12513 assertions /
+0 failures (base 1008 / 12244); ci, compile-check, test-js green; the seven pinned inventories
+(routes, views, routes-architecture, intent contract, registry, witness identity, suite
+architecture) undisturbed. Prolog oracle unverified on this box (no plunit).
+
+**What the fold cannot fix, reported not touched:** the write side at `announce.clj:209/:245`
+reads the projection then appends, outside the store's write lock, and with no cross-instance
+lock on Cloud Run; the projection is now immune, the LOG is not, and `fire-sinks!` runs per
+appended fact, so a duplicate fact double-fires webhooks. Follow-up bead: an idempotency key on
+`store/append!` refused inside the write lock. Also: `review.blind-mode-set` has no writer left;
+the legacy `event.speaker-announced` arm keys the same relation by name while the new arm keys
+by person-id, a latent disagreement needing a product decision.
+
+The pattern for the chronicle: a structural query found the class in one return; the generative
+property found three shapes the query could not and a hole in the hand fix; the ratchet is the
+property, not the fix.
+
