@@ -397,3 +397,42 @@ A and native from the same triple, decides whether the string-symbol payload is 
 Standing order from Gene applied from here: after every result, poll Sol and Opus
 independently for interpretations and the next wave of experiments, and run several in
 parallel on Anvil. First poll launched on the packet through s4.
+
+## Receipt 04:35Z — fleet round 1 (Sol + Opus, independent) and the zero-slot analyses
+
+**s4 blind review (key shuffled):** A 19.0, C 17.5, native 15.5. C, the wave build with the
+string-symbol outline OFF, scored above every B score so far (14.5, 15, 16); N = 1, and the
+judge's own noise is unmeasured, so "weak support for the payload hypothesis" is the most
+that can be said. Two zero-slot experiments launched to fix that: the same three diffs
+re-judged twice by Sol (noise floor), and an Opus judge scoring s2, s3, s4 blind.
+
+**Actions, not seconds (Opus's "one thing nobody measured", computed from the rollouts at
+zero cost):**
+
+| arm | wall s | model actions | MCP calls | suite runs | input tokens carried |
+|---|---|---|---|---|---|
+| s2 A / B / N | 237 / 272 / 287 | 20 / 21 / 19 | 2 / 8 / 0 | 1 / 1 / 2 | 1.21M / 1.46M / 1.30M |
+| s3 A / B / N | 317 / 579 / 194 | 30 / 35 / 15 | 2 / 11 / 0 | 3 / 5 / 3 | 1.86M / 2.61M / 0.84M |
+| s4 A / C / N | 273 / 328 / 263 | 23 / 27 / 25 | 2 / 4 / 0 | 3 / 3 / 2 | 1.35M / 1.72M / 1.60M |
+| Buster A / B / N | 303 / 319 / 191 | 22 / 32 / 14 | 9 / 7 / 0 | 1 / 3 / 1 | 1.27M / 1.27M / 0.78M |
+
+Wall tracks actions plus suite runs almost linearly (about 9 s per action, the corpus's
+model-boundary figure, plus 40 to 60 s per suite run). The action count has far less
+spread than the wall and separates the arms where the wall could not: B and C take more
+actions and carry more input tokens than A or N. **The program's own theory, phase
+deletion, is now measured directly, and the wave build adds phases.**
+
+**Fleet round 1, converged next wave** (both reviewers, independently): a randomized
+power-8 medium replication; a hostile small rung where native should win outright; the
+large multi-owner rung where Surgeon is supposed to win; planning-mode and first-keystroke
+arms (model behavior); a multi-judge quality trial with a measured noise floor; Opus adds
+the action-count metric and four apparatus ratchets (server build SHA per arm, tests ≥
+baseline assertion in the gate, suite-invocation count in the receipt, p90 scheduling);
+Sol adds refusal-injection dose–response and a context-overflow sweep. Opus's sharpest
+reading: wall is conserved on the wave build, discovery −38 s reappears as ceremony +38 s.
+
+Ratchets landed in the v3 runner tonight: server SHA and suite count in every receipt, a
+TESTS-BELOW-BASELINE flag (cal-par B passed with 577 tests, one below baseline, and nobody
+noticed), and a core-slot pool so six 2-core arms can run at once (Gene's suggestion);
+calibration cal2 queued: six medium arms in parallel at 2 cores, N A N A N A, against
+their 4-core numbers.
