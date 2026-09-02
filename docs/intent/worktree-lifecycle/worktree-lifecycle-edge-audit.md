@@ -41,12 +41,12 @@ Gene ratified the missing-registration LLD and EARS requirements on
 `WTL-INV-008` and `WTL-PRUNE-001..010`. It does not authorize pruning a real
 registration.
 
-1. The ratified `:clj-surgeon.worktree-lifecycle-snapshot/v1` shape supersedes
-   the shorter, unpublished prototype shape. There is no compatibility reader
-   for prototype artifacts. Every newly compiled plan binds the ratified
-   lexical path, path state, real path or nearest-parent proof, and the exact
-   full registration row. Previously persisted prototype plans refuse closed
-   validation rather than being upgraded implicitly.
+1. The ratified `:clj-surgeon.worktree-lifecycle-snapshot/v1` is a closed
+   two-row union: the already-ratified present-checkout row remains the only
+   ordinary-close input, while a Git-registered absent target must use the new
+   lexical path, path state, real-path-or-nearest-parent proof, and exact full
+   registration row. The two plan kinds have distinct schemas and validators;
+   neither row nor plan kind is upgraded or reinterpreted as the other.
 2. Request dispatch is by the exact schema before field validation. A
    registration-prune request never passes through ordinary close outcome or
    handoff validation, and an ordinary close request cannot borrow prune
