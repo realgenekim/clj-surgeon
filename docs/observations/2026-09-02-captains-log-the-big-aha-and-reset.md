@@ -450,3 +450,29 @@ fleet freeze was asked for; the ask is that no deployment share an instance acro
 writing one tree until the kernel path is serialised, and that surgeon1 own the fix. Repro:
 scratchpad/redteam-admit2/r5.clj against edit_clojure. The gate's lock wraps the kernel path
 and does not fix it; recorded in the design doc under out of scope.
+
+## Cohort R: prohibition beat explanation, and my prediction was wrong in direction (14:02Z)
+
+| arm (rung M, six-wide) | unmandated sub-commands per run | total actions | wall s | tokens | acceptance failed |
+|---|---|---|---|---|---|
+| H forbid and explain (n=3) | 1.67 | 17.3 | 284 | 1.06 M | 2.33 |
+| J name substitutes (n=3) | 12.0 | 20.0 | 324 | 1.25 M | 1.33 |
+| N native (n=6) | 14.3 | 21.2 | 358 | 1.46 M | 1.83 |
+
+Forbidding removed 88 percent of unmandated sub-commands (minus 2.6 sd of this cohort's own
+native spread), deleted the bd, git, environment and probe classes outright, and cut the
+largest class, post-patch confirmation, by 75 percent. Naming substitutes did nothing that
+clears noise (minus 16 percent) and confirmation calls rose 10 percent under it: telling an
+agent an answer is already known does not stop it checking; naming the command and saying do
+not run it does. The audit's inference that forbidding fails came from the mandate arm,
+whose prompt forbade AND ordered substitution through a tool that was fighting it; that was
+the confound, and this cohort removes it.
+
+The cost side is the honest half: ritual is cheap per return. Deleting 12.7 sub-commands per
+run removed 3.8 model returns (minus 1.3 sd of the floor) and about 75 s of wall (minus 0.9
+sd), because most ritual rides inside cells that also do real work. Acceptance did not move.
+So the paragraph is a free and safe win on tokens and sub-commands, and a suggestive but
+unproven one on returns and wall at n=3; rt2 (forbid against native, six each) launched to
+settle the returns question. Doctrine implication for Gene either way: on throwaway
+worktrees, a one-paragraph prohibition of bd, git status, git diff and post-patch re-reads
+costs nothing and removes most of what the audit found.
