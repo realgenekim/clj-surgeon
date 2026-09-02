@@ -512,3 +512,19 @@ are tight; B's (303, 272, 579, 330) are not. Running series on Anvil, seconds:
 native 243, 287, 194, 263, 283 · A 243, 237, 317, 273 · B 303, 272, 579, 330 · C 328, 333.
 Blind review for s5 launched (Sol); Opus judge to follow on s5–s7 together. s6 (P Q A), the
 first planning-mode triple, is running.
+
+## Receipt 05:15Z — s5 blind review: the string-symbol outline is exonerated
+
+s5 (Sol judge, key shuffled): native 18.5, B 15.0, C 14.5, with C's clarity at 2.5 of 5,
+the same score that sinks B every time. C now has two blind scores, 17.5 (Sol, s4) and 14.5
+(Sol, s5), plus Opus's 12 on s4 with a real defect found. **C is not better than B.** The
+payload hypothesis, that 371 string symbols in context made the wave build's edits messy,
+is falsified: with the outline off, the clarity deficit remains. Whatever makes B and C
+write less clear code than A and native is in the wave build's edit path or in how Sol
+behaves against it, not in the read. Native and A remain tied.
+
+Acceptance rescoring (arm-independent suite, running): first rows show the suite
+discriminating on exactly the defects the Opus judge read by eye: acid-7 (hbms
+server-resolved) fails in most arms, acid-9 (buttons follow recording) in several, acid-6
+(tick rewritten) in two, acid-5 (onset guard resets the speech timer) in one; two diffs
+pass all nine. Full table next.
