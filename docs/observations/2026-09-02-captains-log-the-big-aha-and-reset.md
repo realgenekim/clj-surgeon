@@ -1971,3 +1971,34 @@ collides with any local binding of that name. In Clojure a local cannot shadow t
 generator, the canonical and the cohort prompt say. Fix dispatched (one rule, two witnesses).
 The byte oracle caught a spec error in the spec's own author, which is what it is for.
 
+
+## 19:54Z — tweezer session 3, Gene's real work: the Stellman duplicate is one instance of a class, and a structural query found the class
+
+Gene: *"you can see an emergency fix we did for Andrew Stellman duplicate record. It really makes
+me nervous that a duplicate record showed up. Can we do a safety factor to make that class of
+error impossible using our surgeon tools, with the watcher working."* Then: *"Make a big LID
+assertion to prevent and find instances where vulnerable."*
+
+curtaincall-cfp main 00e8f0fa, "Make event speaker creation retry-safe": the write side now
+checks the projection before appending (check-then-append: still races under two concurrent
+retries, the kernel's lost-update class from this morning); the fold side now treats the
+announced-speakers relation as a set keyed by person-id (the durable half). The class: any fold
+that conjes a fact onto a vector keyed by an identity duplicates under a repeated append-only
+fact.
+
+**Call 1, one return:** `inspect_clojure` with three structural `match` patterns and an outline
+over `folds.clj` (970 lines, 127 forms, 116 `fold-event` methods): `(fnil conj [])` matched
+**six** sites; the other two patterns none. A `grep conj` would have returned dozens and missed
+the shape. **Call 2:** the six read with their dispatch values: `submission.speaker-added`
+(the same defect one relation over), `speaker.blackout-window`, `file.comment-added`,
+`reviewer.recused` and `reviewer.unrecused` (log entries), and `fold-task-chase`, which already
+guards by chase-id `not-any?`, the idempotent shape the others lack. Five vulnerable, one good.
+
+**The LID ratchet, dispatched:** FOLD-IDEM-001, one generative property over every fold method
+(`(methods fold-event)`), folding any event twice from any state equals folding it once, with a
+NAMED gap for any type without a sample, never a silent pass; prediction: exactly the five sites
+fail, the chase helper passes. FOLD-IDEM-002 names each relation's identity (speaker by person-id
+or email; window by value; comment by id; log entry by value). Fix: one `conj-distinct-by` helper
+at the five sites, INTENT-tagged. Write-side idempotency key in the store's append path is the
+follow-up bead. Branch `bridge/fold-idempotence`, merge is Gene's. Watcher on.
+
