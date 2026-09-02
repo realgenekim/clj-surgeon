@@ -431,3 +431,22 @@ forms requests that omit expect, in 4 of 6 runs; that cost belongs to the intent
 (xio), where "expect required per request" is exactly the kind of field an agent cannot
 guess, and the refusal does carry correct_request as its next action. "Demonstrated
 improvement" is not shown at n=6 and nothing in the ledger suggests it would be at n=12.
+
+## Andon pull: lost updates in the shipped kernel's commit path (13:58Z; puller bridge, incident record here)
+
+Gate round three finished (56 witness tests, 453 assertions; a per-workspace lock from
+snapshot to commit makes eight concurrent commits succeed six trials of six; test evidence
+now only from a report the runner writes to a gate-named path inside a fresh per-call
+snapshot directory, stdout never; :focused-test loaded from the start map or a repo file;
+verification_status on every receipt with ok false when nothing requested produced a result;
+detector walks when, let, binding, try, if, eval and intern). While proving the lock, the
+builder ran the same eight-way shape against edit_clojure ALONE: two of three trials lost an
+edit whose receipt said committed (trial 0 claimed 4 and 5, present 4; trial 2 claimed 4 and
+5, present 5), one reached transaction-recovery-required. Cause: intent-transaction/
+commit-compiled! is check-then-write with no mutual exclusion, shared by every write
+entrance. Pulled to skiff as credible and reproduced, scoped: only concurrent writers on one
+file through one instance are exposed, which single-agent-per-worktree use is not, so no
+fleet freeze was asked for; the ask is that no deployment share an instance across agents
+writing one tree until the kernel path is serialised, and that surgeon1 own the fix. Repro:
+scratchpad/redteam-admit2/r5.clj against edit_clojure. The gate's lock wraps the kernel path
+and does not fix it; recorded in the design doc under out of scope.
