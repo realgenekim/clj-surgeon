@@ -888,3 +888,26 @@ overwrites windows for doubled arms; the receipts' suite_invocations counts grep
 log both slots append to. For the 06:25Z retro this swaps rows only within an arm (cal2, k1),
 so the arm means stand. New scorer `~/e3_final.py` on Anvil pins by worktree path and agrees
 with the rollouts' own mcp/patch events 6 of 6. Runner v5 now writes per-slot diffs and logs.
+
+## Receipt 07:45Z — fleet round 3 (Sol and Opus, independent) on e3 group 1, and the queue it produced
+
+Convergent readings. (1) The turn budget is a real lever on actions and it pays with scope,
+not waste: V shipped one test fewer and a named defect (Opus: "a cheaper task, not a cheaper
+route"; Sol: "trade speed for correctness"). (2) Report-only counting is inert, so the
+Hawthorne control did its job. (3) Deliberate planning bought quality with four suite runs,
+and judge disagreement on W equals its effect size. (4) Both: the ranking is one draw; the two
+identical A arms differed by 2.25 quality points and by six actions, which spans the whole
+table. (5) Both: "shipped beats native on conformance" cannot be claimed tonight; the honest
+claim is about the unverified 7888 server, n=4, and leans on acid-9 once acid-7 is excluded.
+Opus side finding: MCP calls per arm ranged 5 to 12 on one server and one task; prompt
+wording moved Surgeon adoption more than any build did.
+
+Divergence: Sol wants a 24-run replication of A/U/V/W; Opus wants the control-variance floor
+first (A x6) so every later gap can be judged against it. Both are queued.
+
+Queue on Anvil (chain-next.sh, then chain-after-k2.sh; each cohort 2-core, six-wide unless
+noted): b1 bisect "G O A" x3 at 4 cores (which edit fix costs clarity) -> n1 "A N" x6 each,
+paired by wave (clean shipped-vs-native, server identity verified) -> k2 "A K" x3 each (MCP vs
+CLI on the same build) -> v1 "A x6 | V x3 A x3" (variance floor, budget dose with the
+baseline gate armed). Every diff frozen per worktree; scored on actions, acceptance, two blind
+judges; walls reported with the contention caveat.
