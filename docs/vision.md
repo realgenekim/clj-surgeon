@@ -576,3 +576,23 @@ graphs, and durable watchpoints—is collected in
 [The Code Reader/Explorer Frontier](code-reader-explorer-frontier.md). These
 are experiment candidates, not accepted features; each must earn its
 complexity against a strongest credible control.
+
+
+## What "winner" is allowed to mean (2026-09-02, after the mayor's composition finding)
+
+A measurement that an operation is fast does not establish that it is correct, and a measurement
+that it is correct does not establish that its output is usable by the next operation. Three
+defects filed today (clj-surgeon-3s5, -c37, -dk9) were in operations this document lists as
+measured winners, and two of them were winners failing on each other: `:extract!` wrote a file
+`:ls` could not read, and `require_change` refused to wire what `:extract!` had made necessary.
+They were measured on wall and churn, not on whether the output was usable afterwards.
+
+**Definition, from here on: a winner is a receipt the next verb, or the compile, accepts without
+hand repair.** The instruments already exist and were pre-registered for rf2: A = native bytes
+landing after the verb (0 means the verb's output needed nothing), B = model returns between the
+receipt and the first compile or test (0 means the receipt was terminal). A verb is promoted only
+with A = 0 and B = 0 on real bytes in its own cohort, plus equal acceptance and zero native
+fallback. Wall and churn are reported alongside, never alone. `:extract! :rewire-callers` is the
+first verb promoted under this definition (rf2, 3/3, `~/acid/receipts/rf2-score.md`); the older
+`:extract!`, `:ls` and `require_change` entries above are demoted to "fast, composition
+unproven" until the rf2 branch that fixes their composition merges and the fixes are re-measured.

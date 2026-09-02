@@ -2876,3 +2876,33 @@ settings value (`identical?`, nil included); then those two arms migrate too. Su
 the Surgeon side is form-scoped, not owner-reprinted; churn measured; the correct tree is not
 auto-selected — comparison receipt next, Gene merges. Session marker written.
 
+
+## 23:04Z — session 4 meter (watcher): 11 returns, 299 s, no hand repairs, verdict YES; the mayor's composition finding; 23j reproduced live on main
+
+Watcher receipt `docs/observations/2026-09-02-tweezer-session-4-watch.md` (copied from the lens
+worktree): 11 counted calls — 4 Surgeon (outline; refused owner probe; two-pattern match 19/19 +
+21; one 16-change transaction) + 7 Bash (worktrees, churn, gate, artifact, marker); ~299 s first call
+to marker; ~7.1 s inside the tool; deviations refusal×1, scope×2, semantic×3, schema×1; hand repairs:
+none (two apparent misses were my shell filters against ANSI kaocha output); housekeeping excluded 8,
+each named. Verdict: "YES — the tool answered the plan question with fewer returns than reading the
+file would". **Watcher's finding for the tool:** the transaction receipt does not say why 16 of the
+19 matched arms were addressed; the exclusion rationale lived only in the driver's head until the
+log — a cold reader cannot recover it from the receipt. Ratchet candidate: a plan-level receipt
+field listing matched-but-unaddressed sites when a prior `match` and a later transaction share a
+snapshot hash.
+
+**The mayor (on Opus, flagged) filed my five bead asks** — clj-surgeon-23j (P1, plan-extraction
+target-ns from the SERVER root), -3s5 (P1, source ns docstring copied), -c37 (P1, `:ls` fails on a file
+`:extract!` wrote; four rf1-ethno findings), -dk9 (P1, require rewiring refused after extract), -oni
+(P2, load-sensitive tests flake) — and raised the design point: three are defects in operations
+vision.md lists as measured winners, two failing ON EACH OTHER; "nobody checked whether the winners
+compose". Ruling (mine): correct, and it is the doctrine we moved to today — a winner is a receipt the
+next verb accepts without hand repair, measured by the pre-registered A/B readouts; written into
+vision.md as the definition of winner, with the older `:extract!`/`:ls`/`require_change` entries
+demoted to "fast, composition unproven" until rf2 merges and they are re-measured. Disposition sent:
+3s5/c37/dk9 fixed on `bridge/rf2-extract-rewire` a66b626 (mayor's queue) — keep composite, P1 until
+merge, close with pointers; oni P2 stays; **23j is open and mine**: reproduced live on main via the
+bridge 7888 server from a foreign workspace root — `plan-extraction` returned
+`target-ns "curtaincall-cfp-lens-scratch.src.cfp-scheduler-killer.settings-lens"` (server-root-relative)
+and the new-file preview carried the source ns docstring; rf2's Anvil server ran from its own workspace,
+so the target-ns derivation was never exercised there. Witness + fix on the rf2 branch before merge.
