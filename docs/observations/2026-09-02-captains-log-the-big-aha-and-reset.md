@@ -1692,3 +1692,35 @@ need 7895 attested == Q5Z-SHA.
 two Z arms touching 1 and 0 files: fast walls on abandoned work until the scorer says otherwise.
 z8 (rung L control) running.
 
+
+## 19:06Z — receipt v2: the cold reader now understands it and still cannot act; two more receipt defects, one of them rf1's "output too long"
+
+The rf2 follow-up landed (uncommitted on 57e3ca0): the receipt leads with `:applied`,
+`:target-ns`, `:target-file`, `:header` (docstring `:none | :caller-supplied |
+:copied-from-source`, imports kept and pruned, visibility derived, alias, refer), `:source-header`,
+`:source-callers-rewired`, `:external-callers-rewired`, `:callers-unresolved []`, `:complete`,
+`:compile`, `:callers-mentions-only`, `:summary`, `:history` demoted; the dry run is the same map
+with `:applied false` and a copy-pasteable `:would`; ordering enforced by construction (an
+`array-map` past eight entries would silently unorder under `assoc`); byte-identity to the
+reference holds with and without `:public`.
+
+**G2, second pass (head of the receipt only):** the reader correctly took `:applied false` as a
+plan, saw the empty unresolved list and `:complete true`, and stopped on `:compile {:checked
+false}`: "compiling before writing is the only way this plan's correctness gets checked."
+DETERMINABLE: no, for two reasons, both real. (1) **The dry run printed 347,405 bytes**: ~3 KB
+of structure and the rest file text, a 238 KB segment after `:public-forms`, a 79 KB
+`:new-file-preview` holding the whole new file. This is rf1's `output too long to use` (the dry
+run truncated at 23,888 tokens in rf1-g2-A-1 and the agent ignored it), still present. Bound
+dispatched: no file contents in a receipt, preview = ns form + form names with line ranges, a
+witness that no string value exceeds 2,000 chars and the encoded receipt is under 4 KB. (2)
+**The verb does not compile what it wrote.** The receipt hands the agent a command to run
+instead, which is a return the receipt was supposed to remove. Dispatched: apply runs the compile
+check as the transaction's last step (in-process on the JVM path; the CLI shells out to the
+command it already prints) and reports `:compile {:checked true :ok …}` with `:undo` on failure.
+That is the "think, compile, bang" shape at the receipt level: the receipt is the verdict only
+when it contains one.
+
+**z8 so far** (rung L control): natives 118, 126, 175; gate 250, 254, 337. The control is not
+flat; the gate costs on a task with nothing to remove, which the mechanism allows and the
+pre-registration called a falsifier of the wall claim on L. Scored when done.
+
