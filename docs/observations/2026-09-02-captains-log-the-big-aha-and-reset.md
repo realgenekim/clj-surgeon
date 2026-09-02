@@ -1313,3 +1313,59 @@ the fan-out intent verb, resurrected), then Sol's three unseen extractions as th
 guard. (4) The three-arm discriminator is already assembled from parts: z7 (gate on R3) is the
 verify-only arm, rf2 is the mutate-with-receipt arm, N is native; read them together.
 
+
+## 18:10Z — big game only: the scale slope (sl1) is pre-registered; the 15 % square is closed after one run
+
+Gene: *"Where do we find the 5-10x gains? If this isn't one of them, let's not waste our time on
+15% gains. Hunt big game, not rodents that aren't even nutritious -- juice not worth the squeeze.
+So where do we get maximum payoff?"*
+
+**Position taken.** Wall is returns; native does a known move in ~10 returns plus a ~12-return
+tail; no per-call editing verb can beat that by more than a few returns, so per-call verbs are
+rodents by construction. rf2 gets its one kill-or-promote run because the verb is built, and no
+more. Five-to-ten-times lives only where the ratio is unbounded: (1) reads that grow with the
+codebase and the tool's calls do not (unread fan-out); (2) agents running unsupervised behind a
+mechanical verifier, the multiplier measured in Gene's hours (twelve arms in eight minutes; the
+curtain-call extractions shipped during a flight); (3) defects that never ship, each deleting a
+later debugging loop. Order: the gate chain (cheap, and it is the verifier (2) needs), then the
+slope, then hazards.
+
+**The slope, designed (Opus; spec committed as
+`docs/observations/2026-09-02-slope-spec-sl1.md`).** Two findings changed it: the existing fan-out
+verbs are disqualified by their own schema (`symbol_migration` takes an O(N) agent-computed
+per-site list with match counts: "authority, not discovery"; it removes no read and adds a
+counting duty; at N=80 the tool arm loses by construction), so the minimal q5z, `alias_migration`,
+one call, payload constant in N, receipt O(1) in N, must be built first; and the best real fan-out
+we own (curtaincall-cfp `store/` across 74 files) aliases identically in 68 of 68 with zero
+`:refer`, so its answer is one `sed` and it yields one point: kept as the adversarial anchor
+native should win, not as the slope. The slope runs on a generated repo with decoys (locals named
+like the alias policy, strings and docstrings containing the old name, `#_`, `#?` branches,
+colliding aliases) and a manifest of protected-region hashes so a `sed` answer fails predicate 3.
+Transformation (a): retire a fan-out namespace and rename its var, alias chosen per file against
+that file's own bindings, so files-that-must-be-read grows with N while sites-per-file is held.
+Budget 14 arm-runs: N = 5/10/20/40/80 × native/tool at n=1 (the readout is the slope), control C
+(5 files × 48 sites: separates reads-grow from patch-size-grows), anchor R.
+
+**Pre-registered predictions (returns to done), both brains:** Sol: native 8→13 across N=5→80,
+tool flat 6–7, ratio 0.75→0.54 ("never big game"); Opus: native 8→30, superlinear past N≈20,
+ratio 0.75→**0.23**. **Ends the structural-editing program:** native wall at N=80 within 1.3× of
+N=5, or the ratio not monotone decreasing, or ≥ 0.85 everywhere, or any q5z fallback to
+`apply_patch` on functional bytes, or refusals > 20 %. **Flagship if:** ratio ≤ 0.35 at N=80,
+monotone on ≥ 4 of 5 points, wall ratio ≤ 0.50 at N ≥ 40, zero fallback, acceptance green both
+arms at every N. Honest prior: ~1.5×. Run once; a flat slope closes the square.
+
+**Dispatched.** q5z build on `bridge/q5z-alias-migration` off main (MCP verb `alias_migration`,
+tool-side discovery, per-file alias against the file's bindings, atomic through the kernel, O(1)
+receipt, typed refusals with next_call, fixture of 12 namespaces with every decoy, atomicity
+witness); Anvil apparatus (generator, canonical + manifest per N, `rescore-FAN.sh` proven PASS on
+canonical and FAIL on base and on a `sed` answer, prompts per N and arm with the strip lines,
+rung FAN, chain-sl1 on GO-SL1 requiring 7895 attested == Q5Z-SHA).
+
+**Apparatus receipt.** `restart-7894-at.sh` aborted at 2cc52fa with `Unreadable arg: "{:command"`:
+its launch line built the focused-test argument through an unquoted command substitution, so the
+shell split the EDN map into words; the original start script quotes it. Patched to a bash
+array (`.pre-quotefix` kept); restart re-run; chain-z6 stayed fail-closed throughout. rs1 (ritual
+strip, native × 3) launched 18:08:05Z with the per-arm session leader and the executed-suite
+counter in place; formatter branch `bridge/format-form-scope` pushed at 62981ee and handed to the
+mayor.
+
