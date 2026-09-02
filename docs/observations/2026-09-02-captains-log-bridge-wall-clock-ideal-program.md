@@ -809,3 +809,29 @@ Subtracting tests reorders nothing: A beats native by 16 s on wall and 16.5 s on
 B is worst on both. Adopted: edit wall as a published companion, never the primary; new
 rungs run one focused suite in-arm and leave the full gate to the harness (for CPU
 contention and conformance, not for wall); fix the invocation counter.
+
+## Receipt 06:50Z — record correction: which server the "A" rows actually called
+
+While confirming the acceptance figures verbatim for the mayor I re-read every arm start line.
+Every Anvil A and P row from s2 through k1 (03:41Z to 05:32Z, including cal2 and k1, which the
+06:00Z receipt had left labelled "shipped") carries `url=http://127.0.0.1:7888/mcp`. The
+`server_sha=` field beside it is NOT the server's identity: the runner computes it with
+`git rev-parse --short HEAD` on the local checkout mapped to the arm (line 24 of the runner),
+so it printed 64eac2e for a server it never inspected. The mayor's statement stands as the only
+identity evidence for 7888: another seat's production Surgeon at e7f72e2. Therefore:
+
+- Every Anvil "A" and "P" result before e3 is **"production 7888, identity unverified (e7f72e2
+  per mayor)"**, not shipped 64eac2e. The only shipped-64eac2e rows are Buster acid2/A and the
+  e3 arms now running on 7893 (healthz and ready.edn prove 7893 is my process, pid 2371990,
+  project-root surgeon-shipped).
+- The acceptance headline "shipped Surgeon 1.0 vs native 2.4" is withdrawn as stated. Verbatim
+  from rescore-anvil.txt and rescore-anvil-s6.txt (failed assertions of 39, arm-independent
+  9-test suite): 7888 rows s2 0, s3 1, s4 0, s6 2 (mean 0.75, n 4); native s2 0, s3 4, s4 3,
+  s5 0 (mean 1.75, n 4); wave B s2 3, s3 2, s5 3; C s4 2, s5 8. Buster acid2 (true shipped)
+  A and N figures are in score_acid. The claim is now "the production Surgeon at 7888 beat native
+  on conformance"; whether shipped 64eac2e does awaits the e3 rescore.
+- Ratchet: the runner must capture server identity FROM THE SERVER (ready.edn project-root +
+  pid, or a build-sha field in healthz, which the server should grow), never from a local path
+  table; and a receipt field named `server_sha` that is not read from the server is exactly the
+  "receipt blind to its subject" class from the delivery invariants. Fixed in v5: the sdir case
+  now includes W (its start line had shown surgeon-main's sha for the same reason).

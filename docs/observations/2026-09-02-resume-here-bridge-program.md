@@ -84,3 +84,8 @@ UPDATE 06:40Z (supersedes above where they conflict) — COMPACTION INSTRUCTIONS
 - Edit-wall retro DONE (log receipt 06:25Z, commit a369097): tests are 2–48 s per arm, subtracting them reorders nothing;
   ~87% of wall is model time between actions; suite_invocations grep over-counts up to 12x; 9 s/action is an average
   (K: 45 s/action). Sol predicted a big shrink (trusted my bad premise); Opus checked the premise and was right.
+
+UPDATE 06:50Z — RECORD CORRECTION: all Anvil A/P rows before e3 (s2..k1, incl. cal2 and k1) called 7888 (identity
+unverified; mayor: another seat's production e7f72e2). The runner's server_sha field is the LOCAL checkout sha, not the
+server's. Shipped-64eac2e rows = Buster acid2/A + e3 arms on 7893 only. Acceptance headline "shipped beats native" is
+withdrawn until e3 rescore (rescore-anvil-cal2k1s7.txt running; e3 rescore next). Log receipt 06:50Z.
