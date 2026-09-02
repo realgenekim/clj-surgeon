@@ -665,3 +665,30 @@ back is. Every tool's only lever on wall is the count of returns it induces, and
 build induced more. Gene, on seeing this: "Obvious and yet insightful"; and: elevate the
 need to reduce tool calls to the global prompt, make it a key part of a coding task at the
 high level, brainstorm with the fleet. Both launched.
+
+## Receipt 05:30Z — fleet round 2, Opus (recomputed from raw receipt rows)
+
+- **Wall null is dead flat:** A − native = +3.4 s, SE 17.6, t = 0.19 (Anvil pooled, n 6–7); every
+  triple tonight was powered only for effects ≥ 60 s, i.e. only B's.
+- **The A trade is real and marginal on both sides:** conformance A 1.0 vs N 2.43 failed
+  assertions (p ≈ 0.08) bought with actions A 23.6 vs N 18.2 (p ≈ 0.07). Caveat that matters:
+  acid-7 (hbms) fails in 14 of 21 rows and inflates every arm; excluding it, the A advantage
+  sits on acid-9 alone (1/6 vs 5/7, Fisher p ≈ 0.10). Acceptance is the correctness
+  authority, judges the maintainability authority, neither yet significant on A vs N.
+- **The one thing nobody measured: input tokens carried predict wall better than actions**
+  (R² 0.78 vs 0.61; 159 s per million carried tokens) — and the Surgeon arms carry MORE than
+  native (A +23%, B +62%). The product's stated mechanism is fewer tokens re-carried; on this
+  rung its own arms carry more. Direction-changing: instrument the context-carry curve per
+  arm; if it is flatter for A on the large rung the theory holds and the medium rung is below
+  the crossover, if steeper there too the theory is falsified on its own metric.
+- **Planning mode: change, not keep.** P +50 s over A, Q +24 s over N, variance not clamped,
+  and an accurate cost estimate with no consequent is a receipt, not a control. Keep only a
+  read-gate: every path named in a plan must cite an inspect receipt obtained before the plan.
+- **Next wave, ranked by information per minute:** E1 repair the scorer (drop or fix acid-7,
+  add a third judge) at zero arm-minutes; E2 bisect the wave build (B minus gap fix, B minus
+  overlap fix), acceptance-scored, ~14 min; E3 hostile small rung n=10; E4 the big chord
+  (≥12 owners) where Surgeon must win or the wall program ends; E5 action-and-context diet
+  (one plan, one chord, ≤2 suite runs, no re-read after read_complete, payload cap) —
+  predicted actions −32%, wall −23%, the largest lever; E6 refusal dose; E7 power-16.
+- Stage 0, free: correlate refusal count with acceptance failures across the 22 frozen diffs
+  (the "refusals are quality control" reading predicts s3-B, 4 refusals, cleaner than B's mean).
