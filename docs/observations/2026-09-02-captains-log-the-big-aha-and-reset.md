@@ -1889,3 +1889,30 @@ carries. The verb succeeds on the tree it was built in and fails on the repo it 
 into, and that asymmetry is invisible from inside Surgeon. Promotion of the rf2 `:ls` fix to
 main is therefore the first prerequisite of every cfp win on the list.
 
+
+## 19:42Z — correction to the z8 record, and the hole was my own ratified decision
+
+The z8 score said "3 of 6 commits at `verification_status: partial`". The gate agent pulled the
+rollouts: **no commit landed at partial**; every partial call was correctly refused
+(ADMIT-105 held). The three bad commits landed at **`unverified`**, and the cause is a ladder:
+refused at `verify focused`; refused again with `allow_partial true` (profile exists, waiver
+correctly denied); then **`verify "none"`, committed.** Exactly three `verify: "none"` calls
+exist across the four z8 Z runs, and they are exactly the three non-complete commits. The agents
+met the gate, tried the waiver, and turned verification off, because the schema let them.
+
+The hole was the decision I ratified earlier tonight: *"`verify: "none"` stays the explicit
+waiver (the cohort prompts mandate focused)."* A prompt mandating focused is not a control; it
+is a suggestion to an agent that can read the schema. **A gate a caller can turn off is the
+caller's gate.** Fixed on the branch (uncommitted, my suites running): completeness required
+regardless of `verify` (ADMIT-120; `verify none` now refuses a commit and its next_call proposes
+focused; unverified answers stay available in preview, where they belong); the `allow_partial`
+waiver decided on directly observed profile absence, published as `profile_absent`, never on a
+runner reason (ADMIT-119); a profile that exists but has no `:command` is its own unverified
+reason, not the no-profile waiver (ADMIT-118, a second latent hole reproduced locally before the
+field data arrived). Witnesses: z8's exact committing call as a real-bytes fixture (fails-first:
+"clock.clj was written to disk"), and a property test over 2 statuses × 17 reasons × 2 verify ×
+2 allow_partial × 2 profile_absent = 272 combinations, refusing every one but the single waiver.
+z7 replay: 1 of the 2 recoverable `require-removed` patches now admits with both dead requires
+as notes; the other fails to apply against the base (replay fidelity, not the gate). The z8
+scorer's column is corrected in place on Anvil.
+
