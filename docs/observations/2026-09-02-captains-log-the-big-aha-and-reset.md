@@ -2058,3 +2058,17 @@ The pattern for the chronicle: a structural query found the class in one return;
 property found three shapes the query could not and a hole in the hand fix; the ratchet is the
 property, not the fix.
 
+
+## 20:15Z — session 3 metered: 4 driver returns; the query is the map, the property is the ratchet
+
+Watcher receipt `docs/observations/2026-09-02-tweezer-session-3-watch.md`: 4 driver returns,
+1196 s wall (the delegated build is most of it), 4 housekeeping calls excluded, three other
+threads (rf2, q5z, z7b) correctly excluded as not session-3 calls. Two observations worth
+keeping: (1) the structural match found 5 of the 9 vulnerable arms in one return and its receipt
+gives no signal that its three literal patterns are incomplete; only the property over ALL arms
+found the `conj` without `fnil`, the `cons`, the counter, and the hole in the hand fix. A
+structural query is the map; the generative property is the ratchet; a session that stops at the
+map has not made the class impossible. (2) My closing cell bundled a suite read-back, a push, an
+inbox write and the session marker: the "no unrelated command in a metered cell" rule I wrote
+this evening, broken by its author within two hours. The meter caught it; that is what it is for.
+
