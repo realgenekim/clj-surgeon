@@ -294,7 +294,7 @@
        "[mcp_servers.clj-surgeon]\n"
        "url = \"" surgeon-url "\"\n"
        "required = true\n"
-       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\"]\n"
+       "enabled_tools = [\"inspect_clojure\", \"apply_clojure_changes\", \"edit_clojure\", \"transform_clojure\", \"relation_census\"]\n"
        managed-end))
 
 (defn- managed-tool-header? [line]

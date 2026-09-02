@@ -28,6 +28,10 @@ background reading.
 Paths in scope:
 
 - `src/clj_surgeon/mcp_*.clj`
+- `src/clj_surgeon/relation_census.clj`
+- `src/clj_surgeon/census_pool.clj`
+- `docs/intent/relation-census/**`
+- `test/clj_surgeon/relation_census_test.clj`
 - `src/clj_surgeon/mcp_server.clj`
 - `test/clj_surgeon/mcp_*_test.clj`
 - `docs/high-level-design.md`

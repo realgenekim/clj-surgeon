@@ -34,6 +34,7 @@
    [clj-surgeon.platform-selector-test]
    [clj-surgeon.quoted-var-refs-test]
    [clj-surgeon.recovery-test]
+   [clj-surgeon.relation-census-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
    [clj-surgeon.structural-lens-test]
@@ -87,5 +88,6 @@
                    'clj-surgeon.worktree-lifecycle-io-test
                    'clj-surgeon.worktree-lifecycle-cli-test
                    'clj-surgeon.recovery-test
+                   'clj-surgeon.relation-census-test
                    'clj-surgeon.cli-dispatch-test)]
   (System/exit (+ (:fail r) (:error r))))

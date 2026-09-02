@@ -45,7 +45,9 @@
    "edit_clojure"
    #{:committed :typed-refusal}
    "transform_clojure"
-   #{:preview :committed :typed-refusal}})
+   #{:preview :committed :typed-refusal}
+   "relation_census"
+   #{:read-success :typed-refusal}})
 
 ;; @spec MCP-OP-COVERAGE-001
 ;; @spec MCP-OP-COVERAGE-002

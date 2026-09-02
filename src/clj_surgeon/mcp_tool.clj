@@ -17,6 +17,7 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]
    [clj-surgeon.mcp-program-tool :as program-tool]
+   [clj-surgeon.mcp-relation-census :as census-tool]
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-telemetry :as telemetry]
@@ -181,7 +182,8 @@
                             (workspace/router config)))]
     (reset! runtime-config configured)
     (inspect-tool/init! configured)
-    (program-tool/init! configured)))
+    (program-tool/init! configured)
+    (census-tool/init! configured)))
 
 (defn- real-root
   ^Path [root]
@@ -1235,7 +1237,8 @@
     :full [inspect-tool/inspect-tool
            clj-change-tool
            edit-clojure-tool
-           program-tool/transform-clojure-tool]
+           program-tool/transform-clojure-tool
+           census-tool/relation-census-tool]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

@@ -23,6 +23,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.relation-census :as relation-census]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -460,6 +461,56 @@
          (sort-by :name)
          vec)))
 
+(defn census-sources
+  "Project-relative {:file :source} inputs that define fold arms. Pure once the
+   bytes are read: discovery is the only I/O."
+  [dir file]
+  (let [root (str (fs/absolutize (or dir ".")))
+        paths (if file
+                [(str (fs/absolutize file))]
+                (->> (fs/glob root "**.{clj,cljc}")
+                     (map str)
+                     (remove #(re-find #"/(\.git|node_modules|target|\.cpcache)/" %))
+                     sort))]
+    (->> paths
+         (map (fn [p] {:file (str (fs/relativize root p)) :source (slurp p)}))
+         (filterv #(relation-census/defines-arms? (:source %))))))
+
+;; @spec MCP-OP-CENSUS-015
+(defn run-relation-census
+  "Census collection writes inside fold arms. Reads only; writes nothing."
+  [{:keys [dir file doors threads]}]
+  (let [inputs (census-sources dir file)
+        doors (if doors
+                (into #{} (map (comp symbol str/trim)) (str/split (str doors) #","))
+                relation-census/default-doors)]
+    (if (empty? inputs)
+      {:ok false
+       :error-type :no-fold-arms-found
+       :error "No file defines defmethod fold-event arms"
+       :dir (str (fs/absolutize (or dir ".")))
+       :next-command "clj-surgeon :op :relation-census :dir <a directory with fold arms>"}
+      (let [threads (when threads (long threads))
+            result (relation-census/plan
+                     {:inputs inputs
+                      :doors doors
+                      :map-fn (if (and threads (> threads 1)) pmap map)})]
+        (if-not (:ok result)
+          result
+          (-> result
+              (dissoc :all-sites :declared)
+              (assoc :pool-size (or threads 1)
+                     :raw (filterv #(= :raw (:class %)) (:all-sites result))
+                     :guarded (filterv #(= :guarded (:class %)) (:all-sites result))
+                     :unknown (filterv #(= :unknown (:class %)) (:all-sites result))
+                     :next-action
+                     (cond
+                       (pos? (get-in result [:counts :raw] 0))
+                       "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
+                       (pos? (get-in result [:counts :unknown] 0))
+                       "review the unknown sites: this census version declines to decide them"
+                       :else "none"))))))))
+
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir
     (println "Error: :dir is required for :ls-tree")
@@ -797,6 +848,21 @@
                        :args      {:file {:required true :desc "Clojure source file"}
                                    :form {:required true :desc "Name of target form"}}
                        :examples  ["clj-surgeon :op :ls-extract :file src/my/ns.clj :form rebuild!"]
+                       :category  :read}
+
+    :relation-census  {:handler   run-relation-census
+                       :aliases   [:census]
+                       :desc      "Classify every collection write inside defmethod fold-event arms"
+                       :args      {:dir     {:desc "Root directory to scan (default: .)"}
+                                   :file    {:desc "Census exactly one file instead of scanning"}
+                                   :doors   {:desc "Comma-separated identity doors (default: conj-once,cons-once,upsert-by,conj-distinct-by,cons-distinct-by)"}
+                                   :threads {:desc "Plan-phase parallelism; changes elapsed time, never the answer"}}
+                       :workflow  ["A :raw site is the vulnerability: a write with no dominating recognised guard."
+                                   "An :unknown site is review work this version declines to decide; :reason names why."
+                                   "The census locates review work. It never proves idempotency and is not an enforcement gate."]
+                       :examples  ["clj-surgeon :op :relation-census :dir ."
+                                   "clj-surgeon :op :relation-census :file src/app/folds.clj"
+                                   "clj-surgeon :op :relation-census :dir . :threads 8"]
                        :category  :read}
 
     :ls-tree          {:handler   run-ls-tree

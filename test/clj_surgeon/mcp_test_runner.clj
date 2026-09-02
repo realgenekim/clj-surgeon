@@ -27,6 +27,7 @@
    [clj-surgeon.mcp-program-tool-test]
    [clj-surgeon.mcp-read-request-normalization-test]
    [clj-surgeon.mcp-recovery-test]
+   [clj-surgeon.mcp-relation-census-test]
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
@@ -62,6 +63,7 @@
           'clj-surgeon.mcp-operation-registry-test
           'clj-surgeon.mcp-operation-test
           'clj-surgeon.mcp-recovery-test
+          'clj-surgeon.mcp-relation-census-test
           'clj-surgeon.mcp-paths-test
           'clj-surgeon.mcp-process-test
           'clj-surgeon.mcp-prepared-request-test
