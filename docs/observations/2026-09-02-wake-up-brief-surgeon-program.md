@@ -107,7 +107,9 @@ re-prints every form it edits and reformats the untouched remainder.
   the tax is inferred entirely from Sol. Needs Claude Code on Anvil with the MCP config and
   a subscription login; I did not build it unilaterally.
 - Substitution was answered (s1): optional, the agent declines the tool; mandated, it
-  complies on reads and escapes on writes. b2 (fixed main vs shipped) is the last cohort
-  running; its receipt closes the insertion-gap story.
+  complies on reads and escapes on writes. b2 closed the insertion-gap story: surgeon1's
+  merged fix (main 2311cc09) shows no detected regression on the typed-refusal ledger at
+  n=3, removes one refusal class shipped still emits, and is safe to promote from the
+  ledger's standpoint; the hold decision sits with the mayor.
 
 Full receipts: `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
