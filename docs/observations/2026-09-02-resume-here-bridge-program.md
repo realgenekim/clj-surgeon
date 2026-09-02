@@ -632,3 +632,23 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Merge-queue note: census and study-ops both touch the MCP schema/tool files → rebase the second.
 - Gene asked "Where are they running": all on Buster; Anvil idle, lock free.
 
+
+## RESUME DELTA 2026-09-02T23:02Z
+
+- **Session 4 dry plan, Surgeon side DONE** (log a39206c): 4 calls, one 16-arm transaction on the
+  scratch worktree `~/src/curtaincall-cfp-lens-scratch` (detached 55d1fd3f; safe to delete after the
+  comparison), zero outside churn, projection gate green, tripwire 19→3 / 24→6. Artifact:
+  `~/src/curtaincall-cfp-lens/.plan/surgeon-settings-lens.patch`. Marker `.tweezer/session-4.closed`
+  written 23:01:49Z; watcher a4647e8ebb78985fc writes `.tweezer/session-4-watch.md` (copy to
+  docs/observations/2026-09-02-tweezer-session-4-watch.md when it lands).
+- **Step A pushed** (`bridge/settings-lens` 55d1fd3f, my run 1050/13097/0).
+- Running: native dry plan a7ef75d64e2a9fd85 on `~/src/curtaincall-cfp-lens-native` (writes
+  `.plan/native-settings-lens.patch` + `.plan/native-plan.md`, not applied); LENS-003 builder
+  ae6df9a536b15e3f4 on the lens worktree (identity no-op in update-settings, fails-first); census
+  ae28eeb3c06c1aeb1; study ops aa962e1fb576e0072. Suites serialised via `flock ~/tmp/suite.lock`.
+- **Next:** comparison receipt (cardinality, churn, preconditions, decisions, wall) Surgeon vs native
+  → log + Gene report; then the REAL migration commit on `bridge/settings-lens` after LENS-003 lands
+  (either plan; Gene merges; no auto-winner), tripwire numbers updated in the same commit, all three
+  excluded arms handled (export.generated stays; the two conditional arms migrate once LENS-003 is in).
+- Buster load ~3.2/4 cores; Gene asked about farming to Anvil — declined mid-build, farm if OOM.
+
