@@ -1747,3 +1747,16 @@ class (batch-form-selection-failed) that shipped still emits. Nothing clears two
 is a no-detected-regression signature at n=3, not a measured improvement; the gate that
 requires demonstrated improvement needs a wider run. From the ledger, 2311cc09 is safe to
 promote; the slice-0 hold decision belongs to skiff.
+
+## Receipt 09:12Z — b2 blind quality: flat
+
+| arm | Opus | Sol | mean |
+|---|---|---|---|
+| B main 2311cc09 | 16, 14, 16 (15.3) | 18, 17, 17 (17.3) | 16.3 |
+| A shipped | 15, 14, 15 (14.7) | 16, 15, 15 (15.3) | 15.0 |
+
+Inside the judge floors. Stale-onset guard placement: 1 of 3 main, 0 of 3 shipped. Both
+judges name a global window.fetch swap in one shipped diff as the riskiest mechanism of the
+set, and Opus finds the best tests of the night's medium rung in a main diff (the only one
+asserting the no-new-timer invariant mechanically). All six byte-safe on the default page.
+Nothing here changes the b2 verdict: no detected regression on main 2311cc09.
