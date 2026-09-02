@@ -139,3 +139,8 @@ Arms X (M-optional: Surgeon optional) and Y (M-receipt + L-receipt: substitution
 chain-3b (replaces chain-3): after "v1 done" runs s1 M "X N X N X N|Y A Y A Y A" then l1 L "A N Y A N Y|Y A N Y A N"; chain-4b
 then b2. v5 also: PROMPT-MISSING guard in arm_run. Call-site taxonomy (pre-edit vs post-edit native calls in n1 Surgeon arms)
 being appended to n1-score.md by the scorer agent. k2 in progress (A 593/775, K 614/716/724). Monitor: restart with s1 b2 added.
+
+UPDATE 07:42Z (REAL UTC; the UPDATE labels 09:20Z..13:55Z above were hand-typed and drifted up to 7 h ahead of the clock; the
+git commit timestamps on this file are authoritative; write headers from `date -u` from now on). State unchanged since the
+previous update except: k2 scored + quality logged (4664188, 39039aa): CLI is a second layer, lowest quality of the night;
+inbox inb-c273db closes the CLI follow-up. v1 running since 07:34Z (six A arms, then V V V A A A). Chain after v1: s1 -> l1 -> b2.

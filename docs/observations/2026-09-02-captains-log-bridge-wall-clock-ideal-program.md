@@ -1359,3 +1359,19 @@ selector failures and plumbing refusals the CLI adds are not free: an agent that
 turns fighting the interface spends them on the code it can see, which is how a flag-isolated
 change turns into a flattened namespace. This is the strongest quality evidence tonight that
 refusal count tracks clarity within an arm, the relation the wave bisect predicted.
+
+## Receipt 07:42Z (real UTC) — correction: receipt header times from "07:10Z" onward are wrong
+
+I hand-typed the receipt header times after the 06:50Z receipt and they drifted ahead of the
+clock by up to seven hours: the entry labelled "15:00Z" (k2 quality) was committed at 07:41Z.
+The authoritative time of every receipt is its git commit timestamp (`git log --format='%h %cI'`
+on this file). Mapping of the drifted labels to real UTC, from the commits: "07:10Z" e3 group-1
+quality = 06:07Z; "07:25Z" = 06:12Z; "07:45Z" fleet 3 = 06:16Z; "08:30Z" e3 final = 06:27Z;
+"08:50Z" fleet 4 = 06:31Z; "09:20Z" b1 apparatus = 06:41Z; "09:45Z" rung L = 06:52Z; "10:40Z"
+b1 actions = 07:03Z; "11:00Z" b1 quality = 07:08Z; "11:25Z" fleet 5 = 07:13Z; "11:50Z" bisect
+settled = 07:17Z; "12:20Z" n1 walls = 07:22Z; "12:45Z" n1 scored = 07:27Z; "13:05Z" n1 quality
+= 07:29Z; "13:40Z" fleet 6 = 07:32Z; "14:15Z" taxonomy = 07:36Z; "14:40Z" k2 = 07:40Z; "15:00Z"
+k2 quality = 07:41Z (all approximate to the minute; the commit list is exact). The same drift
+is in the resume note's UPDATE labels after 06:50Z. From here every header is written from
+`date -u`, never typed. Nothing in the receipts' content depends on these labels; the arm
+walls and Anvil timestamps all come from the runner's own clock.
