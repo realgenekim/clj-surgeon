@@ -1551,3 +1551,20 @@ a score" is the right rule and also why the gate itself needs at least one behav
 assertion per feature. Other single-diff defects: a native diff swaps the global fetch
 during OVER (shared-path hazard); a mandate diff added the force_end bypass to a second,
 out-of-scope endpoint serving the frozen voice-lab page, untested.
+
+## Receipt 08:51Z — l1 walls: the large rung, 21 owners across 11 namespaces (six-wide, 2 cores, paired by wave)
+
+| arm | walls s | mean | vs native |
+|---|---|---|---|
+| native N (n=4) | 177, 194, 199, 288 | 215 | |
+| shipped A (n=4) | 359, 411, 439, 620 | 457 | 2.1x |
+| substitution mandate Y (n=3, one lost to a capacity error, rerun queued) | 493, 585, 796 | 625 | 2.9x |
+
+All eleven gates green (577 tests, base count, as expected for a refactor that adds no
+deftest). Early acceptance on two native diffs: 12 tests, 82 assertions, 0 failures, i.e.
+complete. This is the rung the tool was built for, where locating across many namespaces is
+the expensive part; on it the native agent did the whole hoist in about three and a half
+minutes and the Surgeon arms took twice that, the mandate three times. The full acceptance,
+actions, taxonomy and refusal ledger are being scored; eleven diffs are with the judges.
+Two shipped diffs are 66 KB against 16 KB for the rest, which usually means reformatting of
+untouched forms; the judges will say.
