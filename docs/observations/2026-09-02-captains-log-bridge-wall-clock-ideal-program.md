@@ -1776,3 +1776,49 @@ Final tally of the night's cohorts on verified servers: e3 (12), b1 (9), n1 (12)
 v1 (12), s1 (12), l1 (11 plus the rerun), b2 (6): 81 arm-runs scored on actions, typed
 refusals, tokens and acceptance, 74 of them judged blind by two judges. Every receipt is in
 this file with its commit timestamp; the wake-up brief is the summary for Gene.
+
+## Receipt 11:38Z — design position, on Gene's request ("Captain's log. This is huge"): the ideal tool shape
+
+A position, not a measurement; every claim below names the measurement that would confirm it.
+
+**The constraint the data imposes.** Cost is returns to the model, not tool execution (tool
+execution 3 to 4 percent of wall; 87 percent is model time between actions). A tool earns
+its call only when it removes a return the agent would otherwise make. Surgeon's write verbs
+need exact literals and owners that the tool does not discover, so the native read loop must
+run first and the tool sits on top of it; native apply_patch is already cheap, atomic, and
+did 21 owners in one cell. Any design that asks the agent to express edits form by form has
+lost before the first call. The ideal shape is therefore not a better per-form editor.
+
+**Shape one: an inspect that answers the question, not the location.** Today inspect
+returns an outline and the agent still greps. The ideal read returns exactly what the next
+write needs: the owners matching a predicate, their current spans, call sites, arities, and
+a ready handle for each, so one call replaces the locate step instead of preceding it.
+Test: pre-edit native calls in the Surgeon arm fall from 3.5 per run toward zero.
+
+**Shape two: an intent verb over N owners, with the tool doing the fan-out.** "Add require X
+to every namespace referencing Y." "Thread parameter P through this Var and all its call
+sites." "Replace every call to A with B." One call: the tool discovers the owners, applies
+the change, splices the text into the original source without re-printing anything, and
+returns the unified diff plus a focused test result as the receipt. This is where structure
+beats patches, because the agent cannot write 21 correct hunks faster than it can state one
+intent. Tests: rung L non-test actions at or below native's 10.5; churn within 20 percent
+of the canonical +59/-34.
+
+**Shape three, to build first: a structural gate on native patches.** Let the agent write
+apply_patch as it already does. The tool validates the patch structurally before it lands
+(balanced forms, owner integrity, no reformatting outside the hunk, the shadowed-declaration
+and reassignment patterns flagged) and runs the focused suite, returning one receipt that
+discharges verification so the post-edit re-read and git diff disappear. It meets the agent
+on the route it chose instead of asking it to change route, and its value does not depend
+on the agent choosing to use it. Tests: shell calls after a write go to zero; the
+stale-onset and shadowed-kwCheck defect classes are caught at the gate rather than by a
+judge.
+
+**Refusals.** Every refusal carries a next_call the agent can execute unchanged, or the tool
+performs the recovery itself and reports it. A refusal an agent cannot act on within its
+fields is a return with negative value; two thirds of tonight's refusals were that.
+
+**The honest ceiling.** Shapes one and three buy parity on wall and a real win on review
+burden and defect capture; only shape two can make wall go positive, and only on fan-out
+tasks. If the roadmap has room for one, build the gate: the smallest change that turns every
+native edit into a verified one.
