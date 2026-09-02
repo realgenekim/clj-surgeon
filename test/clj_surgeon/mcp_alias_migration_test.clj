@@ -124,8 +124,9 @@
               "a var migration never moves the defining namespace")
           (is (= {"store2" 8 "st2" 3 "es" 1} (:alias_histogram result)))
           (is (= 5 (:collisions_resolved result)))
-          (is (= {:status "not-configured"} (:kondo_delta result)))
-          (is (= {:status "not-configured"} (:focused_test result)))
+          (is (= {:status "not-requested"} (:kondo_delta result))
+              "verification is opt-in, exactly as it is for the other write tools")
+          (is (= {:status "not-requested"} (:focused_test result)))
           (is (string? (:details_path result)))
           (is (number? (:elapsed_ms result))))
 
@@ -399,7 +400,7 @@
       (let [result (alias-migration/execute!
                      (assoc (config workspace receipt-dir)
                             :verification-profiles {"fast" {:commands []}})
-                     (request workspace))]
+                     (request workspace {:verify "fast"}))]
         (is (:ok result) (pr-str result))
         (is (= {:status "not-configured"} (:kondo_delta result))
             "an empty command list runs no diagnostics")
@@ -418,7 +419,7 @@
                      (assoc (config workspace receipt-dir)
                             :verification-profiles
                             {"fast" {:commands [["false"]]}})
-                     (request workspace))]
+                     (request workspace {:verify "fast"}))]
         (is (false? (:ok result)) (pr-str result))
         (is (true? (:source_unchanged result)))
         (doseq [[relative expected] (:pre corpus)]
@@ -683,7 +684,7 @@
       (let [result (alias-migration/execute!
                      (assoc (config workspace receipt-dir)
                             :verification-profiles {"fast" {:commands [["false"]]}})
-                     (lib-request workspace))]
+                     (lib-request workspace {:verify "fast"}))]
         (is (false? (:ok result)) (pr-str result))
         (is (true? (:source_unchanged result)))
         (testing "the defining file is back where it started"
@@ -694,3 +695,39 @@
             (is (= expected (slurp (io/file workspace relative))) relative))))
       (finally
         (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-028
+(deftest verification-is-opt-in-and-an-unknown-profile-refuses-before-writing
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (testing "a workspace with a configured profile is NOT verified unless asked"
+        (let [runs (atom 0)
+              result (alias-migration/execute!
+                       (assoc (config workspace receipt-dir)
+                              :verification-profiles
+                              {"fast" {:commands [["false"]]}
+                               "full" {:commands [["false"]]}})
+                       (request workspace))]
+          (is (:ok result) (pr-str result))
+          (is (= {:status "not-requested"} (:focused_test result)))
+          (is (zero? @runs))))
+      (finally
+        (delete-tree! workspace)))
+    (let [workspace (workspace!)
+          receipt-dir (io/file workspace "receipts")]
+      (.mkdirs receipt-dir)
+      (try
+        (testing "asking for a profile the workspace does not configure refuses"
+          (let [result (alias-migration/execute!
+                         (assoc (config workspace receipt-dir)
+                                :verification-profiles {"fast" {:commands []}})
+                         (request workspace {:verify "nonexistent"}))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "unknown-verification-profile" (:error_type result)))
+            (is (true? (:source_unchanged result)))
+            (doseq [[relative expected] (:pre corpus)]
+              (is (= expected (slurp (io/file workspace relative))) relative))))
+        (finally
+          (delete-tree! workspace))))))

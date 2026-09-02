@@ -694,6 +694,29 @@
                  :recovery rollback
                  :source-unchanged rolled-back?}))))))))
 
+;; @spec MCP-OP-ALIAS-027
+(defn resolve-verification-config
+  "Resolve a routed workspace's lazy profile accessors into concrete profiles.
+
+  A workspace context published by the HTTP server carries
+  :verification-profile-selection-fn / :verification-profiles-fn rather than
+  :verification-profiles, so every public entrance must resolve them or it
+  silently reads the SERVER's profiles instead of the requested workspace's.
+  One function, both callers, so the two cannot drift apart again."
+  [config]
+  (cond
+    (:verification-profile-selection-fn config)
+    (let [{:keys [profiles source]} ((:verification-profile-selection-fn config))]
+      (assoc config
+             :verification-profiles profiles
+             :verification-profile-source source))
+
+    (:verification-profiles-fn config)
+    (assoc config
+           :verification-profiles ((:verification-profiles-fn config)))
+
+    :else config))
+
 (defn- execute-request-in-context!
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params
@@ -708,20 +731,7 @@
              (not (contains? normalized-params :create_files))
              (some #(contains? normalized-params %)
                    [:edits :delete_owners :symbol_migration :require_change]))
-        config (cond
-                 (:verification-profile-selection-fn config)
-                 (let [{:keys [profiles source]}
-                       ((:verification-profile-selection-fn config))]
-                   (assoc config
-                          :verification-profiles profiles
-                          :verification-profile-source source))
-
-                 (:verification-profiles-fn config)
-                 (assoc config
-                        :verification-profiles
-                        ((:verification-profiles-fn config)))
-
-                 :else config)
+        config (resolve-verification-config config)
         config (cond
                  (:formatter-fn config)
                  (assoc config :formatter ((:formatter-fn config)))
@@ -1287,11 +1297,17 @@
                  routed (workspace/resolve-request workspace-router normalized)]
              (if-not (:ok routed)
                (assoc routed :operation "alias_migration")
-               (assoc (alias-migration/execute!
-                        (update (:config routed) :receipt-dir
-                                #(or % (default-receipt-dir)))
-                        (:params routed))
-                      :workspace_root (:workspace-root routed)))))))
+               ;; the same receipt-directory derivation the direct dispatch
+               ;; uses: the routed project root names the workspace's own
+               ;; durable receipt directory
+               (let [routed-config (resolve-verification-config (:config routed))
+                     receipt-dir (str (or (:receipt-dir routed-config)
+                                          (default-receipt-dir
+                                            (:project-root routed-config))))]
+                 (assoc (alias-migration/execute!
+                          (assoc routed-config :receipt-dir receipt-dir)
+                          (:params routed))
+                        :workspace_root (:workspace-root routed))))))))
      :summarize alias-migration-summary
      :callback callback}))
 

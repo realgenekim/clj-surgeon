@@ -606,7 +606,8 @@
     {:type "object"
      :additionalProperties false
      :properties {"files" {:type "integer" :minimum 0}}
-     :required ["files"]}}
+     :required ["files"]}
+    "verify" {:type "string" :minLength 1}}
    :required ["from" "to" "scope" "expect"]})
 
 (def alias-migration-output-schema

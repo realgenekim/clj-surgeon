@@ -170,11 +170,49 @@ libspec is *added* alongside and the old require is left in place.
 
 ## Verification and the receipt's two summary fields
 
-`kondo_delta` and `focused_test` come from the workspace's own configured
-verification profile, routed through the existing transaction verification
-path, so a lint regression or a failing focused test rolls the whole
-transaction back. When the workspace configures no profile both fields report
-`{"status": "not-configured"}` rather than inventing a policy.
+**Verification is opt-in.** `kondo_delta` and `focused_test` come from the
+workspace's own configured verification profile, routed through the existing
+transaction verification path, so a lint regression or a failing focused test
+rolls the whole transaction back — but only when the request names a profile in
+`verify`. Otherwise both fields report `{"status": "not-requested"}`.
+
+This matches the contract the other public write tools state ("omit `verify`
+unless the user or repository explicitly requests a configured transaction
+profile"), and the reason is not merely consistency. The built-in default `fast`
+profile is `clj-kondo --lint` **plus** `npx @chrisoakman/standard-clojure-style
+check`. An earlier draft auto-selected that profile whenever the workspace had
+one configured — which every workspace does, since those are the defaults. The
+result, found on the first real call over the HTTP wire: a completely correct
+migration was rolled back because `npx` could not run, the refusal blamed
+"verification failed", and every call paid two seconds of wall time in a cohort
+whose entire subject is wall time. Naming a profile the workspace does not
+configure refuses before any write rather than silently skipping verification.
+
+## The server adapter must borrow the dispatch's derivations, not just its config
+
+The verb's MCP handler routes `workspace_root` through the same
+`mcp-workspace` router the other tools use, and it must then repeat two
+derivations the direct dispatch performs, because a routed workspace context is
+*not* a complete config:
+
+* **The receipt directory.** A workspace context carries `:receipt-dir` only
+  when the server was started with one; for any other workspace it is nil and
+  the directory must be derived from the routed project root
+  (`default-receipt-dir project-root`). Calling that helper with the wrong
+  arity is the entire failure mode of the first live call.
+* **The verification profiles.** A context published by the HTTP server carries
+  `:verification-profile-selection-fn` / `:verification-profiles-fn` rather than
+  `:verification-profiles`. An entrance that reads `:verification-profiles`
+  directly gets the *server's* profiles, not the requested workspace's. That
+  resolution now lives in one shared function,
+  `mcp-tool/resolve-verification-config`, called by both entrances so they
+  cannot drift apart again.
+
+Both are witnessed by tests that start the real HTTP server on an ephemeral
+port **without** a `:receipt-dir` and address a `workspace_root` that is not the
+server's project directory — the exact shape of the live call. A unit test that
+drives the handler directly with an explicit receipt directory cannot see either
+defect.
 
 ## Lib-only migration (`var: null` on both sides)
 

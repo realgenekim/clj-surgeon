@@ -58,3 +58,8 @@ requirement.
 - [x] **MCP-OP-ALIAS-024**: If exactly one of `from.var` and `to.var` is null, then clj-surgeon shall refuse with `alias-migration-mixed-var-spec` and change no bytes.
 - [x] **MCP-OP-ALIAS-025**: When clj-surgeon migrates a lib, it shall match namespaces and qualifiers by whole symbol identity, so that a prefix-sharing sibling namespace, a prefix-sharing namespace name, and a prefix-sharing qualified use are all left byte-identical.
 - [x] **MCP-OP-ALIAS-026**: When a lib-only migration commits, its constant-size receipt shall carry `refer_sites` and a `lib_renamed` record naming the old lib, the new lib, the defining file, its new path, and where the superseded file was retired.
+
+# #Server Adapter and Verification Policy
+
+- [x] **MCP-OP-ALIAS-027**: When `alias_migration` is invoked through the MCP server for a routed `workspace_root`, clj-surgeon shall derive that workspace's receipt directory and resolve its lazy verification-profile accessors exactly as the direct dispatch does, so a request addressed to a workspace other than the server's own project directory neither fails nor silently adopts the server's configuration.
+- [x] **MCP-OP-ALIAS-028**: Verification shall be opt-in: `alias_migration` shall run a transaction profile only when the request names one in `verify`, shall report `not-requested` otherwise, and shall refuse before writing when the named profile is not configured for that workspace.

@@ -19,8 +19,10 @@
    (java.nio.file FileSystems Files Path)
    (java.util UUID)))
 
+(declare unknown-profile?)
+
 (def request-fields
-  #{:op :workspace_root :from :to :scope :expect})
+  #{:op :workspace_root :from :to :scope :expect :verify})
 
 (def skipped-directories
   #{".git" ".hg" "target" "node_modules" ".cpcache" ".clj-kondo" ".lsp"
@@ -106,9 +108,15 @@
       (invalid-request "expect.files must be one non-negative integer"
                        ["expect" "files"])
 
+      (not (or (nil? (:verify params)) (nonblank-string? (:verify params))))
+      (invalid-request
+        "verify names one configured transaction profile, or is omitted"
+        ["verify"])
+
       :else
       {:ok true
        :request {:workspace-root (:workspace_root params)
+                 :verify (:verify params)
                  :from {:lib (:lib from) :var (:var from)}
                  :to {:lib (:lib to) :var (:var to)
                       :alias-policy (vec policy)
@@ -288,10 +296,11 @@
 ;; the receipt
 
 (defn- verification-summary
-  [verification]
+  [verification requested]
   (if-not verification
-    {:kondo_delta {:status "not-configured"}
-     :focused_test {:status "not-configured"}}
+    (let [status (if requested "not-configured" "not-requested")]
+      {:kondo_delta {:status status}
+       :focused_test {:status status}})
     (let [checks (:checks verification)
           deltas (keep :diagnostic-delta checks)]
       {:kondo_delta
@@ -336,7 +345,7 @@
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
        :next_action "none"}
-      (verification-summary (:verification commit))
+      (verification-summary (:verification commit) (:verify-requested commit))
       (select-keys commit [:undo_receipt :receipt_hash]))))
 
 (defn commit-refusal
@@ -369,10 +378,24 @@
 ;; ---------------------------------------------------------------------------
 ;; the write, through the shared transaction kernel
 
+;; @spec MCP-OP-ALIAS-028
 (defn selected-profile
-  "The workspace's own focused profile, or nil when none is configured."
-  [verification-profiles]
-  (first (filter #(contains? verification-profiles %) ["fast" "full"])))
+  "The profile this request asked for, or nil.
+
+  Verification is OPT-IN, exactly as it is for the other public write tools,
+  whose contract reads: omit verify unless the user or repository explicitly
+  requests a configured transaction profile. Auto-selecting the workspace's default profile would
+  make every migration depend on whatever that profile shells out to — the
+  built-in `fast` profile runs `npx @chrisoakman/standard-clojure-style`, so a
+  correct migration would roll back on a machine with no npx or no network, and
+  every call would pay that wall time."
+  [verification-profiles verify]
+  (when (and verify (contains? verification-profiles verify))
+    verify))
+
+(defn unknown-profile?
+  [verification-profiles verify]
+  (and verify (not (contains? verification-profiles verify))))
 
 ;; @spec MCP-OP-ALIAS-016
 ;; @spec MCP-OP-ALIAS-017
@@ -412,9 +435,13 @@
   the kernel commits; any later failure restores it before rolling back, so the
   tree is never left with two definitions or none."
   ([config project-root spec files] (commit! config project-root spec files nil))
-  ([{:keys [verification-profiles receipt-dir]} project-root spec files retire]
+  ([{:keys [verification-profiles receipt-dir verify]} project-root spec files retire]
   (.mkdirs (io/file receipt-dir))
-  (let [profile (selected-profile verification-profiles)
+  (if (unknown-profile? verification-profiles verify)
+    {:error (str "Unknown verification profile: " verify)
+     :error-type :unknown-verification-profile
+     :source-unchanged true}
+    (let [profile (selected-profile verification-profiles verify)
         baseline (when profile
                    (change-buffer/capture-verification-baseline!
                      project-root profile verification-profiles files))]
@@ -466,7 +493,7 @@
                      :error-type (or (:error-type verification) :verification-failed)
                      :verification verification
                      :rolled-back rolled-back?
-                     :source-unchanged rolled-back?})))))))))))
+                     :source-unchanged rolled-back?}))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
 ;; @spec MCP-OP-ALIAS-005
@@ -487,19 +514,31 @@
     (if-not (:ok validated)
       validated
       (let [request (:request validated)
-            project-root (:project-root config)
-            planned (plan! project-root request)]
+            project-root (:project-root config)]
+        (if (unknown-profile? (:verification-profiles config) (:verify request))
+          ;; refuse before any discovery: an unusable verification authority is
+          ;; known from the request alone, and doing the work first would make
+          ;; the refusal depend on the tree's state
+          (refusal :unknown-verification-profile
+                   (str "Unknown verification profile: " (:verify request))
+                   {:verify (:verify request)
+                    :configured_profiles (vec (sort (keys (:verification-profiles config))))
+                    :remedy "Name a profile this workspace configures, or omit verify."})
+          (let [planned (plan! project-root request)]
         (if-not (:ok planned)
           planned
           (let [{:keys [plan root paths destination]} planned
                 spec (plan->spec plan paths destination)
                 files (mapv #(get paths (:file %)) (:files plan))
-                commit (commit! config (.toString root) spec files
+                verify (:verify request)
+                commit (commit! (assoc config :verify verify)
+                                (.toString root) spec files
                                 (get-in plan [:lib-rename :file]))]
             (if (:error commit)
               (commit-refusal plan commit)
               (receipt plan
                        (-> commit
                            (assoc :undo_receipt (:receipt-file commit)
-                                  :receipt_hash (:receipt-hash commit)))
-                       (write-details! root plan)))))))))
+                                  :receipt_hash (:receipt-hash commit)
+                                  :verify-requested (boolean verify)))
+                       (write-details! root plan)))))))))))
