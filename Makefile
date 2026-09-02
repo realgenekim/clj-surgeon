@@ -678,10 +678,12 @@ worktree-lifecycle-test:
 	  '(require (quote clojure.test) \
 	            (quote clj-surgeon.worktree-lifecycle-test) \
 	            (quote clj-surgeon.worktree-lifecycle-io-test) \
+	            (quote clj-surgeon.worktree-lifecycle-prune-test) \
 	            (quote clj-surgeon.worktree-lifecycle-cli-test)) \
 	   (let [result (clojure.test/run-tests \
 	                  (quote clj-surgeon.worktree-lifecycle-test) \
 	                  (quote clj-surgeon.worktree-lifecycle-io-test) \
+	                  (quote clj-surgeon.worktree-lifecycle-prune-test) \
 	                  (quote clj-surgeon.worktree-lifecycle-cli-test))] \
 	     (when (pos? (+ (:fail result) (:error result))) \
 	       (System/exit 1)))'
