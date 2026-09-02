@@ -67,6 +67,16 @@ Fan-out is the per-form write API's worst case, not its best: one patch does wha
 writes do, and two shipped diffs shipped nine times the line churn because the tool
 re-prints every form it edits and reformats the untouched remainder.
 
+## The ideal tool shape (design position, logged at your request, receipt a3d2375)
+
+Not a better per-form editor. Three shapes, each with the measurement that would confirm
+it: an inspect that returns exactly what the next write needs so it replaces the locate
+step; an intent verb over N owners where the tool does the fan-out and splices without
+re-printing; and, first, a structural gate on native patches that validates and runs the
+focused suite in one receipt, so the agent keeps its route and every native edit becomes a
+verified one. Only the intent verb can make wall go positive; the gate is the smallest
+change with value that does not depend on the agent choosing the tool.
+
 ## Three product changes the night points at (filed via the mayor)
 
 1. Whole-form re-print must preserve source text outside the edited span.
