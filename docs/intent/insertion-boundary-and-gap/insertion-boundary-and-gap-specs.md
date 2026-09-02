@@ -1,7 +1,7 @@
 ---
 parent: insertion-boundary-and-gap-design
 prefix: MCP-OP-INSERT
-status: "Phase 3 revision approved for implementation by Mayor"
+status: "implemented on surgeon1 branch; awaiting merge review"
 ---
 
 # Insertion Boundary and Gap Specifications
@@ -20,13 +20,13 @@ These IDs are stable and must not be reused if a requirement is deleted.
 
 - [ ] **MCP-OP-INSERT-006**: When overlap or insertion-gap validation refuses a transaction, clj-surgeon shall preserve the existing refusal type, shall grant no write authority, and shall leave persisted source bytes unchanged.
 
-- [ ] **MCP-OP-INSERT-007**: When `insert_before` or `insert_after` names exactly one top-level `forms` owner without `find` and comments in the adjacent sibling gap are mechanically attached to a top-level owner, clj-surgeon shall insert between the adjacent owned spans, shall keep a leading comment block with the right owner and a same-line trailing comment with the left owner, and shall preserve every existing gap byte exactly once.
+- [x] **MCP-OP-INSERT-007**: When `insert_before` or `insert_after` names exactly one top-level `forms` owner without `find` and comments in the adjacent sibling gap are mechanically attached to a top-level owner, clj-surgeon shall insert between the adjacent owned spans, shall keep a leading comment block with the right owner and a same-line trailing comment with the left owner, and shall preserve every existing gap byte exactly once.
 
-- [ ] **MCP-OP-INSERT-008**: When a named top-level owner insertion accepts a mechanically owned comment gap, clj-surgeon shall derive a fresh separator from local sibling style and shall not copy comments or detached source into that separator.
+- [x] **MCP-OP-INSERT-008**: When a named top-level owner insertion accepts a mechanically owned comment gap, clj-surgeon shall derive a fresh separator from local sibling style and shall not copy comments or detached source into that separator.
 
-- [ ] **MCP-OP-INSERT-009**: When a sibling insertion uses a subform anchor whose gap contains comments or detached source, or a named top-level owner gap contains source that the top-level attachment rules assign to neither adjacent owner, clj-surgeon shall refuse with `ambiguous-insertion-gap`, shall grant no write authority, and shall produce no future source.
+- [x] **MCP-OP-INSERT-009**: When a sibling insertion uses a subform anchor whose gap contains comments or detached source, or a named top-level owner gap contains source that the top-level attachment rules assign to neither adjacent owner, clj-surgeon shall refuse with `ambiguous-insertion-gap`, shall grant no write authority, and shall produce no future source.
 
-- [ ] **MCP-OP-INSERT-010**: When a sibling insertion uses newline-based local style, clj-surgeon shall derive indentation from the exact whitespace-only prefix on the anchor's own line, and blank or indented lines anywhere earlier in the source shall not affect the emitted separator.
+- [x] **MCP-OP-INSERT-010**: When a sibling insertion uses newline-based local style, clj-surgeon shall derive indentation from the exact whitespace-only prefix on the anchor's own line, and blank or indented lines anywhere earlier in the source shall not affect the emitted separator.
 
 ## Falsifiers
 

@@ -19,6 +19,7 @@
    [clj-surgeon.fix-declares-test]
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
+   [clj-surgeon.insertion-gap-test]
    [clj-surgeon.install-test]
    [clj-surgeon.intent-transaction-test]
    [clj-surgeon.lens-query-test]
@@ -76,6 +77,7 @@
                    'clj-surgeon.xray-test
                    'clj-surgeon.help-test
                    'clj-surgeon.install-test
+                   'clj-surgeon.insertion-gap-test
                    'clj-surgeon.intent-transaction-test
                    'clj-surgeon.workspace-onboarding-test
                    'clj-surgeon.recovery-test

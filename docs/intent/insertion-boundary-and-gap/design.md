@@ -1,7 +1,7 @@
 ---
 parent: mcp-operation-contract-design
 prefix: MCP-OP-INSERT
-status: "Phase 2 revision approved by Mayor; implementation pending"
+status: "implemented on surgeon1 branch; awaiting merge review"
 ---
 
 # Insertion Boundary and Gap
