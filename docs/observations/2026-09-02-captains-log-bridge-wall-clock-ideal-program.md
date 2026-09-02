@@ -356,3 +356,31 @@ returned the whole batching gain (2026-08-06). Next: B' = wave build with
 
 Caveat: N = 1 per cell for the parallel row and for the review; s2 and s3 (rotated
 sequential triples) are running for N = 3.
+
+## Receipt 04:05Z — Anvil sequential triples s2 and s3 (medium rung): the spread is the finding
+
+All arms correct (full suite green, golden unchanged). Walls in seconds, clean sequential
+runs on Anvil only (Buster runs excluded as contaminated or a different box):
+
+| arm | cal-seq | s2 | s3 | mean | spread |
+|---|---|---|---|---|---|
+| N native | 243 | 287 | (running) | | |
+| A shipped Surgeon | 243 | 237 | 317 | 266 | 80 |
+| B wave build | 303 | 272 | 579 | 385 | 307 |
+
+**Headline:** within-arm spread (40 to 300 s) is larger than every between-arm effect I
+narrated earlier tonight. "B is slowest" and "A matches native" were both draws. At this
+sample size Surgeon and native are indistinguishable on wall for this task class.
+
+**Where B's 579 s went (s3):** 11 Surgeon calls with 4 refusals (`inspect-output-limit`
+on a batched read, `invalid-intent-form` twice on the pair shape, `no-op-intent` once) and
+**eight** `bin/kaocha` runs chosen by the agent. Refusals are stochastic per run, not a fixed
+property of the build: the wave build had 1 refusal in run 2 and 4 here. The variance is
+behavioral, in what Sol chooses to do after a refusal or a test run, and that is what the
+planning-mode arms (P, Q) are designed to constrain.
+
+**Learning:** eight per cell, as the corpus practiced, is the floor; anything less is
+narrative. The small rung (two files, focused suite, ~90 s per arm) plus proven-parallel
+arms is how eight per cell becomes affordable. Standing order from Gene applied from here:
+one unit at a time on a new apparatus, a 2-minute poll that checks receipts advance, fail
+fast.
