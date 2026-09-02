@@ -238,3 +238,15 @@ payloads (scratchpad/field-payloads/). After that: review diff, my mcp-test, pus
 close-losers 205e13a pushed, awaiting merge review. 7894 pid 550992 on cores 10,11 (shares with one native slot per wave).
 Anvil quiet. Freeze script now resets index + excludes .clj-surgeon and bin/gate-report.clj. Lesson (memory file
 test-with-the-callers-real-bytes): replay real payloads before red teams.
+
+UPDATE 16:15Z (real UTC) — GENE ON A PLANE ~2 h, verbatim: "you are a hundred percent go to do whatever you deem safe ... Go. Go.
+Go." Constraints unchanged: no SCI fence/path confinement/kernel commit-path changes, branches only (no merges to clj-surgeon
+main by me), Andon open, never 7888. Curtain-call head d9afe8e9 assumed true (Gene). IN FLIGHT: (a) gate red team round 4 on
+b171338 (dual grammar, whole-file ops, field replay 109/109 parse, 51/77 field refusals gone); my mcp-test 453/4590/1
+pre-existing; on GO: , restart 7894 via ~/acid/start-gate-7894.sh
+after  (verify healthz + ready.edn + attestation sha), then touch
+~/acid/GO-Z3 (chain-z3: z3 M "Z N F Z N F|F Z N F Z N", z4 L same; F = gate OPTIONAL arm = the acceptance test); (b) z3 prep
+agent (prompts M/L-gate fixed to say apply_patch grammar, M/L-gateopt, runner F, chain-z3.sh); (c) 46o builder on
+~/src/clj-surgeon-46o branch bridge/format-form-scope (base close-losers 205e13a). THEN: score z3/z4 (z_score-style with
+admit columns; stale_onset on Z/F/N; acceptance), log, fleet round, brief, mayor. Monitor bdsyvspgr lists rt2 z1 z2 — restart
+with z3 z4 when launched.
