@@ -1150,3 +1150,19 @@ anchor exemption or an actionable next_call in the refusal, and the indentation-
 (11:25Z) sits in the same code. Product tax, separate bead: `invalid-intent-form` is 23 of 36
 refusals across all arms, two-thirds of every refusal the agents drew, with no arm signal;
 the intent grammar is the largest adoption cost measured tonight.
+
+## Receipt 12:20Z — n1, the clean shipped-versus-native cohort: walls (six-wide, 2 cores, paired by wave)
+
+| arm | walls s | mean | gates |
+|---|---|---|---|
+| native N | 231, 259, 521, 363, 402, 427 | 367 | 6 of 6 green |
+| shipped A (verified 7893) | 426, 714, 722, 592, 754, 851 | 677 | 6 of 6 green; one at 577 tests, below the 578 baseline |
+
+Headline: on the verified shipped server, six paired draws, the Surgeon arm took 1.8x the
+native wall, and every shipped run was slower than every native run in its wave except one
+pair. This is the first clean wall comparison of the night; the earlier "indistinguishable"
+result (t=0.19) was measured against the unverified 7888 server, sequentially. Caveats: six-wide
+contention inflates both arms equally in principle but not necessarily in practice (a Surgeon
+arm holds a JVM connection while a native arm does not); the diagnosis waits on the typed
+refusal ledger, MCP call counts and tokens carried, all being scored now, and on blind
+quality. Diffs frozen with the completeness gate: 12 of 12 complete.
