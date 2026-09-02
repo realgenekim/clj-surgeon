@@ -777,3 +777,35 @@ message: three candidate plans, a critique of each against the spec and the meas
 choose one, execute, report the choice. Zero extra returns for the planning itself. Added to
 e3: A, A+report-only, A+budget rule, A+deliberate, three each, scored on actions, acceptance
 and two-judge quality, wall with the contention caveat.
+
+## Receipt 06:25Z — edit wall (test time subtracted) for 37 arm-runs: it changes nothing, and it corrects me
+
+Gene: "I really want Kaocha runs outside of wall time. We're timing edits, not the test times."
+Retro-computed from the rollouts (script `edit_wall.py`, attribution by worktree, test commands
+matched at command position, harness polls subtracted at 9 s each):
+
+| arm | n | wall | edit wall | non-test actions | in-run test s |
+|---|---|---|---|---|---|
+| native | 11 | 282 | 272 | 18.9 | 8 |
+| A shipped | 10 | 266 | 255 | 18.7 | 9 |
+| B wave | 5 | 382 | 366 | 23.8 | 16 |
+| C | 2 | 331 | 322 | 20.0 | 4 |
+| P / Q | 2 / 2 | 309 / 280 | 283 / 269 | 19.5 / 15.0 | 25 / 11 |
+| K CLI-only | 1 | 451 | 450 | 10.0 | 1 |
+
+**Corrections to my own earlier claims.** (1) In-run test time is 2 to 48 s per arm, not
+hundreds: agents fire `bin/kaocha`, codex yields after ~30 s, and most never poll it back;
+"s3-B ran kaocha 8 times" was my `grep -c` counting mentions (prompt echo, bead text), not
+invocations: 4 actual, 48 s. `suite_invocations` in the receipts over-counts up to 12x.
+(2) All tool execution, tests included, averages 32 to 44 s of a 270 to 380 s arm: **about
+87% of scored wall is model return and generation time.** (3) Eight of 33 Anvil arms ran
+the full suite zero times in-run and still passed the external gate; making tests "free"
+would reward that, so verification stays a conformance gate, never a cost. (4) The 9 s per
+action figure is an average, not a law: K made 10 non-test actions in 450 s, 45 s each,
+because each CLI action carried a long syntax-reasoning turn. **Wall ≈ Σ per-action think
+time; actions are the proxy only while think time per action is similar across arms.**
+
+Subtracting tests reorders nothing: A beats native by 16 s on wall and 16.5 s on edit wall,
+B is worst on both. Adopted: edit wall as a published companion, never the primary; new
+rungs run one focused suite in-arm and leave the full gate to the harness (for CPU
+contention and conformance, not for wall); fix the invocation counter.
