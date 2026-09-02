@@ -1711,12 +1711,16 @@
 
 ;; @spec MCP-OP-ADMIT-083
 (deftest dropping-a-referred-symbol-is-a-lost-require
+  ;; @spec MCP-OP-ADMIT-117
+  ;; The fixture now still USES the dropped symbol unqualified, which is the
+  ;; only reading under which this is a defect: the library stays required, so
+  ;; a qualified call would keep working and only a bare use breaks.
   (let [pre (str "(ns app.a\n  (:require\n"
                  "   [clojure.set :refer [union difference]]))\n\n"
-                 "(defn f [] (union))\n")
+                 "(defn f [a b] (union (difference a b)))\n")
         post (str "(ns app.a\n  (:require\n"
                   "   [clojure.set :refer [union]]))\n\n"
-                  "(defn f [] (union))\n")
+                  "(defn f [a b] (union (difference a b)))\n")
         delta (form-identity/form-identity-delta
                 {:file "src/app/a.clj" :pre pre :post post
                  :hunk-spans {:pre [[1 5]] :post [[1 5]]}})
@@ -1725,7 +1729,43 @@
     (is (= :refusal (:class hazard)))
     (is (= [{:library "clojure.set" :symbols ["difference"]}]
            (:referred-symbols-removed hazard))
-        "the lost symbol is named, not just the library it came from")))
+        "the lost symbol is named, not just the library it came from")
+    (is (= [{:file "src/app/a.clj" :library "clojure.set" :line 5
+             :symbol "difference" :via :refer}]
+           (:reference-sites hazard))
+        "and so is the site that still needs it")))
+
+;; @spec MCP-OP-ADMIT-117
+(deftest dropping-an-unused-referred-symbol-is-admitted-as-a-note
+  (let [pre (str "(ns app.a\n  (:require\n"
+                 "   [clojure.set :refer [union difference]]))\n\n"
+                 "(defn f [a b] (union a b))\n")
+        post (str "(ns app.a\n  (:require\n"
+                  "   [clojure.set :refer [union]]))\n\n"
+                  "(defn f [a b] (union a b))\n")
+        delta (form-identity/form-identity-delta
+                {:file "src/app/a.clj" :pre pre :post post
+                 :hunk-spans {:pre [[1 5]] :post [[1 5]]}})
+        hazard (first (filter #(= :require-removed (:type %)) (:hazards delta)))]
+    (is (some? hazard) "the hazard is reported, not suppressed")
+    (is (= :note (:class hazard)))
+    (is (str/includes? (:message hazard) "dead-refer removal"))
+    (is (= [{:library "clojure.set" :symbols ["difference"]}]
+           (:referred-symbols-removed hazard)))
+    (is (= [] (:reference-sites hazard))))
+  (testing "a use that survives only as a qualified call is not a use of the refer"
+    (let [pre (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as st :refer [union difference]]))\n\n"
+                   "(defn f [a b] (union (st/difference a b)))\n")
+          post (str "(ns app.a\n  (:require\n"
+                    "   [clojure.set :as st :refer [union]]))\n\n"
+                    "(defn f [a b] (union (st/difference a b)))\n")
+          hazard (hazard-of (form-identity/form-identity-delta
+                              {:file "src/app/a.clj" :pre pre :post post
+                               :hunk-spans {:pre [[1 5]] :post [[1 5]]}})
+                            :require-removed)]
+      (is (= :note (:class hazard))
+          "clojure.set is still required, so st/difference keeps working"))))
 
 ;; @spec MCP-OP-ADMIT-086
 (deftest the-admission-limit-is-counted-in-bytes
@@ -3091,3 +3131,149 @@
               "editing a suite runs that suite, not <suite>-test")
           (is (= ["app.core-test"] (get-in result [:tests :namespaces]))))
         (finally (delete-tree! root))))))
+
+;; ---------------------------------------------------------------------------
+;; Sewing: a require the extraction made dead
+;; ---------------------------------------------------------------------------
+
+(defn- require-delta
+  [pre post]
+  (form-identity/form-identity-delta
+    {:file "src/app/a.clj" :pre pre :post post
+     :hunk-spans {:pre [[1 40]] :post [[1 40]]}}))
+
+;; @spec MCP-OP-ADMIT-114
+(deftest a-dead-require-removal-is-admitted-as-a-note
+  (testing "the lib is referenced nowhere in the patched image"
+    (let [pre (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as set]\n"
+                   "   [clojure.string :as str]))\n\n"
+                   "(defn f [s] (str/upper-case s))\n")
+          post (str "(ns app.a\n  (:require\n"
+                    "   [clojure.string :as str]))\n\n"
+                    "(defn f [s] (str/upper-case s))\n")
+          hazard (hazard-of (require-delta pre post) :require-removed)]
+      (is (some? hazard) "the hazard is still reported, not suppressed")
+      (is (= :note (:class hazard)))
+      (is (= ["clojure.set"] (:libraries hazard)))
+      (is (str/includes? (:message hazard) "dead-require removal"))
+      (is (= [] (:reference-sites hazard)))))
+  (testing "a mention in a string or a comment is not a reference"
+    (let [pre (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as set]))\n\n"
+                   ";; set/union used to live here\n"
+                   "(defn f [] \"set/union\")\n")
+          post (str "(ns app.a)\n\n"
+                    ";; set/union used to live here\n"
+                    "(defn f [] \"set/union\")\n")
+          hazard (hazard-of (require-delta pre post) :require-removed)]
+      (is (= :note (:class hazard))
+          "the check is structural; text that is not code is not a use")))
+  (testing "a discarded form is not a reference"
+    (let [pre (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as set]))\n\n"
+                   "(defn f [] #_(set/union) 1)\n")
+          post (str "(ns app.a)\n\n(defn f [] #_(set/union) 1)\n")
+          hazard (hazard-of (require-delta pre post) :require-removed)]
+      (is (= :note (:class hazard)))))
+  (testing "end to end: the gate admits and commits the sewing patch"
+    (let [root (temp-dir)
+          src (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as set]\n"
+                   "   [clojure.string :as str]))\n\n"
+                   "(defn f [s] (str/upper-case s))\n")
+          patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                     "@@ -1,4 +1,3 @@\n"
+                     " (ns app.a\n"
+                     "   (:require\n"
+                     "-   [clojure.set :as set]\n"
+                     "    [clojure.string :as str]))\n")]
+      (try
+        (write-sources! root {"src/app/a.clj" src})
+        (let [result (admit/execute-request!
+                       (stub-config root)
+                       {:patch patch :mode "commit" :verify "none"})]
+          (is (:ok result) (str "refused: " (:error result)))
+          (is (true? (:committed result)))
+          (is (= 1 (count (:hazards result)))
+              "the note rides along on the receipt rather than vanishing")
+          (is (= "note" (name (:class (first (:hazards result))))))
+          (is (not (str/includes? (slurp (io/file root "src/app/a.clj"))
+                                  "clojure.set"))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-ADMIT-115
+;; @spec MCP-OP-ADMIT-116
+(deftest a-require-removal-with-a-remaining-alias-reference-is-refused-and-names-the-site
+  (let [pre (str "(ns app.a\n  (:require\n"
+                 "   [clojure.set :as st]))\n\n"
+                 "(defn f [a b]\n"
+                 "  (st/union a b))\n")
+        post (str "(ns app.a)\n\n"
+                  "(defn f [a b]\n"
+                  "  (st/union a b))\n")
+        hazard (hazard-of (require-delta pre post) :require-removed)]
+    (is (= :refusal (:class hazard))
+        "the alias the pre-image ns form bound is still in use")
+    (is (= [{:file "src/app/a.clj" :line 4 :symbol "st/union" :via :alias}]
+           (:reference-sites hazard)))
+    (is (str/includes? (:message hazard) "st/union"))
+    (testing "a use that exists only inside a reader-conditional branch counts"
+      (let [pre (str "(ns app.a\n  (:require\n"
+                     "   [clojure.set :as st]))\n\n"
+                     "(defn f [a b]\n"
+                     "  #?(:clj (st/union a b) :cljs a))\n")
+            post (str "(ns app.a)\n\n"
+                      "(defn f [a b]\n"
+                      "  #?(:clj (st/union a b) :cljs a))\n")
+            hazard (hazard-of (require-delta pre post) :require-removed)]
+        (is (= :refusal (:class hazard)))
+        (is (= [4] (mapv :line (:reference-sites hazard))))))
+    (testing "the refusal's next_call names what would lift it"
+      (let [root (temp-dir)
+            patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                       "@@ -1,3 +1,1 @@\n"
+                       "-(ns app.a\n"
+                       "-  (:require\n"
+                       "-   [clojure.set :as st]))\n"
+                       "+(ns app.a)\n")]
+        (try
+          (write-sources! root {"src/app/a.clj" pre})
+          (let [result (admit/execute-request!
+                         (stub-config root)
+                         {:patch patch :mode "commit" :verify "none"})
+                lift (get-in result [:next_call :lifted_by])]
+            (is (false? (:ok result)))
+            (is (= :require-removed (:error-type result)))
+            (is (false? (:committed result)))
+            (is (some? lift) "every hazard refusal says what would lift it")
+            (is (str/includes? (:description lift) "reference"))
+            (is (= [{:file "src/app/a.clj" :line 4 :symbol "st/union"
+                     :via :alias}]
+                   (:sites lift))
+                "file and line, so the caller can go and fix it")
+            (is (= pre (slurp (io/file root "src/app/a.clj")))))
+          (finally (delete-tree! root)))))))
+
+;; @spec MCP-OP-ADMIT-115
+(deftest a-require-removal-with-a-remaining-refer-use-is-refused
+  (let [pre (str "(ns app.a\n  (:require\n"
+                 "   [clojure.set :refer [union]]))\n\n"
+                 "(defn f [a b]\n"
+                 "  (union a b))\n")
+        post (str "(ns app.a)\n\n"
+                  "(defn f [a b]\n"
+                  "  (union a b))\n")
+        hazard (hazard-of (require-delta pre post) :require-removed)]
+    (is (= :refusal (:class hazard))
+        "a referred symbol still used unqualified is still a reference")
+    (is (= [{:file "src/app/a.clj" :line 4 :symbol "union" :via :refer}]
+           (:reference-sites hazard))))
+  (testing "a fully qualified use keeps the refusal"
+    (let [pre (str "(ns app.a\n  (:require\n"
+                   "   [clojure.set :as st]))\n\n"
+                   "(defn f [a b] (clojure.set/union a b))\n")
+          post (str "(ns app.a)\n\n(defn f [a b] (clojure.set/union a b))\n")
+          hazard (hazard-of (require-delta pre post) :require-removed)]
+      (is (= :refusal (:class hazard)))
+      (is (= [:fully-qualified] (mapv :via (:reference-sites hazard)))))))

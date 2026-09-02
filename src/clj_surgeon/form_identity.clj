@@ -452,7 +452,13 @@
                          :kind (:form-kind (first ordered))
                          :introduced-by-patch
                          (< (effective-count (get pre-counted name))
-                            bindings)})))))
+                            bindings)
+                         :lift {:description
+                                (str "remove or rename all but one binding of "
+                                     name)
+                                :sites (mapv (fn [[start _]]
+                                               {:file file :line start})
+                                             spans)}})))))
         post-counted))
 
 (defn- refer-symbols
@@ -471,6 +477,23 @@
             :else refers))
         (recur (next remaining) refers))
       refers)))
+
+(defn- alias-symbols
+  "Aliases one libspec binds, through `:as` or `:as-alias`.
+
+  The post image no longer says what an alias meant -- the ns form that bound
+  it is exactly what the patch removed -- so the binding has to be read from
+  the pre-image or an alias-qualified call reads as an unrelated symbol."
+  [children]
+  (loop [remaining children
+         aliases #{}]
+    (if-let [item (first remaining)]
+      (if (contains? #{":as" ":as-alias"} (node/string item))
+        (let [value (second remaining)]
+          (recur (if (next remaining) (nnext remaining) nil)
+                 (cond-> aliases value (conj (node/string value)))))
+        (recur (next remaining) aliases))
+      aliases)))
 
 (defn- libspec-entries
   "Every library one `:require` entry names, with the symbols it refers.
@@ -508,21 +531,23 @@
                          (let [inner (significant-children member)]
                            (when-let [leaf (some-> (first inner) node/string)]
                              {:lib (str prefix "." leaf)
-                              :refers (refer-symbols (rest inner))}))
+                              :refers (refer-symbols (rest inner))
+                              :aliases (alias-symbols (rest inner))}))
                          {:lib (str prefix "." (node/string member))
-                          :refers nil}))
+                          :refers nil
+                          :aliases #{}}))
                      members))
 
-          :else [{:lib prefix :refers (refer-symbols rest-children)}]))
+          :else [{:lib prefix
+                  :refers (refer-symbols rest-children)
+                  :aliases (alias-symbols rest-children)}]))
 
-      (= :token tag) [{:lib (node/string entry) :refers nil}]
+      (= :token tag) [{:lib (node/string entry) :refers nil :aliases #{}}]
       :else [])))
 
-;; @spec MCP-OP-ADMIT-033
-;; @spec MCP-OP-ADMIT-065
-;; @spec MCP-OP-ADMIT-083
-(defn ns-requires
-  "Libraries an `ns` node requires, mapped to the symbols each one refers.
+;; @spec MCP-OP-ADMIT-114
+(defn ns-require-bindings
+  "Libraries an `ns` node requires, with the symbols and aliases each binds.
 
   Reading the node tree instead of evaluating `sexpr` keeps this working when
   the `ns` form carries a reader conditional, which is exactly the shape that
@@ -536,23 +561,262 @@
                                       (some-> (first (significant-children x))
                                               node/string)))
                   (doseq [entry (rest (significant-children x))
-                          {:keys [lib refers]} (libspec-entries entry)]
+                          {:keys [lib refers aliases]} (libspec-entries entry)]
                     (vswap! found update lib
                             (fn [existing]
-                              (cond
-                                (= :all existing) :all
-                                (= :all refers) :all
-                                :else (into (or existing #{}) (or refers #{})))))))
+                              {:refers (let [seen (:refers existing)]
+                                         (cond
+                                           (= :all seen) :all
+                                           (= :all refers) :all
+                                           :else (into (or seen #{})
+                                                       (or refers #{}))))
+                               :aliases (into (or (:aliases existing) #{})
+                                              (or aliases #{}))}))))
                 (run! walk (node/children x))))]
       (walk n))
     @found))
 
+;; @spec MCP-OP-ADMIT-033
+;; @spec MCP-OP-ADMIT-065
+;; @spec MCP-OP-ADMIT-083
+(defn ns-requires
+  "Libraries an `ns` node requires, mapped to the symbols each one refers.
+
+  Reading the node tree instead of evaluating `sexpr` keeps this working when
+  the `ns` form carries a reader conditional, which is exactly the shape that
+  silently disabled the check before."
+  [n]
+  (into {} (map (fn [[lib binding]] [lib (:refers binding)]))
+        (ns-require-bindings n)))
+
+(def ^:private non-code-tags
+  "Node tags whose interior the reader never evaluates."
+  #{:uneval :comment})
+
+;; @spec MCP-OP-ADMIT-114
+(defn- token-sites
+  "Every token in these units, with the line it sits on.
+
+  Structural, not textual. Only `:token` nodes count, so a library named
+  inside a string literal or a comment is not a use of it; `#_` discards are
+  not descended into, because a discarded call is not a call. Reader
+  conditional branches ARE descended into: a use that exists only on one
+  platform is still a use, and refusing to look inside them is how a live
+  reference would read as dead."
+  [offsets units]
+  (persistent!
+    (reduce
+      (fn [acc unit]
+        (loop [pending [[(:node unit) (:start-offset unit)]]
+               acc acc]
+          (if-let [[n offset] (first pending)]
+            (let [tag (node/tag n)
+                  children (when (and (node/inner? n)
+                                      (not (contains? non-code-tags tag)))
+                             (first (reduce
+                                      (fn [[acc position] child]
+                                        [(conj acc [child position])
+                                         (+ position
+                                            (count (node/string child)))])
+                                      [[] offset]
+                                      (node/children n))))]
+              (recur (into (vec (next pending)) children)
+                     (if (= :token tag)
+                       (conj! acc {:text (node/string n)
+                                   :line (line-of offsets offset)})
+                       acc)))
+            acc)))
+      (transient [])
+      units)))
+
+;; @spec MCP-OP-ADMIT-114
+;; @spec MCP-OP-ADMIT-115
+(defn- require-reference-sites
+  "Where the patched image still reaches a library its ns form dropped.
+
+  Three ways a reference survives a lost require, and all three have to be
+  checked or the gate refuses correct work and admits broken work in the same
+  breath: the fully qualified name; any alias the PRE-image ns form bound for
+  the library, because the post image no longer says what that alias meant;
+  and a symbol the libspec referred, which appears with no qualifier at all."
+  [lib bindings sites]
+  (let [refers (:refers bindings)
+        referred (when (set? refers) refers)
+        aliases (or (:aliases bindings) #{})]
+    (vec (keep
+           (fn [{:keys [text line]}]
+             (let [keyword? (str/starts-with? text ":")
+                   bare (cond
+                          (str/starts-with? text "::") (subs text 2)
+                          keyword? (subs text 1)
+                          :else text)
+                   slash (str/index-of bare "/")
+                   qualifier (when slash (subs bare 0 slash))]
+               (cond
+                 (= qualifier lib)
+                 {:line line :symbol text :via :fully-qualified}
+
+                 (and qualifier (contains? aliases qualifier))
+                 {:line line :symbol text :via :alias}
+
+                 (and (nil? slash) (not keyword?) referred
+                      (contains? referred bare))
+                 {:line line :symbol text :via :refer}
+
+                 :else nil)))
+           sites))))
+
+(defn- lost-require-hazards
+  "One hazard for the libraries still reached, one for the ones now dead.
+
+  Every extraction's sewing removes a require the moved code took with it, and
+  clj-kondo reports exactly that require as unused. Refusing all of them made
+  a correct patch unadmittable, and there was no override: the refusal's only
+  follow-up was preview, which refuses identically. The evidence that settles
+  it is in the patched image itself, so the gate reads it rather than asking."
+  [file owner span before-bindings lost offsets reference-units]
+  (let [sites (token-sites offsets reference-units)
+        found (into {} (map (fn [lib]
+                              [lib (require-reference-sites
+                                     lib (get before-bindings lib) sites)]))
+                    lost)
+        ;; `:refer :all` cannot be disproved: any bare symbol in the image
+        ;; might have come from it, so absence of evidence is not evidence.
+        opaque (set (filter #(= :all (:refers (get before-bindings %))) lost))
+        live (vec (sort (filter #(or (contains? opaque %) (seq (get found %)))
+                                lost)))
+        dead (vec (sort (remove (set live) lost)))
+        live-sites (vec (mapcat #(map (fn [site] (assoc site :file file))
+                                      (get found %))
+                                live))]
+    (cond-> []
+      (seq live)
+      (conj (hazard :require-removed file owner span :refusal
+                    (str "The ns form no longer requires "
+                         (str/join ", " live)
+                         ", and the patched image still reaches "
+                         (if (< 1 (count live)) "them" "it")
+                         ": "
+                         (if (seq live-sites)
+                           (str/join ", " (map #(str (:symbol %)
+                                                     " (line " (:line %) ")")
+                                               live-sites))
+                           (str "a :refer :all makes any unqualified symbol a "
+                                "possible use, so this cannot be shown dead")))
+                    {:libraries live
+                     :reference-sites live-sites
+                     :lift {:description
+                            (str "remove the remaining reference site"
+                                 (when (< 1 (count live-sites)) "s")
+                                 " named below, or keep the require")
+                            :sites live-sites}}))
+
+      (seq dead)
+      (conj (hazard :require-removed file owner span :note
+                    (str "The ns form no longer requires "
+                         (str/join ", " dead)
+                         "; admitted as a dead-require removal -- the patched "
+                         "image references "
+                         (if (< 1 (count dead)) "them" "it")
+                         " nowhere, by alias, fully qualified name, or "
+                         "referred symbol")
+                    {:libraries dead
+                     :reference-sites []})))))
+
+;; @spec MCP-OP-ADMIT-117
+(defn- referred-symbol-sites
+  "Where the patched image still uses a dropped `:refer` symbol unqualified.
+
+  The library itself is still required in this branch, so a qualified call is
+  not the question: `set/difference` keeps working the moment `difference`
+  leaves the `:refer` vector, and counting it would refuse the same correct
+  narrowing the lost-require branch was refusing. Only a bare use breaks, so
+  only a bare use is evidence."
+  [symbols sites]
+  (let [wanted (set symbols)]
+    (vec (keep (fn [{:keys [text line]}]
+                 (when (and (not (str/starts-with? text ":"))
+                            (nil? (str/index-of text "/"))
+                            (contains? wanted text))
+                   {:line line :symbol text :via :refer}))
+               sites))))
+
+;; @spec MCP-OP-ADMIT-117
+(defn- dropped-refer-hazards
+  "One hazard for the dropped refers still used bare, one for the dead ones.
+
+  The sibling of `lost-require-hazards`, and the same argument: narrowing a
+  `:refer` vector to the symbols the file still uses is the other half of what
+  every extraction's sewing does, and refusing it unconditionally refused
+  correct work for the same reason -- the question was `did the vector lose a
+  symbol?` when the question that decides it is `does the image still use it?`"
+  [file owner span unreferred offsets reference-units]
+  (let [sites (token-sites offsets reference-units)
+        classified (mapv (fn [{:keys [library symbols]}]
+                           (let [found (referred-symbol-sites symbols sites)
+                                 used (set (map :symbol found))]
+                             {:library library
+                              :live (vec (sort (filter used symbols)))
+                              :dead (vec (sort (remove used symbols)))
+                              :sites (mapv #(assoc % :file file
+                                                   :library library)
+                                           found)}))
+                         unreferred)
+        entries (fn [key]
+                  (vec (keep (fn [row]
+                               (when (seq (get row key))
+                                 {:library (:library row)
+                                  :symbols (get row key)}))
+                             classified)))
+        qualified (fn [rows]
+                    (str/join ", " (mapcat (fn [{:keys [library symbols]}]
+                                             (map #(str library "/" %) symbols))
+                                           rows)))
+        live (entries :live)
+        dead (entries :dead)
+        live-sites (vec (mapcat :sites (filter #(seq (:live %)) classified)))]
+    (cond-> []
+      (seq live)
+      (conj (hazard :require-removed file owner span :refusal
+                    (str "The ns form no longer refers " (qualified live)
+                         ", and the patched image still uses "
+                         (if (< 1 (count live-sites)) "them" "it")
+                         " unqualified: "
+                         (str/join ", " (map #(str (:symbol %)
+                                                   " (line " (:line %) ")")
+                                             live-sites)))
+                    {:libraries []
+                     :referred-symbols-removed live
+                     :reference-sites live-sites
+                     :lift {:description
+                            (str "restore the dropped :refer symbol"
+                                 (when (< 1 (count live-sites)) "s")
+                                 ", qualify the remaining use"
+                                 (when (< 1 (count live-sites)) "s")
+                                 " named below, or remove "
+                                 (if (< 1 (count live-sites)) "them" "it"))
+                            :sites live-sites}}))
+
+      (seq dead)
+      (conj (hazard :require-removed file owner span :note
+                    (str "The ns form no longer refers " (qualified dead)
+                         "; admitted as a dead-refer removal -- the patched "
+                         "image uses "
+                         (if (< 1 (count dead)) "them" "it")
+                         " nowhere unqualified")
+                    {:libraries []
+                     :referred-symbols-removed dead
+                     :reference-sites []})))))
+
 (defn- require-hazards
-  [file pre-index post-index]
+  [file pre-index post-index offsets post-units]
   (let [ns-unit (fn [index] (first (filter #(= :ns (:form-kind %))
                                            (vals (:unique index)))))
         pre-ns (ns-unit pre-index)
-        post-ns (ns-unit post-index)]
+        post-ns (ns-unit post-index)
+        reference-units (filterv #(and (= :form (:kind %))
+                                       (not= :ns (:form-kind %)))
+                                 post-units)]
     (cond
       (and pre-ns (nil? post-ns))
       ;; Deleting the namespace form removes every require, alias, import and
@@ -563,10 +827,16 @@
                :refusal
                (str "The ns form for " (:name pre-ns) " is gone from the "
                     "patched image")
-               {:requires-lost (vec (sort (keys (ns-requires (:node pre-ns)))))})]
+               {:requires-lost (vec (sort (keys (ns-requires (:node pre-ns)))))
+                :lift {:description (str "restore the ns form in the patched "
+                                         "image, or send the removal as a "
+                                         "whole-file delete")
+                       :sites []}})]
 
       (and pre-ns post-ns)
-      (let [before (ns-requires (:node pre-ns))
+      (let [before-bindings (ns-require-bindings (:node pre-ns))
+            before (into {} (map (fn [[lib b]] [lib (:refers b)]))
+                         before-bindings)
             after (ns-requires (:node post-ns))
             lost (vec (sort (remove (set (keys after)) (keys before))))
             unreferred (->> before
@@ -583,22 +853,17 @@
                             vec)
             span [(:start-line post-ns) (:end-line post-ns)]]
         (cond-> []
+          ;; @spec MCP-OP-ADMIT-114
+          ;; @spec MCP-OP-ADMIT-115
           (seq lost)
-          (conj (hazard :require-removed file (:name post-ns) span :refusal
-                        (str "The ns form no longer requires "
-                             (str/join ", " lost))
-                        {:libraries lost}))
+          (into (lost-require-hazards file (:name post-ns) span
+                                      before-bindings lost offsets
+                                      reference-units))
 
+          ;; @spec MCP-OP-ADMIT-117
           (seq unreferred)
-          (conj (hazard :require-removed file (:name post-ns) span :refusal
-                        (str "The ns form no longer refers "
-                             (str/join ", "
-                                       (mapcat (fn [{:keys [library symbols]}]
-                                                 (map #(str library "/" %)
-                                                      symbols))
-                                               unreferred)))
-                        {:libraries []
-                         :referred-symbols-removed unreferred})))))))
+          (into (dropped-refer-hazards file (:name post-ns) span unreferred
+                                       offsets reference-units)))))))
 
 (defn- code-shaped?
   [text]
@@ -670,7 +935,14 @@
               :span [1 1]
               :class :refusal
               :message (str "The patched image cannot be read as balanced "
-                            "Clojure: " error)}]})
+                            "Clojure: " error)
+              ;; @spec MCP-OP-ADMIT-116
+              :lift {:description (str "nothing lifts this refusal: the "
+                                       "patched image has to parse as "
+                                       "balanced Clojure before the gate can "
+                                       "read it at all")
+                     :liftable false
+                     :sites []}}]})
 
 ;; @spec MCP-OP-ADMIT-020
 ;; @spec MCP-OP-ADMIT-021
@@ -753,7 +1025,9 @@
                                ;; question that matters there is asked of the
                                ;; workspace, not of the empty post image.
                                (when-not (= :delete operation)
-                                 (require-hazards file pre-index post-index))
+                                 (require-hazards file pre-index post-index
+                                                  (:offsets post-image)
+                                                  post-units))
                                (opaque-string-hazards file (:offsets post-image)
                                                       post-units
                                                       (vec (:post hunk-spans)))))}))))

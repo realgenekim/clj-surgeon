@@ -131,6 +131,24 @@
                       "it is deliberately not echoed here")}
     blocked-by (assoc :blocked_by blocked-by)))
 
+;; @spec MCP-OP-ADMIT-116
+(defn- hazard-lift
+  "What would lift this refusal, named on the refusal itself.
+
+  A refusal whose only follow-up is `preview` tells the caller to run the call
+  that just refused. That is what a correct dead-require sewing patch met in
+  the field: no override, no sites, and no way to tell whether the gate had
+  found something real. Every refusal now carries either the sites to repair
+  or an explicit statement that nothing lifts it."
+  [hazard]
+  (or (:lift hazard)
+      {:description (str "no lift is recorded for a "
+                         (name (or (:type hazard) :unknown))
+                         " refusal; treat it as blocking and repair the "
+                         "condition the message names")
+       :liftable false
+       :sites []}))
+
 ;; @spec MCP-OP-ADMIT-050
 (defn- empty-receipt
   "The closed receipt key set, so no path can publish a partial payload."
@@ -1302,11 +1320,16 @@
                                    {:ok false
                                     :operation :admit-patch-refused
                                     :committed false
+                                    :mutation_attempted false
                                     :source-unchanged true
                                     :error-type (:type (first blocking))
                                     :error (:message (first blocking))
-                                    :next_call (next-call context "preview"
-                                                          (:type (first blocking)))})
+                                    ;; @spec MCP-OP-ADMIT-116
+                                    :next_call
+                                    (assoc (next-call context "preview"
+                                                      (:type (first blocking)))
+                                           :lifted_by
+                                           (hazard-lift (first blocking)))})
 
                             :else
                             ;; Verification runs against the snapshot, before
