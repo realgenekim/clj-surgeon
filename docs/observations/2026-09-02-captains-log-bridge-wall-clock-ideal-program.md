@@ -490,3 +490,17 @@ off the medium rung. Apparatus note: Sol deleted the untracked ledger inside the
 
 Economics gate honored: metered, bounded by construction, cost line per call, total under a
 cent, no auto-fallback exists.
+
+## Receipt 04:58Z — the scorer is no longer written by the subject
+
+An Opus agent that built none of the arms wrote `acid_acceptance_test.clj`: nine deftests
+derived only from the frozen spec's observable contract (golden byte identity; the flag in
+effective-state; buttons and bootstrap key on the flag-on page; micGate inverse of barge-in;
+the onsetReady guard resets the speech timer; the 250 ms tick ridden not rewritten; hbms
+server-resolved with a 2500 default; force_end on the same send path; buttons follow
+recording and the note says controls ON). On the bare base: 2 pass, 7 fail, no errors. On
+the merged reference: 6 of 9, and the three failures are real divergences from the frozen
+spec, two of them introduced later by design (the mic gate became its own flag for
+attributability) and one a genuine deviation in my own build (hbms parsed client-side).
+The suite is now being run against every frozen diff on both boxes. A pass rate per arm,
+from tests the arm did not write, replaces "kaocha green" as the correctness score.
