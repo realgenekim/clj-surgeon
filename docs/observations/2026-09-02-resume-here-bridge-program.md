@@ -158,3 +158,11 @@ tool; did Y obey). v1 scored + logged (3e26e1c floor: wall sd 86, actions sd 2.9
 since 08:27Z "A N Y A N Y|Y A N Y A N" (rung L; one Y died MODEL-CAPACITY -> l1r "Y" queued via chain-l1r.sh after l1 done).
 7889 being rebuilt on main 2311cc09 (gap fix merged by surgeon1) and b2 re-pointed to "B A B A B A" via chain-4c (agent in
 flight; verify pgrep chain-4c and 7889 pid before trusting). Mayor beads: f5e + vcz closed by 2311cc09; fdo = cold-verify flake.
+
+UPDATE 08:39Z (real UTC) — s1 SCORED + judged (f291f38, 2000f1b): optional arm declined the tool (0 MCP x3); mandate obeyed on
+reads/receipts, broke on writes, +210 s; quality flat. CORRECTION logged: stale-onset defect found in a native diff -> tally is
+12/33 Surgeon vs 2/12 native (brief fixed). Acceptance suite is marker-only (passed a broken OVER button) -> gate not score.
+l1 wave 1: N 177/194, A 359/411, Y 493 (+1 Y MODEL-CAPACITY, rerun l1r after b2 via chain-l1r2). l1 wave 2 running. Then b2
+"B A B A B A" (B = main 2311cc09 on 7889, chain-4c) -> l1r. 7889 rebuilt on 2311cc09 (pid 1939050). Anvil surgeon origin is a
+STALE BUNDLE (receipt 49219ff) - reported to mayor. When l1 done: freeze (ended-gate) -> rescore-L.sh -> scorer -> judges
+(rung L spec is in docs/observations/2026-09-02-acid-rung-L/L-spec.md; build a judge prompt from it) -> log -> fleet -> brief.
