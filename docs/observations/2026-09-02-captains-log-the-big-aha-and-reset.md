@@ -3189,3 +3189,16 @@ C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-s
 C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
 C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
 A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)
+
+## 23:54Z — session 5 meter (watcher): 4 counted calls, ~171 s, verdict MIXED — worse than session 4
+
+Receipt `docs/observations/2026-09-02-tweezer-session-5-watch.md`. Deviations: scope×2 and receipt×2 on
+q1 (`ls-tree` bounded both times; `grep` never narrowed the 116-file universe), semantic×2 on q2/q3 (the
+receipts succeeded but answered a different question: an intra-file per-def graph, an intra-file
+topological order). No refusals, no hand repairs; 10 housekeeping calls excluded by id. Verdict, the
+watcher's words: the study ops did not demonstrate a correctness win over rg anywhere; wall matched the
+pre-registered ~100× expectation without a correctness payoff. This is the honest input for the E6
+cohort: it does not run until S1 (names-only ls-tree, inb-a0f37e) and S2 (tree-level requirers,
+inb-0a6315) land, or the cohort would measure a tool that cannot answer the question it is for.
+Tech tree E6 stays BUILT, adoption unmeasured, now with the reason.
+
