@@ -416,3 +416,21 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   `rescore-FAN.sh <wt> 5`) → GO-SL1, GO-SL1R.
 - Catalogue committed (9cf12f0); vision/CLAUDE/tweezer docs updated; memory: a-gate-a-caller-can-turn-off.
 
+
+## RESUME DELTA 2026-09-02T19:48Z
+
+- z7b RUNNING (chain-z7b, launched 19:47:11Z; gate 17125fe; strip prompts). When `z7b done`:
+  score via the scorer agent (rung R3 shape: rescore-R3.sh over the runner's z7b-g*-*.diff, admit
+  columns, executed suites, readout vs rs1 14.3 / 328 s). Monitor bvo62eeqc relays z7b/rf2/sl1.
+- rf2 cohort (R3b) armed (chain-rf2 pid 2578322 on GO-RF2) but BLOCKED on the verb's compile
+  command (omits the test alias). Builder fixing (`.clj-surgeon.edn {:compile {:aliases [...]}}`,
+  candidate aliases on undeclared). On report: my suites → commit/push → `echo <sha> > ~/acid/RF2-SHA`
+  → `git -C ~/acid/surgeon-rf2 fetch && checkout <sha>` → `bash ~/acid/rf2-probe.sh && python3
+  ~/acid/rf2-record-compile.py` (expect :ok true) → `touch ~/acid/GO-RF2`.
+- q5z 40b26b1: G1 oracle fails on alias choice (my brief counted locals as collisions). Builder
+  fixing. On report: suites → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → G1 pass 3
+  (recreate `~/acid/wt/q5z-hand-5`, call, `rescore-FAN.sh <wt> 5`, expect VERDICT=PASS) →
+  `touch ~/acid/GO-SL1` and `touch ~/acid/GO-SL1R` (chains pid 2577460 / 2577653; both take the
+  cohort lock, so they serialise).
+- Four chains armed: sl1, sl1r, rf2, z7b (running). Lock: ~/acid/.cohort-lock.
+
