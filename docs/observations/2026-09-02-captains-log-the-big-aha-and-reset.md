@@ -189,3 +189,42 @@ preview-to-commit does not bind the pre-image; refusals echo the whole patch pas
 public bound. All eight fixes are with the builder under the rule that every probe becomes
 a witness test with its own EARS id, verify-before-commit first. The test doctrine's gate
 held: nothing committed, nothing launched, arm Z stays armed behind a GO file.
+
+## Ritual audit: half of what agents do, nothing asked for (13:03Z; 81 rollouts, receipt ~/acid/receipts/ritual-audit.md on Anvil)
+
+Every native call in all 81 arm-runs (1,446 model returns, 3,008 shell sub-commands)
+classified against the arm prompts, the Makefile, bin/kaocha and the acceptance text, with the
+requiring line quoted where one exists.
+
+| level | non-test calls | unmandated | share |
+|---|---|---|---|
+| model returns (cells) | 839 | 288 | 34 percent |
+| shell sub-commands | 2,273 | 1,129 | 50 percent |
+
+The unmandated work is confirmation and bookkeeping, not exploration (94 percent of it):
+git diff 465 times in 80 of 81 runs, re-verifying an edit whose receipt the agent already
+holds; git status 185 times in 78 of 81, which the prompt does not merely omit but
+countermands ("never git commit, stash, or push"); bd commands 241 times in 69 of 81 runs,
+including full create, claim, close arcs in 39 runs, on a throwaway worktree nobody reads,
+traced to the repository's own AGENTS.md line "Use bd for ALL task tracking", an ambient
+local gate; hand-run clojure -M -e probes 53 times against a prompt that says the pages gate
+does the JS check. Native and Surgeon arms sit inside two sd of each other on the ritual
+share (0.25 vs 0.40, spread 0.23), with or without the mandate arm: ritual is a property of
+the local gate landscape, not the tool.
+
+The finding that decides the next cohort: naming a substitute suppresses ritual, forbidding
+it does not. The CLI arm, one named route per operation, was lowest at 28 percent; the
+mandate arm, which explicitly forbids re-reads and git diff, still spent 13 locating, 7
+confirming and 24 git or bd commands doing what it was told not to. That is also the gate's
+exact mechanism: the receipt is the named substitute for git diff, the single largest ritual
+of the night.
+
+Cohort R, queued after E5 and E8, no code: two prompt variants against native, six-wide, one
+wave each. H forbids and explains (this worktree has no beads and no reviewer; the
+apply_patch result is your verification; git status and git diff add nothing here). J names
+substitutes without forbidding (for each act the agent tends to perform, the thing that
+already answers it: the apply_patch result is the diff; the pages gate is the JS check; the
+runner records the task, no bd). Prediction from the audit: J removes more returns than H;
+H removes little; if J clears the floor on actions with acceptance unmoved, that is a
+zero-tool-cost win on every job in the fleet, and the beads line in every CLAUDE.md is a
+decision for Gene.
