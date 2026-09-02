@@ -1724,3 +1724,25 @@ when it contains one.
 flat; the gate costs on a task with nothing to remove, which the mechanism allows and the
 pre-registration called a falsifier of the wall claim on L. Scored when done.
 
+
+## 19:07Z — G5b: the exact one-call command named in task terms, still never called; free choice 0 of 10
+
+Same cold Codex agent, same worktree sha (57e3ca0), same stripped prompt; the tooling line now
+reads, in the task's own terms: one command does the whole move, `bb -m clj-surgeon.core :op
+:extract! :file … :to … :forms '[…]' :alias exact-verify` moves the forms verbatim, writes the
+header, alias-qualifies the internal sites, rewires every external caller, drops the dead
+requires and imports, prints a receipt; `:op :extract` is the dry run; use it or not as you
+judge. **Zero mentions, zero calls.** Native extraction in 271 s (19:02:48Z → 19:07:19Z), five
+files, `TURNS: 1` again.
+
+**Free-choice adoption today: 0 of 10** (z3 F 0/4, z4 F 0/4, G5 0/1, G5b 0/1), with the last
+one fully greased: the exact invocation, its guarantees, and the dry run all named. Naming a
+tool does not put it in the agent's path. Sol's acquisition funnel is not the mechanism either;
+the funnel was removed and the outcome did not move. What remains is habit: a fresh verb with no
+usage history loses to `apply_patch` on every free choice a Codex agent makes, however good the
+verb. Consequences: (1) the ladder's G5 is answered for this tool class, and the answer is that
+the win exists only under mandate (or under a harness that routes the write through the verb,
+which is what the gate does when mandated); (2) a "prompt affordance" line is not a lever and is
+dropped from rf2's plan; (3) the honest product claim is "a mandated verb + gate makes an agent
+faster and safer on X", never "agents prefer it".
+
