@@ -291,6 +291,17 @@
              (invoke 'clj-surgeon.worktree-lifecycle/validate-prune-plan
                      parent-forged))))))
 
+(deftest rehashed-prune-plan-refuses-untyped-capture-time
+  ;; @spec WTL-PRUNE-005 WTL-PRUNE-010
+  (let [compiled (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
+                         prune-snapshot prune-request controller-identity
+                         "prune-bad-capture-time")
+        forged (-> (:plan compiled) (assoc :captured-at 42) rehash-plan)]
+    (is (= :invalid-prune-captured-at
+           (:error-type
+             (invoke 'clj-surgeon.worktree-lifecycle/validate-prune-plan
+                     forged))))))
+
 (deftest prune-receipt-never-claims-an-experiment-outcome
   ;; @spec WTL-PRUNE-007 WTL-PRUNE-008
   (let [compiled (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
@@ -324,6 +335,20 @@
                          :outcome :landed})]
     (is (= :invalid-prune-postconditions (:error-type receipt)))
     (is (not (str/includes? (pr-str receipt) "secret source")))))
+
+(deftest prune-receipt-requires-exact-boolean-terminal-evidence
+  ;; @spec WTL-PRUNE-007 WTL-PRUNE-008
+  (let [compiled (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
+                         prune-snapshot prune-request controller-identity
+                         "prune-untyped-receipt")
+        receipt (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-receipt
+                        (:plan compiled) :controller
+                        {:target-present nil
+                         :registration-present nil
+                         :branch-unchanged "yes"
+                         :preservation-unchanged 1
+                         :supacode-state :absent})]
+    (is (= :invalid-prune-postconditions (:error-type receipt)))))
 
 (deftest no-follow-path-authority-distinguishes-absence-and-links
   ;; @spec WTL-PRUNE-002 WTL-PRUNE-006
@@ -367,6 +392,7 @@
                 :expectation :success
                 :exit 0
                 :target-registration-present false
+                :target-path-authority-unchanged true
                 :peer-registration-present true}
                (f repo target peer)))))
     (is false "run-prune-compatibility-matrix is missing")))
@@ -383,6 +409,7 @@
             (is (= true (:ok result)) (str path-case " must refuse"))
             (is (= :refusal (:expectation result)))
             (is (= true (:target-registration-present result)))
+            (is (= true (:target-path-authority-unchanged result)))
             (is (= true (:peer-registration-present result)))))))
     (is false "run-prune-compatibility-matrix is missing")))
 

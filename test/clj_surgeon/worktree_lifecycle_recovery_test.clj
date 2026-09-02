@@ -42,6 +42,22 @@
              (catch clojure.lang.ExceptionInfo error
                (:error-type (ex-data error))))))))
 
+(deftest recovery-refuses-open-private-journal-transitions
+  ;; @spec WTL-PLAN-004 WTL-PRUNE-010
+  (let [journal {:schema :clj-surgeon.worktree-lifecycle-journal/v1
+                 :plan-id (:plan-id plan)
+                 :plan-sha256 (:plan-sha256 plan)
+                 :operation :close-worktree
+                 :transitions [{:state :prepared
+                                :result :ok
+                                :source "(secret source)"}]}]
+    (is (= :invalid-lifecycle-journal
+           (try
+             (private-call 'validate-journal! journal plan)
+             nil
+             (catch clojure.lang.ExceptionInfo error
+               (:error-type (ex-data error))))))))
+
 (deftest recovery-after-parking-append-advances-to-archive-command
   (let [journal (journal-through :parking-intent-recorded)]
     (is (= :archive-commanded

@@ -27,6 +27,55 @@
   [:prepared :parking-intent-recorded :archive-commanded :archive-verified
    :remove-commanded :remove-verified :final-receipt-written
    :parking-completion-verified])
+(def ^:private journal-fields
+  #{:schema :plan-id :plan-sha256 :operation :transitions})
+(def ^:private journal-transition-fields #{:state :result})
+
+(defn- revision-value? [value]
+  (or (integer? value) (and (string? value) (not (str/blank? value)))))
+
+(defn- parking-intent-result? [result]
+  (or (= :not-applicable result)
+      (and (map? result)
+           (= #{:result :revision-before :revision-after}
+              (set (keys result)))
+           (contains? #{:recorded :already-recorded} (:result result))
+           (revision-value? (:revision-before result))
+           (revision-value? (:revision-after result)))))
+
+(defn- parking-completion-result? [plan result]
+  (or (= :not-applicable result)
+      (and (map? result)
+           (let [marker (:marker result)]
+             (and (= #{:result :revision-before :revision-after
+                       :marker :marker-file}
+                     (set (keys result)))
+                  (= :completed (:result result))
+                  (revision-value? (:revision-before result))
+                  (revision-value? (:revision-after result))
+                  (string? (:marker-file result))
+                  (.isAbsolute (io/file (:marker-file result)))
+                  (= #{:schema :plan-id :plan-sha256 :receipt-sha256}
+                     (set (keys marker)))
+                  (= :clj-surgeon.worktree-parking-completion/v1
+                     (:schema marker))
+                  (= (:plan-id plan) (:plan-id marker))
+                  (= (:plan-sha256 plan) (:plan-sha256 marker))
+                  (string? (:receipt-sha256 marker))
+                  (boolean (re-matches #"[0-9a-f]{64}"
+                                       (:receipt-sha256 marker))))))))
+
+(defn- valid-journal-result? [plan state result]
+  (case state
+    :prepared (= :ok result)
+    :parking-intent-recorded (parking-intent-result? result)
+    :archive-commanded (contains? #{:commanded :not-applicable} result)
+    :archive-verified (= :ok result)
+    :remove-commanded (contains? #{:commanded :controller-or-external} result)
+    :remove-verified (contains? #{:ok :controller :controller-or-external} result)
+    :final-receipt-written (= :ok result)
+    :parking-completion-verified (parking-completion-result? plan result)
+    false))
 
 (defn validate-process-request [{:keys [directory argv]}]
   (if (and (string? directory)
@@ -420,6 +469,11 @@
                       {:error-type :invalid-journal-transition
                        :expected expected
                        :actual state})))
+    (when-not (and (valid-journal-result? plan state result)
+                   (lifecycle/privacy-safe-record? result))
+      (throw (ex-info "Lifecycle journal result is not closed safe data"
+                      {:error-type :invalid-lifecycle-journal-result
+                       :state state})))
     (let [updated (update journal :transitions conj {:state state :result result})]
       (write-edn! journal-file updated false)
       updated)))
@@ -570,6 +624,7 @@
                           :git-worktree-list-unavailable)))
          target-before (some #(when (= target (:path %)) %) before)
          peer-before (some #(when (= peer (:path %)) %) before)
+         path-before (path-authority target)
          result (run-captured controller (prune-removal-command target))
          after (parse-git-worktrees
                  (:out (require-zero
@@ -579,6 +634,7 @@
                          :git-worktree-list-unavailable)))
          target-after (some #(when (= target (:path %)) %) after)
          peer-after (some #(when (= peer (:path %)) %) after)
+         path-after (path-authority target)
          success? (and (= :success expectation)
                        (zero? (:exit result))
                        target-before
@@ -587,18 +643,21 @@
          refusal? (and (= :refusal expectation)
                        (not (zero? (:exit result)))
                        (= target-before target-after)
-                       (= peer-before peer-after))]
+                       (= peer-before peer-after)
+                       (= path-before path-after))]
      (if (or success? refusal?)
        {:ok true
         :expectation expectation
         :exit (:exit result)
         :target-registration-present (boolean target-after)
+        :target-path-authority-unchanged (= path-before path-after)
         :peer-registration-present true}
        {:ok false
         :error-type :git-prune-compatibility-failed
         :expectation expectation
         :exit (:exit result)
         :target-registration-present (boolean target-after)
+        :target-path-authority-unchanged (= path-before path-after)
         :peer-registration-present (boolean peer-after)}))))
 
 (defn handle-removal-failure! [{:keys [archived-by-invocation restore-fn]}]
@@ -1142,15 +1201,25 @@
      :supacode-state (:state ui)}))
 
 (defn- validate-journal! [journal plan]
-  (let [states (mapv :state (:transitions journal))
-        expected-prefix (subvec transition-order 0 (count states))
+  (let [transitions (:transitions journal)
+        states (mapv :state transitions)
+        expected-prefix (when (<= (count states) (count transition-order))
+                          (subvec transition-order 0 (count states)))
         operation (or (:operation plan) :close-worktree)]
-    (when-not (and (= :clj-surgeon.worktree-lifecycle-journal/v1
+    (when-not (and (= journal-fields (set (keys journal)))
+                   (= :clj-surgeon.worktree-lifecycle-journal/v1
                       (:schema journal))
                    (= (:plan-id plan) (:plan-id journal))
                    (= (:plan-sha256 plan) (:plan-sha256 journal))
                    (= operation (:operation journal))
-                   (= expected-prefix states))
+                   (vector? transitions)
+                   (= expected-prefix states)
+                   (every? #(= journal-transition-fields (set (keys %)))
+                           transitions)
+                   (every? (fn [{:keys [state result]}]
+                             (valid-journal-result? plan state result))
+                           transitions)
+                   (lifecycle/privacy-safe-record? journal))
       (throw (ex-info "Lifecycle journal does not belong to this plan"
                       {:error-type :invalid-lifecycle-journal})))
     journal))

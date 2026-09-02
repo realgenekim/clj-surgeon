@@ -98,6 +98,13 @@
 (defn- exact-oid? [object-format value]
   (some-> (oid-length object-format) (hex? value)))
 
+(defn- instant-string? [value]
+  (and (string? value)
+       (try
+         (Instant/parse value)
+         true
+         (catch Throwable _ false))))
+
 (defn- strict-utf8 [bytes]
   (try
     (-> (.newDecoder StandardCharsets/UTF_8)
@@ -545,6 +552,11 @@
 (defn- privacy-safe? [value]
   (empty? (set/intersection forbidden-record-keys (recursive-keys value))))
 
+(defn privacy-safe-record?
+  "Return true when durable lifecycle data contains no forbidden content keys."
+  [value]
+  (privacy-safe? value))
+
 (defn- supacode-plan-state [snapshot path]
   (if-let [row (supacode-row snapshot path)]
     {:id (:id row) :initial (:status row) :terminal :archived}
@@ -665,6 +677,8 @@
       (refuse :invalid-prune-handoff)
       (not= :absent (:lifecycle-lease-prestate plan))
       (refuse :invalid-lifecycle-lease-prestate)
+      (not (instant-string? (:captured-at plan)))
+      (refuse :invalid-prune-captured-at)
       (not (valid-prune-repository? (:repository plan)))
       (refuse :invalid-prune-repository)
       (not (valid-prune-controller? object-format (:controller plan)))
@@ -827,6 +841,11 @@
       (refuse :invalid-prune-postconditions)
       (not (privacy-safe? postconditions))
       (refuse :private-receipt-data-refused)
+      (not (and (false? (:target-present postconditions))
+                (false? (:registration-present postconditions))
+                (true? (:branch-unchanged postconditions))
+                (true? (:preservation-unchanged postconditions))))
+      (refuse :invalid-prune-postconditions)
       (not (contains? #{:controller :controller-or-external}
                       effect-observed))
       (refuse :invalid-effect-observed)
