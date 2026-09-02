@@ -3104,3 +3104,14 @@ mayor's queue: the one-compiler doc's "exactly two public tools" invariant is al
 exist) and the census branch adds a fifth — the contract text needs Gene's ruling, not a silent edit.
 My own suites in progress; push after; then the mayor on seat bridge.
 
+
+## 23:43Z — routing corrected twice in one evening: answer Gene where he typed
+
+Gene, in the terminal: *"Still seeing this on Marvin dictation which I'm not watching. Send messages
+here."* — quoting the `forge`-user reply I had sent on seat "bridge" after his earlier screenshot said
+to use that channel. The seat the connector calls "bridge" is the dictation page from his side. Rule
+saved (memory `reply-seat-bridge-until-requested`, rewritten): answer in the surface the message came
+from — terminal text gets a terminal answer; `<channel>` blocks get the reply tool on their seat (the
+mayor). fold-diff pushed (f2d8f6eb, my run 1052/13017/0) and handed to the mayor with commands;
+study-ops suites running on my side.
+
