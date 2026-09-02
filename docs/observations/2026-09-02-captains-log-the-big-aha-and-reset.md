@@ -476,3 +476,19 @@ unproven one on returns and wall at n=3; rt2 (forbid against native, six each) l
 settle the returns question. Doctrine implication for Gene either way: on throwaway
 worktrees, a one-paragraph prohibition of bd, git status, git diff and post-patch re-reads
 costs nothing and removes most of what the audit found.
+
+## Close-losers, red team round three (14:03Z): the vacuous span is a real false green; 46o is a top-level-form fix
+
+Round two's fixes hold under every prior probe: basis smuggling refused in three key shapes,
+a basis commit under a reformatting formatter lands at drift 0 with untouched runs preserved,
+a missing guard refuses. Three new NO-GO points, all routed: a whole-form span plus a
+formatter commits with drift 0 while every byte on disk was rewritten, because the oracle
+compares gaps and there are none (fix: measure against the expected post-image, pre-image
+with the request's own replacement spliced in, inside spans too); a file in future-sources
+absent from the guard commits unmeasured and a nil reference throws; the extraction route
+publishes no drift field while CLOSE-008 is checked. The finding that matters most sits
+outside the branch: standard-clojure-style fix on a complete top-level form in isolation
+produced bytes identical to formatting it inside the full file, differing only for sub-form
+fragments by the lost starting column. So the builder's "whole-file context is required" was
+wrong, and bead 46o's fix is "format the enclosing top-level form, never the file": small,
+and it removes the churn class at the source instead of refusing it at the gate.

@@ -31,7 +31,8 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
 | owner-kind-namespace insertion (whole-file churn) | LOST; mechanism corrected: Surgeon runs standard-clojure-style whole-file on changes/basis/extraction routes, never on edits | MCP | clj-surgeon-46o re-scoped to formatter scope; big-aha log |
 | per-form writes for a fan-out change | LOST | MCP | l1: 8 to 10 writes on top of a native patch (fbcaed1) |
-| splice-not-reprint on every write | BUILDING | MCP, branch bridge/close-losers | order of 2026-09-02 |
+| splice-not-reprint on every write (drift gate + typed refusals) | BUILDING, round four | MCP, branch bridge/close-losers | three red-team rounds; big-aha log |
+| format only the enclosing top-level form (46o fix) | OPEN, feasible: isolated top-level form formats byte-identically to in-file | MCP prepare-compiled! | red team round three |
 | intent verb over N owners, tool-side discovery | OPEN | MCP | clj-surgeon-q5z; the only node that can make wall positive |
 
 ### Verification
