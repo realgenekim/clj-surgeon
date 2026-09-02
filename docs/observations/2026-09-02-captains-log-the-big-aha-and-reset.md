@@ -492,3 +492,16 @@ produced bytes identical to formatting it inside the full file, differing only f
 fragments by the lost starting column. So the builder's "whole-file context is required" was
 wrong, and bead 46o's fix is "format the enclosing top-level form, never the file": small,
 and it removes the churn class at the source instead of refusing it at the gate.
+
+## Gate, red team round three (14:15Z): GO with three small items
+
+The lock holds under two server processes on one tree (five of five trials, eight of eight
+commits present) and in-process (six of six); previews and reads do not block while a
+commit holds it; an exception mid-commit releases it. The evidence path is fresh per call
+and refuses foreign-namespace and failing reports; the twelve-way verification matrix is
+honest in every row; the kernel commit path, the SCI fence and path confinement are
+sha-identical to main. Three items before commit: a non-zero runner exit after a clean
+report is credited complete; two adjacent top-level reader conditionals defining one symbol
+on disjoint platforms are a false duplicate; the receipt does not disclose lock scope. All
+three routed as round four; then the branch is committed and pushed as a branch for
+surgeon1 and the mayor to review, and 7894 stands up on Anvil for arm Z.
