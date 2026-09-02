@@ -2796,3 +2796,20 @@ agent on `bridge/settings-lens-native`, not applied), then the plans' cardinalit
 whether the measured arms run at all; both trees stay on experimental branches with a receipt
 nominating a winner; Gene merges.
 
+
+## 22:50Z — the mayor relays Gene's nudge: study ops through the MCP, one kernel, now
+
+Mayor, via the channel, with Gene verbatim: *"Nudge bridge: really think this needs to be done sooner
+rather than later"* — on the finding that `:ls-tree` (and `:ls-deps`, `:deps`, `:topo`, `:ls-extract`,
+plus the write ops `:mv`, `:rename-ns!`, `:fix-declares!`) live only in `core.clj` and appear nowhere
+in the MCP surface (git grep on origin/main: zero hits in mcp_schema / mcp_tool / mcp_contract).
+Why it matters, the mayor's reading: vision.md names square 3 (the questions grep answers wrong) as
+winnable and `:ls-tree` as its foundation; it is the discovery half of the fan-out verb, what the
+gate needs to name its owner delta, and the precondition for square 4. Constraint held: both
+entrances call ONE kernel (docs/plans/one-compiler-two-entrances.md), never a forked path — the
+class we closed three times yesterday. Study ops first because they are read-only and add no
+refusal surface; write ops stay behind the gate. Tracked clj-surgeon-0me (mayor's). Decision under
+day-autonomy: build now. Worktree `~/src/clj-surgeon-study` = `bridge/study-ops-mcp` from origin/main;
+Opus builder; fails-first witnesses incl. the real wire; bounded allowlisted receipts. Merge note:
+this and `bridge/census-verb` both register a tool in the MCP schema files; rebase the second lander.
+
