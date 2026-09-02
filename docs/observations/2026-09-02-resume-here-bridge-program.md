@@ -1,4 +1,4 @@
-# RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 05:05Z; context was 88%)
+# RESUME HERE — bridge seat, surgeon wall-clock-ideal program (refreshed 2026-09-02 06:05Z, pre-compaction)
 
 STANDING ORDERS (memory files): headlines first (table: arm, wall, correct? + one learning + one
 caveat); record every experiment in clj-surgeon docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md
@@ -43,3 +43,26 @@ B-minus-gap), 8 per cell via small/medium rung; 5) k1 CLI arm (follow-up inb-ce2
 PENDING HUMANS: Gene ratifications (MCP-OP-INSERT-001..006, string-outline contract, insert_pair);
 surgeon1 verdict on SCI allowlist; mayor's 11-agent hypothesis fleet output on the clarity finding;
 branch retirement held by mayor until fleet quiet.
+
+UPDATE 06:05Z (supersedes older lines above where they conflict)
+- Servers on Anvil (all tester-owned, port ratchet PORT-NOT-MINE in runner): 7893 = my shipped 64eac2e (A/P/U/V/W arms),
+  7889 = surgeon-main at 41eee738 (mayor's verified SCI fix; B/C arms), 7891 = wave minus insertion-gap fix (arm G),
+  7892 = wave minus overlap fix (arm O). 7888 on Anvil is ANOTHER USER'S production Surgeon (e7f72e2): never call it;
+  all Anvil "A" rows before 05:30Z are relabeled "production e7f72e2" (log 06:00Z receipt). Andon CLOSED at skiff.
+- Runner: ~/acid-cohort-v3.sh == v5 (arms N A B C P Q K U V W G O; CORES_PER_ARM; TESTS_BASELINE=578; port ratchet).
+  Chains: k1 (K done 451 s; A,N running) -> e3 M "A U V W A U|V W A U V W" (2-core wide; U=A+report-only,
+  V=A+budget rule, W=A+deliberate 3-plan selection; score on ACTIONS + acceptance + 2 judges; wall has contention
+  caveat) -> b1 M "G O A|G O A|G O A" (bisect). Monitor task bjjew05fm (2-min poll, reads s7/r1/cal2/k1/r2/s8/s9 only;
+  add e3/b1 to its file list if restarted).
+- New results: cal2 six-wide 2-core: N 223/289/469, A 232/250/355 (tails inflate; wide = not for wall). r1 real job:
+  defect did not exist (sandbox artifact); best regression test merged 2b3177d; bead 9yy amended by mayor.
+  k1 K (CLI-only) 451 s correct. Stage 0 refusals-vs-failures rho -0.14 (undetermined). Opus round 2: input tokens
+  carried predicts wall better than actions (R2 .78), Surgeon arms carry MORE context than native; drop priced
+  planning, keep read-gate. Turn-budget doctrine drafted (turn-budget-rule.md) -> skiff inbox inb-5a2d7b.
+- Pending humans: Gene ratifications (INSERT-001..006, string-outline contract, insert_pair); mayor: readable copy
+  of production 7888 telemetry 03:09-05:20Z; retirement pass when fleet quiet; surgeon1 may accept witness-test help.
+- NEXT after compaction: (1) read e3 receipts -> count actions (count_actions.py on Anvil rollouts) + acceptance
+  (rescore.sh) + two judges (Sol via quality-review dirs, Opus via agent) -> log headline table -> decide how much of
+  the turn-budget paragraph survives (Hawthorne control U vs V vs W). (2) b1 bisect -> which edit fix causes the wave
+  clarity/conformance deficit -> log + tell mayor (slice-0 hold). (3) k1 A/N -> K action count -> inb-ce2f15 note.
+  (4) R2 real job (F5 observe meter, prompts R2-*) one unit. (5) Large multi-owner rung still unrun (E4).
