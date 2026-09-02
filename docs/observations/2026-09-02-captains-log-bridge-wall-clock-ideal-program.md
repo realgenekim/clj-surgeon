@@ -730,3 +730,19 @@ returns to the model. So a turn budget is part of every coding task:
   alongside correctness and the diff; never rank work on turns alone.
 - **A tool earns its call only when it removes a return you would otherwise make.** A tool that
   is 3 s faster but adds one round-trip is a 6 s loss.
+
+## Receipt 05:55Z — r1's real finding: the defect was an apparatus artifact; the ratchet is kept
+
+The blind review of r1's three diffs found that `write-failure-receipt!` already creates its
+parent directory (44db939, an ancestor of the base). All three arms therefore produced
+test-only diffs. The "defect" I reported at 02:40Z came from the O1 build agent, whose codex
+sandbox refused writes under its home; I relayed it without reproducing on the host. Record
+corrected with the mayor (bead clj-surgeon-9yy, second half withdrawn). Fifth apparatus
+lesson of the night, same family: a failure observed inside a sandbox is a fact about the
+sandbox until reproduced outside it.
+
+Kept anyway: the native arm's regression test, chosen blind for asserting on the receipts
+directory itself and `.isFile` and for covering the `:onboarding` failure branch; proven red
+with the `.mkdirs` line disabled (2 errors) and green with it (3 tests, 17 assertions).
+Squash-merged to main (`2b3177d`), bb full suite 654 / 5595 / 0 on this box, branch archived.
+r1 walls for the record: native 113 s, A 148 s, B 194 s on a two-file test-only task.
