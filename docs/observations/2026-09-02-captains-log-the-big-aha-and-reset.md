@@ -246,3 +246,26 @@ next_calls, nine EARS ids each with a witness that fails when its check is remov
 routed with the rule that the witness for the key mismatch must drive the production entry
 path, not the validator. Fourth "verifier blind to its subject" instance of the day, caught
 before a commit by the doctrine's own gate.
+
+## E5: the stale-onset defect, pre-registered predicate, one build, one prompt (13:24Z)
+
+Nine shipped (7893, attested) and nine native arms on rung M, three alternating waves, scored
+by the deterministic predicate (guard placed before the speechStartAt reset without resetting
+it), validated 24 of 24 against the judges before the cohort ran; no judge in the loop.
+
+| arm | DEFECTIVE | SAFE | walls s |
+|---|---|---|---|
+| shipped A | 6 of 9 (2, 3, 1 per wave) | 3 | 506, 550, 599, 437, 546, 615, 549, 571, 590 (mean 552) |
+| native N | 0 of 9 | 9 | 298, 315, 366, 308, 313, 317, 305, 386, 415 (mean 336) |
+
+Fisher's exact test on 6 of 9 against 0 of 9 gives p about 0.009. The skew the pooled tally
+suggested and the fleet distrusted is real on this build and this task: the Surgeon arm
+places the mic-gate guard at the cheap top anchor, before the reset the branch depends on,
+in two thirds of its runs, and the native arm never did in eighteen. This is the claim that
+upgrades "slower" to "harmful", now stated with the rigour the closing round asked for
+(single build, single prompt, mechanical predicate, no pooling). Wall on the same cohort:
+1.64x, consistent with n1. All eighteen gates green.
+
+Why it matters beyond the number: the acceptance suite passed all six defective diffs, so the
+defect class is invisible to markers and visible only to a parsed pre-and-post comparison,
+which is the gate's job; the arm Z cohort measures whether the gate catches it in situ.
