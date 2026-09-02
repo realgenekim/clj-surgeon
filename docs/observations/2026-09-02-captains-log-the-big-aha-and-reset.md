@@ -1935,3 +1935,39 @@ alone: 35 failures + 2 errors. The builder's own process finding: clj-kondo repo
 exactly (`called with 0 args but expects 1`); it had linted the five files it created and not
 the one it edited. MCP-OP-ALIAS-027/028. My suites running; then commit, 7895 restart, G1 again.
 
+
+## 19:48Z — z7b launched on the fixed gate; rf2's cohort blocked by its own compile command; q5z's oracle catches my alias rule
+
+**z7b** (gate vs native on the extraction, strip prompts both arms, 7894 attested at 17125fe ==
+GATE-SHA) launched 19:47:11Z via chain-z7b, "N Z N|Z N Z". This is the gate's claim test after
+both hand-found defects (require-removed as a note; verify-none cannot commit).
+
+**rf2's cohort (R3b) is installed and blocked by a src defect the installer found by running the
+mandate on a pristine bcec265 worktree.** The verb does the move (`:complete true`,
+`:callers-unresolved []`, 9 forms, 4 internal owners, 3 caller files) but the compile command
+its receipt hands the agent omits the repo's test alias, so nrepl is off the classpath and it
+exits 1; the verb reports `:ok :unverified :reason :classpath-incomplete` honestly, and an arm
+told to "run the compile command the receipt names" would see a red unrelated to its work and
+repair, landing bytes after the extract, the exact number the cohort measures. A false red
+terminates the reading as surely as a false green. Fix dispatched: the workspace declares its
+compile aliases in `.clj-surgeon.edn`, the verb uses them in-process and in the printed command,
+and on an undeclared classpath the receipt names candidate aliases and marks the command
+`:guessed`. The installer did not patch the pre-registered mandate; it failed the chain closed
+and named the fix. Also from the installer: an arm launched by accident on a typo'd letter
+(killed within a minute, nothing affected) turned into a refusal for unknown arm letters; the
+chains' driver-wait `pgrep` was unanchored and now is; an atomic `mkdir` lock keeps two released
+chains from launching together; the readout counts `bytes_beyond_verb` from the tree against a
+verb-only reference, because codex logs carry no tool-call markers to count `apply_patch` from.
+Baselines at bcec265 measured, not typed: test-fast 729/6159 with the 5 known routing failures;
+mcp 382/4059 with the known macOS path. `mcp_tool.clj` at bcec265 is not byte-identical to
+2311cc09 (one hunk, the workspace-target-ns fix); references to the nine forms unchanged.
+
+**q5z G1, second pass** (7895 at 40b26b1): the verb commits over the wire, 5 files, 15 sites,
+731 ms; load, suite, residue, protected regions all PASS; **p2 and p6c FAIL on alias choice**:
+three files got the second policy entry where the canonical says the first was free;
+`collisions_resolved 7` is the tell. Root cause is MY brief: I told the builder a policy entry
+collides with any local binding of that name. In Clojure a local cannot shadow the qualifier of
+`store2/fetch-event`; only ns-form aliases and referred names collide, which is what the
+generator, the canonical and the cohort prompt say. Fix dispatched (one rule, two witnesses).
+The byte oracle caught a spec error in the spec's own author, which is what it is for.
+
