@@ -957,3 +957,53 @@ nondeterminism fix inside a refactor branch would destroy attribution, so it is 
 Ledger with inverse receipts: bridge scratchpad `curtaincall-refactor-ledger.md`. Draft for
 Gene: inb-868bb7.
 
+
+## 17:09Z — z3 scored: the corrected gate is the cheapest arm when mandated, and nobody chooses it when free
+
+Rung M, base ab267f9, four runs per arm, server 7894 at 1ca44b4 (dual grammar). Receipt:
+`~/acid/receipts/z3-score.md` (scorer; `z3-score.py`; no runner, prompt or scorer logic edited).
+Acceptance: my background call `rescore.sh z3` was wrong (it takes repo, base, outfile, diffs) and
+died on `dirname: missing operand`; the scorer re-ran it unmodified with the documented arguments.
+
+| arm | n | wall mean (sd) | model returns | tool actions | tokens | extra post-write probes | acceptance failing (of 39) | stale-onset defective |
+|---|---|---|---|---|---|---|---|---|
+| Z mandated gate | 4 | **285.8 (35.8)** | **13.2** | **11.8** | 763,593 | **0** | 2.50 | **0/4** |
+| F optional gate | 4 | 322.0 (60.5) | 18.0 | 14.8 | 1,128,238 | 1.25 | 1.00 | 0/4 |
+| N native | 4 | 356.2 (61.9) | 21.2 | 16.8 | 1,301,344 | 2.50 | **0.50** | 2/4 |
+
+**Learning.** The dual-grammar fix works completely: 5 admit calls, 0 refusals, 5/5
+`verification_status: complete`, 0 previews needed, 0 `apply_patch` fallback on a `.clj` in any
+mandated run (z1: 69 % refused, 5 of 6 fell back). The mandated arm is the fastest and leanest arm
+of the night, 59 % of native's tokens, 8 fewer returns per run; its entire non-gate post-write
+traffic across four runs is one `git diff`. **But 0 of 4 optional runs ever called the tool**, not
+late, not after a native failure, never; one enumerated it by name with a discovery filter and went
+to `apply_patch` anyway. And 0 hazards: nothing was refused, so nothing could be caught.
+
+**Caveat.** n=4. Welch on wall Z vs N: −70.5 s, t −1.97, df 4.8, p ≈ 0.049, d −1.39; a hair inside
+0.05, and 0.82× the v1 single-run floor sd, so a direction to confirm, not a demonstration. The two
+quality instruments disagree in opposite directions: stale-onset says Z clean and N 2/4 defective;
+the acid suite says Z fails 2.50 assertions (acid-7 in all four runs, acid-9 in two) against
+N's 0.50, +1.90 sd of the floor. Neither survives n=4, and which assertions acid-7 and acid-9 are
+must be read before either reading is believed.
+
+**Predictions on record (ae8517c).** 1 Z refusals < 20 %: 0/5, PASS. 2 F adopts in ≥ 2 runs:
+0/4, FAIL. 3 post-write shell < 0.5 per run on Z: 0.25 non-gate, PASS (4.00 if the mandated
+final gate is counted). 4 Z wall within 1 sd of N: gap 1.14× N's own sd, 0.82× the floor sd,
+split, and in Z's favour. 5 ≥ 1 hazard caught: 0, FAIL. Two PASS, two FAIL, one split; the two
+clean failures are adoption and hazard-catching, the two things that would justify the gate
+existing rather than merely being survivable.
+
+**Position taken.** The adoption result measures habit, not value: `apply_patch` is a trained
+reflex and a tool-listing entry does not compete with a reflex. A gate is policy, not a
+convenience, so the doctrine line "free-choice adoption is the acceptance test" gets a carve-out:
+for a GATE the acceptance test is mandated wall at or below native plus hazards caught on real
+caller bytes; free choice remains the test for conveniences. z3 passes the first half and has
+not tested the second.
+
+**Next, pre-registered.** z5-replay: feed the two stale-onset-defective native diffs of this
+cohort (`z3-g1-N-1`, `z3-g2-N-2`) through `admit_clojure_patch` on 7894 as patches against the
+base, preview mode. Prediction: both refused, reason naming the onset defect or the focused
+suite; if both are admitted, the gate's verification profile is blind to the very defect the
+predicate was built for, and that is a finding against the gate, not the predicate. Cost: two
+calls. Then z4 (rung L) scored the same way; rf1 launched 17:06:48Z with a green preflight.
+
