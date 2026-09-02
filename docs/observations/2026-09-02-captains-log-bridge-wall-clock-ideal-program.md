@@ -1050,3 +1050,29 @@ judges are re-scoring the corrected diff. The b1 quality verdict waits for that 
 because groups 1 and 2 worktrees are gone and a truncated diff cannot be recovered there.
 Also: the runner's `TESTS-BELOW-BASELINE` flag on G-g3 was contradicted by the full gate
 (577 in-run, clean on rerun), another orphaned-gate symptom from before the serial fix.
+
+## Receipt 11:00Z — b1 bisect, blind quality under the new rubric (two judges, 20 max, n=3)
+
+| arm | Sol | Opus | mean | note |
+|---|---|---|---|---|
+| A shipped | 19, 18, 19 (18.7) | 16.5, 15, 15.5 (15.7) | 17.2 | |
+| G no-gap-fix (has overlap fix) | 18, 19, 18 (18.3) | 15.5, 17, 15.5 (16.0) | 17.2 | Opus's top diff is G-g2, "by far the DRYest" |
+| O no-overlap-fix (has gap fix) | 17.5, 16.5*, 15.5 (16.5) | 16, 12.5*, 15 (14.5) | 15.5 | *O-g2's tests axis is unverified |
+
+Untracked-file audit (all 21 rollouts, two oracles): no e3 diff lost anything; in b1 only arm
+O created a new file, both times via Surgeon's `create_files` (a new test namespace), in
+groups 2 and 3. Group 3 was recovered and re-scored by both judges (Opus 10.5 to 15, Sol 12 to
+15.5, tests axis only). Group 2's worktree was destroyed at the group boundary, so O-g2 was
+judged on a diff missing its 74-line test file and cannot be repaired; over O's two verified
+runs the judges' mean is 16.0.
+
+Reading of the bisect, at this n: the overlap fix is exonerated on quality (G equals A at
+17.2, and G also drew the fewest refusals and MCP calls); the build that keeps only the
+insertion-gap fix sits 1.2 points below A and G, in the direction of the wave's deficit
+(wave B scored 14 to 15 against A's 17 to 18 earlier tonight). The gap fix is the suspect,
+with the caveat that 1.2 points is inside the 2.25 within-arm spread measured on identical A
+arms. Replication queued as b2 "O G O G O G" one wave after l1, judged blind, with the
+corrected capture. Side observation worth a bead: only the O build's agents used
+`create_files` to put tests in a new namespace; the shipped build's agents never did.
+Rubric held: no clarity deduction cited the reassignment itself; deductions cited duplicated
+body spans (largest: a whole kwCheck `.then` handler copied in O-g3).
