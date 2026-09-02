@@ -57,25 +57,36 @@ and the production tool descriptions. It must narrate its next intended action b
 Stop after tool choice plus the first successful mutation, or at five minutes. It tests the
 acquisition funnel; the driver tests the mechanics. Pair them.
 
-## Promotion ladder (any deterministic contract failure returns to step 1)
+## Promotion ladder (merged from Sol and Opus, 2026-09-02; any deterministic contract failure returns to G1)
 
-| step | what | gate | minutes |
+| gate | test | pass | minutes |
 |---|---|---|---|
-| 1 contract smoke | hand-drive the smallest representative case | zero silent ignores, invalid output, false refusals, unexplained residue | 5–10 |
-| 2 full hand-drive | the real task incl. callers and cleanup, watcher on | returns and wall at or below native's for the same task, by the stopwatch | 10–20 |
-| 3 cold-agent shadow | normal prompt, no prescribed sequence | selects the tool within 3 returns, valid first call within 5 | 5 |
-| 4 single cold completion | n=1 agent completes unassisted | accepted diff, no fallback, returns below native's | 10–15 |
-| 5 paired pilot | 2 tool arms + 2 native arms on Anvil | no acceptance regression, credible return/wall advantage | 20–30 |
-| 6 battery | the claim, at n ≥ 6 per arm, predictions pre-registered | the pre-registered predicates | 15 + scoring |
+| G0 arithmetic | returns budget on paper vs native's for the same task | tool returns ≤ native − 3, no O(N) agent-computed payload | 5 |
+| G1 hand-drive | the real task with the watcher on; one recorded invocation per verb pasted into the pre-registration | does what its docstring says; nothing silently ignored; returns and wall at or below native by the stopwatch | 15–20 |
+| G2 naive-reader | after each call, a fresh cheap model gets ONLY the tool's output bytes and is asked "what is your next call?" | ≥ 80 % determinable (a refusal with an empty diagnostic scores zero) | 2 |
+| G3 shape spec | the watcher's close, written once by Opus | reviewable; every refusal carries next_call; receipt makes a re-read unnecessary | 10 |
+| G4 replay arm n=1 | one agent runs the recorded sequence | zero fallback to `apply_patch` on functional bytes | 15 |
+| G5 cold shadow / free choice n=1 | tool present, not mandated; the agent narrates intent before each call; stop after tool choice + first mutation | chooses the tool within 3 returns, valid first call within 5 | 5 |
+| G6 battery | n ≥ 6 paired, observables pre-registered | the claim | 15 + ~90 scoring |
 
-Cancel a build's battery, not necessarily the build, if it fails twice on the same deterministic
-contract or cannot beat native in the single cold completion.
+Pre-battery total ≈ 52 min against a battery's ≈ 105 min plus a misdirected day. G5 is
+non-negotiable: a verb nobody picks cannot win in the field however fast it is.
+
+**Watcher amendments (Opus):** event-driven per call, never clocked (a clocked narrator
+manufactures relay hops); six fields only per call (`#`, intent, expected vs actual, deviation
+class, **return-tax**: would an agent pay a model return here, **context-privilege**: did the
+driver use knowledge the tool did not supply); hard 60-minute cap plus an idle stop, both
+self-firing (the commentary skill's four runaway scars); Opus once, at the close, for the shape
+spec only. **Correction to the chief of staff's critique (Opus):** the rf1 ethnography was NOT
+tweezer work done late; it read agent rollouts, and its findings are agent behaviour a hand
+session never emits. Hand-drive replaces the missing smoke test, not the ethnography.
 
 ## Standing decisions (2026-09-02)
 
-- rf2 (`:extract!` with `:rewire-callers`) and q5z (`alias_migration`): finish the builds,
-  hand-drive both at steps 1–2, cold shadow at 3, before any pilot or battery. No battery as
-  planned.
+- rf2 (`:extract!` with `:rewire-callers`): finish the build, G0–G5 by hand (≈ 50 min), then its
+  n=3 kill-or-promote cohort with the pre-registered readout. q5z (`alias_migration`): finish,
+  hand-drive at N=5 only (G1–G2, 10 min), then the slope runs as designed: its readout IS the
+  battery (n=1 per N) and its acceptance already carries the receipt rf1 lacked.
 - The gate cohorts already queued (rs1, z6, z7, z8) run: they need no attention and measure the
   one shape that has already won.
 - Every tweezer session's records and commentary are committed under `docs/observations/` as a

@@ -1369,3 +1369,47 @@ strip, native × 3) launched 18:08:05Z with the per-arm session leader and the e
 counter in place; formatter branch `bridge/format-form-scope` pushed at 62981ee and handed to the
 mayor.
 
+
+## 18:16Z — tweezers before the woodchipper: Gene's critique, two brains, one protocol, and GO
+
+Gene, verbatim: *"to discover the novel forms of tools we need, running on anvil (multi-armed)
+seems ridiculous. That is wood chipper and chainsaw work. we need tweezer work, nearby, fastest
+feedback, in REPL. We do work on our side of the anvil interface, highly interactive. critique. I
+recommend doing surgeon refactor in REPL, maybe with watcher (like
+/live-writing-session-commentary generating commentary and metacognition, on opus or sonnet?)
+And when we discover pattern that feels good, where wins are demonstrated, then we put it into
+the anvil test multi-arm battery?"* Ratifying the meter: *"the job of the live writer observer is
+to provide at the meter measurements, to ensure that 'feels good' is true, but also that 'was
+actually faster' -- ask the runner, but also look at stopwatch."* Then: *"Captain log. Go!"*
+
+**Verdict (mine, then both brains): adopt with changes.** Anvil verifies discoveries; it does not
+manufacture them. rf1 pointed six arms at a verb nobody had executed once: a missing ten-minute
+smoke test, not a missing methodology (Opus). "Feels good" is what promoted the winners list that
+lost 1.4–1.75× when measured, because a human at a REPL absorbs the returns that cost an agent
+its wall (Sol: *"the REPL can optimize the wrong product: a tool that feels excellent when
+operated by its author"*). The driver's blind spots are choice and epistemic state: noticing the
+tool, guessing the schema, learning from a refusal in one fact, trusting the receipt, abandoning
+it. Two cheap instruments restore them inside the loop, neither a battery: the naive-reader probe
+(a fresh model gets only the tool's output bytes: "what is your next call?"; ≥ 80 % determinable)
+and the cold-agent shadow / free-choice arm at n=1 (five minutes; tool present, not mandated).
+
+**Correction accepted.** I told Gene the rf1 ethnography "was tweezer work done post hoc". Opus:
+false; it read six agent rollouts, and 8/8 refusals, 9 % commit rate, 4/4 re-reads after `ok`,
+13–15 ritual returns are agent behaviour a hand session never emits. Hand-drive replaces the
+smoke test, not the ethnography. Also accepted: arithmetic (G0) before both REPL and apparatus,
+the day's highest-value finding was paper; and a watcher with no exit criterion inherits the
+commentary skill's four runaway scars, so it carries a 60-minute cap and an idle stop.
+
+**Protocol**: `docs/tweezer-loop.md` (52ca6b1, amended). Watcher = Sonnet, event-driven per call,
+six fields (intent, expected vs actual, deviation class, return-tax, context-privilege), the
+transcript's timestamps are the stopwatch, running totals against native's benchmark for the same
+task (rf1 native: 9–10 returns to the move, 20–24 total, 311–342 s); Opus once at the close for
+the shape spec. Ladder G0–G6, ≈ 52 min pre-battery. rf2: G0–G5 by hand, then its n=3 cohort. q5z:
+hand-drive at N=5, then the slope as designed (its readout is the battery). Gate cohorts already
+queued run untouched.
+
+**GO.** Tweezer session 1 starts now: the rf1 extraction by hand on `~/src/clj-surgeon-tweezer`
+(branch `bridge/tweezer-1` at 2311cc09), driver = bridge, tools = the bridge's own Surgeon MCP
+(7888 local) and the tree's CLI, expectation stated before every call, watcher on the session
+transcript. Receipt to follow under `docs/observations/`.
+
