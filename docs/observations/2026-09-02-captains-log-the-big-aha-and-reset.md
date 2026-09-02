@@ -776,3 +776,43 @@ anyway. Round six: an unrecognised body line refuses (:hunk-truncated, naming th
 post-image equal to the pre-image refuses (:no-op-patch), one terminating newline is
 stripped so seven of 109 field payloads stop tripping spurious context mismatches, a
 single-space V4A context line counts as blank, and a stale v1 paragraph leaves the doc.
+
+## rf1 ethnography protocol, pre-registered (16:36Z)
+
+Gene: "an opportunity to do some ethnographic research in terms of what works, what
+doesn't, specifically where does behavior not match expected behavior. And since this is
+the sweet spot, we spend a little extra time trying to optimize."
+
+Expected behaviour per arm, written before the first rollout is read, from the
+safe-refactor playbook and the skill's own workflow:
+E1. Study first: one ls-tree (or outline) of the source file, one ls-deps or ls-extract on
+    the target unit, before any write. Deviation: writes before study; more than two study
+    calls; study via grep instead of the structural op when the op was available.
+E2. Plan then execute: :extract (plan) is read, then :extract! (or the MCP extraction verb)
+    is called once with the reviewed plan. Deviation: skipping the plan; re-planning after
+    a refusal without reading the refusal's fields; falling back to manual moves.
+E3. One structural move, verbatim: the forms land in the new namespace byte-identical, the
+    ns form of the source gains one require, callers are alias-qualified. Deviation: forms
+    retyped; formatter churn; callers missed; declare left behind.
+E4. Verify once, proportionally: compile-check, then the focused namespaces, then test-fast
+    once at the end. Deviation: repeated full suites; test runs before the move is complete;
+    no compile-check.
+E5. The receipt is trusted: after an extraction receipt, no re-read of the moved forms, no
+    git diff. Deviation: confirmation calls after a receipt (the taxonomy's CONFIRM class).
+E6. Refusals are recovered from their fields: a refusal with a next_call or a named missing
+    field is answered in one call. Deviation: verb switch, probing, native fallback, or
+    abandonment; the refusal text quoted verbatim in every case.
+For each run the ethnographer records, turn by turn: the step the agent was on, the
+expected act, the actual act, the deviation class (none, prompt ambiguity, missing
+affordance, refusal not actionable, output too long to use, habit or ritual, task
+misunderstanding), the verbatim evidence, and the cost in returns. Native arms are read
+against the same E1 to E6 with native equivalents, so "deviation" is not synonymous with
+"used the tool". Instruments: the rollouts pinned by worktree; the servers' own telemetry
+via the repo's study-agent-usage, study-agent-timeline and study-agent-read-chains targets
+on the 7893 and 7889 telemetry dirs for the cohort's window; the acceptance script; the
+curtain-call refactor ledger from the live branch as a second, human-scale source.
+Output: a friction table (deviation class by arm with counts and one verbatim example each),
+the three largest deviations by returns lost, and for each a proposed fix typed as prompt,
+tool affordance, refusal text, or doctrine. Then rf2: the same task with the top fixes
+applied, same arms, to measure whether the deviations move. That is the optimisation loop
+Gene asked for, on the square where the tool is supposed to win.
