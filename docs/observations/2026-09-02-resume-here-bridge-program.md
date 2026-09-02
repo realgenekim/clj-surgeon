@@ -671,3 +671,21 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   stays. Native patch stays on `bridge/settings-lens-native` (push it as the specimen).
 - Mayor's beads: 23j mine (in progress); 3s5/c37/dk9 fixed on rf2 a66b626 (close on merge); oni P2.
 
+
+## RESUME DELTA 2026-09-02T23:12Z
+
+- **Channel rule:** replies to Gene go to seat "bridge" (memory `reply-seat-bridge-until-requested`).
+- **Merge ruling** (log 2972f73): curtain-call main auto-deploys to live Postgres → no blind merges.
+  Owner ops routed to the mayor (Gene: "You can ask mayor to run curtain call and do nrepl ops to
+  check Postgres"): inb-3a9818 — (1) create `store_events_idempotency_key` from the REPL + paste
+  `pg_get_indexdef`; (2) run `make fold-diff-checkpoint` from `bridge/fold-diff-tool` (builder
+  acaae1bcfa4441c72, worktree `~/src/curtaincall-cfp-folddiff` from 96387535) and paste the diff.
+  Merge order: fold after (2) reviewed, store after (1) + paste. Announce the branch to the mayor on
+  seat bridge when it lands.
+- **Census verb landed** `bridge/census-verb` f325529+7244141 (fifth tool; q5z not on main); my suites
+  running (`~/tmp/census-{test-fast,mcp-test}.log`, waiter bdv1wx2gk); push after green; mayor queue.
+- Running: LENS-003 ae6df9a536b15e3f4 (then the migration commit on the lens worktree: 16-change
+  transaction from the transcript / `.plan/surgeon-settings-lens.patch`, second transaction for the two
+  conditional arms, tripwire test edit delegated, gate, push, inbox); 23j ac9d2922b2d295e87 on rf2;
+  study ops aa962e1fb576e0072.
+
