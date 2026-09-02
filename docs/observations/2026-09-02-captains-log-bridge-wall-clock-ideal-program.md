@@ -1591,3 +1591,37 @@ seven Surgeon-arm diffs did not. Whether the churn is the tool re-emitting whole
 a rewrite or the agent running a formatter is being attributed from the rollouts now; the
 answer decides whether this is a Surgeon product defect (whole-form re-emission reformats
 the untouched remainder) or agent behaviour.
+
+## Receipt 08:58Z — l1 scored: the large rung is the per-form write API's worst case, not its best
+
+| arm | wall s | actions | MCP calls (writes) | native patch cells | typed refusals | tokens | acceptance | seconds per owner |
+|---|---|---|---|---|---|---|---|---|
+| native N (4) | 215 | 10.5 | 0 | 1.0 | 0 | 0.44 M | 0 failed, all four | 10.2 |
+| shipped A (4) | 457 | 21.0 | 9.8 (7.8) | 1.0 | 6.0 | 1.03 M | 0 failed, all four | 21.8 |
+| mandate Y (3) | 625 | 27.7 | 24.0 (10.0) | 1.7 | 14.7 | 1.17 M | 0 failed, all three | 29.7 |
+
+(1) All eleven completed runs converged on the identical result (11 files, one
+currentTimeMillis left inside clock.clj) and all pass the rung-L suite 12 tests, 82
+assertions, 0 failures. Native's three-minute runs are complete and correct; there is no
+quality to trade against the speed. (2) Native does the whole 21-owner change in ONE
+apply_patch cell (+59/-34 across 11 files). The shipped arm adds 7.8 MCP writes on top of a
+still-present native patch; the mandate adds 10 on top of 1.7. A per-form write API cannot
+batch what one patch does in one call, so high fan-out is its worst case, the opposite of
+the usual claim for structural editors. (3) The shipped arm substituted nothing (native .clj
+reads 4.0, same as native); only the mandate substituted reads, and neither substituted
+writes. (4) Refusals are rung-specific: invalid-compact-relation hit every Surgeon run
+here (27 of 71 refusals) and never appeared at rung M; one mandate run drew 24 refusals
+including unknown-fields ten times. (5) Collateral: two shipped diffs shipped +508/-476
+against the canonical +59/-34, nine times the review burden for the same 93 lines of work.
+Cause verified by the scorer: Surgeon re-prints each form it edits, reformatting :require
+to one-per-line and :import vectors to lists, and one run rewrote docstring prose; all pass
+acceptance, so this is review burden, not incorrectness. (6) Against the rung-M floor as an
+approximation: shipped-vs-native wall 2.8 sd and actions 3.6 sd clear; mandate-vs-shipped
+wall 1.9 sd does not.
+
+Three product findings for the maintainers, in priority order: whole-form re-print must
+preserve the source text outside the edited span (a structural editor that reformats the
+untouched remainder of a form defeats its own review-burden argument); a batch write verb
+that applies one intent across N owners in one call, since fan-out is where the tool is
+supposed to win and where it lost tonight; and the invalid-compact-relation refusal at
+fan-out, which no agent recovered from within its fields.
