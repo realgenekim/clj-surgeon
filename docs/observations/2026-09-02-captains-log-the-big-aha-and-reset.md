@@ -3031,3 +3031,18 @@ the lens (LENS-002), the identity no-op (LENS-003), dry plans both ways with the
 receipt, then the migration as two Surgeon transactions (LENS-004). Native's patch stays as the
 specimen on `bridge/settings-lens-native` 74a3d7e6.
 
+
+## 23:39Z — Anvil seat: position and the user question; Gene report regenerated
+
+Gene: *"Idea. Should I get a clause code session going on anvil — and we can move your work there????"*
+Position sent: a second seat, not a move — builders and suites belong on Anvil's 16 cores; this seat keeps
+the phone channel, memory, inbox creds, the tweezer server and the resume-note pointer. Brief pre-staged:
+`docs/observations/2026-09-02-anvil-builder-seat-brief.md` (identity `forge-anvil <forge-anvil@anvil>`,
+scoped token in `~/secrets`, never 7888/7894/7895 or `~/acid/GO-*`/lock/chains/fleet dirs, resume
+pointer, first two builds). *"What user should I use ?"* — Anvil's users read from the box: anvil-peek,
+dev-a/b/c, developer, foreman, foreman-ops, gene, kentbeck, merger, surgeon, tester. Recommended a new
+`forge` user (no sudo): tester owns the acid apparatus, dev-*/foreman/merger/kentbeck are the curtain-call
+fleet, surgeon runs the production Surgeon on 7888; `developer` looks generic but its owner is unknown.
+Gene report regenerated (700393e; inb-600289): anchor win, session 4 shipped, z7c flat, false greens,
+composition definition, merge order and the four decisions.
+
