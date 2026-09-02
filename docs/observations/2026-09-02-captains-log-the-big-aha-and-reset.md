@@ -2594,3 +2594,19 @@ runs. **Standing claim for the gate: correctness (every commit verified, no waiv
 speed.** Second cohort today where a small-n speed win was a slow native trio (z3→z6, z7b→z7c):
 rule stands, n≥6 before any wall claim. rf2's 0.723× remains the only within-cohort speed win on
 this rung. Tech tree E1 and the Gene report §1/§3 corrected in this commit.
+
+## 22:14Z — store round three at f568d595: every writer claims the key; a real 32-bit collision in the witness
+
+Builder: (A) `append-all!` honours rules under the lock — a claimed key is skipped (not written,
+not folded, no sink) and named in `:skipped-duplicates`; both participation writers declare
+`folds/speaker-participation-rule` (constructors live in folds because domain-architecture-test
+forbids domain → store) and the precheck is gone; (B) `:already-announced-unverified` with a
+warning banner; (C) the conflict banner names the refused relation and says the rest WERE applied;
+(D) exact `pg_get_indexdef` match + `indisunique`, schema-qualified — written from knowledge,
+unverified against a live server, so a first Postgres boot may refuse and print expected vs
+actual (documented first-deploy note); (E) SHA-256 over canonical `pr-str`, and the witness carries
+a birthday-search collision: two real announced-speaker bodies differing only in org hash to
+123905342 under the old digest, which reported `:already-announced`; now `:conflict`. Three of the
+builder's earlier assertions were rewritten in place with notes naming their successors. Builder's
+gates: unit 1038/12872/0. My own unit run and Sol's third pass running in parallel; push on both.
+
