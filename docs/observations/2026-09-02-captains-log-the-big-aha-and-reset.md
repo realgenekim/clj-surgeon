@@ -228,3 +228,21 @@ runner records the task, no bd). Prediction from the audit: J removes more retur
 H removes little; if J clears the floor on actions with acceptance unmoved, that is a
 zero-tool-cost win on every job in the fleet, and the beads line in every CLAUDE.md is a
 decision for Gene.
+
+## Close-losers branch, red team round one (13:05Z): NO-GO, the signature class again
+
+The typed refusals that close the loser shapes at the server were built (mcp_close_losers.clj,
+splice_drift.clj, design doc with EARS MCP-OP-CLOSE-*, seven new tests; my own runs match
+main's failure sets exactly). The red team's executed probes found the headline refusal dead
+in production: the server keywordizes request params before validation and the refusal read
+string keys, so it returned nil for every real request while every unit test passed with
+string keys. The drift oracle scored zero for junk adjacent to a span and for insertions at
+a zero-length span, because it located gaps by searching from a cursor rather than at the
+offsets the pre-image spans predict; only whole-file reformats were caught. And one
+restaging action (assoc_entry) was missing from the refused list. Sound and kept: the
+whole-file drift gate, the splice path (comments, metadata, reader conditionals and
+multi-line strings preserved byte for byte), the winners unrefused with drift 0, executable
+next_calls, nine EARS ids each with a witness that fails when its check is removed. Fixes
+routed with the rule that the witness for the key mismatch must drive the production entry
+path, not the validator. Fourth "verifier blind to its subject" instance of the day, caught
+before a commit by the doctrine's own gate.
