@@ -2967,3 +2967,21 @@ two conditional arms form-for-form onto `(fn [settings] …)` with the no-op ret
 delegated test edit (tripwire numbers, the `(= arm-count guards)` assertion rewritten, a row for the
 24th write `speaker.reminder-schedule-configured`), then `bin/kaocha unit` to 0, commit, push, inbox.
 
+
+## 23:29Z — 23j: already fixed on the rf2 branch (EXTRACT-014, 57e3ca0); witnessed on all three MCP surfaces at 5e6cdd2
+
+Builder finding: the live reproduction against main was real, and the fix already exists on
+`bridge/rf2-extract-rewire` — not on origin/main. Root cause pinned by mutation: with the wrong root,
+`file-path->ns-name`'s fallback takes the FIRST `/src/` in the absolute path, and every checkout under
+`~/src/<repo>` has an outer `/src/` ancestor, so the server root's fallback grabbed that one. Witnesses
+added (fail on the mutated pre-fix behaviour, pass now): in-process plan-extraction, in-process
+apply extraction (checks the written file), and the real HTTP wire on port 0 — all with the workspace
+nested under `<tmp>/src/<fixture>/src/…` and the server root pointed elsewhere. Wire target-ns before
+(mutated) `curtaincall-cfp-lens-scratch-fixture.src.cfp-scheduler-killer.settings-lens`, after
+`cfp-scheduler-killer.settings-lens`. Docstring copy (3s5) confirmed gone on all three surfaces: the
+header is exactly `(ns cfp-scheduler-killer.settings-lens)`. CLI `:extract` not exposed (derives from
+the file path). Intent MCP-OP-EXTRACT-023 with `@spec` tags (the repo's convention). Suites: test-fast
+731 with the 5 pre-existing routing failures; mcp-test 385 with the 1 pre-existing (on this box it is the
+homebrew clj-kondo path expectation). My own mcp-test run in progress; push after. Disposition for the
+mayor: 23j closes on the rf2 merge, pointer 5e6cdd2.
+
