@@ -1652,3 +1652,43 @@ not state.** Fix dispatched to the builder: `:applied`, `:target-ns`, `:target-f
 the next call from the receipt alone. This is the ladder doing its job: the verb passed G1 by
 hand and failed G2 on its receipt, before any agent or battery touched it.
 
+
+## 19:02Z — G5 cold shadow on the rewiring verb: zero adoption; the anchor pinned; q5z built
+
+**G5.** One cold Codex agent in a fresh worktree at rf2's sha (57e3ca0), the stripped native
+prompt with its tooling rule replaced by one non-mandating line ("this worktree is clj-surgeon
+itself; its babashka CLI is available in place as `bb -m clj-surgeon.core :op …`; `:op :help`
+lists the operations; use it or not as you judge"). Result: **the tool was never mentioned or
+called**; the extraction was done natively in 237 s (18:57:14Z → 19:01:11Z), five files, the same
+shape as native everywhere; the agent also reported `TURNS: 1` against a prompt that asked for
+a tool-call count, and noted the checkout was not the base the prompt named (true: the rf2 sha,
+whose five subject files are byte-identical to 2311cc09). **Free-choice adoption today: 0 of 9.**
+Presence and a name are not a path. The verb that wins in the hand (G1) and reads wrong on its
+receipt (G2) is not chosen cold (G5). Next on the ladder is the cold shadow with the tool named
+IN the task's own terms (what the receipt-first affordance looks like), and the mandated n=3.
+
+**q5z built** (`bridge/q5z-alias-migration`, base 1dc018b): fifth top-level MCP tool
+`alias_migration`, payload constant in N, receipt O(1) (< 1200 bytes at N=12, no per-file
+list; details behind `details_path`), tool-side discovery, per-file alias against that file's
+bindings, atomic through the kernel entrance `execute-mcp-change!` (drift gate per form; a
+concurrent edit that adds a call site to an unplanned form is not migrated, written into the
+design; the residue predicate over the tree is the closure proof), five typed refusals each with
+an executable `next_call` (expect mismatch, policy exhausted, empty scope, indirect reference,
+ambiguous ownership), `.cljc` reader conditionals refused rather than guessed. MCP only by
+design. Fails-first 118 + 64 assertions. My suites running.
+
+**Anchor R pinned.** The spec's var did not exist in curtaincall-cfp; measured menu: no single
+var of `store` reaches 68 files; the whole-lib rename `store` → `event-store` does (68 src files,
+815 src sites, plus 106 test files, 1075 sites; prefix-sharing siblings `store-pg`,
+`store-checkpoint`, `store*-test` are real sed-catchers). Pinned as a lib-only migration
+(`:var nil` both sides; q5z extension dispatched: rewrite every var of the lib, replace the
+require, rename the defining namespace file, refuse on target-lib-exists and on sibling
+touches). Gate `bin/kaocha unit` (1007 tests, 12232 assertions, 0 failures at base). R
+predicates r1–r6 (scope, residue, load, suite, siblings, policy) with churn informational.
+`chain-sl1r.sh` armed on GO-SL1R (pid 1624624); the slope chain on GO-SL1 (pid 1122646); both
+need 7895 attested == Q5Z-SHA.
+
+**z7 done** (gate on R3, n=3): walls Z 281 374 462 vs N 429 749 486, but the runner's diffs show
+two Z arms touching 1 and 0 files: fast walls on abandoned work until the scorer says otherwise.
+z8 (rung L control) running.
+
