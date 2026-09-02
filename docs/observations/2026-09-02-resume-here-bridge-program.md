@@ -66,3 +66,21 @@ UPDATE 06:05Z (supersedes older lines above where they conflict)
   the turn-budget paragraph survives (Hawthorne control U vs V vs W). (2) b1 bisect -> which edit fix causes the wave
   clarity/conformance deficit -> log + tell mayor (slice-0 hold). (3) k1 A/N -> K action count -> inb-ce2f15 note.
   (4) R2 real job (F5 observe meter, prompts R2-*) one unit. (5) Large multi-owner rung still unrun (E4).
+
+UPDATE 06:40Z (supersedes above where they conflict) — COMPACTION INSTRUCTIONS, durable copy (Gene: "Otherwise memento problem")
+- On first action after compaction, read this note (clj-surgeon main docs/observations/2026-09-02-resume-here-bridge-program.md,
+  same text as scratchpad RESUME-HERE.md) before doing anything else; it supersedes the summary wherever they disagree.
+- Then: ssh -n tester@100.66.152.23 'tail -5 ~/acid/receipts/e3.log'; if monitor bjjew05fm is gone, restart it with e3 and b1 in
+  its file list. Do NOT relaunch anything before reading receipts: chains are queued and a second launch collides on cores.
+- Anvil hygiene ratchets learned 06:30Z: (1) never `sed -i` a bash chain script while it is running (bash reads by offset; the
+  edit shifted the group string and dropped arm W and the cp line); (2) chain drivers must not copy runners — v5 is canonical,
+  copy only while nothing runs; (3) "<run> done" markers must be written from a trap, the k1 driver died on a syntax error
+  after its arms and the marker never appeared (chain-e3 waited 12 min; marker written by hand); (4) pkill -f patterns must
+  live in a scp'd script, never in the ssh argv (killed my own ssh twice); (5) use `ssh -n` when the remote backgrounds a job.
+- e3 state: first launch 05:48Z ABORTED (runner had A/U/V at 7888 = not mine, ~1 min of calls went to that server; disclose to
+  mayor); relaunched 05:50Z "A U V W A U|V W A U V W" on 7893 (receipts e3.log; aborted copy e3-aborted-7888.log). Caveat: the
+  W start line printed server_sha=41eee738 while its url is 7893 — a per-arm sha capture race; verify from 7893 telemetry.
+  chain-bisect.sh still waits on "e3 done" then runs b1 "G O A|G O A|G O A".
+- Edit-wall retro DONE (log receipt 06:25Z, commit a369097): tests are 2–48 s per arm, subtracting them reorders nothing;
+  ~87% of wall is model time between actions; suite_invocations grep over-counts up to 12x; 9 s/action is an average
+  (K: 45 s/action). Sol predicted a big shrink (trusted my bad premise); Opus checked the premise and was right.
