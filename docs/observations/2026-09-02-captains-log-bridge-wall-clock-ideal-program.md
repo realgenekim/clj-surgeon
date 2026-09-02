@@ -1234,3 +1234,40 @@ Night's standing after n1 quality: wall, shipped 1.8x native; conformance, nativ
 clarity, native slightly ahead inside noise; one correctness defect class specific to the
 Surgeon arms. The judges' disagreement pattern is stable: Sol compresses toward 18, Opus
 spreads 14 to 19 and finds the defects; both agree on direction.
+
+## Receipt 13:40Z — fleet round 6 on n1: the diagnosis is the write contract, and substitution is the hill
+
+Convergent, both reviewers independently. "Additive, not substitutive" is a property of the
+tool's contract, not agent discipline: Surgeon's write verbs demand complete prior knowledge
+(exact from/to literals, exact owner names; the tool discovers or chooses none of them), and
+that precondition is satisfiable only by the native read loop, so Surgeon can replace
+apply_patch, which was already cheap and atomic, while adding a locate-and-quote step in
+front of it. The steps a structural editor should have removed and did not: rg/sed locating
+(the shipped arm shells more than native), post-write git diff and re-reads (a sub-500-char
+receipt in the tool's idiom does not discharge the agent's need to see a diff), and write
+consolidation (9.7 write ops for a change native made in 3.7). Opus adds the sharpest
+line of the night: the tool's cheapest affordance is top-level anchored insertion, which
+selected the wrong edit site in six Surgeon diffs (the guard at the function's top anchor
+instead of inside the branch). The cheap affordance chose the defect.
+
+Prompt framing compounds it: "Surgeon is available, plain edits are fine" is permissive, and
+availability gets layered, never substituted. Both propose the same pair of six-run
+discriminators: (1) prompt ablation, Surgeon optional with "fastest safe completion" versus
+native; (2) a substitution mandate plus trusted receipts (inspect replaces rg/sed on .clj,
+Surgeon writes replace apply_patch on .clj, a verified receipt is terminal, no re-read, no
+git diff) versus the current mandatory-availability prompt. Predictions: if the gap halves
+under the mandate, the prompt carried half; if shells stay at 14 or acceptance worsens, it
+is the contract and no prompt fixes it. Opus's free third experiment runs on the existing n1
+rollouts: classify every native call in the Surgeon arms as pre-edit (supplying literals
+the next write requires) or post-edit (confirming a receipt); pre-edit at 60 percent or
+more means contract. Running now.
+
+Honest headline, both: on the first clean paired cohort the shipped Surgeon cost 1.8x wall,
+1.85x tokens, 2.1x non-test actions and lost on every quality meter, n=6, one task, one rung,
+the task being a JS string in one file, the one shape structure cannot reach. The thing most
+likely to change it is a task where locating is the expensive part, run under a substitution
+mandate. Divergence on sequencing: Sol says settle substitution before the large rung;
+Opus says the large rung is the only cohort on the tool's advertised shape and
+substitution is an axis, so run l1 as native / Surgeon-available / Surgeon-mandated.
+Both are queued: s1 "X N X N X N | Y A Y A Y A" (X optional, Y mandate) after v1, then l1 as
+"A N Y" x4 with the mandate as the third arm, then b2.
