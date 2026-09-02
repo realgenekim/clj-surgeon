@@ -132,3 +132,10 @@ all gates green; logged 1163443. Diffs frozen complete (12/12); judges running (
 Chain: k2 "A K A K A K" RUNNING (07:20Z) -> v1 -> l1 -> b2 (chain-4b, randomised). Bisect settled (3ed0f84): gap fix introduces
 ambiguous-insertion-gap; beads filed by mayor: clj-surgeon-f5e (P1), -vcz (P2, credible not proven), -xio (P1 invalid-intent-form
 tax). Mayor's sol fixed the analyzer flake (33e03075). NEXT: n1 tables -> log -> fleet round -> mayor (this is Gene's wake-up headline).
+
+UPDATE 13:55Z — n1 scored + quality logged (6e4ff8f, fac1449); fleet round 6 (cc22b63): write contract makes Surgeon additive;
+substitution is the hill. Wake-up brief for Gene: docs/observations/2026-09-02-wake-up-brief-surgeon-program.md (ff52189).
+Arms X (M-optional: Surgeon optional) and Y (M-receipt + L-receipt: substitution mandate + trusted receipts) installed in v5;
+chain-3b (replaces chain-3): after "v1 done" runs s1 M "X N X N X N|Y A Y A Y A" then l1 L "A N Y A N Y|Y A N Y A N"; chain-4b
+then b2. v5 also: PROMPT-MISSING guard in arm_run. Call-site taxonomy (pre-edit vs post-edit native calls in n1 Surgeon arms)
+being appended to n1-score.md by the scorer agent. k2 in progress (A 593/775, K 614/716/724). Monitor: restart with s1 b2 added.
