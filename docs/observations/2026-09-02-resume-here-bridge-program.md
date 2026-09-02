@@ -620,3 +620,15 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   sha). Gate: characterization digest + `bin/kaocha unit` 0 failures. Push the correct tree; inbox for Gene.
 - Never git stash in any curtain-call worktree (parallel agents share the stash).
 
+
+## RESUME DELTA 2026-09-02T22:50Z
+
+- THREE builders on Buster: lens step A aac78b909147d4a88 (`~/src/curtaincall-cfp-lens`); census
+  ae28eeb3c06c1aeb1 (`~/src/clj-surgeon-census`, re-specced per Sol: five classes incl. `:unknown`,
+  four-condition guard rule, evidence fields); study ops aa962e1fb576e0072 (`~/src/clj-surgeon-study`,
+  `bridge/study-ops-mcp` from b2177ad; Gene's nudge via the mayor; clj-surgeon-0me; inb-f403aa updated).
+- Sol's plan opinion applied (log b2177ad): step B = dry plans first, native production default,
+  Surgeon arm research, no auto-winner; census not an enforcement gate.
+- Merge-queue note: census and study-ops both touch the MCP schema/tool files → rebase the second.
+- Gene asked "Where are they running": all on Buster; Anvil idle, lock free.
+
