@@ -1847,3 +1847,72 @@ bitter lesson caution in repo. And vision of ideal vim/emacs and 'think compile 
 what makes it elusive? Lastly, what could we have done in our methodology to have not spent
 weeks on dead ends?" Design is in deliberate planning with Sol and Opus (three plans each,
 critique, choose); the commentary and the post-mortem follow as their own receipts.
+
+## Receipt 11:49Z — the build mission: design chosen; the bitter-lesson boundary; the elusive editor; the methodology post-mortem
+
+**Design.** Sol and Opus, planning independently with three plans each and a forced critique,
+chose the same plan: a gate on the agent's own native patch (`admit_clojure_patch`). One call
+takes the unified diff the agent was about to apply, applies it to an in-memory snapshot,
+re-parses pre and post images as forms, reports the delta by owner and by protected node
+class (comments, metadata, reader conditionals, discards) rather than by hunk, measures byte
+drift outside the hunks, refuses form-level hazards (unreadable post-image, duplicate
+definition of one symbol in a file, a later redefinition, a require removed) with an
+executable next_call, commits atomically, runs the kondo delta and the focused suite, and
+returns one receipt that replaces the three post-write returns. Homoiconic edge: the gate
+reads the patch's result as data, so it can tell a binding from a symbol in a string, prove
+unchanged nodes byte-identical, and see the shadowed-declaration defect the acceptance suite
+passed last night. Why it beat the fan-out intent verb and the compiled dossier: its value
+does not depend on a route the agent has twice declined; it turns every native edit into a
+verified one at the point where verification currently costs three returns; and it is the
+carrier for the other two later. Building now on branch bridge/admit-gate, LID-style with
+phase stops, then measured as arm Z (native plus gate) against native on rungs M and L;
+prediction: post-write shell calls to zero, wall within one sd of native, the stale-onset
+and shadowed-kwCheck classes caught at the gate. The alternatives, filed not dropped: the
+workspace-scoped transform with a predicate selector (the only plan that can make wall go
+positive, on fan-out only), and `prove`, loading the unwritten candidate into the warm JVM.
+
+**The bitter-lesson caution in the repo** (2026-08-08 log, "invest in general perception,
+addressing, cardinality, preservation, and replay; let stronger future models supply paths,
+interpretations, architecture, and replacements; do not encode one special refactoring
+opinion for every production incident") was right and was not followed by the surface that
+shipped. Perception, preservation and replay are exactly what a gate is; a per-form intent
+grammar with its own field vocabulary is exactly the hand-encoded opinion the caution warns
+against, and the ledger says two thirds of the tax was agents failing that grammar. The
+caution needs one more clause the night supplies: the general capability must also be on
+the route the model already takes, or the model will route around it, correctly.
+
+**The ideal vim/emacs and "think, compile, bang".** The vision in the repo is one gesture:
+name a selection on an immutable snapshot, compile the intent into a guarded transaction,
+bang it in with one receipt; marks and motions, but hash-bound and proof-carrying. What makes
+it elusive is not the compiler, it is the three things vim gives a human for free that an
+MCP tool must pay for in returns: the mark is in the human's head at zero cost, while the
+tool must be told exact literals it does not discover; the human sees the buffer after the
+bang for free, while the agent pays a return to trust the receipt; and the human's motions
+are one keystroke, while every tool call is a full model turn. Vim's economics are
+keystrokes per thought; the agent's are model returns per thought, and a return costs nine
+seconds and the whole context. So "think, compile, bang" works for an agent only when the
+think and the bang are the same turn as the patch it was going to write anyway, which is
+the gate, or when one bang replaces twenty patches, which is the fan-out verb. The middle,
+a better per-form editor, is where the vision has been living, and it is the one shape
+that cannot pay for itself.
+
+**Methodology post-mortem: what would have saved weeks.** (1) Measure the free-choice
+baseline first. The single most informative cohort of the night (Surgeon optional: three of
+three declined it) cost six arm-runs and answers the adoption question before any feature
+is built; it should be the first experiment of any agent tool, and repeated after every
+release. (2) Establish the variance floor before any comparison: nine identical runs
+spread 42 percent on wall and 0 to 4 on the acceptance suite; every wall claim under 170 s
+and every quality claim of the summer was inside a floor nobody had measured. (3) Verify
+the subject before measuring it: server identity read from the server, prompt hashes,
+worktree commits, attested per arm; half the night's withdrawals were receipts blind to
+their subject, and the same class (a "main" that was 69 commits stale) had been on Anvil
+all along. (4) Type the ledger from day one: the typed refusal ledger settled in one pass
+what judge scores could not resolve at any n, and the invalid-intent-form tax, two thirds
+of all refusals, would have been visible on the first week's telemetry. (5) Score the
+agent's route, not the tool's features: the call-site taxonomy (pre-edit, post-edit,
+layering) is the measurement that named the mechanism; feature work was aimed at refusal
+round-trips, which the taxonomy shows were not where the cost was. (6) Dogfood on real jobs
+under a wall clock, with the native route as a positive control in every cohort; a tool
+whose benchmarks never include "do it without the tool" cannot lose, and so cannot learn.
+(7) Keep the caller as a variable: everything this summer was inferred from one caller on
+one repo. The gate is the first shape that survives all seven.
