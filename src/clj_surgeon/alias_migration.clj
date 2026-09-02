@@ -156,25 +156,6 @@
 
       :else #{})))
 
-(defn- top-level-definition-names
-  [root-node]
-  (into #{}
-        (keep (fn [node]
-                (when-let [head (head-name node)]
-                  (when (str/starts-with? head "def")
-                    (some-> (nth (meaningful-children node) 1 nil)
-                            simple-symbol-name)))))
-        (filter meaningful? (children root-node))))
-
-(defn file-bindings
-  "Every name bound anywhere in one parsed file: locals, parameters, and
-  top-level definitions. Deliberately scope-blind; it answers only \"could a
-  new alias shadow something here\"."
-  [root-node]
-  (into (top-level-definition-names root-node)
-        (mapcat form-introduced-names)
-        (tree-seq n/inner? n/children root-node)))
-
 ;; ---------------------------------------------------------------------------
 ;; ns form and requires
 
@@ -677,12 +658,27 @@
              {:file file :reason "refer-all" :form (n/string (:node target))}
              (excluding-call request file))))
 
+;; @spec MCP-OP-ALIAS-007
+(defn ns-bound-names
+  "The names a new require alias could actually collide with in one file.
+
+  Exactly the aliases introduced by :as and :as-alias plus the names introduced
+  by :refer — nothing else. A LOCAL is not a collision, and this is a fact about
+  Clojure rather than a policy choice: in `store2/fetch-event` the symbol is
+  QUALIFIED, and a qualified symbol's namespace part is resolved through the
+  namespace's alias map at read and analysis time. A `let`, `loop`, `fn`
+  parameter, or destructured name lives in lexical scope and can never shadow a
+  qualifier, so `(let [store2 1] (store2/fetch-event id))` is unambiguous and
+  correct. Top-level definitions are excluded for the same reason: a var named
+  `store2` and an alias named `store2` coexist, because `store2` alone reads the
+  var while `store2/x` reads through the alias."
+  [direct]
+  (into #{} (concat (mapcat :aliases direct) (mapcat :referred direct))))
+
 (defn- choose-alias
-  "First alias_policy entry bound to nothing in this file."
-  [root direct policy]
-  (let [bound (into (file-bindings root)
-                    (concat (mapcat :aliases direct)
-                            (mapcat :referred direct)))
+  "First alias_policy entry bound to nothing in this file's ns form."
+  [_root direct policy]
+  (let [bound (ns-bound-names direct)
         collided (vec (take-while #(contains? bound %) policy))]
     {:alias (first (drop-while #(contains? bound %) policy))
      :collided collided}))

@@ -23,8 +23,8 @@ requirement.
 
 # #Per-file Alias Policy
 
-- [x] **MCP-OP-ALIAS-007**: When clj-surgeon chooses a file's alias, it shall select the first `to.alias_policy` entry that collides with nothing bound in that file: no existing require alias, no referred name, no top-level definition name, and no local binding introduced by a `let`-family form, a binding vector, a destructuring form, `letfn`, `as->`, `catch`, or a function parameter vector.
-- [x] **MCP-OP-ALIAS-008**: If every `to.alias_policy` entry collides in one file, then clj-surgeon shall refuse with `alias-migration-alias-policy-exhausted`, name that file and the bindings that collided, and change no bytes.
+- [x] **MCP-OP-ALIAS-007**: When clj-surgeon chooses a file's alias, it shall select the first `to.alias_policy` entry that collides with nothing bound in that file's `ns` form, where the collision set is exactly the aliases introduced by `:as` and `:as-alias` together with the names introduced by `:refer`; a local binding, a function parameter, a destructured name, and a top-level definition name shall not be collisions, because the namespace part of a qualified symbol resolves through the namespace's alias map and cannot be shadowed lexically.
+- [x] **MCP-OP-ALIAS-008**: If every `to.alias_policy` entry collides with an alias or referred name in one file's `ns` form, then clj-surgeon shall refuse with `alias-migration-alias-policy-exhausted`, name that file and the colliding names, and change no bytes.
 
 # #Rewrite Closure
 

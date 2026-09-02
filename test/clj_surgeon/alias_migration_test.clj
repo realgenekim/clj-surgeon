@@ -328,8 +328,10 @@
   (let [source (str "(ns demo\n  (:require\n"
                     "   [acid.fanout.store :as store]\n"
                     "   [a.b :as store2]\n"
-                    "   [a.c :as st2]))\n\n"
-                    "(defn one [es id] (let [store-2 es] [store-2 (store/find-event id)]))\n")
+                    "   [a.c :as st2]\n"
+                    "   [a.d :as es]\n"
+                    "   [a.e :as store-2]))\n\n"
+                    "(defn one [id] (store/find-event id))\n")
         plan (alias-migration/plan (request {:expect {:files 1}})
                                    [{:file "src/demo.clj" :source source}])]
     (is (false? (:ok plan)))
@@ -341,7 +343,10 @@
         "the next_call appends one more policy entry")))
 
 ;; @spec MCP-OP-ALIAS-007
-(deftest local-bindings-of-every-declared-shape-block-an-alias
+;; @spec MCP-OP-ALIAS-007
+(deftest local-bindings-of-every-declared-shape-do-not-block-an-alias
+  ;; A qualified symbol's namespace part resolves through the ns alias map, so
+  ;; no lexical binding can shadow it. Every shape below must still get store2.
   (doseq [[label body] [["let" "(defn f [id] (let [store2 1] [store2 (store/find-event id)]))"]
                         ["loop" "(defn f [id] (loop [store2 1] [store2 (store/find-event id)]))"]
                         ["doseq" "(defn f [ids] (doseq [store2 ids] (store/find-event store2)))"]
@@ -360,5 +365,59 @@
             plan (alias-migration/plan (request {:expect {:files 1}})
                                        [{:file "src/demo.clj" :source source}])]
         (is (:ok plan) (pr-str plan))
-        (is (= "st2" (:alias (first (:files plan))))
-            "the first policy entry collides, so the second is chosen")))))
+        (is (= "store2" (:alias (first (:files plan))))
+            "a local of that name is not a collision")
+        (is (= [] (vec (:collided (first (:files plan))))))))))
+
+;; @spec MCP-OP-ALIAS-007
+(deftest a-local-named-like-a-policy-entry-is-not-a-collision
+  ;; `store2/fetch-event` is a QUALIFIED symbol: its namespace part is resolved
+  ;; through the file's alias map, not through lexical scope. A local named
+  ;; store2 therefore cannot shadow it, and must not push the policy along.
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn one\n"
+                    "  [id]\n"
+                    "  (let [store2 1]\n"
+                    "    [store2 (store/find-event id)]))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])
+        entry (first (:files plan))
+        migrated (apply-edits source (:edits entry))]
+    (is (:ok plan) (pr-str plan))
+    (is (= "store2" (:alias entry)) "the first policy entry is free")
+    (is (= [] (vec (:collided entry))))
+    (is (= 0 (get-in plan [:totals :collisions-resolved])))
+    (testing "the local keeps its name and the qualified site resolves past it"
+      (is (str/includes? migrated "[acid.fanout.store2 :as store2]"))
+      (is (str/includes? migrated "(let [store2 1]"))
+      (is (str/includes? migrated "[store2 (store2/fetch-event id)]")))))
+
+;; @spec MCP-OP-ALIAS-007
+(deftest only-an-ns-level-alias-or-referred-name-is-a-collision
+  (let [ns-form (fn [& requires]
+                  (str "(ns demo\n  (:require\n"
+                       (str/join "\n" (map #(str "   " %) requires))
+                       "))\n\n(defn one [id] (store/find-event id))\n"))
+        alias-of (fn [source]
+                   (let [plan (alias-migration/plan (request {:expect {:files 1}})
+                                                    [{:file "src/demo.clj"
+                                                      :source source}])]
+                     (is (:ok plan) (pr-str plan))
+                     [(:alias (first (:files plan)))
+                      (vec (:collided (first (:files plan))))]))]
+    (testing "an :as alias collides"
+      (is (= ["st2" ["store2"]]
+             (alias-of (ns-form "[acid.fanout.store :as store]" "[a.b :as store2]")))))
+    (testing "an :as-alias alias collides"
+      (is (= ["st2" ["store2"]]
+             (alias-of (ns-form "[acid.fanout.store :as store]"
+                                "[a.b :as-alias store2]")))))
+    (testing "a referred name collides"
+      (is (= ["st2" ["store2"]]
+             (alias-of (ns-form "[acid.fanout.store :as store]"
+                                "[a.b :refer [store2]]")))))
+    (testing "the file's own namespace name does not collide"
+      (is (= ["store2" []]
+             (alias-of (str "(ns store2\n  (:require\n"
+                            "   [acid.fanout.store :as store]))\n\n"
+                            "(defn one [id] (store/find-event id))\n")))))))

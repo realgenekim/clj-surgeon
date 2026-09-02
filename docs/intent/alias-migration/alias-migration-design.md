@@ -154,13 +154,34 @@ lexically shadowed; shadowing is tracked through `let`-family binding vectors
 and `fn`/`defn` parameter vectors. Strings, docstrings and comments are
 different node types and can never match.
 
-**Alias choice.** The chosen alias is the first `alias_policy` entry that
-collides with nothing already bound in that file: no existing require alias, no
-referred name, no top-level `def`/`defn` name, and no local introduced by
-`let`, `if-let`, `when-let`, `if-some`, `when-some`, `loop`, `binding`,
-`with-open`, `with-local-vars`, `with-redefs`, `doseq`, `for`, `dotimes`,
-`letfn`, `as->`, `catch`, or any destructuring inside those forms, or by a
-`fn`/`defn`/`defmacro`/`defmethod` parameter vector.
+**Alias choice — and why the collision set is exactly the `ns` form.** The
+chosen alias is the first `alias_policy` entry that collides with nothing in
+that file's `ns` form. The collision set is precisely:
+
+> {aliases introduced by `:as` and `:as-alias`} ∪ {names introduced by `:refer`}
+
+and nothing else. A local binding, a `fn`/`defn` parameter, a destructured
+name, and a top-level `def`/`defn` name are **not** collisions.
+
+The reason is a fact about Clojure, not a policy preference. In
+`store2/fetch-event` the symbol is *qualified*, and the namespace part of a
+qualified symbol is resolved through the namespace's **alias map** at read and
+analysis time. Lexical scope plays no part in it, so
+`(let [store2 1] (store2/fetch-event id))` is unambiguous and correct: `store2`
+alone reads the local, `store2/fetch-event` reads through the alias. The same
+argument covers top-level definitions — a var named `store2` and an alias named
+`store2` coexist, because `store2` reads the var and `store2/x` reads the alias.
+The file's own namespace name is likewise not a collision.
+
+A first draft of this verb fed every local binding in the file into the
+collision set. It was not merely over-cautious: it produced a *different alias
+than the canonical* in every file that happened to contain a local named for a
+policy entry, and the byte oracle caught exactly that — `ns_000.cljc`,
+`ns_033.clj` and `ns_085.clj` were assigned a later policy entry when `store2`
+was in fact free, and the receipt over-reported `collisions_resolved`. The
+local-scope analysis is still carried by the walker, where it belongs and is
+correct: a local named `find-event` *does* shadow a **referred** `find-event`,
+because that spelling is unqualified.
 
 **Require rewrite.** When every use of `from.lib` in the file is a site being
 migrated, the old libspec is *replaced* by `[to.lib :as <alias>]`. When any

@@ -234,15 +234,17 @@
          "  [a b]\n"
          "  [(store2/fetch-event a) (store2/fetch-event b)])\n")}
 
-   ;; 8. a local named like the first policy entry, and metadata carrying the var
+   ;; 8. a LOCAL named like the first policy entry is not a collision: a local
+   ;;    cannot shadow the qualifier of store2/fetch-event. Plus metadata
+   ;;    carrying the var.
    {:file "src/acid/fanout/t08.clj"
     :ns "acid.fanout.t08"
-    :alias "st2"
+    :alias "store2"
     :sites 3
-    :collided ["store2"]
     :requires-pre ["[acid.fanout.store :as store]"]
-    :requires-post ["[acid.fanout.store2 :as st2]"]
-    :protected ["^{:doc \"store/find-event\"}"]
+    :requires-post ["[acid.fanout.store2 :as store2]"]
+    :protected ["^{:doc \"store/find-event\"}"
+                "(let [store2 {:kind :local}]"]
     :body-pre
     (str "(defn shadowing\n"
          "  [id]\n"
@@ -256,11 +258,11 @@
     (str "(defn shadowing\n"
          "  [id]\n"
          "  (let [store2 {:kind :local}]\n"
-         "    [store2 (st2/fetch-event id)]))\n"
+         "    [store2 (store2/fetch-event id)]))\n"
          "\n"
          "(defn annotated\n"
          "  [id]\n"
-         "  ^{:doc \"store/find-event\"} [(st2/fetch-event id) (st2/fetch-event id)])\n")}
+         "  ^{:doc \"store/find-event\"} [(store2/fetch-event id) (store2/fetch-event id)])\n")}
 
    ;; 9. commas, nested destructuring, and a two-arity fn
    {:file "src/acid/fanout/t09.clj"
@@ -287,15 +289,22 @@
          "  ([id] (store2/fetch-event id))\n"
          "  ([id _extra] (store2/fetch-event id)))\n")}
 
-   ;; 10. loop/recur, doseq, and an as-> named for a policy entry
+   ;; 10. TWO real ns-level alias collisions push the policy to its third entry,
+   ;;     while loop and as-> locals of the same names are deliberately NOT
+   ;;     collisions.
    {:file "src/acid/fanout/t10.clj"
     :ns "acid.fanout.t10"
     :alias "es"
     :sites 3
     :collided ["store2" "st2"]
-    :requires-pre ["[acid.fanout.store :as store]"]
-    :requires-post ["[acid.fanout.store2 :as es]"]
-    :protected []
+    :requires-pre ["[acid.fanout.store :as store]"
+                   "[acid.fanout.secondary :as store2]"
+                   "[acid.fanout.mirror :as st2]"]
+    :requires-post ["[acid.fanout.store2 :as es]"
+                    "[acid.fanout.secondary :as store2]"
+                    "[acid.fanout.mirror :as st2]"]
+    :protected ["[acid.fanout.secondary :as store2]"
+                "[acid.fanout.mirror :as st2]"]
     :body-pre
     (str "(defn looping\n"
          "  [ids]\n"
@@ -323,15 +332,15 @@
          "    (es/fetch-event st2)\n"
          "    (es/fetch-event st2)))\n")}
 
-   ;; 11. letfn, with-open, and a defn named for a policy entry
+   ;; 11. letfn, and a top-level DEF named for a policy entry: also not a
+   ;;     collision, because `store2` reads the var and `store2/x` reads the alias
    {:file "src/acid/fanout/t11.clj"
     :ns "acid.fanout.t11"
-    :alias "st2"
+    :alias "store2"
     :sites 3
-    :collided ["store2"]
     :requires-pre ["[acid.fanout.store :as store]"]
-    :requires-post ["[acid.fanout.store2 :as st2]"]
-    :protected []
+    :requires-post ["[acid.fanout.store2 :as store2]"]
+    :protected ["(defn store2\n  [x]\n  x)"]
     :body-pre
     (str "(defn store2\n"
          "  [x]\n"
@@ -348,8 +357,8 @@
          "\n"
          "(defn helpers\n"
          "  [id]\n"
-         "  (letfn [(inner [n] (st2/fetch-event n))]\n"
-         "    [(inner id) (st2/fetch-event id) (st2/fetch-event id)]))\n")}
+         "  (letfn [(inner [n] (store2/fetch-event n))]\n"
+         "    [(inner id) (store2/fetch-event id) (store2/fetch-event id)]))\n")}
 
    ;; 12. two aliases for the same lib, plus an unnamed top-level form
    {:file "src/acid/fanout/t12.clj"
@@ -428,19 +437,25 @@
     :alias "estore"
     :sites 2
     :collided ["event-store"]
-    :requires-pre ["[acid.fanout.store :as store]"]
-    :requires-post ["[acid.fanout.store :as store]"]
-    :protected ["(ns acid.fanout.store-test"]
+    ;; a REAL ns-level alias collision on the first lib-mode policy entry,
+    ;; carried by a prefix-sharing sibling
+    :requires-pre ["[acid.fanout.store :as store]"
+                   "[acid.fanout.store-pg :as event-store]"]
+    :requires-post ["[acid.fanout.store :as store]"
+                    "[acid.fanout.store-pg :as event-store]"]
+    :protected ["(ns acid.fanout.store-test"
+                "[acid.fanout.store-pg :as event-store]"
+                "(event-store/write! id)"]
     :body-pre
     (str "(defn check\n"
          "  [id]\n"
-         "  (let [event-store (store/find-event id)]\n"
-         "    [event-store (store/other-var id)]))\n")
+         "  (let [found (store/find-event id)]\n"
+         "    [found (store/other-var id) (event-store/write! id)]))\n")
     :body-post
     (str "(defn check\n"
          "  [id]\n"
-         "  (let [event-store (store/find-event id)]\n"
-         "    [event-store (store/other-var id)]))\n")}])
+         "  (let [found (store/find-event id)]\n"
+         "    [found (store/other-var id) (event-store/write! id)]))\n")}])
 
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration: acid.fanout.store -> acid.fanout.event-store
