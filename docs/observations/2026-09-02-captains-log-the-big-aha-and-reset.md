@@ -1593,3 +1593,33 @@ whether a cold agent takes that path unprompted.
 reference remains (fix dispatched with a witness); (2) `next_call` on a hazard refusal must name
 the override or the evidence that would lift it, else the refusal is not actionable.
 
+
+## 18:48Z — session 2 metered: 8 returns, 293 s, move at 6, green at 8; the first hand-driven run under native on both axes
+
+Watcher record (`bridge/tweezer-1`, `docs/observations/2026-09-02-tweezer-session-2-watch.md`),
+housekeeping separated and listed (8 calls excluded: an Anvil freeze, a scorer message, the
+watcher spawn, two doc commits, the bundle attempts, a read of session 1's file).
+
+| | session 1 (tool unpatched) | session 2 (tool patched live) | native benchmark |
+|---|---|---|---|
+| returns to the move | 27–31 | **6** | 9–10 |
+| returns to green | 35 | **8** | 14.3 stripped / 20–24 |
+| wall | 797 s | **293 s** | 311–342 s |
+
+Per-call deviations the meter recorded: call 1 a clean refusal (`:missing [:form]`, agent-visible);
+call 4 the extract's receipt reports counts but never states the three properties it now
+guarantees (no docstring, pruned imports, derived visibility): not agent-visible, only checkable by
+a header read; call 5 the two "callers to review" were deftest NAMES echoing the moved forms, not
+references, indistinguishable in grep output; call 8 the suite read-back shared a cell with an
+unrelated Anvil command (scope). Driver's private count 7 vs meter 8.
+
+**Two protocol fixes.** (1) The watcher could not find my `TWEEZER SESSION n CLOSED` sentinel as
+driver text in the transcript store (it found it only quoted inside agent prompts), so sessions
+now close by writing a marker FILE in the worktree (`.tweezer/session-<n>.closed`, `date -u`
+inside), which a watcher can stat. (2) No unrelated command in a metered cell, ever; the meter
+counts the cell.
+
+**Receipt ratchet, third instance:** a receipt must state the properties it guarantees, not
+only counts. rf2-1's receipt gains `header {:docstring :none :imports-pruned n :visibility-derived
+[…]}` (sent to the builder).
+
