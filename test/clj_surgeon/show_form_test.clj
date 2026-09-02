@@ -717,24 +717,26 @@
                        {:file "state.clj" :form "source->target"}))))))
 
 (deftest rendered-form-remedy-survives-zsh-metacharacter-parsing
-  (let [tmp-dir (fs/create-temp-dir {:prefix "show form shell quote "})
-        file (fs/path tmp-dir "names.clj")
-        redirected-file (fs/path tmp-dir "target")]
-    (try
-      (spit (str file) "(ns shell.names)\n(defn source->target [] :ok)\n")
-      (let [command (:command
-                      (show-form/invocation-remedy
-                        {:file (str file) :form "source->target"}))
-            result @(proc/process ["zsh" "-c" command]
-                                  {:dir (str tmp-dir)
-                                   :err :string
-                                   :out :string})
-            receipt (edn/read-string (:out result))]
-        (is (zero? (:exit result)) (:err result))
-        (is (= 'source->target (:name receipt)))
-        (is (not (fs/exists? redirected-file))))
-      (finally
-        (fs/delete-tree tmp-dir)))))
+  (if-not (fs/which "zsh")
+    (println "SKIPPED rendered-form-remedy-survives-zsh-metacharacter-parsing: missing executable zsh")
+    (let [tmp-dir (fs/create-temp-dir {:prefix "show form shell quote "})
+          file (fs/path tmp-dir "names.clj")
+          redirected-file (fs/path tmp-dir "target")]
+      (try
+        (spit (str file) "(ns shell.names)\n(defn source->target [] :ok)\n")
+        (let [command (:command
+                        (show-form/invocation-remedy
+                          {:file (str file) :form "source->target"}))
+              result @(proc/process ["zsh" "-c" command]
+                                    {:dir (str tmp-dir)
+                                     :err :string
+                                     :out :string})
+              receipt (edn/read-string (:out result))]
+          (is (zero? (:exit result)) (:err result))
+          (is (= 'source->target (:name receipt)))
+          (is (not (fs/exists? redirected-file))))
+        (finally
+          (fs/delete-tree tmp-dir))))))
 
 (def ^:private project-root
   (.getCanonicalPath (io/file ".")))
