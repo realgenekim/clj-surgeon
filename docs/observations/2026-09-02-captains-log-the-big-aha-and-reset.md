@@ -415,3 +415,19 @@ it is a real agent-visible behaviour change in 2311cc09 that nobody has characte
 only once missing-fields is characterised and shown recoverable, so the honest state is
 "held pending one characterisation", not "safe to promote" as I said after b2. That earlier
 line is corrected here.
+
+## missing-fields on main, characterised (13:46Z): a wave-lineage requirement, one extra return, recovered every time
+
+All four B-arm missing-fields refusals are inspect_clojure reporting missing "expect": a
+forms request without its own per-request expect (2 of 4) or a call with no top-level expect
+(2 of 4); outline requests without per-request expect are accepted, so the requirement
+attaches to forms. Recovery 4 of 4 in one round trip by re-sending with expect; no verb
+switch, no fallback, no abandonment. The byte-identical refusal comes out of the G build
+(ec63d0ff) before the merge, and shipped's agents never wrote either shape in 21 inspect
+calls, so this is a wave-lineage schema requirement shipped never exercised, not a
+tightening from 2311cc09. Promotion, corrected once more and now stable: from the ledger,
+2311cc09 shows no detected regression at n=6 and one agent-visible cost, an extra return on
+forms requests that omit expect, in 4 of 6 runs; that cost belongs to the intent-grammar bead
+(xio), where "expect required per request" is exactly the kind of field an agent cannot
+guess, and the refusal does carry correct_request as its next action. "Demonstrated
+improvement" is not shown at n=6 and nothing in the ledger suggests it would be at n=12.
