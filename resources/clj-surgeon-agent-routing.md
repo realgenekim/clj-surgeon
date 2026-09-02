@@ -1,47 +1,41 @@
 <!-- BEGIN CLJ-SURGEON ROUTING v:1 -->
-## Clojure structural editing
+## Clojure editing
 
-- Batch known Clojure structural reads in one `inspect_clojure` call. Set
-  `include_source=false` only when names, ranges, counts, hashes, or source
-  anchors are sufficient. Do not repeat a complete read.
-- When the complete decision already names files, owners, old forms,
-  replacements, exact counts, computed programs, or owner deletions, call
-  `edit_clojure` once. Use `within.form` for a named top-level owner and
-  `within.namespace` for the `ns` form. Use `delete_owners` for several exact
-  top-level deletions.
-- Treat resolved owner names, exact old forms, counts, and the frozen snapshot
-  as stale-source guards. Do not preflight-read an already-decided edit.
-- Treat `verification_complete=true` as terminal mutation evidence. Do not add
-  a reread or diff only because Surgeon performed the edit. Run the same
-  proportional formatter, linter, and tests that the native route requires.
-- Invoke direct clj-kondo lint through `~/bin/clj-kondo`. This paved entrance
-  serializes analyzers across agents, repositories, and Surgeon JVMs. Do not
-  bypass it with an absolute Homebrew path unless the task is explicitly
-  testing the bypass contract.
-- When an extraction decision supplies the exact source, destination, ordered
-  forms, and require policy, submit one `apply_clojure_changes` extraction
-  directly. Supply known visibility and caller decisions; omit them when the
-  frozen compiler can derive them. A mechanically complete zero-candidate case
-  commits in that call. A genuine caller decision refuses before writing with
-  the completed snapshot-bound plan; fill it and apply once without another
-  discovery read. Do not pay for a separate planning call as preflight. If the
-  workspace declares the matching project-owned exact profile, pass
-  `verify="exact"` so the verifier participates in the transaction. Otherwise,
-  omit transaction `verify` and run the supplied exact verifier once afterward.
-- If `terminal_response` is present and this mutation completes all remaining
-  user-requested work, return its value exactly. Do not add text, reread, or
-  reverify. If work remains, do not return `terminal_response`. Treat it as
-  terminal evidence for this operation and continue. `next_action=none` and
-  `terminal_response` describe only the completed mutation. They never prove
-  that the complete user request is finished.
-- Use native patching for a small visible literal edit, prose, a new file, or
-  an unsupported operation. Use heavyweight `apply_clojure_changes` only for
-  prepared semantic decisions, unique operations, or gates that must roll back
-  with the source transaction.
-- If the MCP tools are unavailable, use the installed `clj-surgeon` CLI when
-  its structural operation materially helps. Otherwise use native tools.
-- Direct cclsp and clojure-lsp MCP clients are retired. Do not discover,
-  register, start, or call them from an agent session. Use `inspect_clojure`
-  preparation for semantic questions; Surgeon owns bounded provider
-  escalation behind its public contract.
+**Native `rg` plus a native patch is the default route for reading and editing
+Clojure.** Do not reach for clj-surgeon for ordinary edits. Measured 2026-09-02
+(81 arm-runs, verified servers, two blind judges; receipts in clj-surgeon
+`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`):
+an agent told Surgeon is expected pays about 2x wall and 2x actions with no
+quality meter clearing the noise floor, because it keeps its native read/patch
+loop and layers the tool on top. Given a free choice, agents decline it, and
+decline it correctly.
+
+**Call Surgeon only for these, and only when one applies** — each has no native
+equivalent or measured as a win:
+
+- `:extract!` — move forms to a new namespace.
+- `:rename-ns!` — structural namespace rename.
+- `:fix-declares!` — eliminate removable `declare`s.
+- MCP `require_change` — add or change a require across many namespaces
+  (measured: nine namespaces, zero churn).
+- MCP `within` + `from`/`to` — a surgical edit inside one known form
+  (measured: zero churn).
+- `:ls-deps` / `:topo` — dependency structure before a large refactor.
+
+**Do not use (measured losers):** per-form writes for a fan-out change (one
+native patch does 21 owners in one cell); `apply_clojure_changes` with
+`owner {:kind "namespace"}` or forms-scoped `find`+`replace` for insertion (it
+re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
+substitute for MCP (a second layer, refuses 2.2x).
+
+**Lint through `~/bin/clj-kondo`**, always. This paved entrance serializes
+analyzers across agents, repositories, and JVMs; an absolute Homebrew path
+bypasses that serialization and is the cause of contention failures.
+
+**Direct cclsp and clojure-lsp MCP clients are retired.** Do not discover,
+register, start, or call them from an agent session.
+
+*Reversible: re-open the default route when clj-surgeon-q5z (batch intent across
+N owners) and clj-surgeon-az8 (unrecoverable refusal classes) land and the acid
+apparatus shows rung-L non-test actions at or below native's.*
 <!-- END CLJ-SURGEON ROUTING v:1 -->
