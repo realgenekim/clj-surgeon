@@ -240,3 +240,36 @@ assumed box-global destinations (fixed in O1).
 Next wave, not started: ratification stops for O2/O3, O4, O5; the house-rule sentence
 (`inb-32bcd1`); the skill table; and the second program the corpus pointed at: the
 post-decision ceremony that consumed 21.2 hours against 94 seconds of write-shape work.
+
+## Addendum 02:40Z — the acid test's first run measured the apparatus, not the product
+
+Design: two Codex Sol arms, one fresh session each, same prompt bytes, same frozen task (the
+bridge4 controls flag from ab267f9), arm A on the shipped Surgeon (7888), arm B on the wave
+build (7889), sequential, scored by the fixed collector plus kaocha and the golden.
+
+Arm A finished in **341 s**, exit 0, and is **correct**: 578 tests, 7804 assertions, 0
+failures, golden unchanged (the Opus build of the same spec took 750 s). But the server saw
+6 Surgeon calls, all inspects, 3 refused (`invalid-mcp-request`: two aggregate-expectation
+mismatches, one missing-fields), and **zero writes**. The codex rollout shows why: four
+`edit_clojure`/`apply_clojure_changes` calls ended in 0 ms with
+`{"Err": "user cancelled MCP tool call"}`. `codex exec` under `-s workspace-write` auto-cancels
+MCP calls it treats as mutating; reads complete. Sol read this as "surgeon cancelled the
+edit twice" and fell back to native patches, which the brief permitted after two refusals.
+The server telemetry cannot see a client-cancelled call, so the collector's "3 refusals of
+6" was true and useless: the arm's edit route never existed.
+
+Probe: the same write from `codex exec --dangerously-bypass-approvals-and-sandbox` against a
+scratch workspace on 7889 landed (`RESULT=ok true`, file changed). The repo's own Anvil
+harness has always run Codex that way; the bridge's first apparatus did not, and no receipt
+said so until the client view was read. Ratchets taken:
+- the scorer now reads the codex rollouts for the arm window and prints
+  `CLIENT-CANCELLED` per arm, so a silent apparatus failure can never score as "zero
+  refusals";
+- the rerun uses the bypass flag with worktree isolation as the safety boundary;
+- both arms of the first run are retained as **native-route data**, not Surgeon data.
+
+Two product findings survive the invalid run: Sol's first three calls all failed on the
+aggregate `expect` object of `inspect_clojure` (first-keystroke friction: a field that is
+derivable from the request array), and Sol's honest reading of a client cancellation as a
+server refusal means refusal receipts and client failures need distinguishable words in
+the skill. Both routed to SURGEON1 as design questions, not decided here.
