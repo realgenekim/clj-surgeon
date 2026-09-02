@@ -2840,3 +2840,39 @@ that never had one. Next (Sol's order): dry plans on both sides before any arm �
 on `bridge/settings-lens-native` (worktree created at 55d1fd3f, not applied), Surgeon plan via
 `inspect_clojure` over the 19 owners with the watcher on.
 
+
+## 23:01Z — session 4 dry plan, Surgeon side: 16 arms in ONE transaction, zero churn outside the forms, projection gate green (Gene: "Study surgeon usage and usefulness! Seems perfect for the job!!!")
+
+Driver calls (watcher on from transcript offset 21805140; receipts in
+`~/src/curtaincall-cfp-lens/.tweezer/session-4-watch.md`), scratch worktree
+`~/src/curtaincall-cfp-lens-scratch` (detached at 55d1fd3f) so the lens tree stayed untouched:
+1. `inspect_clojure` outline of folds.clj — 1.85 s, 139 forms; **deviation (receipt/schema): every
+   `defmethod` is named `fold-event` with no dispatch value**, so the 19 arms cannot be addressed from
+   the outline.
+2. `forms` probe with a guessed owner `fold-event "schedule.locked"` — refused in 0.16 s with the
+   22-name owner vocabulary; all ~117 arms collapse to one owner name. The addressing answer lives
+   only in `apply_clojure_changes`' schema: `forms: [{kind: defmethod, name, dispatch}]`. A cold
+   agent pays at least one refusal to learn that (return-tax y).
+3. `match` for the guard pattern (19/19, each with full source, hash, preorder address, enclosing
+   form) + `[:events slug :settings _]` (21; the two 5-element paths need a second pattern) — 0.6 s.
+   One read gave the whole migration's content.
+4. `apply_clojure_changes`, ONE call, 16 `changes`, each owner = the arm's dispatch, `find` = the
+   guard form verbatim (interior INTENT comments included in two arms — accepted, spelling preserved),
+   `replace` = the lens form — 3.8 s (formatter 0.7 s), `committed true`, `verification_complete true`,
+   undo receipt written.
+Churn: 58+/83−, 7 hunks, **every changed line inside the 16 replaced forms** — the filtered residue is
+the sixteen `state))` closers and nothing else. Gate on the scratch (`bin/kaocha --focus` the two
+lens namespaces): **20 tests, 250 assertions, 6 failures, all six the inventory tripwire** (19→3
+guards, 24→6 path occurrences; counted twice because the ns loaded under both focus flags) —
+whole-projection replay equality, the 19-arm oracle, the three edge cases and LENS-002 all green.
+Excluded from the transaction, with reasons: `export.generated` (a guard but writes `:exports`, not
+settings); `event.speaker-unannounced` and `event.announced-speaker-adopted` — conditional arms that
+return `state` untouched on a present event; through the lens, an absent `:settings` would be
+materialised as nil where the original left it absent, and the golden would catch it. **Plan
+precondition LENS-003:** `update-settings` returns `state` unchanged when `f` returns the identical
+settings value (`identical?`, nil included); then those two arms migrate too. Surgeon plan artifact:
+`~/src/curtaincall-cfp-lens/.plan/surgeon-settings-lens.patch`; native plan pending from the agent on
+`bridge/settings-lens-native`. Sol's unconvincing-if list, checked: same base sha both sides (55d1fd3f);
+the Surgeon side is form-scoped, not owner-reprinted; churn measured; the correct tree is not
+auto-selected — comparison receipt next, Gene merges. Session marker written.
+
