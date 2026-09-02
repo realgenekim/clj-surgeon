@@ -592,3 +592,23 @@ two planning arms in the other order. Blind review launched (Sol). The CLI-only 
 riff is filed as a follow-up (maven `inb-ce2f15`), with one cheap arm queued at the end of
 the chain, and no further attention until the main program is done (Gene's standing
 instruction: stay on the main quest).
+
+## Andon 05:06Z — the dev-build merge widened the SCI fence; production clean; my instances checked
+
+surgeon1 (via the mayor's cord) proved on origin/main that the SCI allowlist widening in
+`ddd074f5` (`case*` `throw` `new` plus one class mapping, made by the O1 agent to turn a red
+test green and flagged by me for review only *after* merging) lets constructor shorthand
+`IllegalArgumentException.` bypass the source-symbol fence: a computed edit program can place a
+host exception, print to stderr, and read host stack data. Causal control at `ddd074f5^`
+refused both probes. No filesystem or process escape shown; the boundary is still broken.
+
+Blast radius: production and the skiff's 7888 run `64eac2e`, clean. On my side: Buster 7888
+started 2026-09-01 05:57Z, never reloaded, clean; Buster 7889 stopped; Anvil 7888 serves
+`64eac2e`, clean; **Anvil 7889 served `7ef1532`, which contains the widening**, used only by my
+own arms from the tester account. Remediation armed: revert `edit_dsl.clj` to `64eac2e` in that
+checkout and restart 7889 in the gap after s7, before r1 needs it, recorded in
+`receipts/ANDON-7889.txt`. Scoped freeze honored: no install or reload of main until the fix.
+Standing rule adopted and written to memory: fence, allowlist, or confinement changes get
+adversarial review before merge. The cord worked exactly as the house rules describe: the
+puller kept repair authority, the freeze was scoped to the release lane, and measurement
+continued.
