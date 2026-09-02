@@ -450,3 +450,16 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   (merge is his) → close session 3 by `touch ~/src/curtaincall-cfp/.tweezer/session-3.closed`
   → watcher's file → log. Follow-up bead: write-side idempotency key in the store's append path.
 
+
+## RESUME DELTA 2026-09-02T20:15Z
+
+- Session 3 CLOSED (curtain-call fold-idempotence): branch `bridge/fold-idempotence` a02d50a3
+  pushed; Gene's decision inb-d603ce; watcher receipt in docs/observations; tech-tree T3.
+- z7b done (walls Z 257 324 411 vs N 344 552 402; all diffs 5 files); scorer running
+  (`~/acid/receipts/z7b-score.md`). On receipt: log + tell mayor; if refusals < 20 % and every
+  commit complete, the gate's claim on R3 stands at n=3 and the next step is n=6.
+- Cohorts queued on the lock after z7b: rf2 (readout rf2-readout.sh), sl1-5..80 + sl1-C
+  (chain writes sl1-<N>-score.txt), sl1-R (rescore-FAN-R). Score each as it lands; the slope
+  table (returns vs N, ratio monotone) is the sl1 readout; falsifiers in the slope spec.
+- Nothing else in flight on the bridge; all builders idle. Mayor queue: five branches.
+
