@@ -1375,3 +1375,18 @@ k2 quality = 07:41Z (all approximate to the minute; the commit list is exact). T
 is in the resume note's UPDATE labels after 06:50Z. From here every header is written from
 `date -u`, never typed. Nothing in the receipts' content depends on these labels; the arm
 walls and Anvil timestamps all come from the runner's own clock.
+
+## Receipt 08:02Z — v1 walls: the variance floor and the turn-budget dose (six-wide, 2 cores)
+
+| arm | walls s | mean | spread |
+|---|---|---|---|
+| shipped A, wave 1 (six identical) | 516, 577, 609, 616, 649, 781 | 625 | 265 s, 42 percent of the mean |
+| shipped A, wave 2 | 541, 694, 719 | 651 | |
+| turn budget V, wave 2 | 547, 574, 734 | 618 | |
+
+All twelve gates green. The nine identical shipped runs span 516 to 781 s under the same
+conditions, so any between-arm wall gap under about 250 s at n=3 is inside the floor. The
+n1 gap (native 367 vs shipped 677) is 310 s at n=6 and stands; every prompt-variant wall gap
+from e3 is inside the floor and does not. V's wall equals A's here. Actions, refusals,
+tokens, acceptance and the variance floor on each are being scored; twelve diffs are with
+the judges, which also measures the judges' own floor on identical arms. s1 launches next.
