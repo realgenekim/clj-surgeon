@@ -835,3 +835,28 @@ identity evidence for 7888: another seat's production Surgeon at e7f72e2. Theref
   table; and a receipt field named `server_sha` that is not read from the server is exactly the
   "receipt blind to its subject" class from the delivery invariants. Fixed in v5: the sdir case
   now includes W (its start line had shown surgeon-main's sha for the same reason).
+
+## Receipt 07:10Z — e3 group 1 (six-wide, 2 cores per arm, all on my 7893): blind quality, two judges
+
+Prompt variants on the shipped Surgeon: U = A + report-only paragraph, V = A + turn-budget rule,
+W = A + deliberate three-plan selection. Six diffs frozen per worktree (the runner's per-arm diff
+name collided for the two A arms; fixed in v5 to `<run>-<arm>-<slot>.diff`), shuffled, judged
+blind by Sol and Opus on completeness / default safety / tests / clarity (0–5 each, 20 max).
+
+| worktree | wall s (contended) | Opus | Sol | mean | judges' named defect |
+|---|---|---|---|---|---|
+| W-3 deliberate | 464 | 19 | 17.5 | 18.25 | Sol: buttons disabled during checking/sending |
+| U-1 report-only | 381 | 18 | 18.5 | 18.25 | duplicated kwCheck text |
+| A-0 shipped | 434 | 17 | 18 | 17.5 | default-note test weak |
+| V-2 turn budget | 340 | 15 | 17 | 16 | BOTH: lastHeartbeatAt never reset, heartbeat fires at record start |
+| A-4 shipped | 488 | 15 | 15.5 | 15.25 | BOTH: monkeypatches onsetReady/kwCheck, two live definitions |
+| U-5 report-only | 672 | 14 | 16 | 15 | Opus: mic gate leaves stale speechStartAt (the echo class); Sol: negative hbms |
+
+Learning: the judges agree on the ranking's shape and name the same defects independently
+(V-2 heartbeat, A-4 monkeypatch), so the ±1 noise floor holds at n=6. W (deliberate planning)
+scored top on Opus and third on Sol; the fastest arm (V, turn budget, 340 s) carried a real
+flag-on defect, which is the trade the budget rule was expected to make. Cohort-wide drift:
+all six read `hbms` client-side from URLSearchParams instead of server-resolving it like the
+other flags; a spec ambiguity, not a tool effect. Actions, acceptance and prompt-adherence for
+this group are being scored on Anvil (e3-g1-score.md); walls here are contended and not
+comparable to sequential runs.
