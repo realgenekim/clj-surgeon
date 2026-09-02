@@ -2420,3 +2420,32 @@ failures), mcp-test 399/4467 (1 pre-existing). Anvil: `surgeon-q5z` checked out 
 running (memory: timeout kills the wait, not the child); a monitor waits on that pid and then
 reads 7895's ready.edn, Q5Z-SHA, and chain-sl1r before the anchor run is called re-armed.
 
+
+## 21:25Z — the finder: a structural scan of folds.clj found Andrew's class a second time (task chases)
+
+Gene: *"Can we create kickass LID assertion, and maybe could even be generalized so that we find
+other areas of vulnerability"* … *"does it uncover more kickass surgeon primitives that humiliate
+… anyone stuck with Grep and RG"*. Two `inspect_clojure` calls (bridge 7888, workspace
+`~/src/curtaincall-cfp-fold`, file hash e4bafd32…, 1.19 s + 0.58 s), fourteen `match` patterns over
+the whole fold namespace: `(conj _ _)` 4, `(cons _ _)` 1, `(fnil conj _)` 2, `(into _ _)` 1,
+`(concat _ _)` 0, `(update _ _ conj _)` 0, `(update-in _ _ conj _)` 0, `(update-in _ _ (fnil conj _) _)` 1,
+`(remove _ _)` 1 — each match reported with its enclosing form and call path. Classification:
+line 67 `(conj seen current)` and line 95 `(into base added)` are inside the pure
+`effective-submission-speakers` (not fold writes); 163/170/183 are the bodies of the builder's
+own `conj-once`/`cons-once`/`upsert-by` doors (round two renamed the helpers; 12 references);
+line 553 email templates hand-roll an upsert-by-id (safe; a third spelling of `upsert-by`);
+line 908 agenda selections conj into a set (safe); **line 721 `fold-task-chase`:
+`(update :chases (fnil conj []) chase)` + `(inc chase-count)` — unguarded: a retried
+`task.chased` appends twice and double-counts. Same class as Andrew's duplicate.** Sent to the
+fold builder as a round-two item (identity `:chase-id`, witness two-identical-events → one chase).
+The unannounce arm now reads `(remove #(= target (announced-speaker-identity %)) rows)` — the
+tagged identity is in. Why grep cannot do this: it cannot tell a conj inside a pure helper from
+a fold write, cannot match a form broken across lines, and cannot report the enclosing branch.
+**The generalized LID (the relation law), for the next round:** for every fold arm writing into a
+collection, adding the same fact twice equals once; removing by identity removes exactly the
+rows with that identity; after replaying any log every collection is a set under its declared
+identity; a relation with no declared identity is a typed refusal — the refusal list IS the
+vulnerability finder. **Primitive to build:** a relation-write census verb — every write into a
+collection in state, classified by identity door (distinct-by / upsert / set / raw) — one call on
+any event-sourced repo. Filed to the maven inbox.
+
