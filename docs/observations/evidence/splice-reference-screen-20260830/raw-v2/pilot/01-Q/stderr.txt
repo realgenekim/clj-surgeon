@@ -1,0 +1,3 @@
+Reading additional input from stdin...
+2026-08-30T21:18:16.011963Z ERROR codex_core::session: Failed to create session: required MCP servers failed to initialize: clj-surgeon: timed out handshaking with MCP server after 119.999999667s
+Error: thread/start: thread/start failed: error creating thread: Fatal error: Failed to initialize session: required MCP servers failed to initialize: clj-surgeon: timed out handshaking with MCP server after 119.999999667s (code -32603)

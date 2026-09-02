@@ -1,0 +1,268 @@
+{
+  "all-invariants-true" : true,
+  "canonical-requests" : {
+    "bytes" : 630138,
+    "workspace-root-rule" : "removed"
+  },
+  "families" : {
+    "find_replace" : {
+      "closed-lte-1" : 49,
+      "closed-lte-1-percent" : 39.2,
+      "closed-lte-2" : 54,
+      "closed-lte-2-percent" : 43.2,
+      "closed-lte-3" : 56,
+      "closed-lte-3-percent" : 44.8,
+      "closed-program-bytes" : 8100,
+      "closed-to-bytes" : 18053,
+      "escape-pairs" : 69,
+      "escape-program-bytes" : 121528,
+      "escape-share-percent" : 55.2,
+      "escape-to-bytes" : 117388,
+      "estimated-net-tokens" : 1454,
+      "net-bytes" : 5813,
+      "pairs" : 125,
+      "program-byte-quantiles" : {
+        "max" : 6497,
+        "median" : 405,
+        "min" : 10,
+        "n" : 125,
+        "p25" : 85,
+        "p75" : 1374,
+        "p90" : 2420
+      },
+      "program-bytes" : 129628,
+      "semantic-identical" : 1,
+      "to-bytes" : 135441,
+      "verb-count-quantiles" : {
+        "max" : 3,
+        "median" : 1,
+        "min" : 0,
+        "n" : 125,
+        "p25" : 1,
+        "p75" : 1,
+        "p90" : 1
+      }
+    },
+    "from_to" : {
+      "closed-lte-1" : 117,
+      "closed-lte-1-percent" : 56.52173913043478,
+      "closed-lte-2" : 126,
+      "closed-lte-2-percent" : 60.869565217391305,
+      "closed-lte-3" : 126,
+      "closed-lte-3-percent" : 60.869565217391305,
+      "closed-program-bytes" : 16497,
+      "closed-to-bytes" : 15625,
+      "escape-pairs" : 81,
+      "escape-program-bytes" : 64959,
+      "escape-share-percent" : 39.130434782608695,
+      "escape-to-bytes" : 60099,
+      "estimated-net-tokens" : -1433,
+      "net-bytes" : -5732,
+      "pairs" : 207,
+      "program-byte-quantiles" : {
+        "max" : 5905,
+        "median" : 132,
+        "min" : 49,
+        "n" : 207,
+        "p25" : 81,
+        "p75" : 338,
+        "p90" : 1074
+      },
+      "program-bytes" : 81456,
+      "semantic-identical" : 0,
+      "to-bytes" : 75724,
+      "verb-count-quantiles" : {
+        "max" : 2,
+        "median" : 1,
+        "min" : 1,
+        "n" : 207,
+        "p25" : 1,
+        "p75" : 1,
+        "p90" : 1
+      }
+    }
+  },
+  "invariants" : {
+    "all-replayed" : true,
+    "authority-counts" : true,
+    "canonical-request-bytes" : true,
+    "no-program-over-depth" : true,
+    "pair-families" : true
+  },
+  "method" : {
+    "comments" : "escape-hatch",
+    "model-calls" : 0,
+    "parser" : "rewrite-clj 1.2.50",
+    "program-encoding" : "compact sorted-key JSON; full ops envelope",
+    "script-sha256" : "9969a7be00ce726fcd240f30667a60c21bb2b109a9b24362b3a515dcf036ae9d",
+    "search-depth" : 3,
+    "self-tests" : {
+      "cases" : 11,
+      "verbs" : [ "change-arglist", "extract-binding", "insert-child", "remove-child", "rename-symbol", "reorder", "replace-value", "thread", "unwrap-form", "wrap-form" ]
+    },
+    "token-estimate" : "ceil(bytes/4) per payload"
+  },
+  "pairs" : {
+    "closed-lte-1" : 166,
+    "closed-lte-1-percent" : 50.0,
+    "closed-lte-2" : 180,
+    "closed-lte-2-percent" : 54.21686746987952,
+    "closed-lte-3" : 182,
+    "closed-lte-3-percent" : 54.81927710843374,
+    "closed-program-bytes" : 24597,
+    "closed-to-bytes" : 33678,
+    "escape-pairs" : 150,
+    "escape-program-bytes" : 186487,
+    "escape-share-percent" : 45.18072289156626,
+    "escape-to-bytes" : 177487,
+    "estimated-net-tokens" : 21,
+    "net-bytes" : 81,
+    "pairs" : 332,
+    "program-byte-quantiles" : {
+      "max" : 6497,
+      "median" : 169,
+      "min" : 10,
+      "n" : 332,
+      "p25" : 81,
+      "p75" : 741,
+      "p90" : 1652
+    },
+    "program-bytes" : 211084,
+    "semantic-identical" : 1,
+    "to-bytes" : 211165,
+    "verb-count-quantiles" : {
+      "max" : 3,
+      "median" : 1,
+      "min" : 0,
+      "n" : 332,
+      "p25" : 1,
+      "p75" : 1,
+      "p90" : 1
+    }
+  },
+  "parsing" : {
+    "comment-bearing-pairs" : 19,
+    "parse-failures" : 8
+  },
+  "population" : {
+    "eligible-pairs" : 332,
+    "pair-families" : {
+      "find_replace" : 125,
+      "from_to" : 207
+    },
+    "tool-calls" : 1437,
+    "tool-counts" : {
+      "apply_clojure_changes" : 195,
+      "inspect_clojure" : 1242
+    },
+    "writes" : 195
+  },
+  "receipt-payload-sha256" : "56fb0f0de9aad0ee9f478ead9f8c855c50f3d0ea5fafa7e78aab517f76436bd5",
+  "schema" : "transform-verb-expressibility-census.v1",
+  "sensitivity" : {
+    "+0B" : {
+      "estimated-net-tokens" : 21,
+      "net-bytes" : 81,
+      "program-bytes" : 211084
+    },
+    "+16B" : {
+      "estimated-net-tokens" : -1307,
+      "net-bytes" : -5231,
+      "program-bytes" : 216396
+    },
+    "+32B" : {
+      "estimated-net-tokens" : -2635,
+      "net-bytes" : -10543,
+      "program-bytes" : 221708
+    }
+  },
+  "telemetry-inventory" : {
+    "files" : [ {
+      "bytes" : 2077262,
+      "sha256" : "2316cc994558dae159d88d48a17ba161c5a56cf18b5851c9b7bfe0e543dd6f1b"
+    }, {
+      "bytes" : 10412567,
+      "sha256" : "5f74767be5a1c6afb31afc09595070eba8465ba632ce3fd8abe631c76a703eed"
+    }, {
+      "bytes" : 10449654,
+      "sha256" : "a2f63cb8b8ee195b91c1e5543ac50b45e0404c9030ba786ab2cf370dad18bcce"
+    }, {
+      "bytes" : 136066,
+      "sha256" : "b77da8586caae94827aa8a3ab7b22a02b8304a8f6f805093a157803d0405d22d"
+    }, {
+      "bytes" : 5407,
+      "sha256" : "bbb41af5bfad5e8a00151a1c74700ef03cd035126e4fe1f5c1cef1e860039963"
+    }, {
+      "bytes" : 395515,
+      "sha256" : "c33798f9f689ecb2e3fd4817999c8574589b7be948324005829035866a4c2c79"
+    } ]
+  },
+  "verbs" : [ {
+    "cumulative-pair-coverage-percent" : 45.18072289156626,
+    "cumulative-pairs-covered" : 150,
+    "operations" : 150,
+    "pair-share-percent" : 45.18072289156626,
+    "pairs" : 150,
+    "verb" : "replace-subform-freeform"
+  }, {
+    "cumulative-pair-coverage-percent" : 72.59036144578313,
+    "cumulative-pairs-covered" : 241,
+    "operations" : 97,
+    "pair-share-percent" : 27.40963855421687,
+    "pairs" : 91,
+    "verb" : "replace-value"
+  }, {
+    "cumulative-pair-coverage-percent" : 87.65060240963855,
+    "cumulative-pairs-covered" : 291,
+    "operations" : 54,
+    "pair-share-percent" : 15.662650602409638,
+    "pairs" : 52,
+    "verb" : "insert-child"
+  }, {
+    "cumulative-pair-coverage-percent" : 96.3855421686747,
+    "cumulative-pairs-covered" : 320,
+    "operations" : 31,
+    "pair-share-percent" : 8.734939759036145,
+    "pairs" : 29,
+    "verb" : "wrap-form"
+  }, {
+    "cumulative-pair-coverage-percent" : 98.49397590361446,
+    "cumulative-pairs-covered" : 327,
+    "operations" : 10,
+    "pair-share-percent" : 3.0120481927710845,
+    "pairs" : 10,
+    "verb" : "remove-child"
+  }, {
+    "cumulative-pair-coverage-percent" : 99.39759036144578,
+    "cumulative-pairs-covered" : 330,
+    "operations" : 6,
+    "pair-share-percent" : 1.8072289156626506,
+    "pairs" : 6,
+    "verb" : "replace-string"
+  }, {
+    "cumulative-pair-coverage-percent" : 99.6987951807229,
+    "cumulative-pairs-covered" : 331,
+    "operations" : 1,
+    "pair-share-percent" : 0.30120481927710846,
+    "pairs" : 1,
+    "verb" : "reorder"
+  } ],
+  "window" : {
+    "bounds" : "inclusive",
+    "since" : "2026-08-22T00:00:00Z",
+    "until" : "2026-08-30T02:09:33.141926Z"
+  },
+  "writes" : {
+    "closed-lte-1" : 54,
+    "closed-lte-1-percent" : 36.0,
+    "closed-lte-2" : 60,
+    "closed-lte-2-percent" : 40.0,
+    "closed-lte-3" : 60,
+    "closed-lte-3-percent" : 40.0,
+    "eligible-writes" : 150,
+    "escape-share-of-eligible-percent" : 60.0,
+    "escape-writes" : 90,
+    "writes" : 195,
+    "zero-pair-writes" : 45
+  }
+}

@@ -1,0 +1,84 @@
+{:schema :clj-surgeon.three-arm-request-shape-evidence/v1
+ :base {:commit "54aae16f340033dc6d9452043b335c6bb98dea04"
+        :tree "937ee8032c8697594bb1b6b5b7036747b8bb9517"}
+ :candidate {:commit "a9a9d5dd50f099b8569a86f6c0897898f2d3fbb1"
+             :tree "766f688e50d63b270543fc3a64eab5994f1df591"
+             :product-diff-sha256
+             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+             :experiment-diff-sha256
+             "f521facbbcd84922af2f57cc8725bec6c99970d883f77d678ef63602055a7f6c"}
+ :hashes {:protocol
+          "635bc7e8f9467cf4e03a458d672665d3245e2a2686c9aad9b142192b6e447157"
+          :harness
+          "4d1b71d6bf4c767fcde1057e2344fff8fb4311a7bf59b5993f85e3a1ace3706d"
+          :scorer
+          "ef833ebc0c533735390a8ce05bed1d69c9dc2c86b1e01a02bc3412399fb0282a"
+          :scorer-tests
+          "cfa47b00df1e9652eaea3f20ff48e344cc881068961a2d5c3e3c620ffaa27277"
+          :capture-server
+          "aaf9a48e0cc060ac11a52e9b9b8fb90fee55da282519f15eb8bb68e677f58401"
+          :capture-server-tests
+          "db8f26ef3592f1ec52e3160b77419d790375e45241c7412af8f571fdb1b10a4c"
+          :observer
+          "a3b8fc5b8259f14fb5ea0f306c24a013b78e9f8a1989adb1eee1a62c9160bc18"
+          :schema-validator
+          "fd9e989bce4d00d86de5699071946da66fa48acfbfada3ea95a00a968f13589a"
+          :task
+          "789809060a52d647197cf1fb5ade2cc0a76992209a0223991c7a51179f44d8e1"
+          :capsule
+          "7d985f4d30acdf871f615b174e0f6c37338539253e6591cf898f96c26f39d4b9"}
+ :zero-model
+ {:model-calls 0
+  :mutation-actions 0
+  :order [:flat :file-groups :closed-relations
+          :closed-relations :file-groups :flat]
+  :tests {:logical 17 :assertions 86 :failures 0 :errors 0}
+  :arms
+  {:flat {:semantic-exact true
+          :treatment-adherent true
+          :decision-coverage-complete true
+          :argument-bytes 6353
+          :surface-bytes 8442}
+   :file-groups {:semantic-exact true
+                 :treatment-adherent true
+                 :decision-coverage-complete true
+                 :argument-bytes 5189
+                 :surface-bytes 10949}
+   :closed-relations {:semantic-exact true
+                      :treatment-adherent true
+                      :decision-coverage-complete true
+                      :argument-bytes 2703
+                      :surface-bytes 10803}}
+  :falsifiers
+  {:a-mixed-flat :refused
+   :a-local-file :refused
+   :a-duplicate-group :refused
+   :b-duplicate-require-file :refused
+   :b-missing-source :refused
+   :b-platform-conditional :refused
+   :b-alias-collision :refused
+   :b-duplicate-symbol-row :refused
+   :b-row-permutation :non-adherent}}
+ :client-preflight
+ {:model-calls 0
+  :mutation-actions 0
+  :arms [:flat :file-groups :closed-relations]
+  :tool-set ["edit_clojure"]
+  :summary-sha256
+  "921b367355bfc5423688c364ad6aa4cb817a586d71abe4e77802f4c8a6216693"
+  :run-config-sha256
+  "4a0117517f61846a9fef48bf9e40d958dc8254f19026216ab6ed1fd6d975180c"
+  :prerequisites-sha256
+  "f7541e933a2131abb2a255b04430ab0eb1d31d30d86c858f15052d9b21089d01"
+  :flat-registry-sha256
+  "32d65c27482d3c015aac15d566d466c48dd92cae522e8947ddbd451a30b5a5ff"
+  :file-groups-registry-sha256
+  "7cd25ffc121169977386fd60c1271c93800d2e29cef3063ab138f3e084ef6f17"
+  :closed-relations-registry-sha256
+  "eef5fc8c40e929883de41c7807c5c4215d251e21adadb86d7d91397ba1c97898"}
+ :archive
+ {:path
+  "/Users/genekim/src.local/clj-surgeon-bench-archive/2026-08-29/three-arm-request-shape-preflight-a9a9d5d-20260829T081400Z.tar.gz"
+  :sha256
+  "73bdf5c21a3a3d9d19599d02b20aa2efd4a672513bec912aebc486b72f057b60"}
+ :verdict :go-f-a-b-b-a-f-capture-only-cohort}

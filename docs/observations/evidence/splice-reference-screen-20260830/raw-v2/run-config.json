@@ -1,0 +1,143 @@
+{
+  "attempts_per_arm": 8,
+  "codex_version": "codex-cli 0.149.1",
+  "cohort_order": [
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R",
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R"
+  ],
+  "created_utc": "2026-08-30T21:16:15.384460+00:00",
+  "hashes": {
+    "bench/fixtures/splice_reference/before/src/splice_reference/fixture.clj": "4ec9cac6ec514899c8f966d9491c91e9ba6ff826ad139fff7aea628406f9f422",
+    "bench/fixtures/splice_reference/expected/src/splice_reference/fixture.clj": "e72d4368180829b2c2f832a95201ed707620db0a14b0486663b5469fd5f80592",
+    "bench/fixtures/splice_reference/spans.json": "042589eaf703dc84eb743749b14eb8c887bf11c1e04f92405f230762c0cea7e0",
+    "bench/fixtures/splice_reference/task.txt": "ed36db78d46759e42aad5f25f33ac0857c13217795247478fbc5c98c004a10c9",
+    "bench/run_splice_reference_screen.py": "8c1201751543eb5bc84fd2f54816c18dfeef0c9d23832ece512f77a7ec0d7158",
+    "bench/splice_reference_proxy.py": "5696fd14c0c13c35694c1a3b1e554af7a92352bc0fb30a6ae1f4a43aa1a7e004",
+    "bench/splice_reference_screen.py": "c19bc8a3f1cd68f896539c4482f807ac439e306e2bb892383dcfa46292702967",
+    "docs/observations/2026-08-30-splice-reference-screen-preregistration.md": "cff11a5e42b27bcf91c01b94a3e9b1eb27a96eb4bdd677303a512baa98a95f21"
+  },
+  "head": "1e4d60ec9b200be5a6ce166b0c954f9e627530c7",
+  "ideal_requests": {
+    "Q": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:max-attempts 5\n   :initial-delay-ms 250\n   :multiplier 2.0\n   :max-delay-ms 8000\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "matches": 1,
+            "to": "{:max-attempts 7\n   :initial-delay-ms 400\n   :multiplier 2.0\n   :max-delay-ms 12000\n   :jitter-strategy :full\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "within": {
+              "form": "retry-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:ttl-ms 300000\n   :refresh-ahead-ms 30000\n   :max-entries 2000\n   :eviction :least-recently-used\n   :compress-values? false\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v1\"}",
+            "matches": 1,
+            "to": "{:ttl-ms 900000\n   :refresh-ahead-ms 60000\n   :stale-while-revalidate-ms 120000\n   :max-entries 5000\n   :eviction :least-recently-used\n   :compress-values? true\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v2\"}",
+            "within": {
+              "form": "cache-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "[{:signal :latency-p99-ms\n    :warning 750\n    :critical 1500\n    :window-minutes 10\n    :minimum-samples 100}\n   {:signal :error-rate-percent\n    :warning 2.0\n    :critical 5.0\n    :window-minutes 5\n    :minimum-samples 200}\n   {:signal :queue-depth\n    :warning 500\n    :critical 1000\n    :window-minutes 15\n    :minimum-samples 50}]",
+            "matches": 1,
+            "to": "[{:signal :latency-p99-ms\n    :warning 650\n    :critical 1200\n    :window-minutes 10\n    :minimum-samples 150}\n   {:signal :error-rate-percent\n    :warning 1.5\n    :critical 4.0\n    :window-minutes 5\n    :minimum-samples 250}\n   {:signal :queue-depth\n    :warning 400\n    :critical 800\n    :window-minutes 15\n    :minimum-samples 75}]",
+            "within": {
+              "form": "alert-rules"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from": "{:stages [{:name :canary :traffic-percent 5 :hold-minutes 20}\n            {:name :regional :traffic-percent 25 :hold-minutes 45}\n            {:name :broad :traffic-percent 100 :hold-minutes 60}]\n   :abort-on #{:latency-regression :error-budget-breach}\n   :require-manual-approval? true\n   :rollback-window-minutes 120}",
+            "matches": 1,
+            "to": "{:stages [{:name :canary :traffic-percent 3 :hold-minutes 30}\n            {:name :regional :traffic-percent 20 :hold-minutes 60}\n            {:name :broad :traffic-percent 100 :hold-minutes 90}]\n   :abort-on #{:latency-regression :error-budget-breach :saturation}\n   :require-manual-approval? true\n   :rollback-window-minutes 180}",
+            "within": {
+              "form": "rollout-policy"
+            }
+          }
+        ]
+      },
+      "tokens": 847,
+      "utf8_bytes": 2666
+    },
+    "R": {
+      "arguments": {
+        "edits": [
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s1",
+            "matches": 1,
+            "to": "{:max-attempts 7\n   :initial-delay-ms 400\n   :multiplier 2.0\n   :max-delay-ms 12000\n   :jitter-strategy :full\n   :retryable-statuses #{408 425 429 500 502 503 504}\n   :idempotency-required? true\n   :respect-retry-after? true}",
+            "within": {
+              "form": "retry-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s2",
+            "matches": 1,
+            "to": "{:ttl-ms 900000\n   :refresh-ahead-ms 60000\n   :stale-while-revalidate-ms 120000\n   :max-entries 5000\n   :eviction :least-recently-used\n   :compress-values? true\n   :record-hit-rate? true\n   :namespace-prefix \"splice-screen:v2\"}",
+            "within": {
+              "form": "cache-policy"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s3",
+            "matches": 1,
+            "to": "[{:signal :latency-p99-ms\n    :warning 650\n    :critical 1200\n    :window-minutes 10\n    :minimum-samples 150}\n   {:signal :error-rate-percent\n    :warning 1.5\n    :critical 4.0\n    :window-minutes 5\n    :minimum-samples 250}\n   {:signal :queue-depth\n    :warning 400\n    :critical 800\n    :window-minutes 15\n    :minimum-samples 75}]",
+            "within": {
+              "form": "alert-rules"
+            }
+          },
+          {
+            "file": "src/splice_reference/fixture.clj",
+            "from_ref": "s4",
+            "matches": 1,
+            "to": "{:stages [{:name :canary :traffic-percent 3 :hold-minutes 30}\n            {:name :regional :traffic-percent 20 :hold-minutes 60}\n            {:name :broad :traffic-percent 100 :hold-minutes 90}]\n   :abort-on #{:latency-regression :error-budget-breach :saturation}\n   :require-manual-approval? true\n   :rollback-window-minutes 180}",
+            "within": {
+              "form": "rollout-policy"
+            }
+          }
+        ]
+      },
+      "tokens": 509,
+      "utf8_bytes": 1615
+    },
+    "possible_reduction": {
+      "tokens": 0.39905548996458085,
+      "utf8_bytes": 0.3942235558889723
+    }
+  },
+  "model": "gpt-5.6-sol",
+  "pilot_order": [
+    "Q",
+    "R"
+  ],
+  "python": "3.13.7 (v3.13.7:bcee1c32211, Aug 14 2025, 19:10:51) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "reasoning": "high",
+  "release_base": "c55de2279826af5ed21c90981591479dd2e802b2",
+  "route": "codex exec ChatGPT subscription; OPENAI_API_KEY removed",
+  "schema": "clj-surgeon.splice-reference-run-config.v1",
+  "tokenizer": {
+    "encoding": "o200k_base",
+    "tiktoken_version": "0.11.0"
+  },
+  "tree": "481b0e1f6d7b72429f56ccd51835b72f3539de98"
+}

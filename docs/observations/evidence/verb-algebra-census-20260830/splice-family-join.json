@@ -1,0 +1,56 @@
+{
+  "schema": "transform-verb-splice-family-join.v1",
+  "source": {
+    "branch": "experiment/fromto-overlap-study-20260830",
+    "commit": "b51f802a01b51aa89bb8b3ff5f548ac53f137037",
+    "receipt_payload_sha256": "5c66a8b9934fcad07696db01dd3162327d4f5baa3221f572f4f3d4a846e5e4b1",
+    "minimal_run_helper_sha256": "b3e127c2ec76e75fb3edabfa643068aa1dd96e7073b62741f54b8468db61b53d"
+  },
+  "method": {
+    "model_calls": 0,
+    "join": "same extraction order and write ordinal as transform verb census",
+    "overhead_bytes_per_splice_op": 105,
+    "net_formula": "max(0, lcs_bytes - k * 105) per pair"
+  },
+  "population": {
+    "eligible_pairs": 332,
+    "writes": 195,
+    "families": {
+      "from_to": 207,
+      "find_replace": 125
+    }
+  },
+  "families": {
+    "from_to": {
+      "pairs": 207,
+      "to_bytes": 73091,
+      "lcs_bytes": 40473,
+      "splice_ops": 2234,
+      "economic_pairs": 27,
+      "writes_with_saving": 25,
+      "realistic_net_bytes": 4412
+    },
+    "find_replace": {
+      "pairs": 125,
+      "to_bytes": 130761,
+      "lcs_bytes": 103274,
+      "splice_ops": 1869,
+      "economic_pairs": 55,
+      "writes_with_saving": 35,
+      "realistic_net_bytes": 45244
+    }
+  },
+  "totals": {
+    "pairs": 332,
+    "splice_ops": 4103,
+    "economic_pairs": 82,
+    "realistic_net_bytes": 49656
+  },
+  "invariants": {
+    "family_pair_sum": true,
+    "family_lcs_sum_143747": true,
+    "family_net_sum_49656": true,
+    "splice_op_sum_4103": true
+  },
+  "receipt_payload_sha256": "26951acb96a8f1afc5c29e708c017a05c8f2032402b17a518c9f8a3ac83d10c2"
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "clj-surgeon.embedded-elaborator-d1-receipt.v1",
+  "timestamp": "2026-08-31T01:44:51.616771Z",
+  "branch": "feature/embedded-elaborator-20260830",
+  "target": {
+    "file": "src/clj_surgeon/mcp_elaborator_supervisor.clj",
+    "owner": "close-session!",
+    "old_file_sha256": "352cb9d9c854a18f02b8bdd989e2e68aeda358bea194862fd588155f65197454",
+    "new_file_sha256": "7e1986c7c2a8be54eabedb6577a53e087dfe6ea9b00e3060606458193a799a38",
+    "old_owner_sha256": "a945266cfb2483677bd223f0c8205c8182b26196ff82612786dd18bbdb44604d",
+    "expected_owner_sha256": "963d94377a9e5eb074d21b50eeef2d125d0ccb32178bbb76328aba615fb183bd",
+    "rename_count": 3
+  },
+  "comparison": {
+    "candidate_sha256": "963d94377a9e5eb074d21b50eeef2d125d0ccb32178bbb76328aba615fb183bd",
+    "expected_sha256": "963d94377a9e5eb074d21b50eeef2d125d0ccb32178bbb76328aba615fb183bd",
+    "exact": true,
+    "candidate_count": 1,
+    "authority_field_count": 0,
+    "tool_item_count": 0,
+    "reroute_count": 0,
+    "automatic_retry_count": 0
+  },
+  "runtime": {
+    "model": "gpt-5.3-codex-spark",
+    "provider": "openai",
+    "cli_version": "codex-cli 0.149.1",
+    "cli_sha256": "134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477",
+    "schema_sha256": "4f4a8d8f53f971b97f818639f58c8d26bb68bfcdfa2d2f20572cb97e6761ab91",
+    "auth_identity_sha256": "0d0e12878ff5093721eec15e496a31c4e8cddd86fd30aa98d973fa70b93eabb5",
+    "isolation_policy_version": "spark-hs-v1@3c2cc192",
+    "allow_provider_model_fallback": false
+  },
+  "turn": {
+    "turn_count": 1,
+    "turn_id": "01a0557d-8bb3-7490-b56a-a56d44b9c536",
+    "latency_ms": 4526.83375,
+    "input_tokens": 3209,
+    "output_tokens": 803,
+    "result_class": "accepted"
+  },
+  "ordinary": {
+    "operation": "edit_clojure",
+    "wall_ms": 311.833875,
+    "receipt_hash": "6fe2f866af1e24ff10f1a810d289270b62fe6d674d7bdb128caa2ed51d1c76f8",
+    "verification_complete": true
+  },
+  "pipeline_ms": 5855.6345,
+  "cleanup_ok": true,
+  "remaining_process_group_members": 0,
+  "promotion": {
+    "pass": false,
+    "promotion_blocked": true,
+    "reason": "complete verified elaborated wall did not beat the independently prepared ordinary equivalent"
+  },
+  "source_or_secret_material_retained": false
+}

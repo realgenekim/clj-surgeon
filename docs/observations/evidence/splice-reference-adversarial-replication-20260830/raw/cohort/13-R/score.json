@@ -1,0 +1,49 @@
+{
+  "actual_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+  "arm": "R",
+  "blind_reference_count": 0,
+  "completed_task": true,
+  "conventional_call_count": 0,
+  "emitted": {
+    "all_mcp_tokens": 689,
+    "all_mcp_utf8_bytes": 2536,
+    "mutation_tokens": 444,
+    "mutation_utf8_bytes": 1590
+  },
+  "environment_valid": true,
+  "exact_bytes": true,
+  "expected_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+  "incorrect_readback_count": 0,
+  "product_verification_complete": true,
+  "quoted_anchor_count": 0,
+  "read_annotation_count": 4,
+  "readback_behavior": "verified",
+  "reference_count": 4,
+  "reference_used_any": true,
+  "reference_used_strict": true,
+  "resolved_identity_audit_count": 4,
+  "resolved_identity_count": 4,
+  "route_adherent": true,
+  "run_id": "13-R",
+  "schema": "clj-surgeon.splice-reference-adversarial-episode-score.v1",
+  "semantic_correct": true,
+  "strict_reference_call_count": 1,
+  "turns": {
+    "edit_calls": 1,
+    "file_change_calls": 0,
+    "inspect_calls": 4,
+    "mcp_round_trips": 5,
+    "shell_calls": 0
+  },
+  "typed_reference_failures": 0,
+  "usage": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 121088,
+    "input_tokens": 146184,
+    "output_tokens": 1982,
+    "reasoning_output_tokens": 841
+  },
+  "verified_readback_reference_count": 4,
+  "wall_seconds": 54.13223395799287,
+  "wrong_subject": 0
+}
