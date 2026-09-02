@@ -18,6 +18,23 @@ The cost is not tool latency (tool execution is 3 to 4 percent of wall, 87 perce
 time between actions). It is extra steps: the Surgeon arm still runs more shell calls than
 native, adds 8.5 MCP calls, and applies a third as many patches.
 
+## Why (fleet round 6 plus a free measurement)
+
+Every primitive call in the twelve n1 rollouts was classified. The Surgeon arm keeps the
+whole native workflow (102 native calls to native's 91) and adds 51 Surgeon calls that
+displace almost nothing: native patches fall from 22 to 8, nothing else moves. It is not
+receipt distrust (4 post-edit checks in 6 runs) and not literal-hunting (pre-edit 33 percent,
+same ratio as native). It is layering. Both reviewers trace it to the write contract (the
+tool needs exact literals it does not discover, so it can only sit on top of the native read
+loop) and to permissive prompt framing ("Surgeon is available; plain edits are fine"). The
+interface is not the cost: CLI-only on the same build matched MCP on wall (685 vs 725 s).
+
+The next cohort answers the question directly: X = Surgeon optional with "fastest safe
+completion"; Y = a substitution mandate (inspect replaces rg/sed, Surgeon writes replace
+apply_patch, receipts are terminal). If Y closes the gap, the fix is the prompt. If Y is
+obeyed and the gap stays, the tool's steps cost what they replace. If Y is not obeyed, the
+contract cannot be substituted for.
+
 ## What was settled tonight
 
 1. **The wave build's clarity deficit has a cause.** The insertion-gap fix introduces a refusal
