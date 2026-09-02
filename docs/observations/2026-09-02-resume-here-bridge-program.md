@@ -144,3 +144,9 @@ UPDATE 07:42Z (REAL UTC; the UPDATE labels 09:20Z..13:55Z above were hand-typed 
 git commit timestamps on this file are authoritative; write headers from `date -u` from now on). State unchanged since the
 previous update except: k2 scored + quality logged (4664188, 39039aa): CLI is a second layer, lowest quality of the night;
 inbox inb-c273db closes the CLI follow-up. v1 running since 07:34Z (six A arms, then V V V A A A). Chain after v1: s1 -> l1 -> b2.
+
+UPDATE 08:03Z (real UTC) — v1 DONE (walls logged eeaf47a: nine identical A runs 516-781 s, 42% spread = the floor; V = A on wall).
+v1 diffs frozen (12/12 complete), rescore-anvil-v1.txt running, judges running (quality-review-v1/, key.txt), scorer writing
+v1-score.md (variance floor: mean/sd per metric over nine A; V dose). chain-3b launches s1 M "X N X N X N|Y A Y A Y A" next
+(check ~/acid/receipts/chain-next.log for "launching s1"), then l1 L "A N Y A N Y|Y A N Y A N", then chain-4b b2. Monitor
+bb5prq9bu covers k2 v1 s1 l1 b2. Receipt headers are now written from date -u.
