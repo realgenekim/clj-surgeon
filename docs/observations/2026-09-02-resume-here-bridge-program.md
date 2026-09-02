@@ -689,3 +689,16 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   conditional arms, tripwire test edit delegated, gate, push, inbox); 23j ac9d2922b2d295e87 on rf2;
   study ops aa962e1fb576e0072.
 
+
+## RESUME DELTA 2026-09-02T23:20Z
+
+- **Migration applied on `~/src/curtaincall-cfp-lens`** (uncommitted folds.clj on a8af3393): two Surgeon
+  transactions (16 + 2 edits), guards 19→1, paths 25→4, focused gate green except the tripwire
+  numbers. Builder a0ad6890cb421cb67 is editing the tripwire test + registering LENS-004 + committing
+  ("LENS-004: migrate 18 fold arms …"). After its report: my own `flock ~/tmp/suite.lock bin/kaocha
+  unit` → push `bridge/settings-lens` → inbox item for Gene (stacked on store; merge after store).
+- Census pushed (7244141). Scratch worktree removed (patch saved in `.plan/`).
+- Running: 23j ac9d2922b2d295e87 (rf2 worktree), study ops aa962e1fb576e0072, fold-diff acaae1bcfa4441c72.
+- Owed to the mayor on seat bridge: the fold-diff branch name + make target; census + study-ops +
+  rf2(+23j) branches for the queue.
+
