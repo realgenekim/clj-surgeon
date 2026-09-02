@@ -2205,3 +2205,51 @@ the comment now says "the other seat's production port" and the chains relaunche
 rf2 queued, z7c behind it). The check was right to exist and right to fire; a grep for a literal
 is a grep for a literal.
 
+
+## 20:41Z — the slope scored: the tool is flat and perfect; native's cost is site discovery; the falsifier fires because native got better
+
+Receipt `~/acid/receipts/sl1-score.md` (scorer; acceptance from my rescore of all twelve
+worktrees; the spec file was checked against the brief's wording since it is not on Anvil).
+
+| N | sites | N returns | T returns | T/N | N wall | T wall | wall T/N | acceptance N | T |
+|---|---|---|---|---|---|---|---|---|---|
+| 5 | 15 | 3 | 3 | 1.00 | 55 | 25 | 0.45 | FAIL p2 p3 | PASS |
+| 10 | 30 | 3 | 2 | 0.67 | 65 | 25 | 0.38 | PASS | PASS |
+| 20 | 60 | 8 | 3 | 0.38 | 97 | 26 | 0.27 | FAIL p2 p4 p5 p6b p6c | PASS |
+| 40 | 120 | 11 | 3 | 0.27 | 111 | 24 | 0.22 | FAIL p2 p3 | PASS |
+| 80 | 240 | 6 | 3 | 0.50 | 121 | 27 | 0.22 | PASS | PASS |
+| C | 240 (5 files) | 7 | 3 | 0.43 | 127 | 27 | 0.21 | FAIL p2 p6c | PASS |
+
+**T:** one `alias_migration` call at every point, 0.29 → 1.71 s of tool time (scales with files,
+a rounding error against a flat ~25 s wall), 6/6 `ok`, zero refusals, zero `apply_patch`, 6/6
+acceptance. **N:** passes 2 of 6, three distinct failure modes: protected-region corruption (5:
+discards; 40: discards, docstrings and string literals, 14 of 224 regions), syntactic
+destruction (20: its own `migrate-store.sh` emitted unparseable files, namespaces fail to load,
+three files end with no alias at all), and alias-policy violation under density (C: `st2` where
+`store2` was free). The two points it passed are the two where its improvised tooling happened
+to be exactly right. Not a scale story, a **variance** story.
+
+**Mechanism, corrected twice by the receipts.** (1) Both arms type the same bytes: diffs
+byte-identical at N=10 and N=80, six bytes apart at 20; the tool does not save typing. (2) The
+control decides what native pays for: 240 sites in 5 files (C) costs native 127 s; 240 sites in
+80 files costs 121 s; 16× fewer files, 2.6× fewer bytes, same wall; native's read cells track
+sites (1, 1, 3, 2, 5, 5). **Native's cost is site discovery, and one call absorbs the whole site
+set.** (3) The ratio is not monotone, a pre-registered falsifier fires, because native changes
+strategy: hand patch to N=10, a shell script at 20–40 (11 returns), a correct Python generator
+piped into `apply_patch` at 80 (6 returns). The regression at N=80 is native getting better;
+T is flat at 3 throughout. "Bytes patched from the rollout" is invalid past N=10 for that reason
+(the rollout holds the generator, not the diff); the scorer substituted the worktree diff.
+
+**Predictions:** both brains overestimated native's returns (Sol 8→13, Opus 8→30; observed 3→6,
+peak 11 at 40) and underestimated the tool (6–7 predicted; 2–3 observed). Falsifiers: native
+wall at 80 is 2.2× N=5 (not triggered); ratio not monotone (**TRIGGERED**); ratio ≥ 0.85 (no);
+fallback/refusals (none). Flagship: wall ratio ≤ 0.50 at N ≥ 40 PASS (0.22); zero fallback
+PASS; ratio ≤ 0.35 at 80 FAIL (0.50); monotone ≥ 4/5 FAIL (3/4); acceptance both arms every N
+FAIL (native 2/6). **2 of 5.**
+
+**What is true, stated for the brag and its boundary:** on a fan-out migration the one-call
+verb is 4.5× faster on wall at scale, 2× cheaper on returns, and correct at every point where
+native failed four times out of six in three different ways. The 10× the slope was built to
+find is not there on returns, because a competent native agent writes a generator at scale; the
+durable win is deterministic correctness at any scale, in one call, with a receipt.
+
