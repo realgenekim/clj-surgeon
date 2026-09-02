@@ -81,6 +81,17 @@ spec only. **Correction to the chief of staff's critique (Opus):** the rf1 ethno
 tweezer work done late; it read agent rollouts, and its findings are agent behaviour a hand
 session never emits. Hand-drive replaces the missing smoke test, not the ethnography.
 
+## Two protocol fixes from sessions 1–2 (2026-09-02, evening)
+
+- **Close a session with a marker file, not a sentence.** The watcher could not find the driver's
+  `TWEEZER SESSION n CLOSED` line as driver text in the transcript store; it found it only
+  quoted inside agent prompts. A session closes by writing `.tweezer/session-<n>.closed` in the
+  worktree with `date -u` inside; the watcher stats it.
+- **No unrelated command in a metered cell.** The meter counts the cell; a suite read-back that
+  shares a cell with an Anvil ssh is one return carrying two tasks, and the count is arguable.
+  Housekeeping calls are listed and counted separately in the watch file so the number is
+  auditable rather than argued.
+
 ## Standing decisions (2026-09-02)
 
 - rf2 (`:extract!` with `:rewire-callers`): finish the build, G0–G5 by hand (≈ 50 min), then its
