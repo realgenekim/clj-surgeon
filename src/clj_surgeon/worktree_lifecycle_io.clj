@@ -81,42 +81,42 @@
        (partition-by str/blank?)
        (remove #(str/blank? (first %)))
        (mapv
-         (fn [fields]
-           (reduce
-             (fn [row field]
-               (let [[name value] (str/split field #" " 2)]
-                 (case name
-                   "worktree" (assoc row :path value)
-                   "HEAD" (assoc row :head value)
-                   "branch" (assoc row :branch value :detached false)
-                   "detached" (assoc row :branch nil :detached true)
-                   "locked" (assoc row :locked true :lock-reason value)
-                   "prunable" (assoc row :prunable value)
-                   row)))
-             {:branch nil :detached false :locked false :lock-reason nil
-              :prunable nil}
-             fields)))))
+        (fn [fields]
+          (reduce
+           (fn [row field]
+             (let [[name value] (str/split field #" " 2)]
+               (case name
+                 "worktree" (assoc row :path value)
+                 "HEAD" (assoc row :head value)
+                 "branch" (assoc row :branch value :detached false)
+                 "detached" (assoc row :branch nil :detached true)
+                 "locked" (assoc row :locked true :lock-reason value)
+                 "prunable" (assoc row :prunable value)
+                 row)))
+           {:branch nil :detached false :locked false :lock-reason nil
+            :prunable nil}
+           fields)))))
 
 (defn parse-supacode-list
   "Parse tab-separated encoded-ID/status rows from Supacode."
   [output]
   (mapv
-    (fn [line]
-      (let [[encoded status] (str/split line #"\t" 2)
-            decoded (lifecycle/decode-supacode-id encoded
-                                                  (.exists (io/file
-                                                             (or (some-> encoded
-                                                                         (lifecycle/decode-supacode-id
-                                                                           false)
-                                                                         :path)
-                                                                 "/__invalid__"))))]
-        (when-not (:ok decoded)
-          (throw (ex-info "Invalid Supacode worktree identity" decoded)))
-        {:id encoded
-         :path (:path decoded)
-         :status (keyword status)
-         :focused false}))
-    (lines output)))
+   (fn [line]
+     (let [[encoded status] (str/split line #"\t" 2)
+           decoded (lifecycle/decode-supacode-id encoded
+                                                 (.exists (io/file
+                                                           (or (some-> encoded
+                                                                       (lifecycle/decode-supacode-id
+                                                                        false)
+                                                                       :path)
+                                                               "/__invalid__"))))]
+       (when-not (:ok decoded)
+         (throw (ex-info "Invalid Supacode worktree identity" decoded)))
+       {:id encoded
+        :path (:path decoded)
+        :status (keyword status)
+        :focused false}))
+   (lines output)))
 
 (defn- parse-focused-id [output]
   (some-> (first (lines output)) (str/split #"\t" 2) first))
@@ -161,7 +161,9 @@
     (.exists (io/file path)) :none
     :else :unknown))
 
-(defn- enrich-git-row [row]
+(declare path-authority)
+
+(defn- enrich-git-row [controller row]
   (let [path (:path row)
         exists (.isDirectory (io/file path))
         status (if exists (status-for path) :unknown)
@@ -170,34 +172,45 @@
                       (= :clean status)
                       (nil? (:prunable row))
                       (= :none submodules))]
-    (assoc row
-           :path (if exists (canonical-path path) path)
-           :tree (when exists (tree-for path))
-           :status status
-           :removal-preflight
-           {:eligible (boolean eligible)
-            :submodules submodules
-            :reasons (cond-> []
-                       (not exists) (conj :missing-path)
-                       (not= :clean status) (conj :worktree-not-clean)
-                       (:prunable row) (conj :prunable-registration)
-                       (not= :none submodules) (conj :submodule-state))})))
+    (if exists
+      (assoc row
+             :path (canonical-path path)
+             :tree (tree-for path)
+             :status status
+             :removal-preflight
+             {:eligible (boolean eligible)
+              :submodules submodules
+              :reasons (cond-> []
+                         (not= :clean status) (conj :worktree-not-clean)
+                         (:prunable row) (conj :prunable-registration)
+                         (not= :none submodules) (conj :submodule-state))})
+      (let [authority (path-authority path)
+            tree-result (run-captured controller
+                                      ["git" "rev-parse"
+                                       (str (:head row) "^{tree}")])]
+        (-> row
+            (dissoc :path)
+            (merge authority)
+            (assoc :tree (when (zero? (:exit tree-result))
+                           (str/trim (:out tree-result)))
+                   :status :not-applicable
+                   :removal-preflight :not-applicable))))))
 
 (defn- capture-supacode [root]
   (try
     (let [first-list (require-zero
+                      (run-captured root ["supacode" "worktree" "list"
+                                          "--with-status" "--timeout" "10"])
+                      :supacode-list-unavailable)
+          focused-result (require-zero
+                          (run-captured root ["supacode" "worktree" "list"
+                                              "--focused" "--with-status"
+                                              "--timeout" "10"])
+                          :supacode-focus-unavailable)
+          second-list (require-zero
                        (run-captured root ["supacode" "worktree" "list"
                                            "--with-status" "--timeout" "10"])
-                       :supacode-list-unavailable)
-          focused-result (require-zero
-                           (run-captured root ["supacode" "worktree" "list"
-                                               "--focused" "--with-status"
-                                               "--timeout" "10"])
-                           :supacode-focus-unavailable)
-          second-list (require-zero
-                        (run-captured root ["supacode" "worktree" "list"
-                                            "--with-status" "--timeout" "10"])
-                        :supacode-list-unavailable)]
+                       :supacode-list-unavailable)]
       (if (not= (:out first-list) (:out second-list))
         {:available false :error-type :unstable-supacode-bracket :worktrees []}
         (let [focused-id (parse-focused-id (:out focused-result))]
@@ -217,14 +230,14 @@
       {:available true
        :rows
        (vec
-         (mapcat
-           (fn [remote]
-             (let [url-sha (remote-url-digest root remote)
-                   result (require-zero
-                            (run-captured root ["git" "ls-remote" remote])
-                            :git-remote-advertisement-unavailable)]
-               (parse-ls-remote remote url-sha (:out result))))
-           remotes))})
+        (mapcat
+         (fn [remote]
+           (let [url-sha (remote-url-digest root remote)
+                 result (require-zero
+                         (run-captured root ["git" "ls-remote" remote])
+                         :git-remote-advertisement-unavailable)]
+             (parse-ls-remote remote url-sha (:out result))))
+         remotes))})
     (catch Throwable error
       {:available false
        :error-type (or (:error-type (ex-data error)) :remote-state-unavailable)
@@ -259,34 +272,36 @@
   ([] (capture-inventory (System/getProperty "user.dir")))
   ([controller-root]
    (let [root-result (require-zero
-                       (run-captured controller-root
-                                     ["git" "rev-parse" "--show-toplevel"])
-                       :repository-root-unavailable)
+                      (run-captured controller-root
+                                    ["git" "rev-parse" "--show-toplevel"])
+                      :repository-root-unavailable)
          root (canonical-path (str/trim (:out root-result)))
          common-result (require-zero
-                         (run-captured root ["git" "rev-parse" "--git-common-dir"])
-                         :common-git-directory-unavailable)
+                        (run-captured root ["git" "rev-parse" "--git-common-dir"])
+                        :common-git-directory-unavailable)
          common-raw (str/trim (:out common-result))
          common (canonical-path (if (.isAbsolute (io/file common-raw))
                                   common-raw
                                   (io/file root common-raw)))
          format-result (require-zero
-                         (run-captured root ["git" "rev-parse"
-                                             "--show-object-format"])
-                         :object-format-unavailable)
+                        (run-captured root ["git" "rev-parse"
+                                            "--show-object-format"])
+                        :object-format-unavailable)
          object-format (keyword (str/trim (:out format-result)))
          list-result (require-zero
-                       (run-captured root ["git" "worktree" "list"
-                                           "--porcelain" "-z"])
-                       :git-worktree-list-unavailable)
-         git-rows (mapv enrich-git-row (parse-git-worktrees (:out list-result)))
+                      (run-captured root ["git" "worktree" "list"
+                                          "--porcelain" "-z"])
+                      :git-worktree-list-unavailable)
+         git-rows (mapv #(enrich-git-row root %)
+                        (parse-git-worktrees (:out list-result)))
          supacode (capture-supacode root)
          snapshot
          {:schema lifecycle/snapshot-schema
           :captured-at (str (Instant/now))
           :repository {:root root
                        :common-git-dir common
-                       :primary-worktree (:path (first git-rows))
+                       :primary-worktree (or (:path (first git-rows))
+                                             (:path-lexical (first git-rows)))
                        :object-format object-format}
           :controller-worktree (canonical-path controller-root)
           :git-worktrees git-rows
@@ -332,10 +347,10 @@
                          :path (.getPath target)})))
       (try
         (with-open [channel (FileChannel/open
-                              (.toPath tmp)
-                              (into-array OpenOption
-                                          [StandardOpenOption/CREATE_NEW
-                                           StandardOpenOption/WRITE]))]
+                             (.toPath tmp)
+                             (into-array OpenOption
+                                         [StandardOpenOption/CREATE_NEW
+                                          StandardOpenOption/WRITE]))]
           (loop [buffer (ByteBuffer/wrap bytes)]
             (when (.hasRemaining buffer)
               (.write channel buffer)
@@ -363,10 +378,17 @@
     (write-edn! path handoff true)
     {:ok true :handoff-file (.getCanonicalPath path) :handoff handoff}))
 
+(declare unconsumed-plans-for-target)
+
 (defn write-plan! [common-git-dir plan]
-  (let [validation (lifecycle/validate-plan plan)]
+  (let [validation (if (= :prune-missing-registration (:operation plan))
+                     (lifecycle/validate-prune-plan plan)
+                     (lifecycle/validate-plan plan))]
     (when-not (:ok validation)
       (throw (ex-info "Invalid close plan" validation)))
+    (when (seq (unconsumed-plans-for-target common-git-dir plan))
+      (throw (ex-info "Target already has an unconsumed lifecycle plan"
+                      {:error-type :ambiguous-unconsumed-plan})))
     (let [path (io/file (record-dir common-git-dir "plans")
                         (str (:plan-id plan) ".edn"))]
       (write-edn! path plan true)
@@ -388,6 +410,7 @@
                   {:schema :clj-surgeon.worktree-lifecycle-journal/v1
                    :plan-id (:plan-id plan)
                    :plan-sha256 (:plan-sha256 plan)
+                   :operation (or (:operation plan) :close-worktree)
                    :transitions []})
         expected (if (empty? (:transitions journal))
                    :prepared
@@ -439,6 +462,132 @@
 (defn removal-command [controller target]
   ["git" "-C" controller "worktree" "remove" target])
 
+(defn path-authority
+  "Capture one no-follow lexical path state and nearest existing ancestor."
+  ;; @spec WTL-PRUNE-002 WTL-PRUNE-006
+  [path]
+  (try
+    (let [target (.normalize (.toAbsolutePath (.toPath (io/file path))))
+          options (into-array java.nio.file.LinkOption
+                              [java.nio.file.LinkOption/NOFOLLOW_LINKS])
+          present? (Files/exists target options)
+          components (rest (iterator-seq (.iterator target)))
+          root (.getRoot target)
+          walked (reductions #(.resolve ^java.nio.file.Path %1
+                                        ^java.nio.file.Path %2)
+                             root components)
+          symlink (some #(when (Files/isSymbolicLink %) %) walked)
+          nearest (first (drop-while #(not (Files/exists % options))
+                                     (iterate #(.getParent ^java.nio.file.Path %)
+                                              target)))]
+      (cond
+        symlink {:path-lexical (str target)
+                 :path-state :unknown
+                 :path-real nil
+                 :nearest-existing-parent nil
+                 :error-type :symlink-component}
+        present? {:path-lexical (str target)
+                  :path-state :present
+                  :path-real (.toString (.toRealPath target options))
+                  :nearest-existing-parent nil}
+        (nil? nearest) {:path-lexical (str target)
+                        :path-state :unknown
+                        :path-real nil
+                        :nearest-existing-parent nil
+                        :error-type :path-authority-unavailable}
+        :else
+        (let [real (.toRealPath nearest options)
+              attribute (fn [name]
+                          (try
+                            (Files/getAttribute nearest name options)
+                            (catch Throwable _ nil)))]
+          {:path-lexical (str target)
+           :path-state :absent
+           :path-real nil
+           :nearest-existing-parent
+           {:path (str real)
+            :device (attribute "unix:dev")
+            :inode (attribute "unix:ino")}})))
+    (catch Throwable error
+      {:path-lexical (str path)
+       :path-state :unknown
+       :path-real nil
+       :nearest-existing-parent nil
+       :error-type :path-authority-unavailable
+       :exception-class (.getName (class error))})))
+
+(defn prune-removal-command [target]
+  ;; @spec WTL-PRUNE-006
+  ["git" "worktree" "remove" target])
+
+(defn prune-parking-results []
+  ;; @spec WTL-PRUNE-010
+  [:not-applicable :not-applicable])
+
+(def supported-prune-git-versions
+  ;; The initial release gate is intentionally exact. A new version enters
+  ;; only after the compatibility matrix passes on that version.
+  #{"git version 2.50.1 (Apple Git-155)"})
+
+(defn git-version-supported? [controller]
+  ;; @spec WTL-PRUNE-006
+  (let [result (run-captured controller ["git" "--version"])]
+    (and (zero? (:exit result))
+         (contains? supported-prune-git-versions (str/trim (:out result))))))
+
+(defn- validate-prune-git-authority! [plan controller]
+  (let [local-ref (get-in plan [:preservation :local-ref])
+        endpoint (or (get-in plan [:preservation :peeled-object])
+                     (get-in plan [:preservation :object]))
+        tip-result (run-captured controller ["git" "rev-parse" local-ref])
+        endpoint-result (run-captured controller
+                                      ["git" "cat-file" "-e"
+                                       (str endpoint "^{commit}")])]
+    (when-not (git-version-supported? controller)
+      (throw (ex-info "Git version lacks a witnessed prune contract"
+                      {:error-type :unsupported-git-version})))
+    (when-not (and (zero? (:exit tip-result))
+                   (= (get-in plan [:target :head])
+                      (str/trim (:out tip-result))))
+      (throw (ex-info "Local branch tip drifted from registered HEAD"
+                      {:error-type :local-branch-tip-drift})))
+    (when-not (zero? (:exit endpoint-result))
+      (throw (ex-info "Preservation endpoint is not a local commit"
+                      {:error-type :preservation-endpoint-unavailable})))
+    true))
+
+(defn run-prune-compatibility-matrix
+  "Exercise the exact missing-registration command in a temp-owned fixture."
+  ;; @spec WTL-PRUNE-006 WTL-PRUNE-008
+  [controller target peer]
+  (let [before (parse-git-worktrees
+                (:out (require-zero
+                       (run-captured controller
+                                     ["git" "worktree" "list"
+                                      "--porcelain" "-z"])
+                       :git-worktree-list-unavailable)))
+        peer-before (some #(when (= peer (:path %)) %) before)
+        result (run-captured controller (prune-removal-command target))
+        after (parse-git-worktrees
+               (:out (require-zero
+                      (run-captured controller
+                                    ["git" "worktree" "list"
+                                     "--porcelain" "-z"])
+                      :git-worktree-list-unavailable)))
+        target-after (some #(when (= target (:path %)) %) after)
+        peer-after (some #(when (= peer (:path %)) %) after)]
+    (if (and (zero? (:exit result))
+             (nil? target-after)
+             (= peer-before peer-after))
+      {:ok true
+       :target-registration-present false
+       :peer-registration-present true}
+      {:ok false
+       :error-type :git-prune-compatibility-failed
+       :exit (:exit result)
+       :target-registration-present (boolean target-after)
+       :peer-registration-present (boolean peer-after)})))
+
 (defn handle-removal-failure! [{:keys [archived-by-invocation restore-fn]}]
   (if-not archived-by-invocation
     {:ok false :terminal-state :refused :error-type :git-worktree-remove-failed}
@@ -460,8 +609,8 @@
           true
           (catch Throwable _ false))
         ui-result (handle-removal-failure!
-                    {:archived-by-invocation archived-by-invocation
-                     :restore-fn restore-fn})]
+                   {:archived-by-invocation archived-by-invocation
+                    :restore-fn restore-fn})]
     (if (and lease-restored
              (contains? #{:refused :restored-refusal} (:terminal-state ui-result)))
       ui-result
@@ -531,7 +680,7 @@
         (let [after (snapshot-fn)]
           (if (not= (dissoc plan :plan-sha256) (dissoc after :plan-sha256))
             (handle-post-archive-drift!
-              {:archived-by-invocation true :restore-fn (constantly true)})
+             {:archived-by-invocation true :restore-fn (constantly true)})
             (do
               (remove-fn)
               (if (terminal-fn)
@@ -541,9 +690,9 @@
                                   {:state state
                                    :result (if (and (not= :parked (:outcome plan))
                                                     (contains?
-                                                      #{:parking-intent-recorded
-                                                        :parking-completion-verified}
-                                                      state))
+                                                     #{:parking-intent-recorded
+                                                       :parking-completion-verified}
+                                                     state))
                                              :not-applicable
                                              :ok)})
                                 transition-order)}
@@ -551,11 +700,11 @@
                  :error-type :terminal-postcondition-failed}))))))))
 
 (defn- current-target-view [snapshot path]
-  (when-let [row (some #(when (= path (:path %)) %)
+  (when-let [row (some #(when (= path (or (:path-lexical %) (:path %))) %)
                        (:git-worktrees snapshot))]
-    (let [supacode (some #(when (= path (:path %)) %)
+    (let [supacode (some #(when (= path (or (:path-lexical %) (:path %))) %)
                          (get-in snapshot [:supacode :worktrees]))]
-      {:path (:path row)
+      {:path (or (:path-lexical row) (:path row))
        :head (:head row)
        :tree (:tree row)
        :branch (:branch row)
@@ -576,7 +725,7 @@
   (when (.isFile (io/file journal-file))
     (get-in (read-record journal-file)
             [:transitions (dec (count (:transitions
-                                        (read-record journal-file)))) :state])))
+                                       (read-record journal-file)))) :state])))
 
 (defn- transition-reached? [journal-file state]
   (let [current (journal-state journal-file)]
@@ -612,17 +761,17 @@
 (defn- archive-supacode! [root id]
   (when id
     (require-zero
-      (run-captured root ["supacode" "worktree" "archive"
-                          "--worktree" id "--background" "--timeout" "30"])
-      :supacode-archive-failed))
+     (run-captured root ["supacode" "worktree" "archive"
+                         "--worktree" id "--background" "--timeout" "30"])
+     :supacode-archive-failed))
   true)
 
 (defn- restore-supacode! [root id]
   (when id
     (require-zero
-      (run-captured root ["supacode" "worktree" "unarchive"
-                          "--worktree" id "--background" "--timeout" "30"])
-      :supacode-restore-failed))
+     (run-captured root ["supacode" "worktree" "unarchive"
+                         "--worktree" id "--background" "--timeout" "30"])
+     :supacode-restore-failed))
   true)
 
 (defn- parking-record [plan]
@@ -639,9 +788,9 @@
   (let [issue (get-in plan [:outcome-evidence :issue])
         directory (some-> (:store issue) io/file .getParent)
         result (require-zero
-                 (run-captured directory ["bd" "--directory" directory
-                                          "show" (:id issue) "--json"])
-                 :parked-issue-unavailable)
+                (run-captured directory ["bd" "--directory" directory
+                                         "show" (:id issue) "--json"])
+                :parked-issue-unavailable)
         parsed (json/parse-string (:out result) true)]
     (if (sequential? parsed) (first parsed) parsed)))
 
@@ -693,10 +842,10 @@
             (throw (ex-info "Parked issue revision drifted before append"
                             {:error-type :parked-issue-revision-drift})))
           (require-zero
-            (run-captured directory ["bd" "--directory" directory
-                                     "update" issue-id "--append-notes" record
-                                     "--json"])
-            :parking-intent-append-failed)
+           (run-captured directory ["bd" "--directory" directory
+                                    "update" issue-id "--append-notes" record
+                                    "--json"])
+           :parking-intent-append-failed)
           {:result :recorded
            :revision-before expected
            :revision-after (issue-revision (read-issue-row plan))})))))
@@ -716,7 +865,7 @@
           completion-current
           (and (.isFile receipt-path)
                (ends-with-record? row (parking-completion-record
-                                        plan (read-record receipt-path))))
+                                       plan (read-record receipt-path))))
           revision-current
           (if completion-current
             (or (= journal-revision current-revision)
@@ -746,13 +895,13 @@
 
 (defn- terminal-paths-current? [root plan]
   (every?
-    (fn [path]
-      (zero? (:exit (run-captured root ["git" "cat-file" "-e"
-                                        (str (get-in plan
-                                                     [:outcome-evidence
-                                                      :breadcrumb :object])
-                                             ":" path)]))))
-    (get-in plan [:outcome-evidence :terminal-paths])))
+   (fn [path]
+     (zero? (:exit (run-captured root ["git" "cat-file" "-e"
+                                       (str (get-in plan
+                                                    [:outcome-evidence
+                                                     :breadcrumb :object])
+                                            ":" path)]))))
+   (get-in plan [:outcome-evidence :terminal-paths])))
 
 (defn- sha256-bytes [bytes]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256") bytes)]
@@ -773,7 +922,7 @@
                end (not= -1 end) (= -1 second-end))
       (try
         (edn/read-string
-          (str/trim (subs document (+ begin (count negative-seal-begin)) end)))
+         (str/trim (subs document (+ begin (count negative-seal-begin)) end)))
         (catch Throwable _ nil)))))
 
 (defn- durable-archive-current? [target-path raw receipt]
@@ -799,9 +948,9 @@
   (let [breadcrumb (:breadcrumb evidence)
         object (:object breadcrumb)
         document-result (require-zero
-                          (run-captured root ["git" "show"
-                                              (str object ":" (:path breadcrumb))])
-                          :negative-breadcrumb-unavailable)
+                         (run-captured root ["git" "show"
+                                             (str object ":" (:path breadcrumb))])
+                         :negative-breadcrumb-unavailable)
         document (:out document-result)
         seal (one-seal document)
         experiment (get seal :experiment)
@@ -835,7 +984,7 @@
                        (and receipt-result
                             (zero? (:exit receipt-result))
                             (durable-archive-current?
-                              (:path target) raw (:out receipt-result)))))
+                             (:path target) raw (:out receipt-result)))))
       (throw (ex-info "Negative-experiment authority is not durable"
                       {:error-type :negative-experiment-evidence-not-proved})))
     true))
@@ -871,7 +1020,9 @@
 
 (defn- lease-file [common plan]
   (io/file (record-dir common "leases")
-           (str (target-key (get-in plan [:target :path])) ".edn")))
+           (str (target-key (or (get-in plan [:target :path-lexical])
+                                (get-in plan [:target :path])))
+                ".edn")))
 
 (defn- journal-file [common plan]
   (io/file (record-dir common "journals") (str (:plan-id plan) ".edn")))
@@ -883,23 +1034,28 @@
   (io/file (record-dir common "plans") (str (:plan-id plan) ".edn")))
 
 (defn- unconsumed-plans-for-target [common plan]
-  (let [directory (record-dir common "plans")]
+  (let [directory (record-dir common "plans")
+        target (or (get-in plan [:target :path-lexical])
+                   (get-in plan [:target :path]))]
     (vec
-      (for [file (or (.listFiles directory) [])
-            :when (.isFile file)
-            :let [candidate (try (read-record file) (catch Throwable _ nil))]
-            :when (and (map? candidate)
-                       (= (get-in plan [:target :path])
-                          (get-in candidate [:target :path]))
-                       (not (.isFile (receipt-file common candidate))))]
-        candidate))))
+     (for [file (or (.listFiles directory) [])
+           :when (.isFile file)
+           :let [candidate (try (read-record file) (catch Throwable _ nil))]
+           :when (and (map? candidate)
+                      (= target
+                         (or (get-in candidate [:target :path-lexical])
+                             (get-in candidate [:target :path])))
+                      (not (.isFile (receipt-file common candidate))))]
+       candidate))))
 
 (defn- completion-file [common plan]
   (io/file (record-dir common "completions") (str (:plan-id plan) ".edn")))
 
 (defn- lock-file [common plan]
   (io/file (record-dir common "locks")
-           (str (target-key (get-in plan [:target :path])) ".lock")))
+           (str (target-key (or (get-in plan [:target :path-lexical])
+                                (get-in plan [:target :path])))
+                ".lock")))
 
 (defn- acquire-file-lock [file]
   (Files/createDirectories (.toPath (.getParentFile file))
@@ -974,11 +1130,13 @@
 
 (defn- validate-journal! [journal plan]
   (let [states (mapv :state (:transitions journal))
-        expected-prefix (subvec transition-order 0 (count states))]
+        expected-prefix (subvec transition-order 0 (count states))
+        operation (or (:operation plan) :close-worktree)]
     (when-not (and (= :clj-surgeon.worktree-lifecycle-journal/v1
                       (:schema journal))
                    (= (:plan-id plan) (:plan-id journal))
                    (= (:plan-sha256 plan) (:plan-sha256 journal))
+                   (= operation (:operation journal))
                    (= expected-prefix states))
       (throw (ex-info "Lifecycle journal does not belong to this plan"
                       {:error-type :invalid-lifecycle-journal})))
@@ -1030,10 +1188,10 @@
 
         (= journal-revision revision-before)
         (require-zero
-          (run-captured directory ["bd" "--directory" directory
-                                   "update" issue-id "--append-notes"
-                                   completion-bytes "--json"])
-          :parking-completion-append-failed)
+         (run-captured directory ["bd" "--directory" directory
+                                  "update" issue-id "--append-notes"
+                                  completion-bytes "--json"])
+         :parking-completion-append-failed)
 
         :else
         (throw (ex-info "Parked issue revision drifted before completion"
@@ -1070,7 +1228,7 @@
              (= (journal-issue-revision plan) (issue-revision row))))
       (catch Throwable _ false))))
 
-(defn apply-plan-file!
+(defn apply-close-plan-file!
   "Apply one reviewed plan through the real adapters.
 
   This entrance is implemented but is not exercised against a real worktree by
@@ -1182,9 +1340,9 @@
                                                  true))
                 (catch Throwable error
                   (let [failure (handle-post-archive-drift!
-                                  {:archived-by-invocation archive-required
-                                   :restore-fn #(restore-supacode! root
-                                                                   supacode-id)})]
+                                 {:archived-by-invocation archive-required
+                                  :restore-fn #(restore-supacode! root
+                                                                  supacode-id)})]
                     (throw (ex-info "Post-archive safety gate refused"
                                     (merge failure (ex-data error)))))))))
 
@@ -1208,16 +1366,16 @@
               (if target-before-remove
                 (do
                   (validate-current-authorities!
-                    plan before-remove controller
-                    (if lease-before-remove :matching :released) true)
+                   plan before-remove controller
+                   (if lease-before-remove :matching :released) true)
                   (when lease-before-remove
                     (delete-matching-lease! lease-path plan))
                   (let [removal (run-captured controller
                                               (removal-command controller target))]
                     (when-not (zero? (:exit removal))
                       (let [failure (recover-removal-failure!
-                                      lease-path plan archived-by-operation
-                                      #(restore-supacode! root supacode-id))]
+                                     lease-path plan archived-by-operation
+                                     #(restore-supacode! root supacode-id))]
                         (throw (ex-info "Git worktree removal failed" failure))))))
                 (when lease-before-remove
                   (throw (ex-info "Removed target retained a lifecycle lease"
@@ -1239,7 +1397,7 @@
             (when-not (:ok terminal)
               (throw (ex-info "Terminal postconditions failed" terminal)))
             (let [compiled (:receipt
-                             (lifecycle/compile-receipt plan postconditions))
+                            (lifecycle/compile-receipt plan postconditions))
                   receipt (if (.isFile receipt-path)
                             (let [existing (read-record receipt-path)]
                               (when-not (= compiled existing)
@@ -1268,6 +1426,182 @@
         (finally
           (release-file-lock! handle))))))
 
+(defn- prune-target-path [plan]
+  (get-in plan [:target :path-lexical]))
+
+(defn- prune-authorities-current [plan snapshot]
+  (let [target-path (prune-target-path plan)
+        target (current-target-view snapshot target-path)
+        row (some #(when (= target-path (or (:path-lexical %) (:path %))) %)
+                  (:git-worktrees snapshot))
+        proof (lifecycle/validate-preservation-proof
+               snapshot (or row (:target plan)) (:preservation plan))]
+    (and (= (:target plan) row)
+         (= :absent (:path-state (path-authority target-path)))
+         (:ok proof)
+         (nil? (get-in snapshot [:handoffs target-path]))
+         (not (contains? #{:active :dirty-blocked}
+                         (:classification
+                          (lifecycle/classify-target snapshot target-path nil))))
+         target)))
+
+(defn apply-prune-plan-file!
+  "Apply one reviewed stale-registration plan through the journaled boundary."
+  ;; @spec WTL-PRUNE-006 WTL-PRUNE-007 WTL-PRUNE-008 WTL-PRUNE-010
+  [plan-path]
+  (let [plan (read-record plan-path)
+        validation (lifecycle/validate-prune-plan plan)]
+    (when-not (:ok validation)
+      (throw (ex-info "Reviewed prune plan is invalid" validation)))
+    (let [common (get-in plan [:repository :common-git-dir])
+          root (get-in plan [:repository :root])
+          controller (System/getProperty "user.dir")
+          target (prune-target-path plan)
+          handle (acquire-file-lock (lock-file common plan))]
+      (try
+        (when-not (= (canonical-path plan-path)
+                     (canonical-path (persisted-plan-file common plan)))
+          (throw (ex-info "Apply requires the persisted reviewed plan"
+                          {:error-type :unreviewed-plan-path})))
+        (let [journal-path (journal-file common plan)
+              receipt-path (receipt-file common plan)
+              lease-path (lease-file common plan)
+              journal (when (.isFile journal-path)
+                        (validate-journal! (read-record journal-path) plan))
+              state (some-> journal :transitions last :state)
+              initial (capture-inventory controller)
+              initial-row (some #(when (= target
+                                          (or (:path-lexical %) (:path %))) %)
+                                (:git-worktrees initial))]
+          (validate-prune-git-authority! plan controller)
+          (when (and (.isFile receipt-path) (nil? journal))
+            (throw (ex-info "Terminal receipt has no owning journal"
+                            {:error-type :orphan-terminal-receipt})))
+          (when (and (nil? state) (nil? initial-row))
+            (throw (ex-info "Registration already resolved before prepared"
+                            {:error-type :already-resolved})))
+          (when-not state
+            (when-not (prune-authorities-current plan initial)
+              (throw (ex-info "Prune authority drifted before prepared"
+                              {:error-type :pre-apply-authority-drift})))
+            (when (.isFile lease-path)
+              (throw (ex-info "A lifecycle lease already owns this target"
+                              {:error-type :lifecycle-lease-exists})))
+            (write-edn! lease-path (:expected-lifecycle-lease plan) true)
+            (ensure-transition! journal-path plan :prepared :ok))
+
+          (when-not (transition-reached? journal-path :archive-verified)
+            (ensure-transition! journal-path plan :parking-intent-recorded
+                                :not-applicable)
+            (let [{:keys [id initial terminal]} (:supacode plan)]
+              (ensure-transition! journal-path plan :archive-commanded
+                                  (if (= :absent initial)
+                                    :not-applicable
+                                    :commanded))
+              (when (not= :absent initial)
+                (let [before (supacode-status root id)]
+                  (when-not (and (:available before)
+                                 (= initial (:state before))
+                                 (not (:focused before)))
+                    (throw (ex-info "Supacode authority drifted"
+                                    {:error-type :supacode-authority-drift})))
+                  (archive-supacode! root id)))
+              (let [observed (if (= :absent initial)
+                               :absent
+                               (:state (supacode-status root id)))]
+                (when-not (= terminal observed)
+                  (throw (ex-info "Supacode archive was not verified"
+                                  {:error-type :supacode-archive-unverified})))
+                (ensure-transition! journal-path plan :archive-verified :ok))))
+
+          (let [before (capture-inventory controller)
+                target-row (some #(when (= target
+                                           (or (:path-lexical %) (:path %))) %)
+                                 (:git-worktrees before))
+                peers-before (vec (remove #(= target
+                                              (or (:path-lexical %) (:path %)))
+                                          (:git-worktrees before)))
+                effect-observed (if target-row
+                                  :controller
+                                  :controller-or-external)]
+            (when target-row
+              (when-not (prune-authorities-current plan before)
+                (throw (ex-info "Prune authority drifted before removal"
+                                {:error-type :pre-remove-authority-drift})))
+              (ensure-transition! journal-path plan :remove-commanded
+                                  :commanded)
+              (delete-matching-lease! lease-path plan)
+              (let [result (run-captured controller
+                                         (prune-removal-command target))]
+                (when-not (zero? (:exit result))
+                  (throw (ex-info "Git registration removal failed"
+                                  {:error-type :git-worktree-remove-failed
+                                   :exit (:exit result)})))))
+            (when-not target-row
+              (delete-matching-lease! lease-path plan)
+              (ensure-transition! journal-path plan :remove-commanded
+                                  :controller-or-external))
+            (let [after (capture-inventory controller)
+                  peers-after (vec (remove #(= target
+                                               (or (:path-lexical %) (:path %)))
+                                           (:git-worktrees after)))
+                  branch-result (run-captured controller
+                                              ["git" "rev-parse"
+                                               (:branch (:target plan))])
+                  proof-result (lifecycle/validate-preservation-proof
+                                after (:target plan) (:preservation plan))
+                  terminal-state (get-in plan [:supacode :terminal])
+                  observed-ui (if (= :absent terminal-state)
+                                :absent
+                                (:state (supacode-status
+                                         root (get-in plan [:supacode :id]))))
+                  postconditions
+                  {:target-present (not= :absent
+                                         (:path-state (path-authority target)))
+                   :registration-present
+                   (boolean (current-target-view after target))
+                   :branch-unchanged
+                   (and (zero? (:exit branch-result))
+                        (= (:head (:target plan))
+                           (str/trim (:out branch-result))))
+                   :preservation-unchanged (:ok proof-result)
+                   :supacode-state observed-ui}]
+              (when-not (= peers-before peers-after)
+                (throw (ex-info "Peer registration changed inside remove bracket"
+                                {:error-type :peer-registration-drift
+                                 :partial true})))
+              (let [receipt-result (lifecycle/compile-prune-receipt
+                                    plan effect-observed postconditions)]
+                (when-not (:ok receipt-result)
+                  (throw (ex-info "Prune terminal postconditions failed"
+                                  receipt-result)))
+                (ensure-transition! journal-path plan :remove-verified
+                                    effect-observed)
+                (let [receipt (:receipt receipt-result)]
+                  (if (.isFile receipt-path)
+                    (when-not (= receipt (read-record receipt-path))
+                      (throw (ex-info "Prune receipt drifted"
+                                      {:error-type :terminal-receipt-drift})))
+                    (write-edn! receipt-path receipt true))
+                  (ensure-transition! journal-path plan :final-receipt-written
+                                      :ok)
+                  (ensure-transition! journal-path plan
+                                      :parking-completion-verified
+                                      :not-applicable)
+                  {:ok true
+                   :replayed (boolean state)
+                   :terminal-state :complete
+                   :receipt-file (.getCanonicalPath receipt-path)
+                   :receipt receipt})))))
+        (finally
+          (release-file-lock! handle))))))
+
+(defn apply-plan-file! [plan-path]
+  (let [plan (read-record plan-path)]
+    (if (= :prune-missing-registration (:operation plan))
+      (apply-prune-plan-file! plan-path)
+      (apply-close-plan-file! plan-path))))
+
 (defn- controller-identity [root]
   (let [head (-> (require-zero (run-captured root ["git" "rev-parse" "HEAD"])
                                :controller-head-unavailable)
@@ -1276,9 +1610,9 @@
                                :controller-tree-unavailable)
                  :out str/trim)
         status (require-zero
-                 (run-captured root ["git" "status" "--porcelain=v2" "-z"
-                                     "--untracked-files=all"])
-                 :controller-status-unavailable)
+                (run-captured root ["git" "status" "--porcelain=v2" "-z"
+                                    "--untracked-files=all"])
+                :controller-status-unavailable)
         artifacts (into (sorted-map)
                         (for [path ["Makefile"
                                     "src/clj_surgeon/worktree_lifecycle.clj"
@@ -1308,17 +1642,25 @@
 (defn dry-run-plan! [request-file]
   ;; @spec WTL-PLAN-001 WTL-PLAN-002 WTL-PLAN-003 WTL-PLAN-004
   (let [request (read-record request-file)
-        snapshot (add-ancestry (capture-inventory) request)
+        prune? (= lifecycle/prune-request-schema (:schema request))
+        snapshot (cond-> (capture-inventory)
+                   (not prune?) (add-ancestry request))
         root (get-in snapshot [:repository :root])
-        target (some #(when (= (:target request) (:path %)) %)
+        target (some #(when (= (:target request)
+                               (or (:path-lexical %) (:path %))) %)
                      (:git-worktrees snapshot))
-        _ (when (= :negative-experiment (:outcome request))
+        _ (when (and (not prune?)
+                     (= :negative-experiment (:outcome request)))
             (validate-negative-authority! root target (:evidence request)))
-        plan-result (lifecycle/compile-plan snapshot request
-                                            (controller-identity root)
-                                            (lifecycle/new-plan-id))]
+        plan-result ((if prune?
+                       lifecycle/compile-prune-plan
+                       lifecycle/compile-plan)
+                     snapshot request (controller-identity root)
+                     (lifecycle/new-plan-id))]
     (when-not (:ok plan-result)
       (throw (ex-info "Close plan refused" plan-result)))
+    (when prune?
+      (validate-prune-git-authority! (:plan plan-result) root))
     (write-plan! (get-in snapshot [:repository :common-git-dir])
                  (:plan plan-result))))
 

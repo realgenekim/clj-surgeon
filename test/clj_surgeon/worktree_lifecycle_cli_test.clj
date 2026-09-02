@@ -27,16 +27,22 @@
   (is (str/includes? makefile "clj-surgeon.worktree-lifecycle-io")))
 
 (deftest help-names-the-schemas-and-non-deletion-law
-  ;; @spec WTL-CLI-003
+  ;; @spec WTL-CLI-003 WTL-PRUNE-009
   (assert-context [(str/includes? makefile "Direct usage:")
                    (str/includes? makefile "Installation overrides:")
                    (str/includes? makefile "make test-fast")
-                   (str/includes? makefile "make install")])
+                   (str/includes? makefile "make install")
+                   (str/includes? makefile "worktree-registration-prune-request/v1")
+                   (str/includes? makefile "branch-tip-on-remote")
+                   (str/includes? makefile "commit-on-remote")
+                   (str/includes? makefile "one target")
+                   (str/includes? makefile "never force")
+                   (str/includes? makefile "never runs global git worktree prune")])
   (is (str/includes? makefile "make finish-worktree PLAN=/absolute/path.edn APPLY=1")))
 
 (deftest makefile-does-not-embed-destructive-lifecycle-policy
   (assert-context [(not (str/includes? makefile "git branch -D"))
                    (not (str/includes? makefile "git branch --delete --force"))
-                   (not (str/includes? makefile "git worktree prune"))
+                   (not (re-find #"(?m)^\\t@?git worktree prune(?:\\s|$)" makefile))
                    (not (str/includes? makefile "git worktree remove --force"))
                    (not (str/includes? makefile "rm -rf $(WORKTREE)"))]))

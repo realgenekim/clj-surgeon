@@ -1,7 +1,6 @@
 (ns clj-surgeon.worktree-lifecycle-prune-test
   (:require
    [clojure.java.io :as io]
-   [clojure.java.shell :as shell]
    [clojure.test :refer [deftest is]]))
 
 (def oid-a (apply str (repeat 40 "a")))
@@ -76,8 +75,14 @@
     ::missing))
 
 (defn- run-command! [dir & args]
-  (let [result (apply shell/sh (concat args [:dir (.getPath (io/file dir))]))]
-    (when-not (zero? (:exit result))
+  (let [builder (doto (ProcessBuilder. ^java.util.List (mapv str args))
+                  (.directory (io/file dir))
+                  (.redirectErrorStream true))
+        process (.start builder)
+        output (slurp (.getInputStream process))
+        exit (.waitFor process)
+        result {:exit exit :out output}]
+    (when-not (zero? exit)
       (throw (ex-info "fixture command failed" (assoc result :args args))))
     result))
 

@@ -13,9 +13,14 @@
 
 (def snapshot-schema :clj-surgeon.worktree-lifecycle-snapshot/v1)
 (def close-request-schema :clj-surgeon.worktree-close-request/v1)
+(def prune-request-schema
+  :clj-surgeon.worktree-registration-prune-request/v1)
 (def handoff-schema :clj-surgeon.worktree-handoff/v1)
 (def plan-schema :clj-surgeon.worktree-close-plan/v1)
+(def prune-plan-schema :clj-surgeon.worktree-registration-prune-plan/v1)
 (def receipt-schema :clj-surgeon.worktree-close-receipt/v1)
+(def prune-receipt-schema
+  :clj-surgeon.worktree-registration-prune-receipt/v1)
 (def negative-seal-schema :clj-surgeon.negative-experiment-seal/v1)
 
 (def ^:private snapshot-fields
@@ -23,9 +28,14 @@
     :supacode :remotes :ancestry :handoffs :lifecycle-leases})
 (def ^:private request-fields
   #{:schema :target :outcome :handoff :evidence})
+(def ^:private prune-request-fields #{:schema :target :preservation})
 (def ^:private plan-fields
   #{:schema :plan-id :plan-sha256 :repository :controller :captured-at
     :target :outcome :outcome-evidence :handoff :lifecycle-lease-prestate
+    :expected-lifecycle-lease :supacode})
+(def ^:private prune-plan-fields
+  #{:schema :plan-id :plan-sha256 :operation :repository :controller
+    :captured-at :target :preservation :handoff :lifecycle-lease-prestate
     :expected-lifecycle-lease :supacode})
 (def ^:private outcomes #{:landed :negative-experiment :parked})
 (def ^:private handoff-modes #{:agent :legacy})
@@ -114,6 +124,9 @@
        (not (str/includes? path "\u0000"))
        (not-any? #{".." "."} (str/split path #"/"))))
 
+(defn- row-path [row]
+  (or (:path-lexical row) (:path row)))
+
 (defn decode-supacode-id
   "Strictly decode one Supacode worktree ID. Existing paths must be canonical."
   [encoded existing]
@@ -132,24 +145,43 @@
 (defn validate-git-worktree
   "Validate the closed Git facts used by classification and planning."
   [object-format worktree]
-  (let [allowed #{:path :head :tree :branch :detached :locked :lock-reason
-                  :prunable :status :removal-preflight}
+  (let [present-fields #{:path :head :tree :branch :detached :locked
+                         :lock-reason :prunable :status :removal-preflight}
+        absent-fields #{:path-lexical :path-state :path-real
+                        :nearest-existing-parent :head :tree :branch :detached
+                        :locked :lock-reason :prunable :status
+                        :removal-preflight}
+        fields (set (keys worktree))
+        absent-row? (= fields absent-fields)
         preflight (:removal-preflight worktree)
-        missing-path? (some #{:missing-path} (:reasons preflight))]
+        missing-path? (or (= :absent (:path-state worktree))
+                          (some #{:missing-path} (:reasons preflight)))]
     (cond
-      (not (exact-fields? worktree allowed)) (refuse :invalid-git-worktree-fields)
-      (not (absolute-clean-path? (:path worktree))) (refuse :invalid-worktree-path)
+      (not (contains? #{present-fields absent-fields} fields))
+      (refuse :invalid-git-worktree-fields)
+      (not (absolute-clean-path? (row-path worktree)))
+      (refuse :invalid-worktree-path)
+      (and absent-row?
+           (not (and (= :absent (:path-state worktree))
+                     (nil? (:path-real worktree))
+                     (map? (:nearest-existing-parent worktree))
+                     (= :not-applicable (:status worktree))
+                     (= :not-applicable (:removal-preflight worktree)))))
+      (refuse :invalid-absent-path-authority)
       (not (exact-oid? object-format (:head worktree))) (refuse :invalid-git-head)
       (and (not (exact-oid? object-format (:tree worktree)))
            (nil? (:prunable worktree))
            (not missing-path?))
       (refuse :invalid-git-tree)
-      (not (contains? #{:clean :dirty :unknown} (:status worktree)))
+      (not (contains? #{:clean :dirty :unknown :not-applicable}
+                      (:status worktree)))
       (refuse :invalid-worktree-status)
-      (not (and (map? preflight)
-                (boolean? (:eligible preflight))
-                (contains? #{:none :present :unknown} (:submodules preflight))
-                (vector? (:reasons preflight))))
+      (and (not= :not-applicable preflight)
+           (not (and (map? preflight)
+                     (boolean? (:eligible preflight))
+                     (contains? #{:none :present :unknown}
+                                (:submodules preflight))
+                     (vector? (:reasons preflight)))))
       (refuse :invalid-removal-preflight)
       :else {:ok true :worktree worktree})))
 
@@ -180,10 +212,11 @@
         {:ok true :snapshot snapshot}))))
 
 (defn- git-row [snapshot path]
-  (some #(when (= path (:path %)) %) (:git-worktrees snapshot)))
+  (some #(when (= path (row-path %)) %) (:git-worktrees snapshot)))
 
 (defn- supacode-row [snapshot path]
-  (some #(when (= path (:path %)) %) (get-in snapshot [:supacode :worktrees])))
+  (some #(when (= path (row-path %)) %)
+        (get-in snapshot [:supacode :worktrees])))
 
 (defn- plan-current? [snapshot path plan]
   (let [row (git-row snapshot path)]
@@ -200,14 +233,18 @@
   [snapshot path plan]
   (let [git (git-row snapshot path)
         supacode (supacode-row snapshot path)
-        missing-path? (some #{:missing-path}
-                            (get-in git [:removal-preflight :reasons]))
+        missing-path? (or (= :absent (:path-state git))
+                          (some #{:missing-path}
+                                (get-in git [:removal-preflight :reasons])))
         active-reason
         (cond
           (= path (get-in snapshot [:repository :primary-worktree])) :primary-worktree
           (= path (:controller-worktree snapshot)) :controller-worktree
           (:focused supacode) :focused
           (= :pinned (:status supacode)) :pinned
+          (= true (:live supacode)) :live
+          (= :unknown (:live supacode)) :live-state-unknown
+          (= :main (:status supacode)) :contradictory-main
           (:locked git) :agent-locked
           (get-in snapshot [:lifecycle-leases path]) :lifecycle-leased)
         dirty-reason
@@ -260,6 +297,67 @@
     (not (contains? handoff-modes (:handoff request))) (refuse :invalid-handoff-mode)
     (not (map? (:evidence request))) (refuse :invalid-outcome-evidence)
     :else {:ok true :request request :handoff-mode (:handoff request)}))
+
+(defn validate-prune-request
+  "Validate the separate one-target stale-registration request."
+  ;; @spec WTL-PRUNE-001
+  [request]
+  (cond
+    (not= prune-request-fields (set (keys request)))
+    (refuse :invalid-prune-request-fields)
+    (not= prune-request-schema (:schema request))
+    (refuse :invalid-prune-request-schema)
+    (not (absolute-clean-path? (:target request)))
+    (refuse :invalid-worktree-path)
+    (not (map? (:preservation request)))
+    (refuse :invalid-preservation-proof)
+    :else {:ok true :request request}))
+
+(def ^:private preservation-fields
+  #{:kind :local-ref :remote :remote-url-sha256 :ref :object
+    :peeled-object})
+
+(defn validate-preservation-proof
+  "Validate one exact remote preservation proof against the snapshot."
+  ;; @spec WTL-PRUNE-003
+  [snapshot target proof]
+  (let [object-format (get-in snapshot [:repository :object-format])
+        endpoint (or (:peeled-object proof) (:object proof))
+        matching (filterv #(and (= (:remote proof) (:remote %))
+                                (= (:remote-url-sha256 proof)
+                                   (:remote-url-sha256 %))
+                                (= (:ref proof) (:ref %))
+                                (= (:object proof) (:object %))
+                                (= (:peeled-object proof) (:peeled-object %)))
+                          (get-in snapshot [:remotes :rows]))]
+    (cond
+      (not= preservation-fields (set (keys proof)))
+      (refuse :invalid-preservation-fields)
+      (not (contains? #{:branch-tip-on-remote :commit-on-remote}
+                      (:kind proof)))
+      (refuse :invalid-preservation-kind)
+      (or (:detached target) (nil? (:branch target)))
+      (refuse :detached-registration)
+      (not= (:branch target) (:local-ref proof))
+      (refuse :local-ref-mismatch)
+      (not (and (string? (:remote proof))
+                (not (str/blank? (:remote proof)))
+                (string? (:ref proof))
+                (str/starts-with? (:ref proof) "refs/")
+                (hex? 64 (:remote-url-sha256 proof))
+                (exact-oid? object-format (:object proof))
+                (or (nil? (:peeled-object proof))
+                    (exact-oid? object-format (:peeled-object proof)))))
+      (refuse :invalid-preservation-identity)
+      (not= 1 (count matching)) (refuse :ambiguous-remote-preservation)
+      (and (= :branch-tip-on-remote (:kind proof))
+           (or (:peeled-object proof)
+               (not= (:head target) endpoint)))
+      (refuse :remote-tip-mismatch)
+      (and (= :commit-on-remote (:kind proof))
+           (not (contains? (:ancestry snapshot) [(:head target) endpoint])))
+      (refuse :remote-ancestry-missing)
+      :else {:ok true :proof proof :endpoint endpoint})))
 
 (defn compile-handoff
   "Compile the create-only owner handoff record while the agent lock is present."
@@ -436,6 +534,100 @@
   (let [plan-sha (sha256 (canonical-edn (dissoc plan :plan-sha256)))]
     (assoc plan :plan-sha256 plan-sha)))
 
+(defn compile-prune-plan
+  "Compile one exact outcome-free stale-registration plan."
+  ;; @spec WTL-PRUNE-004 WTL-PRUNE-005
+  [snapshot request controller-identity plan-id]
+  (let [snapshot-result (validate-snapshot snapshot)
+        request-result (validate-prune-request request)
+        target (git-row snapshot (:target request))
+        supacode-rows (filterv #(= (:target request) (row-path %))
+                               (get-in snapshot [:supacode :worktrees]))
+        proof-result (when target
+                       (validate-preservation-proof
+                         snapshot target (:preservation request)))
+        classification (when target
+                         (classify-target snapshot (:target request) nil))]
+    (cond
+      (not (:ok snapshot-result)) snapshot-result
+      (not (:ok request-result)) request-result
+      (nil? target) (refuse :target-not-registered)
+      (not= :absent (:path-state target)) (refuse :target-path-not-absent)
+      (:detached target) (refuse :detached-registration)
+      (:locked target) (refuse :target-locked)
+      (not= :missing-prunable (:classification classification))
+      (refuse :target-not-prune-eligible)
+      (seq (get-in snapshot [:handoffs (:target request)]))
+      (refuse :handoff-exists)
+      (seq (get-in snapshot [:lifecycle-leases (:target request)]))
+      (refuse :lifecycle-lease-exists)
+      (> (count supacode-rows) 1) (refuse :ambiguous-supacode-identity)
+      (and (= 1 (count supacode-rows))
+           (let [row (first supacode-rows)]
+             (or (:focused row)
+                 (= :pinned (:status row))
+                 (= :main (:status row))
+                 (not= false (:live row)))))
+      (refuse :active-supacode-identity)
+      (not (:ok proof-result)) proof-result
+      (not (and (string? plan-id) (not (str/blank? plan-id))))
+      (refuse :plan-id-required)
+      (false? (:clean controller-identity))
+      (refuse :controller-worktree-not-clean)
+      (not (privacy-safe? controller-identity))
+      (refuse :private-plan-data-refused)
+      :else
+      (let [supacode-row (first supacode-rows)
+            supacode-state (if supacode-row
+                             {:id (:id supacode-row)
+                              :initial (:status supacode-row)
+                              :terminal :archived}
+                             {:id nil :initial :absent :terminal :absent})
+            base {:schema prune-plan-schema
+                  :plan-id plan-id
+                  :operation :prune-missing-registration
+                  :repository (:repository snapshot)
+                  :controller controller-identity
+                  :captured-at (:captured-at snapshot)
+                  :target target
+                  :preservation (:proof proof-result)
+                  :handoff :not-applicable
+                  :lifecycle-lease-prestate :absent
+                  :expected-lifecycle-lease
+                  {:schema :clj-surgeon.worktree-lifecycle-lease/v1
+                   :plan-id plan-id
+                   :target (:target request)
+                   :handoff-nonce nil}
+                  :supacode supacode-state}
+            plan (seal-plan base)]
+        {:ok true :plan plan :plan-sha256 (:plan-sha256 plan)}))))
+
+(defn validate-prune-plan
+  "Validate the distinct prune plan without weakening close-plan fields."
+  ;; @spec WTL-PRUNE-005 WTL-PRUNE-010
+  [plan]
+  (let [expected (sha256 (canonical-edn (dissoc plan :plan-sha256)))
+        lease (:expected-lifecycle-lease plan)]
+    (cond
+      (not= prune-plan-fields (set (keys plan)))
+      (refuse :invalid-prune-plan-fields)
+      (not= prune-plan-schema (:schema plan))
+      (refuse :invalid-prune-plan-schema)
+      (not= :prune-missing-registration (:operation plan))
+      (refuse :invalid-operation-kind)
+      (not= :not-applicable (:handoff plan))
+      (refuse :invalid-prune-handoff)
+      (not= :absent (:lifecycle-lease-prestate plan))
+      (refuse :invalid-lifecycle-lease-prestate)
+      (not= (get-in plan [:target :path-lexical]) (:target lease))
+      (refuse :invalid-expected-lifecycle-lease)
+      (not= (:plan-id plan) (:plan-id lease))
+      (refuse :invalid-expected-lifecycle-lease)
+      (not (hex? 64 (:plan-sha256 plan))) (refuse :invalid-plan-hash)
+      (not= expected (:plan-sha256 plan)) (refuse :plan-hash-mismatch)
+      (not (privacy-safe? plan)) (refuse :private-plan-data-refused)
+      :else {:ok true :plan plan})))
+
 (defn compile-plan
   "Compile one exact reviewed close plan; perform no external mutation."
   ;; @spec WTL-PLAN-001 WTL-PLAN-002 WTL-PLAN-003 WTL-PLAN-004
@@ -530,3 +722,36 @@
                :postconditions postconditions
                :branch-retained true
                :next-action :none}}))
+
+(defn compile-prune-receipt
+  "Compile one immutable, meaning-free stale-registration receipt."
+  ;; @spec WTL-PRUNE-007 WTL-PRUNE-008
+  [plan effect-observed postconditions]
+  (let [validation (validate-prune-plan plan)]
+    (cond
+      (not (:ok validation)) validation
+      (not (contains? #{:controller :controller-or-external}
+                      effect-observed))
+      (refuse :invalid-effect-observed)
+      (:target-present postconditions) (refuse :path-reused)
+      (:registration-present postconditions)
+      (refuse :registration-still-present)
+      (not (:branch-unchanged postconditions)) (refuse :branch-drift)
+      (not (:preservation-unchanged postconditions))
+      (refuse :preservation-drift)
+      (not= (get-in plan [:supacode :terminal])
+            (:supacode-state postconditions))
+      (refuse :supacode-terminal-state-mismatch)
+      :else
+      {:ok true
+       :receipt {:schema prune-receipt-schema
+                 :plan-id (:plan-id plan)
+                 :plan-sha256 (:plan-sha256 plan)
+                 :operation (:operation plan)
+                 :effect :registration-pruned
+                 :effect-observed effect-observed
+                 :before-registration (:target plan)
+                 :preservation (:preservation plan)
+                 :postconditions postconditions
+                 :branch-retained true
+                 :next-action :none}})))
