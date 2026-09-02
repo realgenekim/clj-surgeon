@@ -1494,3 +1494,35 @@ gained an ended-gate: it refuses a worktree whose arm has not written its end li
 froze three in-progress l1 worktrees by hand and had to delete them. b2 is re-pointed to
 "main 2311cc09 vs shipped", three pairs, with the typed-refusal ledger as the primary
 metric; l1r runs after b2 so it does not share cores.
+
+## Receipt 08:34Z — s1 scored: made optional, the tool is declined; mandated, reads go in and writes go around
+
+| arm (n=3) | wall s | total actions | MCP calls (writes) | shell | native patches | typed refusals | tokens |
+|---|---|---|---|---|---|---|---|
+| X Surgeon optional | 404 | 20.0 | **0 (0)** | 11.7 | 3.0 | 0 | 1.24 M |
+| N native | 446 | 24.0 | 0 | 13.7 | 4.7 | 0 | 1.48 M |
+| A shipped, "available and expected" | 675 | 32.3 | 11.0 (7.0) | 14.7 | 0.7 | 4.3 | 2.04 M |
+| Y substitution mandate | 885 | 35.0 | 18.0 (4.0) | 8.3 | 2.0 | 6.7 | 2.26 M |
+
+(1) All three optional-arm agents made ZERO Surgeon calls. Not used less: declined. X equals N
+on every metric (nothing reaches 2 sd), as two native arms should, and clears 2 sd against
+the shipped floor on wall, actions and tokens, so n1's throughput gap replicated a third time.
+(2) The mandate was obeyed on reads and receipts and broken on writes: zero native .clj
+content reads, zero post-edit re-reads or git diff, but two of three Y runs patched .clj
+files natively (one rewrote two source files in a single patch cell). MCP calls rose to 18
+(plus 2.4 sd) while MCP WRITES fell to 4.0 from A's 7.0: reads went into the tool, writes went
+around it. The trusted-receipt clause bought nothing because A already had zero post-edit
+re-reads unprompted (the taxonomy said so). (3) The mandate's only floor-clearing effect is
+cost, plus 210 s of wall (2.4 sd), the slowest arm of the night, and it surfaced four refusal
+classes never seen elsewhere (inspect-cardinality-mismatch, invalid-match,
+invalid-relative-source-path, semantic-provider-unavailable) plus batch-form-selection-failed
+six times against one. (4) Acceptance spans one failing assertion across all four arms;
+inside the floor, cannot discriminate.
+
+The product finding, stated plainly: given the choice, Sol does not reach for Surgeon on
+this task; told it is available and expected, it layers it on top of its native loop at
+1.8x wall; ordered to substitute, it routes its reads through the tool, keeps writing
+natively where it can, hits more refusals, and pays 2.2x. Every prompt lever moves the
+agent's compliance; none moves the cost below native. The remaining open question is the
+large rung, where locating is the expensive part, and its early native times (177 s, 194 s,
+acceptance clean) do not favour the tool.
