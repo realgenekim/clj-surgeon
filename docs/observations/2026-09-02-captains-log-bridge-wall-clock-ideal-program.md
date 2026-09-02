@@ -543,3 +543,33 @@ path that does not exist (`src/marvin_voice_remote/`). Every Surgeon call then r
 planning sample is really "planned native": it committed to a wrong fact before reading,
 and the plan's authority carried the error into three refusals. A price list does not fix a
 wrong path; a read does. Q (native + plan) and A run next in s6.
+
+## Receipt 04:50Z — the acceptance scoreboard: a correctness result the suite-and-golden gate could not see
+
+Every frozen diff (22, both boxes) rescored with the arm-independent nine-test acceptance
+suite written from the spec. "Failed assertions" are of 39; "clean" means all nine tests pass.
+
+| arm | n | mean failed assertions | mean failed tests | clean diffs | what fails |
+|---|---|---|---|---|---|
+| A shipped Surgeon | 6 | **1.0** | 1.00 | 2 | hbms client-side ×2, tick rewritten ×1, buttons ×1 |
+| B wave build | 6 | 2.5 | 1.67 | 1 | hbms ×4, onset guard ×2, tick ×2, buttons ×1 |
+| C wave, no string symbols | 2 | 5.0 | 2.50 | 0 | hbms ×2, onset guard, micGate, buttons/bootstrap |
+| N native | 7 | 2.4 | 2.00 | 2 | hbms ×5, buttons ×5, tick ×2 |
+| T shipped + typist | 1 | 2.0 | 1.00 | 0 | hbms |
+
+**Headline:** on spec conformance, judged by tests none of the arms wrote, **the shipped
+Surgeon arm is the most correct arm** (1.0 failed assertions per diff against native's
+2.4), while the wave build and C are the least. Every one of these 22 diffs had passed the
+full suite and the golden. The two most common misses are the same across arms and are
+both "reading the spec loosely": resolving `hbms` in client JavaScript instead of server
+state, and gating the buttons on checking or playing instead of on recording. Native's
+extra miss is the buttons rule (5 of 7); B's extra misses are the onset-guard timer reset
+and rewriting the shared tick, the two places where its edit path touches the JavaScript.
+
+**What this changes:** wall was a wash and quality-by-judge favored native and A equally;
+conformance-by-test favors A. Combined with the action count, the honest summary of the
+medium rung is: shipped Surgeon = native on time, ≥ native on correctness, and the wave
+build is worse than both on correctness and clarity while equal on time. The wave's two
+edit-path changes (boundary-insert overlap, insertion gap) are the suspects, and the
+next experiment is the one that isolates them: wave build with the string outline off
+AND the two edit fixes reverted one at a time.
