@@ -1206,3 +1206,31 @@ is slower, 1.8x, six paired draws, direction held in 5 of 6 pairs. Conformance: 
 better on this cohort; the withdrawn headline does not come back. Clarity: pending the two
 judges on these twelve diffs. The earlier "indistinguishable" wall result stands only for the
 unverified 7888 server and is not evidence about the shipped build.
+
+## Receipt 13:05Z — n1 blind quality, two judges, twelve diffs under the rubric ruling
+
+| arm | Opus (per run) | Sol (per run) | mean of judges |
+|---|---|---|---|
+| native N | 19, 16, 17, 16, 17, 19 (17.3) | 18.8, 18.4, 18.3, 18.1, 18.6, 17.8 (18.3) | 17.8 |
+| shipped A | 15, 17, 14, 19, 16, 18 (16.5) | 17.3, 18.5, 16.6, 18.0, 17.6, 18.2 (17.7) | 17.1 |
+
+Both judges put native ahead by under a point, inside the noise floor, and in the same
+direction as acceptance (1.83 vs 3.33). One correctness discriminator, found by Opus and
+mapped after the fact: the micGate guard placed BEFORE the `if(playing){speechStartAt=0;...}`
+reset, which leaves a stale onset timestamp across the reply and lets the first loud frame
+after playback trip the debounce instantly, the echo class the gate exists to prevent. In
+n1 it is in 3 of 6 shipped diffs and 0 of 6 native. Earlier tonight Opus found the same
+defect in e3 (three Surgeon-prompt arms of twelve, no native arm to compare). Across the
+night: 6 Surgeon-arm instances, 0 native. The edit sits inside a JavaScript string in
+channel.clj, where a structural editor has no structure to target; a guard added at the
+function's top anchor is the cheap insertion, a guard inside the branch needs the body read.
+That is the additive-insertion signature from the bisect, now visible as a correctness
+defect in the shipped build's output. Sol's scores did not separate on it (its clarity axis
+dominates); Opus's completeness axis did. Other cohort-wide notes: 2 of 12 parse hbms
+server-side (both native), 2 of 12 retype the whole kwCheck body (both shipped, the two
+lowest Opus scores).
+
+Night's standing after n1 quality: wall, shipped 1.8x native; conformance, native better;
+clarity, native slightly ahead inside noise; one correctness defect class specific to the
+Surgeon arms. The judges' disagreement pattern is stable: Sol compresses toward 18, Opus
+spreads 14 to 19 and finds the defects; both agree on direction.
