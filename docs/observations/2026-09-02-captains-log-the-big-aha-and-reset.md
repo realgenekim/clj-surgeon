@@ -2128,3 +2128,27 @@ acceptance green, nothing written that the suites would reject), cheaper on retu
 and a wall direction of ~0.76× that needs n=6 to become a number. The z8 partial-commit
 regression does not appear on this rung and is closed on the branch regardless.
 
+
+## 20:27Z — sl1-5 diagnosed: native edited inside reader discards; the form-aware verb did not. A correctness win, not a throughput one
+
+Receipt `~/acid/receipts/sl1-5-score.md`. Both arms used **three model returns**; T (one
+`alias_migration` call, 0.29 s tool time; 5 files, 15 sites, 4 collisions resolved, read back
+and verified) took 25 s and 65,414 tokens; N (one `rg -C 8` sweep, one `apply_patch` over five
+files, one suite run) took 55 s and 103,123 tokens. **T: VERDICT=PASS, 8/8. N: FAIL on p2 (form
+tree) AND p3 (protected regions, 5 of 58 changed).** The entire native delta against the
+canonical is one line per file, and every one is inside a `#_` discard: `#_(find-event x)` →
+`#_(store2/fetch-event x)` and its four alias-spelled siblings, in functions named
+`decoy-discard-NNN` carrying the comment ";; store/find-event used to be called here".
+
+**The oracle is right, and the brief's hypothesis (a cosmetic difference to tolerate) was
+wrong.** The canonical does real work in all five files and touches zero discard lines; p2's
+own text names discards as structure that must stay in place; p3 hashes them as protected
+regions; p6b deliberately skips discards when scanning for residue, which is why native's
+p4/p5/p6 all pass. Native's edit is semantically inert (a discard never evaluates) and formally
+a scope violation against a region it was told to leave alone. The mechanism is tooling shape,
+not carelessness: a text-scoped sweep cannot see the difference between a live call and a
+discarded one; a form-aware migration can. **The first square measured tonight where the
+structural route's semantic awareness yields a correctness result native cannot reach at any
+speed.** Slope row one: N=5, returns 3 vs 3 (ratio 1.00), wall T/N 0.45, acceptance N FAIL / T
+PASS. Points 10 and 20 so far: T 25 s and 26 s, flat; N 65 s at 10.
+
