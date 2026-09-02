@@ -2610,3 +2610,22 @@ a birthday-search collision: two real announced-speaker bodies differing only in
 builder's earlier assertions were rewritten in place with notes naming their successors. Builder's
 gates: unit 1038/12872/0. My own unit run and Sol's third pass running in parallel; push on both.
 
+
+## 22:16Z — store f568d595: my run 1038/12872/0; Sol round three GO-WITH-FIX (single instance); two mechanical fixes as the last round
+
+Sol (`scratchpad/fold-review/sol-store3-review.md`): original nine → CLOSED 1, 4, 5, 6, 7, 8;
+PARTIAL 2 (message-fallback `names-constraint?` uses substring membership) and 9 (the expected
+indexdef literal is unverified against a live server — an availability risk, not a false green);
+ACCEPTED-AS-PRECONDITION 3 (cross-instance generation; max-instances=1 recorded verbatim in the
+registry and docs). Round-two holes: CLOSED 2, 3, 4; PARTIAL 5 (same as 9), 6 (`canonical-value`
+is not a general canonical encoder: sets → vectors, lists collapsed, non-EDN objects print
+identity). Round-three mechanics verified: a key claimed earlier in the batch is seen through the
+local `working` fold; a skipped fact is neither written, folded nor sink-fired; later facts proceed;
+a mid-batch durable failure throws and invalidates marks; no single-instance path returns success
+without writing and folding. Round four (last): exact quoted-name extraction in the fallback;
+comparable-body domain = JSON/EDN data with a typed refusal for sets/lists/objects, sorted-key
+recursive encoding. Owner work before a Postgres-backed deploy: install the index, capture the real
+`pg_get_indexdef`, correct the literal if needed (the app refuses to boot until it matches); before
+ever raising max-instances: database-side generation serialisation and `append-all!` handling of a
+durable losing claim. Push after round four and my own run.
+
