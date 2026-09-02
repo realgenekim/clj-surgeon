@@ -159,3 +159,54 @@ which no server change reaches.
 
 A worktree that dogfoods its own Surgeon in seconds (O1) makes every later option cheap
 to try and cheap to reject; that is why it goes first.
+
+## Addendum 01:45Z — what the 138 prior logs say about this program
+
+Read by five parallel Sol readers (28 files each, fixed digest shape), then by the lead
+from the digests. The corpus is 36,151 lines; the lead's context never held it. What the
+logs would have been embarrassing not to know:
+
+- **The dominant clock lives at the model boundary, not in the kernel.** Roughly 0.09 to
+  0.25 s of service work precedes 8.8 to 9.1 s to the next action; a millisecond refusal
+  routinely forced 29 to 33 s of payload reconstruction. The longitudinal gains
+  (2.47x → 6.36x → 7.35x) came from deleting decision and recovery boundaries. So O3 and O4
+  attack the right thing: a refusal avoided is a round-trip deleted.
+- **Over eight days, write-shape work was worth 94.4 s while post-decision ceremony
+  consumed 21.2 hours.** The largest hill is materialization and verification after the
+  decision, which this program does not yet touch. Noted as the next program.
+- **O1 is the best-supported option in the corpus.** A stale working-directory classpath
+  once made `mcp-reload` a truthful no-op; real-wire tests overturned green in-process
+  suites (JSON map types, stale classpaths); a 2 GiB → 512 MiB heap change made a second
+  instance affordable. Two cautions: isolated MCP instances do not justify isolated heavy
+  analyzers (machine-wide analyzer admission stays shared), and the dogfood route must be
+  tested on the actual JSON wire, never only with in-process Clojure maps.
+- **O2 is real but bounded.** A −46.4% formatter-wall win projected to only −4.6% of
+  complete wall; the compact editor won by excluding whole-file formatting. O2's value is
+  the avoided repair round, not milliseconds. Binding stop respected.
+- **O3's authority lesson is firm:** explicit named owners or reviewed hash-fenced plans,
+  never caller-supplied position; an ambiguous boundary insertion refuses rather than
+  overlaps. The approved LLD (two insertions at one boundary still refuse) conforms.
+- **O4 is the proven high-value direction, with one constraint:** a lowering entrance into
+  the one transaction engine with a closed injective syntax table, never a second
+  executor. Sibling spans were already generalized to `case`, `cond`, bindings, and maps;
+  closed relations were promoted at 7.35x on exactly this pattern. Fuzzy tolerance lost
+  every time it was tried.
+- **O5 must stay evidence, never authority.** Positions and symbol-like text inside
+  strings are unsafe as write addressing; the string-symbol map is a read-side aid with
+  `authority=false`, and any later write still names an owner.
+- **O6 has the clearest causal evidence in the corpus:** visibility alone produced 0 of 4
+  adoption, one project rule produced 4 of 4; compact edits were chosen 0 of 3 until the
+  operation had its own unmistakable name; the skill, not the noun, made the route real.
+  The queued house-rule sentence (`inb-32bcd1`) is the right instrument.
+- **O7's warning:** high adoption once coexisted with 21% refusals and direct tool wall of
+  1 to 3% of task wall. Usage counts without route context mislead; the fixed collector's
+  typed status is necessary, not sufficient.
+- **The corpus's own law, in one line:** perceive the complete decision, strike one guarded
+  chord, return terminal proof, and stop. The theoretical ideal is one action per honest
+  judgment boundary, not one command per task.
+
+Method note: the four Sol implementers were interrupted by the harness once mid-work and
+resumed from their partial worktrees; the first O2/O3 run stopped itself at the LID
+low-level-design gate exactly as AGENTS.md instructs, and the lead approved that phase
+in writing before it continued. Both are evidence that the repository's contracts bind
+executors that have never seen them before.
