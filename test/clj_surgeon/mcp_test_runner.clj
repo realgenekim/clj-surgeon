@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
    [clj-surgeon.mcp-change-buffer-test]
+   [clj-surgeon.mcp-close-losers-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-combinable-transaction-test]
    [clj-surgeon.mcp-compact-edit-fields-test]
@@ -47,6 +48,7 @@
           'clj-surgeon.mcp-extraction-test
           'clj-surgeon.mcp-extraction-plan-test
           'clj-surgeon.mcp-change-buffer-test
+          'clj-surgeon.mcp-close-losers-test
           'clj-surgeon.mcp-cold-verify-test
           'clj-surgeon.mcp-compact-edit-test
           'clj-surgeon.mcp-compact-edit-fields-test

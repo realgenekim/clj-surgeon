@@ -245,6 +245,35 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-READ-HYP-001` | The highest-ranked owner can be selected automatically because the list is deterministic. | One-character typo ; semantic paraphrase; one candidate; tied candidates; candidate input permutation. |
 | `MCP-OP-READ-HYP-002` | A top-ten presentation is the complete candidate universe, or a score gap proves intent. | Eleven or more owners ; intended owner at rank ten; intended owner outside the bound; one displayed candidate from many available owners. |
 
+# #Closing the Measured Losers
+
+Design: [close-losers-design.md](close-losers-design.md). Evidence:
+`docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`
+receipts 08:51Z, 08:57Z, 08:58Z, 09:01Z.
+
+- [x] **MCP-OP-CLOSE-001**: When an `apply_clojure_changes` `changes` item scopes a `find` plus `replace`, `insert_before`, or `insert_after` to an owner of kind `namespace`, clj-surgeon shall refuse the complete request with reason `whole-file-reprint-refused` before reading or writing any source.
+- [x] **MCP-OP-CLOSE-002**: When clj-surgeon refuses a namespace-owner change, that refusal shall carry a `next_call` naming `edit_clojure`, derived only from the refused request's own `workspace_root`, `files`, `owner`, `find`, and action fields.
+- [x] **MCP-OP-CLOSE-003**: If a refused namespace-owner change cannot be expressed as one complete `from` to `to` replacement, then clj-surgeon shall name the exact fields the caller must supply in `missing` and shall not describe the emitted `next_call` as executable unchanged.
+- [x] **MCP-OP-CLOSE-004**: When clj-surgeon compiles a change into a future source, it shall independently prove that future source equal to the byte-preserving raw splice of the matched spans into the original source, and shall refuse with reason `reprint-outside-span-refused` when they differ.
+- [x] **MCP-OP-CLOSE-005**: When clj-surgeon prepares the final future bytes of a transaction, it shall compute `byte_drift_outside_span` as the UTF-8 byte difference between those bytes and the byte-preserving splice, measured outside the replaced spans, and shall report `span_alignment` `unlocatable` rather than guess when a replacement cannot be located.
+- [x] **MCP-OP-CLOSE-006**: If `byte_drift_outside_span` is positive when a transaction is about to commit, then clj-surgeon shall refuse with reason `byte-drift-outside-span`, publish that number, and leave every source file unchanged.
+- [x] **MCP-OP-CLOSE-007**: When the drift gate is asked for a non-committing decision, it shall publish `byte_drift_outside_span` and allow the candidate; no public MCP surface currently requests one, so this requirement is witnessed at the pure decision function only.
+- [x] **MCP-OP-CLOSE-008**: When a transaction commits, its public receipt shall publish `byte_drift_outside_span`.
+- [x] **MCP-OP-CLOSE-010**: When a candidate source is measured for drift, clj-surgeon shall compare each untouched gap at the exact offset it occupies in the reference rather than search for it, so that content adjacent to a replaced span cannot be absorbed by that span.
+- [x] **MCP-OP-CLOSE-011**: When a staging step appends or removes characters immediately after a replaced span, clj-surgeon shall report positive `byte_drift_outside_span`.
+- [x] **MCP-OP-CLOSE-012**: When a request names a zero-length span, clj-surgeon shall report any inserted content at that offset as drift rather than as span content.
+- [x] **MCP-OP-CLOSE-013**: When a request reaches refusal evaluation, clj-surgeon shall read its fields whether the transport left string keys or keyword keys, and the closed-shape refusal shall be witnessed through the same entry point production uses.
+- [x] **MCP-OP-CLOSE-014**: When a change scopes `replace`, `insert_before`, `insert_after`, or `assoc_entry` to an owner of kind `namespace`, clj-surgeon shall refuse each of them; where a redirect replacement is derivable it shall be filled, and where only the caller's exact source spelling can complete it that field shall be named in `missing`.
+- [x] **MCP-OP-CLOSE-021**: When clj-surgeon measures a staged write, it shall compare the candidate against the expected post-image the request specifies and count every differing byte including those inside the named spans, publish that count as `byte_drift_from_expected`, and refuse a commit on any positive value; `byte_drift_outside_span` shall remain published as the weaker gap-only measurement and shall never gate a commit on its own.
+- [x] **MCP-OP-CLOSE-022**: When the drift gate runs, it shall iterate the files the transaction is about to write rather than the guard; a staged file with no guard entry, or with a guard entry carrying no reference bytes, shall be a typed refusal naming that file, and an exemption shall be recorded in the guard rather than inferred from absence.
+- [x] **MCP-OP-CLOSE-017**: When a prepared-basis transaction commits, clj-surgeon shall not stage whole existing files through a formatter, shall carry the same byte-preserving guard the direct route carries, and shall publish `byte_drift_outside_span`.
+- [x] **MCP-OP-CLOSE-018**: If a committing transaction carries future bytes but no byte-preserving reference, then clj-surgeon shall refuse it with reason `splice-guard-missing` rather than report zero drift.
+- [x] **MCP-OP-CLOSE-019**: When an extraction commits, every file it modifies rather than creates shall reach commit byte-identical to the bytes its compiler produced, and any departure shall refuse before writing.
+- [x] **MCP-OP-CLOSE-020**: When a prepared-basis request is validated, the closed-shape refusal shall be applied to it on that route as well.
+- [x] **MCP-OP-CLOSE-016**: When a closed-shape refusal reports no missing fields, replaying its `next_call` arguments unchanged against `edit_clojure` shall commit the caller's intended change.
+- [x] **MCP-OP-CLOSE-015**: When the compiled future source departs from the byte-preserving splice, the `reprint-outside-span-refused` refusal shall reach the public MCP result and leave every source file unchanged.
+- [x] **MCP-OP-CLOSE-009**: Where a request uses the `edit_clojure` `edits` route, `require_change` with `symbol_migration`, `delete_owners`, `create_files`, `programs`, `extraction`, or `transform_clojure`, clj-surgeon shall not apply the namespace-owner refusal.
+
 # #Deferred Surface
 
 Transport-level exception envelopes, cancellation, deadlines, queue time

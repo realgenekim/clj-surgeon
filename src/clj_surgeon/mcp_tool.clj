@@ -9,6 +9,7 @@
    [clj-surgeon.mcp-combinable-transaction :as combinable]
    [clj-surgeon.mcp-compact-location :as compact-location]
    [clj-surgeon.mcp-compact-relations :as compact-relations]
+   [clj-surgeon.mcp-close-losers :as close-losers]
    [clj-surgeon.mcp-contract :as contract]
    [clj-surgeon.mcp-extraction :as extraction]
    [clj-surgeon.mcp-formatter :as formatter]
@@ -329,6 +330,13 @@
         compiled (->> (extraction/compile-extraction request)
                       (publicize-extraction-decision-refusal
                         root sources request))
+        ;; @spec MCP-OP-CLOSE-019
+        ;; The bytes the extraction compiler produced, frozen before any
+        ;; staging step can touch them. Files this extraction CREATES are
+        ;; wholly the edit and are exempt; every file it MODIFIES must reach
+        ;; commit byte-identical to what was compiled.
+        compiled-future-sources (:future-sources compiled)
+        created-files (set (:created-files compiled))
         compiled
         (if (and (:ok compiled) (:formatter config))
           (let [format! (or (:format-candidates! config)
@@ -347,7 +355,27 @@
                          (dissoc formatted :future-sources :ok))
                   prepared))
               formatted))
-          compiled)]
+          compiled)
+        ;; @spec MCP-OP-CLOSE-019
+        compiled
+        (if-not (:ok compiled)
+          compiled
+          (transaction/gate-splice-drift
+            (assoc compiled
+                   :splice-guard
+                   (into {}
+                         (map (fn [[file source]]
+                                [file
+                                 (if (contains? created-files file)
+                                   ;; A file this extraction creates is wholly
+                                   ;; the edit, and its formatter pass is the
+                                   ;; authorized one. The exemption is declared
+                                   ;; here so it reads as a decision rather than
+                                   ;; as a file nobody measured.
+                                   {:exempt :created-file}
+                                   {:reference source :spans []})]))
+                         compiled-future-sources))
+            true))]
     (if-not (:ok compiled)
       compiled
       (let [project-root (.toString root)
@@ -379,7 +407,16 @@
               result
               (try
                 (file-ops/atomic-write! receipt (pr-str (:receipt result)))
-                (let [result (assoc result :receipt-file receipt)
+                (let [result (assoc result
+                                    :receipt-file receipt
+                                    ;; @spec MCP-OP-CLOSE-008
+                                    ;; Every committing route publishes the
+                                    ;; number, so a caller never has to guess
+                                    ;; whether this route was measured at all.
+                                    :byte-drift-outside-span
+                                    (or (:byte-drift-outside-span compiled) 0)
+                                    :byte-drift-from-expected
+                                    (or (:byte-drift-from-expected compiled) 0))
                       verification
                       (when verify
                         (cond
@@ -721,6 +758,14 @@
                         ((:verification-profiles-fn config)))
 
                  :else config)
+        ;; @spec MCP-OP-CLOSE-017
+        ;; The basis route stages whole existing files, so whole-file
+        ;; formatting there is the same churn the editor gestures already
+        ;; exempt themselves from. Extraction is not listed: its formatter is
+        ;; already confined to the files it creates.
+        basis? (string? (:basis normalized-params))
+        extraction? (map? (:extraction normalized-params))
+        whole-file-format-unsafe? (or editor-gesture? basis?)
         config (cond
                  (:formatter-fn config)
                  (assoc config :formatter ((:formatter-fn config)))
@@ -732,7 +777,7 @@
                  (assoc config :formatter formatter/default-command)
 
                  :else config)
-        config (if (and (:formatter config) (not editor-gesture?))
+        config (if (and (:formatter config) (not whole-file-format-unsafe?))
                  (let [command (:formatter config)]
                    (assoc config
                           :verification-profiles
@@ -755,12 +800,17 @@
                                     prepared))
                                 formatted)))))
                  config)
-        basis? (string? (:basis normalized-params))
-        extraction? (map? (:extraction normalized-params))
         total-start (System/nanoTime)
         [validated validation-ms]
         (timed #(if basis?
-                  (change-buffer/validate-basis-request normalized-params)
+                  ;; @spec MCP-OP-CLOSE-020
+                  ;; A basis request skips validate-tool-params, so the
+                  ;; closed-shape refusal is applied explicitly here rather
+                  ;; than left absent on this route.
+                  (or (some-> (close-losers/refuse-closed-losers
+                                normalized-params)
+                              contract/normalize-refusal)
+                      (change-buffer/validate-basis-request normalized-params))
                   (contract/validate-tool-params params)))]
     (if basis?
       (record-result!
@@ -865,15 +915,22 @@
                      config normalized public-operation)
             resolved (workspace/canonical-root (:project-root config))]
         (cond-> result
-          (:ok resolved) (assoc :workspace_root (:workspace-root resolved))))
+          (:ok resolved)
+          ;; @spec MCP-OP-CLOSE-002
+          (-> (assoc :workspace_root (:workspace-root resolved))
+              (close-losers/attach-workspace-root
+                (:workspace-root resolved)))))
       (let [workspace-router (or (:workspace-router config)
                                  (workspace/router config))
             routed (workspace/resolve-request workspace-router normalized)]
         (if-not (:ok routed)
           routed
-          (assoc (execute-request-in-context!
-                   (:config routed) (:params routed) public-operation)
-                 :workspace_root (:workspace-root routed)))))))
+          ;; @spec MCP-OP-CLOSE-002
+          (-> (execute-request-in-context!
+                (:config routed) (:params routed) public-operation)
+              (assoc :workspace_root (:workspace-root routed))
+              (close-losers/attach-workspace-root
+                (:workspace-root routed))))))))
 
 (defn concise-summary
   "Render compact visible content; the full receipt remains structuredContent."

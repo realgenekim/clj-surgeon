@@ -1110,3 +1110,85 @@
             "provisional single-owner bases never escape"))
       (finally
         (change-buffer/clear-bases!)))))
+
+;; @spec MCP-OP-CLOSE-017
+(deftest a-basis-commit-that-would-churn-untouched-source-is-refused
+  (change-buffer/clear-bases!)
+  (let [project (temp-project)
+        prepared (prepare! project)
+        sites-by-form (into {} (map (juxt :form identity)
+                                    (:decision-sites prepared)))
+        decisions [{:site (:id (sites-by-form "target"))
+                    :edit {:find "(inc x)" :replace "(dec x)"}}
+                   {:site (:id (sites-by-form "caller")) :keep true}
+                   {:site (:id (sites-by-form "target-test")) :keep true}]
+        before (slurp (:source project))
+        result (change-buffer/apply-basis!
+                 {:project-root (:root project)
+                  :receipt-dir (io/file (:root project) "receipts")
+                  :verify! (fn [_ profile _ files]
+                             {:ok true :profile profile :files files})
+                  ;; The stage that produced the 2026-09-02 cohort's churn:
+                  ;; a whole staged file handed back reformatted.
+                  :prepare-compiled!
+                  (fn [_project-root compiled]
+                    (update compiled :future-sources
+                            (fn [sources]
+                              (into {}
+                                    (map (fn [[file source]]
+                                           [file (str/replace
+                                                   source
+                                                   ";; target here is only a comment"
+                                                   ";;target here is only a comment")]))
+                                    sources))))}
+                 {:basis (:basis prepared)
+                  :decisions decisions
+                  :verify "fast"})]
+    (is (false? (:ok result)) (pr-str result))
+    (is (= :byte-drift-outside-span (:error-type result)))
+    (is (pos? (:byte-drift-outside-span result)))
+    (is (:source-unchanged result))
+    (is (= before (slurp (:source project)))
+        "the basis route commits outside execute-change-with-context!, so it
+         needs its own backstop or it writes churn no gate ever saw")))
+
+;; @spec MCP-OP-CLOSE-017
+(deftest a-clean-basis-commit-publishes-zero-drift
+  (change-buffer/clear-bases!)
+  (let [project (temp-project)
+        prepared (prepare! project)
+        sites-by-form (into {} (map (juxt :form identity)
+                                    (:decision-sites prepared)))
+        result (change-buffer/apply-basis!
+                 {:project-root (:root project)
+                  :receipt-dir (io/file (:root project) "receipts")
+                  :verify! (fn [_ profile _ files]
+                             {:ok true :profile profile :files files})}
+                 {:basis (:basis prepared)
+                  :decisions [{:site (:id (sites-by-form "target"))
+                               :edit {:find "(inc x)" :replace "(dec x)"}}
+                              {:site (:id (sites-by-form "caller")) :keep true}
+                              {:site (:id (sites-by-form "target-test"))
+                               :keep true}]
+                  :verify "fast"})]
+    (is (:ok result) (pr-str result))
+    (is (= 0 (:byte_drift_outside_span result)))
+    (is (str/includes? (slurp (:source project))
+                       ";; target here is only a comment")
+        "the winner path still commits and leaves untouched source alone")))
+
+;; @spec MCP-OP-CLOSE-018
+(deftest a-committing-transaction-without-a-splice-guard-is-refused
+  (let [unguarded {:ok true
+                   :future-sources {"src/app/a.clj" "(ns app.a)\n"}
+                   :original-sources {"src/app/a.clj" "(ns app.a)\n"}}
+        refusal (transaction/gate-splice-drift unguarded true)]
+    (is (false? (:ok refusal)))
+    (is (= :splice-guard-missing (:error-type refusal)))
+    (is (:source-unchanged refusal))
+    (is (false? (:mutation-attempted refusal)))
+    (testing "a non-committing decision is not required to carry one"
+      (is (:ok (transaction/gate-splice-drift unguarded false))))
+    (testing "a transaction with no future bytes at all is unaffected"
+      (is (:ok (transaction/gate-splice-drift {:ok true :future-sources {}}
+                                              true))))))

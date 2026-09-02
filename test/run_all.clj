@@ -36,6 +36,7 @@
    [clj-surgeon.recovery-test]
    [clj-surgeon.rename-test]
    [clj-surgeon.show-form-test]
+   [clj-surgeon.splice-drift-test]
    [clj-surgeon.structural-lens-test]
    [clj-surgeon.syntax-var-refs-test]
    [clj-surgeon.workspace-onboarding-test]

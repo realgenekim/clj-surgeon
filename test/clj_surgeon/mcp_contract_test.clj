@@ -743,14 +743,29 @@
     (is (= 2000 (count (get-in result [:verification :checks 0 :output]))))))
 
 (deftest namespace-owner-crosses-the-json-boundary-as-closed-data
+  ;; @spec MCP-OP-CLOSE-001
+  ;; The namespace-owner write shape is a measured loser and is refused on the
+  ;; direct `changes` route (see close-losers-design.md). Its closed-data
+  ;; lowering stays live for the `edit_clojure` `within.namespace` route, so the
+  ;; lowering is still witnessed here directly.
   (let [change (-> (get valid-request "changes") first
                    (dissoc "forms")
                    (assoc "owner" {"kind" "namespace"
                                    "name" "bench.app-shell"}))
         request (assoc valid-request "changes" [change])
         validated (contract/validate-tool-params request)
-        transaction (contract/tool-params->transaction (:params validated))]
-    (is (:ok validated))
+        transaction (contract/tool-params->transaction
+                      {:changes [{:id (get change "id")
+                                  :files (get change "files")
+                                  :owner {:kind :namespace
+                                          :name 'bench.app-shell}
+                                  :find (get change "find")
+                                  :replace (get change "replace")
+                                  :expect {:matches 1}}]
+                       :expect {:changes 1 :edits 1 :files 1}})]
+    (is (false? (:ok validated)))
+    (is (= :whole-file-reprint-refused (:error-type validated)))
+    (is (= "edit_clojure" (get-in validated [:next-call :tool])))
     (is (= {:kind :namespace :name 'bench.app-shell}
            (get-in transaction [:changes 0 :owner])))
     (doseq [[label owner expected]

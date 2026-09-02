@@ -680,25 +680,29 @@
       (finally
         (delete-tree! workspace)))))
 
-(deftest same-file-namespace-and-form-edits-format-commit-and-undo-once
+(deftest same-file-form-edits-format-commit-and-undo-once
+  ;; @spec MCP-OP-CLOSE-006
+  ;; @spec MCP-OP-CLOSE-008
+  ;; The namespace-owner change this test used to carry is now a typed refusal
+  ;; (close-losers-design.md). What remains is the format/commit/undo path, and
+  ;; a formatter that rewrites untouched source is now refused rather than
+  ;; committed: that whole-file restaging is the mechanism behind the
+  ;; 2026-09-02 cohort's 425 reformatted lines.
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/sample.clj")
         receipt-dir (io/file workspace "receipts")
         original (str "(ns sample.core)\n"
                       "(defn alpha [] :old-a)\n"
                       "(defn beta [] :old-b)\n")
-        formatted (str "(ns sample.next)\n\n"
-                       "(defn alpha\n  []\n  :new-a)\n\n"
-                       "(defn beta\n  []\n  :new-b)\n")
+        edited (str "(ns sample.core)\n"
+                    "(defn alpha [] :new-a)\n"
+                    "(defn beta [] :new-b)\n")
+        reformatted (str "(ns sample.core)\n\n"
+                         "(defn alpha\n  []\n  :new-a)\n\n"
+                         "(defn beta\n  []\n  :new-b)\n")
         request
         {"changes"
-         [{"id" "namespace"
-           "files" ["src/sample.clj"]
-           "owner" {"kind" "namespace" "name" "sample.core"}
-           "find" "sample.core"
-           "replace" "sample.next"
-           "expect" {"matches" 1 "each_file" 1}}
-          {"id" "alpha"
+         [{"id" "alpha"
            "files" ["src/sample.clj"]
            "forms" ["alpha"]
            "find" ":old-a"
@@ -710,40 +714,50 @@
            "find" ":old-b"
            "replace" ":new-b"
            "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
-         "expect" {"changes" 3 "edits" 3 "files" 1}}]
+         "expect" {"changes" 2 "edits" 2 "files" 1}}
+        run (fn [staged]
+              (mcp-tool/execute-request!
+                {:project-root (.getPath workspace)
+                 :receipt-dir (.getPath receipt-dir)
+                 :formatter ["fixture-formatter" "{files}"]
+                 :format-candidates!
+                 (fn [_project-root _command future-sources]
+                   {:ok true
+                    :status :complete
+                    :file-count 1
+                    :changed-file-count 1
+                    :elapsed_ms 0.1
+                    :future-sources
+                    (into {}
+                          (map (fn [[file source]]
+                                 [file (or staged source)]))
+                          future-sources)})}
+                request))]
     (try
       (.mkdirs (.getParentFile source-file))
       (spit source-file original)
-      (let [result
-            (mcp-tool/execute-request!
-              {:project-root (.getPath workspace)
-               :receipt-dir (.getPath receipt-dir)
-               :formatter ["fixture-formatter" "{files}"]
-               :format-candidates!
-               (fn [_project-root _command future-sources]
-                 {:ok true
-                  :status :complete
-                  :file-count 1
-                  :changed-file-count 1
-                  :elapsed_ms 0.1
-                  :future-sources
-                  (into {} (map (fn [[file _]] [file formatted]))
-                        future-sources)})}
-              request)]
-        (is (:ok result) (pr-str result))
-        (is (= 3 (:changes result)))
-        (is (= 3 (:edits result)))
-        (is (= 1 (:files result)))
-        (is (:verification_complete result))
-        (is (= formatted (slurp source-file)))
-        (when (:ok result)
-          (let [receipt (edn/read-string (slurp (:undo_receipt result)))]
-            (is (= 3 (:match-count receipt)))
-            (is (= 1 (:inverse-edit-count receipt)))
-            (is (= 1 (count (get-in receipt [:files 0 :inverse-edits])))))
-          (is (:ok (transaction/execute-undo!
-                     {:receipt (:undo_receipt result)})))
+      (testing "a formatter that rewrites untouched source is refused"
+        (let [result (run reformatted)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "byte-drift-outside-span" (:error_type result)))
+          (is (pos? (:byte_drift_outside_span result)))
+          (is (true? (:source_unchanged result)))
           (is (= original (slurp source-file)))))
+      (testing "a byte-preserving format stage commits, receipts and undoes"
+        (let [result (run nil)]
+          (is (:ok result) (pr-str result))
+          (is (= 2 (:changes result)))
+          (is (= 2 (:edits result)))
+          (is (= 1 (:files result)))
+          (is (= 0 (:byte_drift_outside_span result)))
+          (is (:verification_complete result))
+          (is (= edited (slurp source-file)))
+          (when (:ok result)
+            (let [receipt (edn/read-string (slurp (:undo_receipt result)))]
+              (is (= 2 (:match-count receipt))))
+            (is (:ok (transaction/execute-undo!
+                       {:receipt (:undo_receipt result)})))
+            (is (= original (slurp source-file))))))
       (finally
         (delete-tree! workspace)))))
 
@@ -1696,7 +1710,13 @@
         (delete-tree! default-root)
         (delete-tree! requested-root)))))
 
-(deftest namespace-owner-transaction-crosses-the-complete-writer-boundary
+(deftest namespace-owner-transaction-is-refused-across-the-writer-boundary
+  ;; @spec MCP-OP-CLOSE-001
+  ;; @spec MCP-OP-CLOSE-002
+  ;; This transaction used to commit. It is the exact measured loser (owner kind
+  ;; namespace plus find plus replace), so it is now a typed refusal. What the
+  ;; test still proves is the writer boundary: an explicit workspace_root is
+  ;; resolved, echoed, and carried into the redirect the caller is handed.
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/demo.clj")
         receipt-dir (io/file workspace "receipts")
@@ -1719,14 +1739,22 @@
                  "replace" "[current.api :as current]"
                  "expect" {"matches" 1 "each_file" 1}}]
                "expect" {"changes" 1 "edits" 1 "files" 1}})]
-        (is (:ok result))
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "whole-file-reprint-refused" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (= original (slurp source-file))
+            "the refused loser writes zero bytes")
         (is (= (.getPath (.getCanonicalFile workspace))
                (:workspace_root result)))
-        (is (= (str "(ns demo\n"
-                    "  (:require [current.api :as current]))\n"
-                    "(defn use-api [] [legacy.api :as legacy])\n")
-               (slurp source-file)))
-        (is (.isFile (io/file (:undo_receipt result)))))
+        (is (= (.getPath (.getCanonicalFile workspace))
+               (get-in result [:next_call :arguments :workspace_root]))
+            "the explicit-root branch completes the redirect too")
+        (is (= [{:file "src/demo.clj"
+                 :within {:namespace "demo"}
+                 :from "[legacy.api :as legacy]"
+                 :matches 1
+                 :to "[current.api :as current]"}]
+               (get-in result [:next_call :arguments :edits]))))
       (finally
         (delete-tree! workspace)))))
 

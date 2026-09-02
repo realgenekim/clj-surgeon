@@ -1,6 +1,7 @@
 (ns clj-surgeon.mcp-contract
   (:require
    [clj-surgeon.mcp-compact-edit-fields :as compact-edit-fields]
+   [clj-surgeon.mcp-close-losers :as close-losers]
    [clj-surgeon.mcp-compact-relations :as compact-relations]
    [clj-surgeon.mcp-extraction :as mcp-extraction]
    [clj-surgeon.mcp-schema :as mcp-schema]
@@ -109,7 +110,13 @@
     :invalid-create-files
     :invalid-created-source
     :duplicate-path
-    :unknown-arguments})
+    :unknown-arguments
+    ;; @spec MCP-OP-CLOSE-015
+    ;; Membership here is what makes these refusals reach the public result as
+    ;; source-unchanged rather than as an unclassified kernel error.
+    :whole-file-reprint-refused
+    :reprint-outside-span-refused
+    :byte-drift-outside-span})
 
 (defn- field-name
   [key]
@@ -972,7 +979,16 @@
       (validate-editor-tool-params params)
 
       :else
-      (validate-direct-tool-params params))))
+      ;; @spec MCP-OP-CLOSE-001
+      ;; @spec MCP-OP-CLOSE-009
+      ;; Only the direct `changes` route reaches here; editor gestures are
+      ;; lowered above and are the measured winners. The shape refusal runs
+      ;; after field validation so a malformed request is still diagnosed as
+      ;; malformed rather than as a closed shape.
+      (let [validated (validate-direct-tool-params params)]
+        (if (:ok validated)
+          (or (close-losers/refuse-closed-losers params) validated)
+          validated)))))
 
 (defn tool-params->transaction
   "Compile normalized apply_clojure_changes parameters to transaction EDN."
@@ -1183,6 +1199,18 @@
       (contains? result :completed-plan)
       (assoc :completed_plan
              (public-extraction-data (:completed-plan result)))
+      ;; @spec MCP-OP-CLOSE-005
+      (contains? result :byte-drift-outside-span)
+      (assoc :byte_drift_outside_span (:byte-drift-outside-span result))
+      ;; @spec MCP-OP-CLOSE-021
+      (contains? result :byte-drift-from-expected)
+      (assoc :byte_drift_from_expected (:byte-drift-from-expected result))
+      (contains? result :line-drift-from-expected)
+      (assoc :line_drift_from_expected (:line-drift-from-expected result))
+      (contains? result :line-drift-outside-span)
+      (assoc :line_drift_outside_span (:line-drift-outside-span result))
+      (contains? result :span-alignment)
+      (assoc :span_alignment (some-> (:span-alignment result) name))
       (contains? result :next-call)
       (assoc :next_call (public-extraction-data (:next-call result)))
       (contains? result :next-action)
@@ -1384,6 +1412,12 @@
                    {:scan-complete :scan_complete
                     :semantic-provider-used :semantic_provider_used
                     :zero-callers-authoritative :zero_callers_authoritative})))
+      ;; @spec MCP-OP-CLOSE-008
+      (contains? result :byte-drift-outside-span)
+      (assoc :byte_drift_outside_span (:byte-drift-outside-span result))
+      ;; @spec MCP-OP-CLOSE-021
+      (contains? result :byte-drift-from-expected)
+      (assoc :byte_drift_from_expected (:byte-drift-from-expected result))
       (:format result) (assoc :format (:format result))
       (:verification result) (assoc :verification (:verification result))
       (:location-normalization result)

@@ -1607,6 +1607,14 @@
                                (:sources prepared) edits)
                     compiled (if (and (:ok compiled) prepare-compiled!)
                                (prepare-compiled! project-root compiled)
+                               compiled)
+                    ;; @spec MCP-OP-CLOSE-017
+                    ;; The basis route commits without going through
+                    ;; execute-change-with-context!, so it must apply the same
+                    ;; backstop here or a staging step can churn untouched
+                    ;; source on the very route prepare-change recommends.
+                    compiled (if (:ok compiled)
+                               (transaction/gate-splice-drift compiled true)
                                compiled)]
                 (if-not (:ok compiled)
                   (assoc compiled :source-unchanged true)
@@ -1686,6 +1694,14 @@
                                       :verification verification}
                                      (when (and cold (not verification-complete?))
                                        {:next_call (:next_call cold)})
+                                     ;; @spec MCP-OP-CLOSE-017
+                                     (when (contains? compiled
+                                                      :byte-drift-outside-span)
+                                       {:byte_drift_outside_span
+                                        (:byte-drift-outside-span compiled)
+                                        :byte_drift_from_expected
+                                        (or (:byte-drift-from-expected compiled)
+                                            0)})
                                      (when (:format compiled)
                                        {:format (:format compiled)})))))))))))))))
     {:ok false :error-type :unknown-or-expired-basis

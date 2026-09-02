@@ -5,6 +5,7 @@
    [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.operation-algebra :as operation-algebra]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.splice-drift :as splice-drift]
    [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
@@ -1373,6 +1374,14 @@
                    (fn [left right] (compare right left))
                    edits)))
 
+(defn- raw-splice
+  "Independently splice retained byte spans into the original source. This does
+   not call `apply-edits`, so it can witness a compiler that re-prints."
+  [source raw-edits]
+  (reduce apply-raw-edit
+          source
+          (sort-by :offset (fn [left right] (compare right left)) raw-edits)))
+
 (defn- prefixed-lines
   [prefix source]
   (->> (str/split source #"\n" -1)
@@ -1403,13 +1412,40 @@
                           ordered-edits)
         result-source (if (seq effective-edits)
                         (apply-edits source effective-edits)
-                        source)]
+                        source)
+        ;; @spec MCP-OP-CLOSE-004
+        ;; The byte-preserving splice is recomputed independently of
+        ;; `apply-edits`, so a printer that re-emits the untouched remainder of
+        ;; a file is a typed refusal rather than review burden the caller
+        ;; discovers in the diff.
+        raw-edits (mapv #(if (:raw %) % (prepare-raw-addressed-edit source %))
+                        ordered-edits)
+        spliced (if (seq raw-edits) (raw-splice source raw-edits) source)
+        spans (splice-drift/result-spans raw-edits)]
     (validate-complete-source! file result-source :invalid-result-source)
+    (when (not= spliced result-source)
+      (let [measured (splice-drift/drift-outside-spans
+                       spliced result-source spans)]
+        (refuse! :reprint-outside-span-refused
+                 (str "Compiling " file " re-printed "
+                      (:byte-drift-outside-span measured)
+                      " bytes outside the spans this request named. A"
+                      " structural edit must splice into the original source.")
+                 {:file file
+                  :byte-drift-outside-span
+                  (:byte-drift-outside-span measured)
+                  :line-drift-outside-span
+                  (:line-drift-outside-span measured)
+                  :span-alignment (name (:span-alignment measured))
+                  :source-unchanged true
+                  :mutation-attempted false
+                  :write-authority false})))
     {:file file
      :match-count (count effective-edits)
      :source-hash (structural-lens/source-hash source)
      :result-hash (structural-lens/source-hash result-source)
      :edits effective-edits
+     :splice-spans spans
      :diff (when (seq effective-edits) (file-diff file effective-edits))
      :result-source result-source}))
 
@@ -1441,7 +1477,17 @@
        :match-count (:edit-count actual)
        :changed-file-count (:changed-file-count actual)
        :intents (mapv #(dissoc % :edits) compiled-intents)
-       :files (mapv #(dissoc % :result-source :diff) compiled-files)
+       :files (mapv #(dissoc % :result-source :diff :splice-spans)
+                    compiled-files)
+       ;; @spec MCP-OP-CLOSE-005
+       ;; Retained across `with-future-sources` so a later staging step can be
+       ;; measured against the compiler's byte-preserving result.
+       :splice-guard (into {}
+                           (map (fn [{:keys [file result-source splice-spans]}]
+                                  [file {:reference result-source
+                                         :spans splice-spans}]))
+                           compiled-files)
+       :byte-drift-outside-span 0
        :diff (apply str (keep :diff compiled-files))
        :original-sources (select-keys sources files)
        :future-sources (into {} (map (juxt :file :result-source) compiled-files))
@@ -1833,7 +1879,16 @@
        :match-count (count prepared)
        :changed-file-count (count compiled-files)
        :intents intents
-       :files (mapv #(dissoc % :result-source :diff) compiled-files)
+       :files (mapv #(dissoc % :result-source :diff :splice-spans) compiled-files)
+       ;; @spec MCP-OP-CLOSE-017
+       ;; The basis route commits through its own path, so it needs the same
+       ;; guard the direct route gets or its drift gate would fail open.
+       :splice-guard (into {}
+                           (map (fn [{:keys [file result-source splice-spans]}]
+                                  [file {:reference result-source
+                                         :spans splice-spans}]))
+                           compiled-files)
+       :byte-drift-outside-span 0
        :diff (apply str (keep :diff compiled-files))
        :original-sources (select-keys sources files)
        :future-sources (into {} (map (juxt :file :result-source) compiled-files))
@@ -2680,6 +2735,73 @@
      :capabilities (:capabilities algebra-result)
      :authority-error (when (:error algebra-result) algebra-result)}))
 
+;; @spec MCP-OP-CLOSE-006
+;; @spec MCP-OP-CLOSE-007
+;; @spec MCP-OP-CLOSE-008
+;; @spec MCP-OP-CLOSE-018
+;; @spec MCP-OP-CLOSE-022
+(defn gate-splice-drift
+  "Measure every file this transaction is about to write and refuse the ones
+   that would not carry the change the request asked for.
+
+   The iteration is over `:future-sources`, never over the guard. Walking the
+   guard means a file staged for writing but absent from the guard is committed
+   unmeasured, which is the fail-open this gate exists to prevent: the set of
+   files at risk is the set about to be written, so that is the set to walk.
+   A file with no guard entry, or an entry carrying no reference bytes, is a
+   typed refusal naming the file, never a zero and never an exception."
+  [compiled commit?]
+  (let [guard (:splice-guard compiled)
+        future-sources (:future-sources compiled)
+        unmeasurable
+        (when commit?
+          (first
+            (keep (fn [[file _candidate]]
+                    (let [entry (get guard file)
+                          reason (cond
+                                   ;; An exemption is a decision recorded IN the
+                                   ;; guard. Absence is not an exemption.
+                                   (:exempt entry) nil
+                                   (nil? entry) "carries no byte-preserving reference"
+                                   (not (string? (:reference entry)))
+                                   "carries a guard entry with no reference bytes")]
+                      (when reason
+                        {:ok false
+                         :error-type :splice-guard-missing
+                         :error
+                         (str "Refusing to write " file ": this transaction "
+                              reason ", so drift from the change it asked for"
+                              " cannot be measured. An unmeasurable write is"
+                              " refused, never assumed clean.")
+                         :file file
+                         :source-unchanged true
+                         :mutation-attempted false
+                         :write-authority false
+                         :remedy
+                         (str "Compile this change through a route that records"
+                              " its splice guard for every staged file, then"
+                              " retry once. No source was changed.")})))
+                  (sort-by key future-sources))))
+        measurements
+        (keep (fn [[file candidate]]
+                (when-let [{:keys [reference spans exempt]} (get guard file)]
+                  (when (and (not exempt) (string? reference))
+                    (splice-drift/gate {:file file
+                                        :reference reference
+                                        :candidate candidate
+                                        :spans spans
+                                        :commit? commit?}))))
+              (sort-by key future-sources))]
+    (or unmeasurable
+        (first (remove :ok measurements))
+        (assoc compiled
+               :byte-drift-outside-span
+               (reduce + 0 (map :byte-drift-outside-span measurements))
+               :line-drift-outside-span
+               (reduce + 0 (map :line-drift-outside-span measurements))
+               :byte-drift-from-expected
+               (reduce + 0 (map :byte-drift-from-expected measurements))))))
+
 (defn execute-change-with-context!
   ;; @spec OP-ALG-COMMIT-001,
   ;; @spec OP-ALG-COMMIT-002,
@@ -2709,6 +2831,14 @@
                                                                  write-refusal-context)
           compiled (if (and (nil? (:error compiled)) prepare-compiled!)
                      (prepare-compiled! compiled)
+                     compiled)
+          ;; @spec MCP-OP-CLOSE-006
+          compiled (if (or (:error compiled) (not (:ok compiled)))
+                     compiled
+                     (gate-splice-drift
+                       compiled (= :commit (:lifecycle context))))
+          compiled (if (false? (:ok compiled))
+                     (assoc compiled :error-type (:error-type compiled))
                      compiled)]
       (assert-receipt-does-not-alias-source! receipt-path spec)
       (cond
@@ -2778,7 +2908,21 @@
 
                                       (:canonical-effect-identity compiled)
                                       (assoc :canonical-effect-identity
-                                             (:canonical-effect-identity compiled))))]
+                                             (:canonical-effect-identity compiled))
+
+                                      ;; @spec MCP-OP-CLOSE-008
+                                      (contains? compiled
+                                                 :byte-drift-outside-span)
+                                      (assoc :byte-drift-outside-span
+                                             (:byte-drift-outside-span
+                                               compiled))
+
+                                      ;; @spec MCP-OP-CLOSE-021
+                                      (contains? compiled
+                                                 :byte-drift-from-expected)
+                                      (assoc :byte-drift-from-expected
+                                             (:byte-drift-from-expected
+                                               compiled))))]
                               (observe-change-result
                                 :success capabilities compiled
                                 {:path receipt-path
