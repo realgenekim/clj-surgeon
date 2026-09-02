@@ -2350,3 +2350,30 @@ boundary. (3) Announced speakers: person-id everywhere, normalised name only as 
 fallback, person-id on the unannounce fact; two people named Ann must not share a fate. All
 dispatched to the fold builder as round two.
 
+
+## 21:09Z — Sol's design review of the fold refactor: the lens first, tagged identity, characterization before every edit
+
+Gene: *"Isn't that a getter, even cleaner? Let's get sol review on this too!!!"* Sol: step 1 is
+the right first move, and a small lens beats a `when-event` wrapper: `(settings state event-id)`
+and `(update-settings state event-id f & args)`, update-style varargs, missing event → state
+unchanged in one place; **no path function exposed**, because a caller could hand `update-in` a
+path with a nil slug. Announced speakers get ONE tagged identity, `[:person-id id]` else
+`[:name normalised]` with a total `[:anonymous row]` fallback: tags cannot collide by accident;
+a name is only the identity of an unadopted legacy row and must never alias an identified
+person; legacy unannounce removes name-identified rows only; adoption that collides with an id
+row is a product decision, not a merge. Risk order with witnesses: the lens is a semantic no-op
+pinned by before/after projection equality over the full fixture log; relation operations are
+product-visible and pinned by focused histories (position kept on replay, same-name/different-id
+rows coexist, unannounce preserves id rows, blank names, updates do not reorder); a declarative
+relation table only after each relation's semantics are pinned; command keys are write-side and
+belong with the store branch. **Structural one-transaction edits are appropriate for the 19
+guard eliminations and 20 path rewrites, with projection equality as the gate; identities,
+collision semantics and key policy are judgment.** Ordered commits: characterization → lens +
+mechanical migration → relation module without changing arms → one announced-speaker arm per
+commit → relation metadata later → command keys after the store lands. NO-GO pending product
+decisions: merging legacy and id rows by name; the adoption-collision winner; changing ordering
+or first/last-wins; collapsing blank identities; reading name-unannounce as removing identified
+people; generic declarative relations before semantics are pinned. Session 4 = the lens over 19
+owners as one structural transaction, watcher on, replay equality first; it starts when the fold
+builder's round two (Sol's fixes + the tagged identity) lands, since both touch the same file.
+
