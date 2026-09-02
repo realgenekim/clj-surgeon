@@ -354,3 +354,21 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Inbox beads wanted: inb-4a51e5, inb-51135b, inb-ab0a24, plus the new target-ns one (id in
   this commit's log line).
 
+
+## RESUME DELTA 2026-09-02T18:50Z
+
+- `bridge/rf2-extract-rewire` pushed at 57e3ca0 (base 837fabbe): extract! rewires callers, `:ls`
+  non-fatal, expected_shape refusals; my G1 drive one call byte/form-identical to the reference;
+  follow-up in flight: receipt states header guarantees (commit as a follow-up when reported).
+  G2 naive-reader running; G5 cold shadow next (one agent, tool present, not mandated).
+- Gate sessions: in-process gate server on 7899 from the nREPL (port 40671) in ~/src/clj-surgeon
+  (admit-gate); one false `require-removed` refusal fixed live; a verified commit in 21 s; the
+  proper fix is being built on the branch by the gate agent (witnesses named).
+- Tweezer sessions 1–2 on `bridge/tweezer-1` (702808a): meter says s1 35/797 s, s2 8/293 s.
+  Protocol fixes: close sessions with a marker FILE (`.tweezer/session-<n>.closed`), never a
+  shared cell. rf2 benchmark: 14.3 returns / 328 s stripped native.
+- z6 scored (rung M speed claim withdrawn, fix holds); z7 running (gate 281 vs native 429/749 in
+  wave one); z8 chained. q5z builder + anchor chain (repo-R now on Anvil) still running; when q5z
+  lands: suites, commit, push, checkout at ~/acid/surgeon-q5z, server 7895 via a restart-7895-at.sh
+  clone of the 7894 script, Q5Z-SHA, hand-drive at N=5, then GO-SL1.
+
