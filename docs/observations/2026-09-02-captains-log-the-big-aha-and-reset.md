@@ -2253,3 +2253,19 @@ native failed four times out of six in three different ways. The 10× the slope 
 find is not there on returns, because a competent native agent writes a generator at scale; the
 durable win is deterministic correctness at any scale, in one call, with a receipt.
 
+
+## 20:42Z — the anchor: both arms failed, for a verb defect and a spec hole
+
+sl1-R (curtaincall-cfp at d9afe8e9, `store` → `event-store`, 170 files, ~2,000 sites): native
+122 s, tool 164 s; native wins on wall as the design predicted for a uniform-alias rename. Both
+fail r4. **Tool:** unloadable, `Unable to resolve var: store/*clock*` at `replay.clj:128`, a
+reference reached through the `var` special form (`#'store/*clock*`), which the migration's site
+discovery did not cover; the alias was removed and the reference kept. Same class the extract
+verb tracks as quoted-var-references. The lib-only mode was never hand-driven (I drove the var
+mode at N=5 and let the lib mode go to the field on its fixture); the ladder skipped is the
+ladder that bites. Fix dispatched with the real bytes and a hand-drive on a scratch clone before
+reporting. **Native:** 4 errors 3 failures because three `db-correct` tests read
+`src/cfp_scheduler_killer/store.clj` by PATH as a fixture; a correct rename cannot pass r4 at
+base count, and the path is a string literal the rules protect: a hole in the anchor's own
+acceptance, dispatched to the installer to amend and re-measure. The anchor re-arms after both.
+
