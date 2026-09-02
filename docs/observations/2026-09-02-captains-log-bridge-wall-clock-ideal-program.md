@@ -986,3 +986,22 @@ rung the corpus predicted is below the crossover; tonight A carries 23 percent m
 than native, which reads backwards against the product's mechanism. Sol: cross-task
 generalisation, A vs V x6 on a materially different task. Both filed; the large rung is being
 designed now (task prompt plus acceptance suite) so it can run after v1.
+
+## Receipt 09:20Z — apparatus defect found in b1 group 1: orphaned gates and cross-group name collisions
+
+"b1 A gate  suite_invocations=6" landed with an empty test summary. Cause: the runner launched
+each arm's gate in the background inside an already-backgrounded arm function, so the group's
+`wait` returned before the last gate finished, and the next group re-created the same worktree
+name (b1 uses slot 2 for A in every group) under the running gate. The gate read a fresh
+checkout mid-destruction and printed nothing. The same reuse overwrites per-slot diff and
+report files across groups. e3 escaped because its two groups put different arms in each slot.
+
+Actions: group-1 diffs copied to `b1-g1-*` before group 2 could overwrite them (20.5, 19.4,
+19.7 KB); a watcher freezes groups 2 and 3 the same way; canonical runner v5 now runs the gate
+serially, adds a group index `g<n>` to worktree and receipt names, diffs against the base
+commit (an agent that commits would otherwise yield an empty diff), and stamps `g=` on end
+lines; a `fullgate.sh` re-runs the real gate (full kaocha plus pages) on any frozen diff so a
+lost gate can be recovered; chain-2 waits for b1, refreshes the running copy only after its
+driver exits, full-gates all b1 diffs, then runs n1, k2, v1 on the fixed runner. Ratchet
+class: a background job inside a background job is an orphan; a receipt name without the
+group index is a collision waiting for the first repeated arm.

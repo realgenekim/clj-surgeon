@@ -106,3 +106,9 @@ UPDATE 08:05Z (supersedes above where they conflict)
   -> log receipt -> fleet round (Sol + Opus) -> queue next -> tell mayor (policy-10 shape).
 - Aborted first e3 launch (7888): rollouts ended 05:49:10-18Z, zero-byte diffs, no survivors; exposure ~1 min as disclosed.
   Pre-e3 A/P rows (s2..k1) DID call 7888 for their full runs (14 arm-runs); disclosed to mayor 06:50Z.
+
+UPDATE 09:20Z — chain-next/chain-after-k2 KILLED (parents only); replaced by ~/acid/chain-2.sh: waits "b1 done" + driver exit,
+cp v5->v3, fullgate.sh on b1 diffs (b1-fullgate.txt), then n1 -> k2 -> v1. b1 diffs frozen per group as b1-g1/g2/g3-<arm>-<slot>.diff
+(watcher b1-g2-freeze.sh). Runner v5: gate serial, names <run>-g<gi>-<arm>-<slot>, diff vs base, g= on end lines. Acceptance
+b1 g1: rescore-anvil-b1g1.txt. Judge all 9 b1 diffs in one round when b1 done (rubric clause: appended reassignment is prescribed;
+clarity may score body duplication only; judges cite the spec clause). Doctrine v2 = inb-beecb9. Rung L design in scratchpad rungL/.
