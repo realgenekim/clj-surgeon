@@ -322,3 +322,25 @@ now, from the rollouts: with Surgeon present the agent has the form's boundaries
 outline but never reads the body of the JavaScript string (the outline cannot see inside a
 string literal), so it inserts the guard at the function's top without having seen the
 reset line the branch depends on, while native agents grep the body and see it.
+
+## Gate, red team round two (13:30Z): NO-GO on four points, one of them in the kernel
+
+Held: pre-image binding (replay, wrong file, creation disguised as edit all refused), the
+byte cap (25 and 50 MB refused in under 4 ms), payload bounding, path confinement, multi-file
+rollback, linear identity (128k lines in 2.9 s), the detector on defmulti, defprotocol,
+defrecord, deftype, defmacro, defonce, deftest, and the correct non-duplicate for the same
+symbol in :clj and :cljs branches. Failed: eight concurrent commits on one file lost
+claimed-committed edits in four of six trials, because the kernel's commit-compiled! is
+check-then-write with no lock and the gate widens the window across lint and tests, so this
+is a kernel finding for surgeon1 as well as a gate fix; the {snapshot} placeholder in the
+test command is cosmetic, a command that lists it and prints "Ran 7 tests" is credited, and
+:focused-test has no production loader, so every real commit today reads verification
+incomplete; lint deliberately unverified plus commit returns ok true; the duplicate detector
+does not walk into when, let, binding, try or if, collapses two defs in one reader-conditional
+branch, and falsely refuses a libspec wrapped in a reader conditional. Round three routed:
+a per-workspace write lock from snapshot to commit with the hash re-checked under it; test
+evidence from a report file the runner writes inside the snapshot; a loader from the start
+config or a repo file; verification_status on every receipt; detector depth. Two red-team
+rounds have now found, in a verification gate, both halves of the class the night was about:
+a receipt that can say verified without evidence, and a write that can say committed and be
+lost. The doctrine's gate held both times.
