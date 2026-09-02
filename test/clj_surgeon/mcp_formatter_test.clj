@@ -1,7 +1,9 @@
 (ns clj-surgeon.mcp-formatter-test
   (:require
    [clj-surgeon.mcp-formatter :as formatter]
+   [clj-surgeon.mcp-http-server :as http-server]
    [clojure.java.io :as io]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]])
   (:import
    (java.nio.file Files)
@@ -71,7 +73,8 @@
   (let [profiles
         {"fast" {:commands
                  [["clj-kondo" "--lint" "{files}"]
-                  ["npx" "@chrisoakman/standard-clojure-style"
+                  ["npx" (str "@chrisoakman/standard-clojure-style@"
+                              formatter/formatter-version)
                    "check" "{files}"]
                   ["make" "focused"]]}
          "full" ["make" "test"]}
@@ -84,3 +87,24 @@
     (is (= profiles
            (formatter/verification-profiles-after-format
              profiles ["custom-format" "--write" "{files}"])))))
+
+;; @spec MCP-OP-FMT-012
+(deftest the-default-formatter-command-is-version-pinned
+  (is (= ["npx" "@chrisoakman/standard-clojure-style@0.29.0" "fix" "{files}"]
+         formatter/default-command)
+      "an unpinned npx resolves whatever is newest, and the clause-normalised
+       stream that bounds a scoped format was measured against one version")
+  (is (= "0.29.0" formatter/formatter-version))
+  (testing "the http server's default check command is pinned to the same version"
+    (is (some #(= ["npx" "@chrisoakman/standard-clojure-style@0.29.0"
+                   "check" "{files}"]
+                  %)
+              (get-in http-server/default-verification-profiles
+                      ["fast" :commands]))))
+  (testing "so the check counterpart is still recognised and removed"
+    (is (not-any?
+          #(str/includes? (str %) "standard-clojure-style")
+          (get-in (formatter/verification-profiles-after-format
+                    http-server/default-verification-profiles
+                    formatter/default-command)
+                  ["fast" :commands])))))

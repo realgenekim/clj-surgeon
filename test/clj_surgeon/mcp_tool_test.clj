@@ -683,11 +683,17 @@
 (deftest same-file-form-edits-format-commit-and-undo-once
   ;; @spec MCP-OP-CLOSE-006
   ;; @spec MCP-OP-CLOSE-008
+  ;; @spec MCP-OP-FMT-005
   ;; The namespace-owner change this test used to carry is now a typed refusal
-  ;; (close-losers-design.md). What remains is the format/commit/undo path, and
-  ;; a formatter that rewrites untouched source is now refused rather than
-  ;; committed: that whole-file restaging is the mechanism behind the
-  ;; 2026-09-02 cohort's 425 reformatted lines.
+  ;; (close-losers-design.md). What remains is the format/commit/undo path.
+  ;;
+  ;; Round two of close-losers refused a formatter that rewrote untouched
+  ;; source, because the only formatter the server had restaged whole files.
+  ;; Under bead 46o the formatter is handed one top-level form at a time and
+  ;; can no longer reach an untouched byte at all, so the refusal this test
+  ;; used to witness is unreachable through the formatter. What is reachable,
+  ;; and what it witnesses now, is a formatter that hands back something other
+  ;; than the one form it was given (format-scope-design.md).
   (let [workspace (temp-dir)
         source-file (io/file workspace "src/sample.clj")
         receipt-dir (io/file workspace "receipts")
@@ -736,13 +742,14 @@
     (try
       (.mkdirs (.getParentFile source-file))
       (spit source-file original)
-      (testing "a formatter that rewrites untouched source is refused"
+      (testing "a formatter that returns more than the one form it was given is refused"
         (let [result (run reformatted)]
           (is (false? (:ok result)) (pr-str result))
-          (is (= "byte-drift-outside-span" (:error_type result)))
-          (is (pos? (:byte_drift_outside_span result)))
+          (is (= "format-fragment-not-one-form" (:error_type result)))
           (is (true? (:source_unchanged result)))
-          (is (= original (slurp source-file)))))
+          (is (false? (:mutation_attempted result)))
+          (is (= original (slurp source-file))
+              "a refused format leaves every byte on disk unchanged")))
       (testing "a byte-preserving format stage commits, receipts and undoes"
         (let [result (run nil)]
           (is (:ok result) (pr-str result))
@@ -1334,7 +1341,8 @@
                (slurp source-file)))
         (is (true? (:verification_complete result)))
         (is (= 1 (count @formatter-calls)))
-        (is (= ["npx" "@chrisoakman/standard-clojure-style" "fix" "{files}"]
+        (is (= ["npx" "@chrisoakman/standard-clojure-style@0.29.0"
+                "fix" "{files}"]
                (:command (first @formatter-calls))))
         (is (= :complete (get-in result [:format :status])))
         (is (= 0 (get-in result [:format :changed-file-count])))

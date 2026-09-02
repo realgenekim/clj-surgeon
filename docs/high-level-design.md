@@ -530,6 +530,36 @@ Promotion requires byte-identical frozen outputs and a serial counterbalanced
 integrated transaction cohort. The implementation shall not add a formatter
 daemon until process startup remains material after exact dependency resolution.
 
+**The formatter's unit is the enclosing top-level form, not the file.** Staging
+whole candidate files reformats source nobody asked to change; measured on the
+2026-09-02 `l1` cohort that turned 93 lines of work into +508/-476 of review
+burden. The unit at which scoping is achievable is the complete top-level form:
+formatting one in isolation was byte-identical to formatting it inside its file
+in 1735 of 1735 forms across this repository's 68 source files, and only
+sub-form fragments diverge, by the starting column they lose when cut out.
+So a transaction formats exactly the top-level forms one of its replacement
+spans touches, and splices each formatted form back at its original span in
+descending order so a form that grew cannot move an unspliced neighbour. Every
+byte between those forms is carried through **by construction** — the splice
+concatenates them — and a self-test asserts that the arithmetic held; that
+self-test bounds the splice, never the formatter.
+
+**One check bounds the formatter, and it is the only one:** the text returned
+for a form must carry the same tokens and comments in the same order, with the
+two things the formatter owns normalised away: the clause order of an ns
+`(:require ...)` / `(:import ...)` list, sorted as whole groups so a comment
+travels with its clause and can never be reattached to another, and the spaces
+after a comment's semicolons, which the real formatter rewrites on ordinary
+source. Order
+blindness was tried first and measured worse on both axes: a token multiset
+admits swapping an `if`'s branches, reversing a non-commutative call's
+arguments, moving a symbol to a sibling call, and moving a `:refer` symbol
+between two requires, and it refuses no more of the real formatter's output than
+the ordered check does (both cost zero false refusals over 1735 forms). The
+formatter command is version-pinned for the same reason: the check was measured
+against one version's behaviour. Design:
+docs/intent/mcp-operation-contract/format-scope-design.md.
+
 ### Compress a coherent read mission without guessing
 
 The read path treats a coherent set of known questions as one immutable

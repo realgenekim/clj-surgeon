@@ -459,11 +459,24 @@
         (finally (delete-tree! workspace))))))
 
 ;; @spec MCP-OP-CLOSE-021
-(deftest a-span-covering-the-whole-form-is-still-measured
-  ;; Probe R5. The find covers the entire top-level form, so there are no
-  ;; untouched gaps left and the gap-only measurement is vacuously zero. A
-  ;; formatter that turns double spaces into tabs then rewrote the caller's own
-  ;; replacement text and committed, reporting byte_drift_outside_span 0.
+;; @spec MCP-OP-FMT-004
+;; @spec MCP-OP-FMT-008
+(deftest a-span-covering-the-whole-form-is-still-bounded
+  ;; Probe R5, re-scoped by bead 46o.
+  ;;
+  ;; R5 found that when a `find` covered an entire top-level form there were no
+  ;; untouched gaps left, the gap-only measurement was vacuously zero, and a
+  ;; formatter that turned double spaces into tabs committed reporting
+  ;; `byte_drift_outside_span` 0. Round three answered it by refusing any byte
+  ;; the formatter changed at all.
+  ;;
+  ;; 46o replaces that answer rather than removing it. The formatter is now
+  ;; handed one top-level form at a time and its output must be the same tokens
+  ;; and comments in the same order (MCP-OP-FMT-005), so it may move layout and
+  ;; may do nothing else. Managed formatting therefore commits again — that is
+  ;; the point of the bead — and what bounds it is no longer a vacuous gap
+  ;; count but two positive claims: the tokens are identical, and every byte
+  ;; outside the edited forms is identical.
   (let [tabbing-formatter
         (fn [_root _command future-sources]
           {:ok true :status :complete
@@ -474,8 +487,7 @@
                            [file (str/replace source "  " "\t\t")]))
                  future-sources)})
         workspace (temp-workspace)
-        target (io/file workspace "src/app/only.clj")
-        before (slurp target)]
+        target (io/file workspace "src/app/only.clj")]
     (try
       (let [result
             (mcp-tool/execute-request!
@@ -490,14 +502,59 @@
                            "replace" "(def x  [9  9])"
                            "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
                "expect" {"changes" 1 "edits" 1 "files" 1}})]
-        (is (false? (:ok result)) (pr-str result))
-        (is (= "byte-drift-outside-span" (:error_type result)))
-        (is (pos? (:byte_drift_from_expected result))
-            "the expected post-image is what gates; the gap-only number is
-             vacuous when the span covers the whole form")
-        (is (= 0 (:byte_drift_outside_span result))
-            "and it reports honestly that there were no gaps to compare")
-        (is (= before (slurp target)) "no tabs reached disk"))
+        (is (:ok result) (pr-str result))
+        (is (= 0 (:byte_drift_from_expected result))
+            "the scoped format is an authorized stage, so the expectation the
+             commit gate measures is the post-format image")
+        (is (= 0 (:byte_drift_outside_span result)))
+        (is (= "(def x\t\t[9\t\t9])\n" (slurp target))
+            "layout inside the edited form is the formatter's to decide")
+        (is (= 1 (get-in result [:format :changed-form-count])))
+        (is (= :top-level-forms (get-in result [:format :scope]))))
+      (finally (delete-tree! workspace)))))
+
+;; @spec MCP-OP-FMT-002
+;; @spec MCP-OP-FMT-004
+(deftest the-same-formatter-cannot-reach-a-form-the-change-did-not-edit
+  ;; The claim R5's vacuous zero could not make. `a.clj` carries an ns form, a
+  ;; leading comment and two more top-level forms; the edit touches exactly one
+  ;; of them, and the same aggressive formatter runs.
+  (let [tabbing-formatter
+        (fn [_root _command future-sources]
+          {:ok true :status :complete
+           :file-count (count future-sources)
+           :changed-file-count 1 :elapsed_ms 0.1
+           :future-sources
+           (into {} (map (fn [[file source]]
+                           [file (str/replace source "  " "\t\t")]))
+                 future-sources)})
+        workspace (temp-workspace)
+        target (io/file workspace "src/app/a.clj")]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))
+               :formatter ["fixture-formatter" "{files}"]
+               :format-candidates! tabbing-formatter}
+              {"changes" [{"id" "widen"
+                           "files" ["src/app/a.clj"]
+                           "forms" ["b"]
+                           "find" "#{1}"
+                           "replace" "#{2}"
+                           "expect" {"matches" 1 "each_form" 1 "each_file" 1}}]
+               "expect" {"changes" 1 "edits" 1 "files" 1}})
+            after (slurp target)]
+        (is (:ok result) (pr-str result))
+        (is (= 0 (:byte_drift_from_expected result)))
+        (is (str/includes? after ";; a leading comment that must not move")
+            "a comment between forms is not part of any form")
+        (is (str/includes? after "(def config {:a 1})")
+            "an untouched form keeps its bytes")
+        (is (str/includes? after "  (:require [clojure.string :as str]")
+            "so does the ns form the change never named")
+        (is (str/includes? after "#{2}")
+            "and the requested change did land"))
       (finally (delete-tree! workspace)))))
 
 ;; @spec MCP-OP-CLOSE-021

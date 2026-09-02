@@ -759,13 +759,18 @@
 
                  :else config)
         ;; @spec MCP-OP-CLOSE-017
-        ;; The basis route stages whole existing files, so whole-file
-        ;; formatting there is the same churn the editor gestures already
-        ;; exempt themselves from. Extraction is not listed: its formatter is
-        ;; already confined to the files it creates.
+        ;; @spec MCP-OP-FMT-007
+        ;; The basis route stages whole existing files. Round two disabled its
+        ;; formatter outright because the only formatter available restaged
+        ;; whole files; with `format-scoped-candidates!` the formatter can no
+        ;; longer see a byte the transaction did not edit, so the route is
+        ;; formatted again under that scope. Editor gestures stay exempt: that
+        ;; exemption predates the churn finding and is not this leaf's to lift.
+        ;; Extraction is not listed either — its formatter is already confined
+        ;; to the files it creates.
         basis? (string? (:basis normalized-params))
         extraction? (map? (:extraction normalized-params))
-        whole-file-format-unsafe? (or editor-gesture? basis?)
+        formatter-exempt? editor-gesture?
         config (cond
                  (:formatter-fn config)
                  (assoc config :formatter ((:formatter-fn config)))
@@ -777,7 +782,9 @@
                  (assoc config :formatter formatter/default-command)
 
                  :else config)
-        config (if (and (:formatter config) (not whole-file-format-unsafe?))
+        ;; @spec MCP-OP-FMT-002
+        ;; @spec MCP-OP-FMT-008
+        config (if (and (:formatter config) (not formatter-exempt?))
                  (let [command (:formatter config)]
                    (assoc config
                           :verification-profiles
@@ -787,16 +794,31 @@
                           (fn [project-root compiled]
                             (let [format! (or (:format-candidates! config)
                                               formatter/format-candidates!)
-                                  formatted (format! project-root command
-                                                     (:future-sources compiled))]
+                                  formatted
+                                  (formatter/format-scoped-candidates!
+                                    project-root command
+                                    (:future-sources compiled)
+                                    (:splice-guard compiled)
+                                    format!)]
                               (if (:ok formatted)
                                 (let [prepared (transaction/with-future-sources
                                                  compiled
                                                  (:future-sources formatted))]
                                   (if (:ok prepared)
-                                    (assoc prepared :format
+                                    (assoc prepared
+                                           ;; The formatter is an authorized
+                                           ;; stage, so the expectation the
+                                           ;; commit gate measures becomes the
+                                           ;; post-format image. What proves
+                                           ;; the format itself stayed in scope
+                                           ;; is MCP-OP-FMT-004, above, not
+                                           ;; this guard.
+                                           :splice-guard
+                                           (:splice-guard formatted)
+                                           :format
                                            (dissoc formatted
-                                                   :future-sources :ok))
+                                                   :future-sources
+                                                   :splice-guard :ok))
                                     prepared))
                                 formatted)))))
                  config)

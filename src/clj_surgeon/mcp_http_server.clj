@@ -33,7 +33,13 @@
   {"fast"
    {:commands
     [["clj-kondo" "--lint" "{files}"]
-     ["npx" "@chrisoakman/standard-clojure-style" "check" "{files}"]]}
+     ;; @spec MCP-OP-FMT-012
+     ;; Pinned to the same exact version `mcp-formatter/default-command` runs,
+     ;; so `verification-profiles-after-format` still recognises this as that
+     ;; command's `check` counterpart and does not add a second formatter pass.
+     ["npx" (str "@chrisoakman/standard-clojure-style@"
+                 mcp-formatter/formatter-version)
+      "check" "{files}"]]}
    "full" {:cold {:command ["make" "test"]
                   :timeout-ms 1200000}}})
 

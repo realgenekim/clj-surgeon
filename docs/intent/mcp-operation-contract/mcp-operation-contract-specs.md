@@ -274,6 +274,27 @@ receipts 08:51Z, 08:57Z, 08:58Z, 09:01Z.
 - [x] **MCP-OP-CLOSE-015**: When the compiled future source departs from the byte-preserving splice, the `reprint-outside-span-refused` refusal shall reach the public MCP result and leave every source file unchanged.
 - [x] **MCP-OP-CLOSE-009**: Where a request uses the `edit_clojure` `edits` route, `require_change` with `symbol_migration`, `delete_owners`, `create_files`, `programs`, `extraction`, or `transform_clojure`, clj-surgeon shall not apply the namespace-owner refusal.
 
+# #Scoping the Managed Formatter to the Edited Forms
+
+Design: [format-scope-design.md](format-scope-design.md). Evidence:
+`docs/observations/2026-09-02-captains-log-the-big-aha-and-reset.md`, "churn
+attributed" (+508/-476 for 93 lines of work), and the red-team measurement that
+`standard-clojure-style fix` on a complete top-level form in isolation produces
+bytes identical to formatting that form inside the full file.
+
+- [x] **MCP-OP-FMT-001**: When clj-surgeon scopes a managed formatter to a staged candidate source, it shall compute the character span of every top-level form in that source and shall exclude every byte of whitespace or comment that lies between top-level forms.
+- [x] **MCP-OP-FMT-002**: When a transaction stages an existing file for a managed formatter, clj-surgeon shall pass to the formatter only the text of the top-level forms whose span one of that transaction's replacement spans touches, and no other source text.
+- [x] **MCP-OP-FMT-003**: When a formatted top-level form differs in length from the form it replaces, clj-surgeon shall splice the formatted forms in descending span order so no unspliced region's offsets are moved, and shall report each formatted form's span in result coordinates.
+- [x] **MCP-OP-FMT-004**: When a scoped format completes, clj-surgeon shall assert, gap by gap and without searching, that the splice arithmetic held — every byte outside the formatted top-level forms appears in the result at the offset the splice determines — and shall refuse with reason `format-scope-drift` when it did not. This is a self-test of `splice-forms`, whose output satisfies it by construction; it bounds the splice, never the formatter.
+- [x] **MCP-OP-FMT-005**: When the formatter returns text for one top-level form, clj-surgeon shall refuse with `format-fragment-not-one-form` unless that text parses to exactly one top-level form, and with `format-altered-form` unless its tokens and comments match the form it replaces as an ordered stream in which only the sibling clauses of an `ns` `(:require ...)` or `(:import ...)` list are normalised by sorting whole clause subtrees; an unreadable stream on either side shall be a refusal, never a match.
+- [x] **MCP-OP-FMT-006**: If a staged file carries no byte-preserving reference in the transaction's splice guard, then clj-surgeon shall refuse with `format-scope-unmeasurable` rather than format that file whole; an exemption recorded in the guard shall leave that file unformatted rather than refuse.
+- [x] **MCP-OP-FMT-007**: When a prepared-basis transaction commits, clj-surgeon shall apply the managed formatter to it under the same top-level-form scope the direct route uses.
+- [x] **MCP-OP-FMT-008**: When a scoped format has been applied, clj-surgeon shall replace the transaction's splice guard with the post-format image and the formatted form spans, so the commit-time drift gate measures every later staging step against the bytes the scoped format produced and reports `byte_drift_from_expected` 0 for an ordinary edit with the formatter on.
+- [x] **MCP-OP-FMT-010**: If the bytes staged for a file are not the byte-preserving reference the transaction compiled for it, then clj-surgeon shall refuse with `format-scope-candidate-mismatch` rather than format them, because formatting would replace the transaction's expectation with an image an earlier staging step produced.
+- [x] **MCP-OP-FMT-011**: If a transaction names edited spans in a staged file but no top-level form can be read from that file's staged bytes, then clj-surgeon shall refuse with `format-scope-unparseable-candidate` rather than treat it as nothing to format.
+- [x] **MCP-OP-FMT-012**: When clj-surgeon resolves its own default formatter, that command shall name an exact package version, the default verification profile's corresponding `check` command shall name the same version, and the real binary's behaviour on a committed fixture shall be exercised by a test that is skipped explicitly when the binary is unavailable.
+- [x] **MCP-OP-FMT-009**: If the formatter process fails, times out, or is configured with an invalid command, then clj-surgeon shall refuse the complete transaction with that typed formatter reason and shall leave every source file unchanged.
+
 # #Deferred Surface
 
 Transport-level exception envelopes, cancellation, deadlines, queue time

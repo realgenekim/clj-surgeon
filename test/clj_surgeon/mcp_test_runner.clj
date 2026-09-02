@@ -11,6 +11,8 @@
    [clj-surgeon.mcp-contract-test]
    [clj-surgeon.mcp-create-files-test]
    [clj-surgeon.mcp-extraction-plan-test]
+   [clj-surgeon.mcp-format-scope-real-test]
+   [clj-surgeon.mcp-format-scope-test]
    [clj-surgeon.mcp-extraction-test]
    [clj-surgeon.mcp-hot-verify-test]
    [clj-surgeon.mcp-http-server-test]
@@ -47,6 +49,8 @@
           'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test
           'clj-surgeon.mcp-extraction-plan-test
+          'clj-surgeon.mcp-format-scope-test
+          'clj-surgeon.mcp-format-scope-real-test
           'clj-surgeon.mcp-change-buffer-test
           'clj-surgeon.mcp-close-losers-test
           'clj-surgeon.mcp-cold-verify-test

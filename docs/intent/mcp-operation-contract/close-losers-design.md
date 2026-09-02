@@ -419,6 +419,24 @@ closes the churn, but the durable fix is bead `clj-surgeon-46o` — span-scoped
 formatting — after which the refusal would stop firing on ordinary work. Refuse
 now versus don't-restage later is a sequencing call above this branch.
 
+*Resolved, 2026-09-02, on `bridge/format-form-scope` — see
+[format-scope-design.md](format-scope-design.md).* 46o was built at the unit
+round three's finding identified: the enclosing top-level form. The formatter is
+handed one complete form at a time and can no longer see a byte the transaction
+did not edit, so the two fallbacks this branch shipped are lifted — the basis
+route is formatted again, and the `changes` route's refusal stops firing on
+ordinary work. **What a reviewer must weigh:** 46o replaces the transaction's
+splice guard with the post-format image, so `MCP-OP-CLOSE-021` no longer bounds
+the formatter by "may not change a byte." **Exactly one check bounds it now:**
+inside an edited form the tokens and comments must match as an ordered stream,
+with only the sibling clauses of an ns `:require` / `:import` list normalised by
+sorting whole subtrees. Everything outside those forms is untouched by
+construction rather than by a check. Probe R5's tabbing
+formatter therefore commits rather than refusing, and its witness here was
+re-scoped, with a sibling test proving that same formatter cannot reach a form
+the change did not edit. The deliberate narrowing of the ratified gate is stated
+in full under "What This Changes About the Drift Gate, Stated Plainly".
+
 # #Non-Goals
 
 - Removing or renaming any public tool, and any change to an input schema.
