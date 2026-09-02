@@ -626,3 +626,42 @@ with acceptance, actions, and plan calibration; s7 blind review launched.
 Turn-count picture, for the record: wall ≈ 9 s per model action plus suite runs, on every
 arm and both boxes; native ≈ 19 actions, A ≈ 24, B ≈ 29, T 44. The arm is not the clock; the
 number of times the model comes back is.
+
+## 05:20Z — the pictures (Gene: "record graphs in captain's log")
+
+```
+COMPLETE VERIFIED WALL, Anvil clean runs (• per sample; 10 s per column)
+                150      200      250      300      350      400      450      500      550      600
+native (n=6)    |          •        •  ••  ••                                                      |  194–287
+A shipped (5)   |                 ••  • • •                                                        |  237–317
+B wave (4)      |                          •  •    •                              •                |  272–579
+C wave–sym (2)  |                                 ••                                               |  328,333
+P shipped+plan  |                           •            •                                         |  258,359
+Q native+plan   |                      •                •                                          |  221,338
+T typist (Bstr) |                                             •                                    |  409
+                ^ spread inside an arm (40–300 s) exceeds every gap between arm means
+
+WALL vs MODEL ACTIONS (N native · A shipped · B wave · C · T typist)
+ 600 |                                        B      ← 35 actions, 5 suite runs
+ 400 |                                                 T   ← 44 actions, 4 typist hand-offs
+ 350 |                              C
+ 300 |          N    B       A    A  B  ·······        diagonal ≈ 9 s per action + tests
+ 250 |         N A  A N   ····
+ 200 |     N·····
+     +----+----+----+----+----+----+----+----+
+     10   15   20   25   30   35   40   45   actions
+ read down a column: same actions, same wall, any arm   → the tool is not the clock
+ read along the diagonal: every point, every arm, both boxes → turns are the clock
+
+WHAT THE TIMING CANNOT SEE       judges /20 (2 judges, noise ±1)   acceptance failed/39
+   native   17–19                                                    2.4
+   A        17–19                                                    1.0   ← most conformant
+   B        13–16  (clarity 2/5)                                     2.5
+   C        12–17.5                                                  5.0
+```
+
+**The reading, in one line:** the arm is not the clock; the number of times the model comes
+back is. Every tool's only lever on wall is the count of returns it induces, and the wave
+build induced more. Gene, on seeing this: "Obvious and yet insightful"; and: elevate the
+need to reduce tool calls to the global prompt, make it a key part of a coding task at the
+high level, brainstorm with the fleet. Both launched.
