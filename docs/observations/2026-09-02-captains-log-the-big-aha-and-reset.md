@@ -390,3 +390,28 @@ extraction as on edits), the gate as backstop everywhere, basis through validati
 refusal when the guard is missing. A design decision for surgeon1 surfaced by the probes:
 require_change is bound to symbol_migration, so a namespace-owner require insertion has no
 one-call redirect, and the only legal completion rewrites call sites nobody asked for.
+
+## E8: b2 widened to n=6; a b2 finding withdrawn; a new refusal class on main (13:43Z)
+
+| metric, b2 plus e8, n=6 per arm | B main 2311cc09 | A shipped | delta in floor sd |
+|---|---|---|---|
+| wall s | 575 | 637 | -0.7 |
+| total actions | 32.7 | 32.8 | -0.1 |
+| MCP calls | 10.3 | 11.8 | -0.5 |
+| typed refusals | 4.0 | 4.7 | -0.5 |
+| input tokens | 2.37 M | 2.28 M | +0.3 |
+| acceptance failed | 1.67 | 2.50 | |
+
+Nothing clears two sd at n=6; every B-favouring number from b2 shrank when the sample
+doubled, and the two waves disagree on direction. Refusals by reason over twelve runs:
+overlapping-intents 0 on both; ambiguous-insertion-gap 1 on B against 3 on A, rarer, not
+eliminated; batch-form-selection-failed 1 on B against 5 on A, so b2's "B strictly removes
+the class" was an n=3 artefact and is WITHDRAWN. New: missing-fields appears in 4 of 6 B runs
+and in 0 of the 40 shipped-arm runs with typed ledgers tonight (its only other sighting was
+b1's G build). It fails closed and is correctly typed, so it is not a safety regression, but
+it is a real agent-visible behaviour change in 2311cc09 that nobody has characterised
+(which call, which field, whether the agent recovers). Promotion verdict, both gates: under
+"demonstrated improvement", 2311cc09 does not pass; under "no detected regression", it passes
+only once missing-fields is characterised and shown recoverable, so the honest state is
+"held pending one characterisation", not "safe to promote" as I said after b2. That earlier
+line is corrected here.

@@ -91,7 +91,8 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | optional: declined 3 of 3; mandated: reads in, writes around, +210 s | f291f38 |
 | 2026-09-02 | fan-out is the per-form API's worst case; native does 21 owners in one patch cell | fbcaed1 |
 | 2026-09-02 | owner-kind-namespace writes re-print whole files; require_change and within are churn-free | 241e1bb |
-| 2026-09-02 | main 2311cc09 shows no detected regression on the ledger | a7932cb |
+| 2026-09-02 | main 2311cc09 shows no detected regression on the ledger (n=3) | a7932cb |
+| 2026-09-02 | at n=6 nothing clears 2 sd; missing-fields is a new refusal class on main (4/6 vs 0/40 shipped); promotion held pending characterisation | big-aha log E8 |
 | 2026-09-02 | the fast typist is negative alone; multiplier only on fan-out behind a gate | fd60409 |
 | 2026-09-02 | ritual audit: 34% of model returns / 50% of sub-commands unmandated; git diff 465x in 80/81 runs, bd arcs from the repo AGENTS.md; naming a substitute suppresses ritual, forbidding does not (K 28%, Y 100%) | big-aha log, ritual audit |
 | 2026-09-02 | E5: stale-onset defect 6/9 shipped vs 0/9 native by pre-registered predicate (p about 0.009); acceptance suite passed all six | big-aha log E5 |
@@ -110,4 +111,4 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | E6 | free-choice adoption of `:ls-tree` via MCP once exposed | agents call it once at the start and read fewer files; if they do not call it, the exposure failed | 6 arm-runs | inb-f403aa |
 | E7 | `prove`: load the unwritten candidate into the warm JVM and run named vars | one return replaces the focused-suite return and catches behaviour the suite misses; false-green risk from load order | prototype + 6 arm-runs | gate substrate |
 | E9 | cohort R: prompt variants H (forbid+explain) and J (name substitutes) vs native, rung M | J removes returns beyond the floor with acceptance unmoved; H removes little | 12 arm-runs | none; queued after E5/E8 |
-| E8 | b2 wider, n=6 per arm, for the promotion gate that requires demonstrated improvement | refusal volume down by more than 2 sd, or not | 12 arm-runs | none |
+| E8 | DONE: b2 widened to n=6 | nothing clears 2 sd; b2 "removes batch-form-selection-failed" withdrawn; missing-fields new on main 4/6 vs 0/40 shipped; promotion held pending characterisation | 6 arm-runs | big-aha log E8 |
