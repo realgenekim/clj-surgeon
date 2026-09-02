@@ -1509,3 +1509,25 @@ plan and extract clean, header correct, entry point promoted automatically, two 
 candidates from a substring match on a deftest NAME, sewing three lines, compile and kondo
 clean at call 4, suites at call 5; the meter's count follows from its own watcher.
 
+
+## 18:38Z — sl1 apparatus installed and armed (nothing launched)
+
+On Anvil: `~/acid/fan/gen-fan.py` (deterministic, seed 7; 100 namespaces at every N, targets
+nested 5 ⊂ 10 ⊂ 20 ⊂ 40 ⊂ 80; mixed `:as` / `:refer` / plain spellings, docstrings, comments
+inside `(:require …)`, `.cljc` with `#?`, top-level `#_`; canonical post-image DERIVED at
+generation, never hand-written; manifest with sha256 of every protected decoy region located by
+defn name, never by line); `fanlib.py` and `fancheck.clj` (rewrite-clj form equality keeping
+comments, metadata, `#?` and `#_` as structure; residue scan skipping strings/comments/`#_`;
+alias-shadow check); `rescore-FAN.sh <worktree-or-diff> <N>` with predicates p1–p6c, **proven
+at N=5 and N=80: canonical PASS all, base FAIL p1 p2 p6, naive `sed` FAIL everything** (at N=80
+it stomps 244 of 412 protected regions and breaks the load while touching four of eighty targets
+correctly); `mkprompt-FAN.sh` (14 prompts, byte-identical outside §5, the four ritual lines in
+this task's terms); rung FAN in v5 (base read from the repo's commit, never typed; arm T on
+7895 with attestation); `chain-sl1.sh` armed on GO-SL1 (pid 1122646; requires 7895 attested ==
+Q5Z-SHA; runs sl1-5 … sl1-80 then sl1-C, 12 of 14 arm-runs). Anchor R blocked: Anvil has no
+GitHub credential to clone curtaincall-cfp; one bundle push away. Two apparatus defects found
+and fixed during the proofs (manifest recorded a pool alias for `:refer` files; an empty TSV
+field shifted columns under bash `read`). Remaining: the q5z verb (building) → checkout at
+`~/acid/surgeon-q5z`, server on 7895 writing ready.edn, `Q5Z-SHA`, **hand-drive at N=5 first
+(G1–G2, per the tweezer protocol)**, then GO-SL1.
+
