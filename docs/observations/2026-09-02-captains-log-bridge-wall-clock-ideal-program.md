@@ -504,3 +504,11 @@ spec, two of them introduced later by design (the mic gate became its own flag f
 attributability) and one a genuine deviation in my own build (hbms parsed client-side).
 The suite is now being run against every frozen diff on both boxes. A pass rate per arm,
 from tests the arm did not write, replaces "kaocha green" as the correctness score.
+
+## Receipt 05:05Z — s5 (second triple with C)
+
+s5, Anvil sequential, all correct: native 283 s, C 333 s, B 330 s. C's two samples (328, 333)
+are tight; B's (303, 272, 579, 330) are not. Running series on Anvil, seconds:
+native 243, 287, 194, 263, 283 · A 243, 237, 317, 273 · B 303, 272, 579, 330 · C 328, 333.
+Blind review for s5 launched (Sol); Opus judge to follow on s5–s7 together. s6 (P Q A), the
+first planning-mode triple, is running.
