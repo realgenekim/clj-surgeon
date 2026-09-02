@@ -3072,3 +3072,35 @@ DIFF-001..003, 12 tests; unit 1052/13017/0 (builder). Unverified without product
 path, a real checkpoint's exact shape (fail-closed via `hydrate!`), wall/memory on the full log. My own
 unit run in progress; then push and hand the mayor the exact commands (inb-3a9818).
 
+
+## 23:41Z — study ops reach the MCP through one kernel (b3c17bb on `bridge/study-ops-mcp`, clj-surgeon-0me): Gene's nudge answered
+
+Builder aa962e1fb576e0072, 19 files, +1821/−387. Entrance decision by the contract, not taste:
+`docs/plans/one-compiler-two-entrances.md` forbids a new public tool, so `deps`, `topo`, `ls-deps`,
+`ls-extract` are `inspect_clojure` `requests` operations (file-scoped, zero existing rule changed) and
+`ls-tree` is a top-level `mode: "ls-tree"` (directory-scoped, the shape the contract reserves for
+whole-project reads, like `plan-extraction`). `topo` takes `file`, not `dir` (core.clj). Real-wire
+witnesses per op, success + refusal: `ls-tree :dir "."` → 161 files, returned 3 / omitted 158,
+`truncated true`, `next_action raise_limit_or_narrow_scope`, elapsed 2.35–3.24 s (the scan dominates);
+refusals `invalid-relative-directory-path` (`../../etc`), `directory-not-found`, `path-not-directory`,
+`study-form-not-found` with the 27-owner vocabulary and a `next_call`, `unknown-operation` listing all
+eight, `study-output-limit` (a tree is atomic — refuses rather than returning half). **CLI golden 9 of 10
+byte-identical, and the tenth is a real defect found by the extraction:** old `run-ls-tree` destructured
+`format` as a local, shadowing `clojure.core/format`, so the "No Clojure files found" refusal threw an
+NPE and printed `{:error nil …}` — it had never worked; pinned by `ls-tree-refusal-message-is-reachable`.
+Parity witness `study-ops-both-entrances-call-one-kernel`: MCP receipt payload = kernel data = CLI
+handler return, on the same bytes. A hand-drive caught what the units missed: the truncated `next_call`
+at the limit ceiling returned itself — a continuation that cannot advance; now a call is served only
+while raising `limit` can help, else `narrow_scope`. Suites under the lock: test-fast 711/5942/5
+(baseline five), mcp-test 390/4111/1 (baseline one); kondo clean; intent audit ok. Widenings reported,
+none of them fences: babashka/fs + process moved from a test alias into base deps (the server could not
+load the kernel without them); `find-build-files` no longer builds a `sh -c` string with the scanned
+directory interpolated — an argv vector now, because `ls-tree` is the first MCP read path that runs a
+subprocess (goldens unchanged); `mcp_paths/resolve-directory-path` added, additive, mirroring
+`resolve-source-path`; the mode-enum inventory witness grew by one; the specs file registered with the
+LID auditor. Writes (`:mv`, `:rename-ns!`, `:fix-declares!`) stay out, witnessed. Owed: the E6 free-choice
+adoption cohort for `:ls-tree` through MCP is unmeasured — tech-tree says BUILT, not WON. Note for the
+mayor's queue: the one-compiler doc's "exactly two public tools" invariant is already stale (edit/transform
+exist) and the census branch adds a fifth — the contract text needs Gene's ruling, not a silent edit.
+My own suites in progress; push after; then the mayor on seat bridge.
+
