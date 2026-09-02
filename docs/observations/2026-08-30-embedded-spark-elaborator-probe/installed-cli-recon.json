@@ -1,0 +1,136 @@
+{
+  "schema": "clj-surgeon.embedded-spark-installed-cli-recon.v1",
+  "observed_at": "2026-08-30",
+  "host": "Skiff macOS arm64",
+  "repository_basis": "b445a8c3595d70f6f05b6edccb9b1a924539a195",
+  "installed_cli": {
+    "entrypoint": "/opt/homebrew/bin/codex",
+    "entrypoint_target": "../lib/node_modules/@openai/codex/bin/codex.js",
+    "version_output": "codex-cli 0.149.1",
+    "package_version": "0.149.1",
+    "native_binary_sha256": "f0d8762236594359b60cfbe17f4c7e945a3ce8d1c91e74778838c968d250fb6c",
+    "shipped_readme_sha256": "ba4e1f69ff48386e72a9c5e1edaf76aad64a475c2d51af79ccba6d1128261ba7",
+    "shipped_docs": [
+      "README.md: install, ChatGPT-plan login, and links to online documentation",
+      "No app-server protocol document is included in the npm package"
+    ]
+  },
+  "auth": {
+    "command": "codex login status",
+    "exit": 0,
+    "stdout": "Logged in using ChatGPT",
+    "secret_material_read": false
+  },
+  "model_catalog": {
+    "command": "codex debug models",
+    "entry": {
+      "slug": "gpt-5.3-codex-spark",
+      "display_name": "GPT-5.3-Codex-Spark",
+      "description": "Ultra-fast coding model.",
+      "visibility": "list",
+      "supported_in_api": false,
+      "default_reasoning_level": "high",
+      "supported_reasoning_levels": ["low", "medium", "high", "xhigh"],
+      "truncation_policy": {"mode": "tokens", "limit": 10000}
+    }
+  },
+  "app_server": {
+    "help_command": "codex app-server --help",
+    "maturity": "experimental",
+    "listen_values": ["stdio://", "unix://", "unix://PATH", "ws://IP:PORT", "off"],
+    "default_transport": "stdio://",
+    "protocol": "JSON-RPC 2.0 shape with jsonrpc header omitted",
+    "stdio_framing": "one JSON object per line (JSONL)",
+    "websocket_framing": "one JSON-RPC message per text frame",
+    "generated_schema_command": "codex app-server generate-json-schema --experimental --out DIR",
+    "generated_schema_sha256": "6f76cce25156d405f1da54f205751e38f7b9eb42246ac0742b9958dd60275350",
+    "handshake": ["initialize request", "initialized notification"],
+    "model_fields": [
+      "thread/start.params.model",
+      "thread/start.params.allowProviderModelFallback",
+      "turn/start.params.model"
+    ],
+    "output_controls": [
+      "turn/start.params.outputSchema",
+      "turn/interrupt",
+      "notification opt-out"
+    ],
+    "absent_from_turn_schema": ["max_output_tokens", "max_output_bytes", "disable_builtin_tools"],
+    "managed_variants": {
+      "daemon": "manages a durable local app-server process",
+      "proxy": "proxies stdio bytes to the daemon control socket",
+      "remote_control": "manages remote access to the app-server daemon"
+    }
+  },
+  "deprecated_mcp_server": {
+    "help_command": "codex mcp-server --help",
+    "warning": "deprecated and will be removed in a future release",
+    "transport": "MCP JSON-RPC 2.0 over stdio",
+    "live_initialize_protocol_version": "2025-06-18",
+    "server_version": "0.149.1",
+    "tools": {
+      "codex": {
+        "required": ["prompt"],
+        "optional": [
+          "approval-policy",
+          "base-instructions",
+          "compact-prompt",
+          "config",
+          "cwd",
+          "developer-instructions",
+          "model",
+          "sandbox"
+        ],
+        "output": ["threadId", "content"]
+      },
+      "codex-reply": {
+        "required": ["prompt"],
+        "session_key": "threadId",
+        "output": ["threadId", "content"]
+      }
+    },
+    "output_schema_or_token_cap_exposed": false
+  },
+  "exec_server": {
+    "help_command": "codex exec-server --help",
+    "maturity": "experimental",
+    "purpose": "spawn/control subprocesses and filesystem operations; no model generation",
+    "local_protocol": "exec-specific JSON-RPC; one message per local WebSocket frame",
+    "remote_protocol": "Noise relay with binary protobuf frames containing encrypted payloads",
+    "help_listen_values": ["ws://IP:PORT", "stdio", "stdio://"],
+    "installed_direct_stdio_probe": {
+      "command": "codex exec-server --listen stdio:// --exit-on-stdin-close",
+      "exit": 2,
+      "result": "refused because --remote and --environment-id are required"
+    },
+    "auth": "ChatGPT sign-in, agent identity, or API key can authenticate remote registration; irrelevant to model generation",
+    "output_control": "process/read.maxBytes bounds buffered process output"
+  },
+  "not_server_modes": {
+    "codex_mcp": "manages external MCP registrations; it does not serve requests",
+    "codex_proto": {
+      "exists": false,
+      "command": "codex help proto",
+      "exit": 2,
+      "stderr": "error: unrecognized subcommand 'proto'"
+    }
+  },
+  "openclaw_precedent": {
+    "contacted_buster_live": false,
+    "local_evidence": [
+      "/Users/genekim/src.local/kiloclaw/docs/buster-openclaw/README.md",
+      "/Users/genekim/src.local/kiloclaw/docs/incident-2026-06-03-slack-gpt55-token-expiry-fallback-masquerade.md"
+    ],
+    "facts": [
+      "The Buster runbook records @openclaw/codex as the app-server harness for subscription-authenticated GPT-5.5 turns.",
+      "The incident report records hundreds of app-server-bound sessions, per-session model sidecars, token-expiry fallback, and unreliable model self-reporting."
+    ]
+  },
+  "primary_sources": [
+    "https://developers.openai.com/codex/app-server",
+    "https://developers.openai.com/codex/cli/reference",
+    "https://developers.openai.com/codex/mcp-server",
+    "https://github.com/openai/codex/blob/rust-v0.149.1/codex-rs/app-server/README.md",
+    "https://github.com/openai/codex/blob/rust-v0.149.1/codex-rs/exec-server/README.md"
+  ]
+}

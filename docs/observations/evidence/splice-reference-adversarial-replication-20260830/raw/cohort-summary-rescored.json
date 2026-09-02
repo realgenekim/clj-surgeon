@@ -1,0 +1,89 @@
+{
+  "arms": {
+    "Q": {
+      "attempts": 8,
+      "blind_fire_episodes": 0,
+      "completed": 8,
+      "environment_valid": 8,
+      "exact": 8,
+      "median_all_mcp_tokens": 823.5,
+      "median_mcp_round_trips": 4.0,
+      "median_mutation_tokens": 650.0,
+      "median_mutation_utf8_bytes": 2438.0,
+      "mixed_readback_episodes": 0,
+      "route_adherent": 8,
+      "strict_reference_uses": 0,
+      "typed_reference_failures": 0,
+      "verified_readback_episodes": 0,
+      "wrong_subject": 0
+    },
+    "R": {
+      "attempts": 8,
+      "blind_fire_episodes": 0,
+      "completed": 8,
+      "environment_valid": 8,
+      "exact": 8,
+      "median_all_mcp_tokens": 605.0,
+      "median_mcp_round_trips": 3.5,
+      "median_mutation_tokens": 444.0,
+      "median_mutation_utf8_bytes": 1590.0,
+      "mixed_readback_episodes": 0,
+      "route_adherent": 8,
+      "strict_reference_uses": 8,
+      "typed_reference_failures": 0,
+      "verified_readback_episodes": 8,
+      "wrong_subject": 0
+    }
+  },
+  "expected_attempts_per_arm": 8,
+  "forward_only_rescore": "includes proxy-refused edit attempts in emitted and round-trip totals",
+  "fresh_adversarial_replication": true,
+  "kills": {
+    "R_exact_below_Q_parity": false,
+    "any_wrong_subject": false,
+    "less_than_30_percent_token_reduction": false,
+    "strict_reference_adoption_below_6_of_8": false
+  },
+  "order": [
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R",
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R"
+  ],
+  "primary": {
+    "counting_rule": "canonical JSON tool arguments; all edit_clojure attempts in each completed task",
+    "median_mutation_token_reduction": 0.316923076923077,
+    "median_mutation_utf8_byte_reduction": 0.34782608695652173,
+    "tokenizer": "o200k_base"
+  },
+  "registered_kill_thresholds": {
+    "R_exact_must_be_at_least_Q_exact": true,
+    "maximum_wrong_subject": 0,
+    "minimum_strict_reference_uses_R": 6,
+    "minimum_token_reduction": 0.3
+  },
+  "schema": "clj-surgeon.splice-reference-adversarial-summary.v1",
+  "screen_survives": true,
+  "secondary": {
+    "readback_behavior_R": {
+      "blind_fire_episodes": 0,
+      "mixed_episodes": 0,
+      "verified_episodes": 8
+    },
+    "strict_reference_use_rate_R": 1.0,
+    "wrong_subject_total": 0
+  },
+  "validity_gate_passed": true
+}

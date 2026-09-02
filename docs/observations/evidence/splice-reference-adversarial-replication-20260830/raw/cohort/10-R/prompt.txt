@@ -1,0 +1,29 @@
+Use the available structural tools to update `src/splice_reference/fixture.clj`.
+First read the exact forms `alpha-forms`, `keyword-twins`,
+`substring-siblings`, and `repeated-literals` together in one
+`inspect_clojure` call. Then submit all four owner-scoped replacements together
+in one `edit_clojure` call.
+
+Each owner deliberately contains four near-identical candidate spans. Change
+only these exact candidates from `:enabled? false` to `:enabled? true`:
+
+1. In `alpha-forms`, the `:slot :alpha-b` candidate whose quoted form is
+   `(def alpha "alphabet")` and whose pair is `[:alphabet :alpha]`.
+2. In `keyword-twins`, the fourth candidate, `:slot :pair-d`, whose primary
+   pair is `[:alphabet :alpha]`, secondary pair is `[:alpha :alphabet]`, and
+   position is `:first`.
+3. In `substring-siblings`, the first candidate, `:slot :text-a`, whose needle
+   is the substring `"alpha"`, sibling is `"alphabet"`, and position is
+   `:short`.
+4. In `repeated-literals`, the third candidate, `:slot :literal-c`, whose
+   repeated literal and quoted form are identical to its siblings but whose
+   position is `:east`.
+
+Preserve every other byte, candidate order, indentation, and line break. In a
+reference arm, choose each `from_ref` only after checking its full readable
+file, owner, candidate id, offsets, preview, and identity token in the labeled
+read. If you actively performed that check, copy the label's `identity_token`
+into the optional `ref_readback` field; omit it if you did not. Do not use shell
+commands, native file reads, or file-change tools. Omit `workspace_root`
+because the isolated server owns it. After the verified edit, reply exactly:
+done

@@ -1,0 +1,75 @@
+{
+  "arms": {
+    "Q": {
+      "attempts": 8,
+      "completed": 8,
+      "environment_valid": 8,
+      "exact": 8,
+      "median_all_mcp_tokens": 1011.0,
+      "median_mcp_round_trips": 3.0,
+      "median_mutation_tokens": 899.0,
+      "median_mutation_utf8_bytes": 2844.0,
+      "route_adherent": 8,
+      "strict_reference_uses": 0,
+      "typed_reference_failures": 0,
+      "wrong_subject": 0
+    },
+    "R": {
+      "attempts": 8,
+      "completed": 8,
+      "environment_valid": 8,
+      "exact": 8,
+      "median_all_mcp_tokens": 562.0,
+      "median_mcp_round_trips": 2.0,
+      "median_mutation_tokens": 493.0,
+      "median_mutation_utf8_bytes": 1567.0,
+      "route_adherent": 8,
+      "strict_reference_uses": 8,
+      "typed_reference_failures": 0,
+      "wrong_subject": 0
+    }
+  },
+  "expected_attempts_per_arm": 8,
+  "kills": {
+    "any_wrong_subject": false,
+    "less_than_25_percent_token_reduction": false,
+    "reference_use_below_half": false
+  },
+  "order": [
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R",
+    "Q",
+    "R",
+    "R",
+    "Q",
+    "R",
+    "Q",
+    "Q",
+    "R"
+  ],
+  "primary": {
+    "counting_rule": "canonical JSON tool arguments; all edit_clojure attempts in each completed task",
+    "median_mutation_token_reduction": 0.4516129032258065,
+    "median_mutation_utf8_byte_reduction": 0.44901547116736995,
+    "tokenizer": "o200k_base"
+  },
+  "registered_kill_thresholds": {
+    "maximum_wrong_subject": 0,
+    "minimum_strict_reference_use_rate_R": 0.5,
+    "minimum_token_reduction": 0.25
+  },
+  "schema": "clj-surgeon.splice-reference-screen-summary.v1",
+  "screen_only_no_performance_claim": true,
+  "screen_survives": true,
+  "secondary": {
+    "strict_reference_use_rate_R": 1.0,
+    "wrong_subject_total": 0
+  },
+  "validity_gate_passed": true
+}

@@ -1,0 +1,113 @@
+{
+  "descriptive_only_not_pooled": true,
+  "exact": 2,
+  "forward_only_rescore": "includes proxy-refused edit attempts in emitted and round-trip totals",
+  "model": "gpt-5.3-codex-spark",
+  "order": [
+    "Q",
+    "R"
+  ],
+  "schema": "clj-surgeon.splice-reference-adversarial-spark-bonus.v1",
+  "scores": [
+    {
+      "actual_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+      "arm": "Q",
+      "blind_reference_count": 0,
+      "completed_task": true,
+      "conventional_call_count": 2,
+      "emitted": {
+        "all_mcp_tokens": 1370,
+        "all_mcp_utf8_bytes": 5178,
+        "mutation_tokens": 1272,
+        "mutation_utf8_bytes": 4796
+      },
+      "environment_valid": true,
+      "exact_bytes": true,
+      "expected_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+      "incorrect_readback_count": 0,
+      "product_verification_complete": true,
+      "quoted_anchor_count": 8,
+      "read_annotation_count": 0,
+      "readback_behavior": "not_applicable",
+      "reference_count": 0,
+      "reference_used_any": false,
+      "reference_used_strict": false,
+      "resolved_identity_audit_count": 0,
+      "resolved_identity_count": 0,
+      "route_adherent": true,
+      "run_id": "01-Q",
+      "schema": "clj-surgeon.splice-reference-adversarial-episode-score.v1",
+      "semantic_correct": true,
+      "strict_reference_call_count": 0,
+      "turns": {
+        "edit_calls": 2,
+        "file_change_calls": 0,
+        "inspect_calls": 2,
+        "mcp_round_trips": 4,
+        "shell_calls": 0
+      },
+      "typed_reference_failures": 0,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 86784,
+        "input_tokens": 110079,
+        "output_tokens": 8368,
+        "reasoning_output_tokens": 6683
+      },
+      "verified_readback_reference_count": 0,
+      "wall_seconds": 21.28776929108426,
+      "wrong_subject": 0
+    },
+    {
+      "actual_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+      "arm": "R",
+      "blind_reference_count": 0,
+      "completed_task": true,
+      "conventional_call_count": 0,
+      "emitted": {
+        "all_mcp_tokens": 2980,
+        "all_mcp_utf8_bytes": 11152,
+        "mutation_tokens": 857,
+        "mutation_utf8_bytes": 3088
+      },
+      "environment_valid": true,
+      "exact_bytes": true,
+      "expected_sha256": "c7421df0b6967ff06f4fc1b3b8bf2b6d7d90477ac7bc2083815254d804e50e7f",
+      "incorrect_readback_count": 0,
+      "product_verification_complete": true,
+      "quoted_anchor_count": 0,
+      "read_annotation_count": 33,
+      "readback_behavior": "verified",
+      "reference_count": 8,
+      "reference_used_any": true,
+      "reference_used_strict": true,
+      "resolved_identity_audit_count": 8,
+      "resolved_identity_count": 4,
+      "route_adherent": true,
+      "run_id": "02-R",
+      "schema": "clj-surgeon.splice-reference-adversarial-episode-score.v1",
+      "semantic_correct": true,
+      "strict_reference_call_count": 2,
+      "turns": {
+        "edit_calls": 2,
+        "file_change_calls": 0,
+        "inspect_calls": 33,
+        "mcp_round_trips": 35,
+        "shell_calls": 0
+      },
+      "typed_reference_failures": 1,
+      "usage": {
+        "cache_write_input_tokens": 0,
+        "cached_input_tokens": 981120,
+        "input_tokens": 1052304,
+        "output_tokens": 19529,
+        "reasoning_output_tokens": 15081
+      },
+      "verified_readback_reference_count": 8,
+      "wall_seconds": 93.08846654184163,
+      "wrong_subject": 1
+    }
+  ],
+  "strict_reference_uses_R": 1,
+  "wrong_subject": 1
+}

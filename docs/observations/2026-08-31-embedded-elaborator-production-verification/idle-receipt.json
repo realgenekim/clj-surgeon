@@ -1,0 +1,108 @@
+{
+  "schema": "clj-surgeon.embedded-elaborator-idle-receipt.v1",
+  "runtime": {
+    "model": "gpt-5.3-codex-spark",
+    "reported_model": "gpt-5.3-codex-spark",
+    "provider": "openai",
+    "account_type": "chatgpt",
+    "plan_type": "pro",
+    "cli_version": "codex-cli 0.149.1",
+    "cli_sha256": "134063e133f0b4244fa3b251acf973d4fe4b4aeeacbdc135211bf480f59f1477",
+    "schema_sha256": "4f4a8d8f53f971b97f818639f58c8d26bb68bfcdfa2d2f20572cb97e6761ab91",
+    "auth_identity_sha256": "0d0e12878ff5093721eec15e496a31c4e8cddd86fd30aa98d973fa70b93eabb5",
+    "isolation_policy_version": "spark-hs-v1@3c2cc192",
+    "allow_provider_model_fallback": false,
+    "reroutes": []
+  },
+  "boot": {
+    "timestamp": "2026-08-31T01:42:33.864566Z",
+    "status": "available",
+    "warmup_turn_id": "01a0557b-7ba7-7913-b928-7f1ffab1352b",
+    "warmup_latency_ms": 2350.977958,
+    "warmup_input_tokens": 2510,
+    "warmup_output_tokens": 75
+  },
+  "cells": [
+    {
+      "idle_minutes": 0,
+      "timestamp": "2026-08-31T01:42:33.864966Z",
+      "first_bang": {
+        "ok": true,
+        "turn_count": 1,
+        "candidate_count": 1,
+        "turn_id": "01a0557b-889e-7a60-8a4b-27a88a23d586",
+        "latency_ms": 2693.062125,
+        "input_tokens": 2963,
+        "output_tokens": 619,
+        "tool_item_observed": false,
+        "reroute_observed": false,
+        "exact_echo_comparator": false,
+        "meter_primary_before": 59,
+        "meter_primary_after": 59
+      },
+      "immediate_midstream": {
+        "ok": true,
+        "turn_count": 1,
+        "candidate_count": 1,
+        "turn_id": "01a0557b-9606-7561-bef4-cc2f87e2b3bd",
+        "latency_ms": 2553.399166,
+        "input_tokens": 2963,
+        "output_tokens": 791,
+        "tool_item_observed": false,
+        "reroute_observed": false,
+        "exact_echo_comparator": false,
+        "meter_primary_before": 59,
+        "meter_primary_after": 60
+      }
+    },
+    {
+      "idle_minutes": 60,
+      "timestamp": "2026-08-31T02:42:40.873647Z",
+      "first_bang": {
+        "ok": true,
+        "turn_count": 1,
+        "candidate_count": 1,
+        "turn_id": "01a055b2-92ab-73f2-a7db-e8dbca991bc5",
+        "latency_ms": 2762.366625,
+        "input_tokens": 2963,
+        "output_tokens": 529,
+        "tool_item_observed": false,
+        "reroute_observed": false,
+        "exact_echo_comparator": false,
+        "meter_primary_before": 0,
+        "meter_primary_after": 1,
+        "meter_reset_observed": true
+      },
+      "immediate_midstream": {
+        "ok": true,
+        "turn_count": 1,
+        "candidate_count": 1,
+        "turn_id": "01a055b2-a1ed-7652-8251-3c9b34c2e684",
+        "latency_ms": 3013.797625,
+        "input_tokens": 2963,
+        "output_tokens": 658,
+        "tool_item_observed": false,
+        "reroute_observed": false,
+        "exact_echo_comparator": false,
+        "meter_primary_before": 1,
+        "meter_primary_after": 2
+      }
+    }
+  ],
+  "idle_decay_observed": false,
+  "keepalive_enabled": false,
+  "local_quota_alarm": false,
+  "local_quota_circuit_open": false,
+  "ledger_rows": 5,
+  "ledger_source_free": true,
+  "shutdown": {
+    "timestamp": "2026-08-31T02:42:48.775789Z",
+    "cleanup_ok": true,
+    "remaining_process_group_members": 0,
+    "exit_value": 0
+  },
+  "deferred": {
+    "idle_minutes": 240,
+    "reason": "wall-clock point deferred as allowed by the implementation order"
+  }
+}

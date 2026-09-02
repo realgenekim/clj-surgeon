@@ -1,0 +1,8 @@
+[mcp_servers.clj-surgeon]
+command = "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+args = ["/private/tmp/clj-surgeon-splice-reference-screen-20260830/bench/splice_reference_proxy.py", "--arm", "R", "--repo-root", "/private/tmp/clj-surgeon-splice-reference-screen-20260830", "--workspace", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/docs/observations/evidence/splice-reference-screen-20260830/raw-v2/pilot/02-R/workspace", "--manifest", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/bench/fixtures/splice_reference/spans.json", "--receipts", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/docs/observations/evidence/splice-reference-screen-20260830/raw-v2/pilot/02-R/proxy-receipts.jsonl", "--stream", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/docs/observations/evidence/splice-reference-screen-20260830/raw-v2/pilot/02-R/proxy-stream.jsonl", "--child-stderr", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/docs/observations/evidence/splice-reference-screen-20260830/raw-v2/pilot/02-R/mcp-child.stderr", "--telemetry-dir", "/private/tmp/clj-surgeon-splice-reference-screen-20260830/docs/observations/evidence/splice-reference-screen-20260830/raw-v2/pilot/02-R/mcp-telemetry", "--run-id", "02-R"]
+required = true
+enabled_tools = ["inspect_clojure", "edit_clojure"]
+default_tools_approval_mode = "approve"
+startup_timeout_sec = 120
+tool_timeout_sec = 120
