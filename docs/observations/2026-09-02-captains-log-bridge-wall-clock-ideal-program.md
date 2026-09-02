@@ -1271,3 +1271,34 @@ Opus says the large rung is the only cohort on the tool's advertised shape and
 substitution is an axis, so run l1 as native / Surgeon-available / Surgeon-mandated.
 Both are queued: s1 "X N X N X N | Y A Y A Y A" (X optional, Y mandate) after v1, then l1 as
 "A N Y" x4 with the mandate as the third arm, then b2.
+
+## Receipt 14:15Z — call-site taxonomy on n1 (free, from the rollouts) and k2 walls
+
+Every primitive call in the twelve n1 rollouts classified relative to writes:
+
+| arm | native calls | test | pre-edit (locating literals for the next write) | post-edit (confirming a receipt) | native patches | other |
+|---|---|---|---|---|---|---|
+| shipped A | 102 | 36 | 22 (33% of non-test) | 4 (6%) | 8 | 32 |
+| native N | 91 | 32 | 16 (27%) | 3 (5%) | 22 | 18 |
+
+Verdict: neither fleet hypothesis holds as stated. Receipt distrust is decisively not it (four
+post-edit checks in six runs); literal-hunting is not dominant either (pre-edit at 33 percent,
+and the pre-to-post ratio is identical in the native arm, so that is how these agents work).
+The additive cost is layering in its plainest form: the Surgeon arm keeps essentially the
+whole native workflow (102 native calls to native's 91) and adds 51 Surgeon calls that
+displace almost nothing (native patches fall only from 22 to 8). Non-test primitives 117 vs
+59, which re-derives the 2.1x action gap at primitive granularity. The largest non-test class
+in the Surgeon arm is "other" (bd bookkeeping, .beads cleanup, ls, git status), arm-independent
+overhead worth trimming from the prompt for every arm. Flag: the slowest shipped run made only
+four Surgeon calls; the slowest run of the Surgeon arm barely used the tool under test.
+
+So the s1 cohort is the right next question, sharpened: X (Surgeon optional, "fastest safe
+completion") tests whether the mandate itself causes the layering; Y (substitution mandate:
+inspect replaces rg/sed on .clj, Surgeon writes replace apply_patch on .clj, receipts are
+terminal) tests whether an explicit instruction to DROP native steps is obeyed. If Y closes
+the gap, the fix is the prompt; if Y is obeyed and the gap stays, the tool's steps cost as
+much as the steps they replace; if Y is not obeyed, the contract cannot be substituted for.
+
+k2 walls (MCP vs CLI on the same shipped build, six-wide): shipped MCP 593, 775, 808 (mean 725);
+CLI 614, 716, 724 (mean 685); all gates green. The interface is not the cost. Actions,
+refusals and tokens for k2 are being scored; blind quality on its six diffs is queued.
