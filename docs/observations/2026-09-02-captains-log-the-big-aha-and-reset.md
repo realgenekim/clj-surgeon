@@ -1623,3 +1623,32 @@ counts the cell.
 only counts. rf2-1's receipt gains `header {:docstring :none :imports-pruned n :visibility-derived
 […]}` (sent to the builder).
 
+
+## 18:50Z — rf2 pushed, G1 by hand, G2 "not determinable": the receipt's field names carry history, not state
+
+`bridge/rf2-extract-rewire` 57e3ca0 (base 837fabbe, main moved under it by the worktree-lifecycle
+merge). The builder's acceptance: the rf1 extraction in ONE call, all five files byte-identical
+to `rf1-reference.diff`, promotion derived, no `:public` needed. Root causes it found, both
+better than the ethnographer's guesses: the `:ls` false refusal was clj-kondo's exit code read as
+failure when it counts findings (2 = warnings) plus the diagnostic reading stderr while kondo
+writes stdout; and `expected_shape` was being dropped at the wire boundary by a closed
+diagnostic map, so rf2-3(a) would have reached no agent. rf1's eleven real payloads replay as
+fixtures; the false require refusals are gone; one remaining refusal is kept deliberately and
+made recoverable (deleting an `:as … :refer […]` entry would drop referred names; the old
+extract wrote that entry, the new one does not).
+
+**G1, my hand:** fresh checkout of 837fabbe, one CLI call, 1.3 s: 2+4+10 external sites
+rewired, 7 internal qualified, dead require and two imports removed; diff vs reference differs in
+whitespace and one docstring's wrapping (the tool moved it verbatim, the reference re-wrapped).
+Suites on that scratch running.
+
+**G2, naive reader (a fresh model given only the receipt): DETERMINABLE: no.** It read
+`:remaining-source-callers` and `:callers-to-review 4` as UNFINISHED work it must do by hand,
+when the tool had qualified every one of them; could not tell applied from dry run; did not learn
+the target namespace; had no compile or test status. **The receipt's field names carry history,
+not state.** Fix dispatched to the builder: `:applied`, `:target-ns`, `:target-file`, `:header`
+(guarantees), `:source-callers-rewired`, `:external-callers-rewired`, `:callers-unresolved []`
+(and `:complete` only when empty), `:compile`, with a witness that a cold reader can determine
+the next call from the receipt alone. This is the ladder doing its job: the verb passed G1 by
+hand and failed G2 on its receipt, before any agent or battery touched it.
+
