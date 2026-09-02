@@ -586,3 +586,22 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Gene report printed in the terminal at his request; regenerate after sl1-R and the store push.
 - Then session 4 (the lens over 19 owners, watcher on) on a worktree stacked on fold+store.
 
+
+## RESUME DELTA 2026-09-02T22:29Z
+
+- **sl1-R SCORED** (`~/acid/receipts/sl1-R-score.md`, log 1cb0ae3): both PASS r1–r7; T 228 s / 9 actions /
+  322k tokens vs N 283 s / 13 / 499k (0.81× / 0.69× / 0.64×); the fixed verb loads the tree (r3 190 ns);
+  native's one suite run was RED at load and it shipped a hand fix unverified. n=1.
+- **Apparatus false green fixed on Anvil** (v5 + v3 + chain-sl1r.sh, backups kept, `bash -n` green):
+  `":!.cpcache"` dropped from the runner's `git add` + `DIFF-FAILED rc=` log line; acceptance line names
+  `rescore-FAN-R.sh` for R; chain aborts on empty diff glob / empty score file and prints
+  `scored= passed= failed=`. NOTE: all earlier FAN runs have no `.diff` receipts (scored from worktrees).
+- **Store branch PUSHED** 96387535 (`bridge/store-idempotency`, my run 1040/12908/0); inb-70711c for
+  Gene's merge after fold (inb-d603ce). Owner work: index install + real pg_get_indexdef;
+  precondition max-instances=1.
+- **Gene report** updated (§2 anchor win, §3 first attempt, §5 false green, §8, §9 inb-70711c) and
+  §4a storyboards added (d1e9b5f). Storyboards + pmap position in the log (add37af).
+- **Next, awaiting Gene's word:** session 4 — the settings lens over 19 owners on a worktree stacked
+  on store 96387535, characterization witness first, one Surgeon transaction, watcher on
+  (Sol's ordered commits, log 961186b). No cohort running on Anvil; cohort lock free.
+
