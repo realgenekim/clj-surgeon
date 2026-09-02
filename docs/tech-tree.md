@@ -1,0 +1,108 @@
+# clj-surgeon tech tree
+
+*A living map: every capability shape we have tried or could try, its status, the receipt
+that set the status, and the live backlog of experiments. Opened 2026-09-02T12:15:40Z on Gene's request.
+Rules: a status changes only with a receipt (captain's log entry with commit timestamp, or a
+bead); findings are appended, never rewritten; the backlog carries a prediction and a cost
+for every item, and an item leaves the backlog only into Findings.*
+
+Statuses: **WON** (measured, keep) · **LOST** (measured, closed) · **FLOOR** (the native
+competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not started) ·
+**MULTIPLIER** (wins only in combination).
+
+## The tree
+
+### Perception (questions grep answers wrong)
+| node | status | lives in | receipt |
+|---|---|---|---|
+| `:ls-tree` workspace table of contents, grep-filterable | WON | CLI | big-aha log, winners table (df432c4) |
+| `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI | same |
+| `inspect_clojure` outline / forms / owners / prepare-change | KEEP | MCP | l1 taxonomy: substituted reads only under the mandate (07:36Z receipt) |
+| workspace-wide inspect (ls-tree through MCP) | OPEN | MCP | inb-f403aa |
+| inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
+
+### Writes
+| node | status | lives in | receipt |
+|---|---|---|---|
+| native `apply_patch` | FLOOR | agent | n1, l1: one patch cell for 21 owners |
+| `require_change` across N namespaces | WON | MCP | l1 Y-5, zero churn (churn attribution receipt) |
+| `within` + `from`/`to` surgical edit | WON | MCP | l1 A-0, A-4, Y-0, zero churn |
+| `:extract!` to a new namespace | WON | CLI + MCP extraction verb | no native equivalent; safe-refactor skill |
+| `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
+| owner-kind-namespace insertion (whole-file re-print) | LOST | MCP | clj-surgeon-46o; 3 of 3 churned, 0 of 4 controls |
+| per-form writes for a fan-out change | LOST | MCP | l1: 8 to 10 writes on top of a native patch (fbcaed1) |
+| splice-not-reprint on every write | BUILDING | MCP, branch bridge/close-losers | order of 2026-09-02 |
+| intent verb over N owners, tool-side discovery | OPEN | MCP | clj-surgeon-q5z; the only node that can make wall positive |
+
+### Verification
+| node | status | lives in | receipt |
+|---|---|---|---|
+| gate on the agent's own patch (`admit_clojure_patch`) | BUILDING | MCP, branch bridge/admit-gate | chosen independently by Sol and Opus (e5c4f46) |
+| proof before write in the warm JVM (`prove`) | OPEN | MCP | mission-design-opus Plan 3 |
+| behavioural assertions in the acceptance suite (gate, not score) | OPEN | acid apparatus | s1: a marker-only suite passed a broken button (2000f1b) |
+| kondo delta + focused suite in one receipt | BUILDING (inside the gate) | MCP | existing diagnostic_delta, hot_verify |
+
+### Routing and prompts (how the agent is told about the tool)
+| node | status | receipt |
+|---|---|---|
+| "available and expected" | LOST | n1: 1.8x wall, 2.1x actions, layering (12:45Z receipt) |
+| optional, "fastest safe completion" | MEASURED: declined 3 of 3, native speed | s1 (f291f38) |
+| substitution mandate + trusted receipts | LOST | s1: obeyed on reads, escaped on writes, +210 s |
+| turn budget arithmetic | LOST | e3, v1: actions down, wall flat, overruns 3 of 3 |
+| "count your actions" (report-only) | WON on actions only, nothing on wall | e3 at n=3, fleet round 4 |
+| deliberate three-plan selection in the arm prompt | LOST | e3: acceptance worse, quality flat |
+| routing plate in global AGENTS.md / CLAUDE.md | REWRITTEN to native-default | mayor, 94e43f3b, block c3c0d0f5 |
+
+### Interfaces and callers
+| node | status | receipt |
+|---|---|---|
+| MCP server (warm JVM, telemetry, typed refusals, dev instance) | KEEP | the substrate for the gate and proof-before-write |
+| CLI wrapper as MCP substitute | LOST | k2: second layer, refuses 2.2x, schema discovery, receipt plumbing (4664188) |
+| fast typist (codex spark / gpt-oss) | MULTIPLIER only, behind the gate on fan-out | arm T negative (409 s); big-aha log fd60409 |
+| second caller (Claude) | OPEN | never varied; Opus closing read; Gene's decision |
+
+### Refusal classes (the dominant tax)
+| class | status | receipt |
+|---|---|---|
+| invalid-intent-form (2/3 of rung-M refusals) | OPEN | clj-surgeon-xio |
+| ambiguous-insertion-gap (wave build) | FIXED on main 2311cc09 | b1 bisect (3ed0f84), b2 no regression (a7932cb) |
+| invalid-compact-relation (every rung-L Surgeon run) | OPEN | clj-surgeon-az8 |
+| batch-form-selection-failed | GONE on main | b2 ledger |
+| every refusal carries an executable next_call | OPEN (design constraint) | vision.md constraints |
+
+### Apparatus (the measuring instrument)
+| node | status | receipt |
+|---|---|---|
+| variance floor before comparison (nine identical runs) | WON | v1 (3e26e1c) |
+| per-arm attestation, server identity read from the server | WON | 5f9b674 |
+| typed refusal ledger + call-site taxonomy | WON | 3ed0f84, 3ccc563 |
+| staged diffs, ended-gate, completeness gate, per-slot names | WON | f7c4b22 and later |
+| acceptance as gate not score | WON (rule) | 3e26e1c |
+| Anvil "origin" is a stale bundle | OPEN | kc-ns5i |
+
+## Findings (append-only; newest last)
+
+| date | finding | receipt |
+|---|---|---|
+| 2026-09-02 | tool execution is 3 to 4 percent of wall; 87 percent is model time between calls; wall is the sum of returns | a369097 |
+| 2026-09-02 | the shipped per-form editor costs 1.8x wall, 2.1x actions, by layering; refusals and MCP count explain nothing of wall | 6e4ff8f, 3ccc563 |
+| 2026-09-02 | the insertion-gap fix introduced a refusal class; overlap fix exonerated | 3ed0f84 |
+| 2026-09-02 | acceptance suite spans 0 to 4 on identical inputs; cannot score arms | 3e26e1c |
+| 2026-09-02 | optional: declined 3 of 3; mandated: reads in, writes around, +210 s | f291f38 |
+| 2026-09-02 | fan-out is the per-form API's worst case; native does 21 owners in one patch cell | fbcaed1 |
+| 2026-09-02 | owner-kind-namespace writes re-print whole files; require_change and within are churn-free | 241e1bb |
+| 2026-09-02 | main 2311cc09 shows no detected regression on the ledger | a7932cb |
+| 2026-09-02 | the fast typist is negative alone; multiplier only on fan-out behind a gate | fd60409 |
+
+## Live experiment backlog (prediction and cost on every item)
+
+| id | experiment | prediction | cost | depends on |
+|---|---|---|---|---|
+| E1 | arm Z = native + `admit_clojure_patch` vs native, rungs M and L, n=6 paired | post-write shell calls to zero; wall within 1 sd of native; stale-onset and shadowed-kwCheck caught at the gate | 24 arm-runs, two Anvil evenings | gate branch green |
+| E2 | rung L, native vs shipped, driven by Claude as caller | if Claude also declines or layers, the finding is about the tool; if it substitutes, it was about Sol | 12 arm-runs + Claude login on Anvil | Gene's decision |
+| E3 | fan-out intent verb vs native on rung L and a purpose-built 21-owner parameter-threading rung | one write call; non-test actions at or below 10.5; churn within 20 percent; wall positive only on high fan-out | 12 arm-runs | q5z built |
+| E4 | T2: intent by the strong model, hunks by the typist, verification by the gate, rung L | wins on strong-model tokens; wall break-even unless N exceeds about twenty | 12 arm-runs | E1, E3 |
+| E5 | stale-onset defect, pre-registered mechanical predicate, one build, n=8 native vs 8 shipped, rung M | the skew (12 of 33 vs 2 of 12) either replicates as a rate or dissolves | 16 arm-runs | none |
+| E6 | free-choice adoption of `:ls-tree` via MCP once exposed | agents call it once at the start and read fewer files; if they do not call it, the exposure failed | 6 arm-runs | inb-f403aa |
+| E7 | `prove`: load the unwritten candidate into the warm JVM and run named vars | one return replaces the focused-suite return and catches behaviour the suite misses; false-green risk from load order | prototype + 6 arm-runs | gate substrate |
+| E8 | b2 wider, n=6 per arm, for the promotion gate that requires demonstrated improvement | refusal volume down by more than 2 sd, or not | 12 arm-runs | none |
