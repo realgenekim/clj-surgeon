@@ -1,0 +1,60 @@
+---
+parent: alias-migration-design
+prefix: MCP-OP-ALIAS
+---
+
+# #Alias Migration Specifications
+
+Stable intent registry for the `alias_migration` leaf. IDs are never reused.
+The status marker records whether current code and tests witness the
+requirement.
+
+# #Request and Registration
+
+- [x] **MCP-OP-ALIAS-001**: When the clj-surgeon MCP server starts in the full tool profile, it shall advertise `alias_migration` as a public top-level tool whose declared outcome classes are exactly committed and typed refusal.
+- [x] **MCP-OP-ALIAS-002**: When an `alias_migration` request is received, clj-surgeon shall accept exactly the closed fields `op`, `workspace_root`, `from`, `to`, `scope`, and `expect`, and shall refuse any other field before reading source.
+- [x] **MCP-OP-ALIAS-003**: The `alias_migration` request shall carry no per-file, per-owner, or per-site table, so that its payload size is constant in the number of affected namespaces.
+
+# #Discovery
+
+- [x] **MCP-OP-ALIAS-004**: When `alias_migration` executes, clj-surgeon shall itself discover every namespace under `scope.paths` whose `ns` form directly requires `from.lib`, without the caller naming any file.
+- [x] **MCP-OP-ALIAS-005**: When a requiring namespace is discovered, clj-surgeon shall itself discover every call site of `from.var` under every spelling that file makes legal: each `:as` or `:as-alias` alias, the fully qualified lib name, and the bare name when the file refers it.
+- [x] **MCP-OP-ALIAS-006**: If no namespace under `scope.paths` requires `from.lib`, then clj-surgeon shall refuse with `alias-migration-empty-scope`, state the count found, and change no bytes.
+
+# #Per-file Alias Policy
+
+- [x] **MCP-OP-ALIAS-007**: When clj-surgeon chooses a file's alias, it shall select the first `to.alias_policy` entry that collides with nothing bound in that file: no existing require alias, no referred name, no top-level definition name, and no local binding introduced by a `let`-family form, a binding vector, a destructuring form, `letfn`, `as->`, `catch`, or a function parameter vector.
+- [x] **MCP-OP-ALIAS-008**: If every `to.alias_policy` entry collides in one file, then clj-surgeon shall refuse with `alias-migration-alias-policy-exhausted`, name that file and the bindings that collided, and change no bytes.
+
+# #Rewrite Closure
+
+- [x] **MCP-OP-ALIAS-009**: When every use of `from.lib` in a file is a migrated site, clj-surgeon shall replace that file's `from.lib` libspec with `[to.lib :as <alias>]`; otherwise it shall add the new libspec alongside and leave the old require in place.
+- [x] **MCP-OP-ALIAS-010**: When clj-surgeon rewrites a site, it shall write exactly `<alias>/<to.var>` and shall leave every other byte of the containing form unchanged, including comments, commas, indentation, and metadata.
+- [x] **MCP-OP-ALIAS-011**: When clj-surgeon rewrites a file, it shall leave untouched a local binding of the same name, a string literal, a docstring, a comment, a metadata value, an `#_` discard, and every reader-conditional branch other than the file's own platform branch and `:default`.
+
+# #Typed Refusals
+
+- [x] **MCP-OP-ALIAS-012**: If the number of discovered requiring namespaces differs from `expect.files`, then clj-surgeon shall refuse with `alias-migration-expect-mismatch`, state the found and expected counts, and change no bytes.
+- [x] **MCP-OP-ALIAS-013**: If `from.lib` or `from.var` is reachable only through a construct the tool cannot mechanically close — a prefix-list libspec, a `:use` clause, a runtime `require` or `alias`, a quoted or syntax-quoted occurrence, or a site in a non-selected reader-conditional branch of a `.cljc` file — then clj-surgeon shall refuse with `alias-migration-indirect-reference`, name the file and the form, and change no bytes.
+- [x] **MCP-OP-ALIAS-014**: If a bare occurrence of `from.var` could resolve to two required namespaces, then clj-surgeon shall refuse with `alias-migration-ambiguous-ownership`, name both candidate vars, and change no bytes.
+- [x] **MCP-OP-ALIAS-015**: When `alias_migration` refuses, the refusal shall carry an executable `next_call` that is a complete `alias_migration` request the caller may send verbatim.
+
+# #Atomicity and Kernel Routing
+
+- [x] **MCP-OP-ALIAS-016**: When `alias_migration` writes, it shall route the write through the same transaction kernel entrance the other public write tools use, as one failure-atomic transaction over every affected file.
+- [x] **MCP-OP-ALIAS-017**: If any single file's compiled change fails at commit time, then no file in the transaction shall be modified on disk.
+- [x] **MCP-OP-ALIAS-018**: When clj-surgeon compiles an `alias_migration` change, its `find` shall be the exact original bytes of one complete top-level form, so that source drift between discovery and commit refuses the whole transaction before any write.
+
+# #Receipt
+
+- [x] **MCP-OP-ALIAS-019**: When `alias_migration` commits, it shall return exactly one receipt whose length is constant in the number of affected namespaces, carrying the file count, the site count, the alias histogram, the collisions-resolved count, a kondo delta summary, and a focused-test result summary.
+- [x] **MCP-OP-ALIAS-020**: The `alias_migration` receipt shall never contain a per-file list; per-file detail shall be written to a `details_path` inside the workspace's `.clj-surgeon` directory.
+
+# #Lib-only Migration
+
+- [x] **MCP-OP-ALIAS-021**: When `from.var` and `to.var` are both null, clj-surgeon shall rewrite every qualified use of every var of `from.lib` — through any alias, any fully qualified spelling, and, under the `alias-qualify` refer policy, any referred name — to the file's chosen alias qualifying the same var name; under the default `preserve-refer` policy it shall instead keep those names in a `:refer` vector against `to.lib`.
+- [x] **MCP-OP-ALIAS-022**: When a lib-only migration commits, clj-surgeon shall also rename the namespace that defines `from.lib` to `to.lib`, create it at the path `to.lib` requires in the same transaction as every caller rewrite, and retire the superseded file reversibly; if any later step fails, it shall restore that file and roll the transaction back.
+- [x] **MCP-OP-ALIAS-023**: If `to.lib` is already defined in scope while `from.lib` is still defined, or the path `to.lib` requires is already occupied, then clj-surgeon shall refuse with `alias-migration-target-lib-exists`, name both files, and change no bytes.
+- [x] **MCP-OP-ALIAS-024**: If exactly one of `from.var` and `to.var` is null, then clj-surgeon shall refuse with `alias-migration-mixed-var-spec` and change no bytes.
+- [x] **MCP-OP-ALIAS-025**: When clj-surgeon migrates a lib, it shall match namespaces and qualifiers by whole symbol identity, so that a prefix-sharing sibling namespace, a prefix-sharing namespace name, and a prefix-sharing qualified use are all left byte-identical.
+- [x] **MCP-OP-ALIAS-026**: When a lib-only migration commits, its constant-size receipt shall carry `refer_sites` and a `lib_renamed` record naming the old lib, the new lib, the defining file, its new path, and where the superseded file was retired.

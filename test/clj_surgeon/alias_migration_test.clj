@@ -1,0 +1,364 @@
+(ns clj-surgeon.alias-migration-test
+  (:require
+   [clj-surgeon.alias-migration :as alias-migration]
+   [clj-surgeon.alias-migration-fixture :as fixture]
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [clojure.set]
+   [rewrite-clj.node :as n]
+   [rewrite-clj.parser :as parser]))
+
+(def corpus (fixture/corpus))
+
+(defn- request
+  ([] (request {}))
+  ([overrides]
+   (merge {:workspace-root "/workspace"
+           :from (get-in corpus [:manifest :from])
+           :to (get-in corpus [:manifest :to])
+           :scope {:paths ["src/**"]}
+           :expect {:files 12}}
+          overrides)))
+
+(defn- sources
+  "The planner is scope-blind: scope expansion is the MCP layer's job, so a
+  src-scoped request is given exactly the src files."
+  ([] (sources (into {} (filter #(str/starts-with? (key %) "src/")) (:pre corpus))))
+  ([file-map] (mapv (fn [[file source]] {:file file :source source})
+                    (sort file-map))))
+
+(defn- plan-corpus
+  ([] (plan-corpus (request) (sources)))
+  ([request sources] (alias-migration/plan request sources)))
+
+(defn- apply-edits
+  [source edits]
+  (reduce (fn [text {:keys [original replacement]}]
+            (when-not (str/includes? text original)
+              (throw (ex-info "Planned original bytes are absent from the source"
+                              {:original original})))
+            (str/replace-first text original replacement))
+          source
+          edits))
+
+(defn- migrated-tree
+  "Apply one plan to the pre-migration corpus and return the whole tree."
+  [plan]
+  (reduce (fn [tree {:keys [file edits]}]
+            (assoc tree file (apply-edits (get tree file) edits)))
+          (:pre corpus)
+          (:files plan)))
+
+;; ---------------------------------------------------------------------------
+;; the six acceptance predicates, asserted on the planner's own output
+
+;; @spec MCP-OP-ALIAS-004
+(deftest acceptance-1-the-changed-file-set-equals-the-manifest-targets-exactly
+  (let [plan (plan-corpus)]
+    (is (:ok plan) (pr-str plan))
+    (is (= (get-in corpus [:manifest :targets])
+           (into (sorted-set) (map :file) (:files plan)))
+        "no extra file and no missing file")))
+
+;; @spec MCP-OP-ALIAS-009
+;; @spec MCP-OP-ALIAS-010
+(deftest acceptance-2-every-changed-file-equals-the-canonical-form-tree
+  (let [plan (plan-corpus)
+        tree (migrated-tree plan)]
+    (doseq [file (get-in corpus [:manifest :targets])]
+      (testing file
+        (is (= (get (:post corpus) file) (get tree file)))))))
+
+;; @spec MCP-OP-ALIAS-011
+(deftest acceptance-3-every-protected-decoy-region-survives-byte-identically
+  (let [tree (migrated-tree (plan-corpus))]
+    (doseq [[file regions] (get-in corpus [:manifest :protected])
+            {:keys [region sha256]} regions]
+      (testing (str file " :: " region)
+        (is (str/includes? (get tree file) region))
+        (is (= sha256 (fixture/sha256 region)))))))
+
+;; @spec MCP-OP-ALIAS-009
+(deftest acceptance-4-every-migrated-file-binds-the-alias-it-now-uses
+  (let [plan (plan-corpus)
+        tree (migrated-tree plan)]
+    (doseq [{:keys [file alias]} (:files plan)]
+      (testing file
+        (is (str/includes? (get tree file)
+                           (str "[" fixture/to-lib " :as " alias "]"))
+            "the new require binds the alias the sites now use")
+        (is (str/includes? (get tree file) (str alias "/" fixture/to-var)))))))
+
+;; @spec MCP-OP-ALIAS-005
+(deftest acceptance-5-every-declared-site-is-rewritten-with-the-new-var-name
+  (let [plan (plan-corpus)
+        tree (migrated-tree plan)]
+    (doseq [{:keys [file sites alias]} (:files plan)]
+      (testing file
+        (is (= (get-in corpus [:manifest :files file :sites]) sites))
+        (is (= sites (count (re-seq (re-pattern (str "\\Q" alias "/" fixture/to-var "\\E"))
+                                    (get tree file)))))))))
+
+;; @spec MCP-OP-ALIAS-009
+(defn- live-qualifiers
+  "Namespace qualifiers of every token that is live code.
+
+  Tokens inside an #_ discard or inside a metadata value are excluded, because
+  the contract keeps those bytes exactly as they were."
+  [source]
+  (letfn [(walk [node]
+            (cond
+              (= :uneval (n/tag node)) []
+              (= :meta (n/tag node))
+              (mapcat walk (rest (filter #(not (contains? #{:whitespace :newline :comma}
+                                                          (n/tag %)))
+                                         (n/children node))))
+              (= :token (n/tag node))
+              (let [value (try (n/sexpr node) (catch Exception _ nil))]
+                (if (and (symbol? value) (namespace value)) [(namespace value)] []))
+              (n/inner? node) (mapcat walk (n/children node))
+              :else []))]
+    (set (walk (parser/parse-string-all source)))))
+
+(deftest acceptance-6-no-residue-of-the-old-lib-or-var-remains
+  (let [tree (migrated-tree (plan-corpus))
+        retired #{"acid.fanout.store" "store" "st" "s"}]
+    (doseq [file (get-in corpus [:manifest :targets])]
+      (testing file
+        (let [source (get tree file)]
+          (is (not (str/includes? source (str "[" fixture/from-lib " ")))
+              "no require of the retired lib survives")
+          (is (not (str/includes? source (str "\n   " fixture/from-lib "\n")))
+              "no bare require of the retired lib survives")
+          (is (empty? (clojure.set/intersection retired (live-qualifiers source)))
+              "no live code is still qualified by the retired lib or its aliases"))))))
+
+;; ---------------------------------------------------------------------------
+;; discovery, alias policy, and the histogram
+
+;; @spec MCP-OP-ALIAS-003
+;; @spec MCP-OP-ALIAS-019
+(deftest totals-are-the-only-aggregate-the-planner-publishes
+  (let [{:keys [totals]} (plan-corpus)
+        manifest (:manifest corpus)]
+    (is (= 12 (:files totals)))
+    (is (= (:sites manifest) (:sites totals)))
+    (is (= (:alias-histogram manifest) (into (sorted-map) (:alias-histogram totals))))
+    (is (= (:collisions-resolved manifest) (:collisions-resolved totals)))))
+
+;; @spec MCP-OP-ALIAS-007
+(deftest per-file-alias-is-the-first-policy-entry-bound-to-nothing-in-that-file
+  (let [plan (plan-corpus)
+        by-file (into {} (map (juxt :file identity)) (:files plan))]
+    (doseq [[file {:keys [alias collided]}] (get-in corpus [:manifest :files])]
+      (testing file
+        (is (= alias (:alias (get by-file file))))
+        (is (= collided (vec (:collided (get by-file file)))))))))
+
+;; @spec MCP-OP-ALIAS-005
+(deftest every-legal-spelling-of-the-var-is-discovered
+  (let [by-file (into {} (map (juxt :file identity)) (:files (plan-corpus)))]
+    (testing "a per-file :as alias"
+      (is (= 3 (:sites (get by-file "src/acid/fanout/t03.clj")))))
+    (testing "a fully qualified use with no alias"
+      (is (= 3 (:sites (get by-file "src/acid/fanout/t04.clj")))))
+    (testing "a bare referred name"
+      (is (= 3 (:sites (get by-file "src/acid/fanout/t06.clj")))))
+    (testing "two aliases of the same lib in one file"
+      (is (= 3 (:sites (get by-file "src/acid/fanout/t12.clj")))))))
+
+;; @spec MCP-OP-ALIAS-011
+(deftest decoys-are-not-sites
+  (let [by-file (into {} (map (juxt :file identity)) (:files (plan-corpus)))
+        tree (migrated-tree (plan-corpus))]
+    (testing "a local named for the var, a string, a docstring and a comment"
+      (is (= 3 (:sites (get by-file "src/acid/fanout/t01.clj"))))
+      (is (str/includes? (get tree "src/acid/fanout/t01.clj")
+                         "(let [find-event (store2/fetch-event id)]")))
+    (testing "the reader conditional's selected branch is the only one rewritten"
+      (is (str/includes? (get tree "src/acid/fanout/t02.clj")
+                         "#?(:clj (store2/fetch-event id) :cljs (js-lookup id))")))
+    (testing "an #_ discard and a non-selected reader-conditional branch"
+      (is (str/includes? (get tree "src/acid/fanout/t02.clj")
+                         "#_(store/find-event :disabled)"))
+      (is (str/includes? (get tree "src/acid/fanout/t02.clj")
+                         ":cljs (js-lookup id)")))
+    (testing "a metadata value carrying the token"
+      (is (str/includes? (get tree "src/acid/fanout/t08.clj")
+                         "^{:doc \"store/find-event\"}")))
+    (testing "a different namespace exporting the same var name"
+      (is (str/includes? (get tree "src/acid/fanout/t07.clj")
+                         "(mirror/find-event id)")))))
+
+;; @spec MCP-OP-ALIAS-011
+(deftest bystander-namespaces-are-never-planned
+  (let [files (into #{} (map :file) (:files (plan-corpus)))]
+    (doseq [file ["src/acid/fanout/n01.clj" "src/acid/fanout/n02.clj"
+                  "src/acid/fanout/n03.clj" "src/acid/fanout/store.clj"
+                  "src/acid/fanout/mirror.clj"]]
+      (is (not (contains? files file)) file))))
+
+;; ---------------------------------------------------------------------------
+;; require mode
+
+;; @spec MCP-OP-ALIAS-009
+(deftest a-surviving-use-of-the-old-lib-adds-the-require-instead-of-replacing-it
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn one [id] (store/find-event id))\n\n"
+                    "(defn two [id] (store/other-var id))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])
+        entry (first (:files plan))
+        migrated (apply-edits source (:edits entry))]
+    (is (:ok plan))
+    (is (= :add (:require-mode entry)))
+    (is (str/includes? migrated "[acid.fanout.store :as store]"))
+    (is (str/includes? migrated "[acid.fanout.store2 :as store2]"))
+    (is (str/includes? migrated "(store/other-var id)"))
+    (is (str/includes? migrated "(store2/fetch-event id)"))))
+
+;; @spec MCP-OP-ALIAS-011
+(deftest a-site-in-a-non-selected-branch-keeps-the-old-require
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn one [id]\n"
+                    "  #?(:clj (store/find-event id) :cljs (store/find-event 0)))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])
+        entry (first (:files plan))
+        migrated (apply-edits source (:edits entry))]
+    (is (:ok plan))
+    (is (= :add (:require-mode entry)))
+    (is (str/includes? migrated ":clj (store2/fetch-event id)"))
+    (is (str/includes? migrated ":cljs (store/find-event 0)"))
+    (is (str/includes? migrated "[acid.fanout.store :as store]"))))
+
+;; ---------------------------------------------------------------------------
+;; typed refusals
+
+;; @spec MCP-OP-ALIAS-012
+;; @spec MCP-OP-ALIAS-015
+(deftest expect-mismatch-refuses-closed-and-names-found-versus-expected
+  (let [plan (plan-corpus (request {:expect {:files 80}}) (sources))]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-expect-mismatch" (:error_type plan)))
+    (is (= 12 (:found_files plan)))
+    (is (= 80 (:expected_files plan)))
+    (is (true? (:source_unchanged plan)))
+    (is (= 12 (get-in plan [:next_call "expect" "files"]))
+        "the next_call is executable: it carries the found count")))
+
+;; @spec MCP-OP-ALIAS-006
+;; @spec MCP-OP-ALIAS-015
+(deftest an-empty-scope-refuses-closed-and-states-the-count
+  (let [plan (plan-corpus (request {:expect {:files 3}})
+                          (sources (select-keys (:pre corpus)
+                                                ["src/acid/fanout/n01.clj"
+                                                 "src/acid/fanout/n02.clj"
+                                                 "src/acid/fanout/n03.clj"])))]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-empty-scope" (:error_type plan)))
+    (is (= 0 (:found_files plan)))
+    (is (= 3 (:scanned_files plan)))
+    (is (seq (get-in plan [:next_call "scope" "paths"])))))
+
+;; @spec MCP-OP-ALIAS-013
+;; @spec MCP-OP-ALIAS-015
+(deftest a-prefix-list-libspec-refuses-closed-and-names-the-file-and-form
+  (let [source (str "(ns demo\n  (:require\n   (acid.fanout [store :as store])))\n\n"
+                    "(defn one [id] (store/find-event id))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-indirect-reference" (:error_type plan)))
+    (is (= "src/demo.clj" (:file plan)))
+    (is (str/includes? (:form plan) "acid.fanout"))
+    (is (= ["src/demo.clj"] (get-in plan [:next_call "scope" "exclude"])))))
+
+;; @spec MCP-OP-ALIAS-013
+(deftest a-runtime-require-refuses-closed-and-names-the-file
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn boot [] (require 'acid.fanout.store))\n\n"
+                    "(defn one [id] (store/find-event id))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-indirect-reference" (:error_type plan)))
+    (is (= "src/demo.clj" (:file plan)))))
+
+;; @spec MCP-OP-ALIAS-013
+(deftest a-quoted-occurrence-refuses-closed-and-names-the-form
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn one [id] [(store/find-event id) 'store/find-event])\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-indirect-reference" (:error_type plan)))
+    (is (= "quoted-reference" (:reason plan)))
+    (is (str/includes? (:form plan) "'store/find-event"))))
+
+;; @spec MCP-OP-ALIAS-013
+(deftest a-site-in-a-non-selected-cljc-branch-refuses-closed
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    "(defn one [id]\n"
+                    "  #?(:clj (store/find-event id) :cljs (store/find-event 0)))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.cljc" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-indirect-reference" (:error_type plan)))
+    (is (= "unselected-reader-conditional-branch" (:reason plan)))))
+
+;; @spec MCP-OP-ALIAS-014
+;; @spec MCP-OP-ALIAS-015
+(deftest ambiguous-ownership-refuses-closed-and-names-both-candidates
+  (let [source (str "(ns demo\n  (:require\n"
+                    "   [acid.fanout.store :refer [find-event]]\n"
+                    "   [acid.fanout.mirror :refer [find-event]]))\n\n"
+                    "(defn one [id] (find-event id))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-ambiguous-ownership" (:error_type plan)))
+    (is (= ["acid.fanout.store/find-event" "acid.fanout.mirror/find-event"]
+           (:candidates plan)))
+    (is (= ["src/demo.clj"] (get-in plan [:next_call "scope" "exclude"])))))
+
+;; @spec MCP-OP-ALIAS-008
+;; @spec MCP-OP-ALIAS-015
+(deftest an-exhausted-alias-policy-refuses-closed-and-names-the-collisions
+  (let [source (str "(ns demo\n  (:require\n"
+                    "   [acid.fanout.store :as store]\n"
+                    "   [a.b :as store2]\n"
+                    "   [a.c :as st2]))\n\n"
+                    "(defn one [es id] (let [store-2 es] [store-2 (store/find-event id)]))\n")
+        plan (alias-migration/plan (request {:expect {:files 1}})
+                                   [{:file "src/demo.clj" :source source}])]
+    (is (false? (:ok plan)))
+    (is (= "alias-migration-alias-policy-exhausted" (:error_type plan)))
+    (is (= "src/demo.clj" (:file plan)))
+    (is (= ["store2" "st2" "es" "store-2"] (:collided_bindings plan)))
+    (is (= ["store2" "st2" "es" "store-2" "store-2-2"]
+           (get-in plan [:next_call "to" "alias_policy"]))
+        "the next_call appends one more policy entry")))
+
+;; @spec MCP-OP-ALIAS-007
+(deftest local-bindings-of-every-declared-shape-block-an-alias
+  (doseq [[label body] [["let" "(defn f [id] (let [store2 1] [store2 (store/find-event id)]))"]
+                        ["loop" "(defn f [id] (loop [store2 1] [store2 (store/find-event id)]))"]
+                        ["doseq" "(defn f [ids] (doseq [store2 ids] (store/find-event store2)))"]
+                        ["for" "(defn f [ids] (for [store2 ids] (store/find-event store2)))"]
+                        ["binding" "(defn f [id] (binding [store2 1] (store/find-event id)))"]
+                        ["with-open" "(defn f [id] (with-open [store2 (io)] (store/find-event id)))"]
+                        ["letfn" "(defn f [id] (letfn [(store2 [x] x)] (store/find-event id)))"]
+                        ["as->" "(defn f [id] (as-> id store2 (store/find-event store2)))"]
+                        ["catch" "(defn f [id] (try (store/find-event id) (catch Exception store2 nil)))"]
+                        ["params" "(defn f [store2 id] [store2 (store/find-event id)])"]
+                        ["destructuring" "(defn f [{:keys [store2]} id] [store2 (store/find-event id)])"]
+                        ["top-level def" "(def store2 1)\n(defn f [id] (store/find-event id))"]]]
+    (testing label
+      (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                        body "\n")
+            plan (alias-migration/plan (request {:expect {:files 1}})
+                                       [{:file "src/demo.clj" :source source}])]
+        (is (:ok plan) (pr-str plan))
+        (is (= "st2" (:alias (first (:files plan))))
+            "the first policy entry collides, so the second is chosen")))))

@@ -4,6 +4,7 @@
    [clj-surgeon.extract :as extract]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.intent-transaction :as transaction]
+   [clj-surgeon.mcp-alias-migration :as alias-migration]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-cold-verify :as cold-verify]
    [clj-surgeon.mcp-combinable-transaction :as combinable]
@@ -1219,6 +1220,90 @@
    :structured? true
    :tool-fn #'handle-edit-clojure})
 
+(defn alias-migration-summary
+  "Render one compact visible summary whose length is constant in N."
+  [result]
+  (if (:ok result)
+    (format (str "alias_migration\n"
+                 "  %s files · %s sites · aliases %s · %s collisions resolved · %s\n\n"
+                 "\u2713 atomic commit complete\n"
+                 "\u2713 written bytes read back and verified\n"
+                 "\u2713 terminal evidence · per-file detail at %s")
+            (:files result) (:sites result)
+            (pr-str (:alias_histogram result))
+            (:collisions_resolved result)
+            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (:details_path result))
+    (format (str "alias_migration\n"
+                 "  refused · %s · %s\n\n"
+                 "%s\n"
+                 "\u2192 %s")
+            (or (:error_type result) (:reason result) "unknown-error")
+            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (if (or (:source_unchanged result) (:source-unchanged result))
+              "\u2713 source unchanged"
+              "\u26a0 source state requires structured receipt review")
+            (or (:error result)
+                (:remedy result)
+                "Correct the request and retry once."))))
+
+(def alias-migration-tool-description
+  (str
+    "Migrate one Var to a new namespace and name across every namespace that "
+    "requires the old one, in a single call whose payload does not grow with "
+    "the number of affected files. Send from {lib, var}, to {lib, var, "
+    "alias_policy}, scope {paths}, and expect {files}. Surgeon discovers every "
+    "requiring namespace and every call site itself under every spelling that "
+    "file makes legal — each :as alias, the fully qualified name, and the bare "
+    "referred name — chooses each file's alias as the first alias_policy entry "
+    "bound to nothing in that file, rewrites the require and every site, and "
+    "commits one failure-atomic transaction. Locals of the same name, strings, "
+    "docstrings, comments, metadata, #_ discards, and every reader-conditional "
+    "branch other than the file's own platform branch stay byte-identical. "
+    "Never send a per-file, per-owner, or per-site table; Surgeon discovers "
+    "them. The receipt is one constant-size object: files, sites, the alias "
+    "histogram, collisions resolved, the kondo delta, the focused-test result, "
+    "and a details_path holding per-file detail. Its receipt is terminal "
+    "evidence of the rewrite; do not re-read the files it changed. A refusal is "
+    "fail-closed and carries an executable next_call: send that once."))
+
+;; @spec MCP-OP-ALIAS-001
+(defn handle-alias-migration
+  "Stable callback that plans, commits, and publishes one O(1) receipt."
+  [_exchange params callback]
+  (mcp-operation/invoke!
+    {:execute
+     (fn []
+       (let [normalized (json/parse-string (json/generate-string params) true)]
+         (if-not @runtime-config
+           {:ok false
+            :operation "alias_migration"
+            :error_type "server-not-initialized"
+            :error "alias_migration server is not initialized"
+            :source_unchanged true
+            :remedy "Restart the configured clj-surgeon MCP server."}
+           (let [workspace-router (or (:workspace-router @runtime-config)
+                                      (workspace/router @runtime-config))
+                 routed (workspace/resolve-request workspace-router normalized)]
+             (if-not (:ok routed)
+               (assoc routed :operation "alias_migration")
+               (assoc (alias-migration/execute!
+                        (update (:config routed) :receipt-dir
+                                #(or % (default-receipt-dir)))
+                        (:params routed))
+                      :workspace_root (:workspace-root routed)))))))
+     :summarize alias-migration-summary
+     :callback callback}))
+
+(def alias-migration-tool
+  {:id :alias-migration
+   :name "alias_migration"
+   :description alias-migration-tool-description
+   :schema mcp-schema/alias-migration-schema
+   :output-schema mcp-schema/alias-migration-output-schema
+   :structured? true
+   :tool-fn #'handle-alias-migration})
+
 (def clj-change-tool
   {:id :clj-change
    :name "apply_clojure_changes"
@@ -1235,7 +1320,8 @@
     :full [inspect-tool/inspect-tool
            clj-change-tool
            edit-clojure-tool
-           program-tool/transform-clojure-tool]
+           program-tool/transform-clojure-tool
+           alias-migration-tool]
     :edit [edit-clojure-tool]
     (throw (ex-info "Unsupported MCP tool profile"
                     {:profile profile

@@ -21,6 +21,9 @@ required_outcome(apply_clojure_changes, typed_refusal).
 required_outcome(edit_clojure, committed).
 required_outcome(edit_clojure, typed_refusal).
 
+required_outcome(alias_migration, committed).
+required_outcome(alias_migration, typed_refusal).
+
 required_outcome(transform_clojure, preview).
 required_outcome(transform_clojure, committed).
 required_outcome(transform_clojure, typed_refusal).

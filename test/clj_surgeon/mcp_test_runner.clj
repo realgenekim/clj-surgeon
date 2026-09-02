@@ -1,5 +1,6 @@
 (ns clj-surgeon.mcp-test-runner
   (:require
+   [clj-surgeon.mcp-alias-migration-test]
    [clj-surgeon.mcp-change-buffer-test]
    [clj-surgeon.mcp-cold-verify-test]
    [clj-surgeon.mcp-combinable-transaction-test]
@@ -42,6 +43,7 @@
   [& _]
   (let [result
         (run-tests
+          'clj-surgeon.mcp-alias-migration-test
           'clj-surgeon.mcp-contract-test
           'clj-surgeon.mcp-create-files-test
           'clj-surgeon.mcp-extraction-test

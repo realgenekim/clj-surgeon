@@ -567,3 +567,57 @@
 
 (def editor-gesture-contract
   (editor-gesture-contract-shape editor-hybrid-schema))
+
+;; @spec MCP-OP-ALIAS-002
+;; @spec MCP-OP-ALIAS-003
+(def alias-migration-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"op" {:type "string" :const "alias_migration"}
+    "workspace_root" {:type "string" :minLength 1}
+    "from"
+    {:type "object"
+     :additionalProperties false
+     :properties {"lib" {:type "string" :minLength 1}
+                  "var" {:type ["string" "null"] :minLength 1}}
+     :required ["lib" "var"]}
+    "to"
+    {:type "object"
+     :additionalProperties false
+     :properties {"lib" {:type "string" :minLength 1}
+                  "var" {:type ["string" "null"] :minLength 1}
+                  "alias_policy" {:type "array"
+                                  :minItems 1
+                                  :items {:type "string" :minLength 1}}
+                  "refer_policy" {:type "string"
+                                  :enum ["preserve-refer" "alias-qualify"]}}
+     :required ["lib" "var" "alias_policy"]}
+    "scope"
+    {:type "object"
+     :additionalProperties false
+     :properties {"paths" {:type "array"
+                           :minItems 1
+                           :items {:type "string" :minLength 1}}
+                  "exclude" {:type "array"
+                             :items {:type "string" :minLength 1}}}
+     :required ["paths"]}
+    "expect"
+    {:type "object"
+     :additionalProperties false
+     :properties {"files" {:type "integer" :minimum 0}}
+     :required ["files"]}}
+   :required ["from" "to" "scope" "expect"]})
+
+(def alias-migration-output-schema
+  {:type "object"
+   :properties {"ok" {:type "boolean"}
+                "elapsed_ms" {:type "number" :minimum 0}
+                "files" {:type "integer" :minimum 0}
+                "sites" {:type "integer" :minimum 0}
+                "alias_histogram" {:type "object"}
+                "collisions_resolved" {:type "integer" :minimum 0}
+                "refer_sites" {:type "integer" :minimum 0}
+                "lib_renamed" {:type ["object" "null"]}
+                "details_path" {:type "string"}}
+   :required ["ok" "elapsed_ms"]})
