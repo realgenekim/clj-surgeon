@@ -112,3 +112,8 @@ cp v5->v3, fullgate.sh on b1 diffs (b1-fullgate.txt), then n1 -> k2 -> v1. b1 di
 (watcher b1-g2-freeze.sh). Runner v5: gate serial, names <run>-g<gi>-<arm>-<slot>, diff vs base, g= on end lines. Acceptance
 b1 g1: rescore-anvil-b1g1.txt. Judge all 9 b1 diffs in one round when b1 done (rubric clause: appended reassignment is prescribed;
 clarity may score body duplication only; judges cite the spec clause). Doctrine v2 = inb-beecb9. Rung L design in scratchpad rungL/.
+
+UPDATE 10:05Z — rung L INSTALLED on Anvil (v5 L) entry = M gate; prompts ~/prompts/L-*.md; acceptance ~/acid/receipts/acid_L_acceptance_test.clj
++ rescore-L.sh; base = 12 tests 39 failures; TESTS_BASELINE for L = 577). chain-3.sh queued: after "v1 done" runs l1 L "A N A N A N|N A N A N A".
+Known L prompt nits (unused by l1): U/V/W variants carry two TURNS formats; planning blocks quote the full-suite price. Mayor merged
+analyzer-flake fix 33e03075 (pulled); sweep of Anvil receipts for that signature: 0 files.
