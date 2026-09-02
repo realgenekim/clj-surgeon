@@ -52,9 +52,12 @@ three runs: reads went into the tool, writes went around it, and the price was 2
 wall and four new refusal classes. Every prompt lever moves compliance; none moves the cost
 below native.
 
-Large rung, early (21-owner cross-file clock hoist, the tool's advertised shape): native
-177 s and 194 s with the full acceptance suite clean; shipped 359 s and 411 s; mandate arms
-still running at the time of writing.
+Large rung (21-owner cross-file clock hoist across 11 namespaces, the tool's advertised
+shape, where locating is the expensive part): native 177, 194, 199, 288 s (mean 215) with
+the acceptance suite clean on the two checked so far; shipped 359, 411, 439, 620 s (mean
+457, 2.1x); substitution mandate 493, 585, 796 s (mean 625, 2.9x). Same ordering as the
+medium rung. Actions, refusals and blind quality for this rung are in the captain's log's
+l1 receipts.
 
 ## What was settled tonight
 
