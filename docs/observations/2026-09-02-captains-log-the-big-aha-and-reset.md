@@ -1104,3 +1104,26 @@ the rung-5 ratchet, and the homoiconic square. Filed for the next gate round, af
 fix. (3) z3's mandated-arm win stands as stated (its five commits were `complete`), with the new
 caveat that the same server admits on `partial` elsewhere; the win is on cost, not yet on safety.
 
+
+## 17:36Z — the reproduction program, pre-registered (Gene: "You have the alchemy formula that should work -- let's goooo!")
+
+Gene's question was whether z3 was lightning in a bottle. Half right: one rung, n=4, p 0.049,
+and flat on the next rung. But the mechanism is known, *the gate wins by deleting native's
+post-write ritual*, so it predicts where it reproduces and where it must not. Three tests, all on
+the FIXED gate (commit refuses on anything but complete verification; git extended headers
+accepted; real-bytes fixtures), server 7894 restarted at the fix sha before any arm starts. rf1
+ethnography and rf2 (structural route) proceed separately; these three are about the gate.
+
+| run | rung | arms | prediction (pre-registered) | falsifier |
+|---|---|---|---|---|
+| z6 | M (controls/mic-gate), 2 cores | Z gate mandated vs N, n=8 each | Z wall ≤ 0.85 × N; Z refusals < 10 % of admit calls; ≥ 90 % of Z commits at `complete`; Z extra post-write probes 0; stale-onset Z 0/8 | Z wall within the floor sd of N, or any Z commit at `partial` (the fix makes that a refusal, so a `partial` commit is a fix failure) |
+| z7 | R3 (the rf1 extraction, Surgeon's own tree), 4 cores | Z gate mandated vs N, n=3 each | the ritual-heaviest task of the night (native ran the suites 14–15 times): Z suite invocations ≤ 6 (N 14–15); Z wall ≤ 0.75 × N; refusals < 20 % despite five-file patches; acceptance a–e equal | Z suite invocations ≥ 10, or Z wall ≥ N: the gate does not remove a ritual the agent runs by habit rather than by need |
+| z8 | L (21-owner hoist), 2 cores | Z vs N, n=4 each | CONTROL: flat; Z within 1 sd of N; 0 commits at `partial`; canonical churn 8/8 | a Z win here would mean the mechanism is wrong (there is no ritual to remove on L) |
+
+If z6 and z7 win and z8 stays flat, it is a mechanism. If only z6 wins, Leyden was right.
+Apparatus for z7 (new): `R3-gate.md` prompt (native tools plus the mandated gate, the apply_patch
+grammar named, the R3 spec and the two forbidden edits verbatim), a focused-test profile for the
+Surgeon tree so the gate has evidence to collect (the report-file wrapper and namespaces named in
+the runner's R3 rung), and the fix-sha attestation on 7894. Chain: z6 → z7 → z8, armed on GO-Z6,
+which is created only after the fix's suites are green and 7894 is restarted at the fix.
+
