@@ -1261,3 +1261,31 @@ the winnable square is "intents with large mechanical consequence fan-out, one c
 verdict", not "refactoring". Gene: "we are pretty darned sure this is a winnable test… activate
 brainfleet to confirm… is this where we grind it out until we figure out how to win?"
 
+
+## 17:55Z — fleet round one on rf1 (Sol and Opus, independent): winnable at ~0.85×, my claim corrected, grind-once not campaign
+
+Both brains got the same five questions with `rf1-score.md` and `rf1-ethno.md` attached
+(bridge scratchpad `fleet/`; Sol via `codex exec -m gpt-5.6-sol`, Opus via a subagent).
+
+| question | Sol | Opus |
+|---|---|---|
+| winnable? ceiling | yes; 6–7 returns to move, 17–19 total, wall 0.82–0.90× | yes, narrowly; 6–7 / 17–19 / 0.82–0.88×; native's ~12.5-return tail is untouchable by any editing verb |
+| my "one intent, all consequences, one verdict" claim | directionally right, overstated; the GATE (a fragment of the intent) already won; homoiconicity makes syntax tractable, not consequences computable; amended: *tools win when they compress the intent-to-trusted-verdict path by more returns than discovery + invocation + repair + distrust cost* | wrong in four places: fan-out must be UNREAD fan-out (apply_patch collapses read fan-out for free); already falsified by the gate; homoiconicity is not the mechanism, static analysis is (no Clojure moat); "one verdict" fuses the winner (verdicts) with the loser (mutations) |
+| rf2 prediction | move in 7, wall ≈ 0.88×, **P(beats native, n=3) 65 %**; loss mode: post-success distrust | move in 9 (8–12), wall ≈ 1.00× (0.90–1.15), **P 30 %**; the verb asserts 23 rewrites the agent never read, so the audit grows with the saving |
+| grind or trap | **run rf2 once as kill-or-promote**, pre-registered criteria (≥2/3 paired wall wins, fewer returns, zero fallback, equal acceptance, no task-specific code); if it clears, go straight to unseen extractions | **trap as a grind**; ship the verb (fixes four real defects), run rf2 once, then move to uncapped shapes |
+| decisive next experiments | (1) paired rf2, 6 runs; (2) three UNSEEN extractions of small/medium/awkward fan-out, 6 runs, *highest value*; (3) receipt-authority ablation, 6 runs | (1) **ritual strip on native alone**, 3 runs: N 22 → 15–16 returns, 326 → 255–275 s, which would erase the 0.78× target before rf2 runs; (2) **unread fan-out at scale** (require/alias change across ≥20 namespaces, ≥100 sites), 8 runs, *most decisive*: tool 0.60–0.75× and improving with N, or the program ends; (3) rf2 once, 6 runs |
+
+**Agreements I accept.** Ceiling ~0.85×, not H1's 0.6×; n ≥ 6 per arm to see it (d ≈ 1.8 on the
+measured sd); distrust after `ok` is the top loss mode (E5 fired 4/4); rf2 once, never a
+campaign; the three corrections to my claim (the gate contradicts "only complete intent";
+UNREAD fan-out is the axis; static analysis, not homoiconicity, is the mechanism).
+**The disagreement, which is the signal:** 65 % vs 30 % on rf2, and Opus's observation that the
+largest return sink in rf1 (ritual, 13–15 returns per run) is unowned and larger than the whole
+A−N gap. Round two dispatched: each attacks the other's number.
+
+**Position taken.** Ship the verb regardless. Ritual strip on native FIRST (3 runs). Then rf2
+once at n=6 with identical stripped prompts, Sol's promotion criteria. Then unread fan-out at
+scale, which is bead q5z, the fan-out intent verb shelved as a dead end this morning; if a key
+resurrects a dead end, it is that one. The gate program (z6/z7/z8) runs in parallel as the one
+measured win.
+
