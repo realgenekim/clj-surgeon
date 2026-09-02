@@ -1007,3 +1007,40 @@ suite; if both are admitted, the gate's verification profile is blind to the ver
 predicate was built for, and that is a finding against the gate, not the predicate. Cost: two
 calls. Then z4 (rung L) scored the same way; rf1 launched 17:06:48Z with a green preflight.
 
+
+## 17:12Z — 46o red team: NO-GO, and the stronger check was one probe away
+
+Executed-probe review of branch `bridge/format-form-scope` (13 probes, scratch
+`46o-redteam/`, worktree byte-identical after). Verdict NO-GO; not handed to the mayor.
+
+| finding | severity | evidence |
+|---|---|---|
+| F1 token BAG admits semantics-changing formatter output | NO-GO | swapped `if` branches, `(- debit credit)`, and a `:refer` symbol moved between two requires all committed with `byte_drift_from_expected 0`; the pre-46o guard refused the same bytes with drift 80 |
+| F2 bound applies to an unpinned `npx @chrisoakman/standard-clojure-style`; no test executes it | NO-GO | no version, no lockfile; every test injects the command or compares the vector |
+| F3 the scope "proof" (FMT-004) cannot fail for any output of `splice-forms` | fix wording | seven formatter outputs incl. `))))garbage((((` all read `byte-drift-outside-forms 0, :exact`; gaps are unreachable by construction, so the property is true, but it is not a measurement of the formatter |
+| F4 `file-regions` never checks the staged candidate equals the guard's `:reference`; the post-format guard launders any earlier staging churn; unparseable candidate is a silent no-op that still overwrites the guard | fix before merge | old guard refuses 48 bytes, new guard passes with 0; latent today (no pre-formatter hook exists), fail-open for the next one |
+| F6 formatter returning nil or throwing yields an UNTYPED refusal with `source_unchanged false` while the file is unchanged | fix before merge | contradicts FMT-009 |
+| F5 exempt guard entries rewritten when another file has forms; F7 one temp file per form, a single 1735-fragment call exits 249 | notes | follow-up bead |
+| fails-first understated: 23 assertions across 8 tests with base wiring, not 13 | record | correct the doc |
+
+**The measured fix (p7).** An order-sensitive token stream that sorts the sibling clauses of
+`:require`/`:import` as whole subtrees refuses all four corruptions, admits sorted requires and
+pure whitespace, and over all 1735 top-level forms of the tree with the real standard-clj 0.29.0
+produces **0 false refusals** (the real formatter changes bytes in 16 forms, the bag in 0, the
+stream in 8, all eight `ns` forms). The design doc's "stated limit" (a bag cannot tell `(- a b)`
+from `(- b a)`) was not a limit that had to be accepted; the alternative cost nothing and was
+never measured. Same class as the gate grammar miss this morning: the reviewer's model of the
+input stood in for the input.
+
+**Andon reading.** A broken verifier that has broken nothing is the pull-worthy class, but this
+one is an unmerged branch failing inside its own gate: no pull; the candidate is stopped and its
+owner told. The builder is back in with the five fixes and the exact witness tests named (F1
+stream + end-to-end `a-bag-preserving-semantic-rewrite-does-not-commit`; F2 pin 0.29.0 + one
+gated test that runs the real binary over a committed fixture; F4 two typed refusals; F6 typed
+`:formatter-failed`; F3 "guaranteed by construction", and the token check named as the ONLY
+bound on the formatter).
+
+What survived: scoping is real (l1 230 bytes vs 569), gap preservation is structural, editor
+gestures stay exempt (`require_change` 0 formatter calls, drift 0), tests fail first, both suites
+on exactly the base failure sets.
+
