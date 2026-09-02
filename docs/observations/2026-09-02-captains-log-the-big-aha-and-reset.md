@@ -816,3 +816,26 @@ the three largest deviations by returns lost, and for each a proposed fix typed 
 tool affordance, refusal text, or doctrine. Then rf2: the same task with the top fixes
 applied, same arms, to measure whether the deviations move. That is the optimisation loop
 Gene asked for, on the square where the tool is supposed to win.
+
+## Gate round six, and z3 launched (16:44Z)
+
+Commit 1ca44b4, pushed on the branch: an unrecognised line inside a hunk body, or any body
+line belonging to no hunk, refuses as :hunk-truncated naming the line, never a partial
+apply; a post-image equal to the pre-image refuses as :no-op-patch in preview and commit, the
+ratchet that makes any future truncation self-reporting; a --- line is a file header only
+when +++ follows; one terminating newline stripped; a single-space V4A context line counts as
+blank. Tightening the reader first dropped the field corpus to 107 of 109; the builder
+checked rather than accepted it and found both payloads mix the grammars inside one file
+section (a bare @@ after a counted one), which is a real marker, now honoured, corpus back to
+109. 82 witness tests, 686 assertions; my own mcp-test 459 tests, 4640 assertions, only
+main's failure. The builder's flag, kept: two rounds running it loosened a check and
+asserted the consequence instead of testing it.
+
+7894 restarted on 1ca44b4 (pid 2941763, ready.edn agrees). z3 launched 16:43:33Z on rung M:
+Z (gate mandated, prompt now names the apply_patch grammar), F (gate OPTIONAL, the
+acceptance test), N native, two waves of six, all attested with the server sha read from
+the server; z4 on rung L follows, then rf1 (Surgeon refactoring Surgeon) is armed behind z4.
+Predictions for z3, on record: the refusal rate on Z falls from 69 percent to under 20; the
+optional arm F uses the gate at all in at least two of six runs (if zero, the gate has not
+earned its call even when it works); post-write calls on Z fall below 0.5 per run; wall on
+Z within one sd of native; hazards caught in situ at least once across the twelve.
