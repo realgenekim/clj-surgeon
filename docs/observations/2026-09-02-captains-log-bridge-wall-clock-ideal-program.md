@@ -436,3 +436,29 @@ TESTS-BELOW-BASELINE flag (cal-par B passed with 577 tests, one below baseline, 
 noticed), and a core-slot pool so six 2-core arms can run at once (Gene's suggestion);
 calibration cal2 queued: six medium arms in parallel at 2 cores, N A N A N A, against
 their 4-core numbers.
+
+## Receipt 04:42Z — judge noise floor, a second judge, and the acceptance-test ratchet
+
+**Noise floor (Sol re-scoring identical diffs three times, cal-seq):** native 18.0 / 17.9 / 17.8;
+A 17.0 / 17.4 / 18.7; B 14.5 / 14.4 / 16.0. Judge spread about ±1 point on a 20-point total;
+the A-vs-native rank flipped once. **B's deficit of about 3 points exceeds the floor.**
+
+**Second judge (Opus, blind, same frozen diffs):** s2: native 18, A 16, B 13 · s3: A 19,
+native 15, B 14 · s4: A 18, native 16, **C 12**. Opus agrees with Sol that B is last in s2
+and s3. On C the judges split: Sol 17.5, Opus 12, because Opus found a semantic defect the
+rubric-by-eye judge missed: C's mic-gate branch omits `speechStartAt=0`, so a stale speech
+timer survives playback and the first loud frame after a reply can start a recording with
+no debounce, the very echo tail the feature exists to suppress. The disagreement is the
+signal: C is not vindicated, and one judge is not enough.
+
+Opus also found, across all nine diffs: five resolve `hbms` in client JavaScript instead of
+server state (a spec deviation), three rewrote the shared 250 ms tick instead of appending
+to it, four disable the buttons on checking or playing rather than on not-recording, and
+one native diff plumbs OVER through a mutable flag that can force-end the NEXT automatic
+keyword check. **Every one of those passed the full suite and the golden**, because the only
+tests of the new behavior were the ones each arm wrote for itself.
+
+**Ratchet (in progress):** an arm-independent acceptance test namespace for the task, written
+once from the spec by an agent that did not build any arm, run against every diff. From
+here "correct" means the arm-independent tests, not the arm's own. The scorer must not be
+written by the subject.
