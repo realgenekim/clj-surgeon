@@ -498,3 +498,17 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   a40fc3e; on `z7c done`: scorer per z7b's shape at n=6.
 - Wake-up brief evening edition committed (cb8c92f) and filed to Gene's inbox.
 
+
+## RESUME DELTA 2026-09-02T20:58Z
+
+- rf2 DONE on walls (C 243 vs N 336, no overlap); scorer running the pre-registered readout →
+  `~/acid/receipts/rf2-score.md`; then log + mayor + Gene report §2.
+- z7c (gate n=6) next on the lock; score per z7b's shape when `z7c done`.
+- Anchor: spec amended (R-SPEC/R-BASE/rescore-FAN-R, allowance of six path-fixture tests); native
+  PASSES; chain-sl1r UN-ARMED until 7895 restarts at the q5z fix sha (the builder is extending
+  site discovery to binding-vector and quoted fully-qualified symbols). On the q5z report: suites
+  → commit/push → `restart-7895-at.sh <sha>` → Q5Z-SHA → archive nothing (sl1-R name is free) →
+  `setsid nohup bash ~/acid/chain-sl1r.sh` and `touch ~/acid/GO-SL1R` if absent.
+- Gene report skill: `skills/gene-report/SKILL.md` (trigger "Gene report"); instance
+  `docs/observations/2026-09-02-gene-peek-report.md`; regenerate after rf2/z7c scores.
+
