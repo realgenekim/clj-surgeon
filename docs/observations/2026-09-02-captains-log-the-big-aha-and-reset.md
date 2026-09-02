@@ -145,3 +145,25 @@ model, hunks by the typist, verification by the gate, against native on rung L; 
 wins on tokens carried by the strong model, breaks even or loses on wall unless N exceeds
 about twenty owners. Not part of the battleground on its own; a possible force multiplier on
 one square once the gate and the fan-out verb exist.
+
+## The hole between doctrine and prompt, and what I did about it (12:24Z; mayor's hand-off, Gene: "use its judgement")
+
+The class: doctrine reaches a seat by git pull; the text an agent reads at boot is assembled
+from managed blocks installed per box and per account out of band, and nothing ties the two.
+The repeal of the Surgeon routing rule was pushed and every agent would still have read the
+old forty lines. Same class as the night's other receipt-blindness finds.
+
+Inventory of what I can reach: bridge (genek-forge on Buster) had NO block at all until
+this morning, now carries the rewritten plate, hash c3c0d0f5 verified; Anvil tester has no
+block and I am deliberately NOT installing one there, because the acid arms' global prompt
+must stay empty to keep future cohorts comparable with the night's; Buster's marvin and
+genek accounts are outside my reach by rule (no sudo, no-touch) and are reported to skiff,
+not swept. Ratchets: an hourly cron on this seat, check-prompt-plate.sh, fetches clj-surgeon
+main, checks the installed block against the current plate with the verifier that already
+existed, logs the hash, and files an inbox item on drift (first run OK, main 57e3541);
+a doctrine paragraph "Doctrine cannot silently disagree with the prompt" with a five-step
+rule, on a claude-skills branch for skiff to merge; and a bead ask that the plate embed the
+doctrine commit it was derived from so a checker never needs a human's memory. Judgement on
+the sweep: no fleet-wide sweep from here, both because I cannot reach the accounts that
+matter and because the rule says never change another seat's prompt without telling it;
+each seat installs on its own pull, and the tripwire tells us who has not.
