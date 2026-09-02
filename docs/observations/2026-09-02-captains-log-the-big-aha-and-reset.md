@@ -2544,3 +2544,23 @@ fixture facts to prove equality). Corrected the record with Gene by voice.
 
 ## 21:36Z — fold branch pushed at f115cc2d after my own run (unit 1016/12599/0); inb-d603ce updated for Gene's merge
 
+
+## 21:59Z — store branch 3aac4338: my run 1032/12800/0; Sol round two NO-GO, converging; round three rulings
+
+Builder's round: all nine rulings landed with fails-first witnesses, rebased on f115cc2d; the
+generation is derived inside the lock from a caller-declared rule; the comparable-body digest is
+stamped on the fact so conflict detection survives replay; participation kept BOTH guards because
+`domain/speakers.clj` writes the same relation through `append-all!` (the suite caught the
+"drop the check" version: portal-test 20 → 21). My own unit run: 1032 tests, 12800 assertions,
+0 failures. Sol round two (`scratchpad/fold-review/sol-store2-review.md`): CLOSED 2, 4, 5, 8;
+PARTIAL 1, 3, 6, 7, 9; six new. Rulings sent as round three: (A) `append-all!` honours rules under
+the lock, skipping already-claimed facts and listing them in the receipt, so every writer of
+`speaker.added-to-event` carries the key and the precheck goes; (B) `:comparison :unavailable`
+becomes a distinct unverified outcome, never "nothing was lost"; (C) the conflict banner names
+exactly the refused relation and says the profile/program writes in the same request were
+applied — no gesture reordering; (D) readiness compares the schema-qualified `pg_get_indexdef`
+against the exact definition; (E) SHA-256 over canonical `pr-str` replaces the 32-bit `hash`.
+Held out of the builder's scope: cross-instance generation serialisation — Gene runs
+max-instances=1, and that precondition goes into STORE-IDEM-001's boundary verbatim; live
+Postgres verification — owner work. The z7c scorer and sl1-R are still in flight.
+
