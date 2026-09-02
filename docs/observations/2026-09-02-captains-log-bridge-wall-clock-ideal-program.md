@@ -210,3 +210,33 @@ resumed from their partial worktrees; the first O2/O3 run stopped itself at the 
 low-level-design gate exactly as AGENTS.md instructs, and the lead approved that phase
 in writing before it continued. Both are evidence that the repository's contracts bind
 executors that have never seen them before.
+
+## Receipts 03:20Z — first wave landed as branches, each verified on the host by the lead
+
+| option | branch | commit | verified | verdict |
+|---|---|---|---|---|
+| O1 dev build | `bridge/dev-build-instance` | `a294cac` | `make test-fast` 647/5559/0/0 on this box (baseline 9 failures, 13 errors); `mcp-dev-start` on 7889 with 7888 untouched; real streamable-HTTP `tools/call` read_complete=true in 345 ms; docstring change + `mcp-dev-reload` :ok true; stop leaves no listener | ready to merge; SURGEON1 to review the 3-symbol SCI allowlist widening (`case*` `throw` `new`) |
+| O2+O3 gap and overlap | `bridge/insertion-gap-and-overlap` | `33ba760` | red 3 → green; bb 60/596 + 33/476; repository intent audit :ok true after registering the leaf; JVM 374 tests, 1 pre-existing failure | code ready; specs MCP-OP-INSERT-001..006 await Gene's ratification |
+| O4 sibling pair | `bridge/sibling-pair-verb-lid` | `9082e36` | docs only, 502 lines, four-document LID shape | design awaits Gene's ratification before any code |
+| O5 string-aware outline | `bridge/string-aware-outline-spike` | `5d17b16` | bb 13/45 + 16/215; JVM 377, 1 pre-existing failure; **real-wire dogfood** from a dev instance on 7891: channel.clj 168 forms, 371 string symbols, 886 ms; onsetReady 3336, bargeTh 3256, kwCheck 2626/3356, cueCancel 2625/3355, each with its owning form, all equal to grep | spike proven; contract naming awaits ratification |
+| O7 meter | `fix/collector-telemetry-root` | `3c3427d` | real data: 8 calls; absent root → root-absent | ready to merge |
+| harvest | `bridge/harvest-stranded-lessons-2026-09-02` | `4cd1b91` | 695 files, byte-identical spot checks against branch tips | merge first: it makes the other week's lessons reachable |
+
+Three things the lead learned that the executors could not:
+- Sol's sandbox could not open loopback sockets or write under `$HOME`, so every live
+  gate (server start, wire call, reload) had to be run by the lead on the host. A report
+  that says "the harness prevented this" is honest; a lead that ships it unverified is not.
+- The repository intent audit reads **one `@spec` id per annotation line**; two ids on one
+  line silently witness only the first. The leaf must also be registered in
+  `audit-current-repository`'s hardcoded list. Both are now in the O2/O3 commit message.
+- Two JVM suites run concurrently on one box collide on the agent-shell admission lock
+  (`mcp_process_test`); run alone they pass. Not a product defect; a scheduling one.
+
+Pre-existing findings on `origin/main` on this box, reported not fixed: a test hard-codes
+`/opt/homebrew/bin/clj-kondo` (`mcp_change_buffer_test.clj:686`); `recovery.clj`
+`write-failure-receipt!` does not create its parent directory; the install isolation test
+assumed box-global destinations (fixed in O1).
+
+Next wave, not started: ratification stops for O2/O3, O4, O5; the house-rule sentence
+(`inb-32bcd1`); the skill table; and the second program the corpus pointed at: the
+post-decision ceremony that consumed 21.2 hours against 94 seconds of write-shape work.
