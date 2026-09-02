@@ -3170,3 +3170,22 @@ mcp-serve` should honour MCP_PORT. Watcher receipt to follow (`.tweezer/session-
 Gene, on the seat: *"Use anvil seats that exist already."* → the builder seat is `tester@anvil`;
 brief amended (worktrees under `~/build/`, never while a GO file or the lock exists; fleet seats untouched).
 
+
+## 23:54Z — the prosecution list filed, twelve inbox items with owners and triggers
+
+Gene: *"Make sure all suggestions and areas to explore are in a trusted place where they'll be
+prosecuted at the right time."* bd has no database on the bridge for clj-surgeon or curtain-call
+(embedded dolt not initialised; not a wipe I will do blind on shared state), so the trusted store is the
+maven inbox, per house rules. Filed:
+S1 inb-a0f37e ls-tree names-only rendering (before E6)
+S2 inb-0a6315 tree-level requirers-of-ns op on the alias-migration discovery kernel (after q5z merges)
+S3 inb-d8a635 make mcp-serve honours MCP_PORT (next touch)
+S4 inb-11a6ae outline emits defmethod dispatch; owner refusal names the defmethod owner form (after census+study merge)
+S5 inb-a97614 unaddressed_matches in transaction receipts (same trigger)
+S6 inb-3cb0f4 refusals name the missing field; match receipts explain `_` arity (same trigger)
+S7 inb-c973d2 E6 free-choice adoption cohort for the study ops on Anvil (after S1)
+S8 inb-78e75c contract: "two public tools" invariant stale — Gene's ruling before census merges
+C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-schedule guard (after the three merges)
+C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
+C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
+A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)

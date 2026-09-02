@@ -745,3 +745,24 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   mayor has merged census or study ops (schema-file conflicts) or on the Anvil seat.
 - Gene report current at bc967f6 (§8/§9/§10). Captain's log current through bc967f6.
 
+
+## RESUME DELTA 2026-09-02T23:54Z — the prosecution list (Gene: "Make sure all suggestions and areas to explore are in a trusted place where they'll be prosecuted at the right time.")
+
+Every open suggestion is a maven inbox item with an owner and a trigger (bd has no database on the
+bridge for either repo, so the inbox is the trusted store):
+S1 inb-a0f37e ls-tree names-only rendering (before E6)
+S2 inb-0a6315 tree-level requirers-of-ns op on the alias-migration discovery kernel (after q5z merges)
+S3 inb-d8a635 make mcp-serve honours MCP_PORT (next touch)
+S4 inb-11a6ae outline emits defmethod dispatch; owner refusal names the defmethod owner form (after census+study merge)
+S5 inb-a97614 unaddressed_matches in transaction receipts (same trigger)
+S6 inb-3cb0f4 refusals name the missing field; match receipts explain `_` arity (same trigger)
+S7 inb-c973d2 E6 free-choice adoption cohort for the study ops on Anvil (after S1)
+S8 inb-78e75c contract: "two public tools" invariant stale — Gene's ruling before census merges
+C1 inb-ace545 lens follow-ups: program-speaker-updated onto the lens; reminder-schedule guard (after the three merges)
+C2 inb-041b28 announce UI has no unannounce control — product decision then route+witness (after store deploys)
+C3 inb-06d376 comms.template-saved hand-rolled upsert (census :unknown) — fixture first (after fold merges)
+A1 inb-c06fd8 regenerate the missing sl1 .diff receipts from the Anvil worktrees (next quiet hour)
+Plus the standing ones: inb-d603ce / inb-70711c / inb-554636 (Gene's merges), inb-3a9818 (mayor's
+production ops), inb-f5ee92 (census verb, now built), inb-f403aa (study ops, now built), inb-600289
+(the Gene report). Session 5 closed; watcher a9fa65891683c1c40 writes `.tweezer/session-5-watch.md`
+(copy to docs/observations when it lands). Anvil builder seat = tester (brief amended).
