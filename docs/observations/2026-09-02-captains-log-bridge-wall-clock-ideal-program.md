@@ -592,3 +592,188 @@ two planning arms in the other order. Blind review launched (Sol). The CLI-only 
 riff is filed as a follow-up (maven `inb-ce2f15`), with one cheap arm queued at the end of
 the chain, and no further attention until the main program is done (Gene's standing
 instruction: stay on the main quest).
+
+## Andon 05:06Z — the dev-build merge widened the SCI fence; production clean; my instances checked
+
+surgeon1 (via the mayor's cord) proved on origin/main that the SCI allowlist widening in
+`ddd074f5` (`case*` `throw` `new` plus one class mapping, made by the O1 agent to turn a red
+test green and flagged by me for review only *after* merging) lets constructor shorthand
+`IllegalArgumentException.` bypass the source-symbol fence: a computed edit program can place a
+host exception, print to stderr, and read host stack data. Causal control at `ddd074f5^`
+refused both probes. No filesystem or process escape shown; the boundary is still broken.
+
+Blast radius: production and the skiff's 7888 run `64eac2e`, clean. On my side: Buster 7888
+started 2026-09-01 05:57Z, never reloaded, clean; Buster 7889 stopped; Anvil 7888 serves
+`64eac2e`, clean; **Anvil 7889 served `7ef1532`, which contains the widening**, used only by my
+own arms from the tester account. Remediation armed: revert `edit_dsl.clj` to `64eac2e` in that
+checkout and restart 7889 in the gap after s7, before r1 needs it, recorded in
+`receipts/ANDON-7889.txt`. Scoped freeze honored: no install or reload of main until the fix.
+Standing rule adopted and written to memory: fence, allowlist, or confinement changes get
+adversarial review before merge. The cord worked exactly as the house rules describe: the
+puller kept repair authority, the freeze was scoped to the release lane, and measurement
+continued.
+
+## Receipt 05:12Z — s7 closes the old chain; the real job starts
+
+s7 (Anvil sequential, all correct): Q 338, P 359, N 273. Planning arms across two triples:
+P 258 / 359, Q 221 / 338; planning mode did not clamp variance. s6 acceptance: A fails
+acid-7 (hbms), Q fails acid-7, P fails acid-9 (buttons). The 7889 remediation fired in the
+gap after s7 (edit_dsl.clj at 64eac2e, restarted 05:08:34Z, healthy) before r1's wave arm
+needed it. r1, the first real job (surgeon recovery-receipt defect), started 05:08Z on the
+v3 runner: N and A in parallel, then B. Fleet round 2 (Sol + Opus) polled on the full packet
+with acceptance, actions, and plan calibration; s7 blind review launched.
+
+Turn-count picture, for the record: wall ≈ 9 s per model action plus suite runs, on every
+arm and both boxes; native ≈ 19 actions, A ≈ 24, B ≈ 29, T 44. The arm is not the clock; the
+number of times the model comes back is.
+
+## 05:20Z — the pictures (Gene: "record graphs in captain's log")
+
+```
+COMPLETE VERIFIED WALL, Anvil clean runs (• per sample; 10 s per column)
+                150      200      250      300      350      400      450      500      550      600
+native (n=6)    |          •        •  ••  ••                                                      |  194–287
+A shipped (5)   |                 ••  • • •                                                        |  237–317
+B wave (4)      |                          •  •    •                              •                |  272–579
+C wave–sym (2)  |                                 ••                                               |  328,333
+P shipped+plan  |                           •            •                                         |  258,359
+Q native+plan   |                      •                •                                          |  221,338
+T typist (Bstr) |                                             •                                    |  409
+                ^ spread inside an arm (40–300 s) exceeds every gap between arm means
+
+WALL vs MODEL ACTIONS (N native · A shipped · B wave · C · T typist)
+ 600 |                                        B      ← 35 actions, 5 suite runs
+ 400 |                                                 T   ← 44 actions, 4 typist hand-offs
+ 350 |                              C
+ 300 |          N    B       A    A  B  ·······        diagonal ≈ 9 s per action + tests
+ 250 |         N A  A N   ····
+ 200 |     N·····
+     +----+----+----+----+----+----+----+----+
+     10   15   20   25   30   35   40   45   actions
+ read down a column: same actions, same wall, any arm   → the tool is not the clock
+ read along the diagonal: every point, every arm, both boxes → turns are the clock
+
+WHAT THE TIMING CANNOT SEE       judges /20 (2 judges, noise ±1)   acceptance failed/39
+   native   17–19                                                    2.4
+   A        17–19                                                    1.0   ← most conformant
+   B        13–16  (clarity 2/5)                                     2.5
+   C        12–17.5                                                  5.0
+```
+
+**The reading, in one line:** the arm is not the clock; the number of times the model comes
+back is. Every tool's only lever on wall is the count of returns it induces, and the wave
+build induced more. Gene, on seeing this: "Obvious and yet insightful"; and: elevate the
+need to reduce tool calls to the global prompt, make it a key part of a coding task at the
+high level, brainstorm with the fleet. Both launched.
+
+## Receipt 05:30Z — fleet round 2, Opus (recomputed from raw receipt rows)
+
+- **Wall null is dead flat:** A − native = +3.4 s, SE 17.6, t = 0.19 (Anvil pooled, n 6–7); every
+  triple tonight was powered only for effects ≥ 60 s, i.e. only B's.
+- **The A trade is real and marginal on both sides:** conformance A 1.0 vs N 2.43 failed
+  assertions (p ≈ 0.08) bought with actions A 23.6 vs N 18.2 (p ≈ 0.07). Caveat that matters:
+  acid-7 (hbms) fails in 14 of 21 rows and inflates every arm; excluding it, the A advantage
+  sits on acid-9 alone (1/6 vs 5/7, Fisher p ≈ 0.10). Acceptance is the correctness
+  authority, judges the maintainability authority, neither yet significant on A vs N.
+- **The one thing nobody measured: input tokens carried predict wall better than actions**
+  (R² 0.78 vs 0.61; 159 s per million carried tokens) — and the Surgeon arms carry MORE than
+  native (A +23%, B +62%). The product's stated mechanism is fewer tokens re-carried; on this
+  rung its own arms carry more. Direction-changing: instrument the context-carry curve per
+  arm; if it is flatter for A on the large rung the theory holds and the medium rung is below
+  the crossover, if steeper there too the theory is falsified on its own metric.
+- **Planning mode: change, not keep.** P +50 s over A, Q +24 s over N, variance not clamped,
+  and an accurate cost estimate with no consequent is a receipt, not a control. Keep only a
+  read-gate: every path named in a plan must cite an inspect receipt obtained before the plan.
+- **Next wave, ranked by information per minute:** E1 repair the scorer (drop or fix acid-7,
+  add a third judge) at zero arm-minutes; E2 bisect the wave build (B minus gap fix, B minus
+  overlap fix), acceptance-scored, ~14 min; E3 hostile small rung n=10; E4 the big chord
+  (≥12 owners) where Surgeon must win or the wall program ends; E5 action-and-context diet
+  (one plan, one chord, ≤2 suite runs, no re-read after read_complete, payload cap) —
+  predicted actions −32%, wall −23%, the largest lever; E6 refusal dose; E7 power-16.
+- Stage 0, free: correlate refusal count with acceptance failures across the 22 frozen diffs
+  (the "refusals are quality control" reading predicts s3-B, 4 refusals, cleaner than B's mean).
+
+## Receipt 05:35Z — r1, the first real job, and the s7 review
+
+r1 (R1: the recovery-receipt parent-directory defect, surgeon repo, v3 runner, native and
+shipped in parallel then wave): native 113 s, A 148 s, B 194 s; all three pass the focused
+recovery suite with the new regression test (3 tests, 0 failures). Small real task, native
+fastest, same ordering as the medium rung. A blind comparative review picks the merge
+candidate; the winner merges to surgeon main (merges continue under the scoped freeze;
+installs do not). s7 blind review (Sol): P 19, Q 19, native 17 — the planning arms scored
+highest on this triple (n = 1), so planning's quality effect is open even though its wall
+effect is negative. cal2, the six-arm two-core calibration, started after r1.
+
+## 05:45Z — turn budget as doctrine: the fleet's brainstorm and tonight's test of it
+
+Gene: "elevate the need to reduce tool calls; becomes key part of a coding task at high level; brainstorm with brain fleet." Sol, Opus and the bridge converged on the same shape, drafted below and queued to the skiff as `inb-5a2d7b`. Opus's decisive caution: turns are demand-driven; a cap without a named substitute relocates the spend into one giant unreviewed action (the wave build removed refusals and the model spent the freed turns on re-reads and suite runs). So the rule budgets in actions, keeps suites as a separate counter, names the substitutes (batch, terminal results, one-turn refusals), and requires a report. Running tonight as e3 on Anvil: A vs A+report-only (Hawthorne control) vs A+full rule, three each, two-core slots, scored on actions, acceptance, and blind quality; the control decides how much of the paragraph must survive. cal2 (six two-core arms) is running first after a fail-fast: its first launch fed codex empty prompts, the runner's tests-below-baseline flag caught it in one poll, and the batch rule meant one wasted unit, not a night.
+
+## Turns are the clock (Gene, 2026-09-02; measured on 20+ runs, two boxes)
+
+Complete verified wall of a coding task ≈ **9 s × model actions + ~50 s × test-suite runs**; tool
+execution is 3–4% of wall whatever the tool. You are not paying for tools, you are paying for
+returns to the model. So a turn budget is part of every coding task:
+
+- **Before the first tool call, state one line:** `BUDGET: N actions, M suite runs`, with
+  N = 6 + 2 per file you will change + 1 per unknown you must resolve first, and M = 1 (+1 per
+  milestone gate). Budget in actions, which you control, never in seconds, which you do not.
+- **Spend it the only way that works:** batch independent reads into one call and independent
+  edits into one call; treat a complete result as terminal (never re-read to confirm a write
+  that returned a receipt); on a refusal, retry once from the refusal's own fields or switch
+  route, never probe. Before each call ask: does this change the result, discharge a
+  verification obligation, or remove a later call? If none, do not call.
+- **Two clauses that keep this from backfiring:** suites are a separate counter and never
+  fungible with actions (under budget by skipping the gate is a failed task); and one action
+  may hold many edits but only one irreversible decision (a 400-line blind write is not a cheap
+  turn, it is an unreviewed one).
+- **End with** `TURNS: n/N actions, m/M suites` and, if over, the single cause. Report it
+  alongside correctness and the diff; never rank work on turns alone.
+- **A tool earns its call only when it removes a return you would otherwise make.** A tool that
+  is 3 s faster but adds one round-trip is a 6 s loss.
+
+## Receipt 05:55Z — r1's real finding: the defect was an apparatus artifact; the ratchet is kept
+
+The blind review of r1's three diffs found that `write-failure-receipt!` already creates its
+parent directory (44db939, an ancestor of the base). All three arms therefore produced
+test-only diffs. The "defect" I reported at 02:40Z came from the O1 build agent, whose codex
+sandbox refused writes under its home; I relayed it without reproducing on the host. Record
+corrected with the mayor (bead clj-surgeon-9yy, second half withdrawn). Fifth apparatus
+lesson of the night, same family: a failure observed inside a sandbox is a fact about the
+sandbox until reproduced outside it.
+
+Kept anyway: the native arm's regression test, chosen blind for asserting on the receipts
+directory itself and `.isFile` and for covering the `:onboarding` failure branch; proven red
+with the `.mkdirs` line disabled (2 errors) and green with it (3 tests, 17 assertions).
+Squash-merged to main (`2b3177d`), bb full suite 654 / 5595 / 0 on this box, branch archived.
+r1 walls for the record: native 113 s, A 148 s, B 194 s on a two-file test-only task.
+
+## Receipt 06:00Z — cal2 (six two-core arms in parallel), a mislabel corrected, and arm W
+
+**cal2** (medium rung, CORES_PER_ARM=2, six arms at once, all correct): native 223 / 289 / 469,
+A 232 / 250 / 355. Means native 327 (4-core sequential mean 254), A 279 (259). **Two-core
+six-wide is not timing-neutral:** the tails inflate (469, 355) as six kaocha JVMs contend. So
+the wide configuration is for experiments scored on actions, acceptance and quality, and
+walls from it carry a contention caveat; four-core, three-wide stays the wall apparatus.
+
+**Mislabel, corrected:** Anvil already had a Surgeon on 7888 owned by another user (the
+fleet's production deployment, 2026-08-25-e7f72e2). My shipped instance on 7888 never
+bound; its health check answered from the other server. Every Anvil arm labeled "A shipped
+64eac2e" before 05:30Z in fact called that production server, and its telemetry is in a home
+I cannot read (which is why the refusal analysis had no data for those arms). Relabeled here
+as **A = production e7f72e2** for cal-seq, cal-par, s2–s7, r1, cal2. The comparison stands
+(production is a shipped build), the label and the resource were wrong; reported to the
+mayor. From now every shipped arm calls my own 64eac2e instance on 7893.
+
+**Stage 0 (refusals vs failures, n=10 Surgeon arms with readable telemetry):** Spearman
+−0.14, undetermined, leaning against "refusals are quality control"; confounded with call
+volume; the missing rows are exactly the production-server arms.
+
+**Bisect servers live:** 7891 = wave minus the insertion-gap fix (its added test fails, all
+else passes), 7892 = wave minus the overlap fix (its two added assertions fail, all else
+passes). Arms G and O in the runner; queued after e3.
+
+**Arm W, on Gene's redesign of planning:** not a cost estimate but deliberate selection in one
+message: three candidate plans, a critique of each against the spec and the measured prices,
+choose one, execute, report the choice. Zero extra returns for the planning itself. Added to
+e3: A, A+report-only, A+budget rule, A+deliberate, three each, scored on actions, acceptance
+and two-judge quality, wall with the contention caveat.
