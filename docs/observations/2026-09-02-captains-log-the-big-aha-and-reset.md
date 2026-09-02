@@ -2488,3 +2488,26 @@ red-team of the store diff relaunched from a neutral cwd — the first launch di
 curtain-call's `.codex/config.toml` demands the retired cclsp MCP server (the same trap the
 anchor needed `strip-repo-mcp.py` for).
 
+
+## 21:32Z — Sol red-team of the store branch: NO-GO, nine items; the generation moves inside the lock
+
+Receipt: `scratchpad/fold-review/sol-store-review.md` (codex exec gpt-5.6-sol, read-only, from a
+neutral cwd). Sound: replay rebuilds the key index through fold/fold-one on every path (load!,
+checkpoint + tail, as-of); `append-all!` cannot write a keyed fact. Findings and rulings sent to
+the builder: (3) **my generation spec was wrong in the same way as the original check-then-append —
+the caller computed gen outside the lock**; ruling: the caller declares a rule
+(`:idempotency {:relation … :event-id … :identity …}`), `append!` derives key+gen inside the write
+lock and stamps the concrete key on the line; single instance makes the lock the boundary, and a
+stale gen across instances degrades to a visible refusal, never a duplicate. (2) any 23505 was
+read as our duplicate → only the idempotency index's constraint name maps; others rethrow.
+(4) memory trims keys, PG indexes raw text → normalise before serialisation. (5) fold throwing after
+a durable write leaves the key durable but absent from the atom with matching marks → invalidate
+the mark. (6) durable-duplicate receipt carried `existing nil` → refresh and populate, or a typed
+`:unavailable`. (8) memory keyed by key, PG by (event-id, key) → scope by event in both.
+(7) `:already-announced` was an unread URL parameter → flash; different body → typed `:conflict`.
+(9) privilege refusal on the index logged-and-continued → readiness fails closed when PG is
+configured and the exact index is absent. (1) `record-participation!` still check-then-appends
+`speaker.added-to-event` → own rule; forever key only if participation has no remove verb (Gene's
+item). Pattern worth naming: three of nine are "the verifier's premise was false" (forever key,
+any-23505, IF NOT EXISTS as proof of definition) — the review has to check premises.
+
