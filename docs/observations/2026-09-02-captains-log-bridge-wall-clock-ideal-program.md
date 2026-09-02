@@ -692,3 +692,14 @@ high level, brainstorm with the fleet. Both launched.
   predicted actions −32%, wall −23%, the largest lever; E6 refusal dose; E7 power-16.
 - Stage 0, free: correlate refusal count with acceptance failures across the 22 frozen diffs
   (the "refusals are quality control" reading predicts s3-B, 4 refusals, cleaner than B's mean).
+
+## Receipt 05:35Z — r1, the first real job, and the s7 review
+
+r1 (R1: the recovery-receipt parent-directory defect, surgeon repo, v3 runner, native and
+shipped in parallel then wave): native 113 s, A 148 s, B 194 s; all three pass the focused
+recovery suite with the new regression test (3 tests, 0 failures). Small real task, native
+fastest, same ordering as the medium rung. A blind comparative review picks the merge
+candidate; the winner merges to surgeon main (merges continue under the scoped freeze;
+installs do not). s7 blind review (Sol): P 19, Q 19, native 17 — the planning arms scored
+highest on this triple (n = 1), so planning's quality effect is open even though its wall
+effect is negative. cal2, the six-arm two-core calibration, started after r1.
