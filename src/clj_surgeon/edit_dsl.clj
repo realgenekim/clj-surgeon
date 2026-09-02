@@ -45,7 +45,7 @@
     clojure.core/partition-all clojure.core/replace])
 
 (def ^:private macro-expansion-symbols
-  '[lazy-seq loop loop* recur unchecked-inc
+  '[lazy-seq loop loop* recur case* throw new unchecked-inc
     chunked-seq? chunk-first chunk-rest chunk-buffer chunk-append chunk chunk-cons])
 
 (def ^:private builder-symbols
@@ -396,7 +396,7 @@
   (when (> (count expression) max-expression-characters)
     (invalid! expression :expression-too-large))
   (let [context (sci/init {:namespaces {'user sci-bindings}
-                           :classes {}
+                           :classes {'IllegalArgumentException IllegalArgumentException}
                            :allow sci-allowed-symbols})
         reader (sci/reader expression)
         user-ns (sci/create-ns 'user)]

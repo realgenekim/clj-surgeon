@@ -15,11 +15,20 @@
 
 (defn- run-make
   [& args]
-  @(proc/process
-     (into ["make" "--no-print-directory"] args)
-     {:dir project-root
-      :err :string
-      :out :string}))
+  (let [state-root (fs/create-temp-dir {:prefix "clj-surgeon-install-prereqs-"})]
+    (try
+      @(proc/process
+         (into ["make" "--no-print-directory"
+                (str "CLJ_KONDO_ADMISSION_DEST=" (fs/path state-root "bin" "clj-kondo-admission"))
+                (str "CLJ_KONDO_SHIM_DEST=" (fs/path state-root "bin" "clj-kondo"))
+                (str "CODEX_GLOBAL_INSTRUCTIONS=" (fs/path state-root "codex" "AGENTS.md"))
+                (str "CLAUDE_GLOBAL_INSTRUCTIONS=" (fs/path state-root "claude" "CLAUDE.md"))]
+               args)
+         {:dir project-root
+          :err :string
+          :out :string})
+      (finally
+        (fs/delete-tree state-root {:force true})))))
 
 (defn- run-installed-cli
   [path & args]

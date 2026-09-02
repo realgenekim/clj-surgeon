@@ -1,5 +1,19 @@
 # Publish Local MCP Changes
 
+## Per-worktree dev instance
+
+Use `make mcp-dev-start` when a branch must dogfood the Clojure source in its
+own worktree. It starts a second, bounded-heap MCP instance on port `7889` by
+default, with PID, readiness, log, nREPL port, and telemetry isolated under
+`~/.local/state/clj-surgeon/dev-7889/`. The shared instance on port `7888`
+remains running and untouched.
+
+Run `make mcp-dev-status`, `make mcp-dev-reload`, and `make mcp-dev-stop` for
+the branch instance. `make mcp-dev-register` registers its
+`http://127.0.0.1:7889/mcp` endpoint as `clj-surgeon-dev` with Codex and in the
+worktree-local ignored `.mcp.json`. Override `MCP_DEV_PORT` to run another
+isolated branch instance; the branch dogfoods itself through that dev port.
+
 clj-surgeon uses one shared local development stack. Coding agents do not
 start a production MCP server or a server pair for each repository.
 

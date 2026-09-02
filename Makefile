@@ -33,6 +33,12 @@ MCP_STOP_ATTEMPTS ?= 100
 MCP_JAVA_HOME ?= $(JAVA_HOME)
 MCP_JAVA_CMD ?= $(if $(MCP_JAVA_HOME),$(MCP_JAVA_HOME)/bin/java,$(shell command -v java 2>/dev/null))
 MCP_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
+MCP_DEV_PORT ?= 7889
+MCP_DEV_STATE_DIR ?= $(HOME)/.local/state/clj-surgeon/dev-$(MCP_DEV_PORT)
+MCP_DEV_URL ?= http://127.0.0.1:$(MCP_DEV_PORT)/mcp
+MCP_DEV_PID_FILE := $(MCP_DEV_STATE_DIR)/server.pid
+MCP_DEV_READY_FILE := $(MCP_DEV_STATE_DIR)/ready.edn
+MCP_DEV_LOG_FILE := $(MCP_DEV_STATE_DIR)/server.log
 CLOJURE_BIN ?= $(shell command -v clojure)
 CLOJURE_LSP_BIN ?= $(shell command -v clojure-lsp)
 CCLSP_HOME ?= $(abspath $(CLJ_SURGEON_HOME)../cclsp-structural-results)
@@ -46,7 +52,7 @@ CCLSP_HEALTH_ATTEMPTS ?= 20
 CCLSP_HEALTH_INTERVAL ?= 0.25
 WORKSPACE ?=
 
-.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
+.PHONY: test test-fast analyzer-contract-test analyzer-contract-target-self-test runtests mcp-test mcp-operation-oracle mcp-smoke mcp-serve mcp-serve-benchmark mcp-reload mcp-dev-start mcp-dev-stop mcp-dev-status mcp-dev-reload mcp-dev-register mcp-heap-config-self-test clj-kondo-admission-path-self-test cclsp-client-audit cclsp-client-audit-self-test cclsp-start cclsp-start-self-test cclsp-stop cclsp-status workspace-mcp-start workspace-mcp-stop workspace-mcp-status workspace-mcp-onboard workspace-mcp-install-codex install-mcp-codex-dev uninstall-mcp-codex-dev outline help install install-cli install-clj-kondo-admission install-codex-skill install-claude-skill install-agent-routing check-agent-routing prepare-cli-package prepare-skill-package install-dev install-dev-cli install-dev-codex-skill install-dev-claude-skill sync-clj-surgeon-skill check-clj-surgeon-skill-mirrors nrepl study-agent-usage study-agent-timeline study-agent-read-chains study-agent-usage-self-test benchmark-clean-codex benchmark-edit-portfolio benchmark-edit-portfolio-self-test benchmark-anvil-compiled-edit-canary benchmark-anvil-public-cfp-cleanup benchmark-anvil-format-extraction benchmark-anvil-portfolio-pair benchmark-anvil-portfolio-pair-self-test benchmark-inspect-mcp benchmark-inspect-mcp-self-test benchmark-codex-skill benchmark-claude-skill benchmark-agent-skills benchmark-codex-skill-self-test benchmark-claude-skill-self-test benchmark-agent-skills-self-test clj-surgeon-skill-self-test performance-regression-sentinel-test retain-benchmark-result verify-benchmark-retention benchmark-retention-self-test verify-benchmark-evidence
 
 help:
 	@echo "clj-surgeon — structural operations on Clojure namespaces"
@@ -59,6 +65,11 @@ help:
 	@echo "  make mcp-serve                 Start persistent HTTP MCP with full local telemetry and nREPL"
 	@echo "  make mcp-serve-benchmark       Start persistent HTTP MCP without nREPL"
 	@echo "  make mcp-reload                Reload live Clojure and publish changed tool schemas"
+	@echo "  make mcp-dev-start             Start this worktree's MCP on MCP_DEV_PORT (default 7889)"
+	@echo "  make mcp-dev-reload            Reload this worktree's dev MCP handlers and schemas"
+	@echo "  make mcp-dev-stop              Stop only this worktree's dev MCP"
+	@echo "  make mcp-dev-status            Check this worktree's dev MCP"
+	@echo "  make mcp-dev-register          Register clj-surgeon-dev with Codex and .mcp.json"
 	@echo "  make cclsp-start               Start branch-live cclsp + clojure-lsp provider"
 	@echo "  make cclsp-client-audit        Refuse direct repo cclsp registrations and launchers"
 	@echo "  make install-mcp-codex-dev     Install branch-live tools, start MCP, and register it with Codex"
@@ -189,6 +200,78 @@ mcp-reload:
 	  echo "$$result"; \
 	  echo "Live handlers and server tool contracts reloaded at $(MCP_URL); the server process did not restart."; \
 	  echo "Clients that honor tools/list_changed re-list automatically. The current Codex turn can cache model-visible schemas until a new session."
+
+mcp-dev-start:
+	@set -eu; \
+	  mkdir -p "$(MCP_DEV_STATE_DIR)/telemetry"; \
+	  health_url="$(patsubst %/mcp,%/healthz,$(MCP_DEV_URL))"; \
+	  if curl -fsS --max-time 1 "$$health_url" >/dev/null 2>&1; then \
+	    echo "clj-surgeon dev MCP already ready at $(MCP_DEV_URL)"; exit 0; \
+	  fi; \
+	  if test -f "$(MCP_DEV_PID_FILE)"; then \
+	    old_pid=$$(cat "$(MCP_DEV_PID_FILE)"); \
+	    if kill -0 "$$old_pid" 2>/dev/null; then echo "Dev MCP PID $$old_pid is alive but unhealthy; refusing a competing launch" >&2; exit 1; fi; \
+	  fi; \
+	  rm -f "$(MCP_DEV_PID_FILE)" "$(MCP_DEV_READY_FILE)" "$(MCP_DEV_STATE_DIR)/nrepl-port"; \
+	  cd "$(CLJ_SURGEON_HOME)"; \
+	  nohup env JAVA_HOME="$(MCP_JAVA_HOME)" JAVA_CMD="$(MCP_JAVA_CMD)" \
+	    "$(CLOJURE_BIN)" $(MCP_JAVA_OPTS) -X:clj-surgeon/mcp \
+	    :project-dir '"$(CLJ_SURGEON_HOME)"' \
+	    :port '$(MCP_DEV_PORT)' \
+	    :telemetry :full \
+	    :telemetry-dir '"$(MCP_DEV_STATE_DIR)/telemetry"' \
+	    :run-id '"dev-$(MCP_DEV_PORT)"' \
+	    :port-file '"$(MCP_DEV_STATE_DIR)/nrepl-port"' \
+	    :ready-file '"$(MCP_DEV_READY_FILE)"' \
+	    :log-file '"$(MCP_DEV_LOG_FILE)"' \
+	    :nrepl-port '0' \
+	    >"$(MCP_DEV_LOG_FILE)" 2>&1 & \
+	  launcher_pid=$$!; \
+	  ready=false; \
+	  for attempt in $$(seq 1 $(MCP_START_ATTEMPTS)); do \
+	    if curl -fsS --max-time 1 "$$health_url" >/dev/null 2>&1 && test -f "$(MCP_DEV_READY_FILE)"; then ready=true; break; fi; \
+	    if ! kill -0 "$$launcher_pid" 2>/dev/null; then break; fi; \
+	    sleep 0.5; \
+	  done; \
+	  if test "$$ready" != true; then tail -40 "$(MCP_DEV_LOG_FILE)" >&2 || true; kill "$$launcher_pid" 2>/dev/null || true; exit 1; fi; \
+	  dev_pid=$$(sed -n 's/.*:pid \([0-9][0-9]*\).*/\1/p' "$(MCP_DEV_READY_FILE)"); \
+	  test -n "$$dev_pid"; printf '%s\n' "$$dev_pid" > "$(MCP_DEV_PID_FILE)"; \
+	  echo "clj-surgeon dev MCP ready at $(MCP_DEV_URL) (PID $$dev_pid)"
+
+mcp-dev-stop:
+	@set -eu; \
+	  if test -f "$(MCP_DEV_PID_FILE)"; then \
+	    pid=$$(cat "$(MCP_DEV_PID_FILE)"); \
+	    if kill -0 "$$pid" 2>/dev/null; then kill "$$pid"; fi; \
+	    for attempt in $$(seq 1 $(MCP_STOP_ATTEMPTS)); do if ! kill -0 "$$pid" 2>/dev/null; then break; fi; sleep 0.1; done; \
+	    if kill -0 "$$pid" 2>/dev/null; then echo "Dev MCP PID $$pid did not stop" >&2; exit 1; fi; \
+	  fi; \
+	  rm -f "$(MCP_DEV_PID_FILE)" "$(MCP_DEV_READY_FILE)" "$(MCP_DEV_STATE_DIR)/nrepl-port"; \
+	  echo "clj-surgeon dev MCP stopped on port $(MCP_DEV_PORT)"
+
+mcp-dev-status:
+	@set -eu; \
+	  curl -fsS --max-time 1 "$(patsubst %/mcp,%/healthz,$(MCP_DEV_URL))"; echo; \
+	  test -f "$(MCP_DEV_PID_FILE)"; pid=$$(cat "$(MCP_DEV_PID_FILE)"); kill -0 "$$pid"; \
+	  echo "Dev MCP PID $$pid; state $(MCP_DEV_STATE_DIR)"
+
+mcp-dev-reload:
+	@set -eu; \
+	  port_file="$(MCP_DEV_STATE_DIR)/nrepl-port"; \
+	  test -f "$$port_file" || { echo "No dev MCP nREPL port at $$port_file; run make mcp-dev-start" >&2; exit 1; }; \
+	  port=$$(cat "$$port_file"); \
+	  result=$$(clj-nrepl-eval --port "$$port" \
+	    "(try (doseq [ns '[clj-surgeon.file-ops clj-surgeon.outline clj-surgeon.structural-lens clj-surgeon.owner-hypotheses clj-surgeon.show-form clj-surgeon.mcp-process clj-surgeon.forward-refs clj-surgeon.fix-declares clj-surgeon.binding-rename clj-surgeon.operation-algebra clj-surgeon.intent-transaction clj-surgeon.diagnostic-delta clj-surgeon.extract-header clj-surgeon.quoted-var-refs clj-surgeon.extract clj-surgeon.mcp-paths clj-surgeon.mcp-workspace clj-surgeon.mcp-workspace-sources clj-surgeon.mcp-schema clj-surgeon.mcp-compact-edit-fields clj-surgeon.mcp-compact-relations clj-surgeon.mcp-extraction clj-surgeon.mcp-contract clj-surgeon.mcp-extraction-plan clj-surgeon.mcp-semantic-client clj-surgeon.mcp-source-anchor clj-surgeon.mcp-hot-verify clj-surgeon.mcp-cold-verify clj-surgeon.mcp-change-buffer clj-surgeon.mcp-formatter clj-surgeon.mcp-operation clj-surgeon.mcp-inspect clj-surgeon.mcp-inspect-tool clj-surgeon.mcp-program-tool clj-surgeon.mcp-tool clj-surgeon.mcp-server clj-surgeon.mcp-http-server]] (require ns :reload)) (let [result (clj-surgeon.mcp-server/sync-tools!)] (if (:ok result) result (throw (ex-info \"MCP tool synchronization failed\" result)))) (catch Throwable error {:ok false :error (.getMessage error) :class (.getName (class error))}))"); \
+	  case "$$result" in *":ok true"*) ;; *) echo "$$result" >&2; exit 1 ;; esac; \
+	  echo "$$result"; echo "Dev handlers reloaded at $(MCP_DEV_URL)."
+
+mcp-dev-register:
+	@set -eu; \
+	  workspace="$${WORKSPACE:-$(CLJ_SURGEON_HOME)}"; mkdir -p "$$workspace"; \
+	  echo "codex mcp add clj-surgeon-dev --url $(MCP_DEV_URL)"; \
+	  codex mcp add clj-surgeon-dev --url "$(MCP_DEV_URL)"; \
+	  python3 -c 'import json,pathlib; p=pathlib.Path("'"$$workspace"'")/".mcp.json"; d=json.loads(p.read_text()) if p.exists() else {}; d.setdefault("mcpServers", {})["clj-surgeon-dev"]={"type":"http","url":"$(MCP_DEV_URL)"}; p.write_text(json.dumps(d, indent=2)+"\n")'; \
+	  echo "Updated $$workspace/.mcp.json"
 
 cclsp-start-self-test:
 	@sh test/cclsp_start_test.sh
