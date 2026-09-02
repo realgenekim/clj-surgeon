@@ -625,3 +625,12 @@ with the same defect and will show the same shape; kept as confirmation.
 All twelve full gates green at the base counts. The gate arm is 1.7x native here against
 2.2x on the medium rung; whether any Z arm completed the 21-owner hoist, and how much of the
 gap is the same grammar fight, comes from the scorer and the rung-L acceptance suite.
+
+## z1 gate-arm acceptance on the corrected diffs (15:37Z)
+
+Failed assertions of 39: Z-0 1 (acid-9), Z-2 3, Z-4 1 (acid-9), Z-1 20 with an empty diff (the
+run whose ten admit calls were all refused delivered nothing; a task failure), Z-3 5, Z-5 3;
+native 2.0 mean. Excluding the failed run the gate arm sits at 2.6, inside the suite's
+floor; including it, the gate arm is the only arm today with a run that shipped nothing.
+Nothing in E1 moved in the gate's favour; the grammar defect explains the shape but the
+receipt stands as measured.
