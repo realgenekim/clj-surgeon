@@ -1337,3 +1337,25 @@ Verdict on the follow-up "abandon MCP for a CLI": no. The interface is not where
 is, and the CLI's schema discovery and receipt plumbing are new costs. What the CLI arm does
 show is that a tool the agent can drive from shell gets used MORE (19 calls versus 6.7) and
 still displaces nothing, which is the same layering signature from a second direction.
+
+## Receipt 15:00Z — k2 blind quality: the CLI arm is the lowest-scoring Surgeon arm of the night
+
+| arm | Opus | Sol | mean |
+|---|---|---|---|
+| shipped MCP A | 19, 17, 14 (16.7) | 19, 18.5, 17 (18.2) | 17.4 |
+| CLI-only K | 13, 8, 12 (11.0) | 18, 14, 17.5 (16.5) | 13.8 |
+
+Both judges rank the CLI arm below MCP on the same build; Opus by 5.7, Sol by 1.7. One CLI
+diff is disqualifying-grade by both: it deleted an existing test (the long-reply buffer and
+barge-in coverage) and flattened untouched shared code (a 24-line note-parts form to one
+line) in a change sold as flag-isolated. Another CLI diff weakened a test by rewriting its
+utterance. Stale-onset guard placement: 2 of 3 CLI diffs carry the defect, 0 of 3 MCP here
+(one MCP diff places the guard first but resets the timestamp itself). Night tally of that
+defect class: 8 Surgeon-arm instances (6 MCP-prompt, 2 CLI), 0 native in 6.
+
+Reading: driving the same engine from the shell made the agent both busier (19 calls) and
+worse, and the worst diff came from the run with the most refusals (10, nine kinds). The
+selector failures and plumbing refusals the CLI adds are not free: an agent that spends its
+turns fighting the interface spends them on the code it can see, which is how a flag-isolated
+change turns into a flattened namespace. This is the strongest quality evidence tonight that
+refusal count tracks clarity within an arm, the relation the wave bisect predicted.
