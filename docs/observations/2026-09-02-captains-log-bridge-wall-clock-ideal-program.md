@@ -1646,3 +1646,52 @@ for the exact same nine-namespace require insertion that cost A-1 and A-3 about 
 each. Bead ask, refined: apply_clojure_changes must splice the edited span into the original
 source text and never re-print the owner, or refuse owner kind namespace for insertion and
 route to require_change. Reproducer: any l1 A-1 or A-3 rollout call #09.
+
+## Receipt 09:02Z — closing fleet round (Sol and Opus, independent): conclusion, fixes, distrust, and what runs next
+
+Convergent conclusion, both reviewers: clj-surgeon does not currently make Codex Sol faster
+or reliably better. Optional, Sol declines it and performs as native; encouraged, it layers
+the tool over native work at about 2x wall; mandated, it still escapes to native writes,
+draws more refusals, and takes 2 to 3x. The large cross-file refactor, the intended
+showcase, was the most decisive: native produced the correct change in one patch cell.
+Sol: "treat the present MCP workflow as a product failure, not a prompting problem;
+preserve the structural engine if useful, but redesign its write surface before further
+benchmark tuning." Opus: "act: pull 'Surgeon is available and expected' from fleet prompts
+now, a standing 2x tax with no measured return, and hold at the three fixes before
+re-measuring; scope: one repo, one caller, two rungs."
+
+Fixes ranked, both lists agree on the top three and on the proof for each: (1) one batch
+intent across N owners in one call, discovering its own owners from a Var or predicate
+rather than literals; proof: rerun l1, Surgeon non-test actions at or below native's 10.5.
+(2) Source-preserving splice outside the edited span; proof: l1 churn within 20 percent of
+the canonical +59/-34, whitespace-identical elsewhere. (3) Retire the unrecoverable refusal
+classes (invalid-intent-form, invalid-compact-relation, field validation, match
+cardinality); proof: under one typed refusal per run, zero recovered by native editing.
+Honest ceiling, Opus: all three buy parity on wall plus a review-burden win; nothing in
+tonight's evidence supports wall going positive.
+
+Distrust, two different targets, both accepted. Opus: the stale-onset skew (12 of 33 vs 2
+of 12) is the only claim that upgrades "slower" to "harmful" and it pools cohorts with
+different servers, builds and prompts, including unverified-7888 rows, the exact pooling the
+night's corrections forbid; restated below per cohort, and any future count needs a
+pre-registered mechanical predicate (guard emitted before or after the reset, grep-able,
+no judge). Sol: the apparatus's subject identity, not the statistics; server sha, times,
+"origin" and driver exit codes were each receipt-blind at some point; the ratchet is a
+machine-generated attestation per arm before work begins (server commit read from the
+server, bundle hash, process command line, prompt hash, worktree commit, model, runner
+hash) with the whole cohort rejected on any mismatch. Being added to the runner now.
+
+Stale-onset restated per cohort, verified-server rows only: n1 shipped 3 of 6, native 0 of
+6; k2 MCP 0 of 3, CLI 2 of 3; v1 shipped 3 of 9, turn-budget 1 of 3; s1 shipped 0 of 3,
+mandate 0 of 3, optional 1 of 3, native 1 of 3. The skew is real within n1 and k2 and
+absent in s1; it is not a night-wide law.
+
+What runs next. Both: let b2 finish, then stop measuring the shipped build's wall (three
+replications; the floor says nothing else is visible). Sol: no further cohort unless a
+prototype with batch writes and source-preserving splices exists; Opus: one cohort worth
+its cores, rung L native vs shipped driven by a second caller, because prompt, rung,
+interface and build all varied tonight and the caller never did, while doctrine puts the
+Surgeon one-liner in every Clojure agent prompt on a tax inferred entirely from Sol. Routing
+decision, mine: b2 finishes and is scored; l1r (one arm, already queued) runs; no new cohort
+is launched tonight; the second-caller cohort and the prompt-doctrine change go to Gene as
+decisions in the wake-up brief.

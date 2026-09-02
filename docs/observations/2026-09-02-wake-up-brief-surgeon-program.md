@@ -98,9 +98,16 @@ re-prints every form it edits and reformats the untouched remainder.
   (inbox inb-beecb9). Ship to house rules or hold.
 - Ratifications still queued: MCP-OP-INSERT-001..006, string-symbol outline contract,
   insert_pair design (from earlier tonight).
-- Whether the program continues: the substitution question ("why does the agent not drop
-  native steps when Surgeon is present") is now the hill; l1 (21-owner large rung) and b2
-  (bisect replication) are queued and will run without you. The fleet's diagnosis and the
-  two cheapest discriminating experiments are in the captain's log's last receipts.
+- The fleet's action item, which is a doctrine change and therefore yours: pull "Surgeon is
+  available and expected" from fleet agent prompts (the delegation one-liner every Clojure
+  agent prompt carries) until the three product fixes land, since it is a standing 2x tax
+  with no measured return. Both reviewers recommend it; I have not changed any prompt.
+- Whether to run one more cohort: rung L, native vs shipped, driven by a second caller
+  (Claude) rather than Sol, because the caller is the one variable that never varied and
+  the tax is inferred entirely from Sol. Needs Claude Code on Anvil with the MCP config and
+  a subscription login; I did not build it unilaterally.
+- Substitution was answered (s1): optional, the agent declines the tool; mandated, it
+  complies on reads and escapes on writes. b2 (fixed main vs shipped) is the last cohort
+  running; its receipt closes the insertion-gap story.
 
 Full receipts: `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`.
