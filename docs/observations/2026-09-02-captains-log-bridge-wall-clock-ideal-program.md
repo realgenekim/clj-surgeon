@@ -1426,3 +1426,20 @@ buys nothing on wall.
 What the floor says about the program: a wall effect needs about 170 s at n=3 or about
 100 s at n=9 to be seen at all. Only the shipped-versus-native gap is that large. Everything
 else measured tonight on wall was noise, honestly labelled or not.
+
+## Receipt 08:11Z — v1 blind quality, Opus judge (Sol pending): the judge's own floor on nine identical arms
+
+Opus on the nine identical shipped diffs: 20, 17, 16, 16, 16, 16, 16, 15, 14; mean 16.2, sd
+about 1.7, so two sd is about 3.4 points on the 20-point scale. On the three turn-budget
+diffs: 18, 16, 13 (15.7). Stale-onset guard defect: 3 of 9 shipped, 1 of 3 turn-budget;
+night tally now 12 Surgeon-arm instances, 0 native in 6. One turn-budget diff carries a
+worse defect than any seen tonight: its shared cancel body refuses while "checking" is true,
+which is exactly when the spoken CANCEL branch runs, so under the flag the word is a no-op
+and the hands-free loop wedges until reload.
+
+What the judge floor settles: n1's 0.7-point native lead is noise (already labelled so);
+b1's 1.7-point O deficit at n=3 is inside it, so the bisect stands on the typed-refusal
+ledger alone, which was the stronger evidence anyway; the wave build's earlier 3-point
+deficit sits at the edge and is the only quality gap of the night that approaches
+significance. Correctness-defect counts are the quality measure that resolves; scores do
+not, at this n.
