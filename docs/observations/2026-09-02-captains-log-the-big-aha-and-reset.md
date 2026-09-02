@@ -676,3 +676,34 @@ hardened this gate against inputs the reviewers wrote, and the field killed it w
 first input a caller wrote. The cheapest available test at any point in those rounds was
 one real payload." Next: creation and deletion admitted as operations, then the acceptance
 test the rounds lacked, replaying all 109 field payloads through the new parser.
+
+## The field replay: 109 real payloads through the fixed gate (16:12Z; commit b171338 on the branch, unpushed)
+
+| measure | before | after |
+|---|---|---|
+| payloads that parse | 32 of 109 | 109 of 109 |
+| the 77 field refusals that parse | 0 | 77 |
+| of those 77, refused for a cause the gate no longer has | | 51 (39 invalid-patch, 6 unsupported operation, 3 tool failure, 2 unreadable image, 1 file not found) |
+| first admit call of each run against the pristine pre-image | 0 of 10 apply | 8 of 10 apply |
+
+The remaining 26 are still-correct refusals: 17 context genuinely did not match, 9
+verification failed. The apply column beyond the first call could not be measured honestly
+(a payload that now succeeds changes the tree, and much of what followed in the rollouts
+was the agent retrying that same edit), so the parse and first-call numbers lead and the
+failed reconstructions are kept as negative results.
+
+Whole-file operations are admitted now: creation with an empty pre-image and post-image
+hazards, deletion fenced by the workspace's own requires (deleting a namespace something
+still requires refuses naming the dependents), move as create plus delete in one
+transaction. The replay found two more defects three review rounds had hardened: hunk
+counts were wrong in both directions (nineteen field payloads overcounted, ten
+undercounted, all with bodies that said exactly what the author meant; the body now
+delimits a hunk and the counts are advisory, with strict content matching still refusing
+anything that does not belong), and a terminating newline annexed a phantom line once the
+body took over, caught by an existing witness on the first run. Ten of twelve runs wrote the
+worktree's absolute path into the header; those normalise to the relative remainder, and
+anything outside the root is refused as before. 76 witness tests, 636 assertions.
+
+Builder's flag, kept: "the count fix I shipped in round five was wrong, and only the field
+showed it; both times the mistake had the same shape: I trusted a declared number over the
+bytes in front of me."
