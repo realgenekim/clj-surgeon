@@ -172,3 +172,11 @@ mandate 625; all correct; whole-form re-print churn (9x) + invalid-compact-relat
 mayor. Brief updated. b2 RUNNING since 08:52Z (B = main 2311cc09 on 7889 vs A). Then l1r (chain-l1r2). Final fleet round on
 the whole night launched (fleet-night-*.md). After b2: freeze -> rescore -> scorer (typed-refusal ledger: did
 ambiguous-insertion-gap vanish?) -> log -> brief final -> mayor. Gene wakes ~13:00Z.
+
+UPDATE 09:02Z (real UTC) — CLOSING STATE. Fleet closing round logged (4628bda): product failure of the write surface; three fixes
+with proofs; stale-onset restated per cohort; attestation ratchet being added to v5 by an agent (do not touch v3 while b2 runs).
+Brief (docs/observations/2026-09-02-wake-up-brief-surgeon-program.md) carries Gene's decisions: pull the Surgeon one-liner
+from fleet prompts (doctrine, his call); second-caller cohort (Claude on Anvil, not built); doctrine v2 inb-beecb9;
+ratifications. REMAINING WORK: b2 (running since 08:52Z) -> freeze -> rescore -> scorer (typed-refusal ledger: did
+ambiguous-insertion-gap vanish on main 2311cc09? churn?) -> log -> brief -> mayor; then l1r (1 arm) -> fold into l1 means.
+NO new cohort tonight. Monitor bb5prq9bu covers b2 (add l1r if restarted). Gene wakes ~13:00Z.
