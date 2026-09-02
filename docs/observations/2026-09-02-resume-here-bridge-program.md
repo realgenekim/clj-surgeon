@@ -728,3 +728,20 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Next candidate builds (if Gene starts the Anvil seat, hand these over; else run here one at a time):
   receipt ratchets from the friction ledger; lens follow-ups (program-speaker-updated, reminder-schedule).
 
+
+## RESUME DELTA 2026-09-02T23:45Z — day queue COMPLETE; nothing running
+
+- All branches pushed and verified. clj-surgeon (mayor's queue): rf2 5e6cdd2, census 7244141, study ops
+  b3c17bb, q5z 2753f23, admit-gate 17125fe, close-losers 205e13a, format-form-scope 62981ee.
+  curtain-call (Gene's merges, in order): fold f115cc2d (inb-d603ce) → store 96387535 (inb-70711c) →
+  settings-lens aebb7b9a (inb-554636); tools: fold-diff f2d8f6eb (mayor runs it, inb-3a9818); specimen
+  settings-lens-native 74a3d7e6.
+- Waiting on: the mayor's `pg_get_indexdef` paste + fold-diff output; Gene's four decisions (report §9);
+  whether the Anvil `forge` seat is created (brief: docs/observations/2026-09-02-anvil-builder-seat-brief.md).
+- Routing: answer Gene in the surface he wrote from (memory reply-seat-bridge-until-requested).
+- Held builds, in priority: (1) receipt ratchets from the friction ledger (log 8392477); (2) lens
+  follow-ups (program-speaker-updated onto the lens; reminder-schedule guard); (3) E6 ls-tree free-choice
+  cohort on Anvil (needs the study branch on a cohort server + FAN-style prompts). Start (1) only when the
+  mayor has merged census or study ops (schema-file conflicts) or on the Anvil seat.
+- Gene report current at bc967f6 (§8/§9/§10). Captain's log current through bc967f6.
+
