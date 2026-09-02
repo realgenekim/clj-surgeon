@@ -1302,3 +1302,38 @@ much as the steps they replace; if Y is not obeyed, the contract cannot be subst
 k2 walls (MCP vs CLI on the same shipped build, six-wide): shipped MCP 593, 775, 808 (mean 725);
 CLI 614, 716, 724 (mean 685); all gates green. The interface is not the cost. Actions,
 refusals and tokens for k2 are being scored; blind quality on its six diffs is queued.
+
+## Receipt 14:40Z — k2 scored: the CLI is a second layer, not a substitute (closes the CLI follow-up inb-ce2f15)
+
+| metric (n=3 each, six-wide) | shipped MCP A | CLI-only K |
+|---|---|---|
+| wall s | 725 | 685 |
+| total actions | 26.3 | 31.0 |
+| Surgeon calls | 6.7 MCP | 19.0 CLI invocations in 10.0 shell cells |
+| other shell cells | 13.0 | 17.0 |
+| typed refusals | 2.7 (4 kinds) | 6.0 (9 kinds) |
+| input tokens | 1.67 M | 2.07 M |
+| seconds per action | 27.5 | 22.1 |
+| seconds per Surgeon call | | 36.0 |
+| acceptance failed | 2.00 | 2.33 |
+
+Findings. (1) The CLI does not relocate the additive cost, it adds a second layer: K keeps
+more plain shell than A and puts 19 CLI invocations on top; pre-edit locating in plain shell
+barely moves despite six CLI reads per run, so locating is duplicated across both transports.
+(2) Correction to my earlier "45 s per action" for the CLI arm: that was per CLI CALL. k1-K
+ran 451 s over 42 actions, 10.7 s per action, 41 s per CLI call; k2-K is 36 s per CLI call and
+22 s per action at 2 cores six-wide. (3) The CLI refuses 2.2x as often, with two plumbing
+refusals MCP cannot emit (missing `:receipt-out`, invalid receipt path) and three selector
+failures the MCP arm never hit; one run burned three calls to land one change and two more
+to delete its receipt file from the worktree. (4) Two costs the CLI adds that MCP does not:
+schema discovery (six `--help` calls across K, zero for A, because MCP ships schemas in the
+tool list) and receipt-file plumbing into the worktree, an agent-borne pollution risk.
+(5) Wall and tokens invert here (K carries 1.24x the tokens and finishes 40 s sooner) at box
+load 7.2 versus about 3 during n1: the wall-to-tokens relation is within-cohort and must not
+be carried across cohorts at different load. Caveat: n=3, one K run effectively opted out of
+the tool (3 CLI calls), so K's means rest on two runs.
+
+Verdict on the follow-up "abandon MCP for a CLI": no. The interface is not where the cost
+is, and the CLI's schema discovery and receipt plumbing are new costs. What the CLI arm does
+show is that a tool the agent can drive from shell gets used MORE (19 calls versus 6.7) and
+still displaces nothing, which is the same layering signature from a second direction.
