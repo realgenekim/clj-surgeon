@@ -29,7 +29,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `within` + `from`/`to` surgical edit | WON | MCP | l1 A-0, A-4, Y-0, zero churn |
 | `:extract!` to a new namespace | WON | CLI + MCP extraction verb | no native equivalent; safe-refactor skill |
 | `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
-| owner-kind-namespace insertion (whole-file re-print) | LOST | MCP | clj-surgeon-46o; 3 of 3 churned, 0 of 4 controls |
+| owner-kind-namespace insertion (whole-file churn) | LOST; mechanism corrected: Surgeon runs standard-clojure-style whole-file on changes/basis/extraction routes, never on edits | MCP | clj-surgeon-46o re-scoped to formatter scope; big-aha log |
 | per-form writes for a fan-out change | LOST | MCP | l1: 8 to 10 writes on top of a native patch (fbcaed1) |
 | splice-not-reprint on every write | BUILDING | MCP, branch bridge/close-losers | order of 2026-09-02 |
 | intent verb over N owners, tool-side discovery | OPEN | MCP | clj-surgeon-q5z; the only node that can make wall positive |

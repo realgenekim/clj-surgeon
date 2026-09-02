@@ -369,3 +369,24 @@ guard natively. That is the cheap-affordance story restated correctly: not the t
 the tool's framing. For the gate this means the hazard to detect is generic and structural:
 a new early return placed before an existing state reset in the same function, which a
 parsed pre-and-post comparison can see and a text diff cannot.
+
+## Close-losers, red team round two (13:37Z): mechanism confirmed by instrumentation; the basis route is the open door
+
+Instrumenting format-candidates! settles the churn question: it fires on the changes, basis
+and extraction routes and never on edits; one logical edit gives 89 bytes of drift on
+changes with the formatter, zero without, zero on edits with the formatter configured. The
+churn is Surgeon running standard-clojure-style fix over the whole staged file on every
+non-editor-gesture route. Bead 46o is a formatter-scope fix. Every round-one defect and every
+round-two fix holds on the changes and edits routes (five key shapes refused; drift caught
+for same-length byte changes, CRLF, BOM, trailing newline, tabs, multibyte; unlocatable
+refuses at commit; a second file's drift refuses the whole transaction; winners commit at
+drift 0; fence and paths untouched). NO-GO because the basis route, prepare-change, the route
+the server's own instructions recommend, runs the formatter with no drift gate and skips
+parameter validation entirely, so neither the loser refusal nor the gate can reach it, and
+probe q4 committed whole-file churn there with ok true; extraction is ungated the same way;
+and the drift gate fails open when a compile path omits its splice guard. Round three: span-
+scoped formatting on every committing route (or whole-file formatting off on basis and
+extraction as on edits), the gate as backstop everywhere, basis through validation, and a
+refusal when the guard is missing. A design decision for surgeon1 surfaced by the probes:
+require_change is bound to symbol_migration, so a namespace-owner require insertion has no
+one-call redirect, and the only legal completion rewrites call sites nobody asked for.
