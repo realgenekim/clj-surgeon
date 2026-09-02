@@ -1443,3 +1443,31 @@ ledger alone, which was the stronger evidence anyway; the wave build's earlier 3
 deficit sits at the edge and is the only quality gap of the night that approaches
 significance. Correctness-defect counts are the quality measure that resolves; scores do
 not, at this n.
+
+## Receipt 08:30Z — s1 walls: the substitution mandate is the slowest arm of the night; optional Surgeon runs at native speed
+
+| arm (six-wide, 2 cores, paired by wave) | walls s | mean |
+|---|---|---|
+| wave 1: Surgeon OPTIONAL, "fastest safe completion" (X) | 359, 383, 470 | 404 |
+| wave 1: native (N) | 369, 481, 489 | 446 |
+| wave 2: shipped, mandatory-availability prompt (A) | 616, 622, 787 | 675 |
+| wave 2: SUBSTITUTION MANDATE + trusted receipts (Y) | 850, 891, 913 | 885 |
+
+All twelve gates green. Against the v1 floor (nine identical A: mean 634, sd 86): Y is 2.9 sd
+above the A mean; X is 2.7 sd below it. Reading before the scorer lands: telling the agent it
+MUST substitute Surgeon for its native reads and writes made it slower than merely telling it
+Surgeon is available, which was already 1.8x native; telling it the tool is optional gave
+native speed. Whether the X agents used the tool at all, and whether the Y agents obeyed the
+mandate or fought it, is what the rollouts answer next; either way the mayor's framing holds:
+the cost is inherent to routing through the tool on this task, not to the agent's discipline.
+
+Also: v1 Sol quality on the nine identical shipped diffs: 20, 19, 18, 18, 18, 17, 17, 16, 16
+(mean 17.7, sd about 1.3); turn-budget 17, 16, 14. Both judges independently named the same
+worst defect in the same turn-budget diff (a shared cancel body that refuses while
+"checking" is true, so the spoken CANCEL is a no-op and the loop wedges). Judge floors: Opus
+sd 1.7, Sol sd 1.3, on identical inputs.
+
+Apparatus: one l1 arm (Y, slot 2) died in 52 s with "Selected model is at capacity", an
+OpenAI-side error; the runner now stamps MODEL-CAPACITY on such end lines, and a single-arm
+rerun (l1r) is queued after l1 so the triple is complete. The 7889 instance is being
+rebuilt on main 2311cc09 (the merged gap fix) and b2 re-pointed to "fixed main vs shipped".
