@@ -297,3 +297,28 @@ changes-route commit on a file the formatter would reformat, which closes the ch
 real fix may be to stop restaging; and a namespace-owner insertion has no complete redirect
 because from/to take one form and require_change is bound to symbol_migration, so those
 refusals name the missing field rather than hand back a runnable call.
+
+## E5 scored: the throughput gap replicates a fourth time; the defect tracks presence, not usage (13:27Z)
+
+| metric (n=9 each) | shipped A | native N | delta in floor sd |
+|---|---|---|---|
+| wall s | 551 | 336 | 2.5 |
+| total actions | 32.2 | 19.2 | 4.5 |
+| input tokens | 2.09 M | 1.21 M | 3.5 |
+| native patches | 2.0 | 4.2 | |
+| typed refusals | 3.4 (31 total, 18 invalid-intent-form) | 0 | |
+| diff lines added | 85.7 | 94.4 | |
+
+All three throughput metrics clear two sd of the floor, consistent with n1, s1 and l1. Native
+is not defect-free by doing less: it shipped larger diffs on the same four files. Fisher's
+exact one-sided on 6 of 9 against 0 of 9: p 0.0045.
+
+Inside the shipped arm nothing separates defective from safe runs at two sd, and every
+directional signal runs against a "more tool use causes it" story: defective runs made fewer
+MCP calls (6.3 vs 11.0), fewer writes, fewer refusals, and more native patches. The defect
+tracks the tool's presence in the loop, not how hard the agent leans on it; the one
+ambiguous-insertion-gap refusal of the cohort landed on a SAFE run. Hypothesis under test
+now, from the rollouts: with Surgeon present the agent has the form's boundaries from the
+outline but never reads the body of the JavaScript string (the outline cannot see inside a
+string literal), so it inserts the guard at the function's top without having seen the
+reset line the branch depends on, while native agents grep the body and see it.
