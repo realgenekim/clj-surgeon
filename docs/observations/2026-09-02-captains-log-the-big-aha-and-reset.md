@@ -1531,3 +1531,42 @@ field shifted columns under bash `read`). Remaining: the q5z verb (building) →
 `~/acid/surgeon-q5z`, server on 7895 writing ready.edn, `Q5Z-SHA`, **hand-drive at N=5 first
 (G1–G2, per the tweezer protocol)**, then GO-SL1.
 
+
+## 18:42Z — z6 scored: the fix is real, the wall win was a slow baseline; falsifier triggered on rung M
+
+Receipt `~/acid/receipts/z6-score.md` (scorer; acceptance run, rs1's rescore-R3 still deferred
+while z7 works in the same repo).
+
+| | z3 Z (n=4) | z3 N (n=4) | z6 Z (n=7) | z6 N (n=7) |
+|---|---|---|---|---|
+| wall | 285.8 | 356.2 | **293.1 (53.6)** | **296.7 (54.3)** |
+| returns | 13.2 | 21.2 | 18.1 | 21.7 |
+| tokens Z as % of N | 59 % | | 86 % | |
+| admit refusals | 0 / 5 | | **5 / 21 (23.8 %)** | |
+| commits at complete | 5 / 5 | | **15 / 15; partial never appears** | |
+| extra post-write probes | 0 | 2.5 | **0** | 0.57 |
+| `apply_patch` on `.clj` | 0/4 | | **0/7** | 4.57 per run |
+| stale-onset defective | 0/4 | 2/4 | **3/7** | 1/7 |
+| acid acceptance failing (of 39) | 2.50 | 0.50 | 2.14 | 1.71 |
+
+Welch Z vs N at df 12: −3.6 s, t −0.12, p 0.90, d −0.07. **Predictions (d97fc5d): 2 PASS (100 %
+complete commits; 0 post-write probes), 3 FAIL (wall ≤ 0.85×: 0.988; refusals < 10 %: 23.8 %;
+stale-onset 0/7: 3/7); falsifier TRIGGERED (gap 0.04 floor sd).** Between cohorts Z moved +7.3 s
+and N moved −59.5 s: z3's native arm carried two 400 s+ runs in four; z6's one in seven. The z3
+headline was a slow baseline, not a fast gate. Gene's Leyden question is answered for rung M.
+
+**What reproduced and what is new.** The fix does what it says: 15 of 15 commits at `complete`,
+`partial` unreachable across 21 calls. The gate caught two genuine hazards in situ for the first
+time in the series: an unbalanced post-image (`Unmatched delimiter: )` at `channel_test.clj:1037`)
+and blocking lint findings, both refused with "nothing was written". Two behavioural results hold
+across cohorts: zero extra post-write probes and zero native `.clj` patching. Refusals are a real
+cost after all: 23.8 %, two mechanical, one self-limit (`verification-incomplete`:
+no-clojure-files, no-mapped-test-namespace), two genuine. `verification-runner-failed` and
+`focused-namespace-missing` never fired; two of three new classes remain unexercised.
+
+**Reading against the mechanism.** The gate wins by deleting native's post-write ritual; on this
+cohort native's ritual was 0.57 extra probes per run (z3: 2.5), so there was little to remove,
+and the result is flat. Consistent with the mechanism, fatal to the rung M claim. z7 is the real
+test: native runs two JVM suites on R3, and z7's first gate arm executed zero suites itself and
+ended at 281 s against rs1's 328.
+
