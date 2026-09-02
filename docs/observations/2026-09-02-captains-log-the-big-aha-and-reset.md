@@ -709,3 +709,12 @@ showed it; both times the mistake had the same shape: I trusted a declared numbe
 bytes in front of me."
 
 ## Curtain-call head (16:12Z): Gene, "assume yes from mayor" — d9afe8e9 is the true head; the refactor draft (inb-868bb7) stands as built.
+
+## Self-inflicted, minor, logged: the gate branch was pushed before its round-four verdict
+While writing the resume note I used an unquoted heredoc and the note's prose contained
+backticked commands; bash executed them. Result: bridge/admit-gate pushed to b171338 before
+the fourth red team returned, and a harmless failed checkout of a path that exists only on
+Anvil. Blast radius: none (a branch, never main; any NO-GO lands as further commits). Ratchet:
+prose fed to bash goes through quoted heredocs, and commands never sit in backticks inside
+notes. Same family as the hand-typed timestamps: text and instruction confused at the
+boundary where they take effect.

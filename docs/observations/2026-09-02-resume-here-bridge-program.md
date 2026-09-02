@@ -241,12 +241,12 @@ test-with-the-callers-real-bytes): replay real payloads before red teams.
 
 UPDATE 16:15Z (real UTC) — GENE ON A PLANE ~2 h, verbatim: "you are a hundred percent go to do whatever you deem safe ... Go. Go.
 Go." Constraints unchanged: no SCI fence/path confinement/kernel commit-path changes, branches only (no merges to clj-surgeon
-main by me), Andon open, never 7888. Curtain-call head d9afe8e9 assumed true (Gene). IN FLIGHT: (a) gate red team round 4 on
-b171338 (dual grammar, whole-file ops, field replay 109/109 parse, 51/77 field refusals gone); my mcp-test 453/4590/1
-pre-existing; on GO: , restart 7894 via ~/acid/start-gate-7894.sh
-after  (verify healthz + ready.edn + attestation sha), then touch
-~/acid/GO-Z3 (chain-z3: z3 M "Z N F Z N F|F Z N F Z N", z4 L same; F = gate OPTIONAL arm = the acceptance test); (b) z3 prep
-agent (prompts M/L-gate fixed to say apply_patch grammar, M/L-gateopt, runner F, chain-z3.sh); (c) 46o builder on
-~/src/clj-surgeon-46o branch bridge/format-form-scope (base close-losers 205e13a). THEN: score z3/z4 (z_score-style with
-admit columns; stale_onset on Z/F/N; acceptance), log, fleet round, brief, mayor. Monitor bdsyvspgr lists rt2 z1 z2 — restart
-with z3 z4 when launched.
+main by me), Andon open, never 7888. Curtain-call head d9afe8e9 assumed true (Gene). CORRECTION: an unquoted heredoc in my
+own shell executed backticked commands inside this note's text, so bridge/admit-gate was PUSHED to b171338 BEFORE the round-4
+red team returned (harmless: branch only, never main; if NO-GO, fixes land as further commits). Ratchet: notes are written
+with quoted heredocs; commands never sit in backticks inside prose fed to bash. IN FLIGHT: gate red team round 4 on b171338
+(my mcp-test 453/4590/1 pre-existing); z3 prep agent (fixed Z prompts, F = gate OPTIONAL arm, runner F, chain-z3.sh); 46o
+builder on ~/src/clj-surgeon-46o branch bridge/format-form-scope (base close-losers). ON GO: restart 7894 on b171338 (fetch
++ checkout in ~/acid/surgeon-gate on ANVIL, rerun ~/acid/start-gate-7894.sh, verify healthz/ready.edn/attestation sha), touch
+~/acid/GO-Z3 (chain-z3: z3 M "Z N F Z N F|F Z N F Z N", z4 L same). THEN score z3/z4 (admit columns; stale_onset on Z/F/N;
+acceptance), log, fleet round, brief, mayor. Monitor bdsyvspgr lists rt2 z1 z2 — restart with z3 z4 when launched.
