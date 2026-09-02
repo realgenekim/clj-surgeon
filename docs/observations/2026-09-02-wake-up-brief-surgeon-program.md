@@ -35,6 +35,20 @@ apply_patch, receipts are terminal). If Y closes the gap, the fix is the prompt.
 obeyed and the gap stays, the tool's steps cost what they replace. If Y is not obeyed, the
 contract cannot be substituted for.
 
+## The discriminating experiment (s1, ran after the diagnosis)
+
+| prompt | walls s | mean |
+|---|---|---|
+| Surgeon optional, "fastest safe completion" | 359, 383, 470 | 404 |
+| native, same wave | 369, 481, 489 | 446 |
+| shipped, Surgeon available and expected (the prompt used all night) | 616, 622, 787 | 675 |
+| substitution mandate: inspect replaces grep, Surgeon writes replace patches, receipts terminal | 850, 891, 913 | 885 |
+
+Mandating substitution made it slower still, 2.9 sd above the shipped mean. Making the tool
+optional gave native speed. No prompt discipline recovers the cost; it is inherent to routing
+edits through the tool on this task. Whether the optional-arm agents used the tool at all, and
+whether the mandated agents obeyed, is in the captain's log's s1 receipts.
+
 ## What was settled tonight
 
 1. **The wave build's clarity deficit has a cause.** The insertion-gap fix introduces a refusal

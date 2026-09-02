@@ -150,3 +150,11 @@ v1 diffs frozen (12/12 complete), rescore-anvil-v1.txt running, judges running (
 v1-score.md (variance floor: mean/sd per metric over nine A; V dose). chain-3b launches s1 M "X N X N X N|Y A Y A Y A" next
 (check ~/acid/receipts/chain-next.log for "launching s1"), then l1 L "A N Y A N Y|Y A N Y A N", then chain-4b b2. Monitor
 bb5prq9bu covers k2 v1 s1 l1 b2. Receipt headers are now written from date -u.
+
+UPDATE 08:31Z (real UTC) — s1 DONE + logged (18a6d30): optional X 404 s mean, native 446, shipped A 675, mandate Y 885 (slowest
+of the night). s1 frozen 12/12, rescore done, judges running (quality-review-s1/), scorer writing s1-score.md (did X use the
+tool; did Y obey). v1 scored + logged (3e26e1c floor: wall sd 86, actions sd 2.9; acceptance cannot resolve arms -> withdrawn
+"native more conformant"; brief amended) + judge floors (79261c8, Sol in 18a6d30). k2 logged (4664188, 39039aa). l1 RUNNING
+since 08:27Z "A N Y A N Y|Y A N Y A N" (rung L; one Y died MODEL-CAPACITY -> l1r "Y" queued via chain-l1r.sh after l1 done).
+7889 being rebuilt on main 2311cc09 (gap fix merged by surgeon1) and b2 re-pointed to "B A B A B A" via chain-4c (agent in
+flight; verify pgrep chain-4c and 7889 pid before trusting). Mayor beads: f5e + vcz closed by 2311cc09; fdo = cold-verify flake.
