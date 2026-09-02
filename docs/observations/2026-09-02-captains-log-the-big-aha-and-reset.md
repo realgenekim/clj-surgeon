@@ -634,3 +634,27 @@ native 2.0 mean. Excluding the failed run the gate arm sits at 2.6, inside the s
 floor; including it, the gate arm is the only arm today with a run that shipped nothing.
 Nothing in E1 moved in the gate's favour; the grammar defect explains the shape but the
 receipt stands as measured.
+
+## z2 scored: the same grammar fight, one structural limit, and one run that shows the shape working (15:40Z)
+
+| metric (rung L, n=6 each) | Z native plus gate | N native | delta in floor sd |
+|---|---|---|---|
+| wall s | 361 | 216 | +1.7 |
+| total actions | 15.2 | 10.7 | +1.6 |
+| tokens | 0.70 M | 0.43 M | +1.1 |
+| admit calls | 24 (4 preview, 20 commit), 18 refused (75 percent), 0 hazards | | |
+| refusals by type | invalid-patch 7, unsupported-patch-operation 6, admit-tool-failure 3, patch-does-not-apply 1, source-file-not-found 1 | | |
+| acceptance (rung L suite) | 0 failures, 6 of 6 | 0 failures, 6 of 6 | |
+
+Every arm in both columns completed the hoist (11 files, one currentTimeMillis left, 82
+assertions clean). The grammar refusal repeats in 5 of 6 gate runs. New on this rung: the
+gate refuses whole-file creation and deletion ("apply them natively and admit the edits
+separately"), and the task begins by creating clock.clj, so all six gate runs were told by
+the gate to go around it. The penalty no longer clears the floor here; 95 percent of it is
+still model returns in the re-submission loop, admit tool time 3 s per call. One run,
+z2-g2-Z-1, used the shape as designed: two admit calls, took the creation advice, then
+admitted the rest in one verified commit, never touched apply_patch on a .clj, and finished
+in 254 s, ahead of three of six natives. That is the first field evidence that when the
+grammar matches, the gate is at parity or better, and it is one run. Round five gains
+creation and deletion (Add File and Delete File in the apply_patch grammar, /dev/null in
+unified diff) with post-image hazards and a namespace-removal check.
