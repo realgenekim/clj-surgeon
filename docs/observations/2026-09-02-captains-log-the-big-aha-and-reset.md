@@ -1413,3 +1413,39 @@ queued run untouched.
 (7888 local) and the tree's CLI, expectation stated before every call, watcher on the session
 transcript. Receipt to follow under `docs/observations/`.
 
+
+## 18:28Z — rs1: the ritual strip removed a third of the returns and none of the wall
+
+Receipt `~/acid/receipts/rs1-score.md` (scorer; `rs1-score.py`; acceptance rescore deferred while
+z6 runs, the gate lines are identical to base on both suites for all three runs).
+
+| | rf1 native (n=2) | rs1 stripped native (n=3) | delta |
+|---|---|---|---|
+| wall | 326.5 s | **327.7 s** | +0.4 % |
+| model returns | 22.0 | **14.3** | −35 % |
+| tool actions | 17.5 | 11.0 | −37 % |
+| tokens | 914,848 | 668,887 | −27 % |
+| suites executed | 2 | 2 | 0 |
+| `.cpcache` cleanup returns | 3.0 | **0.0** | −3 |
+| poll returns | 5.0 | 4.0 | −1 |
+| skill-file cells | 1.5 | 1.67 | +0.17 |
+
+**Predictions (a40fc3e): all four FAIL on wall**, Opus 255–275 s (+19 % off), Sol 285–305 s
+(+7 % off); returns 4 of 6 individual observations inside the bands, both means just below.
+Sol's mechanism is confirmed on the number that matters: polls and housekeeping are cheap
+returns; the wall is suite runtime, and both cohorts executed exactly two suites.
+
+**Which lines were obeyed.** `.cpcache` fully (the whole −3); `TOOL CALLS` fully and accurately
+(14/13/15 vs counts 15/13/15; the old `TURNS:` line produced `1` from every run); the single wait
+partially (still a `write_stdin` + `wait` pair per suite; one rf1 run already did it right
+without the line); the absent-skill line NOT AT ALL (3 of 3 still read skill files; the
+`$HOME`-walk clause was inert, the behaviour was already absent). Same asymmetry as cohort R:
+**prohibiting a named artifact removes exactly the returns it names; telling an agent that
+something is already known does nothing.**
+
+**Consequences.** (1) On R3 wall is suite-bound: returns and wall are two meters and are reported
+separately from here on; "wall = returns" holds where the tail is small (rung M) and not where
+two JVM suites dominate. (2) rf2's native benchmark re-bases to **14.3 returns / 328 s** with the
+strip prompt on both arms. (3) The suite-count instrument correction stands: rf1's 14–18 were
+withdrawn on the counter's own authority; every run executed each suite once.
+
