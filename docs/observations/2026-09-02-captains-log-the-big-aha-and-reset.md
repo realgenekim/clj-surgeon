@@ -1201,3 +1201,63 @@ zero-cost fix measured 12/12 and 0 false refusals over 1738 forms (probe p10):
 Builder dispatched for the last round; then commit, push, hand to the mayor with both red-team
 receipts. F5/F7 deferred to a follow-up bead by agreement.
 
+
+## 17:52Z — rf1 ethnography: the tool cuts beautifully and cannot sew
+
+Receipt `~/acid/receipts/rf1-ethno.md` (533 lines; six rollouts turn by turn; server telemetry
+on 7893/7889 as second source; three deviation classes added to the protocol's seven: `refusal
+false`, `silent accept`, `harness artifact`).
+
+**Returns from first read to the move landed:** N 10, 9 · A 16, 15 · B 29, 16. Native's cut is
+4–5 patches; the structural cut is ONE `:extract!` with a hash-fenced receipt, and it genuinely
+does in one call what native does in two. Everything downstream of the cut is where native wins:
+the ns header, the imports, the alias, the visibility flip and the twenty-three caller sites are
+one native patch and zero structural calls that succeed. Server telemetry: 7893 logged 8
+`apply_clojure_changes` attempts across two runs and committed 0; 7889 logged 3 and committed 1.
+Eleven structural mutation attempts, one commit, 9 %. Four of four structural runs finished their
+rewiring with `apply_patch`.
+
+**Ranked deviations (returns lost).** 3.1 `:ls` refused the file `:extract!` had just written,
+`{:error-type :forward-reference-analysis-failed :exit 2 :diagnostic ""}`; the agent "fixed" a
+defect that was not there with eight `:mv` pairs, 15 returns, 38 % of B-g1; `inspect_clojure`
+outlines the same bytes (same sha256) cleanly; three other runs shipped that order unchanged and
+green. 3.2 the `edit_clojure` refusal ladder, one fact per refusal, four returns per A run, and the
+fourth is FALSE: `require-change-unprovable` on the `:as … :refer […]` require `:extract!` itself
+wrote, and on `[clojure.test :refer …]` the call never touched; it ended the structural route in
+2 of 2 A runs. 3.3 `:extract!`'s header is the entire content of every native fallback: source
+docstring copied, unrelated imports copied, `:refer` style the spec forbids, `:public-forms`
+silently accepted and ignored (2 of 2), dead requires left in the source, and `:callers-to-review`
+named correctly and rewired never. 3.4–3.8 arm-independent: suite-poll ping-pong (2–8 returns),
+`.cpcache` cleanup (2–4), an absent skill hunted with an unbounded `$HOME` walk, the sandbox
+rejecting `rm -rf <abs>`, and `TURNS: 1` reported by all six (a null instrument).
+
+**Instrument withdrawn.** The suite-invocation counts 15/14/14/18/14/14 were `grep -c` over the
+run log, which contains the prompt (10 hits before any act) plus `-Spath`, rejected commands and
+a `ps | rg` watchdog. Counted from the rollouts: **every run executed each suite exactly once, at
+the end, as specified.** The E4 "repeated suites" deviation did not occur; the structural route
+removed no verification return and could not have (e1/e2 pin both suites). Counter fix dispatched
+to the runner. Also: `rf1-rescore.out` covers all six runs (54 lines, six ids); the ethnographer's
+"2 of 6" note was a stale read; the scorer's 6/6 acceptance stands.
+
+**Four self-inflicted refusals, H6 SUPPORTED, all beads:** the `:ls` false refusal; `require_change`
+refusing Surgeon's own emitted require; `:extract!` silently ignoring an unknown argument;
+`:op :mv :form bytes->hex` unquoted eaten by the shell as a redirection.
+
+**rf2, dispatched as a build on `bridge/rf2-extract-rewire` off main:** rf2-1 `:extract!` with
+`:rewire-callers` default true (caller's form order, no docstring copy, pruned target imports,
+`[ns :as last-segment]` never `:refer`, dead source requires/imports removed, every caller
+rewired incl. replace-when-only-moved-vars, `:public`, typed refusal on unknown args; acceptance =
+byte-identical to `rf1-reference.diff`); rf2-2 `:ls` never fails an outline that parses;
+rf2-3 `invalid-compact-relation` carries `expected_shape`, provability scoped to the entries
+named; rf1's exact payloads as fixtures. Prompt edits identical across arms: single `wait`,
+`.cpcache` is generated, ignore the absent skill, count tool calls. Ethnographer's traced
+prediction for the shipped path with the verb: **7 returns to move vs native 9 (0.78×)**.
+
+**The claim under it, sent to the fleet (Sol + Opus, independent, to attack):** every tool call
+that is not the whole intent adds a return, because the model already holds the target and reads
+faster than it calls; tools win only when they take a complete intent, compute ALL its mechanical
+consequences, and return one verdict; homoiconicity is what makes the consequences computable;
+the winnable square is "intents with large mechanical consequence fan-out, one call, one
+verdict", not "refactoring". Gene: "we are pretty darned sure this is a winnable test… activate
+brainfleet to confirm… is this where we grind it out until we figure out how to win?"
+
