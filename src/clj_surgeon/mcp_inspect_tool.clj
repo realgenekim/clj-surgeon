@@ -144,6 +144,13 @@
              :properties {"forms" positive-integer-schema}
              :required ["forms"]}})
 
+(def ^:private outline-request-properties
+  {"include_string_symbols"
+   {:type "boolean" :default false
+    :description (str "Set true to add bounded JS-ish declarations found in "
+                      "Clojure string literals to each outline row. Omit to "
+                      "preserve the ordinary outline response exactly.")}})
+
 (defn- operationless-forms-request
   []
   {:type "object"
@@ -179,7 +186,7 @@
      {:oneOf
       [(request-base "forms" forms-request-properties ["forms" "expect"])
        (operationless-forms-request)
-       (request-base "outline" {} [])
+       (request-base "outline" outline-request-properties [])
        (request-base
          "match"
          {"match" {:type "string" :minLength 1

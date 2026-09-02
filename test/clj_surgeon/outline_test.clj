@@ -42,6 +42,63 @@
       (finally
         (.delete tmp)))))
 
+(deftest string-symbols-are-optional-and-source-line-aware
+  (let [source (str "(ns demo)\n\n"
+                    "(defn- page []\n"
+                    "  (str \"function onsetReady(e,now){}\"\n"
+                    "       \"\\n\"\n"
+                    "       \"var P={};\"\n"
+                    "       \"first line\nfunction kwCheck(now){}\"\n"
+                    "       \"escaped\\nfunction bargeTh(){}\"\n"
+                    "       \"const hfControlsTick = function(){};\"))\n")
+        default (outline/outline-source "demo.clj" source)
+        explicit-off (outline/outline-source
+                       "demo.clj" source {} {:include-string-symbols false})
+        requested (outline/outline-source
+                    "demo.clj" source {} {:include-string-symbols true})
+        form (first (:forms requested))]
+    (is (= default explicit-off)
+        "default-off output remains byte-for-byte data-identical")
+    (is (not-any? #(contains? % :string-symbols) (:forms default)))
+    (is (= [{:name "onsetReady" :kind :function :line 4 :owner 'page}
+            {:name "P" :kind :var :line 6 :owner 'page}
+            {:name "kwCheck" :kind :function :line 8 :owner 'page}
+            {:name "bargeTh" :kind :function :line 9 :owner 'page}
+            {:name "hfControlsTick" :kind :const :line 10 :owner 'page}]
+           (:string-symbols form)))
+    (is (false? (:string-symbols-truncated form)))))
+
+(deftest string-symbols-handle-no-strings-and-cap-results
+  (is (= {:symbols [] :truncated? false}
+         (outline/string-symbols-for-form
+           {:source "(defn plain [] 1)" :line 20 :name 'plain})))
+  (let [declarations (str/join ";" (map #(str "var symbol" % "=0")
+                                         (range 513)))
+        result (outline/string-symbols-for-form
+                 {:source (str "(defn many [] \"" declarations "\")")
+                  :line 1
+                  :name 'many})]
+    (is (= 512 (count (:symbols result))))
+    (is (true? (:truncated? result)))
+    (is (= "symbol511" (:name (last (:symbols result)))))))
+
+(deftest string-symbols-cover-the-bounded-js-declaration-grammar
+  (let [result (outline/string-symbols-for-form
+                 {:source (str "(defn declarations []\n"
+                               "  (str \"let localThing=1;\"\n"
+                               "       \"$assigned=function(){};\"\n"
+                               "       \"handler:function(){}\"))")
+                  :line 40
+                  :name 'declarations})]
+    (is (= [{:name "localThing" :kind :let :line 41
+             :owner 'declarations}
+            {:name "$assigned" :kind :assignment :line 42
+             :owner 'declarations}
+            {:name "handler" :kind :property :line 43
+             :owner 'declarations}]
+           (:symbols result)))
+    (is (false? (:truncated? result)))))
+
 (deftest test-basic-outline
   (let [result (outline-from-string simple-ns)]
     (testing "namespace detection"

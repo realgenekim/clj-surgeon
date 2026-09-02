@@ -10,6 +10,82 @@
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
 
+(def max-string-symbols-per-form 512)
+
+(def ^:private string-symbol-patterns
+  [[:function #"(?:^|[^A-Za-z0-9_$]|\\[nrt])function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\("]
+   [:var #"(?:^|[^A-Za-z0-9_$]|\\[nrt])var\s+([A-Za-z_$][A-Za-z0-9_$]*)\b"]
+   [:let #"(?:^|[^A-Za-z0-9_$]|\\[nrt])let\s+([A-Za-z_$][A-Za-z0-9_$]*)\b"]
+   [:const #"(?:^|[^A-Za-z0-9_$]|\\[nrt])const\s+([A-Za-z_$][A-Za-z0-9_$]*)\b"]
+   [:assignment #"(?:^|[^A-Za-z0-9_$]|\\[nrt])([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*function\b"]
+   [:property #"(?:^|[^A-Za-z0-9_$]|\\[nrt])([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*function\b"]])
+
+(defn- newline-count-before
+  [s end]
+  (loop [index 0
+         count 0]
+    (if (>= index end)
+      count
+      (recur (inc index)
+             (if (= \newline (.charAt s index)) (inc count) count)))))
+
+(defn- string-token-symbols
+  [token-zloc owner-line owner]
+  (let [raw (z/string token-zloc)
+        token-row (:row (meta (z/node token-zloc)))]
+    (->> string-symbol-patterns
+         (map-indexed
+           (fn [pattern-index [kind pattern]]
+             (let [matcher (re-matcher pattern raw)]
+               (loop [matches []]
+                 (if (and (<= (count matches) max-string-symbols-per-form)
+                          (.find matcher))
+                   (recur (conj matches
+                                {:index (.start matcher 1)
+                                 :pattern-index pattern-index
+                                 :name (.group matcher 1)
+                                 :kind kind
+                                 :line (+ owner-line token-row -1
+                                          (newline-count-before
+                                            raw (.start matcher 1)))
+                                 :owner owner}))
+                   matches)))))
+         (mapcat identity))))
+
+(defn string-symbols-for-form
+  "Extract bounded JS-ish declarations from string tokens in one form record.
+
+   The record must contain the exact `:source`, its absolute `:line`, and may
+   contain its `:name`. Physical newlines in raw string-token source determine
+   line offsets; escaped newline characters do not."
+  [{:keys [source line name]}]
+  (if (and source line)
+    (let [root (z/of-string source {:track-position? true})
+          found (loop [zloc root
+                       matches []]
+                  (if (z/end? zloc)
+                    matches
+                    (recur (z/next zloc)
+                           (if (and (#{:token :multi-line}
+                                      (n/tag (z/node zloc)))
+                                    (string? (n/sexpr (z/node zloc))))
+                             (into matches
+                                   (string-token-symbols zloc line name))
+                             matches))))
+          ordered (->> found
+                       (sort-by (juxt :line :index :pattern-index))
+                       (reduce (fn [kept match]
+                                 (if (some #(= [(:name match) (:line match)]
+                                               [(:name %) (:line %)])
+                                           kept)
+                                   kept
+                                   (conj kept match)))
+                               []))]
+      {:symbols (mapv #(dissoc % :index :pattern-index)
+                      (take max-string-symbols-per-form ordered))
+       :truncated? (> (count ordered) max-string-symbols-per-form)})
+    {:symbols [] :truncated? false}))
+
 (defn- resolve-user-fields
   "Run each user-supplied extractor fn against the form zloc. Returns a
    map field-key -> value, omitting nil results.
@@ -204,6 +280,8 @@
   ([file source]
    (outline-source file source {}))
   ([file source project-aliases]
+   (outline-source file source project-aliases {}))
+  ([file source project-aliases {:keys [include-string-symbols]}]
    (let [records (top-level-form-records file source project-aliases)
          zloc (z/of-string source {:track-position? true})
          ns-zloc (some-> zloc
@@ -217,7 +295,14 @@
       :form-count (count (filter :name records))
       :forms (->> records
                   (remove #(= 'ns (:type %)))
-                  (mapv #(dissoc % :source)))
+                  (mapv (fn [record]
+                          (cond-> (dissoc record :source)
+                            include-string-symbols
+                            (merge
+                              (let [{:keys [symbols truncated?]}
+                                    (string-symbols-for-form record)]
+                                {:string-symbols symbols
+                                 :string-symbols-truncated truncated?}))))))
       :requires (or requires [])
       :forward-refs []})))
 
