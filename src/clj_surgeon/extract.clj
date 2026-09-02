@@ -366,6 +366,27 @@
   (str "(require " (str/join " " (map #(str "'" %) namespaces))
        ") (println :compile-ok)"))
 
+;; @spec MCP-OP-EXTRACT-021
+(defn normalize-aliases
+  "Pure: a clean vector of alias names, with any leading colon removed.
+
+  Accepts a single alias or a collection, so a caller may pass `:test`,
+  \"test\" or [\"a\" \"b\"] and get the same answer."
+  [aliases]
+  (->> (cond (nil? aliases) []
+             (or (string? aliases) (keyword? aliases)) [aliases]
+             :else aliases)
+       (map #(str/replace (str (if (keyword? %) (name %) %)) #"^:" ""))
+       (remove str/blank?)
+       vec))
+
+;; @spec MCP-OP-EXTRACT-021
+(defn- alias-flag
+  "Pure: the -A flag for a set of aliases, or nil when there are none."
+  [aliases]
+  (when-let [names (seq (normalize-aliases aliases))]
+    (str "-A:" (str/join ":" names))))
+
 (defn- classpath-args-for
   "Pure: the argv that resolves the project classpath.
 
@@ -373,9 +394,40 @@
   this very repository `-M:clj-surgeon/mcp-test -e ...` runs the whole test
   suite instead of compiling. Resolve the classpath, then run clojure.main
   against it."
-  [alias]
+  [aliases]
   (cond-> ["clojure" "-Spath"]
-    (not (str/blank? (str alias))) (conj (str "-A" alias))))
+    (alias-flag aliases) (conj (alias-flag aliases))))
+
+;; @spec MCP-OP-EXTRACT-021
+(defn declared-compile-aliases
+  "The aliases a workspace declares for compiling itself, from its own
+  `.clj-surgeon.edn` under `{:compile {:aliases [\"...\"]}}`.
+
+  A workspace knows which alias puts its test-only dependencies on the
+  classpath; the tool cannot know it. Declaring it is how a correct extraction
+  stops being handed a command that is red for a reason it did not cause."
+  [root]
+  (normalize-aliases (some-> (forms/project-config root) :compile :aliases)))
+
+;; @spec MCP-OP-EXTRACT-022
+(defn candidate-compile-aliases
+  "Pure-ish: deps.edn aliases that add a `test` path, as a fallback guess.
+
+  A guess is only useful if it is determinate, so these are returned sorted and
+  the caller applies the FIRST one; the receipt says it guessed."
+  [root]
+  (let [f (io/file (str root) "deps.edn")]
+    (when (.exists f)
+      (try
+        (->> (:aliases (edn/read-string (slurp f)))
+             (keep (fn [[alias-name spec]]
+                     (when (some #(re-find #"(^|/)test(/|$)" (str %))
+                                 (concat (:extra-paths spec) (:paths spec)))
+                       (str/replace (str alias-name) #"^:" ""))))
+             sort
+             vec
+             seq)
+        (catch Exception _ nil)))))
 
 ;; @spec MCP-OP-EXTRACT-020
 (defn attribute-compile-failure
@@ -403,8 +455,8 @@
 (defn- compile-command-for
   "Pure: the exact command a reader can run, matching what the apply runs."
   ([namespaces] (compile-command-for namespaces nil))
-  ([namespaces alias]
-   (str "CP=$(" (str/join " " (classpath-args-for alias))
+  ([namespaces aliases]
+   (str "CP=$(" (str/join " " (classpath-args-for aliases))
         ") && java -cp \"$CP\" clojure.main -e \""
         (compile-expr-for namespaces) "\"")))
 
@@ -424,10 +476,12 @@
   apply performs it rather than leaving a reader to discover that nothing was
   verified. It is a subprocess on purpose: loading the rewritten namespaces into
   the running process would mutate the very namespaces a server is serving."
-  [{:keys [namespaces root timeout-ms alias touched-files]
+  [{:keys [namespaces root timeout-ms aliases touched-files]
     :or {timeout-ms 30000}}]
-  (let [printed (compile-command-for namespaces alias)
-        base {:namespaces (vec namespaces) :command printed}
+  (let [aliases (normalize-aliases aliases)
+        printed (compile-command-for namespaces aliases)
+        base (cond-> {:namespaces (vec namespaces) :command printed}
+               (seq aliases) (assoc :aliases aliases))
         run! (fn [argv ms]
                (try
                  (process-env/run-bounded!
@@ -437,7 +491,7 @@
     (if-not (project-build-file root)
       (assoc base :checked false :status :skipped
              :reason :no-project-build-file)
-      (let [cp (run! (classpath-args-for alias) timeout-ms)
+      (let [cp (run! (classpath-args-for aliases) timeout-ms)
             classpath (some-> (:out cp) str/trim not-empty)
             result (if (and (:finished? cp) (zero? (long (or (:exit cp) 1)))
                             classpath)
@@ -465,9 +519,28 @@
 
           :else
           ;; @spec MCP-OP-EXTRACT-020
-          (merge base {:checked true :status :run :exit (:exit result)
-                       :output-tail tail}
-                 (attribute-compile-failure output touched-files)))))))
+          (let [attributed (attribute-compile-failure output touched-files)]
+            (merge base
+                   {:checked true :status :run :exit (:exit result)
+                    :output-tail tail}
+                   attributed
+                   ;; @spec MCP-OP-EXTRACT-022
+                   ;; The classpath could not load the project and this
+                   ;; workspace declared no aliases. Hand back a command that
+                   ;; is determinate rather than one that is known-red: the
+                   ;; agent's next call must not be a guess it has to invent.
+                   (when (and (= :classpath-incomplete (:reason attributed))
+                              (empty? aliases))
+                     (let [candidates (candidate-compile-aliases root)]
+                       (cond-> {:candidate-aliases (vec candidates)}
+                         (seq candidates)
+                         (assoc :command (compile-command-for
+                                           namespaces [(first candidates)])
+                                :guessed true
+                                :declare-instead
+                                (str "declare the right one in "
+                                     ".clj-surgeon.edn as "
+                                     "{:compile {:aliases [\"<alias>\"]}}"))))))))))))
 
 ;; @spec MCP-OP-EXTRACT-018
 (defn target-outline
@@ -542,11 +615,18 @@
          :callers-unresolved unresolved
          :complete (empty? unresolved)
          :compile (or (:compile plan)
-                      {:checked false
-                       :status :not-run
-                       :will-check (boolean (:_will-check plan))
-                       :namespaces namespaces
-                       :command (compile-command-for namespaces)})
+                      ;; @spec MCP-OP-EXTRACT-021
+                      ;; the dry run prints the command the apply will RUN,
+                      ;; aliases included; a preview whose command differs from
+                      ;; the one that executes is a second thing to learn
+                      (cond-> {:checked false
+                               :status :not-run
+                               :will-check (boolean (:_will-check plan))
+                               :namespaces namespaces
+                               :command (compile-command-for
+                                          namespaces (:_compile-aliases plan))}
+                        (seq (:_compile-aliases plan))
+                        (assoc :aliases (:_compile-aliases plan))))
          :new-file-preview (:_target-outline plan)
          :quoted-var-references-unrewired (:quoted-var-references plan)
          :note "quoted-var-references-unrewired: Vars reached by quoting, never rewritten here."
@@ -698,7 +778,7 @@
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
            public-forms derive-required-public-forms doc alias rewire-callers
-           project-root]
+           project-root compile-aliases]
     :or {workspace-sources {} require-policy :minimal public-forms []
          derive-required-public-forms false rewire-callers true}}]
   (let [lines (vec (str/split-lines source))
@@ -1012,6 +1092,8 @@
            :_new-file-lines (count (str/split-lines new-file-content))
            :_will-check true
            :_project-root project-root
+           ;; @spec MCP-OP-EXTRACT-021
+           :_compile-aliases (normalize-aliases compile-aliases)
            :_target-outline (assoc (target-outline (:ns-form header-result)
                                                    publicized-texts)
                                    :lines (count (str/split-lines new-file-content)))
@@ -1083,7 +1165,7 @@
   Returns the compiled plan unreshaped, for the executor; `plan` is the
   reader-facing dry run built on top of it."
   [{:keys [file forms to source-paths require-policy public public-forms doc
-           alias rewire-callers]
+           alias rewire-callers compile-alias]
     :as opts
     :or {require-policy :minimal rewire-callers true}}]
   (try
@@ -1109,6 +1191,8 @@
          :workspace-sources workspace-sources
          :require-policy require-policy
          :project-root (str project-root)
+         :compile-aliases (or (not-empty (normalize-aliases compile-alias))
+                              (declared-compile-aliases project-root))
          :public-forms (or public public-forms [])
          ;; @spec MCP-OP-EXTRACT-011
          ;; When the caller does not name the promotions, DERIVE them. The
@@ -1242,7 +1326,10 @@
                        :reason :disabled-by-caller}
                       (compile-check!
                         {:namespaces (:_touched-namespaces p)
-                         :alias (:compile-alias opts)
+                         :aliases (or (not-empty
+                                        (normalize-aliases
+                                          (:compile-alias opts)))
+                                      (:_compile-aliases p))
                          :touched-files (concat [file to]
                                                 (map :file caller-plans))
                          :root (project-root-for-source file

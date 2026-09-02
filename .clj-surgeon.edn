@@ -1,0 +1,10 @@
+;; clj-surgeon's own workspace configuration.
+;;
+;; :compile names the deps.edn aliases that put this project's full classpath
+;; together. clj-surgeon.mcp-change-buffer transitively requires
+;; clj-surgeon.mcp-hot-verify, which needs nrepl, and nrepl is only on the
+;; classpath under :clj-surgeon/mcp-test. Without this declaration a bare
+;; `clojure -Spath` cannot load this project at all, and the post-apply compile
+;; check would hand an agent a command that is red for a reason its change did
+;; not cause.
+{:compile {:aliases ["clj-surgeon/mcp-test"]}}

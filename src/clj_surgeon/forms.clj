@@ -214,6 +214,20 @@
                                      {:file (.getPath f) :key k})))
                    [k (compile-spec k v)])))))
 
+;; @spec MCP-OP-EXTRACT-021
+(defn project-config
+  "Read the raw `.clj-surgeon.edn` map governing `start`, or nil when there is
+  none or it cannot be parsed.
+
+  The alias reader ignores top-level keys it does not know, so a new section is
+  additive: a workspace can declare things about itself here without any risk to
+  form classification."
+  [start]
+  (when-let [f (find-config-file start)]
+    (try (let [parsed (edn/read-string (slurp f))]
+           (when (map? parsed) (assoc parsed :config-file (.getPath f))))
+         (catch Exception _ nil))))
+
 (defn load-project-aliases
   "Find `.clj-surgeon.edn` by walking up from `start` (a file or dir path).
    Return the compiled aliases map, or `{}` if no config found."

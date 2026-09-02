@@ -1346,3 +1346,137 @@
            (extract/attribute-compile-failure
              "Unable to resolve symbol: helper (a.clj:5)." ["src/x/a.clj"]))
         "an error inside a file we DID change is attributable")))
+
+;; ============================================================
+;; rf2 follow-up — a printed command that is red on a correct move.
+;; Field evidence: the Anvil installer ran the mandated CLI on a pristine
+;; bcec265 worktree. The extraction was correct and the verb reported
+;; :ok :unverified :reason :classpath-incomplete honestly — but the command it
+;; printed was `CP=$(clojure -Spath) && ...`, which omits the alias that puts
+;; nrepl on this project's classpath, so it exits 1 on
+;; "Could not locate nrepl/core__init.class". An agent told to run that command
+;; repairs, and lands bytes after the extract — which is the exact number the
+;; rf2 cohort measures.
+;; ============================================================
+
+(defn- workspace-with-config!
+  "A project whose namespaces need a test-only path, with or without a
+  .clj-surgeon.edn declaring the alias that supplies it."
+  [declare?]
+  (let [root (java.io.File/createTempFile "extract-compile-aliases" "")
+        _ (.delete root)
+        _ (.mkdirs root)]
+    (.mkdirs (io/file root "src" "app"))
+    (.mkdirs (io/file root "test" "helper"))
+    (spit (io/file root "deps.edn")
+          (str "{:paths [\"src\"]\n"
+               " :aliases {:only-src {:extra-paths []}\n"
+               "           :app/test {:extra-paths [\"test\"]}\n"
+               "           :app/other-test {:extra-paths [\"test\"]}}}\n"))
+    (spit (io/file root "test" "helper" "dep.clj")
+          "(ns helper.dep)\n\n(def value :ok)\n")
+    (spit (io/file root "src" "app" "core.clj")
+          (str "(ns app.core\n  (:require\n   [helper.dep :as dep]))\n\n"
+               "(defn moved [] dep/value)\n\n"
+               "(defn stays [] (moved))\n"))
+    (when declare?
+      (spit (io/file root ".clj-surgeon.edn")
+            "{:compile {:aliases [\"app/test\"]}}\n"))
+    root))
+
+;; @spec MCP-OP-EXTRACT-021
+(deftest the-compile-command-uses-the-workspaces-declared-aliases
+  (testing "a declared alias reaches both the printed command and the check"
+    (let [root (workspace-with-config! true)
+          source (io/file root "src" "app" "core.clj")
+          target (io/file root "src" "app" "moved.clj")]
+      (try
+        (is (= ["app/test"] (extract/declared-compile-aliases (.getPath root))))
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved]
+                                        :to (.getPath target)
+                                        :alias "moved"})
+              compiled (:compile result)]
+          (is (str/includes? (:command compiled) "clojure -Spath -A:app/test")
+              (str "the printed command must carry the alias: "
+                   (:command compiled)))
+          (is (= ["app/test"] (:aliases compiled)))
+          (is (true? (:checked compiled)) (pr-str compiled))
+          (is (true? (:ok compiled))
+              (str "the declared classpath makes a correct move compile GREEN: "
+                   (pr-str compiled)))
+          (is (nil? (:guessed compiled)))
+          (is (nil? (:candidate-aliases compiled))))
+        (finally (delete-recursive! root)))))
+
+  (testing "the dry run prints the same command the apply will run"
+    (let [root (workspace-with-config! true)
+          source (io/file root "src" "app" "core.clj")]
+      (try
+        (let [compiled (:compile (extract/plan
+                                   {:file (.getPath source)
+                                    :forms '[moved]
+                                    :to (.getPath (io/file root "src" "app" "moved.clj"))
+                                    :alias "moved"}))]
+          (is (str/includes? (:command compiled) "-A:app/test"))
+          (is (= ["app/test"] (:aliases compiled)))
+          (is (false? (:checked compiled))))
+        (finally (delete-recursive! root)))))
+
+  (testing "an explicit compile-alias overrides the declaration"
+    (let [root (workspace-with-config! true)
+          source (io/file root "src" "app" "core.clj")]
+      (try
+        (let [compiled (:compile (extract/plan
+                                   {:file (.getPath source)
+                                    :forms '[moved]
+                                    :to (.getPath (io/file root "src" "app" "moved.clj"))
+                                    :compile-alias ":app/other-test"}))]
+          (is (str/includes? (:command compiled) "-A:app/other-test")))
+        (finally (delete-recursive! root)))))
+
+  (testing "aliases are normalized and joined, colon-prefixed once"
+    (is (= ["a" "b"] (extract/normalize-aliases [":a" "b"])))
+    (is (= ["x"] (extract/normalize-aliases :x)))
+    (is (= [] (extract/normalize-aliases nil)))))
+
+;; @spec MCP-OP-EXTRACT-022
+(deftest an-undeclared-classpath-names-candidate-aliases
+  (testing "with nothing declared, the receipt makes the next call determinate"
+    (let [root (workspace-with-config! false)
+          source (io/file root "src" "app" "core.clj")
+          target (io/file root "src" "app" "moved.clj")]
+      (try
+        (is (= [] (extract/declared-compile-aliases (.getPath root))))
+        (is (= ["app/other-test" "app/test"]
+               (extract/candidate-compile-aliases (.getPath root)))
+            "sorted, and only aliases that add a test path")
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved]
+                                        :to (.getPath target)
+                                        :alias "moved"})
+              compiled (:compile result)]
+          (is (= :unverified (:ok compiled))
+              (str "a classpath that cannot load the project is never :ok false: "
+                   (pr-str compiled)))
+          (is (= :classpath-incomplete (:reason compiled)))
+          (is (= ["app/other-test" "app/test"] (:candidate-aliases compiled))
+              "every candidate is named, so the reader can choose")
+          (is (true? (:guessed compiled)))
+          (is (str/includes? (:command compiled) "-A:app/other-test")
+              (str "the printed command applies the FIRST candidate rather "
+                   "than staying known-red: " (:command compiled)))
+          (is (str/includes? (:declare-instead compiled) ".clj-surgeon.edn")
+              "and the receipt names the durable fix")
+          (is (nil? (:undo result))
+              "an unverified compile is not a failure and claims no revert"))
+        (finally (delete-recursive! root)))))
+
+  (testing "a workspace with no test-path alias says so rather than guessing"
+    (let [root (java.io.File/createTempFile "extract-no-candidates" "")]
+      (.delete root)
+      (.mkdirs root)
+      (try
+        (spit (io/file root "deps.edn") "{:paths [\"src\"] :aliases {:x {}}}\n")
+        (is (nil? (extract/candidate-compile-aliases (.getPath root))))
+        (finally (delete-recursive! root))))))

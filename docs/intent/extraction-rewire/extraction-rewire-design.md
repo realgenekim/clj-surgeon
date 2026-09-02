@@ -79,3 +79,40 @@ an outline that parses is never failed by a stage that only decorates it: a
 failure of forward-reference analysis returns the outline with
 `:forward-refs :unavailable` and one note. Structure the caller can already see
 must not be withheld because an optional decoration was unavailable.
+
+# #The Workspace Declares Its Compile Classpath
+
+The post-apply compile check resolves the project classpath with
+`clojure -Spath`. On a project whose namespaces need a test-only dependency
+that is bare classpath is not the project's classpath, and the check fails for
+a reason the extraction did not cause.
+
+That failure is typed honestly as `:ok :unverified`, so the verb does not tell
+a reader to revert correct work. But the receipt also prints the command it
+ran, and a printed command that is red on a correct move is worse than no
+command: an agent told to run it will try to repair, and land bytes after an
+extraction that was already right.
+
+A workspace knows which alias assembles its classpath and the tool cannot.
+So the workspace says so, in the `.clj-surgeon.edn` it already owns:
+
+```clojure
+{:compile {:aliases ["clj-surgeon/mcp-test"]}}
+```
+
+Both the check and the printed command then use
+`clojure -Spath -A:<aliases joined by colons>`. The alias reader ignores
+top-level keys it does not recognise, so this section is additive and cannot
+affect form classification.
+
+When nothing is declared the check still runs with a bare `-Spath`. If that
+comes back `:classpath-incomplete`, the receipt does not stop at "unverified":
+it publishes `candidate-aliases`, the `deps.edn` aliases that add a `test`
+path, sorted, and reprints its command with the first of them applied and
+marked `guessed`. The point is not that the guess is right — it is that the
+agent's next call is determinate rather than something it has to invent, and
+the receipt names declaring the alias as the durable fix.
+
+This repository ships its own `.clj-surgeon.edn` declaring
+`clj-surgeon/mcp-test`. It is the repository's configuration, not test
+apparatus: any agent extracting inside this tree needs it.
