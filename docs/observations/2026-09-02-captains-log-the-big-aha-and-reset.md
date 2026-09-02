@@ -577,3 +577,40 @@ time each, the killer risk Sol named), which is tool time and not returns, and t
 also decide the other two predictions: post-write calls to zero, and hazards caught in situ.
 Scoring now; z2 on rung L runs in the same chain regardless, because the large rung is
 where the gate's per-call cost amortises differently.
+
+## E1 scored: the gate lost in the field, and the reason is mine (15:23Z)
+
+| metric (rung M, n=6 each) | Z native plus gate | N native | delta in floor sd |
+|---|---|---|---|
+| wall s | 742 | 330 | +4.8 |
+| total actions | 33.5 | 19.8 | +4.7 |
+| tokens | 2.47 M | 1.27 M | +4.8 |
+| post-write native calls after a verified receipt | 1.0 per run | n/a | |
+| admit calls | 85, all commit mode | | |
+| admit refusals | 59 (69 percent): invalid-patch 32, patch-does-not-apply 16, verification-failed 9, unreadable-post-image 2 | | |
+| verified receipts | 17 complete, 12 partial, 56 unverified | | |
+| admit tool time | 2.7 s per call, 5 percent of Z's wall | | |
+| fell back to apply_patch on .clj | 6 of 6 runs | | |
+
+All three predictions failed. Post-write calls did not go to zero. Wall did not stay within
+a sd of native; it went to 2.2x, worse than the shipped editor. The gate caught no
+substantive hazard in situ (two self-inflicted read-back failures). Ninety-three percent of
+the extra wall was model returns, and the returns went to one thing: the first refusal in
+all six runs is identical, "patch contains no unified diff file headers". The prompt told the
+agent to write "a unified diff, the same format you would give apply_patch", and those are
+not the same format: Codex's apply_patch grammar is "*** Begin Patch / *** Update File:" with
+context-matched hunks, and that is what every agent emitted. The gate's contract was on the
+agent's route in design and off it at the byte level, and the agent fought the parser and
+then abandoned the mandate in every run. Three red-team rounds could not see this because
+they fed the gate unified diffs. The free-choice arm would have found it in one run, and the
+doctrine I wrote this morning says to run that first. I did not.
+
+Also found: the gate stages its own control files (the lock and the profile under
+.clj-surgeon) into the index, which polluted the frozen diffs until the freeze learned to
+reset the index and exclude them; one Z run (Z-1, ten calls, ten refusals, zero verified
+receipts) delivered nothing to disk, so its diff is empty and its acceptance is a task
+failure; acceptance for Z is being rescored on the corrected diffs. Fix routed: the gate
+accepts the apply_patch grammar as well as unified diff, detected by the header; refusals
+name the grammar tried and the offending line; the commit path never stages control files;
+then z3 reruns with the free-choice arm alongside the mandated one. z2 on rung L is running
+with the same defect and will show the same shape; kept as confirmation.

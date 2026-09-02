@@ -67,6 +67,14 @@ Fan-out is the per-form write API's worst case, not its best: one patch does wha
 writes do, and two shipped diffs shipped nine times the line churn because the tool
 re-prints every form it edits and reformats the untouched remainder.
 
+## The gate's first field test: lost, on a byte-level mismatch (E1, measured after you woke)
+
+Native plus the gate versus native, six a side, medium rung: 742 s against 330 s, 69 percent
+of admit calls refused because the agents emit Codex's apply_patch grammar and the gate parsed
+unified diff only; every run abandoned the mandate; no hazard caught in situ. Three red-team
+rounds missed it because they fed the gate unified diffs. The fix is small (accept both
+grammars) and the lesson is the doctrine's own: run the free-choice arm first.
+
 ## The cheapest win of the summer (measured after you woke)
 
 Half of what agents do on a task, nothing asked for: git diff in 80 of 81 runs, git status,
