@@ -337,3 +337,20 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - rs1 scoring when done: returns and wall vs rf1 native (22.0 / 326.5 s) against Sol 285–305 s
   and Opus 255–275 s; log; it re-bases the rf2 target.
 
+
+## RESUME DELTA 2026-09-02T18:30Z
+
+- Gene ratified TWEEZERS BEFORE THE WOODCHIPPER: `docs/tweezer-loop.md` (G0–G6; watcher = meter,
+  stopwatch + expectation; cold shadow; batteries only for claims). Session 1 done on
+  `bridge/tweezer-1` 92dc72c (pushed): driver receipt in the big-aha log (ce3e941); watcher
+  records at `docs/observations/2026-09-02-tweezer-session-1-watch.md` on that branch (watcher
+  agent's close pending). nREPL of that tree on port 40179 (may be gone after a reboot).
+- rs1 scored (returns −35 %, wall flat; ac52f51). z6 running (12/16 done, gate ≈ native so far);
+  z7, z8 chained. Monitor b30yfi3as.
+- rf2 builder got the exact root causes from the session. q5z builder and FAN installer still
+  running. Next per protocol: when rf2 lands → my suites → commit/push → G1 hand-drive of the
+  rewiring verb at the REPL (same task) → G2 naive-reader → G5 cold shadow → then its n=3
+  cohort. q5z → hand-drive at N=5 → slope.
+- Inbox beads wanted: inb-4a51e5, inb-51135b, inb-ab0a24, plus the new target-ns one (id in
+  this commit's log line).
+
