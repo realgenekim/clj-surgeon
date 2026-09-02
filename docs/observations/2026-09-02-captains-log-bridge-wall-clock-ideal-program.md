@@ -746,3 +746,34 @@ directory itself and `.isFile` and for covering the `:onboarding` failure branch
 with the `.mkdirs` line disabled (2 errors) and green with it (3 tests, 17 assertions).
 Squash-merged to main (`2b3177d`), bb full suite 654 / 5595 / 0 on this box, branch archived.
 r1 walls for the record: native 113 s, A 148 s, B 194 s on a two-file test-only task.
+
+## Receipt 06:00Z — cal2 (six two-core arms in parallel), a mislabel corrected, and arm W
+
+**cal2** (medium rung, CORES_PER_ARM=2, six arms at once, all correct): native 223 / 289 / 469,
+A 232 / 250 / 355. Means native 327 (4-core sequential mean 254), A 279 (259). **Two-core
+six-wide is not timing-neutral:** the tails inflate (469, 355) as six kaocha JVMs contend. So
+the wide configuration is for experiments scored on actions, acceptance and quality, and
+walls from it carry a contention caveat; four-core, three-wide stays the wall apparatus.
+
+**Mislabel, corrected:** Anvil already had a Surgeon on 7888 owned by another user (the
+fleet's production deployment, 2026-08-25-e7f72e2). My shipped instance on 7888 never
+bound; its health check answered from the other server. Every Anvil arm labeled "A shipped
+64eac2e" before 05:30Z in fact called that production server, and its telemetry is in a home
+I cannot read (which is why the refusal analysis had no data for those arms). Relabeled here
+as **A = production e7f72e2** for cal-seq, cal-par, s2–s7, r1, cal2. The comparison stands
+(production is a shipped build), the label and the resource were wrong; reported to the
+mayor. From now every shipped arm calls my own 64eac2e instance on 7893.
+
+**Stage 0 (refusals vs failures, n=10 Surgeon arms with readable telemetry):** Spearman
+−0.14, undetermined, leaning against "refusals are quality control"; confounded with call
+volume; the missing rows are exactly the production-server arms.
+
+**Bisect servers live:** 7891 = wave minus the insertion-gap fix (its added test fails, all
+else passes), 7892 = wave minus the overlap fix (its two added assertions fail, all else
+passes). Arms G and O in the runner; queued after e3.
+
+**Arm W, on Gene's redesign of planning:** not a cost estimate but deliberate selection in one
+message: three candidate plans, a critique of each against the spec and the measured prices,
+choose one, execute, report the choice. Zero extra returns for the planning itself. Added to
+e3: A, A+report-only, A+budget rule, A+deliberate, three each, scored on actions, acceptance
+and two-judge quality, wall with the contention caveat.
