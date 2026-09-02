@@ -755,11 +755,55 @@
       :else
       (let [parsed (patch-apply/parse-patch patch)]
         (if-not (:ok parsed)
-          (refusal context (:error-type parsed) (:error parsed)
-                   (select-keys parsed [:file :hunk-index]))
+          ;; A refusal on an unparseable payload must say which grammars were
+          ;; tried and show the line that stopped it. The field failure this
+          ;; replaces was one identical message repeated across every run,
+          ;; naming a grammar the caller was never going to write.
+          (merge
+            (refusal context (:error-type parsed) (:error parsed)
+                     (select-keys parsed [:file :hunk-index :grammar
+                                          :grammars-tried :expected-headers
+                                          :offending-line :header]))
+            {:next_call (assoc (next-call context "preview"
+                                          (:error-type parsed))
+                               :expected_headers
+                               (or (:expected-headers parsed)
+                                   patch-apply/expected-headers))})
           (let [targets (mapv :file (:files parsed))
+                unsupported (filterv #(not= :update (:operation %))
+                                     (:files parsed))
+                repeated (->> targets frequencies
+                              (keep (fn [[file n]] (when (< 1 n) file)))
+                              sort vec)
                 passthrough (filterv #(= "passthrough" (file-kind %)) targets)]
-            (if (seq passthrough)
+            (cond
+              ;; @spec MCP-OP-ADMIT-014
+              (seq unsupported)
+              (refusal context :unsupported-patch-operation
+                       (str "Whole-file creation, deletion and renaming are "
+                            "not admitted; apply them natively and admit the "
+                            "edits separately: "
+                            (str/join ", " (map (fn [{:keys [operation file]}]
+                                                  (str (name operation) " "
+                                                       file))
+                                                unsupported)))
+                       {:grammar (:grammar parsed)
+                        :unsupported (mapv #(select-keys % [:file :operation
+                                                            :move-to])
+                                           unsupported)})
+
+              (seq repeated)
+              ;; Two sections for one file describe two different post images
+              ;; of the same bytes. Refusing here keeps that ambiguity out of
+              ;; the transaction, where it can only surface as a failed write.
+              (refusal context :duplicate-patch-target
+                       (str "patch names the same file in more than one "
+                            "section: " (str/join ", " repeated))
+                       {:grammar (:grammar parsed)
+                        :files repeated :file (first repeated)})
+
+              :else
+              (if (seq passthrough)
               ;; A preview that returned ok here would advertise a commit that
               ;; is guaranteed to refuse. Both modes say the same thing.
               (refusal context :unsupported-patch-target
@@ -928,7 +972,7 @@
                                                    :next_call
                                                    (next-call context "preview"
                                                               :verification-unverified))
-                                            receipt)))))))))))))))))))))))
+                                            receipt))))))))))))))))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Telemetry and payload bounding

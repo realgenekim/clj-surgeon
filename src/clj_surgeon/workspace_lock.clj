@@ -22,6 +22,22 @@
 (def lock-directory-name ".clj-surgeon")
 (def lock-file-name "write.lock")
 
+(def control-ignore-lines
+  "What a workspace should never see as a change the gate made.
+
+  The lock is the gate's own bookkeeping, not the caller's work. A commit that
+  leaves it behind as an untracked file makes `git status` report a change
+  nobody asked for, and the next reader has to decide whether it is theirs."
+  ["# Written by clj-surgeon. These are the gate's own control files."
+   ;; The ignore file ignores itself: a directory holding only ignored
+   ;; entries disappears from `git status` entirely, which is the point.
+   ;; `focused-test.edn` is deliberately absent -- that one is the
+   ;; repository's own declaration and belongs in its history.
+   ".gitignore"
+   "write.lock"
+   "*.lock"
+   "focused-test-report*"])
+
 (defonce ^:private monitors (atom {}))
 
 (defn- monitor-for
@@ -68,6 +84,25 @@
                        :lock-path (.getPath file)
                        :cause-error-type (.getName (class error))})))))
 
+;; @spec MCP-OP-ADMIT-094
+(defn- ensure-ignored!
+  "Keep the gate's control files out of the workspace's version control.
+
+  Only the state directory is touched, and only additively: an existing
+  ignore file keeps every line it had and gains the ones it lacked."
+  [^java.io.File directory]
+  (try
+    (let [file (io/file directory ".gitignore")
+          existing (if (.isFile file)
+                     (vec (clojure.string/split-lines (slurp file)))
+                     [])
+          present (set (map clojure.string/trim existing))
+          missing (remove #(contains? present %) control-ignore-lines)]
+      (when (seq missing)
+        (spit file (str (clojure.string/join "\n" (concat existing missing))
+                        "\n"))))
+    (catch Exception _ nil)))
+
 (defn- with-advisory-lock
   [^java.io.File file thunk]
   (with-open [channel (open-lock-channel file)]
@@ -101,7 +136,8 @@
   [root thunk]
   (locking (monitor-for root)
     (if-let [file (advisory-lock-file root)]
-      (with-advisory-lock file thunk)
+      (do (ensure-ignored! (.getParentFile file))
+          (with-advisory-lock file thunk))
       (thunk))))
 
 (defmacro with-workspace-write-lock

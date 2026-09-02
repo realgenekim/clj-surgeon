@@ -13,6 +13,7 @@
    [clj-surgeon.patch-apply :as patch-apply]
    [clj-surgeon.workspace-lock :as workspace-lock]
    [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [clojure.set :as set]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]])
@@ -433,9 +434,10 @@
 
 ;; @spec MCP-OP-ADMIT-014
 (deftest refuses-whole-file-creation-and-deletion
-  (let [applied (patch-apply/apply-patch base-sources file-creation-patch)]
-    (is (false? (:ok applied)))
-    (is (= :unsupported-patch-operation (:error-type applied))))
+  (let [parsed (patch-apply/parse-patch file-creation-patch)]
+    (is (:ok parsed) "the construct parses; the policy refuses it")
+    (is (= :add (:operation (first (:files parsed))))
+        "a /dev/null source names a creation in either grammar"))
   (let [root (temp-dir)]
     (try
       (write-sources! root base-sources)
@@ -1910,3 +1912,270 @@
     (is (= (:payload_omitted_bytes once) (:payload_omitted_bytes twice))
         "re-bounding an already-bounded payload cannot inflate its own report")
     (is (= (:payload_omitted once) (:payload_omitted twice)))))
+
+;; ---------------------------------------------------------------------------
+;; The grammar the agents actually write. Field result from arm Z: 85 admit
+;; calls, 59 refused, 32 of them with one identical message naming a grammar
+;; the caller was never going to emit. A gate must sit on the caller's route
+;; at the byte level or it is not on the route at all.
+;; ---------------------------------------------------------------------------
+
+(def apply-patch-single
+  (str "*** Begin Patch\n"
+       "*** Update File: src/app/core.clj\n"
+       "@@ (defn handle-tick\n"
+       "   [state]\n"
+       "-  (update state :ticks inc))\n"
+       "+  (update state :ticks (fnil inc 0)))\n"
+       "*** End Patch\n"))
+
+(def apply-patch-multi
+  (str "*** Begin Patch\n"
+       "*** Update File: src/app/core.clj\n"
+       "@@\n"
+       "-  (update state :ticks inc))\n"
+       "+  (update state :ticks (fnil inc 0)))\n"
+       "*** Update File: src/app/util.clj\n"
+       "@@\n"
+       "-  (max low (min high value)))\n"
+       "+  (long (max low (min high value))))\n"
+       "*** End Patch\n"))
+
+;; @spec MCP-OP-ADMIT-091
+(deftest both-grammars-are-detected-and-applied
+  (testing "the grammar is read off the first non-blank line"
+    (is (= :apply-patch (patch-apply/detect-grammar apply-patch-single)))
+    (is (= :unified-diff (patch-apply/detect-grammar clean-multi-file-patch)))
+    (is (= :unified-diff (patch-apply/detect-grammar
+                           (str "diff --git a/x.clj b/x.clj\n"
+                                "--- a/x.clj\n+++ b/x.clj\n@@ -1,1 +1,1 @@\n-a\n+b\n"))))
+    (is (nil? (patch-apply/detect-grammar "just some prose"))))
+  (testing "an apply_patch payload applies to the same effect as a diff"
+    (let [from-v4a (patch-apply/apply-patch base-sources apply-patch-single)
+          from-diff (patch-apply/apply-patch base-sources clean-multi-file-patch)]
+      (is (:ok from-v4a))
+      (is (= :apply-patch (:grammar (patch-apply/parse-patch apply-patch-single))))
+      (is (= (:post (first (:files from-diff)))
+             (:post (first (:files from-v4a))))
+          "the same edit, written either way, produces the same bytes")))
+  (testing "a multi-file apply_patch payload"
+    (let [applied (patch-apply/apply-patch base-sources apply-patch-multi)]
+      (is (:ok applied))
+      (is (= ["src/app/core.clj" "src/app/util.clj"]
+             (mapv :file (:files applied))))
+      (is (str/includes? (:post (first (:files applied))) "(fnil inc 0)"))
+      (is (str/includes? (:post (second (:files applied))) "(long (max low")))))
+
+;; @spec MCP-OP-ADMIT-091
+(deftest a-v4a-hunk-is-located-by-content-not-by-line-number
+  (let [shifted (str ";; a header comment nobody mentioned\n"
+                     ";; and another\n"
+                     ";; and a third\n"
+                     core-source)
+        applied (patch-apply/apply-patch {"src/app/core.clj" shifted}
+                                         apply-patch-single)]
+    (is (:ok applied) "no line numbers means nothing to be wrong about")
+    (is (str/includes? (:post (first (:files applied))) "(fnil inc 0)"))
+    (is (str/starts-with? (:post (first (:files applied)))
+                          ";; a header comment nobody mentioned"))
+    (is (= {:pre [[10 10]] :post [[10 10]]}
+           (:hunk-spans (first (:files applied))))
+        "spans are still real line numbers, so drift and binding work"))
+  (testing "the @@ text is a hint that disambiguates, not a requirement"
+    (let [twice (str "(ns app.d)\n\n"
+                     "(defn alpha\n  [s]\n  (inc s))\n\n"
+                     "(defn beta\n  [s]\n  (inc s))\n")
+          patch (str "*** Begin Patch\n*** Update File: src/app/d.clj\n"
+                     "@@ (defn beta\n"
+                     "-  (inc s))\n"
+                     "+  (dec s))\n"
+                     "*** End Patch\n")
+          applied (patch-apply/apply-patch {"src/app/d.clj" twice} patch)]
+      (is (:ok applied))
+      (is (str/includes? (:post (first (:files applied)))
+                         "(defn beta\n  [s]\n  (dec s))")
+          "the anchor selected the second occurrence")
+      (is (str/includes? (:post (first (:files applied)))
+                         "(defn alpha\n  [s]\n  (inc s))")
+          "and left the first alone"))
+    (let [source (str "(ns app.e)\n\n(defn alpha\n  [s]\n  (inc s))\n")
+          wrong-anchor (str "*** Begin Patch\n*** Update File: src/app/e.clj\n"
+                            "@@ (defn something-that-is-not-there\n"
+                            "-  (inc s))\n"
+                            "+  (dec s))\n"
+                            "*** End Patch\n")
+          applied (patch-apply/apply-patch {"src/app/e.clj" source}
+                                           wrong-anchor)]
+      (is (:ok applied)
+          "a hint the author got wrong must not refuse a patch that applies"))))
+
+;; @spec MCP-OP-ADMIT-091
+(deftest whole-file-constructs-are-parsed-then-refused-by-name
+  (doseq [[label patch expected]
+          [["Add File"
+            (str "*** Begin Patch\n*** Add File: src/app/new.clj\n"
+                 "+(ns app.new)\n*** End Patch\n")
+            :add]
+           ["Delete File"
+            (str "*** Begin Patch\n*** Delete File: src/app/util.clj\n"
+                 "*** End Patch\n")
+            :delete]
+           ["Move to"
+            (str "*** Begin Patch\n*** Update File: src/app/util.clj\n"
+                 "*** Move to: src/app/moved.clj\n@@\n"
+                 "-  (max low (min high value)))\n"
+                 "+  (long (max low (min high value))))\n"
+                 "*** End Patch\n")
+            :move]]]
+    (testing label
+      (let [parsed (patch-apply/parse-patch patch)]
+        (is (:ok parsed) "the construct parses; the policy refuses it")
+        (is (= expected (:operation (first (:files parsed))))))
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root base-sources)
+          (let [result (admit/execute-request!
+                         (stub-config root)
+                         {:patch patch :mode "commit" :verify "none"})]
+            (is (false? (:ok result)))
+            (is (= :unsupported-patch-operation (:error-type result)))
+            (is (= :apply-patch (:grammar result)))
+            (is (= expected (:operation (first (:unsupported result))))
+                "the refusal names the construct, not a parse failure")
+            (is (not (.exists (io/file root "src/app/new.clj"))))
+            (is (= util-source (slurp (io/file root "src/app/util.clj")))))
+          (finally (delete-tree! root)))))))
+
+;; @spec MCP-OP-ADMIT-093
+(deftest an-unparseable-payload-names-the-grammars-it-tried
+  (let [root (temp-dir)]
+    (try
+      (write-sources! root base-sources)
+      (testing "prose, or a diff body with no headers at all"
+        (doseq [patch ["please change inc to dec in handle-tick"
+                       "@@ -1,1 +1,1 @@\n-a\n+b\n"]]
+          (let [result (admit/execute-request!
+                         (stub-config root)
+                         {:patch patch :verify "none"})]
+            (is (false? (:ok result)))
+            (is (= :invalid-patch (:error-type result)))
+            (is (= [:apply-patch :unified-diff] (:grammars-tried result)))
+            (is (= (str/trim (first (str/split-lines patch)))
+                   (str/trim (str (:offending-line result))))
+                "the refusal quotes the line that stopped it")
+            (is (str/includes? (:error result) "neither accepted grammar"))
+            (is (= patch-apply/expected-headers
+                   (get-in result [:next_call :expected_headers]))
+                "and the follow-up shows what a first line must look like"))))
+      (testing "a malformed apply_patch payload"
+        (let [patch (str "*** Begin Patch\n"
+                         "*** Rewrite File: src/app/core.clj\n"
+                         "-a\n+b\n*** End Patch\n")
+              result (admit/execute-request!
+                       (stub-config root)
+                       {:patch patch :verify "none"})]
+          (is (false? (:ok result)))
+          (is (= :invalid-patch (:error-type result)))
+          (is (= :apply-patch (:grammar result))
+              "the grammar was recognised; the directive was not")
+          (is (= "*** Rewrite File: src/app/core.clj"
+                 (:offending-line result)))))
+      (testing "an apply_patch body line outside any hunk"
+        (let [patch (str "*** Begin Patch\n"
+                         "*** Update File: src/app/core.clj\n"
+                         "-  (update state :ticks inc))\n"
+                         "*** End Patch\n")
+              result (admit/execute-request!
+                       (stub-config root)
+                       {:patch patch :verify "none"})]
+          (is (false? (:ok result)))
+          (is (= :invalid-patch (:error-type result)))
+          (is (str/includes? (:error result) "outside any hunk"))))
+      (is (= core-source (slurp (io/file root "src/app/core.clj"))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-092
+(deftest a-hunk-body-that-overruns-its-header-is-refused-not-truncated
+  (let [source "(ns app.a)\n\n(defn one\n  [s]\n  (inc s))\n\n(defn two [s] s)\n"
+        ;; The header admits one removed line; the body removes three. Trusting
+        ;; the header applied a truncated hunk and dropped the rest, leaving an
+        ;; owner cut off mid-form -- the self-inflicted unreadable post image.
+        miscounted (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                        "@@ -3,1 +3,0 @@\n"
+                        "-(defn one\n"
+                        "-  [s]\n"
+                        "-  (inc s))\n")
+        applied (patch-apply/apply-patch {"src/app/a.clj" source} miscounted)]
+    (is (false? (:ok applied)))
+    (is (= :hunk-body-overruns-header (:error-type applied)))
+    (is (= "-  [s]" (:offending-line applied)))
+    (is (= "@@ -3,1 +3,0 @@" (:header applied)))
+    (is (true? (:source-unchanged applied))))
+  (testing "a header that is merely generous still applies"
+    (let [source "(ns app.a)\n\n(def x 1)\n"
+          patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                     "@@ -3,1 +3,1 @@\n-(def x 1)\n+(def x 2)\n")]
+      (is (:ok (patch-apply/apply-patch {"src/app/a.clj" source} patch))))))
+
+;; @spec MCP-OP-ADMIT-094
+(deftest a-commit-leaves-nothing-of-its-own-in-version-control
+  (let [root (temp-dir)
+        git (fn [& args]
+              (apply shell/sh (concat ["git" "-c" "user.email=t@t"
+                                       "-c" "user.name=t"]
+                                      args
+                                      [:dir (.getPath root)])))]
+    (try
+      (write-sources! root base-sources)
+      (.mkdirs (io/file root ".clj-surgeon"))
+      (spit (io/file root ".clj-surgeon" "focused-test.edn")
+            (pr-str {:command ["x" "{snapshot}" "{report}" "{namespaces}"]}))
+      (git "init" "-q" ".")
+      (git "add" "-A")
+      (git "commit" "-qm" "base")
+      (is (str/blank? (:out (git "status" "--short")))
+          "the fixture starts clean")
+      (let [result (admit/execute-request!
+                     (stub-config root)
+                     {:patch clean-multi-file-patch
+                      :mode "commit" :verify "none"})
+            status (->> (str/split-lines (str (:out (git "status" "--short"))))
+                        (remove str/blank?)
+                        (map str/trim)
+                        set)]
+        (is (true? (:committed result)))
+        (is (= :cross-process (:lock_scope result)))
+        (is (= #{"M src/app/core.clj" "M src/app/util.clj"} status)
+            (str "git status must show only the patched files, saw: "
+                 (pr-str status))))
+      (testing "the repository's own declaration stays tracked"
+        (is (str/includes? (:out (git "ls-files" ".clj-surgeon/"))
+                           "focused-test.edn")))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-094
+(deftest snapshot-and-report-artefacts-never-touch-the-workspace
+  (let [root (temp-dir)
+        seen (atom nil)]
+    (try
+      (write-sources! root (assoc base-sources
+                                  "test/app/core_test.clj" "(ns app.core-test)\n"))
+      (admit/execute-request!
+        (stub-config root
+                     {:admit-test-runner
+                      (fn [_ {:keys [namespaces snapshot-root]}]
+                        (reset! seen snapshot-root)
+                        {:ran true
+                         :namespace-results
+                         (into {} (map (fn [n] [n {:tests 1 :failures 0
+                                                   :errors 0}]))
+                               namespaces)})})
+        {:patch clean-multi-file-patch :mode "commit" :verify "focused"})
+      (is (some? @seen))
+      (is (not (str/starts-with? @seen (.getPath root)))
+          "the snapshot venue lives outside the workspace entirely")
+      (is (not (.exists (io/file @seen)))
+          "and is removed when the admission ends")
+      (is (= #{"src" "test"} (set (map #(.getName %) (.listFiles root))))
+          "no artefact of the gate is left in the tree")
+      (finally (delete-tree! root)))))

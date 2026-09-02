@@ -43,7 +43,7 @@ where they are.
 | Field | Required | Default | Meaning |
 |---|---|---|---|
 | `workspace_root` | no | configured root | Canonical absolute workspace, resolved by the shared router |
-| `patch` | yes | — | Unified diff text; the exact payload the caller would give `apply_patch` |
+| `patch` | yes | — | The exact payload the caller would give `apply_patch`, in either the V4A or the unified-diff grammar |
 | `mode` | no | `preview` | `preview` never writes; `commit` writes when no refusal-class hazard exists |
 | `verify` | no | `focused` | `focused` runs the lint delta and the mapped focused tests; `none` runs neither |
 | `expect_pre_sha256` | no | — | Per-file pre-image digests, copied from a preview's `next_call`; binds this commit to the bytes that preview inspected |
@@ -137,20 +137,74 @@ and process effects live in `mcp_admit_tool.clj`.
 
 ## #Patch application
 
-Supported input is standard unified diff: optional `diff --git` lines, `---`
-and `+++` file headers, `@@ -l,s +l,s @@` hunk headers, and body lines prefixed
-by a space, `-`, or `+`. A zero-length body line is read as an empty context
+Two grammars are accepted, selected by the first non-blank line of the
+payload: `*** Begin Patch` opens the `apply_patch` V4A grammar, and
+`diff --git`, `--- `, or `Index: ` opens unified diff. Both are described
+below, and everything downstream of application -- hunk spans, drift,
+protected nodes, the pre-image binding -- is computed identically for either.
+
+This is not generosity; it is the difference between a gate that is on the
+caller's route and one that is beside it. Measured in the field: a prompt that
+told six agents to "write the change as a unified diff, the same format you
+would give apply_patch" produced 85 admissions of which 59 refused, 32 with
+the identical message *patch contains no unified diff file headers* -- because
+`apply_patch` does not take a unified diff. It takes V4A, and V4A is what the
+agents wrote. All six fought the parser and then fell back to their native
+tool; 93% of the extra wall was model returns spent on that argument, and the
+gate caught no hazard at all because it never saw a patch. A contract the
+caller cannot express is not a contract, however well it is verified.
+
+**Unified diff**: optional `diff --git` lines, `---` and `+++` file headers,
+`@@ -l,s +l,s @@` hunk headers, and body lines prefixed by a space, `-`, or
+`+`. A zero-length body line is read as an empty context
 line, because many producers strip trailing whitespace. `\ No newline at end of
 file` is honoured on both sides.
 
-Application is strict. For a hunk at pre-image line `l`, the concatenation of
-its context and removed lines must equal the snapshot's lines `[l, l+s)`
-exactly. There is no offset search, no fuzz factor, and no whitespace
-tolerance. A patch that does not apply is a typed refusal that names the file,
-the hunk index, and the first mismatched line — never a best-effort merge.
+**apply_patch (V4A)**: `*** Begin Patch` opens the payload and `*** End Patch`
+closes it. `*** Update File: path` opens a file section, optionally followed by
+`*** Move to: path`; `*** Add File: path` and `*** Delete File: path` name
+whole-file operations. Hunks inside an update open with `@@`, whose trailing
+text is a *context anchor* rather than a line number, and carry the same
+space/`-`/`+` body lines.
 
-Whole-file creation and deletion (`--- /dev/null` or `+++ /dev/null`) refuse in
-v1. The gate's structural report is a delta between two images of the same
+The grammars differ in exactly one thing, and it is the whole of the work: how
+a hunk is located.
+
+Application is strict either way. For a unified hunk at pre-image line `l`,
+the concatenation of its context and removed lines must equal the snapshot's
+lines `[l, l+s)` exactly. There is no offset search, no fuzz factor, and no
+whitespace tolerance.
+
+A V4A hunk carries no line numbers, so it is located by searching the file
+from the current cursor for its exact context-and-removed block. When the `@@`
+line carries text, that text anchors the search: the gate finds the anchor
+first and looks for the block after it, which is what lets one patch edit the
+second of two identical forms. The anchor is a hint and not a requirement --
+if it does not match, the search falls back to the whole remaining file. An
+author who writes an approximate anchor has still described the change
+unambiguously, and refusing them would reproduce the exact failure this
+grammar support exists to end.
+
+A patch that does not apply is a typed refusal that names the file, the hunk
+index, and the first mismatched or unlocatable line — never a best-effort
+merge.
+
+**A hunk body that overruns its own header is a refusal.** A unified header
+that undercounts its body used to leave the surplus lines to be ignored by the
+top-level loop, which applied the truncated hunk the counts described and
+dropped the rest. That is how a patch that merely miscounted became an
+`:unreadable-post-image`: a three-line owner deleted by a header admitting one
+line left `[s]` and `(inc s))` behind, orphaned and unbalanced, and the gate
+reported the corruption as though the author had written it. Only a surplus
+that *changes bytes* is refused; a redundant trailing context line beyond the
+count is harmless, because the lines after a hunk are copied through anyway.
+
+Whole-file creation, deletion and renaming — `--- /dev/null`, `+++ /dev/null`,
+`*** Add File`, `*** Delete File`, `*** Move to` — are **parsed faithfully and
+then refused by policy**, naming the construct. Parsing them is what lets the
+refusal say "Add File src/app/new.clj is not admitted" instead of failing to
+read the payload at all; the distinction is the difference between a boundary
+and a bug. They refuse in v1. The gate's structural report is a delta between two images of the same
 file; a creation has no pre image to compare and a deletion has no post image,
 so admitting them would mean publishing a receipt whose central number is
 undefined. This is a boundary, not an oversight, and it is named in the refusal.
@@ -540,7 +594,10 @@ receipt now states which it was: `pre_image_binding` is `"bound"` or
 | `ns` loses a require | either | yes | ok false, hazard listed | none | false | same call, `preview`, `blocked_by` |
 | Hunk context does not match | either | n/a | typed refusal `:patch-does-not-apply` | none | false | same call, `preview` |
 | Malformed or blank patch | either | n/a | typed refusal `:invalid-patch` | none | false | same call, `preview` |
-| File creation or deletion hunk | either | n/a | typed refusal `:unsupported-patch-operation` | none | false | same call, `preview` |
+| Add File, Delete File, Move to, or a `/dev/null` hunk | either | n/a | parsed, then typed refusal `:unsupported-patch-operation` naming the construct | none | false | same call, `preview` |
+| Payload in neither grammar | either | n/a | typed refusal `:invalid-patch` naming both grammars and quoting the first line | none | false | same call, `preview`, with `expected_headers` |
+| Unified hunk body overruns its header | either | n/a | typed refusal `:hunk-body-overruns-header` | none | false | same call, `preview` |
+| V4A hunk whose `@@` anchor does not match | either | n/a | applies, if the block itself is found | as usual | as usual | as usual |
 | Non-source path in patch | either | n/a | typed refusal `:unsupported-patch-target` | none | false | same call, `preview` |
 | Same file in two file headers | either | n/a | typed refusal `:duplicate-patch-target` | none | false | same call, `preview` |
 | Patch over the admission limit | either | n/a | typed refusal `:patch-too-large`, before decoding | none | false | split the patch |
@@ -689,6 +746,15 @@ Adversarial review, round three. The gate passed; three items remained.
 - [x] **MCP-OP-ADMIT-088**: If the workspace write lock cannot be taken, then clj-surgeon shall publish a typed lock-unavailable refusal naming the lock path, and write nothing. *(x4)*
 - [x] **MCP-OP-ADMIT-089**: If the focused test command exits non-zero, then clj-surgeon shall publish verification as at best partial with the exit code and a runner-exit reason, whatever its report says. *(x1 A4)*
 - [x] **MCP-OP-ADMIT-090**: When a symbol is defined once per reader-conditional platform, however many reader conditionals carry those branches, clj-surgeon shall count one definition; when one platform carries two definitions, or an unconditional definition accompanies a conditional one, it shall count two. *(x3 C1, C1b, C1c)*
+
+Field result, arm Z. The gate lost in the field for a reason no adversarial
+review could see, because every review wrote its own fixtures in the grammar
+the gate already accepted.
+
+- [x] **MCP-OP-ADMIT-091**: When a patch is submitted, clj-surgeon shall accept both the `apply_patch` V4A grammar and unified diff, selecting between them by the first non-blank line, and shall locate a V4A hunk by matching its content, treating the text on its `@@` line as a disambiguating hint rather than a requirement. *(z1)*
+- [x] **MCP-OP-ADMIT-092**: If a unified hunk's body carries a removal or an addition beyond its declared line counts, then clj-surgeon shall publish a typed overrun refusal naming the offending line, rather than applying the hunk the counts describe. *(z1, the unreadable-post-image cause)*
+- [x] **MCP-OP-ADMIT-093**: If a payload is in neither accepted grammar, then clj-surgeon shall name the grammars it tried, quote the first offending line, and publish the expected first line of each grammar in its next call. *(z1)*
+- [x] **MCP-OP-ADMIT-094**: When clj-surgeon commits, it shall leave no control file, snapshot, or report of its own visible to the workspace's version control. *(z1)*
 
 # #Witness Failure Baseline
 
@@ -1242,6 +1308,36 @@ single most ordinary shape in cross-platform Clojure, and the gate was
 refusing it. The fix is not a special case but a better rule — count what a
 single reader would evaluate — and that rule happens to make every earlier
 duplicate case come out the same way it did before.
+
+## #The field, arm Z
+
+Three adversarial rounds passed the gate and one field run failed it, for a
+reason none of the rounds could reach: every review wrote its fixtures in the
+grammar the gate already accepted.
+
+| Symptom | Measured | Cause | Fix |
+|---|---|---|---|
+| Refusal rate | 59 of 85 admissions refused (69%) | — | — |
+| The single largest class | 32 `:invalid-patch`, the **identical** first refusal in all six runs: *patch contains no unified diff file headers* | the prompt said "unified diff, the same format you would give `apply_patch`", but `apply_patch` takes V4A | both grammars accepted, detected by the first line (ADMIT-091) |
+| Second class | 16 `:patch-does-not-apply` | V4A hunks carry no line numbers to apply at | V4A hunks located by content, `@@` text as a hint (ADMIT-091) |
+| Two `:unreadable-post-image` | self-inflicted | a header that undercounted its body left the surplus removals to be silently dropped, applying a truncated hunk that cut an owner in half | `:hunk-body-overruns-header`, refused before application (ADMIT-092) |
+| All six runs | fell back to `apply_patch` on the `.clj` files; 93% of the extra wall was model returns spent arguing with the parser; the gate caught no hazard and post-write calls did not go to zero | the gate was never on the route | — |
+
+The lesson is not about diffs. Three rounds of adversarial review made the
+gate progressively harder to fool and did not once ask whether the caller
+could reach it, because each round wrote its own inputs. A red team that
+supplies its own fixtures is testing the implementation against the
+specification; only the field tests the specification against the world. The
+cheapest thing this gate could have done, at any point in three rounds, was
+read one real payload.
+
+Two smaller things the same run surfaced. The gate left `.clj-surgeon/`
+untracked in every workspace it committed to, so `git status` reported a
+change nobody made -- nothing in the commit path stages anything, the control
+file simply sat there; the state directory now carries a self-ignoring
+`.gitignore` covering the lock and any report artefact, while leaving the
+repository's own `focused-test.edn` tracked. And the snapshot venue was
+already outside the workspace, which is now witnessed rather than assumed.
 
 The measured complexity change is worth keeping as a number rather than a
 claim. The old line lookup counted newlines from the start of the file on
