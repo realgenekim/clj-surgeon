@@ -1127,3 +1127,50 @@ Surgeon tree so the gate has evidence to collect (the report-file wrapper and na
 the runner's R3 rung), and the fix-sha attestation on 7894. Chain: z6 → z7 → z8, armed on GO-Z6,
 which is created only after the fix's suites are green and 7894 is restarted at the fix.
 
+
+## 17:45Z — rf1 scored: Surgeon refactoring Surgeon loses on every cost axis, ties exactly on quality
+
+Receipt `~/acid/receipts/rf1-score.md` (scorer; `rf1-score.py`; acceptance `rf1-rescore.out`,
+"rescore-R3 done"; no `.clj-surgeon` telemetry dir existed in any rf1 worktree, so the call
+ledger is reconstructed from the rollouts).
+
+| arm | n | wall mean | returns | actions | tokens | suites | MCP / CLI calls | native patches | acceptance a–e | churn vs 53 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| N native | 2 | **326.5** | **22.0** | **17.5** | **914,848** | 14.5 | 0 / 0 | 4.5 | all PASS 2/2 | **53** |
+| A shipped 7893 | 2 | 405.5 | 31.0 | 23.0 | 1,946,458 | 16.0 | 5.5 / 6.0 | 1.0 | all PASS 2/2 | **53** |
+| B main 7889 | 2 | 460.0 | 38.5 | 32.0 | 2,419,042 | 14.0 | 2.5 / 15.5 | 1.5 | all PASS 2/2 | **53** |
+
+**Learning.** The tool worked and was used: 4 of 4 Surgeon runs called `:extract!` (through the
+babashka CLI every time; the MCP extraction verb never), the move landed verbatim, and
+`churn_outside_move` is exactly canonical in all six diffs; the l1 formatter pathology did not
+recur. It lost anyway, on every cost axis, and the rollouts show why: native landed the entire
+new namespace with ONE `apply_patch` `*** Add File`, one return after its first read; the
+structural route needed 2–5 returns (study → dry-run plan → execute) to reach the same point.
+Then the shipped build refused **8 of 8** MCP require rewirings (`invalid-compact-relation` ×6,
+`require-change-unprovable` ×2) and both A runs fell back to a native patch for that step; main
+got 1 of 3 through (`invalid-intent-form` ×2). One B run spent 13 `:mv` calls reordering forms
+after the extract. Ordering is unanimous run by run: 311, 342 < 382, 429 < 455, 465.
+
+**Caveat.** n=2 per arm; Welch df 1.2–1.7; the p-values support direction only. The g2-A-1 gate
+scare (1 error in `prepared-confirm-preview-commit-and-replay-cross-the-real-http-wire`, 3931 of
+3945 assertions) is environmental: the quiet-worktree rescore passes e2 with 0 errors; the diff
+touches no wire code; the sibling A run passes with the identical change.
+
+**Hypotheses (aee6e8e).** H1 FAIL and inverted (returns A/N 1.41×, B/N 1.75×; study→move native 1
+return, Surgeon 2–5). H2 FAIL (A +24 %, B +41 % wall). H3 FAIL both halves (no Surgeon churn
+advantage; no formatter churn either). H4 PARTIAL (refusals A 8, B 2, N 0; named types half
+right: `extraction-decisions-required` never fired, `invalid-intent-form` did). H5 half (all arms
+pass; native left no stale alias). H6 PASS (two refusal classes no rung M or L cohort produced,
+both while rewiring requires in Surgeon's own MCP layer: beads).
+
+**What this does to the doctrine.** The winners list (`:extract!`, `:rename-ns!`,
+`require_change`, `within`) was promoted on churn and refusal receipts, never on a wall or
+returns receipt against native on a real extraction. This is that receipt, and it is a loss. Not
+flipping house rules on n=2, but the list carries a measured caveat from now: **the refactor arc
+is itself the cost.** Study, plan, execute are three returns; native skips all three because the
+model already holds the target in its head. The win math says a structural verb wins only if the
+whole refactor (move + caller rewiring across files + ns requires + compile check) collapses into
+ONE return whose response is the verdict, i.e. the extract verb fused with the gate, the
+"think compile bang" shape. rf2's top-3 fixes come from the ethnography (running); the two new
+refusal classes are the beads H6 asked for (inbox to the mayor for creation).
+
