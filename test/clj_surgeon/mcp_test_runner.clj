@@ -30,6 +30,7 @@
    [clj-surgeon.mcp-schema-test]
    [clj-surgeon.mcp-semantic-client-test]
    [clj-surgeon.mcp-server-test]
+   [clj-surgeon.mcp-study-test]
    [clj-surgeon.mcp-telemetry-test]
    [clj-surgeon.mcp-tool-test]
    [clj-surgeon.mcp-workspace-test]
@@ -56,6 +57,7 @@
           'clj-surgeon.mcp-http-server-test
           'clj-surgeon.mcp-hot-verify-test
           'clj-surgeon.mcp-inspect-contract-test
+          'clj-surgeon.mcp-study-test
           'clj-surgeon.mcp-inspect-tool-test
           'clj-surgeon.mcp-intent-contract-test
           'clj-surgeon.mcp-operation-async-test

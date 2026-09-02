@@ -17,6 +17,7 @@
    [clj-surgeon.mcp-workspace :as workspace]
    [clj-surgeon.quoted-var-refs :as quoted-var-refs]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.study :as study]
    [clojure.string :as str]))
 
 (def tool-description
@@ -48,7 +49,17 @@
     "results and SHA-256 guards for every original file. Copy "
     "continuation.retry_template.arguments, replace every declared null selector "
     "hole with one exact owner, and submit that complete guarded request. Do not "
-    "reconstruct aggregate expect or reread completed siblings. Every guarded file is verified before evaluation; "
+    "reconstruct aggregate expect or reread completed siblings. "
+    "For structure questions grep answers wrong, use the study operations: "
+    "requests items deps, topo, ls-deps, and ls-extract answer call-graph, "
+    "ordering, transitive-dependency, and minimal-extractable-closure "
+    "questions for one file (ls-deps and ls-extract need an exact form), and "
+    "top-level mode=ls-tree returns the directory-wide namespace map for an "
+    "optional project-relative dir with optional grep and format=text|edn. "
+    "Every study receipt is bounded to 4096 payload characters by default; a "
+    "larger result sets truncated=true and read_complete=false and returns an "
+    "executable next_call, so raise limit up to 16384 or narrow the scope "
+    "instead of re-reading. Every guarded file is verified before evaluation; "
     "a changed guard refuses without source or write authority. Hypotheses are "
     "never selection authority, and continuation is never write authority. "
     "read_complete=true is "
@@ -151,6 +162,20 @@
                       "Clojure string literals to each outline row. Omit to "
                       "preserve the ordinary outline response exactly.")}})
 
+(def ^:private study-limit-properties
+  {"limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
+            :description (str "Maximum receipt payload characters for this study "
+                              "request. A larger result returns truncated=true "
+                              "with an executable next_call.")}})
+
+(def ^:private study-form-properties
+  (assoc study-limit-properties
+         "form"
+         {:type "string" :minLength 1
+          :description (str "One exact top-level form name. Required for ls-deps "
+                            "and ls-extract; optional for deps, where it narrows "
+                            "the call graph to one owner.")}))
+
 (defn- operationless-forms-request
   []
   {:type "object"
@@ -203,7 +228,11 @@
                                        "Example: (-> (form 'numeric-fields) initializer "
                                        "(expect-count 1) (analyze (fn [[fields]] "
                                        "(count fields))))")}}
-         ["expression"])]}}
+         ["expression"])
+       (request-base "deps" study-form-properties [])
+       (request-base "topo" study-limit-properties [])
+       (request-base "ls-deps" study-form-properties ["form"])
+       (request-base "ls-extract" study-form-properties ["form"])]}}
     "expect"
     {:type "object"
      :additionalProperties false
@@ -307,14 +336,225 @@
     "require_policy" {:type "string" :enum ["minimal" "copy-all"]}}
    :required ["mode" "file" "to" "forms" "require_policy"]})
 
+;; ============================================================
+;; ls-tree mode — the one directory-scoped study operation
+;; ============================================================
+;; Directory-scoped, so it cannot be a `requests` item: every request item is
+;; keyed by one project-relative FILE and participates in expect.files and
+;; snapshot_guards. It therefore takes the shape the contract already reserves
+;; for whole-project reads, a top-level `mode`, exactly like plan-extraction.
+
+(def ls-tree-default-limit 4096)
+(def ls-tree-max-limit 16384)
+
+(def ls-tree-schema
+  {:type "object"
+   :additionalProperties false
+   :properties
+   {"workspace_root" {:type "string" :minLength 1
+                      :description "Optional canonical absolute workspace root. Omit to use the server default. Preserve the returned workspace_root in follow-up calls."}
+    "mode" {:type "string" :const "ls-tree"}
+    "dir" {:type "string" :minLength 1
+           :description "Project-relative directory to scan. Omit or use \".\" for the workspace root. Absolute paths and parent traversal refuse."}
+    "grep" {:type "string" :minLength 1
+            :description "Optional ripgrep pattern; only matching projects and files are outlined."}
+    "format" {:type "string" :enum ["text" "edn"] :default "text"
+              :description "text is the compact scanning view; edn is one row per file."}
+    "limit" {:type "integer" :minimum 1 :maximum 16384 :default 4096
+             :description "Maximum receipt payload characters. A larger tree returns truncated=true with an executable next_call."}}
+   :required ["mode"]})
+
+(defn- ls-tree-total-outlines
+  [projects]
+  (reduce + 0 (map #(count (:outlines %)) projects)))
+
+(defn- ls-tree-take-outlines
+  "Rebuild projects keeping only the first n file outlines in scan order."
+  [projects n]
+  (loop [remaining projects
+         left n
+         acc []]
+    (if (or (empty? remaining) (<= left 0))
+      acc
+      (let [project (first remaining)
+            outlines (:outlines project)
+            kept (min left (count outlines))]
+        (recur (rest remaining)
+               (- left kept)
+               (if (pos? kept)
+                 (conj acc (assoc project :outlines (vec (take kept outlines))))
+                 acc))))))
+
+(defn- ls-tree-render
+  [projects dir output-format]
+  (if (= "edn" output-format)
+    (inspect/json-data (study/format-ls-tree-edn projects dir))
+    (study/format-ls-tree-text projects dir)))
+
+(defn- ls-tree-payload-size
+  [payload output-format]
+  (if (= "edn" output-format)
+    (inspect/json-character-count payload)
+    (count payload)))
+
+(defn- ls-tree-bounded
+  "Grow the receipt one file at a time and stop at the first overflow."
+  [projects dir output-format limit]
+  (let [total (ls-tree-total-outlines projects)]
+    (loop [n 1
+           best {:returned 0
+                 :omitted total
+                 :truncated (pos? total)
+                 :payload (ls-tree-render [] dir output-format)}]
+      (if (> n total)
+        best
+        (let [kept (ls-tree-take-outlines projects n)
+              payload (ls-tree-render kept dir output-format)]
+          (if (<= (ls-tree-payload-size payload output-format) limit)
+            (recur (inc n)
+                   {:returned n
+                    :omitted (- total n)
+                    :truncated (< n total)
+                    :payload payload})
+            best))))))
+
+(defn- ls-tree-next-call
+  [params overrides]
+  {:tool "inspect_clojure"
+   :arguments (merge (cond-> {:mode "ls-tree"}
+                       (:dir params) (assoc :dir (:dir params))
+                       (:grep params) (assoc :grep (:grep params))
+                       (:format params) (assoc :format (:format params)))
+                     overrides)})
+
+(defn- ls-tree-refusal
+  [params error-type message extra]
+  (merge
+    {:ok false
+     :operation "inspect_clojure"
+     :mode "ls-tree"
+     :error_type (name error-type)
+     :error message
+     :read_complete false
+     :source_unchanged true
+     :next_action "correct_request"
+     :next_call (ls-tree-next-call params {:dir "."})}
+    extra))
+
+;; @spec MCP-OP-STUDY-001
+;; @spec MCP-OP-STUDY-006
+;; @spec MCP-OP-STUDY-007
+(defn execute-ls-tree
+  "Run the one study kernel over a workspace-confined directory."
+  [{:keys [project-root]} params]
+  (let [dir (or (:dir params) ".")
+        output-format (or (:format params) "text")
+        limit (or (:limit params) ls-tree-default-limit)
+        root (mcp-paths/real-root project-root)
+        resolved (mcp-paths/resolve-directory-path root dir)]
+    (cond
+      (not (:ok resolved))
+      (ls-tree-refusal
+        params
+        (keyword (:error_type resolved))
+        (:error resolved)
+        {:dir dir
+         :remedy (str "Use an existing directory inside the configured project "
+                      "root, or \".\" for the root itself.")})
+
+      (not (and (integer? limit) (pos? limit) (<= limit ls-tree-max-limit)))
+      (ls-tree-refusal params :invalid-study-limit
+                       "Expected a study limit between 1 and 16384 characters"
+                       {:dir dir :limit limit})
+
+      :else
+      (let [scan (study/ls-tree (cond-> {:dir (:path resolved)}
+                                  (:grep params) (assoc :grep (:grep params))))]
+        (if-not (:ok scan)
+          (ls-tree-refusal params
+                           (:error-type scan)
+                           (:error scan)
+                           (cond-> {:dir dir
+                                    :remedy (if (:grep params)
+                                              "Widen or drop grep, or scan a parent directory."
+                                              "Scan a directory that contains Clojure sources.")}
+                             (:grep params) (assoc :grep (:grep params))))
+          (let [projects (:projects scan)
+                total (ls-tree-total-outlines projects)
+                bounded (ls-tree-bounded projects (:path resolved)
+                                         output-format limit)]
+            (cond->
+              {:ok true
+               :operation "inspect_clojure"
+               :mode "ls-tree"
+               :read_complete (not (:truncated bounded))
+               :dir dir
+               :grep (:grep params)
+               :format output-format
+               :limit limit
+               :project_count (count projects)
+               :file_count total
+               :returned (:returned bounded)
+               :omitted (:omitted bounded)
+               :truncated (:truncated bounded)
+               :next_action (cond
+                              (not (:truncated bounded)) "none"
+                              (< limit ls-tree-max-limit)
+                              "raise_limit_or_narrow_scope"
+                              :else "narrow_scope")}
+              (= "edn" output-format) (assoc :files (:payload bounded))
+              (not= "edn" output-format) (assoc :tree (:payload bounded))
+              ;; An executable continuation only while raising the limit can
+              ;; still advance; a narrower dir or grep is a caller judgment.
+              (and (:truncated bounded) (< limit ls-tree-max-limit))
+              (assoc :next_call
+                     (ls-tree-next-call params {:limit ls-tree-max-limit}))
+              (and (:truncated bounded) (>= limit ls-tree-max-limit))
+              (assoc :remedy
+                     (str "The receipt is already at the maximum limit; scan a "
+                          "subdirectory or add a grep pattern.")))))))))
+
+(defn ls-tree-summary
+  [result]
+  (if-not (:ok result)
+    (format (str "inspect_clojure · ls-tree\n"
+                 "  refused · %s · %s\n\n%s\n\n→ %s")
+            (:error_type result)
+            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (:error result)
+            (:next_action result))
+    (format (str "inspect_clojure · ls-tree\n"
+                 "  %s · %d project%s · %d of %d file%s · %s\n\n"
+                 "%s\n"
+                 "→ %s")
+            (:dir result)
+            (:project_count result)
+            (if (= 1 (:project_count result)) "" "s")
+            (:returned result)
+            (:file_count result)
+            (if (= 1 (:file_count result)) "" "s")
+            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+            (if (:truncated result)
+              (format "! bounded receipt · %d file%s omitted · read_complete=false"
+                      (:omitted result)
+                      (if (= 1 (:omitted result)) "" "s"))
+              "✓ complete tree · read_complete=true")
+            (:next_action result))))
+
 (def inspect-schema
   {:type "object"
    :additionalProperties false
-   :properties (merge (:properties typed-inspect-schema)
-                      (:properties prepare-change-schema)
-                      (:properties basis-view-schema)
-                      (:properties verification-job-schema)
-                      (:properties extraction-plan-schema))
+   :properties (assoc (merge (:properties typed-inspect-schema)
+                             (:properties prepare-change-schema)
+                             (:properties basis-view-schema)
+                             (:properties verification-job-schema)
+                             (:properties extraction-plan-schema)
+                             (:properties ls-tree-schema))
+                      ;; One merged mode vocabulary; each oneOf branch below
+                      ;; pins its own const.
+                      "mode"
+                      {:type "string"
+                       :enum ["prepare-change" "plan-extraction" "ls-tree"]})
    :oneOf [{:required ["requests" "expect"]}
            {:properties {"mode" {:const "prepare-change"}}
             :required ["mode" "subject" "intent"]}
@@ -324,6 +564,8 @@
             :required ["mode" "file" "form" "intent"]}
            {:properties {"mode" {:const "plan-extraction"}}
             :required ["mode" "file" "to" "forms" "require_policy"]}
+           {:properties {"mode" {:const "ls-tree"}}
+            :required ["mode"]}
            {:required ["basis" "view" "open"]}
            {:required ["verification_job" "view"]}]})
 
@@ -386,6 +628,17 @@
     "inspection_elapsed_ms" {:type "number" :minimum 0}
     "job_elapsed_ms" {:type "number" :minimum 0}
     "next_call" {:type "object"}
+    "mode" {:type "string"}
+    "dir" {:type "string"}
+    "grep" {:type ["string" "null"]}
+    "format" {:type "string"}
+    "limit" {:type "integer"}
+    "project_count" {:type "integer"}
+    "returned" {:type "integer"}
+    "omitted" {:type "integer"}
+    "truncated" {:type "boolean"}
+    "tree" {:type "string"}
+    "files" {:type "array"}
     "prepared_request" prepared-request/prepared-request-schema
     "prepared_confirmation" prepared-confirmation-output-schema}
    :required ["ok" "operation" "elapsed_ms"]
@@ -800,9 +1053,11 @@
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))
         extraction-plan? (= "plan-extraction" (:mode normalized-params))
+        ls-tree? (= "ls-tree" (:mode normalized-params))
         basis-view? (= "sites" (:view normalized-params))
         verification-job? (= "verification" (:view normalized-params))
-        validated (when-not (or prepare? extraction-plan? basis-view? verification-job?)
+        validated (when-not (or prepare? extraction-plan? ls-tree?
+                                basis-view? verification-job?)
                     (inspect/validate-inspect-params params))
         result
         (assoc
@@ -819,6 +1074,9 @@
 
             extraction-plan?
             (extraction-plan/plan! config normalized-params)
+
+            ls-tree?
+            (execute-ls-tree config normalized-params)
 
             prepare?
             (change-buffer/prepare-change!
@@ -896,6 +1154,9 @@
     (and (= "verification-job" (:mode result)) (:status result))
     (verification-job-summary result)
 
+    (= "ls-tree" (:mode result))
+    (ls-tree-summary result)
+
     (not (:ok result))
     (let [reason (or (:reason result) (:error-type result)
                      (:error_type result) "unknown-error")
@@ -965,6 +1226,9 @@
 
     (= "plan-extraction" (:mode result))
     (extraction-plan-summary result)
+
+    (= "ls-tree" (:mode result))
+    (ls-tree-summary result)
 
     (= "basis-view" (:mode result))
     (basis-view-summary result)

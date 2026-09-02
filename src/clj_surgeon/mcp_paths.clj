@@ -147,3 +147,60 @@
                  :missing-parent-directories canonical-missing})))))
       (catch Exception error
         (path-refusal :invalid-target-path (.getMessage error) relative)))))
+
+(defn relative-directory-path?
+  "True for a portable project-relative directory path.
+
+  The lexical half of directory confinement; performs no filesystem I/O.
+  \".\" names the project root itself."
+  [value]
+  (when (string? value)
+    (let [portable (str/replace value "\\" "/")]
+      (or (= "." portable)
+          (and (not (str/blank? portable))
+               (not (str/starts-with? portable "/"))
+               (not (re-find #"(?i)^[a-z]:/" portable))
+               (not (str/includes? portable "\u0000"))
+               (every? #(and (not (str/blank? %))
+                             (not (#{"." ".."} %)))
+                       (str/split portable #"/" -1)))))))
+
+;; @spec MCP-OP-STUDY-006
+(defn resolve-directory-path
+  "Resolve one lexically valid relative directory inside canonical root.
+
+  Mirrors `resolve-source-path` exactly: symlinks may point within the root,
+  but escapes and non-directories refuse. Adds no new confinement policy."
+  [^Path root relative]
+  (if-not (relative-directory-path? relative)
+    (path-refusal
+      :invalid-relative-directory-path
+      "Expected a project-relative directory path without parent traversal"
+      relative)
+    (try
+      (let [lexical (.normalize (.resolve root relative))]
+        (if-not (.startsWith lexical root)
+          (path-refusal :path-outside-project
+                        "Directory path escapes the configured project root"
+                        relative)
+          (let [real (.toRealPath lexical (make-array LinkOption 0))]
+            (cond
+              (not (.startsWith real root))
+              (path-refusal :path-outside-project
+                            "Directory symlink resolves outside the configured project root"
+                            relative)
+
+              (not (Files/isDirectory real (make-array LinkOption 0)))
+              (path-refusal :path-not-directory
+                            "Path is not a directory"
+                            relative)
+
+              :else
+              {:ok true
+               :relative relative
+               :path (.toString real)
+               :canonical real}))))
+      (catch java.nio.file.NoSuchFileException _
+        (path-refusal :directory-not-found "Directory does not exist" relative))
+      (catch Exception error
+        (path-refusal :invalid-directory-path (.getMessage error) relative)))))

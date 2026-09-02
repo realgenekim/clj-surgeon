@@ -15,10 +15,10 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 ### Perception (questions grep answers wrong)
 | node | status | lives in | receipt |
 |---|---|---|---|
-| `:ls-tree` workspace table of contents, grep-filterable | WON | CLI | big-aha log, winners table (df432c4) |
-| `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI | same |
+| `:ls-tree` workspace table of contents, grep-filterable | WON | CLI **and MCP** | big-aha log, winners table (df432c4); MCP `mode="ls-tree"` shipped, clj-surgeon-0me |
+| `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI **and MCP** | same; MCP `requests` operations shipped, clj-surgeon-0me |
 | `inspect_clojure` outline / forms / owners / prepare-change | KEEP | MCP | l1 taxonomy: substituted reads only under the mandate (07:36Z receipt) |
-| workspace-wide inspect (ls-tree through MCP) | OPEN | MCP | inb-f403aa |
+| workspace-wide inspect (ls-tree through MCP) | BUILT, adoption unmeasured | MCP | clj-surgeon-0me; `docs/intent/study-ops/`; one kernel proved by `study-ops-both-entrances-call-one-kernel`; E6 free-choice cohort still owed |
 | inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
 
 ### Writes

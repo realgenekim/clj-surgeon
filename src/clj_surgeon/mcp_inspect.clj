@@ -10,6 +10,7 @@
    [clj-surgeon.outline :as outline]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
+   [clj-surgeon.study :as study]
    [clojure.string :as str]))
 
 (def max-requests 64)
@@ -28,12 +29,20 @@
   {"forms" (into common-request-fields ["forms" "expect" "include_source"])
    "outline" (conj common-request-fields "include_string_symbols")
    "match" (into common-request-fields ["match" "inside" "expect"])
-   "xray" (conj common-request-fields "expression")})
+   "xray" (conj common-request-fields "expression")
+   "deps" (into common-request-fields ["form" "limit"])
+   "topo" (conj common-request-fields "limit")
+   "ls-deps" (into common-request-fields ["form" "limit"])
+   "ls-extract" (into common-request-fields ["form" "limit"])})
 (def ^:private operation-required
   {"forms" (into common-request-fields ["forms" "expect"])
    "outline" common-request-fields
    "match" (conj common-request-fields "match")
-   "xray" (get operation-fields "xray")})
+   "xray" (get operation-fields "xray")
+   "deps" common-request-fields
+   "topo" common-request-fields
+   "ls-deps" (conj common-request-fields "form")
+   "ls-extract" (conj common-request-fields "form")})
 
 (defn- field-name
   [key]
@@ -107,6 +116,13 @@
   [value path]
   (when-not (and (integer? value) (not (neg? value)))
     (refuse! :non-negative-integer path "Expected a non-negative integer"))
+  value)
+
+(defn- study-limit!
+  [value path]
+  (when-not (and (integer? value) (pos? value) (<= value 16384))
+    (refuse! :invalid-study-limit path
+             "Expected a study limit between 1 and 16384 JSON characters"))
   value)
 
 (defn- boolean!
@@ -246,7 +262,16 @@
           "xray"
           {:id id :operation operation :file file
            :expression (nonblank-string! (field request "expression")
-                                         (conj path "expression"))})))))
+                                         (conj path "expression"))}
+
+          ("deps" "topo" "ls-deps" "ls-extract")
+          (cond-> {:id id :operation operation :file file}
+            (present? request "form")
+            (assoc :form (nonblank-string! (field request "form")
+                                           (conj path "form")))
+            (present? request "limit")
+            (assoc :limit (study-limit! (field request "limit")
+                                        (conj path "limit")))))))))
 
 (def ^:private operationless-forms-fields
   #{"id" "file" "forms" "expect" "include_source"})
@@ -466,7 +491,15 @@
       (contains? result :candidate-limit)
       (assoc :candidate_limit (:candidate-limit result))
       (contains? result :candidates-truncated)
-      (assoc :candidates_truncated (:candidates-truncated result)))))
+      (assoc :candidates_truncated (:candidates-truncated result))
+      (contains? result :form)
+      (assoc :form (str (:form result)))
+      (contains? result :required)
+      (assoc :required (:required result))
+      (contains? result :limit)
+      (assoc :limit (:limit result))
+      (contains? result :next-call)
+      (assoc :next_call (json-data (:next-call result))))))
 
 ;; @spec MCP-OP-READ-DIAG-001
 ;; @spec MCP-OP-READ-DIAG-003
@@ -580,6 +613,173 @@
                        :file_hash (:hash snapshot)
                        :source_character_count (reduce + 0 (map count sources))))))))))
 
+;; ============================================================
+;; Study operations — bounded receipts over the clj-surgeon.study kernel
+;; ============================================================
+;; The CLI and this entrance call the same kernel functions on the same bytes.
+;; Only read-only study operations are exposed here; the write operations
+;; (:mv, :rename-ns!, :fix-declares!) stay CLI/gate-only by design.
+
+(def study-default-limit 4096)
+(def study-max-limit 16384)
+
+(defn- study-request-arguments
+  "Rebuild one single-request batch for an executable continuation."
+  [request overrides]
+  {:requests [(merge (cond-> {:id (:id request)
+                              :operation (:operation request)
+                              :file (:file request)}
+                       (:form request) (assoc :form (:form request)))
+                     overrides)]
+   :expect {:requests 1 :files 1}})
+
+(defn- study-next-call
+  [request overrides]
+  {:tool "inspect_clojure"
+   :arguments (study-request-arguments request overrides)})
+
+;; @spec MCP-OP-STUDY-007
+(defn bound-rows
+  "Bound an already JSON-normalized row vector by total JSON characters.
+
+  Returns [kept omitted truncated?]. A first row larger than the limit keeps
+  nothing rather than silently exceeding the receipt budget."
+  [rows limit]
+  (loop [remaining (seq rows)
+         kept []
+         used 0]
+    (if-let [row (first remaining)]
+      (let [cost (inc (json-character-count row))]
+        (if (> (+ used cost) limit)
+          [kept (count remaining) true]
+          (recur (next remaining) (conj kept row) (+ used cost))))
+      [kept 0 false])))
+
+(defn- study-limit
+  [request]
+  (or (:limit request) study-default-limit))
+
+(defn- study-base
+  [request snapshot limit]
+  {:id (:id request)
+   :operation (:operation request)
+   :file (:file request)
+   :file_hash (:hash snapshot)
+   :source_character_count 0
+   :limit limit})
+
+(defn- study-truncation
+  "A continuation is emitted only when raising the limit can still advance.
+
+  At the maximum limit the narrower scope is a caller judgment, not a
+  deterministic projection of proved facts, so no executable call is served."
+  [result request truncated? omitted]
+  (let [limit (study-limit request)
+        raisable? (< limit study-max-limit)]
+    (cond-> (assoc result :truncated truncated? :omitted omitted)
+      truncated?
+      (assoc :next_action (if raisable?
+                            "raise_limit_or_narrow_scope"
+                            "narrow_scope")
+             :remedy (if raisable?
+                       "Replay next_call to widen the receipt, or narrow the request."
+                       "The receipt is already at the maximum limit; request one exact form instead."))
+      (and truncated? raisable?)
+      (assoc :next_call (study-next-call request {:limit study-max-limit})))))
+
+;; @spec MCP-OP-STUDY-010
+(defn- study-missing-form
+  [request source]
+  (let [owners (study/owner-names source)
+        total (count owners)
+        returned (min 50 total)]
+    {:error (str "No top-level form named " (:form request)
+                 " in " (:file request))
+     :error-type :study-form-not-found
+     :failed-stage :study-select
+     :form (:form request)
+     :available-owners (vec (take returned owners))
+     :available-owners-returned returned
+     :available-owners-omitted (- total returned)
+     :available-owners-truncated (> total returned)
+     :available-owner-count total
+     :next-call (study-next-call request
+                                 {:form "REPLACE-WITH-ONE-EXACT-OWNER"})}))
+
+(defn- study-oversized
+  [request required limit]
+  {:error "One atomic study result exceeds the receipt limit"
+   :error-type :study-output-limit
+   :required required
+   :limit limit
+   :next-call (study-next-call
+                request
+                {:limit (min study-max-limit (max required limit))})})
+
+(defn- deps-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)]
+    (if (:form request)
+      (if-let [row (study/deps source {:form (:form request)})]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned 1
+                 :deps (json-data row))
+          request false 0)
+        (study-missing-form request source))
+      (let [rows (mapv json-data (study/deps source {}))
+            [kept omitted truncated?] (bound-rows rows limit)]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned (count kept)
+                 :form_count (count rows)
+                 :deps kept)
+          request truncated? omitted)))))
+
+(defn- topo-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        kernel (json-data (study/topo (:source snapshot)))
+        [kept omitted truncated?] (bound-rows (:sorted kernel) limit)]
+    (study-truncation
+      (assoc (study-base request snapshot limit)
+             :returned (count kept)
+             :form_count (count (:sorted kernel))
+             :topo (assoc kernel :sorted kept))
+      request truncated? omitted)))
+
+(defn- ls-deps-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)]
+    (if-let [tree (study/ls-deps source {:form (:form request)})]
+      (let [normalized (json-data tree)
+            required (json-character-count normalized)]
+        (if (> required limit)
+          (study-oversized request required limit)
+          (study-truncation
+            (assoc (study-base request snapshot limit)
+                   :returned 1
+                   :dep_tree normalized)
+            request false 0)))
+      (study-missing-form request source))))
+
+(defn- ls-extract-result
+  [request snapshot]
+  (let [limit (study-limit request)
+        source (:source snapshot)
+        kernel (json-data (study/ls-extract source {:form (:form request)}))]
+    (if (empty? (:forms kernel))
+      (study-missing-form request source)
+      (let [[kept omitted truncated?] (bound-rows (:forms kernel) limit)]
+        (study-truncation
+          (assoc (study-base request snapshot limit)
+                 :returned (count kept)
+                 :form_count (count (:forms kernel))
+                 :closure (assoc kernel :forms kept))
+          request truncated? omitted)))))
+
 (defn- evaluate-request
   [request snapshot]
   (try
@@ -587,7 +787,11 @@
       "forms" (forms-result request snapshot)
       "outline" (outline-result request snapshot)
       "match" (match-result request snapshot)
-      "xray" (xray-result request snapshot))
+      "xray" (xray-result request snapshot)
+      "deps" (deps-result request snapshot)
+      "topo" (topo-result request snapshot)
+      "ls-deps" (ls-deps-result request snapshot)
+      "ls-extract" (ls-extract-result request snapshot))
     (catch Exception error
       {:error (.getMessage error)
        :error-type (or (:error-type (ex-data error)) :invalid-source)})))
@@ -741,18 +945,22 @@
                                    (map (fn [file]
                                           [file (:hash (get snapshots file))]))
                                    files)
-                 source-count (reduce + 0 (map :source_character_count results))]
+                 source-count (reduce + 0 (map :source_character_count results))
+                 truncated? (boolean (some :truncated results))]
              (cond->
                {:ok true
                 :operation "inspect_clojure"
-                :read_complete true
+                :read_complete (not truncated?)
                 :request_count (:requests expect)
                 :file_count (:files expect)
                 :results results
                 :file_hashes file-hashes
                 :source_character_count source-count
                 :result_character_count (:result_character_count budget)
-                :next_action "none"}
+                :next_action (if truncated?
+                               "raise_limit_or_narrow_scope"
+                               "none")}
+               truncated? (assoc :truncated true)
                snapshot-guards (assoc :snapshot_guards snapshot-guards)))))))))
 
 (defn- plural
@@ -802,6 +1010,13 @@
       (when-let [compact (compact-json (:value result) 1024)]
         (str "  " (:id result) ": value " compact)))
 
+    ("deps" "topo" "ls-deps" "ls-extract")
+    (str "  " (:id result) ": " (:operation result) " · "
+         (:returned result) " of "
+         (or (:form_count result) (:returned result)) " rows"
+         (when (:truncated result)
+           (str " · truncated, " (:omitted result) " omitted")))
+
     nil))
 
 (defn concise-summary
@@ -820,7 +1035,10 @@
          "✓ all requests resolved\n"
          "✓ ordered snapshot\n"
          "✓ hashes attached\n"
-         "✓ terminal evidence · read_complete=true · next action none\n"
+         (if (:truncated result)
+           (str "! bounded receipt · read_complete=false · next action "
+                (:next_action result) "\n")
+           "✓ terminal evidence · read_complete=true · next action none\n")
          (when (seq evidence-lines)
            (str "\n" (str/join "\n" evidence-lines) "\n"))
          "  " (format "%,d" (long (:source_character_count result)))

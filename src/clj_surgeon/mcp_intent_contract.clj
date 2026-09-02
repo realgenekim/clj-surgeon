@@ -111,7 +111,9 @@
           (io/file root
                    "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md")
           (io/file root
-                   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md")]]
+                   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md")
+          (io/file root
+                   "docs/intent/study-ops/study-ops-specs.md")]]
      (audit-contract
        {:spec-text (str/join "\n" (map slurp spec-files))
         :implementation-sources

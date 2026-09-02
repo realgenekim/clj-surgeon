@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clj-surgeon.outline :as outline]
             [clj-surgeon.core :as core]
+            [clj-surgeon.study :as study]
             [clojure.string :as str]
             [rewrite-clj.zip :as z]
             [babashka.fs :as fs]))
@@ -77,27 +78,27 @@
 
 (deftest test-source-paths-deps-edn
   (testing "reads :paths from deps.edn"
-    (is (= ["src"] (core/source-paths-from-config "deps.edn" {:paths ["src"]})))
-    (is (= ["src" "test"] (core/source-paths-from-config "deps.edn" {:paths ["src" "test"]}))))
+    (is (= ["src"] (study/source-paths-from-config "deps.edn" {:paths ["src"]})))
+    (is (= ["src" "test"] (study/source-paths-from-config "deps.edn" {:paths ["src" "test"]}))))
   (testing "defaults to [\"src\"] when :paths missing"
-    (is (= ["src"] (core/source-paths-from-config "deps.edn" {})))
-    (is (= ["src"] (core/source-paths-from-config "deps.edn" {:deps {}})))))
+    (is (= ["src"] (study/source-paths-from-config "deps.edn" {})))
+    (is (= ["src"] (study/source-paths-from-config "deps.edn" {:deps {}})))))
 
 (deftest test-source-paths-bb-edn
-  (is (= ["src" "scripts"] (core/source-paths-from-config "bb.edn" {:paths ["src" "scripts"]})))
-  (is (= ["src"] (core/source-paths-from-config "bb.edn" {}))))
+  (is (= ["src" "scripts"] (study/source-paths-from-config "bb.edn" {:paths ["src" "scripts"]})))
+  (is (= ["src"] (study/source-paths-from-config "bb.edn" {}))))
 
 (deftest test-source-paths-project-clj
   (is (= ["src/clj"]
-         (core/source-paths-from-config "project.clj"
+         (study/source-paths-from-config "project.clj"
                                         '(defproject my-app "1.0" :source-paths ["src/clj"]))))
   (testing "defaults to [\"src\"] when :source-paths missing"
     (is (= ["src"]
-           (core/source-paths-from-config "project.clj"
+           (study/source-paths-from-config "project.clj"
                                           '(defproject my-app "1.0" :dependencies []))))))
 
 (deftest test-source-paths-unknown-file
-  (is (= ["src"] (core/source-paths-from-config "build.gradle" {}))))
+  (is (= ["src"] (study/source-paths-from-config "build.gradle" {}))))
 
 ;; ============================================================
 ;; Pure tests: filter-projects-by-hits (data in, data out)
@@ -110,7 +111,7 @@
                      :files ["/r/email-fetch/src/a.clj"
                              "/r/email-fetch/src/b.clj"]}]
           hits #{"/r/email-fetch/deps.edn"}]
-      (is (= projects (core/filter-projects-by-hits projects hits))))))
+      (is (= projects (study/filter-projects-by-hits projects hits))))))
 
 (deftest test-filter-by-hits-source-file-match
   (testing "when only source files match, only those are included"
@@ -120,7 +121,7 @@
                              "/r/app/src/util.clj"
                              "/r/app/src/core.clj"]}]
           hits #{"/r/app/src/email.clj"}
-          result (core/filter-projects-by-hits projects hits)]
+          result (study/filter-projects-by-hits projects hits)]
       (is (= 1 (count result)))
       (is (= ["/r/app/src/email.clj"] (:files (first result)))))))
 
@@ -130,7 +131,7 @@
                      :root "/r/unrelated"
                      :files ["/r/unrelated/src/core.clj"]}]
           hits #{"/r/other/src/foo.clj"}]
-      (is (empty? (core/filter-projects-by-hits projects hits))))))
+      (is (empty? (study/filter-projects-by-hits projects hits))))))
 
 (deftest test-filter-by-hits-mixed
   (testing "mix of build-file match and source-file match across projects"
@@ -144,7 +145,7 @@
                      :root "/r/unrelated"
                      :files ["/r/unrelated/src/core.clj"]}]
           hits #{"/r/email-lib/deps.edn" "/r/app/src/mailer.clj"}
-          result (core/filter-projects-by-hits projects hits)]
+          result (study/filter-projects-by-hits projects hits)]
       (is (= 2 (count result)))
       ;; email-lib: build file matched → all files included
       (is (= ["/r/email-lib/src/a.clj" "/r/email-lib/src/b.clj"]
@@ -158,7 +159,7 @@
 ;; ============================================================
 
 (deftest test-format-file-text-basic
-  (let [result (core/format-file-text
+  (let [result (study/format-file-text
                 {:ns 'my.app
                  :lines 50
                  :form-count 2
@@ -173,7 +174,7 @@
     (is (str/includes? result "12: def version"))))
 
 (deftest test-format-file-text-no-requires
-  (let [result (core/format-file-text
+  (let [result (study/format-file-text
                 {:ns 'my.bare :lines 5 :form-count 1
                  :requires []
                  :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
@@ -182,14 +183,14 @@
     (is (str/includes? result "3: def x"))))
 
 (deftest test-format-file-text-error
-  (let [result (core/format-file-text
+  (let [result (study/format-file-text
                 {:lines 0 :form-count 0 :error "Unexpected EOF"}
                 "broken.clj")]
     (is (str/includes? result "⚠ Unexpected EOF"))))
 
 (deftest test-format-file-text-single-line-form
   (testing "form where line == end-line shows just the line number, not a range"
-    (let [result (core/format-file-text
+    (let [result (study/format-file-text
                   {:ns 'x :lines 5 :form-count 1 :requires []
                    :forms [{:type 'def :name 'x :line 3 :end-line 3}]}
                   "x.clj")]
@@ -208,7 +209,7 @@
                                 :requires ["[clojure.string :as str]"]
                                 :forms [{:type 'defn :name 'greet :args "[x]" :line 3 :end-line 8}
                                         {:type 'def :name 'version :line 10 :end-line 10}]}]]}]
-        result (core/format-ls-tree-text projects "/tmp")]
+        result (study/format-ls-tree-text projects "/tmp")]
     (is (str/includes? result "greet"))
     (is (str/includes? result "version"))
     (is (str/includes? result "total: 1 files, 2 forms"))))
@@ -225,7 +226,7 @@
                                {:ns 'beta.core :lines 15 :form-count 2
                                 :requires [] :forms [{:type 'defn :name 'b-fn :line 3 :end-line 5}
                                                      {:type 'def :name 'b-val :line 7 :end-line 7}]}]]}]
-        result (core/format-ls-tree-text projects "/r")]
+        result (study/format-ls-tree-text projects "/r")]
     (is (str/includes? result "── alpha (1 files, 1 forms)"))
     (is (str/includes? result "── beta (1 files, 2 forms)"))
     (is (str/includes? result "total: 2 files, 3 forms"))))
@@ -242,7 +243,7 @@
                                 :requires ["[clojure.string :as str]"]
                                 :forms [{:type 'defn :name 'f :args "[x]" :line 3 :end-line 5}]
                                 :forward-refs []}]]}]
-        result (core/format-ls-tree-edn projects "/tmp")]
+        result (study/format-ls-tree-edn projects "/tmp")]
     (is (vector? result))
     (is (= 1 (count result)))
     (let [entry (first result)]
