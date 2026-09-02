@@ -1005,3 +1005,20 @@ lost gate can be recovered; chain-2 waits for b1, refreshes the running copy onl
 driver exits, full-gates all b1 diffs, then runs n1, k2, v1 on the fixed runner. Ratchet
 class: a background job inside a background job is an orphan; a receipt name without the
 group index is a collision waiting for the first repeated arm.
+
+## Receipt 09:45Z — rung L designed: "one server-owned wall clock" (the large multi-owner task)
+
+Per fleet round 4 (Opus: every queued cohort re-measures the medium rung). Task: hoist the 21
+scattered `System/currentTimeMillis` reads in marvin-voice-remote at ab267f9 into a new
+`clock` namespace, thread the require through ten ns forms, make the three existing dynamic
+`*now-ms*` vars delegate to it while still winning when locally bound. 21 top-level owners
+across 11 namespaces, purely mechanical, no URL flags, server-owned versus client-owned
+spelled out (the 23 `Date.now()` calls inside JS strings are out of scope and guarded).
+Acceptance suite of 12 tests, every discriminating assertion tied to a numbered clause;
+measured on the pristine base 39 failed assertions, on the reference implementation 0, full
+suite unchanged at 577 tests, zero golden bytes moved. Verify meter for arms: one focused
+namespace that compiles the whole tree and binds two of the three vars. Spec, prompt and
+suite stored beside this log in `2026-09-02-acid-rung-L/`; the reference solution stays off
+the arms' path. Designer's caveat: the full suite runs in 19 s here, so agents will be tempted
+to run it instead of the focused one; that temptation is the main variance source in this
+rung. Installing on Anvil now; cohort l1 "A N" x3 pairs queues after v1.
