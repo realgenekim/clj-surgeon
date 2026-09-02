@@ -1239,10 +1239,45 @@ def in_window(value: dict, since: datetime, until: datetime) -> bool:
     return timestamp is not None and since <= timestamp <= until
 
 
-def collect_surgeon_telemetry(root: Path, since: datetime, until: datetime) -> dict:
+def default_surgeon_telemetry_roots() -> list[Path]:
+    """The known-good Surgeon telemetry roots, scanned together when no
+    explicit --surgeon-telemetry-root is given.
+
+    Two conventions exist for this box and both are legitimate:
+      - the MCP server's own default (mcp_telemetry.clj default-directory),
+        used whenever a launcher (e.g. `make mcp-serve`) does not pass
+        :telemetry-dir explicitly;
+      - $MCP_STATE_DIR/telemetry, the Makefile launchd convention used by
+        `make mcp-start` / `make mcp-serve-benchmark`.
+    An absent root here does not mean zero usage; see collect_surgeon_telemetry.
+    """
+    home = Path.home()
+    mcp_state_dir = Path(
+        os.environ.get("MCP_STATE_DIR", str(home / ".local" / "state" / "clj-surgeon" / "mcp"))
+    )
+    return [
+        home / ".local" / "state" / "clj-surgeon" / "telemetry",
+        mcp_state_dir / "telemetry",
+    ]
+
+
+def collect_surgeon_telemetry(roots: Path | list[Path], since: datetime, until: datetime) -> dict:
+    roots = [roots] if isinstance(roots, Path) else list(roots)
+    roots_checked = [str(root) for root in roots]
+    roots_present = [str(root) for root in roots if root.exists()]
+
     events = []
-    for path in candidate_files(root, "*.jsonl", since):
-        events.extend(value for value in iter_jsonl(path) if in_window(value, since, until))
+    seen_paths: set[str] = set()
+    for root in roots:
+        for path in candidate_files(root, "*.jsonl", since):
+            try:
+                resolved = str(path.resolve())
+            except OSError:
+                resolved = str(path)
+            if resolved in seen_paths:
+                continue
+            seen_paths.add(resolved)
+            events.extend(value for value in iter_jsonl(path) if in_window(value, since, until))
 
     starts = [event for event in events if event.get("event") == "server.start"]
     calls = [event for event in events if event.get("event") == "tool.call"]
@@ -1291,8 +1326,17 @@ def collect_surgeon_telemetry(root: Path, since: datetime, until: datetime) -> d
             apply_edits.append(int(outcome.get("edits") or 0))
             apply_files.append(int(outcome.get("files") or 0))
 
+    if not roots_present:
+        status = "root-absent"
+    elif events:
+        status = "ok"
+    else:
+        status = "no-events"
+
     return {
-        "status": "ok" if events else "no-events",
+        "status": status,
+        "roots_checked": roots_checked,
+        "roots_present": roots_present,
         "event_count": len(events),
         "server_starts": len(starts),
         "sessions": len({str(event.get("session_id")) for event in events if event.get("session_id")}),
@@ -1505,7 +1549,9 @@ def collect(args) -> dict:
         },
         "services": {
             "clj_surgeon_mcp": collect_surgeon_telemetry(
-                Path(args.surgeon_telemetry_root), since, until
+                [Path(args.surgeon_telemetry_root)] if getattr(args, "surgeon_telemetry_root", None)
+                else default_surgeon_telemetry_roots(),
+                since, until,
             ),
             "cclsp_and_clojure_lsp": collect_cclsp_telemetry(
                 Path(args.cclsp_log), since, until
@@ -2186,6 +2232,71 @@ def self_test() -> int:
         assert "3 calls" in rendered_chains
         assert "boundary 18.000s" in rendered_chains
         assert "PRIVATE_" not in rendered_chains
+
+        # Regression coverage for the false-zero fix: an absent telemetry
+        # root must never be reported as "ok"/"no-events" with zero calls.
+        surgeon_since = parse_time("2026-08-05T00:00:00Z")
+        surgeon_until = parse_time("2026-08-05T02:00:00Z")
+        roots_root = root / "surgeon-roots"
+        server_default_root = roots_root / "server-default" / "telemetry"
+        mcp_state_root = roots_root / "mcp-state" / "telemetry"
+
+        # 1. Neither convention's directory exists -> root-absent, never a
+        #    silent zero.
+        absent = collect_surgeon_telemetry(
+            [server_default_root, mcp_state_root], surgeon_since, surgeon_until
+        )
+        assert absent["status"] == "root-absent"
+        assert absent["mcp_tool_calls"] == 0
+        assert absent["roots_checked"] == [str(server_default_root), str(mcp_state_root)]
+        assert absent["roots_present"] == []
+
+        # 2. A root exists but is genuinely empty -> no-events, distinct from
+        #    root-absent, with both roots_checked and roots_present reported.
+        server_default_root.mkdir(parents=True)
+        empty = collect_surgeon_telemetry(
+            [server_default_root, mcp_state_root], surgeon_since, surgeon_until
+        )
+        assert empty["status"] == "no-events"
+        assert empty["mcp_tool_calls"] == 0
+        assert empty["roots_checked"] == [str(server_default_root), str(mcp_state_root)]
+        assert empty["roots_present"] == [str(server_default_root)]
+
+        # 3. One JSONL event in the server-default root, mcp/ root still
+        #    absent (tonight's actual defect shape) -> ok, 1 call counted.
+        write_fixture(
+            server_default_root / "session.jsonl",
+            [
+                {
+                    "timestamp": "2026-08-05T01:11:00Z",
+                    "event": "tool.call",
+                    "session_id": "roots-session",
+                    "tool": "inspect_clojure",
+                    "request_shape": {"operations": {"forms": 1}},
+                    "outcome": {"ok": True, "file_reads": 1, "source_characters": 10},
+                    "timings_ms": {"total_ms": 5.0},
+                },
+            ],
+        )
+        one_root_ok = collect_surgeon_telemetry(
+            [server_default_root, mcp_state_root], surgeon_since, surgeon_until
+        )
+        assert one_root_ok["status"] == "ok"
+        assert one_root_ok["mcp_tool_calls"] == 1
+        assert one_root_ok["roots_present"] == [str(server_default_root)]
+
+        # 4. The same underlying file reachable via both roots (e.g. one
+        #    convention symlinked to the other) is counted once, not twice.
+        mcp_state_root.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(server_default_root, mcp_state_root)
+        deduped = collect_surgeon_telemetry(
+            [server_default_root, mcp_state_root], surgeon_since, surgeon_until
+        )
+        assert deduped["status"] == "ok"
+        assert deduped["mcp_tool_calls"] == 1
+        assert sorted(deduped["roots_present"]) == sorted(
+            [str(server_default_root), str(mcp_state_root)]
+        )
     print("study-agent-usage self-test passed")
     return 0
 
@@ -2199,7 +2310,16 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--claude-root", default=str(Path.home() / ".claude" / "projects"))
     result.add_argument(
         "--surgeon-telemetry-root",
-        default=str(Path.home() / ".local" / "state" / "clj-surgeon" / "mcp" / "telemetry"),
+        default=None,
+        help=(
+            "Override to scan a single Surgeon telemetry root. Omit to scan the "
+            "union of both known conventions: the MCP server's own default "
+            "(~/.local/state/clj-surgeon/telemetry, used when a launcher does not "
+            "pass :telemetry-dir) and $MCP_STATE_DIR/telemetry (default "
+            "~/.local/state/clj-surgeon/mcp/telemetry, the Makefile launchd "
+            "convention). Events found under both are deduplicated by resolved "
+            "absolute file path."
+        ),
     )
     result.add_argument(
         "--cclsp-log",

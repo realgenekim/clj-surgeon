@@ -100,6 +100,18 @@ Old cclsp logs can predate durable MCP-admission events. Preserve that as a
 coverage limit. Do not infer zero cclsp calls from a zero admission count when
 agent route phases show cclsp use.
 
+The Surgeon MCP telemetry section scans two roots by default and unions their
+events (deduplicated by resolved absolute file path): the server's own default
+(`~/.local/state/clj-surgeon/telemetry`, used whenever a launcher such as
+`make mcp-serve` starts the server without `:telemetry-dir`) and
+`$MCP_STATE_DIR/telemetry` (default `~/.local/state/clj-surgeon/mcp/telemetry`,
+the Makefile launchd convention). `--surgeon-telemetry-root` still scans a
+single explicit root when given. `services.clj_surgeon_mcp.status` is typed:
+`"root-absent"` means neither root exists — never read this as zero calls;
+`"no-events"` means a root exists but the window had no events; `"ok"` means
+events were found. Both states list `roots_checked`, and the latter two also
+list `roots_present`.
+
 Read `route_phases` as the agent's keystroke sequence. Each phase contains only
 behavioral kinds, action and Surgeon-call counts, input/output sizes, and wall:
 
