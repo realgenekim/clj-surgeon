@@ -898,3 +898,62 @@ the same arc with native tools only. Both end with the six report items and a `T
 Receipts on Anvil: `rf1-base-testfast.out`, `rf1-base-mcp.out`, `rf1-reference.diff`,
 `acid-cohort-v5.sh.pre-R3`; worktrees `~/acid/rf1/{ref,base}`.
 
+
+## 16:54Z — curtain-call dogfood: three safe extractions shipped to a branch, one stopped at the plan, one Surgeon defect found
+
+Gene's live refactor (Kent Beck safe refactor, hot commit spots of curtaincall-cfp) ran as a
+delegated Opus build in a worktree off origin/main d9afe8e9. Branch `bridge/safe-refactor-1`,
+five commits authored forge-bridge with Gene as co-author, pushed, NOT merged (merge is Gene's).
+My own re-run of `bin/kaocha unit` on the branch head: `1009 tests, 12833 assertions, 0 failures`
+(base: 1007 / 12232 / 0; the delta is the Phase 0 pins).
+
+| commit | what | gate after |
+|---|---|---|
+| 6bc2cdde | Phase 0, test-only (+133): pins writer authorization (157 writers, 16 gate-public, the other 141 answer anonymously with 302 to /), and re-runs the finite-GET sweep on a second event | unit 1009/12821/0 |
+| ffa4172f | presenter-visibility rail → `views/nav_policy.clj` (3 forms, 65 lines) | voting-policy, routes-contract, ci |
+| f36c08b7 | board status chips → `views/board_filters.clj` (2 forms, 17 lines) | board, routes-contract, ci |
+| c1150a20 | board URL-state codec → `views/board_query.clj` (7 forms, 134 lines; callers in replay.clj, review_updates.clj) | board, polish, routes-contract, ci |
+| 7b220edf | choose the three namespaces in the view-architecture guard | full unit 1009/12833/0 |
+
+`views/review.clj` 1033→884, `views/organizer_layout.clj` 754→690, `server.clj` untouched.
+The route topology golden was never re-blessed: no handler var moved.
+
+**The gate finding (the one that matters for the ethnography).** The builder's per-extraction
+gate was insufficient: the trailing full suite came back red on
+`view-namespace-architecture-test`, a clj-kondo guard that pins the exact SET of view
+namespaces and their allowed edges. It would have failed after the first extraction. The repo
+pins TWO inventories (route topology and view-namespace topology) in different files and the
+builder had read one. The correction is the gate, not the guard: the three namespaces were
+chosen deliberately, as the guard's own comment says they must be; `acyclic?` never failed.
+Deviation class for the protocol: **E3, verification gate narrower than the repo's invariants**.
+
+**X3 stopped at the plan.** `:extract` (dry run) listed seven authorization files in
+`:callers-to-review`, because `auth/event-manager?` and `organizer-layout/event-manager?` are
+different functions sharing a name (same for `may-create-events?`). That is an authorization
+review, not a mechanical move; per `security-boundary-review-before-merge` it was not executed.
+The dry run did exactly what the safe-refactor arc promises: the plan surfaced the hazard before
+a byte moved. The draft's own unit for X3 was also mis-specified (`person-event-path` is not
+exclusive).
+
+**X1+X4 merged on evidence.** `:extract` showed X1 alone needs `effective-blind?` promoted
+public; the three together need zero promotions. The cut that needs no edit is the one that
+keeps the resolver private.
+
+**Surgeon in the winner square, tallied.** 3 `:extract!` applied, 6 `:expect`-guarded
+visibility edits applied, 2 plans rejected on review, 2 refusals, 1 native fallback. The
+fallback is a tool defect: `:extract!` copies the SOURCE namespace's docstring onto the new
+namespace; `(form 'ns)` selects nothing; a line-rooted plan proposed replacing the entire ns
+form with a bare string, which the agent discarded and hand-edited. Filed inb-4a51e5 (bead
+wanted; bridge has no beads db for clj-surgeon). Every extraction pays that return until fixed.
+
+**Pre-existing, not fixed, recorded.** `make test-all` dies at step 1 on this box
+(`library(plunit)` absent from the user-local SWI-Prolog; the Prolog oracle is `unverified`,
+never claimed green); `bin/test-new-mission-worktree` does `git init --bare` without
+`--initial-branch=main`; `bin/kaocha unit` is order-randomized and flaked once in three
+(root cause in repo code: `await-sinks!` discards the return of `await-for`, so a straggler
+appends into the next test's store, exactly as the repo's own comment predicts). A suite-wide
+nondeterminism fix inside a refactor branch would destroy attribution, so it is left and named.
+
+Ledger with inverse receipts: bridge scratchpad `curtaincall-refactor-ledger.md`. Draft for
+Gene: inb-868bb7.
+
