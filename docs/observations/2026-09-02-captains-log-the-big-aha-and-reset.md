@@ -2002,3 +2002,24 @@ or email; window by value; comment by id; log entry by value). Fix: one `conj-di
 at the five sites, INTENT-tagged. Write-side idempotency key in the store's append path is the
 follow-up bead. Branch `bridge/fold-idempotence`, merge is Gene's. Watcher on.
 
+
+## 20:02Z — q5z passes its oracle on the third pass; the slope and anchor are GO; rf2's compile fix is in
+
+**q5z** 13d86bb (collision = ns-form alias or referred name only; locals cannot shadow a
+qualifier), 7895 attested. G1 pass 3 at N=5: `committed true`, 676 ms, histogram
+`{store2 3, st2 1, store-2 1}`, 4 collisions, and `rescore-FAN` **p1–p6c all PASS, VERDICT=PASS**.
+Three passes to get here, each caught by a different instrument: the wire (adapter arity and
+two defects behind it), then the byte oracle (my own collision rule). `GO-SL1` and `GO-SL1R`
+created; the chains take the cohort lock and run after z7b.
+
+**rf2** a66b626: the compile check and the printed command use the workspace's declared aliases
+(`.clj-surgeon.edn {:compile {:aliases [...]}}`, committed for this repo), an undeclared classpath
+names candidate aliases and marks the command `:guessed`; on a fresh checkout the mandated CLI
+now reports `:compile {:checked true :ok true :exit 0}` and the pasted command prints
+`:compile-ok`. RF2-SHA re-pinned, `surgeon-rf2` synced, probe re-run green at exit 0; one
+apparatus parse (`:ok true` read as a keyword by the recorder) stands between the probe and
+`GO-RF2`.
+
+**z7b so far:** gate 257 s against natives 344 and 552 s, gate arm at 0 self-run suites, all
+failure sets equal to base. Wave two running.
+
