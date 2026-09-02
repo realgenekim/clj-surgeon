@@ -319,3 +319,40 @@ trial into voice-remote main (`6d4cecf`, kaocha 579 / 7833 / 0). One lesson from
 itself: a squash refused by a dirty beads export, followed by an archive-and-delete that had
 already run, was recoverable only because the archive ref had been pushed and confirmed
 first. The skill's order of operations is the reason nothing was lost.
+
+## Receipt 03:35Z — Anvil calibration (sequential vs pinned-parallel) and the first valid blind quality review
+
+Venue moved to Anvil (`tester@anvil`, 16 cores, 23 GiB spare) after the Buster cohort made
+that box unusable and my own verification jobs contaminated its first triple (Buster r1
+retained as contaminated: N 219 s, B 463 s). Both Surgeon instances on Anvil are pinned to
+cores 12-15; each arm gets its own four cores via `taskset`; `TMPDIR` under the seat home;
+diffs frozen by the runner the moment an arm ends. All arms below are correct (full suite
+green, golden unchanged).
+
+| arm | Anvil sequential | Anvil parallel (all three at once) | Buster run 2 |
+|---|---|---|---|
+| N native, no Surgeon | 243 s | 245 s | 191 s |
+| A shipped Surgeon | 243 s | 239 s | 303 s |
+| B wave build | 303 s | 424 s | 319 s |
+
+**Headline 1: pinned parallel is a valid apparatus for N and A** (within 2 percent of their
+sequential twins). B moved by 121 s, so B's variance is not yet understood; parallel is
+adopted for N and A, B stays sequential until three clean samples exist.
+
+**Headline 2: the shipped Surgeon matches native on this task class** (243 vs 243 on Anvil),
+and **the wave build is the slowest arm in every environment** (303, 424, 319, 463).
+
+**Headline 3: blind quality review, frozen diffs, labels shuffled (Sol):** native 18.0,
+shipped 17.0, wave 14.5 of 20, the wave losing on clarity (2.0 of 5). The reviewer did not
+know which arm used which tool. So B is slower *and* produced the least clear code.
+
+**Learning:** the refusal hypothesis is falsified for wall on this class, twice over. The
+wave build's fewer refusals and fewer reads did not buy time or quality; the most plausible
+mechanism, to be tested next, is payload volume: the string-symbol outline returned 371
+symbols into the model's context and the edits that followed were messier. The corpus
+already recorded that an oversized visible result crossing the transcript boundary
+returned the whole batching gain (2026-08-06). Next: B' = wave build with
+`include_string_symbols` OFF, same task, to separate the read payload from the edit fixes.
+
+Caveat: N = 1 per cell for the parallel row and for the review; s2 and s3 (rotated
+sequential triples) are running for N = 3.
