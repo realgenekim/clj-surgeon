@@ -1076,3 +1076,41 @@ corrected capture. Side observation worth a bead: only the O build's agents used
 `create_files` to put tests in a new namespace; the shipped build's agents never did.
 Rubric held: no clarity deduction cited the reassignment itself; deductions cited duplicated
 body spans (largest: a whole kwCheck `.then` handler copied in O-g3).
+
+## Receipt 11:25Z — fleet round 5 on the bisect: a mechanism, a correction, and a code finding
+
+**Correction to the 10:40Z receipt.** "The insertion-gap fix carries the shipped build's
+MCP-and-refusal profile" was backwards: the shipped build carries neither fix. Opus read the
+diff: the gap fix touches no refusal predicate; `overlap?` is the only edited gate. So G, the
+only arm carrying the overlap fix, drawing half the refusals (2.3 vs 4.3 shipped, 5.3 O) is
+the overlap fix's intended effect, and it is exonerated on quality at the same time.
+
+**Mechanism, both reviewers independently (Sol calls it "productive refusal"):** before the
+gap fix, an insertion into an empty same-side gap either refused or landed ugly (same line,
+column 250), which forced the agent to re-read the form and rewrite the span; rewriting a span
+reads the whole body, and that is where DRY happens. After the fix the insert just works,
+silently and cleanly, and the agent appends without re-reading; the cited deductions were
+appended duplicate bodies (a whole kwCheck `.then` handler in O-g3), and G, without the gap
+fix, was the DRYest arm. The tool became more capable and the output worse because a
+corrective feedback event was removed. This is the same shape as the turn-budget finding:
+what changes the agent's behaviour is what it is made to look at.
+
+**Code finding for the maintainers, before b2 (Opus, from the gap fix's diff):** the
+indentation probe `(?m)(?:^|\n)([ \t]*)$` under `re-find` returns the FIRST match in the
+prefix, i.e. the first blank line anywhere above the anchor, not the anchor's own line; any
+file with an earlier blank line yields anchor indentation "" and a column-0 insert. Needs a
+nested-anchor indentation test. Reported to skiff; credible, not yet proven, unshipped.
+
+**Strongest confound (both):** the capture defect was perfectly correlated with the losing
+arm; one re-score moved O-g3 by 4.5 points, larger than the 1.2 deficit; O's quality rests on
+n=2; fixed G-O-A order per group confounds arm with drift.
+
+**b2 must record:** worktrees preserved to cohort end; staged diffs with a pre-scoring gate
+that no worktree file is absent from the scored diff; refusals typed with the agent's next
+action; an op ledger (insert vs span-replace vs create_files) with whether a re-read followed
+each accepted gap insert; a mechanical near-duplicate-span metric so duplication is a
+predicate; randomised arm order; per-axis judge scores. The decisive analysis is conditional:
+do accepted gap insertions precede the duplicated spans that refusals in G make agents
+reconsider. `create_files` in O: Opus's cheap test (an `:overlapping-intents` refusal
+immediately preceding each create_files, since O lacks the overlap fix) is running on the
+rollouts now; Sol reads it as coincidence pending that.
