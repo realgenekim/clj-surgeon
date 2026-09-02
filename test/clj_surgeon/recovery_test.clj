@@ -71,3 +71,23 @@
     (is (= ["clj-surgeon" ":op" ":cat"
             ":file" "src/sample/core.clj" ":form" "target"]
            (:fallback-command result)))))
+
+(deftest recover-creates-the-failure-receipt-directory
+  (let [root (.toFile
+               (java.nio.file.Files/createTempDirectory
+                 "clj-surgeon-recover-missing-receipts"
+                 (make-array java.nio.file.attribute.FileAttribute 0)))
+        receipt-dir (io/file (mcp-workspace/receipt-dir (.getPath root)))
+        receipt-file (io/file receipt-dir "last-failure.edn")]
+    (is (false? (.exists receipt-dir)))
+    (let [result (recovery/recover!
+                   {:workspace (.getPath root)
+                    :up-fn (fn [_]
+                             (throw (ex-info "startup failed"
+                                             {:error-type :startup-failed})))})]
+      (is (.isFile receipt-file))
+      (is (= (.getCanonicalPath receipt-file)
+             (:failure-receipt result)))
+      (is (= ["clj-surgeon" "report-failure" "--receipt"
+              (.getCanonicalPath receipt-file)]
+             (:report-command result))))))
