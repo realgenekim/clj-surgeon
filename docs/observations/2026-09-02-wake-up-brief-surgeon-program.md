@@ -7,10 +7,10 @@ paired draws against native edits on Anvil:
 
 | axis | native | shipped Surgeon | reading |
 |---|---|---|---|
-| wall | 367 s | 677 s | Surgeon 1.8x slower, direction held 5 of 6 pairs |
+| wall | 367 s | 677 s | Surgeon 1.8x slower, 3.6 sd above the nine-identical-run floor |
 | tokens carried | 1.24 M | 2.30 M | the wall gap IS the token gap (rho 0.87) |
-| non-test actions | 10.0 | 21.2 | Surgeon is layered on the native loop, not substituted for it |
-| acceptance (failed assertions of 39) | 1.83 | 3.33 | native more conformant |
+| non-test actions | 10.0 | 21.2 | 3.8 sd above the floor; Surgeon is layered on the native loop, not substituted for it |
+| acceptance (failed assertions of 39) | 1.83 | 3.33 | inside the noise floor (identical runs span 0 to 4); acceptance is a gate, not a score |
 | blind clarity (2 judges, /20) | 17.8 | 17.1 | native slightly ahead, inside noise |
 | correctness defect class (stale onset timestamp) | 0 of 6 | 3 of 6 | 6 Surgeon instances vs 0 native across the night |
 

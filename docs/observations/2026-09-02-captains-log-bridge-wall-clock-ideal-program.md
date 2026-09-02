@@ -1390,3 +1390,39 @@ n1 gap (native 367 vs shipped 677) is 310 s at n=6 and stands; every prompt-vari
 from e3 is inside the floor and does not. V's wall equals A's here. Actions, refusals,
 tokens, acceptance and the variance floor on each are being scored; twelve diffs are with
 the judges, which also measures the judges' own floor on identical arms. s1 launches next.
+
+## Receipt 08:05Z — v1 scored: the variance floor, and which claims of the night clear it
+
+Nine identical shipped runs (same server, prompt, task, cores):
+
+| metric | mean | sd | min to max | 2 sd |
+|---|---|---|---|---|
+| wall s | 634 | 86 | 516 to 781 | 172 |
+| total actions | 27.1 | 2.9 | 21 to 31 | 5.9 |
+| non-test actions | 18.6 | 3.0 | 13 to 23 | 6.1 |
+| MCP calls | 7.8 | 2.9 | 3 to 12 | 5.9 |
+| input tokens | 1.84 M | 0.25 M | 1.29 M to 2.12 M | 0.51 M |
+| acceptance failed assertions | 2.11 | 1.05 | 0 to 4 | 2.1 |
+
+Which earlier gaps clear two sd: n1 wall, shipped vs native, 309 s = 3.6 sd, YES; n1 actions
+11.0 = 3.8 sd, YES; e3 turn-budget actions 8.6 = 3.0 sd, YES. Which do not: n1 acceptance
+1.50 = 1.4 sd, NO; b1 acceptance 0.31 sd, NO; k2 wall MCP vs CLI 0.47 sd, NO.
+
+**Corrections owed.** "Native more conformant" (n1, wake-up brief, relayed to skiff) is
+withdrawn: on identical inputs the acceptance suite returns 0 to 4 failures, so it cannot
+resolve arm-level quality at n of nine or less. Every acceptance comparison tonight is
+inside the floor; acceptance stays a gate, not a score. The k2 wall difference is noise and
+must not be cited either way (I had called it "the interface is not the cost", which
+survives, since equality is the claim). The wake-up brief is amended.
+
+The turn budget (V, n=3 here, n=6 with e3): fewer actions, minus 2.1 sd, its only effect
+that clears the floor; wall flat (minus 0.2 sd), six fewer actions bought fifteen seconds;
+all three runs declared a budget and overran it (18 of 15, 20 of 16, 24 of 15), each naming
+Surgeon refusals as the cause, self-counts exact; no run shipped fewer deftests than base.
+So the budget is unachievable at the current refusal rate, and refusal-driven fallbacks are
+what forced the extra suite runs. The doctrine's "count, don't budget" stands; "count"
+buys nothing on wall.
+
+What the floor says about the program: a wall effect needs about 170 s at n=3 or about
+100 s at n=9 to be seen at all. Only the shipped-versus-native gap is that large. Everything
+else measured tonight on wall was noise, honestly labelled or not.
