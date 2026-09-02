@@ -762,6 +762,8 @@
                        insert-sources assoc-key assoc-value inside id target-owner]
                 :as intent}]
   (let [root (z/of-string source {:track-position? true})
+        all-owner-records (when target-owner
+                            (outline/top-level-form-records file source))
         owner-records (scoped-owner-records! source file intent)
         scoped? (or forms owner)
         semantic-find (when assoc-key (node/sexpr (:node from)))
@@ -780,8 +782,27 @@
                                :owner (owner-identity owner-record)
                                :file file)
                   (= :delete operator) (assoc :delete true)
-                  target-owner (assoc :insert-side insert-side
-                                      :insert-sources insert-sources))))
+                  target-owner
+                  (assoc :insert-side insert-side
+                         :insert-sources insert-sources
+                         :target-owner true
+                         :owner-context
+                         (let [owner-index (.indexOf all-owner-records owner-record)
+                               addressed-owner
+                               (fn [record]
+                                 (when record
+                                   (assoc (addressed-form-at
+                                            source
+                                            {:line (:line record) :character 1})
+                                          :comment-start
+                                          (:comment-start record))))]
+                           {:current-comment-start (:comment-start owner-record)
+                            :previous
+                            (addressed-owner
+                              (get all-owner-records (dec owner-index)))
+                            :next
+                            (addressed-owner
+                              (get all-owner-records (inc owner-index)))})))))
             owner-records)
       (->> (zipper-locations root)
            (map-indexed vector)
@@ -1149,6 +1170,10 @@
 ;; @spec MCP-OP-INSERT-006
 (defn- insertion-gap
   [source target side edit]
+  ;; @spec MCP-OP-INSERT-007
+  ;; @spec MCP-OP-INSERT-008
+  ;; @spec MCP-OP-INSERT-009
+  ;; @spec MCP-OP-INSERT-010
   (let [parent (z/up target)
         parent-tag (some-> parent z/tag)
         top-level? (= :forms parent-tag)]
@@ -1161,48 +1186,89 @@
     (let [{target-start :start target-end :end} (node-offsets source target)
           {parent-start :start parent-end :end} (node-offsets source parent)
           parent-source (z/string parent)
-          opening-boundary (if top-level?
-                             parent-start
+          opening-boundary (if top-level? parent-start
                              (+ parent-start
                                 (if (str/starts-with? parent-source "#{") 2 1)))
           closing-boundary (if top-level? parent-end (dec parent-end))
-          neighbor (if (= :insert-left side) (z/left target) (z/right target))
-          neighbor-offsets (when neighbor (node-offsets source neighbor))
-          opposite-neighbor (if (= :insert-left side)
-                              (z/right target)
-                              (z/left target))
-          opposite-offsets (when opposite-neighbor
-                             (node-offsets source opposite-neighbor))
-          [gap-start gap-end]
-          (if (= :insert-left side)
-            [(or (:end neighbor-offsets) opening-boundary)
-             target-start]
-            [target-end
-             (or (:start neighbor-offsets) closing-boundary)])
-          gap (subs source gap-start gap-end)
-          opposite-gap
-          (if (= :insert-left side)
-            (subs source target-end
-                  (or (:start opposite-offsets) closing-boundary))
-            (subs source
-                  (or (:end opposite-offsets) opening-boundary)
-                  target-start))
+          line-start (fn [line] (nth (line-offsets source) (dec line)))
+          trailing-comment-end
+          (fn [start limit]
+            (let [comment (re-find #"^[ \t]*;[^\n\r]*"
+                                   (subs source start limit))]
+              (+ start (count (or comment "")))))
+          accepted-gap
+          (fn [gap]
+            (when-not (re-matches #"[\s,]*" gap)
+              (refuse! :ambiguous-insertion-gap
+                       "The sibling gap contains comments or detached source"
+                       {:change-id (:change-id edit)
+                        :file (:file edit)
+                        :target (:before edit)
+                        :gap gap
+                        :remedy "Replace a larger exact span that declares comment placement."}))
+            gap)
+          anchor-line-start
+          (inc (or (when (pos? target-start)
+                     (str/last-index-of source "\n" (dec target-start)))
+                   -1))
+          anchor-prefix (subs source anchor-line-start target-start)
           anchor-indentation
-          (or (second (re-find #"(?m)(?:^|\n)([ \t]*)$"
-                              (subs source 0 target-start)))
-              "")]
-      (when-not (re-matches #"[\s,]*" gap)
-        (refuse! :ambiguous-insertion-gap
-                 "The sibling gap contains comments or detached source"
-                 {:change-id (:change-id edit)
-                  :file (:file edit)
-                  :target (:before edit)
-                  :gap gap
-                  :remedy "Replace a larger exact span that declares comment placement."}))
-      (cond
-        (seq gap) gap
-        (str/includes? opposite-gap "\n") (str "\n" anchor-indentation)
-        :else " "))))
+          (if (re-matches #"[ \t]*" anchor-prefix) anchor-prefix "")]
+      (if (and top-level? (:target-owner edit))
+        (let [{:keys [current-comment-start previous next]} (:owner-context edit)
+              previous-target (when previous (addressed-target source previous))
+              next-target (when next (addressed-target source next))
+              previous-end (if previous-target
+                             (:end (node-offsets source previous-target))
+                             opening-boundary)
+              next-start (if next-target
+                           (:start (node-offsets source next-target))
+                           closing-boundary)
+              current-owned-start
+              (if current-comment-start
+                (line-start current-comment-start)
+                target-start)
+              next-owned-start
+              (if-let [comment-start (:comment-start next)]
+                (line-start comment-start)
+                next-start)
+              [offset gap]
+              (if (= :insert-left side)
+                (let [left-owned-end
+                      (trailing-comment-end previous-end current-owned-start)]
+                  [current-owned-start
+                   (accepted-gap
+                     (subs source left-owned-end current-owned-start))])
+                (let [left-owned-end
+                      (trailing-comment-end target-end next-owned-start)]
+                  [left-owned-end
+                   (accepted-gap
+                     (subs source left-owned-end next-owned-start))]))]
+          {:offset offset :separator (if (seq gap) gap " ")})
+        (let [neighbor (if (= :insert-left side) (z/left target) (z/right target))
+              neighbor-offsets (when neighbor (node-offsets source neighbor))
+              opposite-neighbor
+              (if (= :insert-left side) (z/right target) (z/left target))
+              opposite-offsets
+              (when opposite-neighbor (node-offsets source opposite-neighbor))
+              [gap-start gap-end]
+              (if (= :insert-left side)
+                [(or (:end neighbor-offsets) opening-boundary) target-start]
+                [target-end (or (:start neighbor-offsets) closing-boundary)])
+              gap (accepted-gap (subs source gap-start gap-end))
+              opposite-gap
+              (if (= :insert-left side)
+                (subs source target-end
+                      (or (:start opposite-offsets) closing-boundary))
+                (subs source
+                      (or (:end opposite-offsets) opening-boundary)
+                      target-start))]
+          {:offset (if (= :insert-left side) target-start target-end)
+           :separator
+           (cond
+             (seq gap) gap
+             (str/includes? opposite-gap "\n") (str "\n" anchor-indentation)
+             :else " ")})))))
 
 (defn- deletion-offsets
   [source target]
@@ -1256,13 +1322,12 @@
   [source {:keys [delete after insert-side insert-sources] :as edit}]
   (let [target (addressed-target source edit)]
     (if insert-side
-      (let [{:keys [start end]} (node-offsets source target)
-            gap (insertion-gap source target insert-side edit)
-            inserted (str/join gap insert-sources)
-            offset (if (= :insert-left insert-side) start end)
+      (let [{:keys [offset separator]}
+            (insertion-gap source target insert-side edit)
+            inserted (str/join separator insert-sources)
             insertion (if (= :insert-left insert-side)
-                        (str inserted gap)
-                        (str gap inserted))]
+                        (str inserted separator)
+                        (str separator inserted))]
         (assoc edit
                :raw true
                :offset offset
