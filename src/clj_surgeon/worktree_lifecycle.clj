@@ -37,6 +37,17 @@
   #{:schema :plan-id :plan-sha256 :operation :repository :controller
     :captured-at :target :preservation :handoff :lifecycle-lease-prestate
     :expected-lifecycle-lease :supacode})
+(def ^:private repository-fields
+  #{:root :common-git-dir :primary-worktree :object-format})
+(def ^:private controller-fields #{:commit :tree :clean :artifacts})
+(def ^:private controller-artifact-fields
+  #{"Makefile"
+    "src/clj_surgeon/worktree_lifecycle.clj"
+    "src/clj_surgeon/worktree_lifecycle_io.clj"})
+(def ^:private nearest-parent-fields #{:path :device :inode})
+(def ^:private prune-postcondition-fields
+  #{:target-present :registration-present :branch-unchanged
+    :preservation-unchanged :supacode-state})
 (def ^:private outcomes #{:landed :negative-experiment :parked})
 (def ^:private handoff-modes #{:agent :legacy})
 (def ^:private forbidden-record-keys
@@ -127,6 +138,21 @@
 (defn- row-path [row]
   (or (:path-lexical row) (:path row)))
 
+(defn- valid-prune-repository? [repository]
+  (and (= repository-fields (set (keys repository)))
+       (every? absolute-clean-path?
+               (map repository [:root :common-git-dir :primary-worktree]))
+       (contains? #{:sha1 :sha256} (:object-format repository))))
+
+(defn- valid-prune-controller? [object-format controller]
+  (and (= controller-fields (set (keys controller)))
+       (exact-oid? object-format (:commit controller))
+       (exact-oid? object-format (:tree controller))
+       (true? (:clean controller))
+       (map? (:artifacts controller))
+       (= controller-artifact-fields (set (keys (:artifacts controller))))
+       (every? #(hex? 64 %) (vals (:artifacts controller)))))
+
 (defn decode-supacode-id
   "Strictly decode one Supacode worktree ID. Existing paths must be canonical."
   [encoded existing]
@@ -153,9 +179,7 @@
                         :removal-preflight}
         fields (set (keys worktree))
         absent-row? (= fields absent-fields)
-        preflight (:removal-preflight worktree)
-        missing-path? (or (= :absent (:path-state worktree))
-                          (some #{:missing-path} (:reasons preflight)))]
+        preflight (:removal-preflight worktree)]
     (cond
       (not (contains? #{present-fields absent-fields} fields))
       (refuse :invalid-git-worktree-fields)
@@ -165,13 +189,19 @@
            (not (and (= :absent (:path-state worktree))
                      (nil? (:path-real worktree))
                      (map? (:nearest-existing-parent worktree))
+                     (= nearest-parent-fields
+                        (set (keys (:nearest-existing-parent worktree))))
+                     (absolute-clean-path?
+                       (get-in worktree [:nearest-existing-parent :path]))
+                     (every? #(or (nil? %) (integer? %))
+                             (map #(get-in worktree
+                                           [:nearest-existing-parent %])
+                                  [:device :inode]))
                      (= :not-applicable (:status worktree))
                      (= :not-applicable (:removal-preflight worktree)))))
       (refuse :invalid-absent-path-authority)
       (not (exact-oid? object-format (:head worktree))) (refuse :invalid-git-head)
-      (and (not (exact-oid? object-format (:tree worktree)))
-           (nil? (:prunable worktree))
-           (not missing-path?))
+      (not (exact-oid? object-format (:tree worktree)))
       (refuse :invalid-git-tree)
       (not (contains? #{:clean :dirty :unknown :not-applicable}
                       (:status worktree)))
@@ -385,7 +415,8 @@
   {:schema :clj-surgeon.worktree-lifecycle-lease/v1
    :plan-id (:plan-id plan)
    :plan-sha256 (:plan-sha256 plan)
-   :target (get-in plan [:target :path])
+   :target (or (get-in plan [:target :path-lexical])
+               (get-in plan [:target :path]))
    :handoff-nonce (get-in plan [:handoff :nonce])})
 
 (defn validate-lease-prestate [plan existing]
@@ -579,8 +610,12 @@
       (not (:ok proof-result)) proof-result
       (not (and (string? plan-id) (not (str/blank? plan-id))))
       (refuse :plan-id-required)
-      (false? (:clean controller-identity))
-      (refuse :controller-worktree-not-clean)
+      (not (valid-prune-repository? (:repository snapshot)))
+      (refuse :invalid-prune-repository)
+      (not (valid-prune-controller?
+             (get-in snapshot [:repository :object-format])
+             controller-identity))
+      (refuse :invalid-prune-controller)
       (not (privacy-safe? controller-identity))
       (refuse :private-plan-data-refused)
       :else
@@ -630,6 +665,10 @@
       (refuse :invalid-prune-handoff)
       (not= :absent (:lifecycle-lease-prestate plan))
       (refuse :invalid-lifecycle-lease-prestate)
+      (not (valid-prune-repository? (:repository plan)))
+      (refuse :invalid-prune-repository)
+      (not (valid-prune-controller? object-format (:controller plan)))
+      (refuse :invalid-prune-controller)
       (not (:ok (validate-git-worktree object-format target)))
       (refuse :invalid-prune-target)
       (not (and (= :absent (:path-state target))
@@ -784,6 +823,10 @@
   (let [validation (validate-prune-plan plan)]
     (cond
       (not (:ok validation)) validation
+      (not= prune-postcondition-fields (set (keys postconditions)))
+      (refuse :invalid-prune-postconditions)
+      (not (privacy-safe? postconditions))
+      (refuse :private-receipt-data-refused)
       (not (contains? #{:controller :controller-or-external}
                       effect-observed))
       (refuse :invalid-effect-observed)
