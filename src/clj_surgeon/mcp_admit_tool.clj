@@ -936,7 +936,7 @@
             (refusal context (:error-type parsed) (:error parsed)
                      (select-keys parsed [:file :hunk-index :grammar
                                           :grammars-tried :expected-headers
-                                          :offending-line :header]))
+                                          :offending-line :header :patch-line]))
             {:next_call (assoc (next-call context "preview"
                                           (:error-type parsed))
                                :expected_headers
@@ -1003,7 +1003,9 @@
                           applied (patch-apply/apply-parsed sources (:files parsed))]
                       (if-not (:ok applied)
                         (refusal context (:error-type applied) (:error applied)
-                                 (select-keys applied [:file :hunk-index :line]))
+                                 (select-keys applied [:file :hunk-index :line
+                                                       :patch-line
+                                                       :offending-line]))
                         (let [images (:files applied)
                               deltas (mapv
                                        (fn [{:keys [file pre post hunk-spans
@@ -1043,11 +1045,32 @@
                                                      images) "created"
                                              (seq expect_pre_sha256) "bound"
                                              :else "unbound")
+                              no-op? (every? #(= (:pre %) (:post %)) images)
                               blocking (form-identity/refusal-hazards
                                          (:hazards report))
                               base (assoc (merge (empty-receipt mode) report)
                                           :pre_image_binding base-binding)]
                           (cond
+                            ;; @spec MCP-OP-ADMIT-102
+                            ;; A patch that changes nothing is not a small
+                            ;; success, it is a request the gate failed to
+                            ;; understand. Reporting ok for it is how a
+                            ;; truncated hunk came back looking like work.
+                            no-op?
+                            (merge base
+                                   {:ok false
+                                    :operation :admit-patch-refused
+                                    :committed false
+                                    :source-unchanged true
+                                    :error-type :no-op-patch
+                                    :error (str "The patch produces a post-image "
+                                                "identical to the pre-image for "
+                                                "every file it names; nothing "
+                                                "was requested that the reader "
+                                                "could act on")
+                                    :next_call (next-call context "preview"
+                                                          :no-op-patch)})
+
                             (seq blocking)
                             (merge base
                                    {:ok false

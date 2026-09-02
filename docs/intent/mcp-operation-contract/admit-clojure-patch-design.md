@@ -204,11 +204,35 @@ the new check. In every one of those 29, the body said exactly what the author
 meant.
 
 So the counts are no longer load-bearing. A hunk runs to the next header, and
-what it carries is what it means. Nothing is dropped, so nothing is silently
-truncated; the strict content match downstream still refuses anything that
-does not belong where it claims to, and a hunk with an empty body is still a
-refusal. A header whose counts disagree with its body is recorded on the hunk
-and otherwise ignored.
+what it carries is what it means. A header whose counts disagree with its body
+is recorded on the hunk and otherwise ignored.
+
+**That is only safe because every line in between is understood.** The first
+version of this rule was not: a body line the reader could not classify
+quietly ended the hunk, and the remaining lines fell through the top-level
+loop, which ignored whatever it did not recognise. The two together dropped
+work in silence. A context line that lost its leading space committed a no-op
+and reported success. A removed line whose own text began `-- ` rendered as
+`--- `, was read as a file header, and deleted one line where the author had
+written three. A payload with one unreadable line in the middle applied the
+first of two edits and returned `ok: true`. The design document claimed
+"nothing is dropped, so nothing is silently truncated" while all three were
+live.
+
+There is now no lenient reading of a line whose marker is missing. An
+unclassifiable body line, and any patch-body line belonging to no hunk, is a
+`:hunk-truncated` refusal naming the line and its number in the payload.
+A `---` line is a file header only when a `+++` line follows it, which is the
+disambiguation the format itself provides. And a bare `@@`, the sibling
+grammar's marker, opens a content-located hunk — field payloads mix the two
+inside one file section, and reading a real marker as garbage because the
+header was the other grammar's would be the same mistake in reverse.
+
+**A patch that changes nothing is refused.** If the post image equals the pre
+image for every file named, the receipt is `:no-op-patch`, in preview as well
+as commit. A no-op can never be a success receipt: it is not a small correct
+edit, it is a request the reader failed to understand, and it was the shape
+every one of the truncation defects came back wearing.
 
 **A workspace-absolute header path names the file it means.** Ten payloads —
 the first admit call of ten of the twelve runs — wrote the agent's own
@@ -822,6 +846,14 @@ Field replay. The 109 payloads six gate runs actually sent, extracted from the
 z1 and z2 rollouts and replayed through the parser.
 
 - [x] **MCP-OP-ADMIT-098**: When a patch header names an absolute path that lies inside the resolved workspace root, clj-surgeon shall read it as the project-relative path it denotes; a path outside that root shall be refused exactly as before. *(field replay)*
+
+Adversarial review, round four. The reader's leniency was itself a
+silent-truncation engine.
+
+- [x] **MCP-OP-ADMIT-099**: When clj-surgeon splits patch text, it shall remove exactly one terminating newline and no more, so that a payload ending in a blank line keeps it and a payload ending in a newline gains no phantom line.
+- [x] **MCP-OP-ADMIT-100**: If a line inside a hunk body carries no space, minus or plus marker, or a patch-body line belongs to no hunk, then clj-surgeon shall publish a typed truncation refusal naming the line and its number and apply nothing; a `---` line shall be read as a file header only when a `+++` line follows it; and a bare hunk marker shall open a content-located hunk rather than being read as an unclassifiable line.
+- [x] **MCP-OP-ADMIT-101**: When a V4A hunk body carries a single-space context line, clj-surgeon shall read it as a context line for a blank source line rather than as whitespace to skip.
+- [x] **MCP-OP-ADMIT-102**: If a patch produces a post-image identical to the pre-image for every file it names, then clj-surgeon shall refuse it as a no-op rather than publish a success receipt.
 
 # #Witness Failure Baseline
 

@@ -50,18 +50,22 @@
   [lines]
   (str/join "\n" lines))
 
+;; @spec MCP-OP-ADMIT-099
 (defn patch-lines
-  "Split patch text, dropping the phantom line its terminating newline makes.
+  "Split patch text after removing exactly one terminating newline.
 
-  Splitting `\"a\\n\"` yields `[\"a\" \"\"]`, and that trailing empty string reads as
-  a blank context line. With counts terminating a hunk it was invisible; with
-  the body terminating it, it silently annexed a fourth line onto every
-  three-line hunk."
+  Splitting `\"a\\n\"` yields `[\"a\" \"\"]`, and that trailing empty string reads
+  as a blank context line: invisible while the declared counts ended a hunk,
+  and the moment the body ended it, an extra line annexed onto every hunk that
+  reached the end of a payload. Exactly one newline is removed and never more,
+  because a payload that really ends in a blank line has content there and the
+  reader has no business editing it away."
   [patch-text]
-  (let [lines (source-lines (str patch-text))]
-    (if (and (< 1 (count lines)) (= "" (peek lines)))
-      (pop lines)
-      lines)))
+  (let [text (str patch-text)
+        text (if (str/ends-with? text "\n")
+               (subs text 0 (dec (count text)))
+               text)]
+    (source-lines text)))
 
 (defn- body-line
   "Read one hunk body line as [kind text], or nil when it is not one.
@@ -120,88 +124,114 @@
       :else raw)))
 
 ;; @spec MCP-OP-ADMIT-092
+;; @spec MCP-OP-ADMIT-100
+(defn- file-header-start?
+  "Is this `--- ` line a file header rather than a removed line of text?
+
+  A removed line whose own text begins `-- ` renders as `--- `, and reading
+  that as a header ended the hunk and threw the rest of it away. A unified file
+  header is always the pair, so the lookahead is the disambiguation the format
+  itself provides."
+  [line next-line]
+  (and (str/starts-with? line "--- ")
+       (some? next-line)
+       (str/starts-with? next-line "+++ ")))
+
 (defn- unified-header?
-  [line]
-  (or (str/starts-with? line "@@")
-      (str/starts-with? line "--- ")
-      (str/starts-with? line "+++ ")
-      (str/starts-with? line "diff ")
-      (str/starts-with? line "Index: ")))
+  ([line] (unified-header? line nil))
+  ([line next-line]
+   (or (str/starts-with? line "@@")
+       (str/starts-with? line "diff ")
+       (str/starts-with? line "Index: ")
+       (file-header-start? line next-line))))
 
 ;; @spec MCP-OP-ADMIT-092
+;; @spec MCP-OP-ADMIT-100
 (defn- parse-unified-hunk
   "Consume one unified hunk. Returns [hunk remaining-lines] or a refusal.
 
   **The body delimits the hunk; the declared counts are advisory.** Field
   payloads miscount in both directions -- 19 of 77 refused calls declared more
   lines than they carried and 10 declared fewer -- and in every one of them
-  the body said exactly what the author meant. Terminating on the counts
-  instead produced two failures at once: a header that overcounted ran into
-  the next `@@` and refused a patch that was plainly readable, and a header
-  that undercounted applied a *truncated* hunk and let the surplus fall on the
-  floor, which is how a miscounted deletion became an unreadable image.
+  the body said exactly what the author meant.
 
-  Reading to the next header removes both. Nothing is dropped, so nothing is
-  silently truncated, and the strict content match downstream still refuses
-  anything that does not belong where it claims to."
-  [file hunk-index header lines]
+  **A line the reader cannot classify ends the patch, not the hunk.** Reading
+  to the next header is only safe if everything before it is understood.
+  Treating an unrecognised line as a quiet terminator meant a context line
+  that lost its leading space silently discarded the rest of the hunk and the
+  gate committed the truncated remainder with `ok: true` -- a receipt claiming
+  success for an edit it did not make. There is no lenient reading of a line
+  whose marker is missing: the author meant something by it, and the gate
+  cannot know what."
+  [file hunk-index header lines line-number]
   (let [[_ pre-start pre-count post-start post-count]
         (re-find hunk-header-pattern header)
-        declared-pre (if pre-count (parse-long pre-count) 1)
-        declared-post (if post-count (parse-long post-count) 1)]
+        ;; A bare `@@`, or `@@ some context`, is the sibling grammar's hunk
+        ;; marker and carries no arithmetic. Field payloads mix the two inside
+        ;; one file section; the marker is recognised either way and the hunk
+        ;; is then located by content, exactly as a V4A hunk is.
+        anchor (when-not pre-start
+                 (let [text (str/trim (subs header (min 2 (count header))))]
+                   (when-not (str/blank? text) text)))
+        declared-pre (when pre-count (parse-long pre-count))
+        declared-post (when post-count (parse-long post-count))
+        finish (fn [body]
+                 (let [pre-lines (count (filter #(#{:context :remove} (first %)) body))
+                       post-lines (count (filter #(#{:context :add} (first %)) body))]
+                   (cond-> {:pre-count pre-lines
+                            :post-count post-lines
+                            :declared-pre-count declared-pre
+                            :declared-post-count declared-post
+                            :counts-match? (and (= pre-lines declared-pre)
+                                                (= post-lines declared-post))
+                            :body body}
+                     pre-start (assoc :pre-start (parse-long pre-start))
+                     post-start (assoc :post-start (parse-long post-start))
+                     anchor (assoc :context anchor))))]
     (loop [remaining lines
-           body []]
+           body []
+           n (inc line-number)]
       (let [line (first remaining)]
         (cond
-          (or (nil? line) (unified-header? line))
+          (or (nil? line) (unified-header? line (second remaining)))
           (if (empty? body)
             (refusal :invalid-patch
                      (str "Hunk " hunk-index " of " file " has an empty body")
                      {:file file :hunk-index hunk-index :header header})
-            (let [pre-lines (count (filter #(#{:context :remove} (first %)) body))
-                  post-lines (count (filter #(#{:context :add} (first %)) body))]
-              [{:pre-start (parse-long pre-start)
-                :pre-count pre-lines
-                :post-start (parse-long post-start)
-                :post-count post-lines
-                :declared-pre-count declared-pre
-                :declared-post-count declared-post
-                :counts-match? (and (= pre-lines declared-pre)
-                                    (= post-lines declared-post))
-                :body body}
-               remaining]))
+            [(finish body) remaining n])
 
           (str/starts-with? line "\\")
-          (recur (next remaining) body)
+          (recur (next remaining) body (inc n))
 
           :else
           (if-let [[kind text] (body-line line)]
-            (recur (next remaining) (conj body [kind text]))
-            ;; Anything that is neither a header nor a body line ends the
-            ;; hunk; unified diffs are routinely embedded in prose.
-            (if (empty? body)
-              (refusal :invalid-patch
-                       (str "Unrecognized hunk body line in " file ": "
-                            (pr-str line))
-                       {:file file :hunk-index hunk-index
-                        :offending-line line})
-              [{:pre-start (parse-long pre-start)
-                :pre-count (count (filter #(#{:context :remove} (first %)) body))
-                :post-start (parse-long post-start)
-                :post-count (count (filter #(#{:context :add} (first %)) body))
-                :declared-pre-count declared-pre
-                :declared-post-count declared-post
-                :counts-match? false
-                :body body}
-               remaining])))))))
+            (recur (next remaining) (conj body [kind text]) (inc n))
+            (refusal :hunk-truncated
+                     (str "Line " n " of the patch is inside hunk " hunk-index
+                          " of " file " but carries no space, - or + marker: "
+                          (pr-str line)
+                          ". A line the reader cannot classify is never "
+                          "skipped; the rest of this hunk would be lost.")
+                     {:file file :hunk-index hunk-index
+                      :patch-line n :offending-line line})))))))
 
+;; @spec MCP-OP-ADMIT-100
 (defn- parse-unified-diff
+  "Read a unified payload, refusing anything it cannot account for.
+
+  The top-level loop used to ignore whatever it did not recognise. Combined
+  with a hunk that ended early, that is how body lines vanished without a
+  word: the hunk stopped, the remaining lines fell through here, and the gate
+  applied a fraction of the requested edit and called it success. Every line
+  now has to be a header, a file section it belongs to, or a refusal."
   [patch-text]
   (loop [remaining (patch-lines patch-text)
          files []
          old-path nil
-         current nil]
-    (let [line (first remaining)]
+         current nil
+         n 1]
+    (let [line (first remaining)
+          next-line (second remaining)]
       (cond
         (nil? line)
         (let [files (cond-> files current (conj current))]
@@ -222,11 +252,12 @@
             :else
             {:ok true :grammar :unified-diff :files files}))
 
-        (str/starts-with? line "--- ")
+        (file-header-start? line next-line)
         (recur (next remaining)
                (cond-> files current (conj current))
                (header-path line)
-               nil)
+               nil
+               (inc n))
 
         (str/starts-with? line "+++ ")
         (let [new-path (header-path line)]
@@ -234,44 +265,67 @@
             (nil? old-path)
             (refusal :invalid-patch
                      "patch has a +++ header with no matching --- header"
-                     {:grammar :unified-diff :offending-line line})
+                     {:grammar :unified-diff :offending-line line :patch-line n})
 
             ;; /dev/null on either side names a whole-file operation. The
             ;; section still carries hunks -- a creation's body is the file --
             ;; so parsing continues rather than closing the payload here.
             (= :dev-null old-path)
             (recur (next remaining) files old-path
-                   {:file new-path :operation :add :hunks []})
+                   {:file new-path :operation :add :hunks []} (inc n))
 
             (= :dev-null new-path)
             (recur (next remaining) files old-path
-                   {:file old-path :operation :delete :hunks []})
+                   {:file old-path :operation :delete :hunks []} (inc n))
 
             (not= old-path new-path)
             (recur (next remaining) files old-path
                    {:file old-path :operation :move
-                    :move-to new-path :hunks []})
+                    :move-to new-path :hunks []} (inc n))
 
             :else
             (recur (next remaining) files old-path
-                   {:file new-path :operation :update :hunks []})))
+                   {:file new-path :operation :update :hunks []} (inc n))))
 
-        (re-find hunk-header-pattern line)
+        (str/starts-with? line "@@")
         (if-not current
           (refusal :invalid-patch
                    "patch has a hunk header with no file header"
-                   {:grammar :unified-diff :offending-line line})
+                   {:grammar :unified-diff :offending-line line :patch-line n})
           (let [result (parse-unified-hunk (:file current)
                                            (count (:hunks current))
-                                           line (next remaining))]
+                                           line (next remaining) n)]
             (if (map? result)
               result
-              (let [[hunk rest-lines] result]
+              (let [[hunk rest-lines end-n] result]
                 (recur rest-lines files old-path
-                       (update current :hunks conj hunk))))))
+                       (update current :hunks conj hunk) end-n)))))
+
+        ;; Anything that looks like a hunk body but is not inside one means a
+        ;; hunk ended where the author did not intend it to.
+        (and current (body-line line) (not (str/blank? line)))
+        (refusal :hunk-truncated
+                 (str "Line " n " of the patch carries a patch-body marker but "
+                      "belongs to no hunk: " (pr-str line)
+                      ". Applying the hunks around it would apply part of the "
+                      "requested change and report success.")
+                 {:grammar :unified-diff :file (:file current)
+                  :patch-line n :offending-line line})
+
+        (or (str/starts-with? line "diff ")
+            (str/starts-with? line "Index: ")
+            (str/starts-with? line "\\")
+            (str/blank? line)
+            (nil? current))
+        (recur (next remaining) files old-path current (inc n))
 
         :else
-        (recur (next remaining) files old-path current)))))
+        (refusal :hunk-truncated
+                 (str "Line " n " of the patch is inside file section "
+                      (:file current) " but is neither a header nor a hunk "
+                      "body line: " (pr-str line))
+                 {:grammar :unified-diff :file (:file current)
+                  :patch-line n :offending-line line})))))
 
 ;; ---------------------------------------------------------------------------
 ;; apply_patch (V4A)
@@ -341,7 +395,11 @@
 
               :else {:ok true :grammar :apply-patch :files files}))
 
-          (str/blank? line)
+          ;; @spec MCP-OP-ADMIT-101
+          ;; Only outside a hunk. Inside one, " " is a context line for a blank
+          ;; source line -- str/blank? swallowed it, so any V4A hunk spanning a
+          ;; blank line lost that line and then could not apply.
+          (and (str/blank? line) (nil? hunk))
           (recur (next remaining) files current hunk started?)
 
           (= apply-patch-begin (str/trim line))

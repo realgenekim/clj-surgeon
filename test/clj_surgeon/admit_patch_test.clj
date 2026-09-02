@@ -2467,3 +2467,193 @@
         (is (str/includes? (slurp (io/file root "src/app/core.clj"))
                            "(fnil inc 0)")))
       (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; Round four. The reader's leniency was a silent-truncation engine: a body
+;; line it could not classify ended the hunk, the rest of the lines fell
+;; through the top-level loop unnoticed, and the gate committed a fraction of
+;; the requested edit with ok true.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-ADMIT-100
+(deftest an-unclassifiable-body-line-refuses-and-never-truncates
+  (let [source "(ns app.a)\n\n(defn f [] 1)\n(defn g [] 2)\n(defn h [] 3)\n"]
+    (testing "M1: a context line that lost its leading space"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root {"src/app/a.clj" source})
+          (let [patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                           "@@ -3,3 +3,3 @@\n"
+                           " (defn f [] 1)\n"
+                           "(defn g [] 2)\n"
+                           "-(defn h [] 3)\n"
+                           "+(defn h [] 99)\n")
+                result (admit/execute-request!
+                         (stub-config root)
+                         {:patch patch :mode "commit" :verify "none"})]
+            (is (false? (:ok result))
+                "this used to commit a no-op and report success")
+            (is (= :hunk-truncated (:error-type result)))
+            (is (= 5 (:patch-line result)) "the refusal numbers the line")
+            (is (= "(defn g [] 2)" (:offending-line result)))
+            (is (false? (:committed result)))
+            (is (= source (slurp (io/file root "src/app/a.clj")))))
+          (finally (delete-tree! root)))))
+    (testing "M3: two requested edits, one applicable"
+      (let [root (temp-dir)]
+        (try
+          (write-sources! root {"src/app/a.clj" source})
+          (let [patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                           "@@ -3,2 +3,2 @@\n"
+                           "-(defn f [] 1)\n+(defn f [] 9)\n"
+                           "GARBAGE\n"
+                           "-(defn g [] 2)\n+(defn g [] 8)\n")
+                result (admit/execute-request!
+                         (stub-config root)
+                         {:patch patch :mode "commit" :verify "none"})]
+            (is (false? (:ok result))
+                "half a change is not a success")
+            (is (= :hunk-truncated (:error-type result)))
+            (is (= source (slurp (io/file root "src/app/a.clj")))))
+          (finally (delete-tree! root)))))
+    (testing "a body-marked line belonging to no hunk"
+      (let [patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                       "@@ -3,1 +3,1 @@\n-(defn f [] 1)\n+(defn f [] 9)\n"
+                       "diff \n"
+                       "-(defn g [] 2)\n")
+            applied (patch-apply/apply-patch {"src/app/a.clj" source} patch)]
+        (is (false? (:ok applied)))
+        (is (= :hunk-truncated (:error-type applied)))))))
+
+;; @spec MCP-OP-ADMIT-100
+(deftest a-removed-line-that-renders-as-a-file-header-is-still-a-removed-line
+  ;; M2: the author deletes three lines, one of whose text begins "-- ", so it
+  ;; renders as "--- ". Reading that as a file header ended the hunk and the
+  ;; gate deleted one line instead of three.
+  (let [source (str "(ns app.a)\n\n(defn doc []\n  \"Notes\n"
+                    "-- deprecated, see b\n   more\"\n  1)\n")
+        patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                   "@@ -3,5 +3,2 @@\n"
+                   " (defn doc []\n"
+                   "-  \"Notes\n"
+                   "--- deprecated, see b\n"
+                   "-   more\"\n"
+                   "+  \"Notes\"\n"
+                   "   1)\n")
+        parsed (patch-apply/parse-patch patch)
+        hunk (first (:hunks (first (:files parsed))))
+        applied (patch-apply/apply-patch {"src/app/a.clj" source} patch)]
+    (is (:ok parsed))
+    (is (= 6 (count (:body hunk))) "every body line is read")
+    (is (= ["  \"Notes" "-- deprecated, see b" "   more\""]
+           (mapv second (filter #(= :remove (first %)) (:body hunk))))
+        "all three removals, including the one that looks like a header")
+    (is (:ok applied))
+    (is (= "(ns app.a)\n\n(defn doc []\n  \"Notes\"\n  1)\n"
+           (:post (first (:files applied)))))
+    (testing "a genuine file-header pair is still a header"
+      (let [two-file (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                          "@@ -3,1 +3,1 @@\n-(defn f [] 1)\n+(defn f [] 9)\n"
+                          "--- a/src/app/b.clj\n+++ b/src/app/b.clj\n"
+                          "@@ -1,1 +1,1 @@\n-(ns app.b)\n+(ns app.b2)\n")
+            parsed (patch-apply/parse-patch two-file)]
+        (is (:ok parsed))
+        (is (= ["src/app/a.clj" "src/app/b.clj"] (mapv :file (:files parsed))))))))
+
+;; @spec MCP-OP-ADMIT-102
+(deftest a-patch-that-changes-nothing-is-refused
+  (let [root (temp-dir)
+        source "(ns app.a)\n\n(defn f [] 1)\n"]
+    (try
+      (write-sources! root {"src/app/a.clj" source})
+      (doseq [[label patch]
+              [["context only"
+                (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                     "@@ -3,1 +3,1 @@\n (defn f [] 1)\n")]
+               ["a removal and an identical addition"
+                (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                     "@@ -3,1 +3,1 @@\n-(defn f [] 1)\n+(defn f [] 1)\n")]]]
+        (testing label
+          (doseq [mode ["preview" "commit"]]
+            (let [result (admit/execute-request!
+                           (stub-config root)
+                           {:patch patch :mode mode :verify "none"})]
+              (is (false? (:ok result))
+                  "a receipt that reports success for no change is a false green")
+              (is (= :no-op-patch (:error-type result)))
+              (is (false? (:committed result)))
+              (is (= source (slurp (io/file root "src/app/a.clj"))))))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-ADMIT-099
+(deftest exactly-one-terminating-newline-is-removed-before-parsing
+  (let [source "(ns app.a)\n\n(defn f [] 1)\n\n"
+        hunk (str "@@ -3,1 +3,1 @@\n-(defn f [] 1)\n+(defn f [] 9)\n")
+        header "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"]
+    (testing "a payload ending in one newline"
+      (is (:ok (patch-apply/apply-patch {"src/app/a.clj" source}
+                                        (str header hunk)))))
+    (testing "a payload ending in a real blank line still applies"
+      ;; 7 of 109 field payloads ended this way and were refused as
+      ;; patch-does-not-apply because the blank was annexed as context.
+      (is (:ok (patch-apply/apply-patch {"src/app/a.clj" source}
+                                        (str header hunk "\n")))))
+    (testing "a payload with no terminating newline at all"
+      (is (:ok (patch-apply/apply-patch
+                 {"src/app/a.clj" source}
+                 (str header "@@ -3,1 +3,1 @@\n-(defn f [] 1)\n+(defn f [] 9)")))))
+    (testing "a trailing blank line inside a hunk is content, not trimmed"
+      (let [with-blank (str header "@@ -3,2 +3,2 @@\n"
+                            "-(defn f [] 1)\n+(defn f [] 9)\n \n")
+            applied (patch-apply/apply-patch {"src/app/a.clj" source} with-blank)]
+        (is (:ok applied))
+        (is (= "(ns app.a)\n\n(defn f [] 9)\n\n" (:post (first (:files applied)))))))))
+
+;; @spec MCP-OP-ADMIT-101
+(deftest a-v4a-context-line-for-a-blank-source-line-is-not-dropped
+  (let [source "(ns app.a)\n\n(defn f [] 1)\n\n(defn g [] 2)\n"
+        patch (str "*** Begin Patch\n*** Update File: src/app/a.clj\n@@\n"
+                   "-(defn f [] 1)\n"
+                   "+(defn f [] 9)\n"
+                   " \n"
+                   " (defn g [] 2)\n"
+                   "*** End Patch\n")
+        parsed (patch-apply/parse-patch patch)
+        hunk (first (:hunks (first (:files parsed))))
+        applied (patch-apply/apply-patch {"src/app/a.clj" source} patch)]
+    (is (= 4 (count (:body hunk)))
+        "the single-space context line is a line, not whitespace to skip")
+    (is (= [:remove :add :context :context] (mapv first (:body hunk))))
+    (is (:ok applied))
+    (is (= "(ns app.a)\n\n(defn f [] 9)\n\n(defn g [] 2)\n"
+           (:post (first (:files applied)))))))
+
+;; @spec MCP-OP-ADMIT-100
+(deftest a-bare-hunk-marker-inside-a-unified-payload-is-a-hunk
+  ;; Field payloads mix the grammars inside one file section: a unified header
+  ;; pair, then `@@ -n,m +n,m @@` for one hunk and a bare `@@` for the next.
+  ;; The bare marker is the sibling grammar's, so it is recognised and its hunk
+  ;; is located by content -- refusing it would be reading the marker of one
+  ;; grammar as an unclassifiable line only because the header was the other's.
+  (let [source (str "(ns app.a)\n\n(defn f [] 1)\n\n(defn g [] 2)\n"
+                    "\n(defn h [] 3)\n")
+        patch (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                   "@@ -3,1 +3,1 @@\n"
+                   "-(defn f [] 1)\n+(defn f [] 9)\n"
+                   "@@\n"
+                   "-(defn h [] 3)\n+(defn h [] 99)\n")
+        parsed (patch-apply/parse-patch patch)
+        applied (patch-apply/apply-patch {"src/app/a.clj" source} patch)]
+    (is (:ok parsed))
+    (is (= 2 (count (:hunks (first (:files parsed))))))
+    (is (= 3 (:pre-start (first (:hunks (first (:files parsed)))))))
+    (is (nil? (:pre-start (second (:hunks (first (:files parsed))))))
+        "the bare marker carries no arithmetic, so it is located by content")
+    (is (:ok applied))
+    (is (= "(ns app.a)\n\n(defn f [] 9)\n\n(defn g [] 2)\n\n(defn h [] 99)\n"
+           (:post (first (:files applied)))))
+    (testing "with a context anchor"
+      (let [anchored (str "--- a/src/app/a.clj\n+++ b/src/app/a.clj\n"
+                          "@@ (defn h\n"
+                          "-(defn h [] 3)\n+(defn h [] 99)\n")]
+        (is (:ok (patch-apply/apply-patch {"src/app/a.clj" source} anchored)))))))
