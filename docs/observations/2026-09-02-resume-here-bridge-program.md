@@ -286,3 +286,36 @@ detector (stale-onset predicate inside the gate), not a test profile.
 Anvil files), then: if the gate fix is green → push, GATE-SHA, restart 7894, GO-Z6; if rf1
 ethnography is in → log it and dispatch rf2; if 46o verification is GO → commit, push, hand off.
 
+
+## RESUME BLOCK 2026-09-02T17:57Z (supersedes earlier blocks)
+
+**State.** Gate fix pushed: `bridge/admit-gate` 2cc52fa (re-submitted to mayor). `~/acid/GATE-SHA`
+on Anvil = 2cc52fa. rf1 scored (Surgeon-on-Surgeon LOST every cost axis, quality tie) and
+ethnographed ("cuts beautifully, cannot sew"); fleet polled twice (Sol 60 % / Opus 35 % on rf2;
+readout = fallback count + returns after the ok receipt, pre-registered at a40fc3e).
+
+**In flight (bridge subagents, resumable by name in the session):**
+- 46o formatter last round (N1 comment spacing, N2 clause-group sort) on ~/src/clj-surgeon-46o;
+  on report: my three suites, commit on `bridge/format-form-scope`, push, hand to mayor with both
+  red-team receipts.
+- rf2 builder on ~/src/clj-surgeon-rf2 (`bridge/rf2-extract-rewire` off main): `:extract!` with
+  `:rewire-callers`, `:ls` non-fatal outline, refusals with `expected_shape`; acceptance =
+  byte-identical to `~/acid/receipts/rf1-reference.diff`. On report: my suites, commit, push branch;
+  then install a server for it on Anvil (new port, e.g. 7895, attested) and run rf2 = R3 with
+  arms N vs C(rf2) at n=6, ritual-stripped prompts BOTH arms, readout per a40fc3e.
+- Anvil installer: chain-z6 (z6 rung M n=8, z7 R3 gate, z8 L control; preflight needs 7894
+  attested == GATE-SHA), R3-gate.md, Surgeon-tree focused profile + wrapper, restart-7894-at.sh,
+  rs1 (ritual strip, native only, 3 runs, chain-rs1 on GO-RS1, PROMPT_SUFFIX=-strip), suite
+  counter fix, per-arm process groups. On report: `bash ~/acid/restart-7894-at.sh 2cc52fa`,
+  touch GO-RS1 first (no gate needed), then GO-Z6 after rs1 done; start a Monitor on
+  rs1/z6/z7/z8 receipts (bwc61lrlv covers only z3/z4/rf1).
+
+**Order of experiments (decided).** rs1 → z6 → z7 → z8 (chain) ; rf2 once at n=6 ; then the scale
+slope (q5z, require change across 20+ namespaces) ; then three unseen extractions.
+
+**Blocked on others.** Mayor: review close-losers 205e13a and admit-gate 2cc52fa; beads inb-4a51e5,
+inb-51135b, inb-ab0a24. Gene: merge curtain-call `bridge/safe-refactor-1` (inb-e12ff9).
+
+**First action after compaction.** Read the task notifications / the three agents' output files
+listed above, then follow the "on report" lines. Log every receipt with `date -u` headers.
+
