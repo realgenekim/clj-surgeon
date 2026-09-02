@@ -99,6 +99,50 @@ route (pre-edit, post-edit, layering), not the tool's features. Keep native as t
 control in every cohort; a benchmark that never includes "do it without the tool" cannot
 lose and so cannot learn. Keep the caller as a variable. Acceptance is a gate, not a score.
 
+### The law of decisions, and the two-call shape (2026-09-02, evening; measured by hand at the meter)
+
+The night's numbers, in one move: extracting nine forms with sixteen external and seven internal
+call sites took native 141–152 s and 9–10 model returns to land; the rewiring verb landed the
+same bytes in **1.3 s of tool time** and one call (`docs/observations/2026-09-02-captains-log-the-big-aha-and-reset.md`,
+"what is possible"). The law that explains it: **an agent's cost is its count of decisions,
+not its count of edits.** On that task there are two decisions, which forms go where and
+whether to accept the verdict; everything between them is mechanical closure, and closure runs
+at machine speed once a verb takes the whole intent and returns a verdict a cold reader can act
+on. Three multipliers are true at once and must be quoted together: ~110× on the closure, ~4×
+on the step (a return costs the same whether it is a call or a patch), ~1.15× on the whole task
+until the gate absorbs the tail.
+
+**The shape is two calls:** a verb that takes a complete intent and computes every consequence
+(callers, requires, imports, visibility, verbatim moves), and a gate that takes the resulting
+patch, verifies it against a snapshot with the repository's own coverage statement, and commits
+or refuses with a remedy. Extract-with-rewire (`bridge/rf2-extract-rewire`) and
+`admit_clojure_patch` (`bridge/admit-gate`) are the first two instances; `alias_migration`
+(`bridge/q5z-alias-migration`) is the third and the one whose ratio should grow with the
+codebase.
+
+**The boundaries, which are part of the claim:**
+- **The win exists only under mandate.** Free-choice adoption on 2026-09-02 was 0 of 10, the
+  last with the exact one-call command named in the task's own terms. A tool's presence and name
+  are not a path; a harness that routes the write through the verb is.
+- **The receipt is the product.** A cold reader given only the receipt could not act on it twice:
+  field names carried history (`remaining-source-callers` read as work to do), 347 KB of file text
+  rode along, compile was unchecked. A receipt states the properties it guarantees, leads with
+  state (`:applied`, target, header guarantees, callers rewired, `:callers-unresolved []`,
+  `:compile {:checked true}`), is bounded (≤ 4 KB, no file contents), and every refusal carries
+  what would lift it. The naive-reader probe (a fresh model, only the receipt, "what is your
+  next call?") is the gate on this, and it is cheaper than any review.
+- **The gate's own verification is a cost where there is nothing to remove.** Rung L control:
+  gate ≈ 1.9× native on a two-minute hoist. The gate pays where native's tail is large (two JVM
+  suites on the extraction task) and costs where it is small.
+- **Wall and returns are two meters.** On suite-bound tasks the wall is the suites; stripping a
+  third of the returns moved wall by 0.4 %. Report both, always.
+
+**The target set is a catalogue, not a hunch:** every mechanical closure the tool can compute in
+under two seconds that an agent would otherwise type or read, measured on real repos and ranked
+by files-that-must-be-read × edit sites (`docs/closure-catalogue.md`). The slope experiment
+(`docs/observations/2026-09-02-slope-spec-sl1.md`) draws the curve for the alias class; the
+ladder that promotes a verb from hand-drive to battery is `docs/tweezer-loop.md`.
+
 ## What We Proved
 
 The original session proved that a Babashka CLI could outline a 2,768-line

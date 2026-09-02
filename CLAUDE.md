@@ -170,6 +170,25 @@ attested, with receipts frozen by the runner. Buster and the skiff keep the conn
 work. Record the method as well as the result in the captain's log: option, ratchet, evidence,
 counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
 
+### Evening amendments (2026-09-02, measured at the meter; see docs/vision.md "The law of decisions")
+
+- **Receipts are the product.** Every verb's receipt leads with state, never history: `:applied`,
+  `:target-*`, guarantees (`:header`), what was rewired, `:callers-unresolved []`, `:compile
+  {:checked true}`; bounded (≤ 4 KB, no file contents; a witness asserts it); every refusal
+  carries `next_call` and what would lift it. Gate on it with the naive-reader probe: a fresh
+  model given only the receipt must be able to name its next call.
+- **Two meters, always.** Model returns and wall are reported separately; on suite-bound rungs
+  the wall is the suites.
+- **Mandate is the delivery mechanism.** Free choice was 0 of 10 with the exact command named.
+  Claims are "a mandated verb + gate makes an agent faster/safer on X", never "agents prefer it".
+- **Hand-drive before any battery.** The ladder in `docs/tweezer-loop.md` (G0 arithmetic, G1
+  hand-drive with a watcher, G2 naive-reader, G3 shape spec, G4 replay, G5 cold shadow, G6
+  battery). A verb that has never been executed by hand does not go to Anvil.
+- **The self-count is never the figure.** A driver's own count of its returns undercounted by
+  more than half; the watcher's count is the report.
+- **Target set = `docs/closure-catalogue.md`**; a verb is built for a measured fan-out, not a
+  hunch.
+
 ## Architecture
 
 - `forms.clj` — single source of truth for form classification (what is a defn, what is private, etc.)
