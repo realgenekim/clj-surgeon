@@ -462,3 +462,31 @@ tests of the new behavior were the ones each arm wrote for itself.
 once from the spec by an agent that did not build any arm, run against every diff. From
 here "correct" means the arm-independent tests, not the arm's own. The scorer must not be
 written by the subject.
+
+## Receipt 04:48Z — arm T, the fast typist (gpt-oss-120b via OpenRouter), on Buster
+
+Mayor delivered an OpenRouter key on Gene's offer ("a SUPER FAST TYPIST … IN ADDITION TO codex
+spark"). Tool: `~/bin/typist SPEC [TARGET]`, one bounded call per invocation, key read from
+`~/secrets/openrouter.edn` at runtime, hard cap 10 calls / 40k output tokens per run, cost
+printed from the response, no fallback path. Arm T = shipped Surgeon (7888) + Sol keeps every
+decision + typist for mechanical JS-string and test typing. Same frozen task, same fences,
+run on Buster so it is comparable to Buster run 2 (native 191 s, A 303 s, B 319 s).
+
+| arm T | value |
+|---|---|
+| wall | **409 s**, exit 0 |
+| correct | 579 tests / 7808 assertions / 0 failures; golden unchanged |
+| model actions | **44** (Buster A: 22, native: 14) |
+| Surgeon calls | 6, 1 refusal (invalid-intent-form) |
+| typist calls | 4: one rejected (empty output), two accepted as scaffolds then rewritten, one partially used; ~$0.007 total; 22 to 25 s per call at 24k to 74k input tokens |
+
+**Headline:** the typist made the arm slower, not faster: +106 s over A and twice the model
+actions. Each delegation cost a spec-writing turn, a 20-second typist wait, a review turn and
+usually a correction turn, on a task whose expensive act was never typing. Exactly the
+fleet's prediction before the run ("the typist hands over the load-bearing act"). Retained
+negative; the tool stays for tasks with long mechanical runs (test bodies, fixtures) and is
+off the medium rung. Apparatus note: Sol deleted the untracked ledger inside the worktree
+"to keep the diff clean"; the ledger moves outside the worktree from here.
+
+Economics gate honored: metered, bounded by construction, cost line per call, total under a
+cent, no auto-fallback exists.
