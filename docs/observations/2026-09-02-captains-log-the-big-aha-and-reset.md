@@ -2097,3 +2097,34 @@ cleanly and are scored from their worktrees.
 Also: z7b's chain held the cohort lock ten minutes past its driver's exit because it scores six
 diffs with two suites each before releasing; that is by design and was not intervened on.
 
+
+## 20:23Z — z7b scored: one field, refusal → note, and the gate arm goes from 1 of 3 to 3 of 3 on the extraction
+
+Receipt `~/acid/receipts/z7b-score.md` (scorer; rescore-R3 run on a quiet box the moment the lock
+released: 42 predicate lines, zero FAILs).
+
+| arm (both stripped) | n | wall (sd) | returns | actions | tokens | executed suites | acceptance | churn |
+|---|---|---|---|---|---|---|---|---|
+| Z gate 17125fe | 3 | **330.7 (77.2)** | **14.00** | 9.33 | 745,841 | 1.33 | 3/3 all PASS | 53 ×3 |
+| N native | 3 | 432.7 (107.3) | 17.67 | 13.00 | 868,013 | 2.00 | 3/3 all PASS | 53 ×3 |
+
+Admit: 5 calls, 2 refusals (both `patch-does-not-apply` stale hunks, both recovered next call),
+3 commits **all at `complete`**, zero fix failures, `require-removed` firing in all three runs on
+exactly z7's two files and spans as **`class: note`**. Gate seconds: 16.5 per commit, 0.06 per
+refusal, **5.0 % of Z's wall**. `apply_patch` on `.clj` 0.00 (N 3.00); post-write probes 0.00.
+`z7b-g1-Z-1` executed **zero** suites of its own and passed every predicate: the gate's focused
+profile was the verification, which is the design. Predictions: executed suites ≤ 6 PASS (1.33
+vs N 2); acceptance equal PASS; wall ≤ 0.75× FAIL by 6.2 s (0.764); refusals < 20 % FAIL (2 of
+5). Welch −102 s, p 0.18, df 3.6: a direction; the gap leans on one 552 s native run.
+
+**Against z7:** refusals 24 → 2, rate 92.3 % → 40 %, completion 1/3 → 3/3, the causal class
+demoted from refusal to note: the cleanest single-variable result in the z-series. **Against
+rs1:** the gate arm has reached the stripped-native baseline, 14.00 returns / 330.7 s vs 14.3 /
+328 s, by a different route; z7b's own native arm ran worse than rs1's on the identical prompt
+(17.67 / 432.7), which is how much cohort-to-cohort noise n=3 walls carry.
+
+**Status of the gate's claim on R3:** correct and safe at n=3 (every commit verified, every
+acceptance green, nothing written that the suites would reject), cheaper on returns by ~20 %,
+and a wall direction of ~0.76× that needs n=6 to become a number. The z8 partial-commit
+regression does not appear on this rung and is closed on the branch regardless.
+
