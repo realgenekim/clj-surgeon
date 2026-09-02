@@ -1471,3 +1471,26 @@ Apparatus: one l1 arm (Y, slot 2) died in 52 s with "Selected model is at capaci
 OpenAI-side error; the runner now stamps MODEL-CAPACITY on such end lines, and a single-arm
 rerun (l1r) is queued after l1 so the triple is complete. The 7889 instance is being
 rebuilt on main 2311cc09 (the merged gap fix) and b2 re-pointed to "fixed main vs shipped".
+
+## Receipt 08:33Z — l1 early: native finished the 21-owner refactor in about three minutes and passed the whole acceptance suite
+
+RELAY (l1.log, rescore-anvil-l1-early.txt): native N 177 s and 194 s, full gate 577 tests 0
+failures, rung-L acceptance "12 tests, 82 assertions, 0 failures" on both. The two shipped
+arms and the mandate arm in the same wave were still running at 12 minutes. This is the
+rung the tool was designed for (cross-file, many owners, mechanical), and the native agent
+did it faster than any Surgeon arm has done the medium task tonight. Full l1 table follows
+when the wave ends; one Y arm died of an OpenAI capacity error and reruns after b2.
+
+Apparatus findings from the 7889 rebuild (agent receipt): (1) Anvil's clj-surgeon "origin"
+is a hand-copied bundle file, not GitHub, 69 commits stale by the time of the rebuild, with
+no refresh script, so an arm labelled "main" on Anvil can be stale with no error; the rebuild
+fetched an incremental bundle built on bridge and fast-forwarded 41eee738 to 2311cc09
+(verified descendant; no reset), and 7889 now serves main 2311cc09, pid 1939050, MCP proof
+ok. This is the third receipt-blind-to-subject finding tonight (server sha, hand-typed
+times, and now "origin"). (2) The chain scripts logged "$?" inside the same string as
+"$(date)", so their exit codes were date's status; chain-4c and chain-l1r2 capture rc on its
+own line; the earlier chains' "driver exit 0" lines are unverified. (3) The freeze script
+gained an ended-gate: it refuses a worktree whose arm has not written its end line, after I
+froze three in-progress l1 worktrees by hand and had to delete them. b2 is re-pointed to
+"main 2311cc09 vs shipped", three pairs, with the typed-refusal ledger as the primary
+metric; l1r runs after b2 so it does not share cores.
