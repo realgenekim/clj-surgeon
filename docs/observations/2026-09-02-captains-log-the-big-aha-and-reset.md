@@ -3123,3 +3123,24 @@ Mayor's queue from bridge: rf2 5e6cdd2, census 7244141, study ops b3c17bb, q5z 2
 96387535 → settings-lens aebb7b9a, gated on the mayor's index paste and fold-diff output (inb-3a9818).
 No builders running; load ~1.2. Held deliberately until the queue drains or the Anvil seat exists: the
 receipt ratchets from the friction ledger, the lens follow-ups, the ls-tree free-choice cohort (E6).
+
+## 23:47Z — what today taught about Surgeon usage, in eight lines (Gene: "What did you learn about surgeon usage during this build? What's next?")
+
+1. The win is site discovery, not typing: native's cost everywhere it lost was proving completeness;
+   one structural match was the whole plan for 19 arms (0.6 s).
+2. Form-scoped replacement addressed by dispatch value is the clean write: 0 lines outside the forms,
+   comments preserved; native's equivalent patch touched 149 outside lines, 86 reindentation.
+3. The tool does not say how to address what it just showed: outline collapses arms to one name; the
+   defmethod owner shape lives only in the apply schema; two refusals name no field; `_` silently misses
+   longer paths. A cold agent pays a refusal to learn each.
+4. Receipts are thinner than the driver's head: 16 edits reported, 19 matched, the exclusion only in my log.
+5. Winners must compose (the mayor's finding): extract wrote what `:ls` could not read; now the definition
+   of winner in vision.md, measured by A and B.
+6. Structural match sees the write, not the guard: the finder's false positive became the census's
+   four-condition rule with `:unknown`.
+7. The gate buys correctness, not speed (6/6 complete, flat at n=6); every gate speed win was a slow native trio.
+8. Hand-driving finds what suites miss: the self-returning continuation, the `format` shadow, the
+   read path that would have created a production index.
+Next, in order: the mayor's production paste decides fold/store; receipt ratchets; the E6 adoption cohort
+for the study ops; the two lens follow-ups; drain the queue before touching the MCP schema files again.
+
