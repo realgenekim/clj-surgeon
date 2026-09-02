@@ -34,7 +34,7 @@ An agent's cost is its count of decisions, not edits: both arms type the same by
 
 - Free-choice adoption 0 of 10, even with the exact one-call command named in the task's terms.
 - z3's 20 % gate win was a slow native baseline: n=4 with two 400 s runs; at n=7 it was 1 %.
-- The gate committed on  because I ratified that waiver; a prompt is not a control.
+- The gate committed on `verify none` because I ratified that waiver; a prompt is not a control.
 - Native at N=80 wrote a correct Python generator and got cheaper; the ratio's non-monotone falsifier fired because native improved.
 - The structural query found 6 of 9 vulnerable folds; only the generative property found the other three and the hole inside the emergency fix.
 
