@@ -434,3 +434,19 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   cohort lock, so they serialise).
 - Four chains armed: sl1, sl1r, rf2, z7b (running). Lock: ~/acid/.cohort-lock.
 
+
+## RESUME DELTA 2026-09-02T20:03Z
+
+- ALL GO files created: GO-Z7B (running since 19:47Z), GO-RF2, GO-SL1, GO-SL1R. Chains take
+  `~/acid/.cohort-lock` in turn. Monitor bvo62eeqc relays z7b/rf2/sl1-*/sl1-R/chain-next lines.
+  When each `<run> done` lands: score via the scorer agent (z7b: R3 shape vs rs1 14.3/328 s; rf2:
+  readout `~/acid/receipts/rf2-readout.sh` bytes_beyond_verb + returns after receipt, per a40fc3e;
+  sl1-N: `sl1-<N>-score.txt` written by the chain, then the slope table returns vs N and ratio
+  monotone check per the spec's falsifiers; sl1-R: rescore-FAN-R predicates).
+- Branch shas: admit-gate 17125fe; rf2 a66b626 (RF2-SHA); q5z 13d86bb (Q5Z-SHA, 7895); all in the
+  mayor's queue; bridge merges nothing.
+- curtain-call: fold-idempotence builder running (branch bridge/fold-idempotence, worktree
+  ~/src/curtaincall-cfp-fold); on report: my kaocha unit run → push branch → inbox item for Gene
+  (merge is his) → close session 3 by `touch ~/src/curtaincall-cfp/.tweezer/session-3.closed`
+  → watcher's file → log. Follow-up bead: write-side idempotency key in the store's append path.
+
