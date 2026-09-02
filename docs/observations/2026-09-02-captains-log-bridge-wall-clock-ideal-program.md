@@ -703,3 +703,30 @@ candidate; the winner merges to surgeon main (merges continue under the scoped f
 installs do not). s7 blind review (Sol): P 19, Q 19, native 17 — the planning arms scored
 highest on this triple (n = 1), so planning's quality effect is open even though its wall
 effect is negative. cal2, the six-arm two-core calibration, started after r1.
+
+## 05:45Z — turn budget as doctrine: the fleet's brainstorm and tonight's test of it
+
+Gene: "elevate the need to reduce tool calls; becomes key part of a coding task at high level; brainstorm with brain fleet." Sol, Opus and the bridge converged on the same shape, drafted below and queued to the skiff as `inb-5a2d7b`. Opus's decisive caution: turns are demand-driven; a cap without a named substitute relocates the spend into one giant unreviewed action (the wave build removed refusals and the model spent the freed turns on re-reads and suite runs). So the rule budgets in actions, keeps suites as a separate counter, names the substitutes (batch, terminal results, one-turn refusals), and requires a report. Running tonight as e3 on Anvil: A vs A+report-only (Hawthorne control) vs A+full rule, three each, two-core slots, scored on actions, acceptance, and blind quality; the control decides how much of the paragraph must survive. cal2 (six two-core arms) is running first after a fail-fast: its first launch fed codex empty prompts, the runner's tests-below-baseline flag caught it in one poll, and the batch rule meant one wasted unit, not a night.
+
+## Turns are the clock (Gene, 2026-09-02; measured on 20+ runs, two boxes)
+
+Complete verified wall of a coding task ≈ **9 s × model actions + ~50 s × test-suite runs**; tool
+execution is 3–4% of wall whatever the tool. You are not paying for tools, you are paying for
+returns to the model. So a turn budget is part of every coding task:
+
+- **Before the first tool call, state one line:** `BUDGET: N actions, M suite runs`, with
+  N = 6 + 2 per file you will change + 1 per unknown you must resolve first, and M = 1 (+1 per
+  milestone gate). Budget in actions, which you control, never in seconds, which you do not.
+- **Spend it the only way that works:** batch independent reads into one call and independent
+  edits into one call; treat a complete result as terminal (never re-read to confirm a write
+  that returned a receipt); on a refusal, retry once from the refusal's own fields or switch
+  route, never probe. Before each call ask: does this change the result, discharge a
+  verification obligation, or remove a later call? If none, do not call.
+- **Two clauses that keep this from backfiring:** suites are a separate counter and never
+  fungible with actions (under budget by skipping the gate is a failed task); and one action
+  may hold many edits but only one irreversible decision (a 400-line blind write is not a cheap
+  turn, it is an unreviewed one).
+- **End with** `TURNS: n/N actions, m/M suites` and, if over, the single cause. Report it
+  alongside correctness and the diff; never rank work on turns alone.
+- **A tool earns its call only when it removes a return you would otherwise make.** A tool that
+  is 3 s faster but adds one round-trip is a 6 s loss.
