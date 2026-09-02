@@ -582,3 +582,13 @@ shared 250 ms tick predicate on the flag-on path (drops `!stopping`), C forks `k
 wholesale copy so future fixes to the real one never reach the flag-on page, and native's
 cancel body exists twice in source. The clarity deficit of the wave-derived arms is now
 supported by two judges on three triples and a measured noise floor.
+
+## Receipt 04:52Z — s6, the first planning-mode triple
+
+s6, Anvil sequential, all correct: P (shipped Surgeon + plan) 258 s, Q (native + plan) 221 s,
+A 244 s. P's plan predicted 193 s and self-reported 200; Q's plan is captured for the same
+calibration. Q is the fastest native-family sample after s3's 194. One triple; s7 repeats the
+two planning arms in the other order. Blind review launched (Sol). The CLI-only entrance
+riff is filed as a follow-up (maven `inb-ce2f15`), with one cheap arm queued at the end of
+the chain, and no further attention until the main program is done (Gene's standing
+instruction: stay on the main quest).
