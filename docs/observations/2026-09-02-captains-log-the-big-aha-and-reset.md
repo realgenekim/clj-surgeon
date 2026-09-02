@@ -2747,3 +2747,20 @@ merge re-keyed by path so order is irrelevant. The write/commit phase stays seri
 all-or-nothing. Receipts carry per-phase `elapsed_ms` so the parallel win is a measured number
 (baseline: 1.19 s per file for 8 match patterns; 171 files ≈ 3–4 min serial vs ~15 s on 16 cores).
 
+
+## 22:33Z — autonomy for the day: session 4 and the census verb launched in parallel (Gene: "No word needed. Use best judgement." / "I'm busy all day today. Keep going!" / "Or get sol opinion.")
+
+Worktrees: `~/src/curtaincall-cfp-lens` = `bridge/settings-lens` at 96387535 (stacked on the store
+branch; 19 guards, 23 settings paths counted); `~/src/clj-surgeon-census` = `bridge/census-verb` at
+origin/main 8ac4332 (fetched, recorded). Session 4, step A (Opus builder): characterization first —
+replay digest, the guard's three edge cases over the 19 event types, a structural inventory pinning
+19/23 — then the lens with no call sites (LENS-001/002). Step B after A: the migration measured as
+two arms — one structural transaction through Surgeon over the 19 owners driven by me with a watcher
+(returns + stopwatch) vs an Opus agent natively on a second worktree; gate = the characterization
+digest + unit suite. Census verb (Opus builder): `relation_census`, classification :door / :set /
+:guarded (enclosing branch mentioning an identity key of the written value) / :raw; claypoole upmap
+plan phase; allowlisted receipt with per-phase elapsed_ms; LID CENSUS-001..; real-bytes fixture from
+folds.clj; pool-1-vs-N identical-answer witness; real-wire witness. Sol consulted in parallel on
+the plan (`scratchpad/fleet/sol-plan-s4-census-answer.md`): KEEP / ADJUST / STOP per build, what
+must not run unattended, the guard rule he would ship. His answer is folded in before step B starts.
+
