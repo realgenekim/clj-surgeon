@@ -1829,3 +1829,35 @@ L a loss, rung R3 unmeasured until the fix. The mechanism survives in the decomp
 gate's clock is small; refusals are the cost) and in the hand drive; it has not yet survived a
 cohort.
 
+
+## 19:26Z — q5z pushed and caught at G1 on the wire; rf2's receipt bounded 346 KB → 4 KB and the verb now compiles what it wrote
+
+**q5z** (`bridge/q5z-alias-migration` 6b5252c, pushed; server 7895 attested at that sha, root
+`~/acid/surgeon-q5z`). First real call over the HTTP wire, hand-driven at N=5 on a fresh worktree
+of the generated repo: `mcp-adapter-failure: Wrong number of args (0) passed to
+clj-surgeon.mcp-tool/default-receipt-dir`, 157 ms, source unchanged, acceptance = base. 182
+assertions green because nothing drove the tool through the server's adapter with a real
+request. Third instance today of the reviewer's input standing in for the caller's. G1 exists
+for this; the battery would have measured a dead tool across ten arms. Fix dispatched with two
+real-wire witnesses (a commit and a refusal whose next_call must arrive intact) and an arity
+audit of every helper the adapter borrows.
+
+**rf2** (follow-up on 57e3ca0, uncommitted, my suites running). The leak, measured per key:
+`:_caller-plans` 238 KB (each caller plan carried the whole original AND the whole rewritten
+file), `:_source` 78 KB (the entire source file), plus `:_form-texts`, `:_new-file-content`,
+`:_moved-sources`: 337 KB of `_`-prefixed executor state against 8 KB of receipt, reaching
+readers through a denylist (`dissoc`) where a forgotten key leaks by default. Now an allowlist
+applied to both surfaces: dry run 4,077 bytes, apply 3,657, longest string 324 chars, no `_` key,
+witnessed. The preview reports each form's RESULTING kind (a receipt that still said `defn-`
+would deny the promotion it just made). Two corrections to my reading: the 79 KB after
+`:new-file-preview` was `:_source` printing adjacent in hash-map order; the preview itself was
+already 679 bytes. **The compile check runs inside `:extract!`** as the transaction's last step,
+a bounded subprocess (loading the rewritten namespaces in-process would mutate what a server
+is serving): `{:checked true :status :run :ok true :exit 0}` in 7.8 s on the fixture; failure
+reported with `:undo` naming the receipt and the exact revert command, witnessed by a fixture
+whose moved form references a helper left behind. Two defects the check found in itself:
+`clojure -M:alias -e` runs the alias's `:main-opts` (it ran the whole suite and timed out; now
+resolve the classpath, then `clojure.main`); and a false `:ok false` from an error raised in a
+namespace the extraction never touched, now `:ok :unverified` when the check cannot see its
+subject. The receipt-cannot-see-its-subject rule, applied to the receipt.
+
