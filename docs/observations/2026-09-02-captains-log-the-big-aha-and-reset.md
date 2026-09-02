@@ -3046,3 +3046,29 @@ fleet, surgeon runs the production Surgeon on 7888; `developer` looks generic bu
 Gene report regenerated (700393e; inb-600289): anchor win, session 4 shipped, z7c flat, false greens,
 composition definition, merge order and the four decisions.
 
+
+## 23:39Z — fold-diff-checkpoint built (f2d8f6eb on `bridge/fold-diff-tool`): the checkpoint is a raw prefix, the baseline is folded by main's own code, and the naive read path would have installed the index
+
+Builder acaae1bcfa4441c72. Premise correction: `store_checkpoint.clj` writes a validated snapshot of
+the RAW log (`:frontier`, `:row-count`, `:sha256`, `:rows`), fold-independent — no projection to compare
+against; and the fetch target is `make download-cache`, not `store-checkpoint`. Built instead:
+`bin/fold-diff-checkpoint` checks `BASELINE_REF` (default `origin/main` = what production runs) into a
+throwaway worktree and runs main's own `store/fold` there to emit the baseline projection; this tree
+re-folds the same live prefix (digest re-checked against the checkpoint) and diffs; both fold-source
+digests are printed and a vacuous comparison (equal digests) is called out. Exit 0 identical / 1
+differences / 2 refusal (`make` collapses to 2; run the bin for exact codes). **Finding that changed the
+design:** `store-pg/read-lines-with-seq` goes through `start!` → `ensure-schema!` →
+`ensure-idempotency-index!` — a read-only merge gate would have created STORE-IDEM-002's index on
+production as a side effect; the tool opens the pool with `db/start-pool!` (SELECT 1) and issues
+`SELECT seq, line FROM store_events WHERE seq <= ? ORDER BY seq` directly (FOLD-DIFF-002's pin).
+Read-only asserted: every append path stubbed to throw for the run and restored; touched files digested
+before/after. Hand-driven against real origin/main 00e8f0fa on a JSONL fixture: ONE real difference —
+`[:events "prop-summit" :settings :announced-speakers]` baseline `[{:name "Andrew Stellman"} {:name
+"Andrew Stellman"}]`, this tree `[{:name "Andrew Stellman"}]` — main's `announced-speaker-added`
+dedupes only by `:person-id`, so a name-only speaker announced twice is conj'ed twice; the branch upserts
+under the tagged identity. That is the product-visible change the mayor's production run will enumerate.
+Fails-first: reverting that arm to main's turned 8 assertions red and the tool said IDENTICAL. FOLD-
+DIFF-001..003, 12 tests; unit 1052/13017/0 (builder). Unverified without production: the Postgres read
+path, a real checkpoint's exact shape (fail-closed via `hydrate!`), wall/memory on the full log. My own
+unit run in progress; then push and hand the mayor the exact commands (inb-3a9818).
+
