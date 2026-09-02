@@ -561,3 +561,19 @@ on rung L follows. Caveat: the gate's JVM shares cores 10 and 11 with one native
 wave, so walls carry that; actions, refusals and receipts do not. Predictions on record:
 post-write shell calls to zero in the Z arm; wall within one sd of native; the stale-onset
 and shadowed-declaration classes caught at the gate in situ.
+
+## z1 walls: the gate arm is slower than native, and slower than the shipped editor was (15:18Z)
+
+| arm (rung M, six-wide, paired by wave) | walls s | mean |
+|---|---|---|
+| Z native plus admit gate | 439, 674, 932, 475, 895, 1035 | 742 |
+| N native | 354, 384, 421, 240, 258, 322 | 330 |
+
+All twelve gates green. The wall prediction (within one sd of native) FAILS on its face:
+2.2x, wider than the shipped editor's 1.8x. Before reading it as the design's death, the
+receipts have to say where the time went, because the gate's own verification spawns a
+fresh JVM and a focused kaocha run per admit call (about five to fifteen seconds of tool
+time each, the killer risk Sol named), which is tool time and not returns, and the receipts
+also decide the other two predictions: post-write calls to zero, and hazards caught in situ.
+Scoring now; z2 on rung L runs in the same chain regardless, because the large rung is
+where the gate's per-call cost amortises differently.
