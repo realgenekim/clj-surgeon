@@ -131,6 +131,38 @@ hold; each is a receipt in the captain's log with its commit timestamp:
 10. **Every fix earns a ratchet in the apparatus** (the runner refuses the class next time),
     and every withdrawn claim is corrected at the mechanism and in every place it was relayed.
 
+**Battles we must not fight (measured, closed).** A single edit at a known site in text the
+agent already holds: `apply_patch` is one cheap atomic batched call and is the floor. A
+per-form intent grammar for ordinary edits: two thirds of every refusal was the agent failing
+it. Adoption by instruction: told the tool is expected the agent layers it at 2x; mandated,
+it complies on reads and escapes on writes; optional, it declines it. The CLI as an MCP
+substitute: a second layer that refuses 2.2x. Any claim about wall from inside the variance
+floor, and any quality score inside the judges' floor. Any benchmark without "do it without
+the tool" in the same wave.
+
+**The math: conditions that must be true to win.** Let a model return cost t_r (about 9 s
+plus a context increment; tool execution is 3 to 4 percent of wall and is not the term).
+Complete wall is the sum of returns times t_r. A tool call is worth making only if
+
+    returns_removed - returns_added - r * (1 + f) > 0
+
+where r is the call's refusal rate and f the mean returns a refusal costs in fallback. The
+per-form editor adds one return per form and removes none (the native patch still happens),
+so it is negative at any r; it lost by construction. The gate adds one return and removes the
+two or three post-write returns (re-read, diff, focused test), so it wins only if the receipt
+is trusted (post-edit re-reads go to zero) and its own wall is under those returns, about 27 s.
+The fan-out intent adds one return and removes N hunk-writes plus K locating reads, so it
+wins only when the owner discovery is complete (an incomplete closure hands N back to the
+agent as repair returns) and N is large; on a 21-owner change native's whole write was one
+return, so the win is the K reads, not the N writes. Refusals: an unrecovered refusal is at
+least one return of negative value, so r must satisfy r * (1 + f) < returns_removed, which
+at last night's r of 0.3 per call and f of 2 to 6 is why nothing shipped could win. Detection
+threshold: an effect must exceed two sd of the identical-arm floor to be seen at all (172 s
+on wall at n=3, 5.9 actions, 2.1 acceptance failures); design the cohort so the predicted
+effect clears it or do not run it. Adoption: the free-choice arm must use the feature at all;
+a feature with zero calls when optional has an effect of exactly zero whatever the mandated
+arm scores.
+
 Venue is part of t: anything needing a JVM or more than one arm runs on Anvil, pinned,
 attested, with receipts frozen by the runner. Buster and the skiff keep the connector and light
 work. Record the method as well as the result in the captain's log: option, ratchet, evidence,
