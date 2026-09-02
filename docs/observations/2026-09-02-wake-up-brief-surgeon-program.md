@@ -45,9 +45,16 @@ contract cannot be substituted for.
 | substitution mandate: inspect replaces grep, Surgeon writes replace patches, receipts terminal | 850, 891, 913 | 885 |
 
 Mandating substitution made it slower still, 2.9 sd above the shipped mean. Making the tool
-optional gave native speed. No prompt discipline recovers the cost; it is inherent to routing
-edits through the tool on this task. Whether the optional-arm agents used the tool at all, and
-whether the mandated agents obeyed, is in the captain's log's s1 receipts.
+optional gave native speed because all three optional-arm agents made zero Surgeon calls:
+given the choice, the agent declines the tool. The mandated agents obeyed on reads and
+receipts (zero native .clj reads, zero re-reads after a write) and broke on writes in two of
+three runs: reads went into the tool, writes went around it, and the price was 210 s of
+wall and four new refusal classes. Every prompt lever moves compliance; none moves the cost
+below native.
+
+Large rung, early (21-owner cross-file clock hoist, the tool's advertised shape): native
+177 s and 194 s with the full acceptance suite clean; shipped 359 s and 411 s; mandate arms
+still running at the time of writing.
 
 ## What was settled tonight
 
