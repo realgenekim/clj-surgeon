@@ -147,12 +147,68 @@ libspec. Any other route to the lib is a typed refusal, not a silent miss.
 `:refer :all` — as a bare `<var>`.
 
 **Sites.** A site is a `:token` node equal to one of those spellings that is
-not inside an `:uneval` (`#_`) node, not inside the metadata child of a `:meta`
-node, and not inside a reader-conditional branch other than the file's own
-platform branch or `:default`. A bare spelling is a site only where it is not
-lexically shadowed; shadowing is tracked through `let`-family binding vectors
-and `fn`/`defn` parameter vectors. Strings, docstrings and comments are
-different node types and can never match.
+not inside an `:uneval` (`#_`) node and not inside a reader-conditional branch
+other than the file's own platform branch or `:default`. A bare spelling is a
+site only where it is not lexically shadowed; shadowing is tracked through
+`let`-family binding vectors and `fn`/`defn` parameter vectors. Strings,
+docstrings and comments are different node types and can never match.
+
+**Every position a qualified symbol can occupy.** A qualified symbol is not
+always a bare token in call position, and missing one of these leaves the alias
+retired while a reference to it survives — which is a *load* failure, not a
+subtle one. The anchor found this the hard way:
+
+| position | treatment | why |
+|---|---|---|
+| `alias/x`, `alias/*earmuffed*` | site | ordinary |
+| `#'alias/x`, `(var alias/x)` | site | a `:var` node wraps the token; the reference is real |
+| **`(binding [alias/*x* v] …)`**, `with-redefs`, `with-bindings` | **left-hand side is a site** | these rebind **Vars**: the LHS is a reference through the alias map, not a binding form |
+| `(let [x v] …)` and family | left-hand side is *not* a site | these bind locals |
+| `` `(alias/x) `` | site | the **reader resolves the alias** inside a syntax quote |
+| `'alias/x` | typed refusal | an ALIAS-qualified literal that nothing resolves; whether it is a reference is a judgment |
+| `'from.lib/x` (fully qualified, quoted) | site, in lib mode | names exactly one namespace; a runtime `(requiring-resolve 'old.lib/v)` breaks *lazily at call time*, with no compile error |
+| `^{:validator alias/f} x` | site | metadata values are evaluated code |
+| `::alias/k` | typed refusal | see below |
+| `:alias/k` | never a site | a plain keyword is not alias-resolved |
+| `#?(:clj …)` non-selected branch | not a site | already covered |
+| `#_(alias/x)` | not a site | already covered |
+
+**A file that never requires the lib can still name it.** `sched_import.clj`
+deliberately avoids the compile-time dependency and reaches the store through
+`@(var-get (requiring-resolve 'cfp-scheduler-killer.store/state))`. Discovery
+scoped to *requiring* namespaces never sees it, the tree loads clean, and the
+import path throws the first time anybody runs it. So in lib mode every file in
+scope is scanned for fully-qualified spellings, and a file that has only those
+is migrated with no require change (`require-mode :qualified-only`).
+
+**String literals naming the old lib are neither rewritten nor refused.** The
+anchor's architecture tests assert things *about* the codebase —
+`#{"cfp-scheduler-killer.store" …}` — and other strings are data paths like
+`"data/store/events.jsonl"`. Rewriting them would silently edit test
+expectations; refusing for them would block a migration over something that is
+not a code reference. The receipt carries `string_mentions`, a count, so the
+bucket is visibly non-zero and an operator can go look.
+
+**The `binding` case is the one that broke the real anchor.** An earlier draft
+classified `binding` with `let`, so `(binding [store/*clock* sim-birth] …)` at
+`replay.clj:128` had its left-hand side skipped as if it were a local. The
+migration rewrote every ordinary site and the require, then the load failed with
+`Unable to resolve var: store/*clock* in this context` — the alias was gone and
+the reference was not. `with-redefs` has the same shape and appears in dozens of
+the anchor's tests.
+
+**Auto-resolved keywords refuse, and this is a deliberate scope decision.**
+`::store/k` reads as `:cfp-scheduler-killer.store/k`: the alias is resolved at
+read time exactly as it is for a symbol, so leaving it breaks the read once the
+alias is retired. But rewriting it *changes the keyword's value*, and a
+keyword's namespace is part of its identity — it may be persisted in a database,
+dispatched on by a multimethod, or compared against a literal written elsewhere
+in a form this verb never sees. Neither outcome is bookkeeping, so the verb
+refuses with reason `auto-resolved-keyword`, names the file and the exact form,
+and hands back a `next_call` that excludes that file. The alternative — a silent
+change to a data value — is precisely the failure class this repository treats as
+worse than an error, because it terminates investigation. (The anchor repo
+contains zero `::store/` occurrences, so this costs nothing there.)
 
 **Alias choice — and why the collision set is exactly the `ns` form.** The
 chosen alias is the first `alias_policy` entry that collides with nothing in

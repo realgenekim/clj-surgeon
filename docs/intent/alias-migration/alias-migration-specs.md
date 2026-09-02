@@ -30,7 +30,7 @@ requirement.
 
 - [x] **MCP-OP-ALIAS-009**: When every use of `from.lib` in a file is a migrated site, clj-surgeon shall replace that file's `from.lib` libspec with `[to.lib :as <alias>]`; otherwise it shall add the new libspec alongside and leave the old require in place.
 - [x] **MCP-OP-ALIAS-010**: When clj-surgeon rewrites a site, it shall write exactly `<alias>/<to.var>` and shall leave every other byte of the containing form unchanged, including comments, commas, indentation, and metadata.
-- [x] **MCP-OP-ALIAS-011**: When clj-surgeon rewrites a file, it shall leave untouched a local binding of the same name, a string literal, a docstring, a comment, a metadata value, an `#_` discard, and every reader-conditional branch other than the file's own platform branch and `:default`.
+- [x] **MCP-OP-ALIAS-011**: When clj-surgeon rewrites a file, it shall leave untouched a local binding of the same name, a string literal, a docstring, a comment, an `#_` discard, and every reader-conditional branch other than the file's own platform branch and `:default`.
 
 # #Typed Refusals
 
@@ -63,3 +63,14 @@ requirement.
 
 - [x] **MCP-OP-ALIAS-027**: When `alias_migration` is invoked through the MCP server for a routed `workspace_root`, clj-surgeon shall derive that workspace's receipt directory and resolve its lazy verification-profile accessors exactly as the direct dispatch does, so a request addressed to a workspace other than the server's own project directory neither fails nor silently adopts the server's configuration.
 - [x] **MCP-OP-ALIAS-028**: Verification shall be opt-in: `alias_migration` shall run a transaction profile only when the request names one in `verify`, shall report `not-requested` otherwise, and shall refuse before writing when the named profile is not configured for that workspace.
+
+
+# #Every Position a Qualified Symbol Can Occupy
+
+- [x] **MCP-OP-ALIAS-029**: When clj-surgeon discovers sites, it shall treat a Var reference written as `#'alias/x` or `(var alias/x)` as a site, including names carrying earmuffs such as `alias/*clock*`.
+- [x] **MCP-OP-ALIAS-030**: When a binding vector belongs to a form that rebinds Vars — `binding`, `with-redefs`, `with-bindings` — clj-surgeon shall treat every left-hand side as a reference and a migration site, and shall introduce no local from it; a `let`-family binding vector's left-hand sides shall remain binding forms that are never sites.
+- [x] **MCP-OP-ALIAS-031**: When a qualified reference appears inside a syntax quote, clj-surgeon shall migrate it, because the reader resolves the alias; when one appears inside a plain quote, clj-surgeon shall refuse with `alias-migration-indirect-reference` and reason `quoted-reference`.
+- [x] **MCP-OP-ALIAS-032**: If an auto-resolved keyword `::alias/k` reaches the migrating alias, then clj-surgeon shall refuse with `alias-migration-indirect-reference` and reason `auto-resolved-keyword`, because rewriting changes the keyword's value while leaving it breaks the read; a single-colon `:alias/k` shall never be treated as a site.
+- [x] **MCP-OP-ALIAS-033**: When a qualified reference appears inside a metadata map, clj-surgeon shall migrate it, because metadata values are evaluated code; a string inside that map shall remain a string.
+- [x] **MCP-OP-ALIAS-034**: When a lib-only migration completes, its receipt shall carry the count of files naming the old lib as a string literal, which the verb does not rewrite because such strings are assertions about the codebase or data rather than code references.
+- [x] **MCP-OP-ALIAS-035**: When a lib-only migration runs, clj-surgeon shall treat a quoted fully-qualified symbol `'from.lib/x` as a site and rewrite it to `'to.lib/x`, including in a file that never requires the lib, because retiring the namespace otherwise breaks that reference lazily at call time with no compile error; a quoted alias-qualified symbol shall remain a typed refusal.

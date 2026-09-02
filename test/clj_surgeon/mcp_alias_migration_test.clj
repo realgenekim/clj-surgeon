@@ -128,6 +128,9 @@
           (is (= {:status "not-requested"} (:kondo_delta result))
               "verification is opt-in, exactly as it is for the other write tools")
           (is (= {:status "not-requested"} (:focused_test result)))
+;; @spec MCP-OP-ALIAS-034
+          (is (= 0 (:string_mentions result))
+              "the synthetic corpus names the old lib in no string literal")
           (is (string? (:details_path result)))
           (is (number? (:elapsed_ms result))))
 
@@ -465,7 +468,7 @@
            :to {:lib fixture/lib-to-lib :var nil
                 :alias_policy fixture/lib-alias-policy}
            :scope {:paths ["src/**" "test/**"]}
-           :expect {:files 13}}
+           :expect {:files 14}}
           overrides)))
 
 (defn- execute-lib!
@@ -483,12 +486,12 @@
   (let [workspace (workspace!)]
     (try
       (let [result (execute-lib! workspace)]
-        (testing "one O(1) receipt covers thirteen namespaces and the rename"
+        (testing "one O(1) receipt covers fourteen namespaces and the rename"
           (is (:ok result) (pr-str result))
-          (is (= 13 (:files result)))
-          (is (= 35 (:sites result)))
+          (is (= 14 (:files result)))
+          (is (= 43 (:sites result)))
           (is (= 3 (:refer_sites result)) "t06's three bare referred uses")
-          (is (= {"event-store" 12 "estore" 1} (:alias_histogram result)))
+          (is (= {"event-store" 13 "estore" 1} (:alias_histogram result)))
           (is (= 1 (:collisions_resolved result)))
           (is (= {:from "acid.fanout.store"
                   :to "acid.fanout.event-store"
@@ -594,7 +597,7 @@
             (is (str/includes? t07 "[acid.fanout.store-pg :as store-pg]"))
             (is (str/includes? t07 "(store-pg/write! id)"))))
         (testing "the siblings are not counted as migrated files"
-          (is (= 13 (:files result)))))
+          (is (= 14 (:files result)))))
       (finally
         (delete-tree! workspace)))))
 
@@ -667,7 +670,7 @@
                                        :alias_policy fixture/lib-alias-policy
                                        :refer_policy "alias-qualify"}})]
         (is (:ok result) (pr-str result))
-        (is (= 38 (:sites result)) "the three bare uses become alias-qualified sites")
+        (is (= 46 (:sites result)) "the three bare uses become alias-qualified sites")
         (is (= 3 (:refer_sites result)))
         (let [t06 (slurp (io/file workspace "src/acid/fanout/t06.clj"))]
           (is (str/includes? t06 "[acid.fanout.event-store :as event-store]"))

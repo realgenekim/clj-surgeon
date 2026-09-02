@@ -421,3 +421,217 @@
              (alias-of (str "(ns store2\n  (:require\n"
                             "   [acid.fanout.store :as store]))\n\n"
                             "(defn one [id] (store/find-event id))\n")))))))
+
+;; ---------------------------------------------------------------------------
+;; every position a qualified symbol can occupy
+;;
+;; Reduced from the real anchor: curtaincall-cfp at d9afe8e9,
+;; src/cfp_scheduler_killer/replay.clj:119-128 and sinks.clj:693.
+
+(defn- lib-request
+  [overrides]
+  (merge {:workspace-root "/workspace"
+          :from {:lib fixture/from-lib :var nil}
+          :to {:lib fixture/to-lib :var nil
+               :alias-policy ["store2"] :refer-policy "preserve-refer"}
+          :scope {:paths ["src/**"]}
+          :expect {:files 1}}
+         overrides))
+
+(defn- migrate-one
+  [body]
+  (let [source (str "(ns demo\n  (:require\n   [acid.fanout.store :as store]))\n\n"
+                    body)
+        plan (alias-migration/plan (lib-request {}) [{:file "src/demo.clj"
+                                                      :source source}])]
+    (if-not (:ok plan)
+      plan
+      (assoc plan :migrated (apply-edits source (:edits (first (:files plan))))
+                  :entry (first (:files plan))))))
+
+;; @spec MCP-OP-ALIAS-029
+(deftest a-var-quoted-reference-is-migrated
+  (testing "the #' reader form, which rewrite-clj represents as a var node"
+    (let [result (migrate-one
+                   "(def installed (alter-var-root #'store/*default-sinks-fn* identity))\n")]
+      (is (:ok result) (pr-str result))
+      (is (= 1 (:sites (:entry result))))
+      (is (str/includes? (:migrated result) "#'store2/*default-sinks-fn*"))))
+  (testing "the (var ...) special form"
+    (let [result (migrate-one "(def clock (var store/*clock*))\n")]
+      (is (:ok result))
+      (is (str/includes? (:migrated result) "(var store2/*clock*)"))))
+  (testing "earmuffed names carry through both spellings"
+    (let [result (migrate-one
+                   "(defn f [] [#'store/*clock* store/*clock* (var store/*clock*)])\n")]
+      (is (= 3 (:sites (:entry result))))
+      (is (not (str/includes? (:migrated result) "store/*clock*"))))))
+
+;; @spec MCP-OP-ALIAS-030
+(deftest a-var-binding-vectors-left-hand-side-is-a-site-not-a-local
+  ;; This is the exact shape that broke the anchor at replay.clj:128. `binding`
+  ;; rebinds Vars, so its left-hand side is a reference through the alias map,
+  ;; not a local binding form.
+  (testing "binding, reduced from replay.clj:128"
+    (let [result (migrate-one
+                   (str "(defn replay!\n"
+                        "  \"Born ON the simulated timeline: creation facts are stamped\n"
+                        "   (via store/*clock*) an hour before the CFP opens.\"\n"
+                        "  [sim-birth]\n"
+                        "  (binding [store/*clock* sim-birth]\n"
+                        "    (store/other-var sim-birth)))\n"))]
+      (is (:ok result) (pr-str result))
+      (is (= 2 (:sites (:entry result))))
+      (is (str/includes? (:migrated result) "(binding [store2/*clock* sim-birth]"))
+      (is (str/includes? (:migrated result) "(store2/other-var sim-birth)"))
+      (testing "the docstring one line above keeps its bytes"
+        (is (str/includes? (:migrated result)
+                           "(via store/*clock*) an hour before the CFP opens.")))))
+  (testing "with-redefs, the same shape, hundreds of times in the anchor's tests"
+    (let [result (migrate-one
+                   "(defn t [] (with-redefs [store/snapshot (constantly 1)] (store/go)))\n")]
+      (is (= 2 (:sites (:entry result))))
+      (is (str/includes? (:migrated result)
+                         "(with-redefs [store2/snapshot (constantly 1)]"))))
+  (testing "a let vector's left-hand side is still a local and still untouched"
+    (let [result (migrate-one
+                   "(defn f [x] (let [store2 1 y (store/go x)] [store2 y]))\n")]
+      (is (= 1 (:sites (:entry result))))
+      (is (str/includes? (:migrated result) "(let [store2 1 y (store2/go x)]")))))
+
+;; @spec MCP-OP-ALIAS-031
+(deftest a-syntax-quoted-reference-is-migrated-and-a-plain-quote-refuses
+  (testing "the reader resolves an alias inside a syntax quote, so it migrates"
+    (let [result (migrate-one
+                   (str "(defmacro as-of [selection & body]\n"
+                        "  `(binding [store/*as-of-state* ~selection]\n"
+                        "     (store/run ~@body)))\n"))]
+      (is (:ok result) (pr-str result))
+      (is (= 2 (:sites (:entry result))))
+      (is (str/includes? (:migrated result) "(binding [store2/*as-of-state* ~selection]"))
+      (is (str/includes? (:migrated result) "(store2/run ~@body)"))))
+  (testing "a plain quote is a literal symbol nothing resolves, so it refuses"
+    (let [result (migrate-one "(defn f [] ['store/go (store/go)])\n")]
+      (is (false? (:ok result)))
+      (is (= "alias-migration-indirect-reference" (:error_type result)))
+      (is (= "quoted-reference" (:reason result))))))
+
+;; @spec MCP-OP-ALIAS-032
+(deftest a-namespaced-keyword-through-the-alias-is-refused-typed
+  ;; Rewriting ::store/k changes the KEYWORD'S VALUE — a keyword's namespace is
+  ;; part of its identity and may be persisted, dispatched on, or compared
+  ;; elsewhere. Leaving it breaks the read once the alias is gone. Neither is
+  ;; bookkeeping, so the verb refuses rather than guessing.
+  (testing "an auto-resolved keyword refuses and names the form"
+    (let [result (migrate-one "(defn f [] [::store/k (store/go)])\n")]
+      (is (false? (:ok result)))
+      (is (= "alias-migration-indirect-reference" (:error_type result)))
+      (is (= "auto-resolved-keyword" (:reason result)))
+      (is (= "::store/k" (:form result)))
+      (is (= "src/demo.clj" (:file result)))
+      (is (= ["src/demo.clj"] (get-in result [:next_call "scope" "exclude"])))))
+  (testing "a single-colon keyword is not alias-resolved and never moves"
+    (let [result (migrate-one "(defn f [] [:store/k (store/go)])\n")]
+      (is (:ok result) (pr-str result))
+      (is (= 1 (:sites (:entry result))))
+      (is (str/includes? (:migrated result) ":store/k"))
+      (is (str/includes? (:migrated result) "(store2/go)"))))
+  (testing "a keyword through an UNRELATED alias is untouched"
+    (let [result (migrate-one "(defn f [] [::other/k (store/go)])\n")]
+      (is (:ok result))
+      (is (str/includes? (:migrated result) "::other/k")))))
+
+;; @spec MCP-OP-ALIAS-033
+(deftest a-qualified-symbol-inside-a-metadata-value-is-migrated
+  (let [result (migrate-one
+                 (str "(def ^{:validator store/valid? :doc \"see store/valid?\"} guarded 1)\n"))]
+    (is (:ok result) (pr-str result))
+    (is (= 1 (:sites (:entry result))))
+    (is (str/includes? (:migrated result) ":validator store2/valid?")
+        "metadata values are evaluated code")
+    (is (str/includes? (:migrated result) ":doc \"see store/valid?\"")
+        "a string inside metadata is still a string")))
+
+;; @spec MCP-OP-ALIAS-030
+(deftest a-qualified-symbol-in-binding-position-is-migrated
+  ;; Real bytes: curtaincall-cfp d9afe8e9 src/cfp_scheduler_killer/replay.clj:128
+  ;; and src/cli/judge_sandbox.clj:118. The symbol is NAMED as a Var, never
+  ;; invoked, so a discovery pass that only looks at operator position sees
+  ;; nothing and the alias is retired out from under it.
+  (let [result (migrate-one
+                 (str "(defn replay! [sim-birth at offset]\n"
+                      "  (binding [store/*clock* sim-birth]\n"
+                      "    (store/other-var sim-birth))\n"
+                      "  (binding [store/*clock* (.plusSeconds at (* offset 24 60 60))]\n"
+                      "    :done))\n"))]
+    (is (:ok result) (pr-str result))
+    (is (= 3 (:sites (:entry result))) "two binding names plus one ordinary call")
+    (is (= 2 (count (re-seq (re-pattern (java.util.regex.Pattern/quote
+                                          "binding [store2/*clock*"))
+                            (:migrated result))))
+        "both binding-vector names moved")
+    (is (not (str/includes? (:migrated result) "store/*clock*")))))
+
+;; @spec MCP-OP-ALIAS-030
+(deftest with-redefs-over-several-vars-migrates-every-name
+  ;; Real bytes: curtaincall-cfp d9afe8e9
+  ;; test/cfp_scheduler_killer/db_correct_test.clj:599-610 — seven Var names in
+  ;; one binding vector, several with values that reference the lib again.
+  (let [result (migrate-one
+                 (str "(defn t [state-atom appended]\n"
+                      "  (with-redefs [store/postgres? (constantly true)\n"
+                      "                store/refresh-if-changed! (constantly nil)\n"
+                      "                store/snapshot #(deref state-atom)\n"
+                      "                store/person-by-id #(get-in @state-atom [:people %])\n"
+                      "                store/append-all!\n"
+                      "                (fn [facts]\n"
+                      "                  (let [canonical (mapv #(store/canonicalize %) facts)]\n"
+                      "                    (swap! state-atom #(reduce store/fold-one % canonical))\n"
+                      "                    canonical))\n"
+                      "                store/load! #(deref state-atom)]\n"
+                      "    (store/other-var 1)))\n"))]
+    (is (:ok result) (pr-str result))
+    (is (= 9 (:sites (:entry result)))
+        "six rebound Var names, two references inside the values, one call")
+    (doseq [name ["postgres?" "refresh-if-changed!" "snapshot" "person-by-id"
+                  "append-all!" "load!" "canonicalize" "fold-one" "other-var"]]
+      (is (str/includes? (:migrated result) (str "store2/" name)) name))
+    (is (not (re-find #"[^2]store/" (:migrated result)))
+        "no name is left behind under the retired alias")))
+
+;; @spec MCP-OP-ALIAS-035
+(deftest a-quoted-fully-qualified-symbol-in-data-position-is-migrated
+  ;; Real bytes: curtaincall-cfp d9afe8e9
+  ;; src/cfp_scheduler_killer/sched_import.clj:127. That namespace deliberately
+  ;; does NOT require the lib — it resolves it at runtime — so it fails lazily
+  ;; at call time with no compile error: the tree loads and breaks in
+  ;; production. A fully qualified name is unambiguous, so it migrates.
+  (testing "in a file that never requires the lib"
+    (let [source (str "(ns demo\n  (:require\n   [clojure.string :as str]))\n\n"
+                      "(defn import! [slug]\n"
+                      "  (let [state @(var-get (requiring-resolve"
+                      " 'acid.fanout.store/state))]\n"
+                      "    [slug (str/trim (str state))]))\n")
+          plan (alias-migration/plan (lib-request {}) [{:file "src/demo.clj"
+                                                        :source source}])
+          entry (first (:files plan))
+          migrated (apply-edits source (:edits entry))]
+      (is (:ok plan) (pr-str plan))
+      (is (= 1 (:sites entry)))
+      (is (= :qualified-only (:require-mode entry))
+          "no require to rewrite; only the fully qualified spelling moves")
+      (is (str/includes? migrated "'acid.fanout.store2/state"))
+      (is (str/includes? migrated "[clojure.string :as str]")
+          "the file's own requires are untouched")))
+  (testing "an ALIAS-qualified quote stays a refusal: nothing resolves it"
+    (let [result (migrate-one "(defn f [] (requiring-resolve 'store/state))\n")]
+      (is (false? (:ok result)))
+      (is (= "quoted-reference" (:reason result)))))
+  (testing "a prefix-sharing sibling's fully qualified name is untouched"
+    (let [source (str "(ns demo)\n\n"
+                      "(defn f [] (requiring-resolve 'acid.fanout.store-pg/write!))\n")
+          plan (alias-migration/plan (lib-request {}) [{:file "src/demo.clj"
+                                                        :source source}])]
+      (is (false? (:ok plan)))
+      (is (= "alias-migration-empty-scope" (:error_type plan))
+          "store-pg is a different namespace, so nothing in this file is a site"))))

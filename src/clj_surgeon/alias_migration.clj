@@ -54,10 +54,29 @@
 ;; ---------------------------------------------------------------------------
 ;; local bindings
 
-(def binding-vector-heads
+(def local-binding-vector-heads
+  "Heads whose binding vector introduces LOCALS.
+
+  Their left-hand sides are binding forms, not references: they are never
+  migration sites, and they shadow a bare referred name inside the body."
   #{"let" "let*" "if-let" "when-let" "if-some" "when-some" "loop" "loop*"
-    "binding" "with-open" "with-local-vars" "with-redefs" "doseq" "for"
-    "dotimes" "with-bindings"})
+    "with-open" "with-local-vars" "doseq" "for" "dotimes"})
+
+
+;; @spec MCP-OP-ALIAS-030
+(def var-binding-vector-heads
+  "Heads whose binding vector names VARS, not locals.
+
+  `(binding [store/*clock* t] ...)` and `(with-redefs [store/snapshot f] ...)`
+  rebind Vars: every left-hand side is a REFERENCE, normally a qualified symbol
+  resolved through the namespace's alias map, so it is a migration site and it
+  introduces no local. Treating these like `let` is what left
+  `store/*clock*` behind after the alias was gone."
+  #{"binding" "with-redefs" "with-bindings"})
+
+(def binding-vector-heads
+  "Every head that takes a binding vector, whatever it binds."
+  (into local-binding-vector-heads var-binding-vector-heads))
 
 (def function-heads
   #{"fn" "fn*" "defn" "defn-" "defmacro" "defmethod" "definline"})
@@ -136,7 +155,7 @@
         (letfn-binding-names vector-part)
         #{})
 
-      (contains? binding-vector-heads head)
+      (contains? local-binding-vector-heads head)
       (if-let [vector-part (first (filter vector-node? (rest parts)))]
         (pair-binding-names vector-part)
         #{})
@@ -276,6 +295,22 @@
 
 
 ;; @spec MCP-OP-ALIAS-025
+
+;; @spec MCP-OP-ALIAS-032
+(defn- auto-resolved-keyword-parts
+  "For a token spelled ::qualifier/name, return [qualifier name].
+
+  `::store/k` is resolved through the namespace's alias map by the reader
+  exactly as `store/x` is, so it moves with the alias. A single-colon
+  `:store/k` is a plain keyword that nothing resolves and never moves."
+  [node]
+  (when-let [text (token-string node)]
+    (when (str/starts-with? text "::")
+      (let [body (subs text 2)
+            separator (str/index-of body "/")]
+        (when separator
+          [(subs body 0 separator) (subs body (inc separator))])))))
+
 (defn- token-facts
   "Classify one token against the migration.
 
@@ -285,9 +320,18 @@
   :rewrite    the replacement spelling, or nil to leave it alone
   :refer-hit? the token is a live bare occurrence of a referred name
   :other-use? the token names the old lib but is not part of this migration"
-  [node {:keys [mode qualifiers from-var to-var alias rewrite-bare count-bare]}
+  [node {:keys [mode qualifiers from-var to-var alias rewrite-bare count-bare]
+         :as context}
    live-bare]
-  (let [value (token-symbol node)]
+  (if-let [[keyword-qualifier _keyword-name] (auto-resolved-keyword-parts node)]
+    (if (contains? qualifiers keyword-qualifier)
+      ;; Rewriting would change the KEYWORD'S VALUE, because a keyword's
+      ;; namespace is part of its identity and may be persisted, dispatched on,
+      ;; or compared elsewhere; leaving it breaks the read once the alias is
+      ;; gone. Neither is bookkeeping, so the verb refuses and says so.
+      {:indirect {:reason :auto-resolved-keyword}}
+      {})
+    (let [value (token-symbol node)]
     (if-not value
       {}
       (let [qualifier (namespace value)
@@ -295,11 +339,14 @@
         (if qualifier
           (if-not (contains? qualifiers qualifier)
             {}
-            (if (= :lib mode)
-              {:rewrite (str alias "/" var-name)}
-              (if (= var-name from-var)
-                {:rewrite (str alias "/" to-var)}
-                {:other-use? true})))
+            (let [fully-qualified? (= qualifier (:from-lib context))]
+              (if (= :lib mode)
+                {:rewrite (str alias "/" var-name)
+                 :fully-qualified? fully-qualified?}
+                (if (= var-name from-var)
+                  {:rewrite (str alias "/" to-var)
+                   :fully-qualified? fully-qualified?}
+                  {:other-use? true}))))
           (let [live? (contains? live-bare var-name)]
             (cond-> {}
               (and live? (contains? count-bare var-name))
@@ -308,12 +355,17 @@
               (and live? (contains? rewrite-bare var-name))
               (assoc :rewrite (if (= :lib mode)
                                 (str alias "/" var-name)
-                                (str alias "/" to-var))))))))))
+                                (str alias "/" to-var)))))))))))
 
-(defn- quoted-site?
+;; @spec MCP-OP-ALIAS-031
+(defn- quoted-facts
+  "Site facts for every token inside a quoted form."
   [node context live-bare]
-  (some #(:rewrite (token-facts % context live-bare))
-        (filter #(= :token (n/tag %)) (tree-seq n/inner? n/children node))))
+  (->> (tree-seq n/inner? n/children node)
+       (filter #(= :token (n/tag %)))
+       (keep #(let [facts (token-facts % context live-bare)]
+                (when (:rewrite facts) facts)))
+       vec))
 
 (def ^:private empty-walk
   {:nodes [] :sites 0 :refer-sites 0 :indirect [] :other-use false
@@ -343,43 +395,54 @@
   {:node node :sites 0 :refer-sites 0 :indirect [] :other-use false
    :unselected-sites false})
 
+;; @spec MCP-OP-ALIAS-029
+;; @spec MCP-OP-ALIAS-033
 (defn- rewrite-forms
-  "Walk one node and return its rewritten node plus the migration's tallies."
+  "Walk one node and return its rewritten node plus the migration's tallies.
+
+  Every node type a qualified symbol can sit in is walked: operator and
+  argument position, binding vectors, map keys and values, vector elements,
+  metadata values, `:var` nodes (`#'x`), and `(var x)` lists."
   [node {:keys [platform] :as context} live-bare]
   (let [tag (n/tag node)]
     (cond
       ;; a reader discard is data the contract keeps exactly as it is
       (= :uneval tag) (leaf node)
 
-      (contains? #{:quote :syntax-quote} tag)
-      (if (quoted-site? node context live-bare)
-        (assoc (leaf node)
-               :indirect [{:reason :quoted-reference :form (n/string node)}])
-        (leaf node))
+      ;; `alias/x inside a syntax quote IS resolved through the alias map by
+      ;; the reader, so it is ordinary code and must migrate with everything
+      ;; else. A plain 'alias/x is a literal symbol that nothing resolves, so
+      ;; whether it is a reference is a judgment and the verb refuses.
+      (= :quote tag)
+      (let [facts (quoted-facts node context live-bare)]
+        (cond
+          (empty? facts) (leaf node)
+
+          ;; 'fully.qualified.lib/x names exactly one namespace and nothing
+          ;; resolves it away, so the rewrite is mechanical — this is how a
+          ;; runtime (requiring-resolve 'old.lib/v) survives a lib rename
+          (every? :fully-qualified? facts)
+          (let [walked (reduce (fn [state child]
+                                 (accumulate state
+                                             (rewrite-forms child context live-bare)))
+                               empty-walk
+                               (children node))]
+            (walk-result node walked))
+
+          :else
+          (assoc (leaf node)
+                 :indirect [{:reason :quoted-reference :form (n/string node)}])))
 
       (= :token tag)
-      (let [{:keys [rewrite refer-hit? other-use?]}
+      (let [{:keys [rewrite refer-hit? other-use? indirect]}
             (token-facts node context live-bare)]
         (cond-> (leaf node)
-          rewrite (assoc :node (n/token-node (symbol rewrite)) :sites 1)
+          rewrite (assoc :node (parser/parse-string rewrite) :sites 1)
           refer-hit? (assoc :refer-sites 1)
-          other-use? (assoc :other-use true)))
+          other-use? (assoc :other-use true)
+          indirect (assoc :indirect
+                          [(assoc indirect :form (n/string node))])))
 
-      (= :meta tag)
-      ;; children are [metadata whitespace target]; metadata stays byte-exact
-      (let [kids (children node)
-            metadata-index (first (keep-indexed
-                                    (fn [index child]
-                                      (when (meaningful? child) index))
-                                    kids))]
-        (walk-result
-          node
-          (reduce (fn [state [index child]]
-                    (if (<= index metadata-index)
-                      (update state :nodes conj child)
-                      (accumulate state (rewrite-forms child context live-bare))))
-                  empty-walk
-                  (map-indexed vector kids))))
 
       (reader-conditional-node? node)
       (let [kids (children node)
@@ -414,7 +477,8 @@
       (let [head (head-name node)
             introduced (form-introduced-names node)
             kids (children node)
-            binding-vector (when (contains? binding-vector-heads head)
+            ;; a var-binding vector is ordinary code on BOTH sides
+            binding-vector (when (contains? local-binding-vector-heads head)
                              (first (filter vector-node?
                                             (rest (meaningful-children node)))))
             letfn-vector (when (= "letfn" head)
@@ -713,6 +777,7 @@
 ;; @spec MCP-OP-ALIAS-013
 ;; @spec MCP-OP-ALIAS-021
 ;; @spec MCP-OP-ALIAS-024
+;; @spec MCP-OP-ALIAS-035
 (defn- file-plan
   "Plan one file, or return {:refusal r}, or nil when the file is out of scope."
   [request file source]
@@ -726,6 +791,48 @@
         root (parser/parse-string-all source)
         analysis (analyze-requires request file root)]
     (cond
+      ;; A file may never require the lib and still reference it fully
+      ;; qualified, e.g. (requiring-resolve 'old.lib/v) deliberately avoiding
+      ;; the compile-time dependency. Retiring the lib breaks it at RUNTIME,
+      ;; where no load check can see it.
+      (and (nil? analysis) lib-mode?)
+      (let [context {:mode :lib
+                     :from-lib from-lib
+                     :qualifiers #{from-lib}
+                     :alias to-lib
+                     :rewrite-bare #{}
+                     :count-bare #{}
+                     :platform (platform-keyword file)}
+            forms (top-level-forms root)
+            walked (mapv #(rewrite-forms % context #{}) forms)
+            indirect (vec (mapcat :indirect walked))
+            sites (reduce + 0 (map :sites walked))]
+        (cond
+          (seq indirect)
+          {:refusal (refusal :alias-migration-indirect-reference
+                             (str "An indirect reference to " from-lib " in " file
+                                  " cannot be closed mechanically")
+                             {:file file
+                              :reason (name (:reason (first indirect)))
+                              :form (:form (first indirect))}
+                             (excluding-call request file))}
+
+          (zero? sites) nil
+
+          :else
+          {:file file
+           :alias to-lib
+           :collided []
+           :sites sites
+           :refer-sites 0
+           :require-mode :qualified-only
+           :edits (vec (keep (fn [[form result]]
+                               (when (pos? (:sites result))
+                                 {:kind :form
+                                  :original (n/string form)
+                                  :replacement (n/string (:node result))}))
+                             (map vector forms walked)))}))
+
       (nil? analysis) nil
       (:refusal analysis) analysis
 
@@ -765,6 +872,7 @@
                     ;; new lib; alias-qualify rewrites them and drops the :refer
                     kept-refer (if (and lib-mode? preserve-refer?) referred #{})
                     context {:mode (if lib-mode? :lib :var)
+                             :from-lib from-lib
                              :qualifiers (into #{from-lib} (:aliases target))
                              :from-var from-var
                              :to-var to-var
@@ -847,6 +955,20 @@
                                (n/token-node (symbol to-lib))))
                  %)
               (children root))))))
+
+;; @spec MCP-OP-ALIAS-034
+(defn string-mentions
+  "Files whose source contains the old lib name as a STRING literal.
+
+  These are not code references — they are assertions about the codebase
+  (architecture tests), documentation paths, and data. The verb does not touch
+  them and does not refuse for them, but a silent zero would hide real work, so
+  the count travels in the receipt."
+  [from-lib sources]
+  (vec (sort (keep (fn [{:keys [file source]}]
+                     (when (str/includes? source (str "\"" from-lib "\""))
+                       file))
+                   sources))))
 
 ;; @spec MCP-OP-ALIAS-022
 ;; @spec MCP-OP-ALIAS-023
@@ -997,5 +1119,10 @@
                                   :alias-histogram (into (sorted-map)
                                                          (frequencies (map :alias files)))
                                   :collisions-resolved
-                                  (reduce + 0 (map #(count (:collided %)) files))}}
+                                  (reduce + 0 (map #(count (:collided %)) files))
+                                  :string-mentions
+                                  (if (nil? from-var)
+                                    (string-mentions (get-in request [:from :lib])
+                                                     sources)
+                                    [])}}
                   renamed (assoc :lib-rename renamed))))))))))

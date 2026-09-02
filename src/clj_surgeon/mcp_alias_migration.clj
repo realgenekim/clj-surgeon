@@ -342,6 +342,7 @@
        :refer_sites (:refer-sites totals)
        :alias_histogram (into {} (:alias-histogram totals))
        :collisions_resolved (:collisions-resolved totals)
+       :string_mentions (count (:string-mentions totals))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
        :next_action "none"}

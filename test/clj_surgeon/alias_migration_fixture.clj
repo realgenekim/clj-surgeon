@@ -383,7 +383,66 @@
          "  [id]\n"
          "  [(store2/fetch-event id) (store2/fetch-event id)])\n"
          "\n"
-         "(def preloaded (store2/fetch-event :boot))\n")}])
+         "(def preloaded (store2/fetch-event :boot))\n")}
+
+   ;; 13. the shapes the real anchor contains, reduced from
+   ;;     curtaincall-cfp src/cfp_scheduler_killer/replay.clj:119-128 and
+   ;;     src/cfp_scheduler_killer/sinks.clj:693. A `binding` vector's
+   ;;     left-hand side is a VAR reference, not a local; the docstring one
+   ;;     line above it mentions the same symbol and must not move.
+   {:file "src/acid/fanout/t13.clj"
+    :ns "acid.fanout.t13"
+    :alias "store2"
+    :sites 0
+    :lib-only? true
+    :requires-pre ["[acid.fanout.store :as store]"]
+    :requires-post ["[acid.fanout.store :as store]"]
+    :protected ["(via store/*clock*) an hour before the CFP opens"
+                ":store/plain-keyword"]
+    :body-pre
+    (str "(defn replay!\n"
+         "  \"Born ON the simulated timeline: creation facts are stamped\n"
+         "   (via store/*clock*) an hour before the CFP opens.\"\n"
+         "  [sim-birth]\n"
+         "  (binding [store/*clock* sim-birth]\n"
+         "    (store/other-var sim-birth)))\n"
+         "\n"
+         "(def installed\n"
+         "  (alter-var-root #'store/*default-sinks-fn* identity))\n"
+         "\n"
+         "(def ^{:validator store/valid?} guarded 1)\n"
+         "\n"
+         "(defn redefs [state]\n"
+         "  (with-redefs [store/other-var (constantly true)\n"
+         "                store/valid? #(deref state)]\n"
+         "    (store/other-var 1)))\n"
+         "\n"
+         "(defn resolved []\n"
+         "  @(var-get (requiring-resolve 'acid.fanout.store/*clock*)))\n"
+         "\n"
+         "(defn tagged [] [:store/plain-keyword])\n")
+    :body-post
+    (str "(defn replay!\n"
+         "  \"Born ON the simulated timeline: creation facts are stamped\n"
+         "   (via store/*clock*) an hour before the CFP opens.\"\n"
+         "  [sim-birth]\n"
+         "  (binding [store/*clock* sim-birth]\n"
+         "    (store/other-var sim-birth)))\n"
+         "\n"
+         "(def installed\n"
+         "  (alter-var-root #'store/*default-sinks-fn* identity))\n"
+         "\n"
+         "(def ^{:validator store/valid?} guarded 1)\n"
+         "\n"
+         "(defn redefs [state]\n"
+         "  (with-redefs [store/other-var (constantly true)\n"
+         "                store/valid? #(deref state)]\n"
+         "    (store/other-var 1)))\n"
+         "\n"
+         "(defn resolved []\n"
+         "  @(var-get (requiring-resolve 'acid.fanout.store/*clock*)))\n"
+         "\n"
+         "(defn tagged [] [:store/plain-keyword])\n")}])
 
 (def bystander-specs
   [{:file "src/acid/fanout/n01.clj"
@@ -413,7 +472,12 @@
 
 (def support-files
   {"src/acid/fanout/store.clj"
-   "(ns acid.fanout.store)\n\n(defn find-event [id] {:old id})\n\n(defn other-var [id] {:other-old id})\n"
+   (str "(ns acid.fanout.store)\n\n"
+        "(def ^:dynamic *clock* nil)\n\n"
+        "(def ^:dynamic *default-sinks-fn* nil)\n\n"
+        "(defn valid? [_] true)\n\n"
+        "(defn find-event [id] {:old id})\n\n"
+        "(defn other-var [id] {:other-old id})\n")
    "src/acid/fanout/store2.clj"
    "(ns acid.fanout.store2)\n\n(defn fetch-event [id] {:new id})\n"
    "src/acid/fanout/secondary.clj"
@@ -427,6 +491,11 @@
    "(ns acid.fanout.store-checkpoint)\n\n(defn mark [id] {:checkpoint id})\n"
    "src/acid/fanout/util.clj"
    "(ns acid.fanout.util)\n\n(defn tag [label value] [label value])\n\n(defn js-lookup [id] {:js id})\n"})
+
+(def var-mode-specs
+  "Targets of the VAR migration. t13 exercises lib-only shapes and never
+  mentions the migrated var, so it is out of scope for that mode."
+  (vec (remove :lib-only? file-specs)))
 
 (def test-file-specs
   [;; the ns NAME shares the old lib's prefix; a naive rename makes
@@ -493,17 +562,17 @@
      :manifest
      {:from {:lib from-lib :var from-var}
       :to {:lib to-lib :var to-var :alias-policy alias-policy}
-      :targets (into (sorted-set) (map :file file-specs))
+      :targets (into (sorted-set) (map :file var-mode-specs))
       :files (into (sorted-map)
                    (map (fn [spec]
                           [(:file spec)
                            {:alias (:alias spec)
                             :sites (:sites spec)
                             :collided (vec (:collided spec))}]))
-                   file-specs)
-      :alias-histogram (into (sorted-map) (frequencies (map :alias file-specs)))
-      :sites (reduce + 0 (map :sites file-specs))
-      :collisions-resolved (reduce + 0 (map #(count (:collided %)) file-specs))
+                   var-mode-specs)
+      :alias-histogram (into (sorted-map) (frequencies (map :alias var-mode-specs)))
+      :sites (reduce + 0 (map :sites var-mode-specs))
+      :collisions-resolved (reduce + 0 (map #(count (:collided %)) var-mode-specs))
       :lib {:from {:lib from-lib :var nil}
             :to {:lib lib-to-lib :var nil :alias-policy lib-alias-policy}
             :targets lib-targets
