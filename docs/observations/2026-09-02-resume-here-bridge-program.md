@@ -474,3 +474,14 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
 - Score as they land: sl1-<N>-score.txt (chain), rf2 readout, sl1-R.
 - All five branches in the mayor's queue; curtain-call fold-idempotence with Gene (inb-d603ce).
 
+
+## RESUME DELTA 2026-09-02T20:35Z
+
+- Slope sl1 DONE on walls (T flat 24–27 s at N=5..80 and C; N 55→127); scorer running the full
+  slope table from the twelve worktrees (`~/acid/receipts/sl1-score.md`; score files
+  `sl1-<N>-score.txt` written by my background rescore, `ALL-SCORED` marks the end).
+- sl1-R (anchor) RUNNING after the repo-MCP neutralisation; rf2 queued (chain re-armed after the
+  7888-comment preflight trip); z7c armed on GO-Z7C behind them. All on the cohort lock.
+- On each `<run> done`: scorer (rf2 readout per a40fc3e; sl1-R per rescore-FAN-R; z7c per z7b's shape
+  at n=6). Then: log, tell mayor, tech tree, and the wake-up brief for Gene.
+

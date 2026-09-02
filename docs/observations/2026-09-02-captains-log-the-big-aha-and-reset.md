@@ -2175,3 +2175,33 @@ predicts); N 55, 65, 97 s at 5, 10, 20, rising; N=20's native gate line printed 
 summary, which usually means the tree did not load. Acceptance per point from the chain's
 score files when the run completes.
 
+
+## 20:35Z — the slope, walls: the tool is flat from N=5 to N=80 and on the control; native grows with what it types
+
+| N | native wall | tool wall | T/N |
+|---|---|---|---|
+| 5 | 55 s | 25 s | 0.45 |
+| 10 | 65 s | 25 s | 0.38 |
+| 20 | 97 s | 26 s | 0.27 |
+| 40 | 111 s | 24 s | 0.22 |
+| 80 | 121 s | 27 s | 0.22 |
+| C (5 files × 48 sites) | **127 s** | 27 s | 0.21 |
+
+Pre-registered readings, on wall: native at N=80 is 2.2× its N=5 (falsifier "within 1.3×" not
+triggered); the ratio is monotone non-increasing on all five points and ≤ 0.35 at N=80 (flagship
+criterion on wall met); the tool's wall is the same within 3 s across a 16× fan-out. **The
+control is the decisive row:** native took 127 s on five files carrying 48 sites each, as long
+as on eighty files with a few sites apiece, while the tool stayed at 27 s. Native's cost grew
+with the volume it had to TYPE, not the files it had to read; the tool's cost grew with neither.
+That reframes the slope's axis from "unread files" to "edit volume", and the reframing still
+favours the tool, which computes what native types. Returns, tokens, acceptance per point and
+native's failure classes come from the scorer (the chain's own score step wrote nothing; the
+twelve worktrees are being rescored). Native already failed acceptance at N=5 on the reader
+discards.
+
+**Apparatus, two more:** the anchor and rf2 chains aborted on their own fail-closed check
+"the runner names port 7888", tripped by the installer's new comment explaining the 7888 hazard;
+the comment now says "the other seat's production port" and the chains relaunched (sl1-R running,
+rf2 queued, z7c behind it). The check was right to exist and right to fire; a grep for a literal
+is a grep for a literal.
+
