@@ -605,3 +605,18 @@ listed above, then follow the "on report" lines. Log every receipt with `date -u
   on store 96387535, characterization witness first, one Surgeon transaction, watcher on
   (Sol's ordered commits, log 961186b). No cohort running on Anvil; cohort lock free.
 
+
+## RESUME DELTA 2026-09-02T22:34Z
+
+- **Autonomy for the day** (Gene: "No word needed. Use best judgement." / "I'm busy all day today. Keep
+  going!" / "Or get sol opinion."). Running: session-4 step A builder aac78b909147d4a88 on
+  `~/src/curtaincall-cfp-lens` (bridge/settings-lens @ 96387535; characterization + lens, no call
+  sites); census builder ae28eeb3c06c1aeb1 on `~/src/clj-surgeon-census` (bridge/census-verb @ 8ac4332);
+  Sol plan opinion `scratchpad/fleet/sol-plan-s4-census-answer.md` (waiter bjuuwssgr).
+- **Step B (after A + Sol):** two arms: (1) me driving ONE `apply_clojure_changes` transaction over the
+  19 owners on the lens worktree via bridge 7888, Sonnet watcher per docs/tweezer-loop.md (marker
+  `.tweezer/session-4.closed`, six fields, 60-min cap, stopwatch), (2) Opus native arm on a second
+  worktree `~/src/curtaincall-cfp-lens-native` (branch bridge/settings-lens-native from the step-A
+  sha). Gate: characterization digest + `bin/kaocha unit` 0 failures. Push the correct tree; inbox for Gene.
+- Never git stash in any curtain-call worktree (parallel agents share the stash).
+
