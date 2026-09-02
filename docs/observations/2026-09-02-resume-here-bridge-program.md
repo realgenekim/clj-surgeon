@@ -250,3 +250,39 @@ builder on ~/src/clj-surgeon-46o branch bridge/format-form-scope (base close-los
 + checkout in ~/acid/surgeon-gate on ANVIL, rerun ~/acid/start-gate-7894.sh, verify healthz/ready.edn/attestation sha), touch
 ~/acid/GO-Z3 (chain-z3: z3 M "Z N F Z N F|F Z N F Z N", z4 L same). THEN score z3/z4 (admit columns; stale_onset on Z/F/N;
 acceptance), log, fleet round, brief, mayor. Monitor bdsyvspgr lists rt2 z1 z2 — restart with z3 z4 when launched.
+
+## RESUME BLOCK 2026-09-02T17:37Z (supersedes earlier blocks)
+
+**Goal.** Measure whether clj-surgeon helps agents build better code; make it brag-worthy; exploit
+homoiconicity. Gene is present (post-plane), ratified the reproduction program ("let's goooo!").
+
+**Running / in flight (agents are bridge subagents; ids in the session, resumable by name):**
+- gate fail-open fix on `bridge/admit-gate` (worktree ~/src/clj-surgeon): commit refuses on
+  anything but `complete`; `:verification-runner-failed`; git extended headers; real-bytes
+  fixtures; diagnose why z4/z5 had no test evidence. NOT pushed until suites green; then push
+  branch, write ~/acid/GATE-SHA on Anvil, run ~/acid/restart-7894-at.sh <sha>, touch ~/acid/GO-Z6.
+- z6/z7/z8 apparatus installer on Anvil: chain-z6.sh (armed on GO-Z6, preflight requires 7894
+  attested sha == GATE-SHA), R3-gate.md prompt, Surgeon-tree focused profile + report wrapper,
+  restart-7894-at.sh. Predictions in the big-aha log (d97fc5d).
+- rf1 scorer (~/acid/receipts/rf1-score.md) and rf1 ethnographer (rf1-ethno.md): rf1 done; walls
+  N 342/311, A 429/382, B 465/455; A-g2 mcp gate had an extra http-wire error; acceptance
+  rescore-R3 output in rf1-rescore.out. Then rf2 = R3 with the top-3 typed fixes from the ethnography.
+- 46o formatter branch `bridge/format-form-scope` (worktree ~/src/clj-surgeon-46o, uncommitted):
+  red team NO-GO fixed by builder (stream check, pin 0.29.0, guard mismatch refusals, typed
+  formatter-failed, wording); verification round by the red team running; my suites running.
+  On GO: commit on the branch, push, hand to mayor with the red-team receipts.
+- Monitor bwc61lrlv relays z3/z4/rf1 lines; a new monitor is needed for z6/z7/z8 once launched.
+
+**Decided today.** admit-gate 1ca44b4 WITHDRAWN from mayor review (fail-open commit on partial).
+close-losers 205e13a still in the mayor's queue. curtain-call `bridge/safe-refactor-1` pushed at
+7b220edf, merge is Gene's (inb-e12ff9). Surgeon defect inb-4a51e5 (extract! copies source ns
+docstring). Doctrine carve-out taken: a GATE's acceptance test is mandated wall ≤ native plus
+hazards caught; free choice remains the test for conveniences. Hazard-catching needs a structural
+detector (stale-onset predicate inside the gate), not a test profile.
+
+**Blocked on.** Mayor: review of close-losers; bead for inb-4a51e5. Gene: merge of curtain-call.
+
+**Next single action after compaction.** Check the six receipts above (task notifications or the
+Anvil files), then: if the gate fix is green → push, GATE-SHA, restart 7894, GO-Z6; if rf1
+ethnography is in → log it and dispatch rf2; if 46o verification is GO → commit, push, hand off.
+
