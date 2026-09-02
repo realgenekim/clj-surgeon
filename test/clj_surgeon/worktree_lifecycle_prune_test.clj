@@ -74,6 +74,12 @@
         {:ok false :error-type :unexpected-throw :class (class error)}))
     ::missing))
 
+(defn- rehash-plan [plan]
+  (let [canonical (public-var 'clj-surgeon.worktree-lifecycle/canonical-edn)
+        sha256 (public-var 'clj-surgeon.worktree-lifecycle/sha256)]
+    (assoc plan :plan-sha256
+           (sha256 (canonical (dissoc plan :plan-sha256))))))
+
 (defn- run-command! [dir & args]
   (let [builder (doto (ProcessBuilder. ^java.util.List (mapv str args))
                   (.directory (io/file dir))
@@ -171,6 +177,19 @@
     (is (= true
            (:ok (invoke 'clj-surgeon.worktree-lifecycle/validate-prune-plan
                         (:plan compiled)))))))
+
+(deftest rehashed-prune-plan-drift-still-refuses
+  ;; @spec WTL-PRUNE-005 WTL-PRUNE-010
+  (let [compiled (invoke 'clj-surgeon.worktree-lifecycle/compile-prune-plan
+                         prune-snapshot prune-request controller-identity
+                         "prune-rehashed-drift")
+        forged (-> (:plan compiled)
+                   (assoc-in [:target :path-state] :unknown)
+                   rehash-plan)]
+    (is (= :invalid-prune-target
+           (:error-type
+             (invoke 'clj-surgeon.worktree-lifecycle/validate-prune-plan
+                     forged))))))
 
 (deftest prune-receipt-never-claims-an-experiment-outcome
   ;; @spec WTL-PRUNE-007 WTL-PRUNE-008
