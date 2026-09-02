@@ -17,6 +17,88 @@ durable investment is not a growing catalog of encoded refactoring opinions. It
 is a small set of dependable primitives that give a smarter model inexpensive
 perception and precise action.
 
+## The battlefield (Gene, 2026-09-02; measured on 81 attested arm-runs, two blind judges)
+
+Grep plus a native patch is the competitor, and it is formidable for one reason: it costs the
+agent nothing it was not already paying. One call to locate, one call to write, and the agent
+trusts both without a second look. A structural tool that asks for one extra model return to
+use it starts nine seconds and a context bump behind, and the agent knows it: told the tool is
+available it layers it on top of its native loop at 2x wall; told it is optional it declines
+it three times in three; ordered to substitute it complies on reads, escapes on writes, and
+pays 2.2x. **The bar is therefore not "faster than grep". The bar is "removes a return grep
+would have cost."** There are four squares where code-as-data can do that and text cannot,
+and one square we withdraw from.
+
+### Squares we compete on
+
+1. **Verification after the agent's own patch (the gate; build first).** After every native
+   patch the agent spends two or three returns to believe it: a re-read, a diff, a focused
+   test. A gate that re-parses the patched file as forms, proves the untouched nodes
+   byte-identical, names the owner delta, refuses form-level hazards with an executable
+   next_call, and runs the focused suite returns one receipt worth those three returns, and it
+   catches the classes the acceptance suite passed (a duplicate top-level definition shadowed
+   by hoisting; a guard placed at the cheap top anchor instead of inside the branch). Taken on
+   the route the agent already uses, its value does not depend on the agent choosing us.
+2. **Fan-out: one intent across N owners, the tool discovering the owners.** Native did a
+   21-owner change in one patch cell but read eleven namespaces first. An intent that finds its
+   own owners from a Var or a predicate, splices the change without re-printing, and returns
+   the diff plus a focused result in one receipt removes those reads and the hunk-writing. This
+   is the only square where wall can go positive, and only here.
+3. **Questions grep answers wrong.** Who calls this Var and with which arities; is this
+   symbol a binding or a word inside a string or a comment; which branch of a reader
+   conditional is live; what does this namespace require and expose. Grep returns candidates
+   the agent then reads to reject. Code-as-data answers exactly, once. `:ls-tree` is the
+   foundation of this square: a table of contents for a whole source tree (namespace, requires,
+   every public form with its arglist and line span) in seconds, grep-filterable across many
+   repos, which is the inspect-that-answers-the-question in its cheapest form. `:ls-deps`,
+   `:topo` and `:mv` (move a form relative to another) sit on it.
+4. **Proof before write.** Homoiconicity plus a warm JVM: a candidate change can be loaded and
+   its named vars exercised before a byte lands on disk. A text tool cannot evaluate a patch.
+   An agent that can ask "does this change do what I meant" and get a real answer in one
+   return has something grep will never have.
+
+### The square we withdraw from
+
+A single edit at a known site in text the agent already holds. `apply_patch` is the floor
+there and it is one cheap, atomic, batched call. The summer's per-form intent grammar lived on
+this square, two thirds of every refusal it drew was the agent failing that grammar, and it is
+the one square that cannot pay for itself. Measured winners that stay: `require_change`
+(nine namespaces, zero churn), surgical `within` + `from`/`to`, `:extract!`, `:rename-ns!`,
+`:fix-declares!`. Measured losers, closed: owner-kind-namespace insertion (re-prints the whole
+file), per-form writes for fan-out, the CLI wrapper as an MCP substitute, prompt mandates.
+
+### Constraints every design must satisfy
+
+- **A call must remove a return the agent would otherwise make.** A tool that is faster per
+  call but adds a round-trip is a loss; tool execution is 3 to 4 percent of wall and 87
+  percent is model time between calls. Count returns, not milliseconds.
+- **Sit on the agent's route.** Do not ask it to change route; it will not, and it is right.
+- **Free-choice adoption is the acceptance test.** A feature the agent declines when the tool
+  is optional has not shipped, whatever the benchmark says under a mandate.
+- **Splice, never re-print.** A structural editor that reformats the untouched remainder of a
+  form (hundreds of lines for a require insertion) defeats its own review-burden argument.
+- **Every refusal carries a next_call the agent can execute unchanged**, or the tool performs
+  the recovery and reports it. A refusal the agent cannot act on within its fields is a return
+  with negative value.
+- **Receipts discharge verification.** A verified receipt is terminal; if the agent still
+  re-reads after it, the receipt has failed, not the agent.
+- **The bitter-lesson boundary, with one added clause.** Invest in general perception,
+  addressing, cardinality, preservation and replay; let the model supply interpretation and
+  architecture; do not encode one refactoring opinion per incident; and the general capability
+  must be on the route the model already takes, or the model routes around it.
+
+### Cautions from the summer, so it is not repeated
+
+Measure the free-choice baseline before building a feature. Measure the variance floor
+before any comparison (nine identical runs spread 42 percent on wall and 0 to 4 on the
+acceptance suite; every wall claim under 170 s and every quality score of the summer was
+inside a floor nobody had measured). Attest the subject before measuring it: server identity
+read from the server, prompt hash, worktree commit, per arm, or the receipt is blind. Type
+the refusal ledger from day one; it settled what judge scores could not. Score the agent's
+route (pre-edit, post-edit, layering), not the tool's features. Keep native as the positive
+control in every cohort; a benchmark that never includes "do it without the tool" cannot
+lose and so cannot learn. Keep the caller as a variable. Acceptance is a gate, not a score.
+
 ## What We Proved
 
 The original session proved that a Babashka CLI could outline a 2,768-line

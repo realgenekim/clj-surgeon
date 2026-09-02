@@ -87,47 +87,54 @@ updates, and verification gates. It is not a chronological coding diary.
   general model can reason from bounded facts, expose those facts and keep
   authority mechanical instead of growing a heuristic policy engine.
 
-## Active speed mission: five-times-native extraction
+## The battlefield and the test doctrine (Gene, 2026-09-02; supersedes the five-times-native extraction mission)
 
-- The frozen north star is the 15-owner extraction: Surgeon currently completes
-  it in 37.871 seconds versus the matched-correctness native control at 122.278
-  seconds (3.23x). The next earned gate is at most 24.456 seconds (5x). Optimize
-  complete verified task wall, not tool microbenchmarks or adoption.
-- Keep two independent research lanes. SURGEON1 owns the production branch,
-  integration judgment, publication, and the combined result. SURGEON2 owns
-  bounded uncertainty-reduction experiments and returns immutable receipts;
-  SURGEON1 cherry-picks mechanisms only after reviewing evidence and overlap.
-- Operate as `(N * K * sigma) / t`: create independently testable options,
-  parallelize only non-overlapping experiments, spend runs on high-uncertainty
-  seams, and shorten the verified decision cycle before expanding sample size.
-  Do not wait for user input while a safe, already-authorized experiment or
-  analysis step remains.
-- Freeze the task, scorer, caller/model stratum, and route geometry before a
-  comparison. Start with a small counterbalanced cohort. Retain every negative
-  result, confound, and stop decision; do not quietly tune away an ugly run.
-- Current priority order is: observable event/phase clocks; hot or incremental
-  complete extraction proof; exact repository-declared verification inside the
-  transaction; cheaper post-decision materialization; then combinations of
-  independently earned wins. Treat projected savings as hypotheses until a
-  clean-context complete-wall cohort verifies them.
-- Binding stops from prior experiments: fewer MCP schemas was slower; compact
-  plan handles missed their gate; the broad heuristic ranker was rejected;
-  formatter startup is not the primary extraction bottleneck; generic
-  `verify=fast` is not equivalent verification. Reopen a stopped option only
-  with new causal evidence.
-- **Venue is part of t (Gene, 2026-09-02: "must do what it takes to keep fast feedback
-  cycles. Nk/t. Maximize K and N to enable large K. Minimize T").** Any experiment that
-  needs a JVM or more than one arm runs on Anvil (`tester@anvil`, 16 cores; runner pattern:
-  fresh worktree per arm, `taskset` four cores per arm, `TMPDIR` under the seat home, gates
-  inline, diffs and receipts frozen by the runner the moment an arm ends). Buster and the
-  skiff keep the connector and light work. Calibrate sequential against parallel once before
-  trusting parallel walls. Evidence: the 2026-09-02 cohort ran 5 min per arm on Buster while
-  making the box unusable and contaminating its own walls; the same triple ran pinned and
-  parallel on Anvil with 23 GiB to spare.
-- Record the method as well as the result in a Captain's Log: option created,
-  reversible ratchet, evidence, counterfactual, surprise, falsifier, decision,
-  and what becomes cheaper next. The interaction between parallel lanes is a
-  product artifact worth preserving, not merely coordination overhead.
+Read [docs/vision.md](docs/vision.md) "The battlefield" first. The 2026-09-02 program
+(receipts: `docs/observations/2026-09-02-captains-log-bridge-wall-clock-ideal-program.md`)
+measured the shipped per-form editor at 2x native wall with no quality win, declined by the
+agent when optional, and closed that square. We compete on four squares only: the gate on the
+agent's own patch (build first: `admit_clojure_patch`), one intent across N owners with
+tool-side discovery and splice, questions grep answers wrong (`:ls-tree` is the foundation),
+and proof before write in the warm JVM. The five-times-native extraction north star and its
+binding stops are history, kept in git; the measured winners (`require_change`, `within` +
+`from`/`to`, `:extract!`, `:rename-ns!`, `:fix-declares!`) stay.
+
+**Test doctrine, so no feature spends months on a dead square.** A feature is not shipped,
+and no speed or quality claim about it may be written anywhere, until ALL of the following
+hold; each is a receipt in the captain's log with its commit timestamp:
+
+1. **Native positive control in every cohort.** Every measurement includes "do it without the
+   tool" on the same task, same wave, same cores. A benchmark that cannot lose cannot learn.
+2. **Variance floor first.** At least six identical runs of the control arm before any
+   comparison; a wall claim must clear two sd of that floor, and any quality score inside the
+   judges' own floor on identical inputs is reported as noise, not as a result.
+3. **Free-choice adoption cohort.** Three or more runs with the tool available but optional
+   and the prompt asking for the fastest safe completion. If the agent declines the feature,
+   the feature has not shipped, whatever a mandated arm scores.
+4. **Attested subject.** Every arm writes a machine-generated attestation before work starts:
+   server identity read from the server (healthz, port pid, ready.edn project root and its
+   HEAD), prompt hash, worktree commit, model, runner hash; any mismatch refuses the arm. A
+   receipt whose evidence source can transform or omit its subject is `:unverified`.
+5. **Typed refusal ledger and call-site taxonomy on every run.** Refusals by typed reason;
+   every native call classified pre-edit, post-edit, patch, test, other. The mechanism is
+   named from these, never from wall alone.
+6. **Acceptance is a gate, not a score.** The arm-independent suite decides pass or fail;
+   it is never averaged across arms. Add one behavioural assertion per feature; a
+   marker-only suite passed a broken button.
+7. **Frozen, complete artefacts.** Diffs staged (`git add -A`) and captured against the base
+   commit at arm end, with an ended-gate and a completeness gate; worktrees kept to cohort
+   end; per-slot and per-group names so repeated arms never overwrite each other.
+8. **Timestamps from the clock, never typed.** Headers and receipts take their time from
+   `date -u` inside the write; git commit timestamps are the record.
+9. **Both judges, blind, with a written rubric ruling for every disputed pattern**, and the
+   judges' disagreement recorded as a finding, never averaged away.
+10. **Every fix earns a ratchet in the apparatus** (the runner refuses the class next time),
+    and every withdrawn claim is corrected at the mechanism and in every place it was relayed.
+
+Venue is part of t: anything needing a JVM or more than one arm runs on Anvil, pinned,
+attested, with receipts frozen by the runner. Buster and the skiff keep the connector and light
+work. Record the method as well as the result in the captain's log: option, ratchet, evidence,
+counterfactual, surprise, falsifier, decision, and what becomes cheaper next.
 
 ## Architecture
 
