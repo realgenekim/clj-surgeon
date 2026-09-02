@@ -2737,3 +2737,13 @@ it never examined.
 
 **Store branch pushed**: `bridge/store-idempotency` 96387535 (my run 1040/12908/0); inb-70711c
 for Gene's merge, after fold (inb-d603ce); owner work and the max-instances=1 precondition named.
+
+## 22:30Z — claypoole ratified for the plan phase (Gene: "I love using claypool pmap that uses thread pool and is eager.")
+
+The census verb (inb-f5ee92) and any whole-repo read verb parallelise parse/match/plan with
+`com.climate/claypoole` — `cp/upmap` over files on a `cp/threadpool` sized to the box inside
+`cp/with-shutdown!`; eager start, bounded pool, worker exceptions rethrown at the consumer, the
+merge re-keyed by path so order is irrelevant. The write/commit phase stays serial and
+all-or-nothing. Receipts carry per-phase `elapsed_ms` so the parallel win is a measured number
+(baseline: 1.19 s per file for 8 match patterns; 171 files ≈ 3–4 min serial vs ~15 s on 16 cores).
+
