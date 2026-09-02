@@ -683,7 +683,7 @@
   Returns owners added, removed, and changed by defining-form name; per-owner
   protected-node drift; the bytes the patch moved outside its structural
   change; and every typed hazard."
-  [{:keys [file pre post hunk-spans]}]
+  [{:keys [file pre post hunk-spans operation]}]
   (let [pre-image (try (decompose pre) (catch Exception e {::error e}))
         post-image (try (decompose post) (catch Exception e {::error e}))]
     (cond
@@ -749,7 +749,11 @@
          :byte-drift-outside-hunks (+ (reduce + 0 (map :drift comparisons))
                                       gap-drift)
          :hazards (vec (concat (duplicate-hazards file pre-counted post-counted)
-                               (require-hazards file pre-index post-index)
+                               ;; A deletion loses its ns form by design. The
+                               ;; question that matters there is asked of the
+                               ;; workspace, not of the empty post image.
+                               (when-not (= :delete operation)
+                                 (require-hazards file pre-index post-index))
                                (opaque-string-hazards file (:offsets post-image)
                                                       post-units
                                                       (vec (:post hunk-spans)))))}))))

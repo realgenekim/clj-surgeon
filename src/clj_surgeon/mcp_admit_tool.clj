@@ -21,6 +21,7 @@
    [clj-surgeon.mcp-runtime :as runtime]
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.mcp-workspace-sources :as workspace-sources]
    [clj-surgeon.mcp-write-refusal :as write-refusal]
    [clj-surgeon.patch-apply :as patch-apply]
    [clj-surgeon.workspace-lock :as workspace-lock]
@@ -505,7 +506,9 @@
 (defn- verify-snapshot!
   "Run every requested check against the snapshot, before anything is written."
   [config images verify]
-  (let [clojure-images (filterv #(= "clojure" (file-kind (:file %))) images)
+  (let [clojure-images (filterv #(and (= "clojure" (file-kind (:file %)))
+                                      (not= :delete (:operation %)))
+                                images)
         lint-runner (or (:admit-lint-runner config) default-lint-runner)
         test-runner (or (:admit-test-runner config) default-test-runner)
         namespaces (->> clojure-images
@@ -518,7 +521,9 @@
         lint (lint-runner config clojure-images)
         snapshot (temp-tree! "clj-surgeon-admit-snapshot")]
     (try
-      (materialize! snapshot images :post)
+      (materialize! snapshot
+                    (remove #(= :delete (:operation %)) images)
+                    :post)
       (let [tests (test-runner config {:namespaces namespaces
                                        :snapshot-root (.getPath snapshot)})
             tests (merge {:ran false :passed 0 :failed 0 :skipped 0
@@ -548,41 +553,198 @@
 ;; Execution
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-ADMIT-098
+(defn relativize-under-root
+  "Rewrite an absolute path that lies inside the workspace as a relative one.
+
+  Ten field payloads wrote absolute headers -- the agent had the workspace
+  path in hand and used it -- and were refused as invalid relative paths. The
+  path they named was the right file, inside the root, and unambiguous.
+
+  This is normalisation, not confinement. Anything that does not lie under the
+  resolved root is handed on unchanged and refused by the same guard as
+  before; all this does is stop the gate rejecting an exact synonym for a path
+  it would have accepted."
+  [root file]
+  (let [root-path (str root)
+        prefix (if (str/ends-with? root-path "/") root-path (str root-path "/"))]
+    (if (and (str/starts-with? (str file) "/")
+             (str/starts-with? (str file) prefix))
+      (subs (str file) (count prefix))
+      file)))
+
+;; @spec MCP-OP-ADMIT-096
+(defn- namespace-of
+  "The namespace a source declares, or nil."
+  [source]
+  (try
+    (->> (:units (form-identity/decompose source))
+         (filter #(= :ns (:form-kind %)))
+         first
+         :name)
+    (catch Exception _ nil)))
+
+;; @spec MCP-OP-ADMIT-096
+(defn deletion-hazards
+  "Refuse to delete a namespace the rest of the workspace still requires.
+
+  Deleting a file is the one edit whose damage is entirely outside the file.
+  Nothing in the deleted image can show it, so the gate reads the workspace's
+  own requires -- the same structural read it uses everywhere else -- and names
+  the callers that would stop loading."
+  [root deleted-images]
+  (let [deleted (into {} (keep (fn [{:keys [file pre]}]
+                                 (when-let [name (namespace-of pre)]
+                                   [name file])))
+                      deleted-images)]
+    (when (seq deleted)
+      (let [gone (set (map :file deleted-images))
+            sources (workspace-sources/read-all root)
+            relative (workspace-sources/relative-paths root sources)
+            dependents
+            (reduce
+              (fn [acc [path source]]
+                (let [project-path (get relative path)]
+                  (if (contains? gone project-path)
+                    acc
+                    (let [required (try
+                                     (->> (:units (form-identity/decompose source))
+                                          (filter #(= :ns (:form-kind %)))
+                                          first
+                                          :node
+                                          form-identity/ns-requires
+                                          keys
+                                          set)
+                                     (catch Exception _ #{}))]
+                      (reduce (fn [acc [name _]]
+                                (cond-> acc
+                                  (contains? required name)
+                                  (update name (fnil conj []) project-path)))
+                              acc
+                              deleted)))))
+              {}
+              sources)]
+        (vec (keep (fn [[name file]]
+                     (when-let [callers (seq (sort (get dependents name)))]
+                       {:type :namespace-form-removed
+                        :file file
+                        :owner name
+                        :span [1 1]
+                        :class :refusal
+                        :scope :workspace
+                        :message (str "Deleting " file " removes namespace "
+                                      name ", which is still required by "
+                                      (str/join ", " callers))
+                        :dependents (vec callers)}))
+                   deleted))))))
+
+;; @spec MCP-OP-ADMIT-095
 (defn- freeze-sources
-  "Read every admitted target once. Returns the frozen snapshot or a refusal."
-  [root files]
+  "Read every admitted target once. Returns the frozen snapshot or a refusal.
+
+  A creation has no bytes to read, so its pre-image is defined to be empty and
+  its target is resolved as an absent path; that confinement guard is also the
+  creation's staleness fence, because a file that appeared since the preview
+  fails it. A move resolves both ends."
+  [root parsed-files]
   (reduce
-    (fn [acc file]
-      (let [resolved (mcp-paths/resolve-source-path root file)]
-        (if-not (:ok resolved)
+    (fn [acc {:keys [file operation move-to]}]
+      (let [operation (or operation :update)
+            resolved (if (= :add operation)
+                       (mcp-paths/resolve-new-source-path root file)
+                       (mcp-paths/resolve-source-path root file))
+            destination (when (= :move operation)
+                          (mcp-paths/resolve-new-source-path root move-to))]
+        (cond
+          (not (:ok resolved))
           (reduced {:error-type (keyword (:error_type resolved))
                     :error (:error resolved)
                     :file file})
-          (assoc acc file {:absolute (:path resolved)
-                           :source (slurp (:path resolved))}))))
+
+          (and destination (not (:ok destination)))
+          (reduced {:error-type (keyword (:error_type destination))
+                    :error (:error destination)
+                    :file move-to})
+
+          :else
+          (assoc acc file
+                 (cond-> {:absolute (:path resolved)
+                          :operation operation
+                          :source (if (= :add operation)
+                                    ""
+                                    (slurp (:path resolved)))
+                          :missing-parent-directories
+                          (vec (map str (:missing-parent-directories resolved)))}
+                   destination
+                   (assoc :destination (:path destination)
+                          :destination-missing-parents
+                          (vec (map str (:missing-parent-directories
+                                          destination)))))))))
     {}
-    files))
+    parsed-files))
 
 ;; @spec MCP-OP-ADMIT-052
 ;; @spec MCP-OP-ADMIT-053
 ;; @spec MCP-OP-ADMIT-087
+;; @spec MCP-OP-ADMIT-095
+;; @spec MCP-OP-ADMIT-096
+;; @spec MCP-OP-ADMIT-097
 (defn- compiled-transaction
+  "Project the admitted images onto the kernel's transaction shape.
+
+  The kernel already knows how to create, replace and delete under one
+  rollback; the gate's job is to say which is which. A move is a creation of
+  the destination and a deletion of the source in the same transaction, so a
+  half-finished rename cannot survive a failure."
   [snapshot images]
-  (let [plans (mapv (fn [{:keys [file pre post]}]
-                      {:file (get-in snapshot [file :absolute])
-                       :source-hash (structural-lens/source-hash pre)
-                       :result-hash (structural-lens/source-hash post)
-                       :match-count 1
-                       :edits []})
-                    images)]
+  (let [by-operation (group-by #(or (:operation %) :update) images)
+        updates (:update by-operation)
+        moves (:move by-operation)
+        creations (:add by-operation)
+        deletions (:delete by-operation)
+        absolute (fn [file] (get-in snapshot [file :absolute]))
+        plan (fn [{:keys [file pre post]}]
+               {:file (absolute file)
+                :source-hash (structural-lens/source-hash pre)
+                :result-hash (structural-lens/source-hash post)
+                :match-count 1
+                :edits []})
+        created (fn [target content parents]
+                  {:file target
+                   :content content
+                   :result-hash (structural-lens/source-hash content)
+                   :workspace-root nil
+                   :directories parents})]
     {:ok true
-     :files plans
-     :original-sources (into {} (map (fn [{:keys [file pre]}]
-                                       [(get-in snapshot [file :absolute]) pre]))
-                             images)
-     :future-sources (into {} (map (fn [{:keys [file post]}]
-                                     [(get-in snapshot [file :absolute]) post]))
-                           images)}))
+     :files (mapv plan updates)
+     :original-sources (into {} (map (fn [{:keys [file pre]}] [(absolute file) pre]))
+                             updates)
+     :future-sources (into {} (map (fn [{:keys [file post]}] [(absolute file) post]))
+                           updates)
+     :created-files (vec (concat
+                           (map (fn [{:keys [file post]}]
+                                  (created (absolute file) post
+                                           (get-in snapshot [file :missing-parent-directories])))
+                                creations)
+                           (map (fn [{:keys [file post]}]
+                                  (created (get-in snapshot [file :destination]) post
+                                           (get-in snapshot [file :destination-missing-parents])))
+                                moves)))
+     :created-directories (vec (distinct
+                                 (concat
+                                   (mapcat #(get-in snapshot [(:file %) :missing-parent-directories])
+                                           creations)
+                                   (mapcat #(get-in snapshot [(:file %) :destination-missing-parents])
+                                           moves))))
+     :deleted-files (vec (concat
+                           (map (fn [{:keys [file pre]}]
+                                  {:file (absolute file)
+                                   :result-hash (structural-lens/source-hash pre)})
+                                deletions)
+                           (map (fn [{:keys [file pre]}]
+                                  {:file (absolute file)
+                                   :result-hash (structural-lens/source-hash pre)})
+                                moves)))}))
 
 (defn- passthrough-file
   [file]
@@ -596,10 +758,12 @@
 (defn- aggregate
   [images deltas]
   (let [by-file (into {} (map (juxt :file identity)) deltas)]
-    {:files (mapv (fn [{:keys [file hunk-count hunk-spans pre post]}]
+    {:files (mapv (fn [{:keys [file hunk-count hunk-spans pre post operation
+                              move-to]}]
                     (let [delta (get by-file file)]
-                      {:file file
+                      (cond-> {:file file
                        :kind (file-kind file)
+                       :operation (or operation :update)
                        :hunks hunk-count
                        :hunk_line_spans hunk-spans
                        :owners (or (:owners delta)
@@ -608,7 +772,8 @@
                        :byte_drift_outside_hunks
                        (or (:byte-drift-outside-hunks delta) 0)
                        :pre_sha256 (structural-lens/source-hash pre)
-                       :post_sha256 (structural-lens/source-hash post)}))
+                       :post_sha256 (structural-lens/source-hash post)}
+                        move-to (assoc :move_to move-to))))
                   images)
      :owners {:added (vec (mapcat (fn [{:keys [file owners]}]
                                     (map #(str file "::" %) (:added owners)))
@@ -671,15 +836,23 @@
   proof and the write empty."
   [context snapshot]
   (let [drifted (->> snapshot
-                     (keep (fn [[file {:keys [absolute source]}]]
-                             (let [current (try (slurp absolute)
-                                                (catch Exception _ nil))]
-                               (when-not (= current source)
-                                 {:file file
-                                  :expected-hash (structural-lens/source-hash
-                                                   source)
-                                  :actual-hash (some-> current
-                                                       structural-lens/source-hash)}))))
+                     (keep (fn [[file {:keys [absolute source operation]}]]
+                             (if (= :add operation)
+                               ;; A creation's fence is the absence of its
+                               ;; target, not the content of a file that by
+                               ;; definition has none.
+                               (when (.exists (io/file absolute))
+                                 {:file file :expected-hash nil
+                                  :actual-hash (structural-lens/source-hash
+                                                 (slurp absolute))})
+                               (let [current (try (slurp absolute)
+                                                  (catch Exception _ nil))]
+                                 (when-not (= current source)
+                                   {:file file
+                                    :expected-hash (structural-lens/source-hash
+                                                     source)
+                                    :actual-hash (some-> current
+                                                         structural-lens/source-hash)})))))
                      vec)]
     (when (seq drifted)
       (select-keys
@@ -770,28 +943,11 @@
                                (or (:expected-headers parsed)
                                    patch-apply/expected-headers))})
           (let [targets (mapv :file (:files parsed))
-                unsupported (filterv #(not= :update (:operation %))
-                                     (:files parsed))
                 repeated (->> targets frequencies
                               (keep (fn [[file n]] (when (< 1 n) file)))
                               sort vec)
                 passthrough (filterv #(= "passthrough" (file-kind %)) targets)]
             (cond
-              ;; @spec MCP-OP-ADMIT-014
-              (seq unsupported)
-              (refusal context :unsupported-patch-operation
-                       (str "Whole-file creation, deletion and renaming are "
-                            "not admitted; apply them natively and admit the "
-                            "edits separately: "
-                            (str/join ", " (map (fn [{:keys [operation file]}]
-                                                  (str (name operation) " "
-                                                       file))
-                                                unsupported)))
-                       {:grammar (:grammar parsed)
-                        :unsupported (mapv #(select-keys % [:file :operation
-                                                            :move-to])
-                                           unsupported)})
-
               (seq repeated)
               ;; Two sections for one file describe two different post images
               ;; of the same bytes. Refusing here keeps that ambiguity out of
@@ -820,7 +976,22 @@
               (guarding-writes
                 (when (= "commit" mode) workspace-root)
                 (let [root (mcp-paths/real-root (:project-root config))
-                      snapshot (freeze-sources root targets)]
+                      parsed (update parsed :files
+                                     (fn [files]
+                                       (mapv #(-> %
+                                                  (update :file
+                                                          (partial
+                                                            relativize-under-root
+                                                            root))
+                                                  (cond->
+                                                    (:move-to %)
+                                                    (update :move-to
+                                                            (partial
+                                                              relativize-under-root
+                                                              root))))
+                                             files)))
+                      targets (mapv :file (:files parsed))
+                      snapshot (freeze-sources root (:files parsed))]
                 (if (:error-type snapshot)
                   (refusal context (:error-type snapshot) (:error snapshot)
                            (select-keys snapshot [:file]))
@@ -835,11 +1006,13 @@
                                  (select-keys applied [:file :hunk-index :line]))
                         (let [images (:files applied)
                               deltas (mapv
-                                       (fn [{:keys [file pre post hunk-spans]}]
+                                       (fn [{:keys [file pre post hunk-spans
+                                                    operation]}]
                                          (if (= "clojure" (file-kind file))
                                            (form-identity/form-identity-delta
                                              {:file file :pre pre :post post
-                                              :hunk-spans hunk-spans})
+                                              :hunk-spans hunk-spans
+                                              :operation operation})
                                            {:file file
                                             :owners {:added [] :removed []
                                                      :changed []}
@@ -847,14 +1020,29 @@
                                             :byte-drift-outside-hunks 0
                                             :hazards []}))
                                        images)
-                              report (aggregate images deltas)
-                              expect-pre (into {} (map (fn [[file {:keys [pre]}]]
-                                                         [file pre]))
+                              deletion (deletion-hazards
+                                         root
+                                         (filter #(= :delete (:operation %))
+                                                 images))
+                              report (update (aggregate images deltas)
+                                             :hazards into deletion)
+                              created (set (map :file
+                                                (filter #(= :add (:operation %))
+                                                        images)))
+                              expect-pre (into {}
+                                               (comp
+                                                 (remove #(contains? created
+                                                                     (key %)))
+                                                 (map (fn [[file {:keys [pre]}]]
+                                                        [file pre])))
                                                (:hashes report))
                               context (assoc context :expect-pre expect-pre)
-                              base-binding (if (seq expect_pre_sha256)
-                                             "bound"
-                                             "unbound")
+                              base-binding (cond
+                                             ;; Nothing existed to bind to.
+                                             (every? #(= :add (:operation %))
+                                                     images) "created"
+                                             (seq expect_pre_sha256) "bound"
+                                             :else "unbound")
                               blocking (form-identity/refusal-hazards
                                          (:hazards report))
                               base (assoc (merge (empty-receipt mode) report)

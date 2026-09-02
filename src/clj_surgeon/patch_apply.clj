@@ -50,6 +50,19 @@
   [lines]
   (str/join "\n" lines))
 
+(defn patch-lines
+  "Split patch text, dropping the phantom line its terminating newline makes.
+
+  Splitting `\"a\\n\"` yields `[\"a\" \"\"]`, and that trailing empty string reads as
+  a blank context line. With counts terminating a hunk it was invisible; with
+  the body terminating it, it silently annexed a fourth line onto every
+  three-line hunk."
+  [patch-text]
+  (let [lines (source-lines (str patch-text))]
+    (if (and (< 1 (count lines)) (= "" (peek lines)))
+      (pop lines)
+      lines)))
+
 (defn- body-line
   "Read one hunk body line as [kind text], or nil when it is not one.
 
@@ -84,7 +97,7 @@
     (cond
       (= apply-patch-begin line) :apply-patch
       (str/starts-with? line "*** ") :apply-patch
-      (str/starts-with? line "diff --git ") :unified-diff
+      (str/starts-with? line "diff ") :unified-diff
       (str/starts-with? line "--- ") :unified-diff
       (str/starts-with? line "Index: ") :unified-diff
       :else nil)))
@@ -106,85 +119,85 @@
       (re-find #"^[ab]/" raw) (subs raw 2)
       :else raw)))
 
-(defn- surplus-change
-  "The first byte-changing line left over after a hunk's declared counts."
-  [remaining]
-  (loop [lines remaining]
-    (when-let [line (first lines)]
-      (cond
-        (or (str/starts-with? line "@@")
-            (str/starts-with? line "--- ")
-            (str/starts-with? line "+++ ")
-            (str/starts-with? line "diff --git ")) nil
-        (or (str/starts-with? line "-") (str/starts-with? line "+")) line
-        :else (recur (next lines))))))
+;; @spec MCP-OP-ADMIT-092
+(defn- unified-header?
+  [line]
+  (or (str/starts-with? line "@@")
+      (str/starts-with? line "--- ")
+      (str/starts-with? line "+++ ")
+      (str/starts-with? line "diff ")
+      (str/starts-with? line "Index: ")))
 
 ;; @spec MCP-OP-ADMIT-092
 (defn- parse-unified-hunk
-  "Consume one unified hunk body. Returns [hunk remaining-lines] or a refusal.
+  "Consume one unified hunk. Returns [hunk remaining-lines] or a refusal.
 
-  The declared counts bound the body, and the line that follows must be a
-  header or the end of the payload. A header that undercounts its own body
-  used to leave the surplus lines to be silently ignored by the top-level
-  loop, which applied a truncated hunk and produced an unreadable image out of
-  a patch that merely miscounted."
+  **The body delimits the hunk; the declared counts are advisory.** Field
+  payloads miscount in both directions -- 19 of 77 refused calls declared more
+  lines than they carried and 10 declared fewer -- and in every one of them
+  the body said exactly what the author meant. Terminating on the counts
+  instead produced two failures at once: a header that overcounted ran into
+  the next `@@` and refused a patch that was plainly readable, and a header
+  that undercounted applied a *truncated* hunk and let the surplus fall on the
+  floor, which is how a miscounted deletion became an unreadable image.
+
+  Reading to the next header removes both. Nothing is dropped, so nothing is
+  silently truncated, and the strict content match downstream still refuses
+  anything that does not belong where it claims to."
   [file hunk-index header lines]
   (let [[_ pre-start pre-count post-start post-count]
         (re-find hunk-header-pattern header)
-        pre-start (parse-long pre-start)
-        pre-count (if pre-count (parse-long pre-count) 1)
-        post-start (parse-long post-start)
-        post-count (if post-count (parse-long post-count) 1)]
+        declared-pre (if pre-count (parse-long pre-count) 1)
+        declared-post (if post-count (parse-long post-count) 1)]
     (loop [remaining lines
-           body []
-           pre-seen 0
-           post-seen 0]
-      (if (and (= pre-seen pre-count) (= post-seen post-count))
-        ;; Only a surplus that changes bytes matters. A trailing context line
-        ;; beyond the declared count is redundant -- the lines after a hunk
-        ;; are copied through anyway -- but a surplus removal or addition is
-        ;; a change the header did not admit, and dropping it silently is how
-        ;; a miscounted patch became an unreadable image.
-        (if-let [surplus (surplus-change remaining)]
-          (refusal :hunk-body-overruns-header
-                   (str "Hunk " hunk-index " of " file " declares "
-                        pre-count "/" post-count " lines but its body "
-                        "continues past them at: " (pr-str surplus))
-                   {:file file :hunk-index hunk-index
-                    :header header :offending-line surplus})
-          [{:pre-start pre-start :pre-count pre-count
-            :post-start post-start :post-count post-count
-            :body body}
-           remaining])
-        (let [line (first remaining)]
-          (cond
-            (nil? line)
+           body []]
+      (let [line (first remaining)]
+        (cond
+          (or (nil? line) (unified-header? line))
+          (if (empty? body)
             (refusal :invalid-patch
-                     (str "Hunk " hunk-index " of " file
-                          " ends before its declared line counts")
+                     (str "Hunk " hunk-index " of " file " has an empty body")
                      {:file file :hunk-index hunk-index :header header})
+            (let [pre-lines (count (filter #(#{:context :remove} (first %)) body))
+                  post-lines (count (filter #(#{:context :add} (first %)) body))]
+              [{:pre-start (parse-long pre-start)
+                :pre-count pre-lines
+                :post-start (parse-long post-start)
+                :post-count post-lines
+                :declared-pre-count declared-pre
+                :declared-post-count declared-post
+                :counts-match? (and (= pre-lines declared-pre)
+                                    (= post-lines declared-post))
+                :body body}
+               remaining]))
 
-            (str/starts-with? line "\\")
-            (recur (next remaining) body pre-seen post-seen)
+          (str/starts-with? line "\\")
+          (recur (next remaining) body)
 
-            :else
-            (if-let [[kind text] (body-line line)]
-              (case kind
-                :context (recur (next remaining) (conj body [:context text])
-                                (inc pre-seen) (inc post-seen))
-                :remove (recur (next remaining) (conj body [:remove text])
-                               (inc pre-seen) post-seen)
-                :add (recur (next remaining) (conj body [:add text])
-                            pre-seen (inc post-seen)))
+          :else
+          (if-let [[kind text] (body-line line)]
+            (recur (next remaining) (conj body [kind text]))
+            ;; Anything that is neither a header nor a body line ends the
+            ;; hunk; unified diffs are routinely embedded in prose.
+            (if (empty? body)
               (refusal :invalid-patch
                        (str "Unrecognized hunk body line in " file ": "
                             (pr-str line))
                        {:file file :hunk-index hunk-index
-                        :offending-line line}))))))))
+                        :offending-line line})
+              [{:pre-start (parse-long pre-start)
+                :pre-count (count (filter #(#{:context :remove} (first %)) body))
+                :post-start (parse-long post-start)
+                :post-count (count (filter #(#{:context :add} (first %)) body))
+                :declared-pre-count declared-pre
+                :declared-post-count declared-post
+                :counts-match? false
+                :body body}
+               remaining])))))))
 
 (defn- parse-unified-diff
   [patch-text]
-  (loop [remaining (source-lines patch-text)
+  (loop [remaining (patch-lines patch-text)
          files []
          old-path nil
          current nil]
@@ -198,7 +211,9 @@
                      "patch contains no unified diff file headers"
                      {:grammar :unified-diff})
 
-            (some (comp empty? :hunks) files)
+            (some (fn [{:keys [operation hunks]}]
+                    (and (empty? hunks) (contains? #{:update :move} operation)))
+                  files)
             (refusal :invalid-patch
                      "patch contains a file header with no hunks"
                      {:grammar :unified-diff
@@ -216,23 +231,26 @@
         (str/starts-with? line "+++ ")
         (let [new-path (header-path line)]
           (cond
-            (or (= :dev-null old-path) (= :dev-null new-path))
-            {:ok true :grammar :unified-diff
-             :files (conj (cond-> files current (conj current))
-                          {:file (if (= :dev-null old-path) new-path old-path)
-                           :operation (if (= :dev-null old-path) :add :delete)
-                           :hunks []})}
-
             (nil? old-path)
             (refusal :invalid-patch
                      "patch has a +++ header with no matching --- header"
                      {:grammar :unified-diff :offending-line line})
 
+            ;; /dev/null on either side names a whole-file operation. The
+            ;; section still carries hunks -- a creation's body is the file --
+            ;; so parsing continues rather than closing the payload here.
+            (= :dev-null old-path)
+            (recur (next remaining) files old-path
+                   {:file new-path :operation :add :hunks []})
+
+            (= :dev-null new-path)
+            (recur (next remaining) files old-path
+                   {:file old-path :operation :delete :hunks []})
+
             (not= old-path new-path)
-            {:ok true :grammar :unified-diff
-             :files (conj (cond-> files current (conj current))
-                          {:file old-path :operation :move
-                           :move-to new-path :hunks []})}
+            (recur (next remaining) files old-path
+                   {:file old-path :operation :move
+                    :move-to new-path :hunks []})
 
             :else
             (recur (next remaining) files old-path
@@ -272,6 +290,19 @@
             [operation (str/trim (subs line (count prefix)))]))
         apply-patch-directives))
 
+(defn- normalize-add
+  "An `*** Add File` body is the whole file; carry it as one hunk at line 0.
+
+  Creation then flows through exactly the same application path as every other
+  edit, against a pre-image of nothing, instead of needing a second code path
+  that nobody's hazards would run over."
+  [file]
+  (if (and (= :add (:operation file)) (seq (:body file)))
+    (-> file
+        (assoc :hunks [{:pre-start 0 :body (:body file)}])
+        (dissoc :body))
+    file))
+
 ;; @spec MCP-OP-ADMIT-091
 (defn- parse-apply-patch
   "Parse the V4A grammar `apply_patch` actually takes.
@@ -281,7 +312,7 @@
   inside an update are opened by `@@`, whose trailing text is a context
   anchor rather than a line number."
   [patch-text]
-  (let [lines (source-lines patch-text)]
+  (let [lines (patch-lines patch-text)]
     (loop [remaining lines
            files []
            current nil
@@ -294,7 +325,7 @@
                          (cond-> files file (conj (close-hunk file hunk))))]
         (cond
           (nil? line)
-          (let [files (close-file files current hunk)]
+          (let [files (mapv normalize-add (close-file files current hunk))]
             (cond
               (not started?)
               (refusal :invalid-patch
@@ -318,7 +349,7 @@
 
           (= apply-patch-end (str/trim line))
           {:ok true :grammar :apply-patch
-           :files (close-file files current hunk)}
+           :files (mapv normalize-add (close-file files current hunk))}
 
           (directive line)
           (let [[operation path] (directive line)]
@@ -469,12 +500,13 @@
   slightly wrong must not turn a patch that plainly applies into a refusal."
   [file index hunk lines cursor expected]
   (if-let [start (:pre-start hunk)]
-    (let [at (dec start)]
+    (let [at (max 0 (dec start))]
       (cond
-        (neg? at) {:error (refusal :patch-does-not-apply
-                                   (str "Hunk " index " of " file
-                                        " names line " start)
-                                   {:file file :hunk-index index})}
+        (and (zero? start) (seq expected))
+        {:error (refusal :patch-does-not-apply
+                         (str "Hunk " index " of " file
+                              " starts at line 0 but expects existing lines")
+                         {:file file :hunk-index index})}
         (> (+ at (count expected)) (count lines))
         {:error (refusal :patch-does-not-apply
                          (str "Hunk " index " of " file
@@ -572,22 +604,48 @@
            :hunk-spans {:pre pre-spans :post post-spans}
            :diff-window (diff-window source post)})))))
 
+;; @spec MCP-OP-ADMIT-095
+;; @spec MCP-OP-ADMIT-096
+;; @spec MCP-OP-ADMIT-097
 (defn apply-parsed
-  "Apply already-parsed per-file hunk plans to one frozen source map."
+  "Apply already-parsed per-file plans to one frozen source map.
+
+  Creation and deletion are ordinary applications with one side defined to be
+  nothing. A created file's pre-image is the empty string, so its owners all
+  read as added and its hazards are computed over the post image alone; a
+  deleted file's post-image is the empty string, so its owners all read as
+  removed. Giving them a defined image on both sides is what lets one delta,
+  one hazard set and one receipt describe every operation."
   [sources parsed-files]
   (loop [remaining parsed-files
          images []]
-    (if-let [{:keys [file hunks]} (first remaining)]
-      (let [source (get sources file)]
-        (if-not (string? source)
+    (if-let [{:keys [file operation hunks move-to]} (first remaining)]
+      (let [operation (or operation :update)
+            source (get sources file)]
+        (cond
+          (not (string? source))
           (refusal :patch-source-missing
                    (str "Patch names a file that is not in the frozen snapshot: "
                         file)
                    {:file file})
+
+          (= :delete operation)
+          (recur (next remaining)
+                 (conj images {:ok true :file file :operation :delete
+                               :pre source :post ""
+                               :changed? (not= source "")
+                               :hunk-count (count hunks)
+                               :hunk-spans {:pre [[1 (count (source-lines source))]]
+                                            :post [[1 0]]}
+                               :diff-window (count source)}))
+
+          :else
           (let [image (apply-file-hunks file source hunks)]
             (if-not (:ok image)
               image
-              (recur (next remaining) (conj images image))))))
+              (recur (next remaining)
+                     (conj images (cond-> (assoc image :operation operation)
+                                    move-to (assoc :move-to move-to))))))))
       {:ok true :files images})))
 
 (defn apply-patch

@@ -78,7 +78,7 @@ request schema.
  :tests {:ran true :passed 12 :failed 0 :skipped 0
          :namespaces ["app.core-test"]}
  :hashes {"src/app/core.clj" {:pre "…" :post "…"}}
- :pre_image_binding "bound"        ; or "unbound"
+ :pre_image_binding "bound"        ; "unbound", or "created" when nothing existed
  :lock_scope :cross-process        ; or :process on commit, :none on preview
  :lock_path "/abs/path/.clj-surgeon/write.lock"
  :verification_status :complete    ; or :partial, :unverified
@@ -189,22 +189,72 @@ A patch that does not apply is a typed refusal that names the file, the hunk
 index, and the first mismatched or unlocatable line — never a best-effort
 merge.
 
-**A hunk body that overruns its own header is a refusal.** A unified header
-that undercounts its body used to leave the surplus lines to be ignored by the
-top-level loop, which applied the truncated hunk the counts described and
-dropped the rest. That is how a patch that merely miscounted became an
-`:unreadable-post-image`: a three-line owner deleted by a header admitting one
-line left `[s]` and `(inc s))` behind, orphaned and unbalanced, and the gate
-reported the corruption as though the author had written it. Only a surplus
-that *changes bytes* is refused; a redundant trailing context line beyond the
-count is harmless, because the lines after a hunk are copied through anyway.
+**The body delimits a hunk; the declared counts are advisory.** This is the
+one place the design changed twice, and the second change was the field's.
 
-Whole-file creation, deletion and renaming — `--- /dev/null`, `+++ /dev/null`,
-`*** Add File`, `*** Delete File`, `*** Move to` — are **parsed faithfully and
-then refused by policy**, naming the construct. Parsing them is what lets the
-refusal say "Add File src/app/new.clj is not admitted" instead of failing to
-read the payload at all; the distinction is the difference between a boundary
-and a bug. They refuse in v1. The gate's structural report is a delta between two images of the same
+A header that *undercounts* its body used to leave the surplus to be ignored,
+applying the truncated hunk the counts described and dropping the rest — how a
+patch that merely miscounted became an `:unreadable-post-image`, with a
+three-line owner deleted by a header admitting one line leaving `[s]` and
+`(inc s))` behind, orphaned and unbalanced, reported as though the author had
+written it. The first fix refused that. Then the replay showed the mirror
+image: 19 of 77 refused payloads *overcounted*, ran into the next `@@`, and
+were refused as unreadable — and a further 10 undercounted and were refused by
+the new check. In every one of those 29, the body said exactly what the author
+meant.
+
+So the counts are no longer load-bearing. A hunk runs to the next header, and
+what it carries is what it means. Nothing is dropped, so nothing is silently
+truncated; the strict content match downstream still refuses anything that
+does not belong where it claims to, and a hunk with an empty body is still a
+refusal. A header whose counts disagree with its body is recorded on the hunk
+and otherwise ignored.
+
+**A workspace-absolute header path names the file it means.** Ten payloads —
+the first admit call of ten of the twelve runs — wrote the agent's own
+worktree path into the header and were refused as invalid relative paths. The
+path was the right file, inside the root, unambiguous. The gate now rewrites
+an absolute path that lies under the resolved root to its relative remainder
+before resolution. This is normalisation and not confinement: anything not
+under that root is passed through unchanged and refused by the same guard as
+before.
+
+### #Whole-file operations
+
+Creation, deletion and renaming — `*** Add File`, `*** Delete File`,
+`*** Move to`, and `/dev/null` on either side of a unified header — are
+admitted operations, not named refusals.
+
+The v1 boundary said a creation has no pre-image to diff against, so its
+central number is undefined. That was true of the *implementation* and false
+of the *idea*: the pre-image of a file that does not exist is empty, and once
+that is written down every part of the gate works on it unchanged. A created
+file's owners are all added, its byte drift is zero because there is no
+earlier text to have moved, and its hazards — a duplicate definition, an image
+that does not read — are exactly the ones computable from the post image
+alone. A deletion is the mirror: post-image empty, owners all removed. A move
+is a creation of the destination carrying the patch's edits and a deletion of
+the source, in one transaction, so a half-finished rename cannot survive a
+failure.
+
+The field decided this. On the rung-L task, which begins by creating a file,
+`unsupported-patch-operation` fired on the first call of all six gate runs.
+The one run that took the refusal's advice, created the file natively, and
+then admitted the rest in a single verified commit was **the only gate run in
+either cohort that never fell back to `apply_patch` on a `.clj` file**, and it
+beat three of six natives. A boundary that every real task trips on the first
+call is not a boundary; it is the reason the tool is not used.
+
+Two guards replace the two the boundary was standing in for. A creation is
+fenced by the **absence of its target**: `resolve-new-source-path` refuses a
+path that already exists, which is also the staleness check a creation needs,
+since a file that appeared between preview and commit fails it. A deletion is
+fenced by the **workspace's own requires**: deleting a file is the one edit
+whose damage is entirely outside the file, so nothing in the deleted image can
+show it. The gate reads the workspace's namespace forms — the same structural
+read it uses everywhere else — and refuses with `:namespace-form-removed`
+naming every caller that would stop loading. A namespace nothing requires
+deletes cleanly. The gate's structural report is a delta between two images of the same
 file; a creation has no pre image to compare and a deletion has no post image,
 so admitting them would mean publishing a receipt whose central number is
 undefined. This is a boundary, not an oversight, and it is named in the refusal.
@@ -594,7 +644,12 @@ receipt now states which it was: `pre_image_binding` is `"bound"` or
 | `ns` loses a require | either | yes | ok false, hazard listed | none | false | same call, `preview`, `blocked_by` |
 | Hunk context does not match | either | n/a | typed refusal `:patch-does-not-apply` | none | false | same call, `preview` |
 | Malformed or blank patch | either | n/a | typed refusal `:invalid-patch` | none | false | same call, `preview` |
-| Add File, Delete File, Move to, or a `/dev/null` hunk | either | n/a | parsed, then typed refusal `:unsupported-patch-operation` naming the construct | none | false | same call, `preview` |
+| Add File, or `--- /dev/null` | either | no | ok, owners all added, `pre_image_binding: "created"` | the new file | per check | same call, `commit` |
+| Add File whose target exists | commit | n/a | typed refusal `:target-already-exists` | none | false | same call, `preview` |
+| Created file with a duplicate definition or an image that does not read | either | yes | typed refusal, nothing created | none | false | same call, `preview` |
+| Delete File, or `+++ /dev/null` | either | no | ok, owners all removed | the file is removed | per check | same call, `commit` |
+| Delete File whose namespace is still required | either | yes | typed refusal `:namespace-form-removed` naming the dependents | none | false | same call, `preview` |
+| Move to | either | no | ok, destination created with the edits, source deleted, one transaction | both | per check | same call, `commit` |
 | Payload in neither grammar | either | n/a | typed refusal `:invalid-patch` naming both grammars and quoting the first line | none | false | same call, `preview`, with `expected_headers` |
 | Unified hunk body overruns its header | either | n/a | typed refusal `:hunk-body-overruns-header` | none | false | same call, `preview` |
 | V4A hunk whose `@@` anchor does not match | either | n/a | applies, if the block itself is found | as usual | as usual | as usual |
@@ -677,7 +732,7 @@ Patch application.
 - [x] **MCP-OP-ADMIT-011**: If a hunk's context or removed lines do not equal the frozen snapshot at the hunk's declared position, then clj-surgeon shall publish a typed refusal naming the file and hunk and leave every file unchanged.
 - [x] **MCP-OP-ADMIT-012**: When an admit request runs in preview mode, clj-surgeon shall write no file.
 - [x] **MCP-OP-ADMIT-013**: When a patch is applied, clj-surgeon shall record each hunk's pre-image and post-image line span and publish those spans in the receipt.
-- [x] **MCP-OP-ADMIT-014**: If a patch creates or deletes a whole file, then clj-surgeon shall publish a typed unsupported-operation refusal and leave every file unchanged.
+- [D] **MCP-OP-ADMIT-014**: *Withdrawn.* If a patch creates or deletes a whole file, then clj-surgeon shall publish a typed unsupported-operation refusal and leave every file unchanged. Superseded by MCP-OP-ADMIT-095, 096 and 097 after the rung-L field result: the refusal fired on the first call of all six gate runs, and the operations are now admitted with defined empty images. The id is retained and never reused.
 
 Form-identity delta.
 
@@ -752,9 +807,21 @@ review could see, because every review wrote its own fixtures in the grammar
 the gate already accepted.
 
 - [x] **MCP-OP-ADMIT-091**: When a patch is submitted, clj-surgeon shall accept both the `apply_patch` V4A grammar and unified diff, selecting between them by the first non-blank line, and shall locate a V4A hunk by matching its content, treating the text on its `@@` line as a disambiguating hint rather than a requirement. *(z1)*
-- [x] **MCP-OP-ADMIT-092**: If a unified hunk's body carries a removal or an addition beyond its declared line counts, then clj-surgeon shall publish a typed overrun refusal naming the offending line, rather than applying the hunk the counts describe. *(z1, the unreadable-post-image cause)*
+- [x] **MCP-OP-ADMIT-092**: When clj-surgeon reads a unified hunk, the body shall delimit it and the declared line counts shall be advisory, so that a header which miscounts in either direction neither truncates the applied hunk nor refuses a readable patch. *(z1, the unreadable-post-image cause; corrected by the field replay)*
 - [x] **MCP-OP-ADMIT-093**: If a payload is in neither accepted grammar, then clj-surgeon shall name the grammars it tried, quote the first offending line, and publish the expected first line of each grammar in its next call. *(z1)*
 - [x] **MCP-OP-ADMIT-094**: When clj-surgeon commits, it shall leave no control file, snapshot, or report of its own visible to the workspace's version control. *(z1)*
+
+Field result, arm Z2 (rung L). The task begins by creating a file, so the v1
+boundary fired on the first call of all six gate runs.
+
+- [x] **MCP-OP-ADMIT-095**: When a patch creates a file, clj-surgeon shall admit it against an empty pre-image, report every owner of the new file as added, compute its hazards over the post image alone, publish a pre-image binding of created, and fence the write on the absence of the target. *(z2)*
+- [x] **MCP-OP-ADMIT-096**: When a patch deletes a file, clj-surgeon shall admit it as owners removed; and if the deleted namespace is still required elsewhere in the workspace, it shall publish a refusal-class namespace-form-removed hazard naming the dependents. *(z2)*
+- [x] **MCP-OP-ADMIT-097**: When a patch moves a file, clj-surgeon shall admit it as one transaction that creates the destination carrying the patch's edits and deletes the source. *(z2)*
+
+Field replay. The 109 payloads six gate runs actually sent, extracted from the
+z1 and z2 rollouts and replayed through the parser.
+
+- [x] **MCP-OP-ADMIT-098**: When a patch header names an absolute path that lies inside the resolved workspace root, clj-surgeon shall read it as the project-relative path it denotes; a path outside that root shall be refused exactly as before. *(field replay)*
 
 # #Witness Failure Baseline
 
@@ -1338,6 +1405,52 @@ file simply sat there; the state directory now carries a self-ignoring
 `.gitignore` covering the lock and any report artefact, while leaving the
 repository's own `focused-test.edn` tracked. And the snapshot venue was
 already outside the workspace, which is now witnessed rather than assumed.
+
+## #Replaying the field
+
+The acceptance test the three adversarial rounds lacked: not fixtures the
+reviewers wrote, but the 109 payloads six gate runs actually sent, extracted
+from the z1 and z2 rollouts and replayed through the parser.
+
+| Measure | Before | After |
+|---|---|---|
+| Payloads that parse | 32 of 109 | **109 of 109** |
+| Of the 77 field refusals, parse | 0 | **77 of 77** |
+| Of the 77, refused for a cause the gate no longer has | — | **51 of 77** |
+| First admit call of each run, against the correct pristine pre-image | 0 of 10 applied | **8 of 10 apply** |
+
+The 51 breaks down as the causes that no longer exist: 39 `invalid-patch`
+(wrong grammar, miscounted headers, absolute paths), 6
+`unsupported-patch-operation` (whole-file creation), 3 `admit-tool-failure`,
+2 `unreadable-post-image` (the gate's own truncation), 1
+`source-file-not-found`. The remaining 26 were refused for reasons that still
+exist and are still right: 17 `patch-does-not-apply` (the context genuinely
+did not match) and 9 `verification-failed`.
+
+**The apply column cannot be measured honestly from the rollouts, and saying
+so is part of the result.** Three reconstructions were tried — each payload
+independently against the base tree, sequential per run, and sequential with
+the agents' 19 interleaved native `apply_patch` calls replayed too — and the
+fidelity check fails in all three: of the 32 payloads that *succeeded in the
+field*, only 0 to 4 re-apply, depending on the strategy. The reason is
+structural. A payload that now succeeds where it once refused changes the tree
+for everything after it, and much of what follows in the rollout is the
+agent's *retry of the same edit*, which then cannot apply. Reconstructing the
+field pre-image would need every shell command replayed as well.
+
+So the parse number is the honest headline, because it is state-independent
+and it is exactly what the grammar fix moves; the first-call number is the
+honest apply evidence, because those ten payloads ran against a pristine tree
+and need no reconstruction at all. Both are in the table. The sequential
+replays are retained in `scratchpad/` as negative results.
+
+Two further defects came out of the replay that no adversarial round had
+reached, and both were in code the rounds had already hardened: the count
+handling, whose first fix was itself wrong in the mirror direction, and the
+phantom trailing line a terminating newline leaves behind, which was invisible
+while counts terminated a hunk and annexed a fourth line onto every three-line
+hunk the moment the body did. Neither was reachable by a reviewer writing
+fixtures, because a reviewer writes headers that count correctly.
 
 The measured complexity change is worth keeping as a number rather than a
 claim. The old line lookup counted newlines from the start of the file on
