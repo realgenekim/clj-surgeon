@@ -122,3 +122,26 @@ a warm project image, telemetry on every call, typed refusals, a per-worktree de
 (re-parse, kondo delta, focused suite, one receipt) and the only substrate on which
 proof-before-write is possible. The CLI is the right shape for `:ls-tree`: cold, seconds,
 no server, safe to run from a shell or a Makefile. Keep both; put the winners in both.
+
+## The fast-typist shape (codex spark / gpt-oss typist), placed on the battlefield (12:12Z, Gene's question)
+
+Measured: arm T (a cheap fast model typing from a strong model's spec) was negative on the
+medium rung, 409 s against shipped 303 s and native 191 s, more actions, acceptance no
+better. The mechanism is the same math as everything else: every handoff to the typist costs
+the strong model a return to write the spec and a return to verify the result, so the typist
+wins only when (spec length) is much smaller than (output length) AND the verification is
+mechanical rather than another model return. On a 20-line edit the spec is the edit; there
+is nothing to delegate. It is not on the withdrawn square by accident; it is the withdrawn
+square with an extra hop.
+
+Where it can win, and only there: the fan-out square, paired with the gate. The strong model
+states one intent; the tool discovers the N owners and the per-site templates; the typist
+fills N mechanical hunks (boilerplate, fixtures from a schema, a rule applied across many
+files); the gate verifies structurally in one receipt instead of the strong model re-reading
+N sites. Conditions that must hold: N large (the output-to-spec ratio is the whole margin),
+the templates exact enough that the typist makes no judgment, and the verifier a predicate,
+never a model. Filed as an experiment for after the gate exists: arm T2 = intent by the strong
+model, hunks by the typist, verification by the gate, against native on rung L; prediction:
+wins on tokens carried by the strong model, breaks even or loses on wall unless N exceeds
+about twenty owners. Not part of the battleground on its own; a possible force multiplier on
+one square once the gate and the fan-out verb exist.
