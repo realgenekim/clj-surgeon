@@ -1193,6 +1193,11 @@
                         :require-change-unprovable
                         :compact-relation-overlap}
                       error-type))
+      ;; @spec MCP-OP-EDIT-039
+      ;; A shape refusal that cannot show the shape teaches one field per
+      ;; return. The skeleton rides the closed diagnostic so it reaches the
+      ;; public MCP surface the ladder was actually climbed on; it is data,
+      ;; carries no write or retry authority, and only a shape refusal has one.
       (assoc :compact_relation_diagnostic
              (cond-> {:failed_stage (name (:failed-stage result))}
                (:path result)
@@ -1203,7 +1208,11 @@
                           (assoc :file_index (nth path 2))
 
                           (integer? (nth path 4 nil))
-                          (assoc :row_index (nth path 4)))))))
+                          (assoc :row_index (nth path 4)))))
+
+               (and (= :invalid-compact-relation error-type)
+                    (contains? result :expected-shape))
+               (assoc :expected_shape (:expected-shape result))))
       (contains? result :change-ids)
       (assoc :change_ids (mapv #(if (keyword? %) (name %) (str %))
                                (:change-ids result)))

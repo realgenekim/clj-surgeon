@@ -1,0 +1,38 @@
+{
+  "Ok": {
+    "content": [
+      {
+        "type": "text",
+        "text": "edit_clojure\n  refused · require-change-unprovable at [\"require_change\" \"files\" 0] · 34.92 ms\n\n✓ source unchanged\n→ Correct the declared scope or count and call apply_clojure_changes once."
+      }
+    ],
+    "structuredContent": {
+      "phase": "kernel",
+      "reason": "require-change-unprovable",
+      "workspace_root": "/home/tester/acid/wt/rf1-g2-A-1",
+      "remedy": "Correct the declared scope or count and call apply_clojure_changes once.",
+      "mutation_attempted": false,
+      "error": "Require entries must be direct [lib :as alias] vectors",
+      "write_authority": false,
+      "path": [
+        "require_change",
+        "files",
+        0
+      ],
+      "elapsed_ms": 34.924155,
+      "source_unchanged": true,
+      "error_type": "require-change-unprovable",
+      "next_action": "correct_request",
+      "compact_relation_diagnostic": {
+        "failed_stage": "require-lowering",
+        "path": {
+          "field": "require_change",
+          "file_index": 0
+        }
+      },
+      "ok": false,
+      "operation": "edit_clojure"
+    },
+    "isError": true
+  }
+}

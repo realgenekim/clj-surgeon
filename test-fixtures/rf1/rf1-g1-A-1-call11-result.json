@@ -1,0 +1,34 @@
+{
+  "Ok": {
+    "content": [
+      {
+        "type": "text",
+        "text": "edit_clojure\n  refused · invalid-compact-relation at [\"symbol_migration\" \"columns\"] · 0.85 ms\n\n✓ source unchanged\n→ Correct the declared scope or count and call apply_clojure_changes once."
+      }
+    ],
+    "structuredContent": {
+      "workspace_root": "/home/tester/acid/wt/rf1-g1-A-1",
+      "remedy": "Correct the declared scope or count and call apply_clojure_changes once.",
+      "mutation_attempted": false,
+      "error": "columns must be [owner, from, matches]",
+      "write_authority": false,
+      "path": [
+        "symbol_migration",
+        "columns"
+      ],
+      "elapsed_ms": 0.845958,
+      "source_unchanged": true,
+      "error_type": "invalid-compact-relation",
+      "next_action": "correct_request",
+      "compact_relation_diagnostic": {
+        "failed_stage": "relation-admission",
+        "path": {
+          "field": "symbol_migration"
+        }
+      },
+      "ok": false,
+      "operation": "edit_clojure"
+    },
+    "isError": true
+  }
+}

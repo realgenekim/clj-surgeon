@@ -10,6 +10,7 @@
    [clj-surgeon.mcp-extraction-plan :as extraction-plan]
    [clj-surgeon.mcp-schema :as schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
+   [cheshire.core :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -286,7 +287,19 @@
     (is (string? (:error structured)))
     (is (<= (count (:error structured)) 1024))
     (is (= failed-stage (:failed_stage diagnostic)))
-    (is (every? #{:failed_stage :path} (keys diagnostic)))
+    ;; @spec MCP-OP-EDIT-039
+    ;; The closed diagnostic admits expected_shape, and ONLY for the shape
+    ;; refusal: a refusal that cannot show the shape teaches one field per
+    ;; return, which is the ladder this change exists to remove.
+    (is (every? #{:failed_stage :path :expected_shape} (keys diagnostic)))
+    (if (= "invalid-compact-relation" error-type)
+      (do
+        (is (= relations/relation-expected-shape (:expected_shape diagnostic))
+            "the public shape refusal must carry the whole accepted skeleton")
+        (is (= relations/relation-fields
+               (set (keys (:expected_shape diagnostic))))))
+      (is (not (contains? diagnostic :expected_shape))
+          (str error-type " is not a shape refusal and must omit expected_shape")))
     (cond
       (= ::optional path)
       (when-let [actual-path (:path diagnostic)]
@@ -1081,3 +1094,407 @@
         (change-buffer/clear-bases!)
         (mcp-tool/init! nil)
         (delete-tree! workspace)))))
+
+(def scoped-file "test/sample/scoped_test.clj")
+
+(def scoped-request
+  {"symbol_migration"
+   {"target_alias" "submission-row"
+    "target_rule" "preserve-name"
+    "columns" ["owner" "from" "matches"]
+    "files" [[scoped-file [["render-row" "review/board-row" 1]]]]}
+   "require_change"
+   {"add" {"lib" "sample.views.submission-row" "as" "submission-row"}
+    "files" [{"file" scoped-file}]}})
+
+(defn- scoped-source
+  [require-body]
+  (str "(ns sample.scoped-test\n"
+       "  (:require\n"
+       require-body
+       "))\n"
+       "\n"
+       "(deftest render-row\n"
+       "  (is (= 1 (review/board-row))))\n"))
+
+(defn- scoped-lowering
+  ([source] (scoped-lowering source scoped-request))
+  ([source request]
+   (relations/compile-frozen
+     {scoped-file source}
+     (relations/compile-source-blind request))))
+
+(deftest an-invalid-compact-relation-refusal-carries-the-expected-shape
+  ;; @spec MCP-OP-EDIT-037
+  (let [expected
+        {"symbol_migration"
+         {"target_alias" "<alias>"
+          "target_rule" "preserve-name"
+          "columns" ["owner" "from" "matches"]
+          "files" [["<file>" [["<owner>" "<from-symbol>" 1]]]]}
+         "require_change"
+         {"add" {"lib" "<lib>" "as" "<alias>"}
+          "files" [{"file" "<file>"
+                    "remove" {"lib" "<lib>" "as" "<alias>"}}]}}]
+    (doseq [[label request path]
+            [[:missing-pair (dissoc relation-request "require_change")
+              ["require_change"]]
+             [:wrong-columns
+              (assoc-in relation-request ["symbol_migration" "columns"]
+                        ["from" "owner" "matches"])
+              ["symbol_migration" "columns"]]
+             [:wrong-file-tuple-arity
+              (update-in relation-request ["symbol_migration" "files" 0] pop)
+              ["symbol_migration" "files" 0]]
+             [:bad-migration-symbol
+              (assoc-in relation-request
+                        ["symbol_migration" "files" 0 1 0 1] "one/two/three")
+              ["symbol_migration" "files" 0 1 0 1]]
+             [:unknown-require-field
+              (assoc-in relation-request ["require_change" "extra"] true)
+              ["require_change" "extra"]]
+             [:unknown-require-file-field
+              (assoc-in relation-request
+                        ["require_change" "files" 0 "extra"] true)
+              ["require_change" "files" 0 "extra"]]
+             [:bad-lib-alias-object
+              (assoc-in relation-request ["require_change" "add"]
+                        {"lib" "sample.views.submission-row"})
+              ["require_change" "add" "as"]]
+             [:wrong-target-rule
+              (assoc-in relation-request
+                        ["symbol_migration" "target_rule"] "rename")
+              ["symbol_migration" "target_rule"]]]]
+      (testing (name label)
+        (let [result (relations/compile-source-blind request)]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= :invalid-compact-relation (:error-type result)))
+          (is (= path (:path result)))
+          (is (= expected (:expected-shape result)) (pr-str result)))))
+
+    (testing "the skeleton is derived from the one relation schema"
+      (let [shape (:expected-shape
+                    (relations/compile-source-blind
+                      (dissoc relation-request "require_change")))]
+        (is (= (set (get-in relations/relation-schema [:request :relations]))
+               (set (keys shape))))
+        (is (= relations/relation-fields (set (keys shape))))
+        (is (= (get-in relations/relation-schema [:migration :allowed])
+               (set (keys (get shape "symbol_migration")))))
+        (is (= (get-in relations/relation-schema [:migration :columns])
+               (get-in shape ["symbol_migration" "columns"])))
+        (is (= (get-in relations/relation-schema [:migration :target-rule])
+               (get-in shape ["symbol_migration" "target_rule"])))
+        (is (= (count (get-in relations/relation-schema [:migration :columns]))
+               (count (get-in shape
+                              ["symbol_migration" "files" 0 1 0]))))
+        (is (= (get-in relations/relation-schema [:require :allowed])
+               (set (keys (get shape "require_change")))))
+        (is (= (get-in relations/relation-schema [:require :file :allowed])
+               (set (keys (get-in shape ["require_change" "files" 0])))))
+        (is (= (get-in relations/relation-schema [:lib-alias :allowed])
+               (set (keys (get-in shape ["require_change" "add"])))))
+        (is (= (get-in relations/relation-schema [:lib-alias :allowed])
+               (set (keys (get-in shape
+                                  ["require_change" "files" 0 "remove"])))))
+        (is (= relations/allowed-request-fields
+               (get-in relations/relation-schema [:request :allowed])))))
+
+    (testing "only shape refusals carry expected_shape"
+      (let [overlap
+            (relations/compile-source-blind
+              (update relation-request "edits" conj
+                      {"file" "src/sample/review_updates.clj"
+                       "within" {"form" "push-person-row"}
+                       "from" "view-review/board-row"
+                       "to" "submission-row/board-row"
+                       "matches" 1}))
+            source-blind (relations/compile-source-blind relation-request)
+            unprovable (relations/compile-frozen {} source-blind)
+            path-conflict
+            (relations/validate-path-resolution
+              source-blind
+              {:ok false
+               :raw-path (first relation-files)
+               :error "A relation path is outside the workspace"})]
+        (is (= :compact-relation-overlap (:error-type overlap)))
+        (is (not (contains? overlap :expected-shape)) (pr-str overlap))
+        (is (= :require-change-unprovable (:error-type unprovable)))
+        (is (not (contains? unprovable :expected-shape)) (pr-str unprovable))
+        (is (= :compact-relation-path-conflict (:error-type path-conflict)))
+        (is (not (contains? path-conflict :expected-shape))
+            (pr-str path-conflict))
+        (is (not (contains? source-blind :expected-shape))
+            (pr-str (keys source-blind)))))))
+
+(deftest require-change-provability-is-scoped-to-the-entries-named
+  ;; @spec MCP-OP-EDIT-038
+  (testing "an untouched non-direct entry never blocks a provable change"
+    (let [source (scoped-source
+                   (str "   [clojure.test :refer [deftest is testing]]\n"
+                        "   [sample.views.review :as review]"))
+          result (scoped-lowering source)
+          edit (first (:generated-require-edits result))]
+      (is (:ok result) (pr-str result))
+      (is (= 1 (count (:generated-require-edits result))))
+      (is (= (str "(:require\n"
+                  "   [clojure.test :refer [deftest is testing]]\n"
+                  "   [sample.views.review :as review])")
+             (get edit "from")))
+      (is (= (str "(:require\n"
+                  "   [clojure.test :refer [deftest is testing]]\n"
+                  "   [sample.views.review :as review]\n"
+                  "   [sample.views.submission-row :as submission-row])")
+             (get edit "to")))
+      (is (= 1 (get edit "matches")))
+      (is (= {"namespace" true} (get edit "within")))))
+
+  (testing "every untouched byte survives an unusual separator"
+    (let [source (scoped-source
+                   (str "   [clojure.test :refer [deftest is testing]] ,\n"
+                        "      [sample.views.review :as review]"))
+          result (scoped-lowering source)
+          edit (first (:generated-require-edits result))]
+      (is (:ok result) (pr-str result))
+      (is (= (str "(:require\n"
+                  "   [clojure.test :refer [deftest is testing]] ,\n"
+                  "      [sample.views.review :as review] ,\n"
+                  "      [sample.views.submission-row :as submission-row])")
+             (get edit "to")))
+      (is (str/includes? (get edit "to")
+                         "[clojure.test :refer [deftest is testing]]"))))
+
+  (testing "a declared removal still lowers beside an untouched entry"
+    (let [source (scoped-source
+                   (str "   [clojure.test :refer [deftest is testing]]\n"
+                        "   [sample.views.review :as review]"))
+          result (scoped-lowering
+                   source
+                   (assoc-in scoped-request
+                             ["require_change" "files" 0 "remove"]
+                             {"lib" "sample.views.review" "as" "review"}))
+          edit (first (:generated-require-edits result))]
+      (is (:ok result) (pr-str result))
+      (is (= (str "(:require\n"
+                  "   [clojure.test :refer [deftest is testing]]\n"
+                  "   [sample.views.submission-row :as submission-row])")
+             (get edit "to")))))
+
+  (testing "an entry the request names must still be direct"
+    (let [source (scoped-source
+                   (str "   [clojure.test :refer [deftest is testing]]\n"
+                        "   [sample.views.review :as review :refer [board-row]]"))
+          result (scoped-lowering
+                   source
+                   (assoc-in scoped-request
+                             ["require_change" "files" 0 "remove"]
+                             {"lib" "sample.views.review" "as" "review"}))]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= :require-change-unprovable (:error-type result)))
+      (is (str/includes? (:error result)
+                         "drop options the removal did not declare")
+          (str "the refusal must say what it protects, not restate a rule: "
+               (:error result)))
+      (is (str/includes? (:error result) ":refer")
+          "and must quote the entry so the caller can act on it")
+      (is (= ["require_change" "files" 0 "remove"] (:path result)))))
+
+  (testing "duplicate-require refusals survive a non-direct existing entry"
+    (let [already-required
+          (scoped-lowering
+            (scoped-source
+              (str "   [clojure.test :refer [deftest is testing]]\n"
+                   "   [sample.views.submission-row :as row :refer [board-row]]")))
+          alias-bound
+          (scoped-lowering
+            (scoped-source
+              (str "   [clojure.test :refer [deftest is testing]]\n"
+                   "   [sample.other :as submission-row :refer [board-row]]")))]
+      (is (false? (:ok already-required)) (pr-str already-required))
+      (is (= "Target namespace is already required" (:error already-required)))
+      (is (false? (:ok alias-bound)) (pr-str alias-bound))
+      (is (= "Target alias is already bound" (:error alias-bound)))))
+
+  (testing "a clause with no vector libspec entry still refuses"
+    (let [result (scoped-lowering
+                   (scoped-source "   clojure.string"))]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "Require entries must be direct [lib :as alias] vectors"
+             (:error result)))
+      (is (= ["require_change" "files" 0] (:path result)))))
+
+  (testing "a declared removal must still match exactly one entry"
+    (let [result (scoped-lowering
+                   (scoped-source
+                     (str "   [clojure.test :refer [deftest is testing]]\n"
+                          "   [sample.views.review :as review]"))
+                   (assoc-in scoped-request
+                             ["require_change" "files" 0 "remove"]
+                             {"lib" "sample.views.absent" "as" "absent"}))]
+      (is (false? (:ok result)) (pr-str result))
+      (is (= "Declared removal must match exactly one direct libspec"
+             (:error result))))))
+
+;; ============================================================
+;; rf2-3 — the rf1 payloads, replayed as the caller actually sent them.
+;;
+;; These are not synthetic fixtures. Every request below is the verbatim JSON a
+;; Codex agent sent to `edit_clojure` during cohort rf1 on 2026-09-02, lifted
+;; from the rollouts' `mcp_tool_call_end` records (the wire bytes, upstream of
+;; any harness display limit) and stored under test-fixtures/rf1/.
+;;
+;; The measured cost: two runs each climbed a FOUR-call ladder learning one
+;; field constraint per return, and in both runs the fourth call — the one that
+;; finally had a valid `symbol_migration` — died on `require-change-unprovable`
+;; and ENDED the structural route. Forensics on these exact payloads showed the
+;; `require_change` object was byte-identical across calls 11 to 13 in g1 and
+;; across all four calls in g2: the require refusal was always going to fire,
+;; hidden behind the earlier rungs.
+;;
+;; The predicate for these tests is the one the field cares about: the LAST call
+;; of each ladder must now succeed, or refuse with the whole expected shape, on
+;; the FIRST try.
+;; ============================================================
+
+(defn- rf1-payload [name]
+  (json/parse-string (slurp (io/file "test-fixtures/rf1" name))))
+
+(defn- rf1-refusal-text [name]
+  (let [envelope (json/parse-string (slurp (io/file "test-fixtures/rf1" name)))]
+    (get-in envelope ["Ok" "structuredContent" "error"])))
+
+;; @spec MCP-OP-EDIT-037
+(deftest rf1-g1-A-1-shape-ladder-is-answered-by-one-refusal
+  (let [call-10 (rf1-payload "rf1-g1-A-1-call10-args.json")
+        call-11 (rf1-payload "rf1-g1-A-1-call11-args.json")
+        call-12 (rf1-payload "rf1-g1-A-1-call12-args.json")]
+    (testing "the field really did refuse one field at a time"
+      (is (= "Closed compact relations require symbol_migration"
+             (rf1-refusal-text "rf1-g1-A-1-call10-result.json")))
+      (is (= "columns must be [owner, from, matches]"
+             (rf1-refusal-text "rf1-g1-A-1-call11-result.json")))
+      (is (= "Each migration file must be [file, rows]"
+             (rf1-refusal-text "rf1-g1-A-1-call12-result.json"))))
+
+    (testing "every rung now hands back the complete accepted skeleton, so the
+              caller never has to climb it a second time"
+      (doseq [[label request] [["call-10" call-10]
+                               ["call-11" call-11]
+                               ["call-12" call-12]]]
+        (let [result (relations/compile-source-blind request)]
+          (is (false? (:ok result)) label)
+          (is (= :invalid-compact-relation (:error-type result)) label)
+          (is (= relations/relation-expected-shape (:expected-shape result))
+              (str label ": a shape refusal that cannot show the shape teaches "
+                   "one field per return"))
+          (is (false? (:mutation-attempted result)) label))))))
+
+;; @spec MCP-OP-EDIT-038
+(deftest rf1-require-change-refusals-were-false-and-are-gone
+  (testing "rf1-g1-A-1 call 13 — the rejected file was the TEST namespace, whose
+            only non-direct entry is [clojure.test :refer [deftest is testing]],
+            which the call never asked to touch"
+    (is (= "Require entries must be direct [lib :as alias] vectors"
+           (rf1-refusal-text "rf1-g1-A-1-call13-result.json")))
+    (let [request (rf1-payload "rf1-g1-A-1-call13-args.json")
+          source-blind (relations/compile-source-blind request)]
+      (is (:ok source-blind)
+          (str "the last rung must now pass admission on the first try: "
+               (pr-str (select-keys source-blind [:error :error-type :path]))))
+      ;; the three named files were untouched by :extract! at that moment, so
+      ;; the repository's own bytes ARE the frozen sources rf1 lowered against
+      (let [sources {"src/clj_surgeon/mcp_formatter.clj"
+                     (slurp "src/clj_surgeon/mcp_formatter.clj")
+                     "src/clj_surgeon/mcp_tool.clj"
+                     (slurp "src/clj_surgeon/mcp_tool.clj")
+                     "test/clj_surgeon/mcp_change_buffer_test.clj"
+                     (slurp "test/clj_surgeon/mcp_change_buffer_test.clj")}
+            lowered (relations/compile-frozen sources source-blind)]
+        (is (:ok lowered)
+            (str "require lowering must not refuse because of an untouched "
+                 "entry: " (pr-str (select-keys lowered [:error :error-type :path]))))
+        (is (= 3 (count (:generated-require-edits lowered))))
+        (let [test-edit (first (filter #(= "test/clj_surgeon/mcp_change_buffer_test.clj"
+                                           (get % "file"))
+                                       (:generated-require-edits lowered)))]
+          (is (some? test-edit))
+          (is (str/includes? (get test-edit "to")
+                             "[clojure.test :refer [deftest is testing]]")
+              "the untouched entry must survive byte for byte")
+          (is (str/includes? (get test-edit "to")
+                             "[clj-surgeon.mcp-exact-verify :as exact-verify]"))))))
+
+  (testing "rf1-g2-A-1 call 13 — the rejected file was mcp_change_buffer.clj,
+            whose only non-direct entry is the `:as ... :refer [...]` require
+            that Surgeon's OWN :extract! had written five calls earlier"
+    (is (= "Require entries must be direct [lib :as alias] vectors"
+           (rf1-refusal-text "rf1-g2-A-1-call13-result.json")))
+    (let [request (rf1-payload "rf1-g2-A-1-call13-args.json")
+          source-blind (relations/compile-source-blind request)]
+      (is (:ok source-blind)
+          (str "admission on the first try: "
+               (pr-str (select-keys source-blind [:error :error-type :path]))))
+      (let [sources {"src/clj_surgeon/mcp_change_buffer.clj"
+                     ;; the exact intermediate the old :extract! produced,
+                     ;; reproduced byte for byte (target hash 3e315396...)
+                     (slurp "test-fixtures/rf1/g2-A-1-change-buffer-after-old-extract.clj")
+                     "src/clj_surgeon/mcp_formatter.clj"
+                     (slurp "src/clj_surgeon/mcp_formatter.clj")
+                     "src/clj_surgeon/mcp_tool.clj"
+                     (slurp "src/clj_surgeon/mcp_tool.clj")
+                     "test/clj_surgeon/mcp_change_buffer_test.clj"
+                     (slurp "test/clj_surgeon/mcp_change_buffer_test.clj")}
+            lowered (relations/compile-frozen sources source-blind)]
+        ;; The honest outcome, and it is NOT a green. Admission now passes on
+        ;; the first try, and the old blanket refusal about untouched entries is
+        ;; gone. What remains is a DIFFERENT and correct refusal, scoped to the
+        ;; one entry this call actually names: it declared it was removing
+        ;; `[clj-surgeon.mcp-exact-verify :as mcp-exact-verify]`, but the entry
+        ;; on disk is `[... :as mcp-exact-verify :refer [admission-unverified?
+        ;; expand-command run-process!]]`, and deleting it would silently drop
+        ;; three referred names the removal never mentioned. Fail closed is
+        ;; right here; the refusal was made recoverable instead of weakened.
+        ;;
+        ;; The entry it trips on exists ONLY because the old :extract! wrote it.
+        ;; rf2-1 stops emitting that `:refer`, so this call disappears.
+        (is (false? (:ok lowered)))
+        (is (= :require-change-unprovable (:error-type lowered)))
+        (is (= ["require_change" "files" 0 "remove"] (:path lowered))
+            "the refusal is scoped to the one entry the call names")
+        (is (str/includes? (:error lowered) "drop options the removal did not declare")
+            (str "a refusal must say what it is protecting: " (:error lowered)))
+        (is (str/includes? (:error lowered) ":refer")
+            "and it must quote the entry, so the caller can act on it")
+        (is (str/includes? (:error lowered) "admission-unverified?"))))))
+
+;; @spec MCP-OP-EDIT-038
+(deftest a-re-alias-is-not-a-duplicate-require
+  (testing "remove [lib :as a] and add [lib :as b] lowers; the entry being
+            removed is not a duplicate of the entry replacing it"
+    (let [source (str "(ns sample.core
+"
+                      "  (:require
+"
+                      "   [alpha.core :as alpha]
+"
+                      "   [sample.moved :as old-name]))
+")
+          request {"workspace_root" "/w"
+                   "symbol_migration"
+                   {"target_alias" "new-name" "target_rule" "preserve-name"
+                    "columns" ["owner" "from" "matches"]
+                    "files" [["a.clj" [["owner" "old-name/moved" 1]]]]}
+                   "require_change"
+                   {"add" {"lib" "sample.moved" "as" "new-name"}
+                    "files" [{"file" "a.clj"
+                              "remove" {"lib" "sample.moved" "as" "old-name"}}]}}
+          source-blind (relations/compile-source-blind request)
+          lowered (relations/compile-frozen {"a.clj" source} source-blind)]
+      (is (:ok source-blind))
+      (is (:ok lowered)
+          (str "a re-alias must not refuse as a duplicate: "
+               (pr-str (select-keys lowered [:error :error-type :path]))))
+      (is (= (str "(:require\n"
+                  "   [alpha.core :as alpha]\n"
+                  "   [sample.moved :as new-name])")
+             (get (first (:generated-require-edits lowered)) "to"))))))

@@ -1,0 +1,204 @@
+{
+  "workspace_root": "/home/tester/acid/wt/rf1-g1-A-1",
+  "require_change": {
+    "add": {
+      "lib": "clj-surgeon.mcp-exact-verify",
+      "as": "exact-verify"
+    },
+    "files": [
+      {
+        "file": "src/clj_surgeon/mcp_change_buffer.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-exact-verify",
+          "as": "mcp-exact-verify"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_formatter.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-change-buffer",
+          "as": "change-buffer"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_tool.clj"
+      },
+      {
+        "file": "test/clj_surgeon/mcp_change_buffer_test.clj"
+      }
+    ]
+  },
+  "edits": [
+    {
+      "file": "src/clj_surgeon/mcp_exact_verify.clj",
+      "within": {
+        "namespace": "clj-surgeon.mcp-exact-verify"
+      },
+      "from": "\"Proof-carrying semantic selection followed by one addressed transaction.\"",
+      "to": "\"Compile and run project-owned exact verification profiles.\"",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_exact_verify.clj",
+      "within": {
+        "namespace": "clj-surgeon.mcp-exact-verify"
+      },
+      "from": "(:import\n   (java.nio.charset StandardCharsets)\n   (java.nio.file LinkOption Path Paths)\n   (java.security MessageDigest)\n   (java.util UUID))",
+      "to": "(:import\n   (java.nio.charset StandardCharsets)\n   (java.security MessageDigest))",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_exact_verify.clj",
+      "within": {
+        "form": "admission-unverified?"
+      },
+      "from": "defn-",
+      "to": "defn",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-check!"
+      },
+      "from": "run-process!",
+      "to": "exact-verify/run-process!",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-check!"
+      },
+      "from": "admission-unverified?",
+      "to": "exact-verify/admission-unverified?",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "diagnostic-command"
+      },
+      "from": "expand-command",
+      "to": "exact-verify/expand-command",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-diagnostic-check!"
+      },
+      "from": "run-process!",
+      "to": "exact-verify/run-process!",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-diagnostic-check!"
+      },
+      "from": "admission-unverified?",
+      "to": "exact-verify/admission-unverified?",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-verification!"
+      },
+      "from": "expand-command",
+      "to": "exact-verify/expand-command",
+      "matches": 2
+    },
+    {
+      "file": "src/clj_surgeon/mcp_formatter.clj",
+      "within": {
+        "form": "format-candidates!"
+      },
+      "from": "change-buffer/run-process!",
+      "to": "exact-verify/run-process!",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_formatter.clj",
+      "within": {
+        "form": "format-candidates!"
+      },
+      "from": "change-buffer/expand-command",
+      "to": "exact-verify/expand-command",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-extraction!"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-extraction!"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-explicit-change!"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile",
+      "matches": 1
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-explicit-change!"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!",
+      "matches": 1
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-profile-compilation-is-project-owned-and-snapshot-bound"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile",
+      "matches": 3
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-process-evidence-is-complete-bounded-and-honest"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!",
+      "matches": 4
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-process-evidence-is-complete-bounded-and-honest"
+      },
+      "from": "change-buffer/classify-exact-process-outcome",
+      "to": "exact-verify/classify-exact-process-outcome",
+      "matches": 2
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-verification-admission-timeout-is-unverified"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!",
+      "matches": 1
+    }
+  ]
+}

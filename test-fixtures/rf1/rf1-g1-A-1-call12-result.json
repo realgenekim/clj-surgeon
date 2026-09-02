@@ -1,0 +1,36 @@
+{
+  "Ok": {
+    "content": [
+      {
+        "type": "text",
+        "text": "edit_clojure\n  refused · invalid-compact-relation at [\"symbol_migration\" \"files\" 0] · 0.76 ms\n\n✓ source unchanged\n→ Correct the declared scope or count and call apply_clojure_changes once."
+      }
+    ],
+    "structuredContent": {
+      "workspace_root": "/home/tester/acid/wt/rf1-g1-A-1",
+      "remedy": "Correct the declared scope or count and call apply_clojure_changes once.",
+      "mutation_attempted": false,
+      "error": "Each migration file must be [file, rows]",
+      "write_authority": false,
+      "path": [
+        "symbol_migration",
+        "files",
+        0
+      ],
+      "elapsed_ms": 0.764868,
+      "source_unchanged": true,
+      "error_type": "invalid-compact-relation",
+      "next_action": "correct_request",
+      "compact_relation_diagnostic": {
+        "failed_stage": "relation-admission",
+        "path": {
+          "field": "symbol_migration",
+          "file_index": 0
+        }
+      },
+      "ok": false,
+      "operation": "edit_clojure"
+    },
+    "isError": true
+  }
+}

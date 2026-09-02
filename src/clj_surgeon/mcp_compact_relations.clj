@@ -6,11 +6,74 @@
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
 
-(def relation-fields #{"symbol_migration" "require_change"})
+;; @spec MCP-OP-EDIT-037
+(def relation-schema
+  "The single source of truth for the closed compact relation shape.
 
-(def allowed-request-fields
-  #{"workspace_root" "symbol_migration" "require_change"
-    "edits" "delete_owners" "verify"})
+  Both admission (`validate-migration!`, `validate-require!`,
+  `validate-lib-alias!`, and the request-field checks in
+  `compile-source-blind`) and the published `expected_shape` skeleton read
+  their allowed field names, required field names, column vector, and
+  `target_rule` constant from this one value, so a refusal can never teach a
+  shape the validator does not accept."
+  {:request {:allowed #{"workspace_root" "symbol_migration" "require_change"
+                        "edits" "delete_owners" "verify"}
+             :relations #{"symbol_migration" "require_change"}}
+   :migration {:field "symbol_migration"
+               :allowed #{"target_alias" "target_rule" "columns" "files"}
+               :required #{"target_alias" "target_rule" "columns" "files"}
+               :columns ["owner" "from" "matches"]
+               :target-rule "preserve-name"}
+   :require {:field "require_change"
+             :allowed #{"add" "files"}
+             :required #{"add" "files"}
+             :file {:allowed #{"file" "remove"}
+                    :required #{"file"}}}
+   :lib-alias {:allowed #{"lib" "as"}
+               :required #{"lib" "as"}}})
+
+(def relation-fields (get-in relation-schema [:request :relations]))
+
+(def allowed-request-fields (get-in relation-schema [:request :allowed]))
+
+(defn- object-skeleton
+  "Render one closed object skeleton for exactly the schema's allowed fields."
+  [allowed field->value]
+  (into {} (map (fn [field] [field (get field->value field)])) allowed))
+
+(defn- lib-alias-skeleton []
+  (object-skeleton (get-in relation-schema [:lib-alias :allowed])
+                   {"lib" "<lib>" "as" "<alias>"}))
+
+(defn- migration-skeleton []
+  (let [columns (get-in relation-schema [:migration :columns])]
+    (object-skeleton
+      (get-in relation-schema [:migration :allowed])
+      {"target_alias" "<alias>"
+       "target_rule" (get-in relation-schema [:migration :target-rule])
+       "columns" columns
+       "files" [["<file>"
+                 [(mapv {"owner" "<owner>"
+                         "from" "<from-symbol>"
+                         "matches" 1}
+                        columns)]]]})))
+
+(defn- require-skeleton []
+  (object-skeleton
+    (get-in relation-schema [:require :allowed])
+    {"add" (lib-alias-skeleton)
+     "files" [(object-skeleton
+                (get-in relation-schema [:require :file :allowed])
+                {"file" "<file>" "remove" (lib-alias-skeleton)})]}))
+
+;; @spec MCP-OP-EDIT-037
+(def relation-expected-shape
+  "The literal accepted skeleton of the closed relation pair, derived from
+  `relation-schema` so one shape refusal replaces the whole field-at-a-time
+  ladder."
+  (object-skeleton (get-in relation-schema [:request :relations])
+                   {"symbol_migration" (migration-skeleton)
+                    "require_change" (require-skeleton)}))
 
 (defn- string-keys [value]
   (cond
@@ -129,15 +192,16 @@
 
 (defn- validate-migration! [migration]
   (closed-map! migration
-               #{"target_alias" "target_rule" "columns" "files"}
-               #{"target_alias" "target_rule" "columns" "files"}
+               (get-in relation-schema [:migration :allowed])
+               (get-in relation-schema [:migration :required])
                ["symbol_migration"])
   (let [target-alias (simple-symbol! (get migration "target_alias")
                                      ["symbol_migration" "target_alias"])
-        _ (when-not (= "preserve-name" (get migration "target_rule"))
+        _ (when-not (= (get-in relation-schema [:migration :target-rule])
+                       (get migration "target_rule"))
             (fail! "target_rule must be preserve-name"
                    ["symbol_migration" "target_rule"]))
-        _ (when-not (= ["owner" "from" "matches"]
+        _ (when-not (= (get-in relation-schema [:migration :columns])
                        (get migration "columns"))
             (fail! "columns must be [owner, from, matches]"
                    ["symbol_migration" "columns"]))
@@ -206,12 +270,17 @@
         {:target-alias target-alias :files parsed}))))
 
 (defn- validate-lib-alias! [value path]
-  (closed-map! value #{"lib" "as"} #{"lib" "as"} path)
+  (closed-map! value
+               (get-in relation-schema [:lib-alias :allowed])
+               (get-in relation-schema [:lib-alias :required])
+               path)
   {:lib (namespace-symbol! (get value "lib") (conj path "lib"))
    :as (simple-symbol! (get value "as") (conj path "as"))})
 
 (defn- validate-require! [require-change]
-  (closed-map! require-change #{"add" "files"} #{"add" "files"}
+  (closed-map! require-change
+               (get-in relation-schema [:require :allowed])
+               (get-in relation-schema [:require :required])
                ["require_change"])
   (let [add (validate-lib-alias! (get require-change "add")
                                  ["require_change" "add"])
@@ -223,7 +292,9 @@
      (loop [index 0 remaining files seen #{} parsed []]
        (if-let [entry (first remaining)]
          (do
-           (closed-map! entry #{"file" "remove"} #{"file"}
+           (closed-map! entry
+                        (get-in relation-schema [:require :file :allowed])
+                        (get-in relation-schema [:require :file :required])
                         ["require_change" "files" index])
            (let [file (nonblank! (get entry "file")
                                  ["require_change" "files" index "file"])
@@ -321,11 +392,18 @@
           :deleted_owners (deletion-count ordinary-request)
           :declared_matches symbol-matches}})
       (catch clojure.lang.ExceptionInfo error
-        (let [data (ex-data error)]
-          (relation-refusal
-            (or (:relation-error-type data) :invalid-compact-relation)
-            (or (:failed-stage data) :relation-admission)
-            (.getMessage error) (:path data)))))))
+        ;; @spec MCP-OP-EDIT-037
+        (let [data (ex-data error)
+              error-type (or (:relation-error-type data)
+                             :invalid-compact-relation)]
+          (cond-> (relation-refusal
+                    error-type
+                    (or (:failed-stage data) :relation-admission)
+                    (.getMessage error) (:path data))
+            ;; Only shape refusals teach the shape ; path-conflict,
+            ;; require-change-unprovable, and overlap refusals stay closed.
+            (= :invalid-compact-relation error-type)
+            (assoc :expected-shape relation-expected-shape)))))))
 
 (defn validate-path-resolution
   "Prove that one existing resolver result gives each raw relation path one canonical identity."
@@ -399,14 +477,30 @@
 (defn- meaningful-node? [node]
   (not (contains? #{:whitespace :newline :comma} (n/tag node))))
 
-(defn- entry-facts [node]
+;; @spec MCP-OP-EDIT-038
+(defn- lenient-entry-facts
+  "Read `{:lib, :as, :direct?}` from any vector libspec node.
+
+  `:as` is nil when the entry binds no alias, and `:direct?` is true only for
+  the exact three-element `[lib :as alias]` shape. Entries the request never
+  names are read leniently so that an untouched `[lib :refer [...]]` cannot
+  refuse a provable require change, while still proving that the target lib or
+  alias is not already bound."
+  [node]
   (when (= :vector (n/tag node))
     (let [value (try (n/sexpr node) (catch Exception _ nil))]
-      (when (and (vector? value) (= 3 (count value))
-                 (symbol? (nth value 0)) (= :as (nth value 1))
-                 (symbol? (nth value 2)))
-        {:lib (str (nth value 0))
-         :as (str (nth value 2))}))))
+      (when (and (vector? value) (seq value) (symbol? (first value)))
+        (let [alias (second (drop-while #(not= :as %) value))]
+          {:lib (str (first value))
+           :as (when (symbol? alias) (str alias))
+           :direct? (and (= 3 (count value))
+                         (= :as (nth value 1))
+                         (symbol? (nth value 2)))})))))
+
+(defn- entry-facts [node]
+  (let [facts (lenient-entry-facts node)]
+    (when (:direct? facts)
+      (select-keys facts [:lib :as]))))
 
 (defn- target-node [{:keys [lib as]}]
   (n/vector-node
@@ -444,27 +538,68 @@
                                    (when (meaningful-node? node) index))
                                  children)
             entry-indexes (vec (rest meaningful-indexes))
-            entries (mapv #(entry-facts (get children %)) entry-indexes)
-            _ (when (or (empty? entries) (some nil? entries))
+            ;; @spec MCP-OP-EDIT-038
+            ;; Positional, aligned with entry-indexes ; nil for any meaningful
+            ;; child that is not a vector libspec.
+            entries (mapv #(lenient-entry-facts (get children %)) entry-indexes)
+            libspecs (vec (keep identity entries))
+            _ (when (empty? libspecs)
                 (fail! "Require entries must be direct [lib :as alias] vectors"
                        ["require_change" "files" file-index]))
-            _ (when (some #(= (:lib add) (:lib %)) entries)
-                (fail! "Target namespace is already required"
-                       ["require_change" "files" file-index]))
-            _ (when (some #(= (:as add) (:as %)) entries)
-                (fail! "Target alias is already bound"
-                       ["require_change" "files" file-index]))
             remove (:remove file-spec)
-            remove-positions (when remove
-                               (keep-indexed #(when (= remove %2) %1) entries))
+            remove-positions
+            (when remove
+              (vec (keep-indexed
+                     (fn [position facts]
+                       (when (and facts
+                                  (= remove (select-keys facts [:lib :as])))
+                         position))
+                     entries)))
             _ (when (and remove (not= 1 (count remove-positions)))
                 (fail! "Declared removal must match exactly one direct libspec"
                        ["require_change" "files" file-index "remove"]))
-            only-removed? (and remove (= 1 (count entries)))
+            ;; @spec MCP-OP-EDIT-038
+            ;; The duplicate checks run against what will SURVIVE the change.
+            ;; An entry the call declares it is removing is not a duplicate of
+            ;; the entry replacing it, so a re-alias -- remove [lib :as a], add
+            ;; [lib :as b] -- must lower rather than refuse "already required".
+            survivors (if (seq remove-positions)
+                        (vec (keep identity
+                                   (assoc entries (first remove-positions) nil)))
+                        libspecs)
+            _ (when (some #(= (:lib add) (:lib %)) survivors)
+                (fail! "Target namespace is already required"
+                       ["require_change" "files" file-index]))
+            _ (when (some #(= (:as add) (:as %)) survivors)
+                (fail! "Target alias is already bound"
+                       ["require_change" "files" file-index]))
+            ;; @spec MCP-OP-EDIT-038
+            ;; The entry a removal NAMES is an entry the call names, so it
+            ;; remains provable-or-refuse -- and here the refusal is load
+            ;; bearing, not ceremony: deleting [lib :as a :refer [x y]] when the
+            ;; caller declared [lib :as a] would silently drop referred names
+            ;; the caller never mentioned. Say exactly that, so the refusal is
+            ;; recoverable instead of merely correct.
+            _ (when (and remove
+                         (not (entry-facts
+                                (get children
+                                     (get entry-indexes
+                                          (first remove-positions))))))
+                (fail! (str "The declared removal names a libspec that carries "
+                            "more than [lib :as alias]; removing it would drop "
+                            "options the removal did not declare: "
+                            (z/string (z/of-node
+                                        (get children
+                                             (get entry-indexes
+                                                  (first remove-positions))))))
+                       ["require_change" "files" file-index "remove"]))
+            only-removed? (and remove (= 1 (count libspecs)))
             target (target-node add)
             changed-children
             (if only-removed?
-              (assoc children (first entry-indexes) target)
+              (assoc children
+                     (get entry-indexes (first remove-positions))
+                     target)
               (let [without-removal
                     (if-not remove
                       children
@@ -475,13 +610,24 @@
                               [entry-index (dec (get entry-indexes 1))]
                               [(inc (get entry-indexes (dec position))) entry-index])]
                         (remove-range children start end)))
+                    ;; @spec MCP-OP-EDIT-038
+                    ;; The insertion point is the last vector libspec of any
+                    ;; shape ; reading it strictly would address the wrong
+                    ;; child whenever an untouched entry is not direct.
                     remaining-entry-indexes
                     (vec (keep-indexed
                            (fn [index node]
-                             (when (entry-facts node) index))
+                             (when (lenient-entry-facts node) index))
                            without-removal))
                     last-index (last remaining-entry-indexes)
-                    previous-index (or (last (butlast remaining-entry-indexes)) 0)
+                    previous-index
+                    (or (last (keep-indexed
+                                (fn [index node]
+                                  (when (and (< index last-index)
+                                             (meaningful-node? node))
+                                    index))
+                                without-removal))
+                        0)
                     separator (subvec without-removal
                                       (inc previous-index) last-index)]
                 (when (empty? separator)

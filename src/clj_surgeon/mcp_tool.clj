@@ -323,8 +323,9 @@
         sources (workspace-sources/read-all root)
         request (assoc request
                        :source (get sources (:file request))
-                       :target-ns (extract/file-path->ns-name
-                                    (:to request) ["src" "test" "dev"])
+                       ;; @spec MCP-OP-EXTRACT-014
+                       :target-ns (extract/workspace-target-ns
+                                    root (:to request))
                        :workspace-sources sources)
         compiled (->> (extraction/compile-extraction request)
                       (publicize-extraction-decision-refusal

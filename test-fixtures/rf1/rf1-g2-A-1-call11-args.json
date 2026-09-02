@@ -1,0 +1,112 @@
+{
+  "workspace_root": "/home/tester/acid/wt/rf1-g2-A-1",
+  "require_change": {
+    "add": {
+      "lib": "clj-surgeon.mcp-exact-verify",
+      "as": "exact-verify"
+    },
+    "files": [
+      {
+        "file": "src/clj_surgeon/mcp_change_buffer.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-exact-verify",
+          "as": "mcp-exact-verify"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_formatter.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-change-buffer",
+          "as": "change-buffer"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_tool.clj"
+      },
+      {
+        "file": "test/clj_surgeon/mcp_change_buffer_test.clj"
+      }
+    ]
+  },
+  "symbol_migration": {
+    "columns": [
+      "owner",
+      "from",
+      "matches"
+    ],
+    "target_alias": "exact-verify",
+    "target_rule": "preserve-name",
+    "files": [
+      {
+        "file": "src/clj_surgeon/mcp_change_buffer.clj",
+        "rows": [
+          [
+            "run-check!",
+            "",
+            2
+          ],
+          [
+            "diagnostic-command",
+            "",
+            1
+          ],
+          [
+            "run-diagnostic-check!",
+            "",
+            2
+          ],
+          [
+            "run-verification!",
+            "",
+            2
+          ]
+        ]
+      },
+      {
+        "file": "src/clj_surgeon/mcp_formatter.clj",
+        "rows": [
+          [
+            "format-candidates!",
+            "change-buffer",
+            2
+          ]
+        ]
+      },
+      {
+        "file": "src/clj_surgeon/mcp_tool.clj",
+        "rows": [
+          [
+            "execute-extraction!",
+            "change-buffer",
+            2
+          ],
+          [
+            "execute-explicit-change!",
+            "change-buffer",
+            2
+          ]
+        ]
+      },
+      {
+        "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+        "rows": [
+          [
+            "exact-profile-compilation-is-project-owned-and-snapshot-bound",
+            "change-buffer",
+            3
+          ],
+          [
+            "exact-process-evidence-is-complete-bounded-and-honest",
+            "change-buffer",
+            6
+          ],
+          [
+            "exact-verification-admission-timeout-is-unverified",
+            "change-buffer",
+            1
+          ]
+        ]
+      }
+    ]
+  }
+}

@@ -632,7 +632,16 @@
             (is (not (.exists target))))))
       (finally (delete-recursive! root)))))
 
-(deftest test-source-caller-gets-one-runtime-valid-refer-entry
+;; @spec MCP-OP-EXTRACT-004
+;; @spec MCP-OP-EXTRACT-006
+;; SUPERSEDED CONTRACT, rf2-1: this used to assert the source got
+;; `[fixture.moved :as moved :refer [moved]]`. Cohort rf1 measured that refer
+;; list being rewritten by hand in 4 of 4 structural runs, because the task
+;; forbade it. The extraction now qualifies the remaining call sites itself and
+;; emits a bare `[ns :as alias]`. The invariant the old name protected --
+;; the source still RUNS -- is unchanged and still asserted below by actually
+;; requiring the namespace in a cold JVM.
+(deftest test-source-caller-is-alias-qualified-and-runtime-valid
   (let [root (java.io.File/createTempFile "extract-source-caller" "")
         _ (.delete root)
         _ (.mkdirs root)
@@ -651,8 +660,13 @@
         (is (= [{:owner "caller" :moved-vars ["moved"]}]
                (:remaining-source-callers result)))
         (is (= ["moved"] (:source-referred-forms result)))
-        (is (str/includes? (slurp source)
-                           "[fixture.moved :as moved :refer [moved]]"))
+        (is (str/includes? (slurp source) "[fixture.moved :as moved]"))
+        (is (not (str/includes? (slurp source) ":refer"))
+            "the rewiring qualifies the sites, so a refer list is never emitted")
+        (is (str/includes? (slurp source) "(moved/moved)")
+            "the remaining caller is alias-qualified")
+        (is (= [{:owner "caller" :var "moved" :count 1}]
+               (:source-call-sites-qualified result)))
         (let [runtime (cold-eval-result
                         root
                         "(require 'fixture.callers) (assert (= :ok (fixture.callers/caller)))")]
@@ -761,3 +775,281 @@
         (is (= original (slurp source)))
         (is (not (.exists target))))
       (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-012
+(deftest an-unprovable-source-header-degrades-instead-of-failing-the-extraction
+  (testing "a comment-bearing require clause cannot be narrowed, and that is
+            not a reason to fail an extraction that is otherwise correct"
+    (let [source (str "(ns sample.core\n"
+                      "  (:require ;; keep this side effect\n"
+                      "   [alpha.side-effects]\n"
+                      "   [clojure.string :as str]))\n\n"
+                      "(defn moved [] (str/upper-case \"x\"))\n"
+                      "(defn remains [] :ok)\n")
+          plan (extract/compile-plan
+                 {:file "src/sample/core.clj"
+                  :source source
+                  :forms '[moved]
+                  :to "src/sample/extracted.clj"
+                  :target-ns "sample.extracted"})
+          candidates (extract/compile-candidates
+                       {:source source
+                        :source-file "src/sample/core.clj"
+                        :target-file "src/sample/extracted.clj"
+                        :form-ranges (:_form-texts plan)
+                        :target-source (:_new-file-content plan)
+                        :target-ns "sample.extracted"
+                        :target-alias (:target-alias plan)
+                        :source-referred-forms (:_source-referred-forms plan)
+                        :moved-sources (:_moved-sources plan)
+                        :remaining-callers (:remaining-source-callers plan)})]
+      (is (:ok candidates)
+          (str "the extraction must still complete: " (pr-str candidates)))
+      (is (string? (:source candidates)))
+      (is (str/includes? (:source candidates) ";; keep this side effect")
+          "the unprovable header is left exactly as the caller wrote it")
+      (is (str/includes? (:source candidates) "[alpha.side-effects]"))
+      (is (some? (:narrowing-note candidates))
+          "and the caller is told narrowing was unavailable")
+      (is (nil? (:removed-requires candidates))))))
+
+(defn- create-caller-project!
+  "A project whose monolith is used by two other namespaces: one that uses only
+  moved Vars (so its require is REPLACED) and one that uses both moved and
+  staying Vars (so the target require is ADDED beside the existing one)."
+  []
+  (let [root (java.io.File/createTempFile "extract-rewire-project" "")
+        _ (.delete root)
+        _ (.mkdirs root)
+        src (io/file root "src" "app")]
+    (.mkdirs src)
+    (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+    (spit (io/file src "core.clj")
+          (str "(ns app.core\n"
+               "  (:require\n"
+               "   [clojure.string :as str]))\n\n"
+               "(defn moved-one [x] (str/upper-case x))\n\n"
+               "(defn moved-two [x] (moved-one x))\n\n"
+               "(defn stays [x] (moved-two x))\n\n"
+               "(defn also-stays [] :ok)\n"))
+    (spit (io/file src "only_moved.clj")
+          (str "(ns app.only-moved\n"
+               "  (:require\n"
+               "   [app.core :as core]))\n\n"
+               "(defn go [x] (core/moved-two x))\n"))
+    (spit (io/file src "mixed.clj")
+          (str "(ns app.mixed\n"
+               "  (:require\n"
+               "   [app.core :as core]\n"
+               "   [clojure.test :refer [deftest is]]))\n\n"
+               "(defn go [x] [(core/moved-one x) (core/also-stays)])\n"))
+    root))
+
+;; @spec MCP-OP-EXTRACT-001
+;; @spec MCP-OP-EXTRACT-008
+(deftest extraction-rewires-every-proved-caller-in-one-transaction
+  (let [root (create-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")
+        only-moved (io/file root "src" "app" "only_moved.clj")
+        mixed (io/file root "src" "app" "mixed.clj")
+        receipt (io/file root "rewire-receipt.edn")
+        before {:source (slurp source) :only-moved (slurp only-moved)
+                :mixed (slurp mixed)}]
+    (try
+      (let [result (extract/execute! {:file (.getPath source)
+                                      :forms '[moved-one moved-two]
+                                      :to (.getPath target)
+                                      :alias "moved"
+                                      :receipt-out (.getPath receipt)})
+            target-text (slurp target)]
+
+        (testing "the target emits the caller's declared order"
+          ;; @spec MCP-OP-EXTRACT-001
+          (is (< (str/index-of target-text "(defn moved-one")
+                 (str/index-of target-text "(defn moved-two"))))
+
+        (testing "the source is narrowed, qualified and requires the target"
+          (let [source-text (slurp source)]
+            (is (str/includes? source-text "[app.moved :as moved]"))
+            (is (not (str/includes? source-text ":refer")))
+            (is (str/includes? source-text "(moved/moved-two x)"))
+            (is (not (str/includes? source-text "[clojure.string :as str]"))
+                "the require whose last use left with the moved forms is gone")))
+
+        (testing "a caller whose only uses were moved has its require REPLACED"
+          (let [text (slurp only-moved)]
+            (is (str/includes? text "[app.moved :as moved]"))
+            (is (not (str/includes? text "app.core")))
+            (is (str/includes? text "(moved/moved-two x)"))))
+
+        (testing "a caller that still uses the source gets the target require ADDED,
+                  and its unrelated :refer entry is untouched"
+          (let [text (slurp mixed)]
+            (is (str/includes? text "[app.core :as core]"))
+            (is (str/includes? text "[app.moved :as moved]"))
+            (is (str/includes? text "[clojure.test :refer [deftest is]]"))
+            (is (str/includes? text "(moved/moved-one x)"))
+            (is (str/includes? text "(core/also-stays)"))))
+
+        (testing "the receipt names every rewired file"
+          (is (= 2 (count (:rewired-callers result))))
+          (is (= #{:replaced :added}
+                 (set (map :require-action (:rewired-callers result))))))
+
+        (testing "every rewritten namespace loads in a cold JVM"
+          (let [runtime (cold-require-result root "app.core" "app.moved"
+                                             "app.only-moved" "app.mixed")]
+            (is (zero? (:exit runtime)) (:err runtime))))
+
+        (testing "undo restores the complete proved file set, not just two files"
+          ;; @spec MCP-OP-EXTRACT-008
+          (is (true? (:ok (extract/undo! {:receipt (.getPath receipt)}))))
+          (is (= (:source before) (slurp source)))
+          (is (= (:only-moved before) (slurp only-moved)))
+          (is (= (:mixed before) (slurp mixed)))
+          (is (not (.exists target)))))
+      (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-009
+;; @spec MCP-OP-EXTRACT-011
+(deftest the-dry-run-previews-the-same-plan-the-executor-applies
+  (let [root (create-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")
+        before (slurp source)]
+    (try
+      (let [preview (:preview (extract/plan {:file (.getPath source)
+                                             :forms '[moved-one moved-two]
+                                             :to (.getPath target)
+                                             :alias "moved"
+                                             :doc "Moved out of app.core."}))]
+        (testing "the dry run writes nothing"
+          (is (= before (slurp source)))
+          (is (not (.exists target))))
+
+        (testing "the target preview carries the header the executor will write"
+          (is (= ["moved-one" "moved-two"] (get-in preview [:target :form-order])))
+          (is (str/includes? (get-in preview [:target :ns-form])
+                             "\"Moved out of app.core.\""))
+          (is (= ["clojure.string"] (get-in preview [:target :requires]))))
+
+        (testing "the source preview names what it will remove and qualify"
+          (is (= ["clojure.string"] (get-in preview [:source :removed-requires])))
+          (is (= [{:owner "stays" :var "moved-two" :count 1}]
+                 (get-in preview [:source :call-sites-qualified]))))
+
+        (testing "every caller is previewed with its per-file action"
+          (is (= #{[:replaced 1] [:added 1]}
+                 (set (map (juxt :require-action :rewrites)
+                           (:callers preview)))))))
+
+      (testing ":public promotes exactly the named private forms"
+        ;; @spec MCP-OP-EXTRACT-011
+        (let [private-source (io/file root "src" "app" "private.clj")]
+          (.mkdirs (.getParentFile private-source))
+          (spit private-source
+                (str "(ns app.private)\n\n"
+                     "(defn- helper [] :ok)\n\n"
+                     "(defn user [] (helper))\n"))
+          (let [out (io/file root "src" "app" "promoted.clj")
+                result (extract/execute! {:file (.getPath private-source)
+                                          :forms '[helper]
+                                          :to (.getPath out)
+                                          :public '[helper]})]
+            (is (nil? (:error result)) (pr-str result))
+            (is (str/includes? (slurp out) "(defn helper"))
+            (is (not (str/includes? (slurp out) "(defn- helper"))))
+          (let [out2 (io/file root "src" "app" "promoted2.clj")
+                refusal (extract/execute! {:file (.getPath private-source)
+                                           :forms '[user]
+                                           :to (.getPath out2)
+                                           :public '[user]})]
+            (is (= :invalid-public-forms (:error-type refusal))
+                "a form that is not a selected PRIVATE form refuses")
+            (is (not (.exists out2))))))
+      (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-013
+(deftest a-declared-order-that-would-need-a-declare-refuses
+  (testing "honouring the caller's order means the caller can state one that
+            does not compile; that refuses and names the order that works"
+    (let [source (str "(ns sample.core)\n\n"
+                      "(defn first-fn [] :ok)\n\n"
+                      "(defn second-fn [] (first-fn))\n\n"
+                      "(defn stays [] (second-fn))\n")
+          refusal (extract/compile-plan
+                    {:file "src/sample/core.clj"
+                     :source source
+                     ;; second-fn calls first-fn, so this order needs a declare
+                     :forms '[second-fn first-fn]
+                     :to "src/sample/extracted.clj"
+                     :target-ns "sample.extracted"})]
+      (is (= :forward-reference-in-declared-order (:error-type refusal)))
+      (is (= [{:form "second-fn" :depends-on "first-fn"}]
+             (:forward-references refusal)))
+      (is (= ["first-fn" "second-fn"] (:dependency-order refusal))
+          "the refusal hands back an order that satisfies the constraint")
+      (is (true? (:source-unchanged refusal)))
+      (is (true? (:target-unchanged refusal)))))
+
+  (testing "the order the refusal recommends is accepted"
+    (let [source (str "(ns sample.core)\n\n"
+                      "(defn first-fn [] :ok)\n\n"
+                      "(defn second-fn [] (first-fn))\n\n"
+                      "(defn stays [] (second-fn))\n")
+          plan (extract/compile-plan
+                 {:file "src/sample/core.clj"
+                  :source source
+                  :forms '[first-fn second-fn]
+                  :to "src/sample/extracted.clj"
+                  :target-ns "sample.extracted"})]
+      (is (nil? (:error plan)) (pr-str (select-keys plan [:error :error-type])))
+      (is (= ["first-fn" "second-fn"]
+             (get-in plan [:preview :target :form-order]))))))
+
+;; @spec MCP-OP-EXTRACT-014
+(deftest a-target-namespace-is-derived-from-the-workspace-not-the-server
+  (testing "the workspace's own deps.edn decides its source roots"
+    (let [root (java.io.File/createTempFile "extract-workspace-ns" "")
+          _ (.delete root)
+          _ (.mkdirs root)]
+      (try
+        ;; this workspace calls its source root "source", not "src"
+        (spit (io/file root "deps.edn") "{:paths [\"source\"]}\n")
+        (.mkdirs (io/file root "source" "app"))
+        (is (= ["source"] (extract/source-paths-in-root (.getPath root))))
+        (is (= "app.moved"
+               (extract/workspace-target-ns
+                 (.getPath root)
+                 (.getPath (io/file root "source" "app" "moved.clj"))))
+            "a hard-coded [src test dev] would not have matched this workspace")
+        (finally (delete-recursive! root)))))
+
+  (testing "a directory named src ABOVE the workspace cannot name the namespace"
+    (let [outer (java.io.File/createTempFile "extract-outer-src" "")
+          _ (.delete outer)
+          _ (.mkdirs outer)
+          ;; the workspace itself lives under a path containing /src/
+          root (io/file outer "src" "vendored-project")]
+      (try
+        (.mkdirs (io/file root "src" "app"))
+        (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+        (is (= "app.moved"
+               (extract/workspace-target-ns
+                 (.getPath root)
+                 (.getPath (io/file root "src" "app" "moved.clj"))))
+            "the enclosing /src/ must not decide the name")
+        (finally (delete-recursive! outer)))))
+
+  (testing "a workspace with no deps.edn falls back to the conventional roots"
+    (let [root (java.io.File/createTempFile "extract-no-deps" "")
+          _ (.delete root)
+          _ (.mkdirs root)]
+      (try
+        (is (nil? (extract/source-paths-in-root (.getPath root))))
+        (is (= "app.moved"
+               (extract/workspace-target-ns
+                 (.getPath root)
+                 (.getPath (io/file root "src" "app" "moved.clj")))))
+        (finally (delete-recursive! root))))))

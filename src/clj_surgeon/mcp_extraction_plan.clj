@@ -5,9 +5,18 @@
    [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.mcp-workspace-sources :as workspace-sources]))
 
+(defn private-plan-field?
+  "Pure: a compiled-plan key the public MCP response must never publish.
+
+  Derived from the key's own name rather than a hand-maintained set, so a new
+  private field added to the compiler cannot leak by being forgotten here."
+  [field]
+  (.startsWith (name field) "_"))
+
 (def private-plan-fields
+  "Retained for callers that want the set for one known compiled plan."
   #{:_form-texts :_new-file-content :_source :_source-hash
-    :_source-referred-forms})
+    :_source-referred-forms :_moved-sources :_caller-plans})
 
 (def allowed-request-fields
   #{:workspace_root :mode :file :to :forms :require_policy})
@@ -74,14 +83,20 @@
              :to target-path
              :target-ns target-ns
              :workspace-sources workspace-sources
-             :require-policy require-policy})]
+             :require-policy require-policy
+             ;; @spec MCP-OP-EXTRACT-008
+             ;; Planning mirrors the MCP apply path, which owns its own caller
+             ;; contract; a plan must never preview rewiring the executor on
+             ;; this surface will not perform.
+             :rewire-callers false})]
       (if (:error compiled)
         (refusal :extraction-plan-refused (:error compiled))
         (let [callers (mapv #(get relative-paths % %) (:callers-to-review compiled))
               quoted (mapv #(public-reference relative-paths %)
                            (:quoted-var-references compiled))
               source-hash (:_source-hash compiled)
-              public-plan (-> (apply dissoc compiled private-plan-fields)
+              public-plan (-> (apply dissoc compiled
+                                     (filter private-plan-field? (keys compiled)))
                               (assoc :file file
                                      :to to
                                      :callers-to-review callers
@@ -142,8 +157,11 @@
                :target-path target-path
                :source (get sources source-path)
                :forms (:forms params)
-               :target-ns (extract/file-path->ns-name
-                            target-path ["src" "test" "dev"])
+               ;; @spec MCP-OP-EXTRACT-014
+               ;; Read against the WORKSPACE root, never the server's own
+               ;; project: a server answering for another checkout derived
+               ;; namespace names from its own layout.
+               :target-ns (extract/workspace-target-ns root target-path)
                :workspace-sources sources
                :relative-paths (workspace-sources/relative-paths root sources)
                :require-policy (keyword (:require_policy params))})))))))

@@ -1,0 +1,142 @@
+{
+  "workspace_root": "/home/tester/acid/wt/rf1-g2-A-1",
+  "require_change": {
+    "add": {
+      "lib": "clj-surgeon.mcp-exact-verify",
+      "as": "exact-verify"
+    },
+    "files": [
+      {
+        "file": "src/clj_surgeon/mcp_change_buffer.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-exact-verify",
+          "as": "mcp-exact-verify"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_formatter.clj",
+        "remove": {
+          "lib": "clj-surgeon.mcp-change-buffer",
+          "as": "change-buffer"
+        }
+      },
+      {
+        "file": "src/clj_surgeon/mcp_tool.clj"
+      },
+      {
+        "file": "test/clj_surgeon/mcp_change_buffer_test.clj"
+      }
+    ]
+  },
+  "symbol_migration": {
+    "columns": [
+      "owner",
+      "from",
+      "matches"
+    ],
+    "target_alias": "exact-verify",
+    "target_rule": "preserve-name",
+    "files": [
+      [
+        "src/clj_surgeon/mcp_change_buffer.clj",
+        [
+          [
+            "run-check!",
+            "run-process!",
+            1
+          ],
+          [
+            "run-check!",
+            "admission-unverified?",
+            1
+          ],
+          [
+            "diagnostic-command",
+            "expand-command",
+            1
+          ],
+          [
+            "run-diagnostic-check!",
+            "run-process!",
+            1
+          ],
+          [
+            "run-diagnostic-check!",
+            "admission-unverified?",
+            1
+          ],
+          [
+            "run-verification!",
+            "expand-command",
+            2
+          ]
+        ]
+      ],
+      [
+        "src/clj_surgeon/mcp_formatter.clj",
+        [
+          [
+            "format-candidates!",
+            "change-buffer/run-process!",
+            1
+          ],
+          [
+            "format-candidates!",
+            "change-buffer/expand-command",
+            1
+          ]
+        ]
+      ],
+      [
+        "src/clj_surgeon/mcp_tool.clj",
+        [
+          [
+            "execute-extraction!",
+            "change-buffer/compile-exact-profile",
+            1
+          ],
+          [
+            "execute-extraction!",
+            "change-buffer/run-exact-verification!",
+            1
+          ],
+          [
+            "execute-explicit-change!",
+            "change-buffer/compile-exact-profile",
+            1
+          ],
+          [
+            "execute-explicit-change!",
+            "change-buffer/run-exact-verification!",
+            1
+          ]
+        ]
+      ],
+      [
+        "test/clj_surgeon/mcp_change_buffer_test.clj",
+        [
+          [
+            "exact-profile-compilation-is-project-owned-and-snapshot-bound",
+            "change-buffer/compile-exact-profile",
+            3
+          ],
+          [
+            "exact-process-evidence-is-complete-bounded-and-honest",
+            "change-buffer/run-exact-verification!",
+            4
+          ],
+          [
+            "exact-process-evidence-is-complete-bounded-and-honest",
+            "change-buffer/classify-exact-process-outcome",
+            2
+          ],
+          [
+            "exact-verification-admission-timeout-is-unverified",
+            "change-buffer/run-exact-verification!",
+            1
+          ]
+        ]
+      ]
+    ]
+  }
+}

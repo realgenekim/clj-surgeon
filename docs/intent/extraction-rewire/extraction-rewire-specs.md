@@ -1,0 +1,45 @@
+---
+parent: extraction-rewire-design
+prefix: MCP-OP
+---
+
+ #Extraction Rewiring and Non-Fatal Outline Specifications
+
+This file is the stable intent registry for the extraction-rewiring leaf.
+IDs are never reused. The status marker records whether the current code and
+tests witness the requirement.
+
+# #Target Emission Order and Header
+
+- [x] **MCP-OP-EXTRACT-001**: When extraction compiles a target namespace, clj-surgeon shall emit the moved forms in the caller's declared `forms` order and shall not reorder them by an internal topological sort.
+- [x] **MCP-OP-EXTRACT-013**: If the caller's declared `forms` order would place a moved form before a moved form it references, then clj-surgeon shall refuse before writing, name each offending pair, and publish a dependency order that satisfies the constraint ; it shall never silently reorder the caller's forms and shall never emit a target that would require a `declare`.
+- [x] **MCP-OP-EXTRACT-002**: When extraction compiles a target namespace header under the minimal require policy, clj-surgeon shall omit any docstring unless the caller supplies `doc`, and when the caller supplies `doc` it shall emit exactly that text as the target docstring ; the copy-all policy shall continue to preserve the complete source header exactly, docstring included.
+- [x] **MCP-OP-EXTRACT-003**: When extraction compiles a target namespace header under the minimal require policy, clj-surgeon shall retain exactly the import entries whose classes the moved forms reference, preserving source order and dropping an emptied package group and an emptied import clause ; an import clause shape it cannot prove shall refuse the extraction without changing any file.
+
+# #Source Header Narrowing and Alias Policy
+
+- [x] **MCP-OP-EXTRACT-004**: When extraction rewrites the source namespace, clj-surgeon shall add `[<target-ns> :as <alias>]` to its requires and shall never emit a `:refer` list for the target ; the alias shall default to the target namespace's last dot-separated segment and shall be exactly the caller's `alias` when one is supplied.
+- [x] **MCP-OP-EXTRACT-005**: When extraction rewrites the source namespace, clj-surgeon shall remove each require and each import entry that the moved forms referenced and the remaining source no longer references, and shall retain every entry the remaining source still references and every entry the moved forms never referenced.
+
+# #Caller Rewiring
+
+- [x] **MCP-OP-EXTRACT-006**: When `rewire_callers` is enabled, which shall be the default, clj-surgeon shall alias-qualify every remaining source call site of a moved Var through the target alias, and shall leave no unqualified reference to a moved Var in the source.
+- [x] **MCP-OP-EXTRACT-007**: When `rewire_callers` is enabled, clj-surgeon shall rewrite each `<source-alias>/<moved-var>` reference in every proved caller file, including test namespaces, to `<target-alias>/<moved-var>`, and shall add `[<target-ns> :as <alias>]` to that file's requires ; where a caller file's only references to the source namespace were moved Vars, it shall replace that file's source-namespace require with the target require rather than keep both.
+- [x] **MCP-OP-EXTRACT-008**: When `rewire_callers` is enabled, clj-surgeon shall write the complete proved file set as one failure-atomic transaction with parse and read-back verification, and shall restore every touched file when any write or verification fails ; when `rewire_callers` is disabled, it shall change only the source and target and report the caller inventory unchanged.
+- [x] **MCP-OP-EXTRACT-009**: When extraction is planned as a dry run, clj-surgeon shall preview the complete per-file effect of the same compiled plan, including the target header, the narrowed source header, and every caller rewrite, and shall write no file.
+
+# #Argument Admission
+
+- [x] **MCP-OP-EXTRACT-010**: If a CLI operation receives an argument its registry entry does not declare, then clj-surgeon shall refuse before dispatch with an `unsupported-arguments` refusal naming the unknown arguments and the accepted keys, and shall not execute the operation ; an operation whose registry entry declares open arguments, because it recognises historical call shapes and returns a repaired command, shall keep its own admission.
+- [x] **MCP-OP-EXTRACT-012**: When extraction cannot prove the source namespace header it is narrowing, it shall leave that header exactly as the caller wrote it, report that narrowing was unavailable, and complete the extraction ; header narrowing only removes entries the extraction itself made dead, so failing to narrow shall never fail an otherwise correct extraction, while target-header minimization shall continue to refuse.
+- [x] **MCP-OP-EXTRACT-011**: When extraction receives `public`, clj-surgeon shall promote exactly those selected private forms from `defn-` to `defn` in the target, and shall refuse when a named form is not a selected private form or cannot be promoted losslessly.
+
+# #Non-Fatal Forward-Reference Analysis
+
+- [x] **MCP-OP-LS-001**: When forward-reference analysis runs its analyzer, clj-surgeon shall judge success by whether the analyzer produced a parseable analysis payload and shall not treat the analyzer's finding-count exit status as an analysis failure.
+- [x] **MCP-OP-LS-002**: If forward-reference analysis fails or is unavailable for a file whose outline parses, then the `ls` operation shall return that complete outline with `forward_refs` set to `unavailable` and one explanatory note, and shall exit zero.
+- [x] **MCP-OP-LS-003**: If forward-reference analysis fails, then its refusal shall carry a non-empty diagnostic drawn from the analyzer's own output streams rather than an empty string.
+
+# #Workspace-Scoped Namespace Derivation
+
+- [x] **MCP-OP-EXTRACT-014**: When clj-surgeon derives a target namespace name for a workspace, it shall read the source paths from that workspace root's own `deps.edn` and express the target path relative to that root ; it shall never read the serving process's working directory or a hard-coded source-path list, so a server answering for a different checkout cannot derive a namespace from its own layout.

@@ -1,0 +1,27 @@
+{
+  "Ok": {
+    "content": [
+      {
+        "type": "text",
+        "text": "edit_clojure\n  refused · invalid-intent-form · 17.03 ms\n  change 5 · edit-6 · field :do replacement\n\n✓ source unchanged\n→ Correct :do replacement for change 5 (edit-6). Complete-input parser: :do replacement must contain exactly one complete form with no detached comments Submit exactly one complete Clojure form."
+      }
+    ],
+    "structuredContent": {
+      "phase": "kernel",
+      "reason": "invalid-intent-form",
+      "workspace_root": "/home/tester/acid/wt/rf1-g2-B-2",
+      "remedy": "Correct :do replacement for change 5 (edit-6). Complete-input parser: :do replacement must contain exactly one complete form with no detached comments Submit exactly one complete Clojure form.",
+      "error": ":do replacement must contain exactly one complete form with no detached comments",
+      "form_count": 2,
+      "field": ":do replacement",
+      "elapsed_ms": 17.030234,
+      "source_unchanged": true,
+      "error_type": "invalid-intent-form",
+      "change_id": "edit-6",
+      "ok": false,
+      "operation": "edit_clojure",
+      "change_index": 5
+    },
+    "isError": true
+  }
+}

@@ -200,7 +200,14 @@
                           :to to
                           :target-ns target-ns
                           :workspace-sources workspace-sources
-                          :require-policy require-policy}
+                          :require-policy require-policy
+                          ;; @spec MCP-OP-EXTRACT-008
+                          ;; The MCP extraction verb owns its OWN caller
+                          ;; contract: the caller declares caller_changes and
+                          ;; an omitted decision is a typed refusal. Tool-side
+                          ;; rewiring would silently answer the question this
+                          ;; surface exists to ask, so it stays off here.
+                          :rewire-callers false}
               plan (extract/compile-plan plan-input)]
           (cond
             (:error plan)

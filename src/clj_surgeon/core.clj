@@ -30,12 +30,24 @@
    [clojure.pprint :as pp]
    [clojure.string :as str]))
 
+;; @spec MCP-OP-LS-002
+(defn outline-with-forward-refs
+  "Pure: combine one outline with one forward-reference analysis result.
+
+   A failed analysis decorates the outline; it never replaces it."
+  [outline analysis]
+  (if (:ok analysis)
+    (assoc outline :forward-refs (or (:forward-refs analysis) []))
+    (assoc outline
+           :forward-refs :unavailable
+           :note (:note analysis))))
+
 (defn run-outline [{:keys [file]}]
   (let [result (outline/outline file)
-        ns-name (:ns result)
-        forward-refs (when ns-name
-                       (fwd/detect-forward-refs file ns-name))]
-    (assoc result :forward-refs (or forward-refs []))))
+        ns-name (:ns result)]
+    (if ns-name
+      (outline-with-forward-refs result (fwd/try-detect-forward-refs file ns-name))
+      (assoc result :forward-refs []))))
 
 (defn run-mv [{:as opts}]
   (move/move-form (cond-> opts (#{:mv-with-deps "mv-with-deps" ":mv-with-deps"} (:op opts)) (assoc :with-deps true))))
@@ -550,7 +562,12 @@
                        :args      {:file           {:required true :desc "Source file"}
                                    :forms          {:required true :desc "EDN vector of form names, e.g. '[foo bar]'"}
                                    :to             {:required true :desc "Target file path for new namespace"}
-                                   :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}}
+                                   :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}
+                                   :public         {:desc "EDN vector of selected private forms to promote from defn- to defn in the target"}
+                                   :doc            {:desc "Docstring for the target namespace; omitted means no docstring (the source's is never copied)"}
+                                   :alias          {:desc "Alias for the target namespace; defaults to its last dot-separated segment. Never emitted as :refer"}
+                                   :rewire-callers {:desc "true (default) alias-qualifies the source's remaining call sites and repoints every proved caller file; false changes only the source and target"}
+                                   :source-paths   {:desc "EDN vector of source roots used to derive the target namespace name"}}
                        :examples  ["clj-surgeon :op :extract :file src/state.clj :forms '[distill refine]' :to src/distillery.clj"]
                        :category  :write
                        :pair      :extract!}
@@ -561,6 +578,11 @@
                                    :forms          {:required true :desc "EDN vector of form names"}
                                    :to             {:required true :desc "New target file; existing files refuse"}
                                    :require-policy {:desc ":minimal (default) proves exact requires; :copy-all preserves the complete source ns header as a conservative starting point"}
+                                   :public         {:desc "EDN vector of selected private forms to promote from defn- to defn in the target"}
+                                   :doc            {:desc "Docstring for the target namespace; omitted means no docstring (the source's is never copied)"}
+                                   :alias          {:desc "Alias for the target namespace; defaults to its last dot-separated segment. Never emitted as :refer"}
+                                   :rewire-callers {:desc "true (default) alias-qualifies the source's remaining call sites and repoints every proved caller file; false changes only the source and target"}
+                                   :source-paths   {:desc "EDN vector of source roots used to derive the target namespace name"}
                                    :receipt-out    {:desc "Optional new .edn path for a guarded inverse receipt"}}
                        :workflow  ["Run :extract first. Review target-requires, omitted-target-requires, remaining-source-callers, callers-to-review, and authority-labeled quoted-var-references. Unsupported require shapes refuse instead of copying or dropping unproved dependencies."
                                    "Application compiles both complete files from one source snapshot, parses them, hash-fences the source, writes atomically, and verifies read-back."
@@ -681,6 +703,12 @@
 
     :find-subform     {:handler   structural-lens/find-file
                        :aliases   [:match-form :grep-form]
+                       ;; :line and :pattern are historical spellings this
+                       ;; operation deliberately RECOGNISES so it can return the
+                       ;; repaired :cat / :match-form command. A generic unknown
+                       ;; argument refusal would replace that repair with a bare
+                       ;; refusal, which is strictly worse for the caller.
+                       :open-args #{:line :pattern}
                        :desc      "Find nested syntax structurally across a file or within a named form"
                        :args      {:file   {:required true :desc "Clojure source file"}
                                    :inside {:desc "Restrict search to this top-level form"}
@@ -752,6 +780,12 @@
     :show-form        {:handler  show-form/show
                        :desc     "Show exact top-level forms from one file snapshot or one guarded cross-file manifest"
                        :aliases  [:cat]
+                       ;; This operation deliberately ACCEPTS undeclared legacy
+                       ;; selectors so it can recognise a historical call shape
+                       ;; and hand back the repaired command. Refusing them
+                       ;; generically would replace that repair with a bare
+                       ;; refusal, which is strictly worse for the caller.
+                       :open-args true
                        :args     {:file     {:required true :desc "Clojure source file"}
                                   :form     {:desc "Unqualified top-level name; supply exactly one selector"}
                                   :forms    {:desc "Nonempty EDN vector of up to 50 unique top-level names; supply exactly one selector"}
@@ -1128,6 +1162,43 @@
       (throw (ex-info "Provide exactly one of :spec or :spec-file"
                       {:error-type :missing-spec-input})))))
 
+(def ^:private universal-cli-args
+  "Arguments every operation accepts: the op selector and the help flag."
+  #{:op :help})
+
+;; @spec MCP-OP-EXTRACT-010
+(defn unknown-argument-refusal
+  "Pure: refuse arguments an operation's registry entry does not declare.
+
+  Returns a typed refusal map, or nil when every argument is accepted. An
+  unrecognized argument accepted and ignored is invisible: it reports success
+  for work that did not happen, and a caller can only discover it by diffing
+  the result. The registry's :args map is the single source of truth for what
+  an operation accepts, so this can never drift from the help text.
+
+  An operation may declare :open-args -- a SET of additional keys it recognises
+  in order to repair a historical call shape, or true when its whole argument
+  surface is legacy-open. A set is strongly preferred: it keeps the refusal for
+  arguments that really are unknown."
+  [canonical op-def opts]
+  (let [open (:open-args op-def)
+        accepted (cond-> (into universal-cli-args (keys (:args op-def)))
+                   (set? open) (into open))
+        unknown (when-not (true? open)
+                  (->> (keys opts) (remove accepted) sort vec))]
+    (when (seq unknown)
+      {:error (str "Unknown arguments for :" (name canonical) ": "
+                   (str/join ", " (map #(str ":" (name %)) unknown)))
+       ;; The repository already refuses unknown arguments under this name in
+       ;; edit_dsl and structural_lens. One vocabulary, now applied to every
+       ;; operation instead of two.
+       :error-type :unsupported-arguments
+       :unknown unknown
+       :accepted (vec (sort (map #(keyword (name %)) (keys (:args op-def)))))
+       :usage (str "clj-surgeon :op :" (name canonical) " --help")
+       :source-unchanged true
+       :target-unchanged true})))
+
 (defn run [{:keys [op] :as opts}]
   ;; Load .clj-surgeon.edn project aliases from nearest config file
   (when-let [anchor (or (:file opts) (:clj opts) (:cljs opts) (:dir opts))]
@@ -1140,8 +1211,11 @@
                (load-spec-input opts)
                opts)
         op-def (get ops-registry canonical)
+        unknown (when op-def (unknown-argument-refusal canonical op-def opts))
         result (if op-def
-                 (let [missing (->> (:args op-def)
+                 (if unknown
+                   unknown
+                   (let [missing (->> (:args op-def)
                                     (keep (fn [[arg {:keys [required]}]]
                                             (when (and required
                                                        (not (contains? opts arg))
@@ -1169,7 +1243,7 @@
                      (let [handler-result ((:handler op-def) opts)]
                        (if (and (= canonical :show-form) (:error handler-result))
                          (with-cat-remedy handler-result opts)
-                         handler-result))))
+                         handler-result)))))
                  (with-cat-remedy
                    {:error (str "Unknown op: " op
                                 ". Valid ops: "

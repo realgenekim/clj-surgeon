@@ -12,6 +12,7 @@
   (:require
    [babashka.process :as proc]
    [clj-surgeon.core :as core]
+   [clj-surgeon.forward-refs :as fwd]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -321,3 +322,175 @@
                (str/index-of moved "(defn run-kondo")))
         (is (str/blank? err)))
       (finally (.delete tmp)))))
+
+;; ============================================================
+;; rf2-2 — :ls never fails an outline that parses
+;; Field provenance: cohort rf1, run rf1-g1-B-2 call 11 ran
+;;   bb -m clj-surgeon.core :op :ls :file src/clj_surgeon/mcp_exact_verify.clj
+;; on the file :extract! had just written and got
+;;   {:error-type :forward-reference-analysis-failed :exit 2 :diagnostic ""
+;;    :error "Forward-reference analysis failed"}
+;; The same bytes (sha256 3e31539658283d67646e7fc37af4f5fc0854e903f8c8efaddd0effd6403e81d6)
+;; outline cleanly through inspect_clojure. The agent believed the refusal and
+;; spent 15 of its 48 returns reordering forms that were already in a valid
+;; order. Cause: the extracted file carried four unused-import warnings, clj-kondo
+;; exits non-zero when it has FINDINGS, and the analysis stage read that as
+;; failure; the diagnostic was empty because findings go to stdout and it read
+;; stderr.
+;; ============================================================
+
+(def ^:private rf2-lint-warning-fixture
+  "A parseable namespace carrying exactly the field's defect shape: imports that
+   nothing in the file references, which make clj-kondo exit non-zero."
+  (str "(ns clj-surgeon-rf2-outline-fixture\n"
+       "  (:import\n"
+       "   (java.nio.file LinkOption Path Paths)\n"
+       "   (java.util UUID)))\n"
+       "\n"
+       "(defn first-form [] :first)\n"
+       "\n"
+       "(defn second-form [] (first-form))\n"))
+
+;; @spec MCP-OP-LS-002
+(deftest ls-outlines-a-file-whose-forward-reference-analysis-fails
+  (testing "a failed analysis decorates the outline; it never replaces it"
+    ;; @spec MCP-OP-LS-002
+    (let [outline {:ns 'app.core :file "src/app/core.clj" :lines 12
+                   :form-count 2 :forms [{:name 'a} {:name 'b}]}
+          decorated (core/outline-with-forward-refs
+                      outline
+                      {:ok false
+                       :error-type :forward-reference-analysis-failed
+                       :note "Forward-reference analysis was unavailable."})]
+      (is (= :unavailable (:forward-refs decorated)))
+      (is (string? (:note decorated)))
+      (is (= 1 (count (str/split-lines (:note decorated))))
+          "the note is one line")
+      (is (nil? (:error decorated)))
+      (is (nil? (:error-type decorated)))
+      (is (= (dissoc outline :forward-refs)
+             (dissoc decorated :forward-refs :note))
+          "every other outline field survives untouched")))
+
+  (testing "a successful analysis is carried through unchanged"
+    (let [outline {:ns 'app.core :form-count 1}
+          refs [{:name 'later :used-at 3 :defined-at 9 :gap 6}]]
+      (is (= refs (:forward-refs (core/outline-with-forward-refs
+                                   outline {:ok true :forward-refs refs}))))
+      (is (= [] (:forward-refs (core/outline-with-forward-refs
+                                 outline {:ok true :forward-refs nil}))))))
+
+  (testing "the real CLI outlines a file whose analyzer reports findings"
+    ;; @spec MCP-OP-LS-001
+    ;; @spec MCP-OP-LS-002
+    (let [fixture (java.io.File/createTempFile "clj-surgeon-rf2-ls" ".clj")]
+      (try
+        (spit fixture rf2-lint-warning-fixture)
+        (let [{:keys [exit out]} (run-cli ":op" ":ls"
+                                          ":file" (.getAbsolutePath fixture))
+              result (edn/read-string out)]
+          (is (zero? exit)
+              "an outline that parses exits zero whatever the analyzer says")
+          (is (nil? (:error result))
+              (str "the outline must not be replaced by a refusal: " (pr-str result)))
+          (is (= 'clj-surgeon-rf2-outline-fixture (:ns result)))
+          (is (= 2 (:form-count result)))
+          (is (= ["first-form" "second-form"]
+                 (mapv #(str (:name %)) (:forms result)))))
+        (finally (.delete fixture))))))
+
+;; @spec MCP-OP-LS-001
+(deftest forward-reference-analysis-is-not-failed-by-analyzer-findings
+  (testing "an analyzer finding-count exit is not an analysis failure"
+    (let [fixture (java.io.File/createTempFile "clj-surgeon-rf2-fwd" ".clj")]
+      (try
+        (spit fixture rf2-lint-warning-fixture)
+        (let [analysis (fwd/try-detect-forward-refs
+                         (.getAbsolutePath fixture)
+                         'clj-surgeon-rf2-outline-fixture)]
+          (is (:ok analysis)
+              (str "findings are not a failure: " (pr-str analysis)))
+          (is (vector? (:forward-refs analysis))))
+        (finally (.delete fixture))))))
+
+;; @spec MCP-OP-LS-003
+(deftest a-forward-reference-analysis-refusal-carries-a-diagnostic
+  (testing "a genuine analyzer failure names why, drawn from its own output"
+    (let [analysis (fwd/try-detect-forward-refs
+                     "/nonexistent/clj-surgeon-rf2/definitely-absent.clj"
+                     'absent.ns)]
+      (is (false? (:ok analysis)))
+      (is (keyword? (:error-type analysis)))
+      (is (not (str/blank? (:note analysis)))
+          "an empty diagnostic is a refusal that cannot be recovered from")
+      (is (not (str/blank? (str (:diagnostic analysis)))))
+      (is (str/includes? (str (:diagnostic analysis)) "file does not exist")
+          (str "the diagnostic must quote the analyzer's own output, not a "
+               "constant: " (pr-str (:diagnostic analysis)))))))
+
+;; ============================================================
+;; rf2-1 (vii) — an unknown CLI argument is a typed refusal, never a
+;; success receipt for work that did not happen.
+;; Field provenance: cohort rf1, runs rf1-g1-A-1 call 08 and rf1-g2-A-1 call 07
+;; both ran
+;;   :op :extract! ... :public-forms '[admission-unverified?]'
+;; `:public-forms` is not an argument of :extract!. It was accepted, ignored,
+;; and reported as `ok` with a complete verified receipt; the form was written
+;; `defn-` anyway. One agent discovered it only from a later `git diff`; the
+;; other reported it as a tool defect. A success receipt for work that did not
+;; happen is worse than a refusal, because it terminates investigation.
+;; ============================================================
+
+;; @spec MCP-OP-EXTRACT-010
+(deftest an-unknown-cli-argument-is-refused-with-the-accepted-keys
+  (testing "the exact rf1 invocation is now refused, not silently ignored"
+    (let [refusal (core/unknown-argument-refusal
+                    :extract!
+                    (get core/ops-registry :extract!)
+                    {:op :extract!
+                     :file "src/clj_surgeon/mcp_change_buffer.clj"
+                     :forms ['expand-command]
+                     :to "src/clj_surgeon/mcp_exact_verify.clj"
+                     :public-forms ['admission-unverified?]})]
+      (is (some? refusal) ":public-forms must not be silently accepted")
+      (is (= :unsupported-arguments (:error-type refusal)))
+      (is (= [:public-forms] (:unknown refusal)))
+      (is (contains? (set (:accepted refusal)) :public)
+          "the refusal names the real spelling of what the caller wanted")
+      (is (contains? (set (:accepted refusal)) :forms))
+      (is (true? (:source-unchanged refusal)))))
+
+  (testing "a complete, correct invocation is not refused"
+    (is (nil? (core/unknown-argument-refusal
+                :extract!
+                (get core/ops-registry :extract!)
+                {:op :extract!
+                 :file "a.clj" :forms ['x] :to "b.clj"
+                 :public ['x] :doc "d" :alias "b" :rewire-callers false
+                 :require-policy :minimal :receipt-out "/tmp/r.edn"}))))
+
+  (testing "--help never counts as an unknown argument"
+    (is (nil? (core/unknown-argument-refusal
+                :ls (get core/ops-registry :ls)
+                {:op :ls :file "a.clj" :help true}))))
+
+  (testing "the refusal reaches the real CLI and changes no bytes"
+    (let [fixture (java.io.File/createTempFile "clj-surgeon-rf2-unknown" ".clj")
+          target (str (.getAbsolutePath fixture) ".target.clj")
+          original "(ns rf2.unknown.arg.fixture)\n\n(defn- only-form [] :ok)\n"]
+      (try
+        (spit fixture original)
+        (let [{:keys [exit out]} (run-cli ":op" ":extract!"
+                                          ":file" (.getAbsolutePath fixture)
+                                          ":forms" "[only-form]"
+                                          ":to" target
+                                          ":public-forms" "[only-form]")
+              result (edn/read-string out)]
+          (is (= 1 exit) "an unknown argument exits nonzero")
+          (is (= :unsupported-arguments (:error-type result)))
+          (is (= [:public-forms] (:unknown result)))
+          (is (= original (slurp fixture)) "the source is unchanged")
+          (is (not (.exists (io/file target))) "no target was created"))
+        (finally
+          (.delete fixture)
+          (.delete (io/file target)))))))

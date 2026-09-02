@@ -16,6 +16,7 @@
    [clj-surgeon.analyze :as analyze]
    [clj-surgeon.cljc.require-ops :as require-ops]
    [clj-surgeon.extract-header :as extract-header]
+   [clj-surgeon.extract-rewire :as extract-rewire]
    [clj-surgeon.file-ops :as file-ops]
    [clj-surgeon.forms :as forms]
    [clj-surgeon.outline :as outline]
@@ -48,15 +49,28 @@
 ;; Pure helpers
 ;; ============================================================
 
-(defn- source-paths-from-deps-edn
-  "Read :paths and alias :extra-paths from deps.edn. Returns nil if no deps.edn."
-  []
-  (let [f (io/file "deps.edn")]
+;; @spec MCP-OP-EXTRACT-014
+(defn source-paths-in-root
+  "Read :paths and alias :extra-paths from one project root's deps.edn.
+
+  The root is explicit because a server answering for a workspace must read
+  THAT workspace's layout: reading `deps.edn` from the process working
+  directory derives namespace names from whichever project the server itself
+  happens to live in. Returns nil when the root has no readable deps.edn."
+  [root]
+  (let [f (if root (io/file (str root) "deps.edn") (io/file "deps.edn"))]
     (when (.exists f)
-      (let [deps (edn/read-string (slurp f))]
-        (distinct
-          (concat (:paths deps)
-                  (mapcat :extra-paths (vals (:aliases deps)))))))))
+      (try
+        (let [deps (edn/read-string (slurp f))]
+          (seq (distinct
+                 (concat (:paths deps)
+                         (mapcat :extra-paths (vals (:aliases deps)))))))
+        (catch Exception _ nil)))))
+
+(defn- source-paths-from-deps-edn
+  "Read :paths and alias :extra-paths from deps.edn in the working directory."
+  []
+  (source-paths-in-root nil))
 
 (defn file-path->ns-name
   "Derive namespace name from a file path.
@@ -103,6 +117,26 @@
          (str/replace "/" ".")
          (str/replace "_" "-")))))
 
+;; @spec MCP-OP-EXTRACT-014
+(defn workspace-relative-path
+  "Pure: one path expressed relative to a workspace root, when it is inside it.
+
+  Deriving a namespace from an ABSOLUTE path lets a directory named `src`
+  ABOVE the workspace decide the name."
+  [root path]
+  (let [root (some-> root str (str/replace #"/+$" ""))
+        path (str path)]
+    (if (and (seq root) (str/starts-with? path (str root "/")))
+      (subs path (inc (count root)))
+      path)))
+
+;; @spec MCP-OP-EXTRACT-014
+(defn workspace-target-ns
+  "Derive a target namespace from a path, read against ONE workspace root."
+  [root path]
+  (file-path->ns-name (workspace-relative-path root path)
+                      (or (source-paths-in-root root) ["src" "test" "dev"])))
+
 (defn- project-root-for-source
   [file source-paths]
   (let [path (-> file io/file .getCanonicalFile .toPath)
@@ -118,8 +152,16 @@
             (take-while some? (iterate #(.getParent %) (.getParent path))))
       (some-> file io/file .getParentFile .getParentFile))))
 
+;; @spec MCP-OP-EXTRACT-004
 (defn- add-require-to-ns
-  "Add one optional alias and refer entry while preserving source trivia."
+  "Add one libspec for the target while preserving source trivia.
+
+  The :refer list is COUPLED to rewiring and is never a free choice. When the
+  extraction qualified the remaining call sites itself, it emits a bare
+  [ns :as alias] -- a refer list would be a second place to maintain, and
+  undoing it by hand was in 4 of 4 rf1 runs' repair patch. When rewiring is
+  disabled the caller owns those sites, so the refer list must stay or the
+  source would not compile."
   [file-source new-ns-name alias referred]
   (require-ops/insert-into-require-sorted file-source
                                           (symbol new-ns-name)
@@ -174,19 +216,92 @@
                        :source-unchanged true}
                       e)))))
 
+(defn namespace-form-text
+  "Pure: the exact text of one source's single top-level ns form, or nil."
+  [source]
+  (loop [location (z/of-string source)]
+    (when location
+      (if (and (z/list? location)
+               (= "ns" (some-> location z/down z/string)))
+        (z/string location)
+        (recur (z/right location))))))
+
+(defn replace-ns-form
+  "Pure: swap one source's ns form for new text, preserving every other byte."
+  [source new-ns-form]
+  (loop [location (z/of-string source)]
+    (cond
+      (nil? location) source
+      (and (z/list? location)
+           (= "ns" (some-> location z/down z/string)))
+      (-> location (z/replace (parser/parse-string new-ns-form)) z/root-string)
+      :else (recur (z/right location)))))
+
+(defn- source-body
+  "Pure: one source with its ns form elided, so header analysis never counts a
+  libspec's own name as a reference to it."
+  [source ns-text]
+  (if ns-text (str/replace-first source ns-text "") source))
+
+;; @spec MCP-OP-EXTRACT-005
+;; @spec MCP-OP-EXTRACT-006
 (defn compile-candidates
-  "Purely compile and parse the complete source and target after extraction."
+  "Purely compile and parse the complete source and target after extraction.
+
+  The future source is the extraction's complete result: the moved forms
+  removed, the header narrowed to what the remaining body still uses, the
+  remaining call sites of moved Vars alias-qualified, and the target require
+  added."
   [{:keys [source source-file target-file form-ranges target-source target-ns
-           target-alias source-referred-forms]}]
+           target-alias source-referred-forms moved-sources remaining-callers
+           rewire-callers]
+    :or {rewire-callers true}}]
   (let [source-without-forms (remove-form-ranges source form-ranges)
-        future-source (if (seq source-referred-forms)
-                        (add-require-to-ns source-without-forms
-                                           target-ns
-                                           target-alias
-                                           source-referred-forms)
-                        source-without-forms)]
-    {:source (validate-complete-source! source-file future-source)
-     :target (validate-complete-source! target-file target-source)}))
+        ns-text (namespace-form-text source-without-forms)
+        narrowed (when ns-text
+                   (extract-header/narrow-source-ns-header
+                     ns-text
+                     (or (seq moved-sources) [""])
+                     [(source-body source-without-forms ns-text)]))
+        ;; @spec MCP-OP-EXTRACT-005
+        ;; @spec MCP-OP-EXTRACT-012
+        ;; Narrowing only REMOVES entries the extraction itself made dead, so
+        ;; being unable to prove a header is not a reason to fail an extraction
+        ;; that is otherwise correct: it degrades to the unnarrowed header,
+        ;; exactly the behaviour before this ratchet, and says so. (Target
+        ;; header minimization still fails closed: those requires decide
+        ;; whether the new namespace compiles at all.)
+        narrowed (when (:ok narrowed) narrowed)
+        narrowing-note
+          (when-not narrowed
+            "The source namespace header could not be proved and was left unnarrowed.")
+        narrowed-source (if narrowed
+                          (replace-ns-form source-without-forms
+                                           (:ns-form narrowed))
+                          source-without-forms)
+        qualified (if (and rewire-callers (seq remaining-callers))
+                    (extract-rewire/qualify-owner-call-sites
+                      narrowed-source remaining-callers target-alias)
+                    {:ok true :source narrowed-source})]
+        (if-not (:ok qualified)
+          qualified
+          (let [qualified? (boolean (and rewire-callers (seq remaining-callers)))
+                future-source (if (seq source-referred-forms)
+                                (add-require-to-ns (:source qualified)
+                                                   target-ns
+                                                   target-alias
+                                                   (if qualified?
+                                                     []
+                                                     source-referred-forms))
+                                (:source qualified))]
+            {:ok true
+             :source (validate-complete-source! source-file future-source)
+             :target (validate-complete-source! target-file target-source)
+             :removed-requires (:removed-requires narrowed)
+             :removed-imports (:removed-imports narrowed)
+             :narrowing-note narrowing-note
+             :source-rewrites (:rewrites qualified)
+             :unmatched-rewrites (:unmatched qualified)}))))
 
 (def ^:private receipt-version 1)
 
@@ -219,20 +334,32 @@
          :source-unchanged true
          :target-unchanged true}))))
 
+;; @spec MCP-OP-EXTRACT-008
 (defn- extraction-receipt
-  [{:keys [source-file target-file original-source future-source target-source]}]
-  {:receipt-version receipt-version
-   :operation :extract!
-   :source {:file (canonical-path source-file)
-            :source-hash (structural-lens/source-hash original-source)
-            :result-hash (structural-lens/source-hash future-source)
-            :original-source original-source
-            :result-source future-source}
-   :target {:file (canonical-path target-file)
-            :absent-before true
-            :result-hash (structural-lens/source-hash target-source)
-            :result-source target-source}
-   :inverse {:operation :undo-extract!}})
+  [{:keys [source-file target-file original-source future-source target-source
+           caller-plans]}]
+  (cond->
+    {:receipt-version receipt-version
+     :operation :extract!
+     :source {:file (canonical-path source-file)
+              :source-hash (structural-lens/source-hash original-source)
+              :result-hash (structural-lens/source-hash future-source)
+              :original-source original-source
+              :result-source future-source}
+     :target {:file (canonical-path target-file)
+              :absent-before true
+              :result-hash (structural-lens/source-hash target-source)
+              :result-source target-source}
+     :inverse {:operation :undo-extract!}}
+    (seq caller-plans)
+    (assoc :callers
+           (mapv (fn [{:keys [file original source]}]
+                   {:file (canonical-path file)
+                    :source-hash (structural-lens/source-hash original)
+                    :result-hash (structural-lens/source-hash source)
+                    :original-source original
+                    :result-source source})
+                 caller-plans))))
 
 (defn- publish-receipt!
   [receipt-out receipt]
@@ -254,9 +381,9 @@
   "Purely compile an extraction plan from one source snapshot and a captured
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
-           public-forms derive-required-public-forms]
+           public-forms derive-required-public-forms doc alias rewire-callers]
     :or {workspace-sources {} require-policy :minimal public-forms []
-         derive-required-public-forms false}}]
+         derive-required-public-forms false rewire-callers true}}]
   (let [lines (vec (str/split-lines source))
         ol (outline/outline-source file source)
         all-forms (:forms ol)
@@ -288,11 +415,28 @@
                           location
                           (recur (z/right location)))))
             ns-form-text (when ns-zloc (z/string ns-zloc))
-            zloc (analyze/string->zloc source)
             extracted-names (set (map #(str (:name %)) matched))
-            topo-order (let [topology (analyze/topological-sort zloc)]
-                         (->> (:sorted topology)
-                              (filter extracted-names)))
+            ;; @spec MCP-OP-EXTRACT-001
+            ;; The caller states the intended reading order; an internal
+            ;; topological re-sort is a diff the caller did not ask for, and in
+            ;; cohort rf1 it was the trigger an agent spent 15 returns chasing.
+            caller-order (mapv str forms)
+            ;; @spec MCP-OP-EXTRACT-013
+            ;; Honouring the caller's order means the caller can state one that
+            ;; needs a `declare`. Emitting that file would ship source that does
+            ;; not compile, so it refuses and names the order that works.
+            moved-deps (into {}
+                             (map (juxt :name :depends-on))
+                             (analyze/intra-ns-deps
+                               (analyze/string->zloc source)))
+            position (into {} (map-indexed (fn [i n] [n i])) caller-order)
+            forward-references
+            (vec (for [name caller-order
+                       dependency (sort (get moved-deps name))
+                       :when (and (contains? position dependency)
+                                  (> (get position dependency)
+                                     (get position name)))]
+                   {:form name :depends-on dependency}))
             form-texts
             (->> (sort-by :line matched)
                  (mapv
@@ -315,18 +459,22 @@
                         :text (str/join "\n"
                                         (subvec lines form-start form-end))}))))
             texts-by-name (into {} (map (juxt :name identity) form-texts))
-            ordered-texts (mapv #(get texts-by-name %) topo-order)
+            ordered-texts (mapv #(get texts-by-name %) caller-order)
             header-result
             (extract-header/compile-target-header
               {:source-ns-form ns-form-text
                :target-ns target-ns
                :form-sources (mapv :text ordered-texts)
-               :require-policy require-policy})
+               :require-policy require-policy
+               :doc doc})
             alias-result (if (= :copy-all require-policy)
                            {:ok true :aliases {}}
                            (extract-header/source-aliases ns-form-text))
-            target-alias (when (and (:ok alias-result)
-                                    (not= :copy-all require-policy))
+            ;; @spec MCP-OP-EXTRACT-004
+            target-alias (cond
+                           (not (str/blank? (str alias))) (str alias)
+                           (and (:ok alias-result)
+                                (not= :copy-all require-policy))
                            (extract-header/allocate-alias
                              target-ns (:aliases alias-result)))
             remaining-callers
@@ -356,6 +504,7 @@
                             supported-public-form-names)
             missing-required-public-forms
             (set/difference required-public-forms requested-public-forms)
+;; @spec MCP-OP-EXTRACT-011
             publicized-texts
             (if (seq unsupported-public-forms)
               ordered-texts
@@ -383,8 +532,62 @@
                  vec)
             subjects (mapv #(str source-ns "/" %) (sort extracted-names))
             quoted-proof (quoted-var-refs/scan-sources
-                           captured-sources subjects)]
+                           captured-sources subjects)
+            ;; @spec MCP-OP-EXTRACT-007
+            ;; Every file the planner has already PROVED references a moved Var
+            ;; is repointed here, in the same pure pass that proved it. A file
+            ;; whose only mention of a moved name is a comment rewrites nothing
+            ;; and is dropped, so no caller gains an unused require.
+            caller-plans
+            (when (and rewire-callers target-alias (seq other-files))
+              (vec
+                (keep
+                  (fn [caller-file]
+                    (let [caller-source (get captured-sources caller-file)
+                          caller-ns-form (when caller-source
+                                           (namespace-form-text caller-source))
+                          old-alias (when caller-ns-form
+                                      (extract-header/alias-for-namespace
+                                        caller-ns-form source-ns))]
+                      (when old-alias
+                        (let [result (extract-rewire/requalify-caller
+                                       {:source caller-source
+                                        :old-alias old-alias
+                                        :old-ns source-ns
+                                        :target-ns target-ns
+                                        :alias target-alias
+                                        :moved-vars (vec (sort extracted-names))})]
+                          (when (or (not (:ok result))
+                                    (pos? (long (or (:rewrites result) 0))))
+                            (assoc result :file caller-file
+                                   :old-alias old-alias
+                                   :original caller-source))))))
+                  other-files)))
+            caller-refusal (some #(when-not (:ok %) %) caller-plans)]
         (cond
+          (seq forward-references)
+          {:error (str "The declared form order would need a declare: "
+                       (str/join ", "
+                                 (map #(str (:form %) " before "
+                                            (:depends-on %))
+                                      forward-references)))
+           :error-type :forward-reference-in-declared-order
+           :forward-references forward-references
+           :dependency-order
+           (vec (->> (:sorted (analyze/topological-sort
+                                (analyze/string->zloc source)))
+                     (filter extracted-names)))
+           :source-unchanged true
+           :target-unchanged true}
+
+          caller-refusal
+          (assoc caller-refusal
+                 :error (str "Caller rewiring could not be proved for "
+                             (:file caller-refusal) ": "
+                             (:error caller-refusal))
+                 :source-unchanged true
+                 :target-unchanged true)
+
           (seq invalid-public-forms)
           {:error "public-forms must name selected private forms"
            :error-type :invalid-public-forms
@@ -434,6 +637,53 @@
                     (count preview-lines) " lines total)")
                new-file-content))
            :callers-to-review other-files
+           :rewire-callers (boolean rewire-callers)
+           ;; @spec MCP-OP-EXTRACT-009
+           ;; The dry run previews the SAME compiled plan the executor applies,
+           ;; per file, so a caller can review the complete effect before any
+           ;; byte moves.
+           :preview
+           (let [candidates
+                 (try
+                   (compile-candidates
+                     {:source source
+                      :source-file file
+                      :target-file to
+                      :form-ranges form-texts
+                      :target-source new-file-content
+                      :target-ns target-ns
+                      :target-alias target-alias
+                      :source-referred-forms source-referred
+                      :moved-sources (mapv :text publicized-texts)
+                      :remaining-callers remaining-callers
+                      :rewire-callers rewire-callers})
+                   (catch Exception error
+                     {:ok false
+                      :error-type (or (:error-type (ex-data error))
+                                      :invalid-extraction-candidate)
+                      :error (.getMessage error)}))]
+             {:target {:file to
+                       :ns-form (:ns-form header-result)
+                       :form-order (mapv :name publicized-texts)
+                       :requires (:target-requires header-result)
+                       :omitted-requires (:omitted-target-requires header-result)
+                       :imports (:target-imports header-result)
+                       :omitted-imports (:omitted-target-imports header-result)
+                       :lines (count (str/split-lines new-file-content))}
+              :source (if (:ok candidates)
+                        {:file file
+                         :ns-form (namespace-form-text (:source candidates))
+                         :removed-requires (:removed-requires candidates)
+                         :removed-imports (:removed-imports candidates)
+                         :call-sites-qualified (:source-rewrites candidates)
+                         :unmatched-call-sites (:unmatched-rewrites candidates)}
+                        candidates)
+              :callers (mapv #(select-keys % [:file :old-alias :rewrites
+                                              :require-action])
+                             caller-plans)})
+           :caller-rewrites
+           (mapv #(select-keys % [:file :old-alias :rewrites :require-action])
+                 caller-plans)
            :quoted-var-references
            (mapv #(select-keys % [:subject :file :line :character
                                   :reference-authority])
@@ -442,13 +692,17 @@
            :_source-hash (structural-lens/source-hash source)
            :_new-file-content new-file-content
            :_form-texts form-texts
-           :_source-referred-forms source-referred})))))
+           :_source-referred-forms source-referred
+           :_moved-sources (mapv :text publicized-texts)
+           :_caller-plans (vec caller-plans)})))))
 
 (defn plan
   "Capture one workspace snapshot and delegate extraction decisions to
   compile-plan. This is the filesystem shell, not the pure planner."
-  [{:keys [file forms to source-paths require-policy]
-    :or {require-policy :minimal}}]
+  [{:keys [file forms to source-paths require-policy public public-forms doc
+           alias rewire-callers]
+    :as opts
+    :or {require-policy :minimal rewire-callers true}}]
   (try
     (let [source (slurp file)
           target-ns (file-path->ns-name to source-paths)
@@ -470,7 +724,20 @@
          :to to
          :target-ns target-ns
          :workspace-sources workspace-sources
-         :require-policy require-policy}))
+         :require-policy require-policy
+         :public-forms (or public public-forms [])
+         ;; @spec MCP-OP-EXTRACT-011
+         ;; When the caller does not name the promotions, DERIVE them. The
+         ;; planner already computes exactly which moved private forms a
+         ;; remaining owner must call; shipping one of them still private, as
+         ;; rf1 did twice, is a success receipt for a namespace that will not
+         ;; compile. Deriving is only a default: a supplied :public stays
+         ;; authoritative, and a wrong one still refuses.
+         :derive-required-public-forms
+         (not (or (contains? opts :public) (contains? opts :public-forms)))
+         :doc doc
+         :alias alias
+         :rewire-callers rewire-callers}))
     (catch Exception error
       {:ok false
        :error-type :extraction-snapshot-failed
@@ -498,6 +765,7 @@
             source-referred-forms (:_source-referred-forms p)
             target-alias (:target-alias p)
             target-ns (:target-ns p)
+            caller-plans (:_caller-plans p)
             candidates (compile-candidates
                          {:source original-source
                           :source-file file
@@ -506,7 +774,10 @@
                           :target-source new-content
                           :target-ns target-ns
                           :target-alias target-alias
-                          :source-referred-forms source-referred-forms})
+                          :source-referred-forms source-referred-forms
+                          :moved-sources (:_moved-sources p)
+                          :remaining-callers (:remaining-source-callers p)
+                          :rewire-callers (:rewire-callers p)})
             updated-source (:source candidates)
             target-file (io/file to)
             source-file (io/file file)
@@ -516,10 +787,26 @@
                        :target-file target-file
                        :original-source original-source
                        :future-source updated-source
-                       :target-source new-content})]
+                       :target-source new-content
+                       :caller-plans caller-plans})]
         (cond
+          (false? (:ok candidates))
+          candidates
+
           receipt-error
           receipt-error
+
+          ;; @spec MCP-OP-EXTRACT-008
+          ;; Every caller file is hash-fenced against the snapshot the plan was
+          ;; compiled from, exactly as the source already is.
+          (some (fn [{:keys [file original]}]
+                  (not= original (slurp (io/file file))))
+                caller-plans)
+          {:error "Extraction caller changed after planning"
+           :error-type :stale-extraction-caller
+           :files (mapv :file caller-plans)
+           :source-unchanged true
+           :target-unchanged true}
 
           (.exists target-file)
           {:error "Extraction target already exists"
@@ -542,8 +829,13 @@
             (try
               (file-ops/atomic-write! target-file new-content)
               (file-ops/atomic-write! source-file updated-source)
+              (doseq [{:keys [file source]} caller-plans]
+                (file-ops/atomic-write! (io/file file) source))
               (when-not (and (= new-content (slurp target-file))
-                             (= updated-source (slurp source-file)))
+                             (= updated-source (slurp source-file))
+                             (every? (fn [{:keys [file source]}]
+                                       (= source (slurp (io/file file))))
+                                     caller-plans))
                 (throw (ex-info "Extraction read-back verification failed"
                                 {:error-type :extraction-read-back-failed})))
               (let [receipt-file (publish-receipt! receipt-out receipt)]
@@ -579,6 +871,10 @@
                               :atomic-write true
                               :read-back true}
                    :callers-to-review (:callers-to-review p)
+                   :rewired-callers (:caller-rewrites p)
+                   :removed-source-requires (:removed-requires candidates)
+                   :removed-source-imports (:removed-imports candidates)
+                   :source-call-sites-qualified (:source-rewrites candidates)
                    :quoted-var-references (:quoted-var-references p)
                    :summary {:forms-extracted (count form-texts)
                              :new-file-lines (count (str/split-lines new-content))
@@ -594,6 +890,13 @@
                         (file-ops/atomic-write! source-file original-source)
                         (= original-source (slurp source-file))
                         (catch Exception _ false))
+                      callers-restored?
+                      (every? (fn [{:keys [file original]}]
+                                (try
+                                  (file-ops/atomic-write! (io/file file) original)
+                                  (= original (slurp (io/file file)))
+                                  (catch Exception _ false)))
+                              caller-plans)
                       target-removed?
                       (or (not (.exists target-file))
                           (and (= new-content (slurp target-file))
@@ -607,9 +910,11 @@
                   (throw (ex-info "Extraction commit failed and was rolled back"
                                   {:error-type :extraction-commit-failed
                                    :source-restored source-restored?
+                                   :callers-restored callers-restored?
                                    :target-removed target-removed?
                                    :receipt-removed receipt-removed?
-                                   :source-unchanged source-restored?}
+                                   :source-unchanged (and source-restored?
+                                                          callers-restored?)}
                                   commit-error)))))))))))
 
 (defn undo!
@@ -620,7 +925,16 @@
           source (:source receipt-data)
           target (:target receipt-data)
           source-file (io/file (:file source))
-          target-file (io/file (:file target))]
+          target-file (io/file (:file target))
+          callers (vec (:callers receipt-data))
+          stale-caller
+          (some (fn [{:keys [file result-hash] :as caller}]
+                  (let [f (io/file file)]
+                    (when (or (not (.exists f))
+                              (not= result-hash
+                                    (structural-lens/source-hash (slurp f))))
+                      caller)))
+                callers)]
       (cond
         (= :compiled-extraction (:operation receipt-data))
         ((requiring-resolve 'clj-surgeon.mcp-extraction/undo!) receipt-data)
@@ -659,6 +973,17 @@
          :source-unchanged true
          :target-unchanged true}
 
+        ;; @spec MCP-OP-EXTRACT-008
+        ;; A rewired caller is part of the extraction's result; undoing without
+        ;; it would leave the workspace pointing at a namespace that no longer
+        ;; exists.
+        stale-caller
+        {:error "Extraction caller no longer matches the receipt"
+         :error-type :stale-extraction-result
+         :file (:file stale-caller)
+         :source-unchanged true
+         :target-unchanged true}
+
         :else
         (let [original-source (validate-complete-source!
                                 (:file source)
@@ -672,8 +997,15 @@
              :target-unchanged true}
             (try
               (file-ops/atomic-write! source-file original-source)
-              (when-not (= (:source-hash source)
-                           (structural-lens/source-hash (slurp source-file)))
+              (doseq [{:keys [file original-source]} callers]
+                (file-ops/atomic-write! (io/file file) original-source))
+              (when-not (and (= (:source-hash source)
+                                (structural-lens/source-hash (slurp source-file)))
+                             (every? (fn [{:keys [file source-hash]}]
+                                       (= source-hash
+                                          (structural-lens/source-hash
+                                            (slurp (io/file file)))))
+                                     callers))
                 (throw (ex-info "Extraction undo read-back verification failed"
                                 {:error-type :extraction-undo-read-back-failed})))
               {:ok true
@@ -681,6 +1013,7 @@
                :receipt (canonical-path receipt)
                :verified {:source-restored true
                           :source-hash (:source-hash source)
+                          :callers-restored (mapv :file callers)
                           :target-absent (not (.exists target-file))
                           :read-back true}}
               (catch Exception undo-error
@@ -690,6 +1023,14 @@
                         (= (:result-hash source)
                            (structural-lens/source-hash (slurp source-file)))
                         (catch Exception _ false))
+                      _callers-restored-to-result?
+                      (every? (fn [{:keys [file result-source]}]
+                                (try
+                                  (file-ops/atomic-write! (io/file file)
+                                                          result-source)
+                                  true
+                                  (catch Exception _ false)))
+                              callers)
                       target-restored?
                       (try
                         (file-ops/atomic-write! target-file result-target)

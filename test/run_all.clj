@@ -13,6 +13,7 @@
    [clj-surgeon.edit-test]
    [clj-surgeon.edn-config-integration-test]
    [clj-surgeon.extract-header-test]
+   [clj-surgeon.extract-rewire-test]
    [clj-surgeon.extract-test]
    [clj-surgeon.failure-report-test]
    [clj-surgeon.file-ops-test]
@@ -56,6 +57,7 @@
                    'clj-surgeon.rename-test
                    'clj-surgeon.fix-declares-test
                    'clj-surgeon.extract-header-test
+                   'clj-surgeon.extract-rewire-test
                    'clj-surgeon.extract-test
                    'clj-surgeon.failure-report-test
                    'clj-surgeon.file-ops-test

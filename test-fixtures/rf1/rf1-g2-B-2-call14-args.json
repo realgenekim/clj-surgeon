@@ -1,0 +1,185 @@
+{
+  "workspace_root": "/home/tester/acid/wt/rf1-g2-B-2",
+  "edits": [
+    {
+      "file": "src/clj_surgeon/mcp_exact_verify.clj",
+      "within": {
+        "namespace": true
+      },
+      "from": "(ns clj-surgeon.mcp-exact-verify\n  \"Proof-carrying semantic selection followed by one addressed transaction.\"\n  (:require\n   [clj-surgeon.mcp-process :as process-env]\n   [clojure.java.io :as io]\n   [clojure.string :as str])\n  (:import\n   (java.nio.charset StandardCharsets)\n   (java.nio.file LinkOption Path Paths)\n   (java.security MessageDigest)\n   (java.util UUID)))",
+      "to": "(ns clj-surgeon.mcp-exact-verify\n  \"Run project-owned exact verification with bounded process evidence.\"\n  (:require\n   [clj-surgeon.mcp-process :as process-env]\n   [clojure.java.io :as io]\n   [clojure.string :as str])\n  (:import\n   (java.nio.charset StandardCharsets)\n   (java.security MessageDigest)))"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_exact_verify.clj",
+      "within": {
+        "form": "admission-unverified?"
+      },
+      "from": "defn-",
+      "to": "defn"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "namespace": true
+      },
+      "from": "(ns clj-surgeon.mcp-change-buffer\n  \"Proof-carrying semantic selection followed by one addressed transaction.\"\n  (:require\n   [clj-surgeon.diagnostic-delta :as diagnostic-delta]\n   [clj-surgeon.file-ops :as file-ops]\n   [clj-surgeon.intent-transaction :as transaction]\n   [clj-surgeon.mcp-cold-verify :as cold-verify]\n   [clj-surgeon.mcp-exact-verify :as mcp-exact-verify :refer [admission-unverified? expand-command run-process!]]\n   [clj-surgeon.mcp-hot-verify :as hot-verify]\n   [clj-surgeon.mcp-paths :as mcp-paths]\n   [clj-surgeon.mcp-process :as process-env]\n   [clj-surgeon.mcp-workspace :as workspace]\n   [clj-surgeon.outline :as outline]\n   [clj-surgeon.structural-lens :as structural-lens]\n   [clojure.edn :as edn]\n   [clojure.java.io :as io]\n   [clojure.set :as set]\n   [clojure.string :as str]\n   [rewrite-clj.zip :as z])\n  (:import\n   (java.nio.charset StandardCharsets)\n   (java.nio.file LinkOption Path Paths)\n   (java.security MessageDigest)\n   (java.util UUID)))",
+      "to": "(ns clj-surgeon.mcp-change-buffer\n  \"Proof-carrying semantic selection followed by one addressed transaction.\"\n  (:require\n   [clj-surgeon.diagnostic-delta :as diagnostic-delta]\n   [clj-surgeon.file-ops :as file-ops]\n   [clj-surgeon.intent-transaction :as transaction]\n   [clj-surgeon.mcp-cold-verify :as cold-verify]\n   [clj-surgeon.mcp-exact-verify :as exact-verify]\n   [clj-surgeon.mcp-hot-verify :as hot-verify]\n   [clj-surgeon.mcp-paths :as mcp-paths]\n   [clj-surgeon.mcp-workspace :as workspace]\n   [clj-surgeon.outline :as outline]\n   [clj-surgeon.structural-lens :as structural-lens]\n   [clojure.edn :as edn]\n   [clojure.java.io :as io]\n   [clojure.set :as set]\n   [clojure.string :as str]\n   [rewrite-clj.zip :as z])\n  (:import\n   (java.nio.file LinkOption Path Paths)\n   (java.util UUID)))"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_formatter.clj",
+      "within": {
+        "namespace": true
+      },
+      "from": "(ns clj-surgeon.mcp-formatter\n  \"Format staged candidate sources before a transaction writes live files.\"\n  (:require\n   [clj-surgeon.mcp-change-buffer :as change-buffer]\n   [clojure.java.io :as io]\n   [clojure.string :as str]))",
+      "to": "(ns clj-surgeon.mcp-formatter\n  \"Format staged candidate sources before a transaction writes live files.\"\n  (:require\n   [clj-surgeon.mcp-exact-verify :as exact-verify]\n   [clojure.java.io :as io]\n   [clojure.string :as str]))"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "namespace": true
+      },
+      "from": "(ns clj-surgeon.mcp-tool\n  (:require\n   [cheshire.core :as json]\n   [clj-surgeon.extract :as extract]\n   [clj-surgeon.file-ops :as file-ops]\n   [clj-surgeon.intent-transaction :as transaction]\n   [clj-surgeon.mcp-change-buffer :as change-buffer]\n   [clj-surgeon.mcp-cold-verify :as cold-verify]\n   [clj-surgeon.mcp-combinable-transaction :as combinable]\n   [clj-surgeon.mcp-compact-location :as compact-location]\n   [clj-surgeon.mcp-compact-relations :as compact-relations]\n   [clj-surgeon.mcp-contract :as contract]\n   [clj-surgeon.mcp-extraction :as extraction]\n   [clj-surgeon.mcp-formatter :as formatter]\n   [clj-surgeon.mcp-inspect-tool :as inspect-tool]\n   [clj-surgeon.mcp-operation :as mcp-operation]\n   [clj-surgeon.mcp-paths :as mcp-paths]\n   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]\n   [clj-surgeon.mcp-program-tool :as program-tool]\n   [clj-surgeon.mcp-runtime :as runtime]\n   [clj-surgeon.mcp-schema :as mcp-schema]\n   [clj-surgeon.mcp-telemetry :as telemetry]\n   [clj-surgeon.mcp-workspace :as workspace]\n   [clj-surgeon.mcp-workspace-sources :as workspace-sources]\n   [clj-surgeon.mcp-write-refusal :as write-refusal]\n   [clj-surgeon.structural-lens :as structural-lens]\n   [clojure.java.io :as io]\n   [clojure.string :as str])\n  (:import\n   (java.nio.file Files Path)\n   (java.util UUID)))",
+      "to": "(ns clj-surgeon.mcp-tool\n  (:require\n   [cheshire.core :as json]\n   [clj-surgeon.extract :as extract]\n   [clj-surgeon.file-ops :as file-ops]\n   [clj-surgeon.intent-transaction :as transaction]\n   [clj-surgeon.mcp-change-buffer :as change-buffer]\n   [clj-surgeon.mcp-cold-verify :as cold-verify]\n   [clj-surgeon.mcp-combinable-transaction :as combinable]\n   [clj-surgeon.mcp-compact-location :as compact-location]\n   [clj-surgeon.mcp-compact-relations :as compact-relations]\n   [clj-surgeon.mcp-contract :as contract]\n   [clj-surgeon.mcp-exact-verify :as exact-verify]\n   [clj-surgeon.mcp-extraction :as extraction]\n   [clj-surgeon.mcp-formatter :as formatter]\n   [clj-surgeon.mcp-inspect-tool :as inspect-tool]\n   [clj-surgeon.mcp-operation :as mcp-operation]\n   [clj-surgeon.mcp-paths :as mcp-paths]\n   [clj-surgeon.mcp-prepared-confirmation :as prepared-confirmation]\n   [clj-surgeon.mcp-program-tool :as program-tool]\n   [clj-surgeon.mcp-runtime :as runtime]\n   [clj-surgeon.mcp-schema :as mcp-schema]\n   [clj-surgeon.mcp-telemetry :as telemetry]\n   [clj-surgeon.mcp-workspace :as workspace]\n   [clj-surgeon.mcp-workspace-sources :as workspace-sources]\n   [clj-surgeon.mcp-write-refusal :as write-refusal]\n   [clj-surgeon.structural-lens :as structural-lens]\n   [clojure.java.io :as io]\n   [clojure.string :as str])\n  (:import\n   (java.nio.file Files Path)\n   (java.util UUID)))"
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "namespace": true
+      },
+      "from": "[clj-surgeon.mcp-change-buffer :as change-buffer]",
+      "to": "[clj-surgeon.mcp-change-buffer :as change-buffer]\n   [clj-surgeon.mcp-exact-verify :as exact-verify]"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-check!"
+      },
+      "from": "run-process!",
+      "to": "exact-verify/run-process!"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-check!"
+      },
+      "from": "admission-unverified?",
+      "to": "exact-verify/admission-unverified?"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "diagnostic-command"
+      },
+      "from": "expand-command",
+      "to": "exact-verify/expand-command"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-diagnostic-check!"
+      },
+      "from": "run-process!",
+      "to": "exact-verify/run-process!"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-diagnostic-check!"
+      },
+      "from": "admission-unverified?",
+      "to": "exact-verify/admission-unverified?"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_change_buffer.clj",
+      "within": {
+        "form": "run-verification!"
+      },
+      "from": "expand-command",
+      "to": "exact-verify/expand-command",
+      "matches": 2
+    },
+    {
+      "file": "src/clj_surgeon/mcp_formatter.clj",
+      "within": {
+        "form": "format-candidates!"
+      },
+      "from": "change-buffer/run-process!",
+      "to": "exact-verify/run-process!"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_formatter.clj",
+      "within": {
+        "form": "format-candidates!"
+      },
+      "from": "change-buffer/expand-command",
+      "to": "exact-verify/expand-command"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-extraction!"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-extraction!"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-explicit-change!"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile"
+    },
+    {
+      "file": "src/clj_surgeon/mcp_tool.clj",
+      "within": {
+        "form": "execute-explicit-change!"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!"
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-profile-compilation-is-project-owned-and-snapshot-bound"
+      },
+      "from": "change-buffer/compile-exact-profile",
+      "to": "exact-verify/compile-exact-profile",
+      "matches": 3
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-process-evidence-is-complete-bounded-and-honest"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!",
+      "matches": 4
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-process-evidence-is-complete-bounded-and-honest"
+      },
+      "from": "change-buffer/classify-exact-process-outcome",
+      "to": "exact-verify/classify-exact-process-outcome",
+      "matches": 2
+    },
+    {
+      "file": "test/clj_surgeon/mcp_change_buffer_test.clj",
+      "within": {
+        "form": "exact-verification-admission-timeout-is-unverified"
+      },
+      "from": "change-buffer/run-exact-verification!",
+      "to": "exact-verify/run-exact-verification!"
+    }
+  ]
+}

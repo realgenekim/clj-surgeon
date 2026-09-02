@@ -1,0 +1,38 @@
+{
+  "Ok": {
+    "content": [
+      {
+        "type": "text",
+        "text": "edit_clojure\n  28 edits · 5 files · 4158.75 ms\n\n✓ atomic commit complete\n✓ written bytes read back and verified\n✓ terminal evidence · verification_complete=true · next action none"
+      }
+    ],
+    "structuredContent": {
+      "canonical_effect_identity": {
+        "version": 1,
+        "sha256": "542f35dff779857dfc54d7e901cc00d85427c0a8f1a4d4f0179fb40489c67ec7",
+        "files": 5,
+        "effects": 28
+      },
+      "workspace_root": "/home/tester/acid/wt/rf1-g2-B-2",
+      "committed": true,
+      "changes": 21,
+      "verification_complete": true,
+      "elapsed_ms": 4158.747876,
+      "edits": 28,
+      "read_back_hashes": {
+        "src/clj_surgeon/mcp_change_buffer.clj": "fd894e185e7ed53bee910ddbf31e2a3cba6ab2b248ce996cc37083971ee7c005",
+        "src/clj_surgeon/mcp_exact_verify.clj": "f048cdc2d9341acac9f2c79cc3ee1c8b23bd3ac01af3d4570011ceb3f382cfdd",
+        "src/clj_surgeon/mcp_formatter.clj": "4f3b8fdd24c7c1cc9dc2f5c5c9eefe9e24925ed62685c951c883b7a94608ea18",
+        "src/clj_surgeon/mcp_tool.clj": "37fb84eeb951d8f5aee9493ec9c995be317ca93e6233a6d765940a950024b19c",
+        "test/clj_surgeon/mcp_change_buffer_test.clj": "b8bc19f7de07d1bf203975747cc5303d636a390f175866b6524f273c875df721"
+      },
+      "next_action": "none",
+      "files": 5,
+      "receipt_hash": "493f6a122d3ecc6b56bd900ea06e209d5d52a1a709278ab458e5a570c4052920",
+      "ok": true,
+      "operation": "edit_clojure",
+      "undo_receipt": "/home/tester/.local/state/clj-surgeon/workspaces/cba021a96bc3dbc14273dc414a14d5b03e3a7fd2154afe9177de2e6d8ce2c1f2/receipts/96ecf953-c667-418d-af37-925c27aa566c.edn"
+    },
+    "isError": false
+  }
+}
