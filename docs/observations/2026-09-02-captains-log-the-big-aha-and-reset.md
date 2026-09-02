@@ -2629,3 +2629,64 @@ recursive encoding. Owner work before a Postgres-backed deploy: install the inde
 ever raising max-instances: database-side generation serialisation and `append-all!` handling of a
 durable losing claim. Push after round four and my own run.
 
+
+## 22:25Z — the win as four storyboards (Gene: "4. Exactly what the win is — Show in ascii art storyboards" … "Add to captain log. Amazing.")
+
+**1. The extraction (rf2): native cuts and sews by hand; the verb does both in one call.**
+
+```
+NATIVE (stripped, n=3, mean 336 s, 17.3 returns)        VERB :extract! :rewire-callers (n=3, mean 243 s, 14.7 returns)
+
+ read ns ─▶ patch A (cut 9 forms) ─▶ patch B (paste,      read ns ─▶ ONE CALL {:file :forms :to :rewire-callers}
+ hand-write header) ─▶ grep callers (26 sites, 5 files)              │ 1.3 s of tool time
+ ─▶ patch C, D, … (2.8 apply_patch on .clj per run)                   ▼
+ ─▶ compile ─▶ missed caller, back to patch ─▶ 4 suites   RECEIPT {:applied true :complete true
+                                                                    :callers-unresolved [] :compile 5 ns ok}
+ t = 336 s (fastest 291)                                    ─▶ compile ─▶ 3 suites   (B = 0 returns between receipt and check;
+                                                            t = 243 s (slowest 253)   A = 0 native bytes after the verb, 3/3)
+ Every verb run beat every native run: {230, 246, 253} vs {291, 339, 378}. Acceptance byte-identical.
+```
+
+**2. The fan-out (sl1, alias migration N=5…80): native pays per site; the verb pays once.**
+
+```
+ N=5   native: grep→edit ×5 → suite            55 s,  3 returns, PASS   │ verb: ONE CALL {from to}   24 s, 2 returns, PASS
+ N=20  native: grep→sed→collision→fix→suite    90 s,  7 returns, FAIL   │ verb: same call            25 s, 2 returns, PASS
+ N=80  native: writes a Python generator      127 s, 11 returns, PASS   │ verb: same call            27 s, 3 returns, PASS
+ control: 240 sites in 5 files cost native the same as in 80 files → the cost is site DISCOVERY, not typing.
+ Wall 4.5× at scale, returns 2×, native 2/6, verb 6/6. Real repo: 171 files, 1,872 sites, one call, kondo delta 0.
+```
+
+**3. The gate (z7c, n=6): same speed, different last frame.**
+
+```
+ NATIVE 348 s:  read → patch → patch → compile → suites → git commit        (agent decides it is done)
+ GATE   339 s:  read → patch → patch → compile → suites → admit_clojure_patch verify:focused
+                                                            ├─ REFUSED 0.01 s  (bash error text piped in as a patch)
+                                                            ├─ REFUSED 7.5 s   (blocking lint in the post-image)
+                                                            └─ COMMIT complete  7/7 commits, 0 on verify none
+ 0.975×, p 0.79: FLAT. The gate buys the last frame (every commit verified, no waiver path); it costs 25 s/run
+ and a fat tail (8 refusals, all in the 2 slowest runs). A ratchet, not an engine.
+```
+
+**4. Where the win stops.**
+
+```
+ (a) nothing to discover (rung L control, z8): native 149 s, gate 277 s (1.86×) — the gate's own suite is pure cost
+ (b) free choice: tool called 0 / 10 — the win exists under MANDATE only
+ (c) small n: z3 0.80× → z6 1.00×; z7b 0.76× → z7c 0.975× — no wall claim below n=6
+ (d) structural match sees the write, not the guard: (fnil conj []) flagged raw; (not-any? #(= chase-id …)) three lines up
+```
+
+**pmap at large N — position (Gene: "Do we benefit from pmap in large n?").** Not on the migration
+verb's write path: in the anchor arm the verb is seconds inside 228 s, the wall is the agent's returns
+and the suites, and the commit must stay serial and all-or-nothing. Yes on whole-repo READ verbs: one
+`inspect_clojure` call with 8 match patterns over one ~1,000-line file measured 1,191 ms (0.57 s for 6),
+so a census over 171 files is ~3–4 min serial vs ~15 s on Anvil's 16 cores — the class where the verb
+itself becomes the wall (census, `prepare-change` proofs, the finder). Rule: parallelise parse/match/
+plan per file with a bounded executor (bare `pmap` is lazy, chunked, no back-pressure), serialise the
+plan merge and the write; kondo already parallelises internally. Receipt gap: the alias-migration
+receipt carries no per-phase `elapsed_ms`; the migration verb's own elapsed in the anchor is
+UNMEASURED, not small. Decision: migration stays serial; the census verb (inb-f5ee92) gets a parallel
+plan phase from the start; every receipt gets per-phase elapsed (facts, not verdicts).
+
