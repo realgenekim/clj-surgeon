@@ -1793,3 +1793,39 @@ supervised agent run becomes: state the intent, read one receipt, let the gate v
 moves ran tonight by hand in the time one used to take. With the receipt fixed and the verb
 mandated, that is what an unsupervised agent inherits.
 
+
+## 19:24Z — z7 and z8 scored: the gate killed its own extraction arm, and the fix regressed on the control
+
+Receipts `~/acid/receipts/z7-score.md`, `z8-score.md`; rs1's deferred acceptance resolved: all
+three stripped-native runs PASS every predicate, churn 53 canonical (the −35 % returns cost
+nothing).
+
+**z7 (gate on the extraction, n=3).** The gate cost 2 of 3 Z runs the task: `require-removed`
+refused the extraction's own defining act 13 times (92.3 % refusal); the cohort's fastest wall,
+281 s, did a fifth of the job. This is the exact false refusal the hand drive hit in one call
+tonight and f5965ad fixes; the woodchipper spent three arms confirming what the tweezer found
+in 750 ms. Walls (Z 281 374 462 vs N 429 749 486) are therefore not comparable and are withdrawn
+as a speed reading; the z7 claim is re-run only after the fixed gate serves 7894 (it does now).
+
+**z8 (rung L control, n=4).** Not flat: **1.86×**, every Z run slower than every N run
+(250 254 267 337 vs 118 126 175 178; d 3.51). Decomposition: the gate's own verification is
+22.1 s per run, **17 % of the +128 s gap**; 83 % is agent time, 5.25 extra returns and 79 %
+more tokens retrying around a **58.6 % refusal rate**, 13 of 17 refusals being the gate failing
+to verify itself (`verification-runner-failed`, `no-mapped-test-namespace`). Zero hazards
+caught. One Z run produced nothing (6 calls, 5 refused, empty diff). **And the fix regressed:
+3 of 6 commits landed at `verification_status: partial`** under 2cc52fa, the state ADMIT-105
+exists to make unreachable; z6 had 0 of 15. The guarantee is rung-dependent, which means it is
+not a guarantee. The mandate itself is obeyed and cheap (0 native `.clj` patches, shell below
+native); the verification pipeline behind it does not hold on this rung.
+
+**Decisions.** (1) `bridge/admit-gate` f5965ad is WITHDRAWN from review a second time until the
+partial-commit path is reproduced from z8's real payloads and closed with a property test over
+every non-complete status (dispatched, real bytes first). (2) z7 is re-run on the fixed gate as
+the gate's claim test; z8 stands as the cost boundary: the gate pays where it removes a large
+tail and costs ~1.9× where it removes nothing, and on L most of that cost is refusals, not
+verification. (3) Predictions (d97fc5d) on z8: control flat FAIL by 4 sd; 0 partial commits
+FAIL; canonical churn 6/8 FAIL. The reproduction program's honest state: rung M flat (n=7), rung
+L a loss, rung R3 unmeasured until the fix. The mechanism survives in the decomposition (the
+gate's clock is small; refusals are the cost) and in the hand drive; it has not yet survived a
+cohort.
+
