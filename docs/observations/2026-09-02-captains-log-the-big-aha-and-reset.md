@@ -1174,3 +1174,30 @@ ONE return whose response is the verdict, i.e. the extract verb fused with the g
 "think compile bang" shape. rf2's top-3 fixes come from the ethnography (running); the two new
 refusal classes are the beads H6 asked for (inbox to the mayor for creation).
 
+
+## 17:47Z — 46o verification round: GO-WITH-FIX; the census certified the repo's style, not the check
+
+Red team re-executed its own probes against the fixed branch (15 probes): F1, F2, F3, F4, F6 all
+CLOSED at the layer they belong to (pure predicate with witnesses; typed laundering refusals that
+install no guard; typed `formatter-failed` on nil and throw; one pinned version constant derived
+at both call sites; the real binary executes in CI; `scope-drift`'s docstring now reads "a
+self-test, not a proof… nothing about the formatter is bounded by it"). The e2e ns-form deviation
+judged acceptable: the predicate is witnessed on real ns forms and at `format-scoped-candidates!`;
+only the wire layer uses a clause list in a defn, forced by the closed-loser constraint. String
+probes 9/9 correct: the real formatter never touches bytes inside a string, regex, or docstring.
+
+Two NEW findings from the real pinned 0.29.0 on ordinary source, both GO-WITH-FIX, both with a
+zero-cost fix measured 12/12 and 0 false refusals over 1738 forms (probe p10):
+- **N1** the formatter rewrites `;;foo` → `;; foo` (and `;;;foo`, end-of-line `;;t`); the stream
+  check refuses it as `format-altered-form`, killing the entire transaction on the real wire route
+  with a message accusing the formatter of changing code. The 1738-form census read 0 because this
+  repo never writes that comment style: **the census measured the repo's style, not the check.**
+  Fix: normalise whitespace after a comment's semicolons in `sig`; fixture gains the shapes the
+  census cannot supply (`;;no-space`, a comment inside `:require`, a multi-line string).
+- **N2** the clause sort treats comments as independent siblings, so a comment inside
+  `(:require …)` can be reattached to a different clause and commit; the real formatter moves a
+  comment WITH its clause. Fix: sort clause groups (leading comments + the clause).
+
+Builder dispatched for the last round; then commit, push, hand to the mayor with both red-team
+receipts. F5/F7 deferred to a follow-up bead by agreement.
+
