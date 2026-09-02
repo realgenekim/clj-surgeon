@@ -1166,3 +1166,43 @@ contention inflates both arms equally in principle but not necessarily in practi
 arm holds a JVM connection while a native arm does not); the diagnosis waits on the typed
 refusal ledger, MCP call counts and tokens carried, all being scored now, and on blind
 quality. Diffs frozen with the completeness gate: 12 of 12 complete.
+
+## Receipt 12:45Z — n1 scored: on the verified server the shipped Surgeon arm is additive, not substitutive
+
+Per-arm means, n=6 each, paired by wave (scorer pins rollouts by worktree and start time, 12 of 12):
+
+| metric | native N | shipped A | A/N |
+|---|---|---|---|
+| wall s | 367 | 677 | 1.84 |
+| input tokens carried | 1,239,123 | 2,297,194 | 1.85 |
+| non-test actions | 10.0 | 21.2 | 2.12 |
+| total actions | 19.5 | 30.5 | 1.56 |
+| shell calls | 11.5 | 15.7 | 1.37 |
+| MCP calls | 0 | 8.5 | |
+| patch applies | 3.7 | 1.2 | 0.33 |
+| refusals (typed) | 0 | 2.7 (13 of 16 invalid-intent-form) | |
+| acceptance failed assertions of 39 | 1.83 | 3.33 | |
+
+Findings. (1) The wall gap is the token gap: 1.84 = 1.55 (turns) x 1.19 (seconds per turn),
+and the 1.19 in seconds per turn equals the 1.19 in context per turn; Spearman wall~tokens
+0.87 over all twelve runs, the strongest pairing. (2) Refusals and MCP-call count explain
+nothing: within A, wall~MCP-calls rho 0.03; the slowest run made the fewest Surgeon calls,
+same as the fastest. No ambiguous-insertion-gap or overlapping-intents refusals in this
+cohort (shipped build carries neither fix). (3) The mechanism is that Surgeon is layered on
+top of the native workflow rather than replacing it: the A arm still issues more shell calls
+than native, adds 8.5 MCP calls, and applies a third as many patches; native replaced reading
+with editing. MCP results are small (under 500 chars average), so the extra context is the
+consequence of twice the steps, not of verbose receipts. (4) Contention is not the cause: in
+both waves the native runs exited first and left the shipped arms nearly alone on the box.
+(5) Acceptance runs opposite to wall: native 1.83 failed assertions to shipped 3.33, native
+holds the only clean sweep, shipped the worst run (5 failures, slowest, most tokens).
+(6) Apparatus: the TESTS-BELOW-BASELINE flag is off by one; ab267f9 has 577 top-level
+deftests, so 577 is the honest count for any run that adds assertions inside existing tests;
+the flag has fired falsely four times today and is informational only. Baseline for rung M
+is 577 from here.
+
+Standing of the night's claims after n1. Wall: on the verified shipped build the Surgeon arm
+is slower, 1.8x, six paired draws, direction held in 5 of 6 pairs. Conformance: native is
+better on this cohort; the withdrawn headline does not come back. Clarity: pending the two
+judges on these twelve diffs. The earlier "indistinguishable" wall result stands only for the
+unverified 7888 server and is not evidence about the shipped build.
