@@ -1114,3 +1114,39 @@ do accepted gap insertions precede the duplicated spans that refusals in G make 
 reconsider. `create_files` in O: Opus's cheap test (an `:overlapping-intents` refusal
 immediately preceding each create_files, since O lacks the overlap fix) is running on the
 rollouts now; Sol reads it as coincidence pending that.
+
+## Receipt 11:50Z — the bisect settles: the gap fix ADDS a refusal, and only O ever sees it
+
+Typed refusal classifier over all nine b1 rollouts (agrees with the text-derived counts 9 of 9):
+
+| reason | G x3 | O x3 | A x3 |
+|---|---|---|---|
+| invalid-intent-form | 5 | 8 | 10 |
+| ambiguous-insertion-gap | 0 | **4** (3 of 3 runs) | 0 |
+| overlapping-intents | 0 | 1 | 0 |
+| other (inspect-output-limit, batch-form-selection, unknown/missing fields, expect-count) | 2 | 3 | 3 |
+| total | 7 | 16 | 13 |
+
+`ambiguous-insertion-gap` ("the sibling gap contains comments or detached source") fires in
+every O run and in no G or A run. O is the only arm carrying the insertion-gap fix, so the fix
+does not remove a refusal, it introduces one, and it fires on real code because channel.clj
+has comments between top-level forms. What the agents did with it: two of three escaped on the
+very next call to `create_files` (a new test namespace), one stopped. The one
+`overlapping-intents` refusal in the cohort started a six-call struggle in O-g2 that ended in
+the same escape. So both anomalies of the night (the only new files, and the file lost to
+plain `git diff`) have one root.
+
+This overturns the fleet's "productive refusal removed" story from round 5, in direction:
+the gap fix did not make an ugly success silent, it turned a success into a refusal that the
+agent cannot act on from its fields, and the escape (a new file, or giving up on the
+insertion) is where the clarity went. It also explains why the wave build (both fixes)
+scored lowest: the overlap fix alone halves refusals (G), the gap fix alone adds a family of
+them (O), and together the agent meets the new family without the old escape routes.
+
+Reading with confidence now: **the insertion-gap fix causes the wave deficit; the overlap fix
+is good.** Maintainers: the ambiguity predicate treats comments or detached source between
+siblings as ambiguous even when the anchor is explicit; that condition needs an explicit
+anchor exemption or an actionable next_call in the refusal, and the indentation-regex finding
+(11:25Z) sits in the same code. Product tax, separate bead: `invalid-intent-form` is 23 of 36
+refusals across all arms, two-thirds of every refusal the agents drew, with no arm signal;
+the intent grammar is the largest adoption cost measured tonight.
