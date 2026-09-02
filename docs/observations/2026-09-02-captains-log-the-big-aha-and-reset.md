@@ -2690,3 +2690,50 @@ receipt carries no per-phase `elapsed_ms`; the migration verb's own elapsed in t
 UNMEASURED, not small. Decision: migration stays serial; the census verb (inb-f5ee92) gets a parallel
 plan phase from the start; every receipt gets per-phase elapsed (facts, not verdicts).
 
+
+## 22:28Z — sl1-R scored: both arms PASS, the fixed verb loads the tree, the tool wins every cost axis where native was predicted to win; the chain's "pass" was a noun
+
+Receipt `~/acid/receipts/sl1-R-score.md` (scorer `sl1R-score.py`, rollouts 1:1 by worktree path;
+acceptance by running `rescore-FAN-R.sh` on each worktree; diffs produced by hand at 22:20Z).
+Anchor = curtain-call at d9afe8e9, rename store → event-store, alias migrated everywhere; T = q5z
+2753f23 on 7895, N = native; gpt-5.6-sol; n=1 per arm.
+
+| arm | wall | returns | actions | tokens total (out) | suites by arm | r1–r7 | load |
+|---|---|---|---|---|---|---|---|
+| N | 283 s | 14 | 13 | 499,455 (12,286) | 1, RED at load | PASS, r7 4/4 | 190 ns |
+| T | 228 s | 13 | 9 | 321,834 (2,851) | 1, 2 failures | PASS, r7 4/4 | 190 ns |
+
+T/N: wall 0.81, actions 0.69, tokens 0.64, output tokens 0.23; acceptance a tie (both 1007 tests /
+12232 assertions / 2 failures, the two string-literal expectations in store_architecture_test that
+the carve-out protects; four of the six allowed failures never fire because both arms repointed all
+four path literals). The worktrees differ in one line of one file (mail.clj: N kept the fully
+qualified form, T normalised to the alias). **The fixed verb loads the tree**: at 13d86bb the same
+call left `1 tests, 1 errors` (replay.clj:128 `binding [store/*clock*]` unmigrated); at 2753f23
+r3 = `:load-ok 190`. T's verb receipts verbatim: call 1 REFUSED `alias-migration-expect-mismatch`
+(agent guessed expect.files 176, found 171; source unchanged; next_call handed back and re-sent as
+is); call 2 COMMITTED 171 files / 1,872 sites / 0 collisions / string_mentions 4 / 62.1 s inside the
+call; kondo_delta not requested. Bytes beyond the verb: 4 files × 1 line, exactly the four carved-out
+path literals the verb reported and declined; zero corrective bytes. Native wrote a Python lexer,
+generated one patch, then re-derived the token census in three more cells; its single permitted suite
+run was RED at load (`#'store/*default-sinks-fn*` in sinks.clj:693 — the same reader-quoted class that
+killed the tool arm at 13d86bb), it fixed by hand and shipped without re-running. The chain's own
+prediction — "native is EXPECTED to win here (uniform alias, one sed)" — did not hold: a uniform alias
+does not make the *verification* uniform; native spent its budget proving completeness (4 census
+cells, 487k input tokens), which the receipt discharges. Caveat: n=1, 55 s gap, quality tie.
+
+**Apparatus false green, three defects, all fixed on Anvil this hour.** (1) chain-sl1r's line
+`sl1-R scored -> … pass`: `pass` was a hardcoded noun after `$(grep -c …)`, the count was empty
+because the file did not exist, and an earlier run had printed `0 pass`; the token never once
+meant success. (2) No FAN arm has EVER produced a diff: the runner's `git add -A -- . ":!.cpcache" …`
+fails (exit 1) when the ignored `.cpcache` exists, because a negative pathspec makes git treat the
+ignored path as explicitly named; `&&` then skipped the diff. `sl1-score.md` never noticed because it
+scored worktrees directly. (3) The runner's acceptance line names `rescore-FAN.sh` (synthetic) for
+the anchor, which cannot score R. Fixes (v5 canonical + v3 executing copy + chain-sl1r.sh, `bash -n`
+green, backup kept): `":!.cpcache"` dropped and a `DIFF-FAILED rc=` line written to the run log on
+any add/diff failure; the acceptance line names `rescore-FAN-R.sh` when FAN_N=R; the chain aborts
+on an empty diff glob and on an empty score file, and prints `scored= passed= failed=` counts
+instead of a label. Delivery invariant 20 in the flesh: the verifier printed a word about a subject
+it never examined.
+
+**Store branch pushed**: `bridge/store-idempotency` 96387535 (my run 1040/12908/0); inb-70711c
+for Gene's merge, after fold (inb-d603ce); owner work and the max-instances=1 precondition named.

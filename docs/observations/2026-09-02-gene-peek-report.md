@@ -84,6 +84,7 @@ NATIVE (stripped, n=3, mean 336 s, 17.3 returns)        VERB :extract! :rewire-c
 ## 5. Surprises
 
 - z7b's gate win evaporated at n=6 (0.76× → 0.97×): the second cohort in a row where a small-n gate win was a slow native trio.
+- The chain's "pass" line was a hardcoded noun over an empty glob, and no FAN arm had ever produced a diff: one negative git pathspec on an ignored path.
 - The store builder's own boundary sentence was false: "no announced-speaker-removed fact" — `event.speaker-unannounced` exists; a forever key would have refused Ann's unpublish-then-publish for good.
 - Sol's first-round NO-GO found my generation fix had the same flaw as the original bug: computed outside the lock.
 - Adopting a legacy announced speaker removed the row and re-added it without its person-id: silent identity loss, found only by a characterization replay.
@@ -113,6 +114,7 @@ Worst: the gate is flat at n=6 on the task where it looked fastest, so the gate'
 ## 9. Decisions waiting on Gene
 
 - Merge bridge/fold-idempotence f115cc2d — inb-d603ce — recommend yes; the store branch stacks on it.
+- Merge bridge/store-idempotency 96387535 — inb-70711c — recommend yes, after fold; owner work before any Postgres-backed deploy: install the index and capture the real index definition.
 - Merge bridge/safe-refactor-1 — inb-e12ff9 — recommend yes.
 - Product claim wording — recommend "the mandated rewiring verb makes extraction 28 % faster with zero native fallback; the gate makes commits verified, not faster".
 - Adoption-collision winner, name-vs-id merging, blank identities (Sol's NO-GO list) — no id yet; recommend keep-not-merge until a product rule exists.
