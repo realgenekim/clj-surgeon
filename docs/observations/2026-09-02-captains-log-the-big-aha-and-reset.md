@@ -167,3 +167,25 @@ doctrine commit it was derived from so a checker never needs a human's memory. J
 the sweep: no fleet-wide sweep from here, both because I cannot reach the accounts that
 matter and because the rule says never change another seat's prompt without telling it;
 each seat installs on its own pull, and the tripwire tells us who has not.
+
+## Gate, build round one and red team round one (12:44Z)
+
+Built on bridge/admit-gate from e5c4f46: patch_apply.clj, form_identity.clj,
+mcp_admit_tool.clj, 31 witness tests (214 assertions) that failed before the code existed,
+design doc with EARS MCP-OP-ADMIT-001..055 and two live receipts (clean patch admitted in
+278 ms preview, 234 ms commit; duplicate definition refused in 20 ms, source unchanged).
+My own run of the JVM suite: 408 tests, 4168 assertions, one failure, the pre-existing
+macOS clj-kondo path assertion, untouched by the branch. Not committed.
+
+Red team, nine probe families executed, scripts retained: GO on path confinement (../,
+absolute, symlink-out, NUL, percent-encoded, backslash, all refused through the existing
+mcp-paths helper), multi-file atomicity, and stale pre-image at commit. NO-GO on five:
+a (declare foo) disables duplicate detection for foo, and definitions wrapped in reader
+conditionals, do, metadata or discards evade it, and prefix-list require removal is missed;
+verification_complete can be true with zero tests run because process exit was taken as
+evidence, and commit precedes verification with no rollback; form-identity is quadratic
+(55 s on a 16k-line file) and a 25 MB patch escapes the size cap as an uncaught exception;
+preview-to-commit does not bind the pre-image; refusals echo the whole patch past the
+public bound. All eight fixes are with the builder under the rule that every probe becomes
+a witness test with its own EARS id, verify-before-commit first. The test doctrine's gate
+held: nothing committed, nothing launched, arm Z stays armed behind a GO file.

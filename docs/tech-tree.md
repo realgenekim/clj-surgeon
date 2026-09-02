@@ -93,6 +93,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | 2026-09-02 | owner-kind-namespace writes re-print whole files; require_change and within are churn-free | 241e1bb |
 | 2026-09-02 | main 2311cc09 shows no detected regression on the ledger | a7932cb |
 | 2026-09-02 | the fast typist is negative alone; multiplier only on fan-out behind a gate | fd60409 |
+| 2026-09-02 | gate round one: confinement/atomicity/TOCTOU solid; hazard detector evadable via declare, reader conditionals, do, metadata; verification_complete minted on process exit; quadratic identity; fixes in round two | big-aha log, gate round one |
 
 ## Live experiment backlog (prediction and cost on every item)
 
