@@ -535,3 +535,14 @@ ever measured in either direction, from one paragraph. The paragraph, verbatim a
 > not run git status or git diff, do not re-read a file you just patched, do not hand-run
 > clojure -M -e syntax probes; the apply_patch result is your verification of the edit and
 > the pages gate performs the JS check. Every extra command costs a full model turn.
+
+## Both branches committed and pushed for review (14:28Z)
+
+bridge/admit-gate f2d93ab: the gate, 61 witness tests, three red-team rounds, final suite 438
+tests with only main's pre-existing failure. bridge/close-losers 205e13a: the loser shapes
+refused at the server on every committing route, drift against the expected post-image,
+fail-closed guard, 22 EARS ids, four red-team rounds, final suite 399 tests likewise. Both
+authored forge-bridge with Gene as co-author, pushed as branches only; merge belongs to skiff
+and surgeon1. Neither touches the SCI fence, path confinement or the kernel commit path; the
+Andon on the kernel's check-then-write commit stays open. Next: 7894 on Anvil from f2d93ab
+with report-file test evidence, then E1, the gate against native on both rungs.

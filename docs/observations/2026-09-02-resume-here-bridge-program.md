@@ -219,3 +219,12 @@ Curtain-call safe-refactor draft in Gene's inbox inb-868bb7; Surgeon :ls/:declar
 Monitor bqnleb8jg. On red-team GO: commit both branches (author forge-bridge), push branches (not main), Anvil
 ~/acid/surgeon-gate checkout at the branch + 7894 server with :focused-test {:command [... "{namespaces}" "{snapshot}"]},
 then touch ~/acid/GO-Z1 (chain-z1 armed).
+
+UPDATE 14:28Z (real UTC) — BRANCHES PUSHED: clj-surgeon bridge/admit-gate f2d93ab (gate), bridge/close-losers 205e13a; merge is
+mayor/surgeon1's. Andon on kernel commit-compiled! open. Cohorts done today: e5 (6/9 vs 0/9 defect; mechanism = insertion
+strategy), e8 (no regression at n=6, missing-fields = per-request expect, promotion held/characterised), rt1+rt2 (forbid
+paragraph -27% wall, acceptance flat; doctrine decision for Gene). Curtain-call draft inb-868bb7. NEXT: report wrapper
+(agent) -> Anvil: git clone/checkout f2d93ab at ~/acid/surgeon-gate, start 7894 (cores 12,13? use free cores; pattern
+fix-shipped-7893.sh) with -X :focused-test {:command ["clojure" "-M:test" "bin/gate-report.clj" "{report}" "{namespaces}"]
+:timeout-ms 300000}; runner v5 copies bin/gate-report.clj into Z worktrees (add next to the FT_EDN copy); verify with one
+admit call via mcp_call.py; then touch ~/acid/GO-Z1 (chain-z1 runs z1 M then z2 L, "Z N" x6 each). Monitor bdsyvspgr covers z1 z2.

@@ -31,14 +31,14 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
 | owner-kind-namespace insertion (whole-file churn) | LOST; mechanism corrected: Surgeon runs standard-clojure-style whole-file on changes/basis/extraction routes, never on edits | MCP | clj-surgeon-46o re-scoped to formatter scope; big-aha log |
 | per-form writes for a fan-out change | LOST | MCP | l1: 8 to 10 writes on top of a native patch (fbcaed1) |
-| splice-not-reprint on every write (drift gate + typed refusals) | BUILDING, round four | MCP, branch bridge/close-losers | three red-team rounds; big-aha log |
+| drift gate + typed refusals for the loser shapes | BUILT, pushed bridge/close-losers 205e13a, awaiting merge review | MCP | four red-team rounds; big-aha log |
 | format only the enclosing top-level form (46o fix) | OPEN, feasible: isolated top-level form formats byte-identically to in-file | MCP prepare-compiled! | red team round three |
 | intent verb over N owners, tool-side discovery | OPEN | MCP | clj-surgeon-q5z; the only node that can make wall positive |
 
 ### Verification
 | node | status | lives in | receipt |
 |---|---|---|---|
-| gate on the agent's own patch (`admit_clojure_patch`) | BUILDING | MCP, branch bridge/admit-gate | chosen independently by Sol and Opus (e5c4f46) |
+| gate on the agent's own patch (`admit_clojure_patch`) | BUILT, pushed bridge/admit-gate f2d93ab, awaiting merge review; E1 next | MCP | three red-team rounds; big-aha log |
 | proof before write in the warm JVM (`prove`) | OPEN | MCP | mission-design-opus Plan 3 |
 | behavioural assertions in the acceptance suite (gate, not score) | OPEN | acid apparatus | s1: a marker-only suite passed a broken button (2000f1b) |
 | kondo delta + focused suite in one receipt | BUILDING (inside the gate) | MCP | existing diagnostic_delta, hot_verify |
