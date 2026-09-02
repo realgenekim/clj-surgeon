@@ -2308,3 +2308,45 @@ fails lazily at call time with no compile error, the kind that loads and breaks 
 Comments naming the var were correctly left alone. Dispatched to the verb's builder with the
 real forms as fixtures; the anchor re-arms after 7895 restarts at the fix.
 
+
+## 21:08Z — Gene's riff on the duplicate: one instance, the store layer, the accessor pair, and Sol's GO-WITH-FIX on the fold branch
+
+Gene: max instances = 1 on Cloud Run, so the cross-instance race is not this duplicate's path;
+two facts on one instance means two requests, almost certainly a second submission of the
+announce form (the log's two facts carry actor and timestamp; that query decides). His fix
+checks the projection then appends outside the write lock; correct enough on one instance,
+protects the view not the log. Layers, cheapest first: an edge request id on the POST; an
+idempotency key on `append!` checked inside the write lock (makes the log correct at one
+instance); a unique index in Postgres (survives a second instance); set semantics in the fold
+(already on the branch). Gene: *"Fold and store. Do quick review with sol."* The store layer is
+building on `bridge/store-idempotency` (on top of the fold branch); Sol reviewed the fold branch.
+
+**Ann's "I unpublished one, but both disappear"**, from the fold code: `event.speaker-unannounced`
+removes every entry whose :name equals the payload's, and `event.program-speaker-updated` maps
+over every entry with the same person-id; two rows under one identity, so any identity-keyed
+operation applied to both. Set semantics remove the second row; the residual is the identity
+mismatch (legacy arms by name, new arm by person-id).
+
+**DRY and safer, measured by a structural query in one return:** 19 arms open with the
+identical guard `(if-let [slug (:slug (event-by-id state (:event-id payload)))] _ state)`; 20
+write sites spell `[:events slug :settings _]`; the announced-speakers vector is edited at 6
+sites in 5 arms under three identities. Gene's refinement over a guard wrapper: an **accessor
+pair** (`settings` / `update-settings`), a lens, the path spelled once, the missing-event case
+handled once. Plan: accessor pair → relation module with one identity rule → set-like relations
+declared as data (the property becomes a table check) → command functions that mint the fact
+and its key. Was Surgeon helpful: yes, the `match` op with holes answered in two returns what
+grep answers wrong; the refactor itself (one intent over 19 owners; extract-with-rewire for the
+module) is the measured winner square, on Gene's real code, not yet driven by hand: session 4.
+Sol's design review of the plan is running.
+
+**Sol on the fold branch: GO-WITH-FIX.** (1) Replace-in-place silently overwrites a same-key
+fact with DIFFERENT content where the old code appended; exports are first-wins and drop a
+corrected receipt; recusal identity is not total on sparse entries. Fix: collision policy per
+relation, immutable historical facts dedupe by whole value only, upserts keep last-wins,
+adversarial samples for same-key/different-content and missing keys. (2) `review.blind-mode-set`
+re-folds to lower versions than before; grep consumers (presenter-visibility, expected-version,
+etag, policy-version, changed-at) and prove none treats every application as a revision
+boundary. (3) Announced speakers: person-id everywhere, normalised name only as a legacy
+fallback, person-id on the unannounce fact; two people named Ann must not share a fate. All
+dispatched to the fold builder as round two.
+
