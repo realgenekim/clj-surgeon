@@ -12,7 +12,7 @@ paired draws against native edits on Anvil:
 | non-test actions | 10.0 | 21.2 | 3.8 sd above the floor; Surgeon is layered on the native loop, not substituted for it |
 | acceptance (failed assertions of 39) | 1.83 | 3.33 | inside the noise floor (identical runs span 0 to 4); acceptance is a gate, not a score |
 | blind clarity (2 judges, /20) | 17.8 | 17.1 | native slightly ahead, inside noise |
-| correctness defect class (stale onset timestamp) | 0 of 6 | 3 of 6 | 6 Surgeon instances vs 0 native across the night |
+| correctness defect class (stale onset timestamp) | 2 of 12 native or declined | 12 of 33 Surgeon-arm | a skew across the night, not an absence; corrected after s1 found it in a native diff |
 
 The cost is not tool latency (tool execution is 3 to 4 percent of wall, 87 percent is model
 time between actions). It is extra steps: the Surgeon arm still runs more shell calls than

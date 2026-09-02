@@ -1526,3 +1526,28 @@ natively where it can, hits more refusals, and pays 2.2x. Every prompt lever mov
 agent's compliance; none moves the cost below native. The remaining open question is the
 large rung, where locating is the expensive part, and its early native times (177 s, 194 s,
 acceptance clean) do not favour the tool.
+
+## Receipt 08:39Z — s1 blind quality, and a correction to the stale-onset tally
+
+| arm (n=3) | Opus | Sol | mean |
+|---|---|---|---|
+| X optional (declined the tool) | 17, 16, 17 (16.7) | 16, 17, 16 (16.3) | 16.5 |
+| N native | 19, 17, 12 (16.0) | 18, 17, 13 (16.0) | 16.0 |
+| A shipped | 18, 16, 14 (16.0) | 19, 16, 10 (15.0) | 15.5 |
+| Y mandate | 16, 16, 12 (14.7) | 15, 18, 13 (15.3) | 15.0 |
+
+Flat within the judge floors, as expected at n=3. Two findings that matter more than the
+scores. (1) **Correction:** the stale-onset guard defect appeared in a NATIVE diff (N-1) and
+in an optional-arm diff that made zero Surgeon calls (X-4). The tally "Surgeon instances vs
+zero native" is withdrawn as stated; the honest count over the night is 12 of 33 Surgeon-arm
+diffs against 2 of 12 native-or-declined diffs, a skew, not an absence, and with acid-7-style
+caution about what a count at these sizes can carry. The mechanism story (cheap top-anchor
+insertion) still fits the skew; it no longer fits "never native". (2) One shipped diff (A-3)
+passed the acceptance suite with zero failures and ships a broken OVER button: its flag-on
+block declares a two-argument kwCheck, the original one-argument kwCheck is still emitted
+after it in the same scope, the later declaration wins hoisting, and the tap never sends
+force_end. The suite asserts markers, not behaviour, which is why "acceptance is a gate, not
+a score" is the right rule and also why the gate itself needs at least one behavioural
+assertion per feature. Other single-diff defects: a native diff swaps the global fetch
+during OVER (shared-path hazard); a mandate diff added the force_end bypass to a second,
+out-of-scope endpoint serving the frozen voice-lab page, untested.
