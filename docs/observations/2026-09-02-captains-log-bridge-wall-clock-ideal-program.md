@@ -1695,3 +1695,15 @@ Surgeon one-liner in every Clojure agent prompt on a tax inferred entirely from 
 decision, mine: b2 finishes and is scored; l1r (one arm, already queued) runs; no new cohort
 is launched tonight; the second-caller cohort and the prompt-doctrine change go to Gene as
 decisions in the wake-up brief.
+
+## Receipt 09:06Z — b2 walls: main 2311cc09 (surgeon1's merged insertion-gap fix) versus shipped, three pairs
+
+| arm | walls s | mean |
+|---|---|---|
+| B main 2311cc09 on my 7889 (pid 1939050, verified) | 372, 490, 627 | 496 |
+| A shipped on 7893 | 496, 609, 637 | 581 |
+
+All six gates green. The 85 s difference is 1.0 sd of the floor and means nothing; the
+cohort's purpose is the typed-refusal ledger (does ambiguous-insertion-gap appear on the
+fixed main at all, and does anything new appear), plus churn and create_files usage, being
+scored now with six diffs at the judges. l1r, the single mandate rerun, launches next.
