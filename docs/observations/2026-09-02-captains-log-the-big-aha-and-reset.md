@@ -707,3 +707,5 @@ anything outside the root is refused as before. 76 witness tests, 636 assertions
 Builder's flag, kept: "the count fix I shipped in round five was wrong, and only the field
 showed it; both times the mistake had the same shape: I trusted a declared number over the
 bytes in front of me."
+
+## Curtain-call head (16:12Z): Gene, "assume yes from mayor" — d9afe8e9 is the true head; the refactor draft (inb-868bb7) stands as built.
