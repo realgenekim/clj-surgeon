@@ -2511,3 +2511,33 @@ configured and the exact index is absent. (1) `record-participation!` still chec
 item). Pattern worth naming: three of nine are "the verifier's premise was false" (forever key,
 any-23505, IF NOT EXISTS as proof of definition) — the review has to check premises.
 
+
+## 21:33Z — fold round two at f115cc2d: per-relation policy, tagged identity, Ann's sequence pinned; my task-chase finding was a false positive
+
+Agent a8fea285fa6efe9e5, five linear commits on `bridge/fold-idempotence`, unpushed until my run.
+`conj-distinct-by` is gone; three named policies: `conj-once`/`cons-once` (immutable facts, identity
+= whole value: comments, versions, export receipts, recusal log, blackouts) and `upsert-by`
+(submission speakers by person-id else email else value; announced speakers by the tagged
+identity `[:person-id id]` → `[:name normalised]` → `[:anonymous row]`). Fails-first: 19
+assertions red at a896608d, green at f115cc2d. Two arms carried defects reachable only by replay:
+`event.speaker-unannounced` removed every same-name row (Ann's report — now by tag, name-only
+payload removes name-identified rows only; witness `two-anns-then-unannounce`); and
+`event.announced-speaker-adopted` — **new finding, worse than the riff assumed** — did not update the
+adopted row, it removed it and appended a `select-keys` copy WITHOUT the person-id, silently dropping
+identity; now it claims only an unidentified row, and an adoption collision is kept-not-merged as a
+documented open case (FOLD-IDEM-003 boundaries). Characterization golden: the shipped judge-sandbox
+log (3,246 facts, 14 legacy announces) projects byte-identical; two synthetic histories blessed.
+`review.blind-mode-set` advance-on-change verified against every consumer (the writer already refuses
+a same-mode fact at review_plan.clj:210). Dead writer found: `events/unannounce-speaker!` has zero
+callers; legacy announce is reachable only from the judge sandbox. Gates at f115cc2d: unit
+1016/12599/0, ci, compile-check, test-js 18/18, property 121 arms 0 gaps; Prolog oracles UNVERIFIED
+(swipl lacks plunit on this box).
+**My finder result was wrong on its one positive:** `fold-task-chase`'s `(fnil conj [])` sits inside
+`(not-any? #(= (:chase-id payload) (:chase-id %)) …)` three lines above the match. The structural
+scan matched the write form and not its guard. Pinned by the builder (green before and after: a pin,
+not a ratchet). Lesson for the census verb (inb-f5ee92): the identity door can be a predicate in an
+enclosing branch, not only a named helper; classify by the guard, and report "raw" only when no
+enclosing predicate mentions the written value's identity. Declined by the builder, correctly:
+folding `comms.template-saved` into `upsert-by` (nil-id templates would change projection; no
+fixture facts to prove equality). Corrected the record with Gene by voice.
+
