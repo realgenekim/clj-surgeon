@@ -839,3 +839,62 @@ Predictions for z3, on record: the refusal rate on Z falls from 69 percent to un
 optional arm F uses the gate at all in at least two of six runs (if zero, the gate has not
 earned its call even when it works); post-write calls on Z fall below 0.5 per run; wall on
 Z within one sd of native; hazards caught in situ at least once across the twelve.
+
+## 16:49Z — rf1 installed: the extraction is chosen, the acceptance script is proven both ways
+
+The Surgeon-on-Surgeon rung (R3) is installed on Anvil and armed behind z4. Nothing launched.
+
+**The extraction.** `src/clj_surgeon/mcp_change_buffer.clj` (1,694 lines, 26 commits in 30 days,
+third-hottest src file) loses nine forms to a new sibling namespace
+`clj-surgeon.mcp-exact-verify` (next to the existing cold-verify and hot-verify): the exact
+verification profile compiler, the bounded subprocess runner, the outcome classifier, and their
+private helpers (`expand-command`, `bytes->hex`, `sha256-text`, `run-process!`,
+`admission-unverified?`, `compile-exact-profile`, `classify-exact-process-outcome`,
+`run-exact-verification!`, plus the one-line `exact-verification-visible-bytes` def). Forms 2–9
+are one contiguous 156-line block with zero references back into the rest of the file, so the
+move is acyclic by construction. It has real cross-file callers: `mcp_formatter.clj` uses only
+the two moved fns from the change buffer, so its require must be *replaced* not kept (a stale
+require is caught mechanically); `mcp_tool.clj` has four sites; the change-buffer test has ten;
+seven internal sites in four staying functions become alias-qualified, which forces one
+deliberate visibility change (`admission-unverified?` from `defn-` to `defn`). `ls-extract`
+sizes it as one unit; the whole move is one `:extract!` call with an explicit `:forms` vector,
+the cleanest possible test of H1.
+
+**Correction to my brief.** I had told the installer to expect five failures in
+`agent_routing_test` on Anvil. Measured on a pristine worktree of 2311cc09: test-fast is
+`664 tests, 5691 assertions, 0 failures`; the JVM MCP suite is `377 tests, 3945 assertions,
+1 failure`, the known macOS clj-kondo path assertion, which lives *inside the namespace being
+refactored*. Both prompts quote it and forbid touching it; "fixing" it is a detectable spec
+violation. There is no focus mechanism for that suite (the alias's `:main-opts` win), so the
+bounded gate is the whole suite at 57 s.
+
+**Acceptance (`~/acid/receipts/rescore-R3.sh`, arm-independent).** a: new ns defines exactly the
+nine; b: source defines none; c1: no unqualified moved refs left; c2: no `change-buffer/`
+qualified refs to the nine anywhere; c3: the five touched namespaces compile; d: churn outside
+the move, mechanical (`total_clj_changed − new_ns_lines − removed_lines_matched_verbatim`),
+canonical native move = 53; e1/e2: both failure *sets* equal the base's. Proven both ways: the
+reference solution (native, `~/acid/receipts/rf1-reference.diff`) passes a–e; the pristine base
+fails a, b, c1, c2, c3 and passes e1/e2, as it must. Cost 1 m 55 s per subject.
+
+**Runner.** Rung R3 in v5 (and already in v3, since the z3 launch copied v5 after the patch):
+repo `~/acid/surgeon-task`, a fresh clone at 2311cc09 that is *not* `surgeon-main` (7889's
+checkout); gate prints both suites' failure sets on the gate line; `.cpcache` excluded from the
+freeze (18 files of noise otherwise); suite counter learned the R3 commands. Arms: N native,
+A shipped 64eac2e (7893), B main 2311cc09 (7889); `CORES_PER_ARM=4`, three per wave,
+`"N A B|N A B"`. Chain preflight fails closed on: v3 lacks R3, prompts or scorer missing,
+surgeon-task wrong tree, rf1.log present, 7893 or 7889 down (one pid-guarded self-heal of 7889,
+then abort). 7889 was found down at install time and is up now.
+
+**Design note kept on record.** The forbid-ritual paragraph (−27 % wall) is *not* in the R3
+prompts. rf1 runs the pre-registered design; the paragraph is an rf2 lever, applied to all three
+arms identically, so its effect is separable from the tool's.
+
+**Prompts.** `R3-main.md` (sha256 9f5ffe4e…) names the four MCP tools, the CLI in place
+(`bb -m clj-surgeon.core`), the STUDY / PLAN / EXECUTE / COMPILE-CHECK arc with `:ls-extract`,
+`:extract` dry run and `:extract!`, and the two facts the agent cannot know (the CLI runs the
+tree it is editing; the MCP server is a different checkout). `R3-native.md` (ccea2c6b…) names
+the same arc with native tools only. Both end with the six report items and a `TURNS:` line.
+
+Receipts on Anvil: `rf1-base-testfast.out`, `rf1-base-mcp.out`, `rf1-reference.diff`,
+`acid-cohort-v5.sh.pre-R3`; worktrees `~/acid/rf1/{ref,base}`.
+
