@@ -2564,3 +2564,33 @@ Held out of the builder's scope: cross-instance generation serialisation — Gen
 max-instances=1, and that precondition goes into STORE-IDEM-001's boundary verbatim; live
 Postgres verification — owner work. The z7c scorer and sl1-R are still in flight.
 
+
+## 22:12Z — z7c scored: the gate is wall-neutral at n=6; z7b's 0.76× withdrawn; correctness 6/6
+
+Receipt `~/acid/receipts/z7c-score.md` (scorer `z7c-score.py` + `z7c-admit.py`, walls from
+`z7c.log` end lines slot-mapped 1:1 to `acid_arm=` starts, arm letters corroborating; acceptance
+read only after all twelve `rescore-R3 done` markers). Mirrored order "N Z N Z N Z | Z N Z N Z N".
+
+| arm | n | wall (sd) | returns | actions | tokens | suites | acceptance |
+|---|---|---|---|---|---|---|---|
+| Z gate 17125fe | 6 | 339.3 (62.6) | 17.50 | 12.17 | 969,920 | 2.0 | 6/6 all PASS |
+| N stripped | 6 | 348.2 (48.3) | 18.00 | 12.33 | 856,732 | 2.0 | 6/6 all PASS |
+
+0.975×, Welch p 0.79; walls interleave completely (Z owns the fastest and the slowest run). The
+chain's pre-registered falsifier ("Z within the 86 s floor sd of N") fires at 8.8 s; the 0.85×
+claim misses by 42 s. Mechanism now visible: **z7b's native arm was slow, not its gate arm fast** —
+stripped native on the same prompt and base reads 327.7 (rs1) / 432.7 (z7b, carried by one 552 s
+run) / 348.2 (z7c); the gate arm moved 330.7 → 339.3. Pooled every stripped run on the rung, gate
+n=9 vs native n=12: 0.924×, p 0.355 — nothing clears the floor. Correctness, counts not estimates:
+7 commits all `complete`, `verify focused` on 18/18 admit calls, `verify none` never used, 108/108
+acceptance predicates PASS, churn canonical 53 in all twelve runs of both arms, apply_patch on .clj
+0 in every Z run. Refusals bimodal: 8, all in two runs (462 s / 27 returns / 1.55M tokens and
+345 s / 19 / 1.12M) — 4 patch-does-not-apply (stale hunks), 2 invalid-admit-request, 1
+invalid-patch (the agent piped `/bin/bash: line 3: ruby: command not found` into the gate as a
+patch; refused in 0.00 s), 1 verification-failed (blocking-lint-findings, 7.5 s — the one
+substantive catch). Gate 25.3 s per run, 7.4% of wall; the suite-saving seen once in z7b did not
+recur (every run both arms executed exactly 2 suites). Z tokens +13%, driven by the two refusal
+runs. **Standing claim for the gate: correctness (every commit verified, no waiver path), not
+speed.** Second cohort today where a small-n speed win was a slow native trio (z3→z6, z7b→z7c):
+rule stands, n≥6 before any wall claim. rf2's 0.723× remains the only within-cohort speed win on
+this rung. Tech tree E1 and the Gene report §1/§3 corrected in this commit.

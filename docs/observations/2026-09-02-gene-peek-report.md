@@ -4,7 +4,7 @@
 
 **The rewiring extract verb beat stripped native on every one of nine cross-pairs, 243 s against 336 s, with zero native bytes after the verb and identical acceptance; all five of Sol's pre-registered promotion criteria PASS (rf2, n=3+3, `~/acid/receipts/rf2-score.md`).** The one-call closure stands at 1.3 s of tool time against 141–152 s of native typing, byte-identical.
 
-*Events to the contrary:* one, and it is the gate, not the verb. z7c (gate at n=6, same task, both arms stripped) is **flat on wall**: Z 339 s mean vs N 348 s (walls from `z7c.log` end lines; returns and gate-completeness in the scorer now). z7b's 0.76× at n=3 was a slow native trio, the same shape as z3's withdrawn 20 %. Acceptance is 12/12 PASS on every predicate, both arms (`z7c-score.txt`). Free-choice adoption is still 0 of 10; the gate still costs ~1.9× where there is nothing to remove.
+*Events to the contrary:* one, and it is the gate, not the verb. z7c (gate at n=6, same task, both arms stripped) is **wall-neutral**: Z 339 s vs N 348 s, 0.975×, Welch p 0.79; returns 17.5 vs 18.0 (`z7c-score.md`). z7b's 0.76× is withdrawn: its native arm was slow (327.7 / 432.7 / 348.2 s across rs1 / z7b / z7c on the same prompt), the same shape as z3's withdrawn 20 %. Correctness holds 6/6: seven commits all complete, `verify none` never used, acceptance 108/108 PASS, churn canonical in all twelve runs. Free-choice adoption is still 0 of 10; the gate still costs ~1.9× where there is nothing to remove.
 
 ## 2. Wins vs native
 
@@ -22,7 +22,7 @@
 
 | task | native | tool | ratio | note | n | receipt |
 |---|---|---|---|---|---|---|
-| admit gate at n=6 (z7c) | 348 s | 339 s | 0.97×, flat | z7b's 0.76× does not hold; correctness pending scorer | 6+6 | z7c.log, z7c-score.txt |
+| admit gate at n=6 (z7c) | 348 s, 18.0 returns | 339 s, 17.5 returns, +13 % tokens | 0.975× wall, p 0.79 | z7b's 0.76× withdrawn (slow native arm); correctness 6/6, gate 7.4 % of wall, refusals bimodal (8 in 2 runs) | 6+6 | z7c-score.md |
 | old extract without rewire (rf1) | 327 s, 22.0 returns | 406 s, 31.0 returns | 1.24× wall | the tool cut but could not sew | 2 per arm | rf1-score.md |
 | gate on rung L control (z8) | 149 s | 277 s | 1.86× | nothing to remove | 4+4 | z8-score.md |
 | gate on rung M at n=7 (z6) | 297 s | 293 s | flat | z3's 20 % was a slow baseline | 7+7 | z6-score.md |
@@ -56,7 +56,7 @@ Worst: the gate is flat at n=6 on the task where it looked fastest, so the gate'
 
 ## 8. Board (Pacific)
 
-- z7c scorer running (returns, gate completeness 6/6?); lands ~15:20 PDT.
+- z7c scored: wall-neutral, correctness 6/6 (z7c-score.md).
 - sl1-R (anchor rename with the fixed q5z verb on 7895) queued behind z7c on the cohort lock; ~15:40 PDT.
 - Store branch 3aac4338 (nine Sol items + generational key, unit 1032/12800/0 by the builder): my own unit run and Sol's second review running; push on both green, ~15:30 PDT.
 - Fold branch f115cc2d pushed and verified; merge is yours (inb-d603ce).
