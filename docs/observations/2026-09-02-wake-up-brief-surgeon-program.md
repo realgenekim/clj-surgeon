@@ -53,11 +53,28 @@ wall and four new refusal classes. Every prompt lever moves compliance; none mov
 below native.
 
 Large rung (21-owner cross-file clock hoist across 11 namespaces, the tool's advertised
-shape, where locating is the expensive part): native 177, 194, 199, 288 s (mean 215) with
-the acceptance suite clean on the two checked so far; shipped 359, 411, 439, 620 s (mean
-457, 2.1x); substitution mandate 493, 585, 796 s (mean 625, 2.9x). Same ordering as the
-medium rung. Actions, refusals and blind quality for this rung are in the captain's log's
-l1 receipts.
+shape), all eleven completed runs identical and correct on the acceptance suite:
+
+| axis | native (4) | shipped (4) | mandate (3) |
+|---|---|---|---|
+| wall | 215 s | 457 s | 625 s |
+| actions | 10.5 | 21.0 | 27.7 |
+| how the writes happened | one apply_patch cell, +59/-34 over 11 files | 7.8 per-form MCP writes on top of one native patch | 10 on top of 1.7 |
+| typed refusals | 0 | 6.0 | 14.7 |
+| blind quality (2 judges, /20) | 19.4 | 16.8 | 17.3 |
+
+Fan-out is the per-form write API's worst case, not its best: one patch does what N per-form
+writes do, and two shipped diffs shipped nine times the line churn because the tool
+re-prints every form it edits and reformats the untouched remainder.
+
+## Three product changes the night points at (filed via the mayor)
+
+1. Whole-form re-print must preserve source text outside the edited span.
+2. A batch write verb: one intent across N owners in one call.
+3. The refusal classes that no agent recovered from within their fields: invalid-intent-form
+   (two thirds of all refusals at the medium rung) and invalid-compact-relation (every Surgeon
+   run at the large rung), plus the insertion-gap refusal already fixed by surgeon1 tonight.
+
 
 ## What was settled tonight
 

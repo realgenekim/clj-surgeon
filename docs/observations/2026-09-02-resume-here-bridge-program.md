@@ -166,3 +166,9 @@ l1 wave 1: N 177/194, A 359/411, Y 493 (+1 Y MODEL-CAPACITY, rerun l1r after b2 
 "B A B A B A" (B = main 2311cc09 on 7889, chain-4c) -> l1r. 7889 rebuilt on 2311cc09 (pid 1939050). Anvil surgeon origin is a
 STALE BUNDLE (receipt 49219ff) - reported to mayor. When l1 done: freeze (ended-gate) -> rescore-L.sh -> scorer -> judges
 (rung L spec is in docs/observations/2026-09-02-acid-rung-L/L-spec.md; build a judge prompt from it) -> log -> fleet -> brief.
+
+UPDATE 08:58Z (real UTC) — l1 DONE + scored + judged (17f3378, 647b136, fbcaed1): native 215 s one patch cell; shipped 457 (2.1x);
+mandate 625; all correct; whole-form re-print churn (9x) + invalid-compact-relation at fan-out; three product findings sent to
+mayor. Brief updated. b2 RUNNING since 08:52Z (B = main 2311cc09 on 7889 vs A). Then l1r (chain-l1r2). Final fleet round on
+the whole night launched (fleet-night-*.md). After b2: freeze -> rescore -> scorer (typed-refusal ledger: did
+ambiguous-insertion-gap vanish?) -> log -> brief final -> mayor. Gene wakes ~13:00Z.
