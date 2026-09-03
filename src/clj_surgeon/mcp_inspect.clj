@@ -875,6 +875,7 @@
        :error-type (or (:error-type (ex-data error)) :invalid-source)})))
 
 ;; @spec MCP-OP-STUDY-020
+;; @spec MCP-OP-STUDY-034
 (defn returned-source-character-count
   "How many characters of file SOURCE one result actually hands back.
 
@@ -885,14 +886,24 @@
   them refuse with `inspect-output-limit` / `request_less_evidence` — a remedy
   no caller can act on, because the request was already the smallest one that
   answers the question. The budget exists to bound what crosses the wire, so
-  it counts what crosses the wire: every `:source` string anywhere in the
-  result, and nothing else."
+  it counts what crosses the wire: every string of file source anywhere in the
+  result.
+
+  The keys are enumerated, in both their keyword and their JSON-normalized
+  spellings, because a walk keyed on `:source` alone measured the wrong thing:
+  `outline` returns no `:source` at all — it returns each form's `:args`,
+  lifted verbatim out of the file and normalized to a string key by
+  `json-data` — so 2,696 characters of `intent_transaction.clj` crossed the
+  wire scored as zero. Coverage here is a naming convention, so it is written
+  down rather than assumed: a NEW key that carries verbatim source belongs in
+  this set the day it is added."
   [result]
-  (let [total (volatile! 0)]
+  (let [source-keys #{:source "source" :args "args"}
+        total (volatile! 0)]
     (walk/postwalk
       (fn [node]
         (when (and (map-entry? node)
-                   (= :source (key node))
+                   (contains? source-keys (key node))
                    (string? (val node)))
           (vswap! total + (count (val node))))
         node)

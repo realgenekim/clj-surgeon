@@ -189,14 +189,26 @@
 
 ;; @spec MCP-OP-STUDY-020
 (deftest the-source-budget-counts-the-source-a-result-returns
-  (testing "a derived structure returns no source"
+  (testing "a derived structure is charged what it hands back, not what it read"
+    ;; This block asserted the stronger claim that outline returns NO source.
+    ;; It does return some — each form's `:args`, verbatim from the file
+    ;; (MCP-OP-STUDY-034) — and the charge was 0 only because the walk did not
+    ;; know that key. What MCP-OP-STUDY-020 promises is that the charge is
+    ;; what CROSSES THE WIRE: for a 126,596-character file, 2,696 characters
+    ;; of arglists, and not the file.
     (let [result (result-of
                    (run {"requests" [{"operation" "outline"
                                       "file" "src/clj_surgeon/intent_transaction.clj"}]
-                         "expect" {"requests" 1 "files" 1}}))]
-      (is (zero? (inspect/returned-source-character-count result)))
+                         "expect" {"requests" 1 "files" 1}}))
+          charged (inspect/returned-source-character-count result)]
+      (is (pos? charged) "the arglists it returns are file source")
       (is (< 65536 (:source_character_count result))
-          "while the source it READ is far over the budget")))
+          "while the source it READ is far over the budget")
+      (is (< (* 10 charged) (:source_character_count result))
+          "the charge is a small fraction of the file, never the file")
+      (is (true? (:ok (inspect/enforce-output-budget
+                        [result] inspect/default-output-limits)))
+          "so an outline of any size file this repository holds still answers")))
   (testing "source a result really does return is still charged"
     (let [result (result-of
                    (run {"requests" [{"operation" "forms"
