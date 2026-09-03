@@ -796,6 +796,47 @@
     :unparseable-file
     :census-worker-failure})
 
+;; @spec MCP-OP-CENSUS-014
+(def mcp-refusal-types
+  "Every typed refusal the `relation_census` MCP tool can return once its
+   request has passed the ordered shape pass.
+
+   The sibling of `cli-refusal-types`, and it exists for the reason that one
+   already proved: Sol's round-fourteen item 9 found the 512-byte continuation
+   ceiling enforced at ONE of the tool's eight construction sites, and no
+   witness could have caught it, because the CLI's refusals were enumerated
+   and the tool's were not. A rule that lives in one branch is a rule the
+   other branches break; a set nobody wrote down is a set nobody can drive.
+
+   Every name here is driven through the tool against a workspace root of at
+   least 600 characters and asserted to publish either a continuation that
+   fits the wire or a remedy that says what it measured — and to have built
+   any continuation it carries through the ONE constructor, counted through a
+   redefinition of that constructor rather than by reading the source.
+
+   The SHAPE refusals are not here. They all publish `error_type`
+   `invalid-mcp-request` and their specific name in `reason`, and the shared
+   `request-shape-rules` table already enumerates them for both entrances;
+   the ceiling witness drives that table too.
+
+   `:census-failed` IS here even though the two plan failures this version can
+   produce both name themselves: it is the fallback the tool would publish for
+   a plan failure that does not, and a fallback nobody drives is a refusal
+   shape nobody has ever seen."
+  #{:invalid-workspace-root
+    :unknown-door-symbol
+    :unreadable-source-path
+    :source-too-large
+    :no-fold-arms-found
+    :unparseable-file
+    :census-worker-failure
+    :census-failed
+    :too-many-candidate-files
+    :too-many-walk-entries
+    :census-adapter-failure
+    :census-resource-exhausted
+    :server-not-initialized})
+
 (def ^:dynamic *shape-rules*
   "An override for the shared refusal table, or nil for the real one.
 

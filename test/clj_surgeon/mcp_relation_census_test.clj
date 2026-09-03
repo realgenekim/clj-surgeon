@@ -3107,135 +3107,159 @@
                                    tokens))]
     (when index (get tokens (inc index)))))
 
+;; ---------------------------------------------------------------------------
+;; The CLI enumeration MACHINERY, extracted so more than one witness can drive
+;; it. `every-cli-refusal-anchors-its-continuation-on-the-named-workspace` asks
+;; whether each refusal names the workspace the caller named;
+;; `every-continuation-either-entrance-emits-fits-the-byte-ceiling` asks the
+;; same drives whether what they hand back fits the wire. Both are pinned to
+;; `census/cli-refusal-types`, so a refusal added to the op without a probe
+;; fails BOTH rather than shipping unexercised in either.
+;; ---------------------------------------------------------------------------
+
+(defn- cli-refusal-fixture!
+  "Build, under `parent`, every tree the CLI enumeration drives need."
+  [^java.io.File parent]
+  (let [trees {:workspace (io/file parent "workspace")
+               :empty-ws (io/file parent "empty")
+               :broken (io/file parent "broken")
+               ;; A chmod-000 source lives in a tree of its OWN. Every other
+               ;; drive walks `workspace`, and an unreadable entry inside it
+               ;; would refuse those walks `unreadable-source-path` instead of
+               ;; the refusal each one exists to probe.
+               :denied-file (io/file parent "denied/src/a/denied.clj")}]
+    (spit-file! (io/file (:workspace trees) "src/a/one.clj") arm-source)
+    (spit-file! (io/file (:workspace trees) "src/b/two.clj") arm-source)
+    (spit-file! (io/file (:workspace trees) "src/b/three.clj") arm-source)
+    (.mkdirs (io/file (:empty-ws trees) "src"))
+    (spit-file! (io/file (:broken trees) "src/app/broken.clj")
+                malformed-arm-source)
+    (spit-file! (:denied-file trees) arm-source)
+    (deny-reads! (:denied-file trees))
+    trees))
+
+(defn- cli-refusal-drives
+  "One drive per refusal `census/cli-refusal-types` declares the op can emit."
+  [{:keys [workspace empty-ws broken denied-file]}]
+  (let [named #(.getCanonicalPath ^java.io.File %)]
+    (concat
+      ;; Every row of the shared table the CLI can express, driven
+      ;; from the table itself rather than a hand-kept list.
+      (for [rule census/request-shape-rules
+            :when (keyword? (:cli rule))
+            :let [probe (get shape-rule-probes
+                             [(:field rule) (:violation rule)])]]
+        {:label [(:field rule) (:violation rule)]
+         :error-type (:cli rule)
+         :root workspace
+         ;; The :dir row's own probe REPLACES the anchor with the
+         ;; blank value it is refusing, so its refusal names what a
+         ;; blank :dir would have meant — the cwd — which is the
+         ;; point of that refusal rather than an exception to this
+         ;; rule.
+         ;; Two rows REPLACE the anchor with the value they are
+         ;; refusing, so their refusals name what that value would
+         ;; have meant — the cwd for a blank :dir, the undecodable
+         ;; string itself for a path that did not survive argv. That
+         ;; is the point of those refusals, not an exception to this
+         ;; rule.
+         :expect-anchor (case (:field rule)
+                          :dir (System/getProperty "user.dir")
+                          :paths undecodable-probe-path
+                          nil)
+         :opts (merge {:dir (named workspace)} (:cli probe))})
+      [{:label :unknown-door-symbol-after-the-scan
+        :error-type :unknown-door-symbol
+        :root workspace
+        :opts {:dir (named workspace) :doors "no-such-door"}}
+       {:label :source-too-large
+        :error-type :source-too-large
+        :root workspace
+        ;; This drive names a :file, so the workspace it named IS
+        ;; that file — `cli-anchor` prefers an explicit :file over
+        ;; :dir, because that is the narrower thing the caller named.
+        :expect-anchor (str (named workspace) "/src/a/one.clj")
+        :opts {:file (str (named workspace) "/src/a/one.clj")}
+        :around (fn [f]
+                  (with-redefs [census/max-source-bytes 4] (f)))}
+       ;; Sol's round-thirteen item 7: the missing-`:file` refusal,
+       ;; enumerated so it cannot ship unexercised. It names a `:file`,
+       ;; so the workspace it named IS that file — even though the file
+       ;; is not there, which is the whole point: the anchor is what
+       ;; the CALLER named, not what the filesystem confirms.
+       {:label :file-not-found
+        :error-type :file-not-found
+        :root workspace
+        :expect-anchor (str (named workspace) "/src/a/missing.clj")
+        :opts {:file (str (named workspace) "/src/a/missing.clj")}}
+       ;; Sol's round-fourteen item 7: the denied-`:file` refusal,
+       ;; enumerated so IT cannot ship unexercised either. Same shape
+       ;; as the missing one — the anchor is the file the caller
+       ;; named — and a separate row because it is a separate name.
+       {:label :file-not-readable
+        :error-type :file-not-readable
+        :root workspace
+        :expect-anchor (.getCanonicalPath denied-file)
+        :opts {:file (.getCanonicalPath denied-file)}}
+       {:label :no-fold-arms-found
+        :error-type :no-fold-arms-found
+        :root empty-ws
+        :opts {:dir (named empty-ws)}}
+       {:label :unparseable-file
+        :error-type :unparseable-file
+        :root broken
+        :opts {:dir (named broken)}}
+       {:label :census-worker-failure
+        :error-type :census-worker-failure
+        :root workspace
+        :opts {:dir (named workspace)}
+        :around (fn [f]
+                  (with-redefs [census/census-file
+                                (fn [& _]
+                                  (throw (ex-info "boom" {})))]
+                    (f)))}
+       {:label :too-many-candidate-files
+        :error-type :too-many-candidate-files
+        :root workspace
+        :opts {:dir (named workspace)}
+        :around (fn [f]
+                  (with-redefs [census/max-scanned-files 2] (f)))}
+       {:label :too-many-walk-entries
+        :error-type :too-many-walk-entries
+        :root workspace
+        :opts {:dir (named workspace)}
+        :around (fn [f]
+                  (with-redefs [census/max-walk-entries 3] (f)))}])))
+
+(defn- run-cli-drives
+  "Run each drive, counting the continuation-constructor calls it made."
+  [drives]
+  (doall
+    (for [{:keys [label error-type root opts around expect-anchor]}
+          drives]
+      (let [built (atom 0)
+            thunk (fn []
+                    (with-redefs [census/cli-continuation
+                                  (counting
+                                    built census/cli-continuation)]
+                      (binding [*out* (java.io.StringWriter.)]
+                        (core/run (assoc opts
+                                         :op :relation-census)))))
+            result ((or around (fn [f] (f))) thunk)]
+        {:label label :error-type error-type :root root
+         :expect-anchor (or expect-anchor
+                            (.getCanonicalPath ^java.io.File root))
+         :built @built :result result}))))
+
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-019
 ;; @spec MCP-OP-CENSUS-027
 ;; @spec MCP-OP-CENSUS-033
 (deftest every-cli-refusal-anchors-its-continuation-on-the-named-workspace
   (let [parent (temp-dir)
-        workspace (io/file parent "workspace")
-        empty-ws (io/file parent "empty")
-        broken (io/file parent "broken")
-        ;; A chmod-000 source lives in a tree of its OWN. Every other drive
-        ;; here walks `workspace`, and an unreadable entry inside it would
-        ;; refuse those walks `unreadable-source-path` instead of the refusal
-        ;; each one exists to probe.
-        denied-file (io/file parent "denied/src/a/denied.clj")
-        named #(.getCanonicalPath ^java.io.File %)]
+        trees (cli-refusal-fixture! parent)]
     (try
-      (spit-file! (io/file workspace "src/a/one.clj") arm-source)
-      (spit-file! (io/file workspace "src/b/two.clj") arm-source)
-      (spit-file! (io/file workspace "src/b/three.clj") arm-source)
-      (.mkdirs (io/file empty-ws "src"))
-      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
-      (spit-file! denied-file arm-source)
-      (deny-reads! denied-file)
-      (let [drives
-            (concat
-              ;; Every row of the shared table the CLI can express, driven
-              ;; from the table itself rather than a hand-kept list.
-              (for [rule census/request-shape-rules
-                    :when (keyword? (:cli rule))
-                    :let [probe (get shape-rule-probes
-                                     [(:field rule) (:violation rule)])]]
-                {:label [(:field rule) (:violation rule)]
-                 :error-type (:cli rule)
-                 :root workspace
-                 ;; The :dir row's own probe REPLACES the anchor with the
-                 ;; blank value it is refusing, so its refusal names what a
-                 ;; blank :dir would have meant — the cwd — which is the
-                 ;; point of that refusal rather than an exception to this
-                 ;; rule.
-                 ;; Two rows REPLACE the anchor with the value they are
-                 ;; refusing, so their refusals name what that value would
-                 ;; have meant — the cwd for a blank :dir, the undecodable
-                 ;; string itself for a path that did not survive argv. That
-                 ;; is the point of those refusals, not an exception to this
-                 ;; rule.
-                 :expect-anchor (case (:field rule)
-                                  :dir (System/getProperty "user.dir")
-                                  :paths undecodable-probe-path
-                                  nil)
-                 :opts (merge {:dir (named workspace)} (:cli probe))})
-              [{:label :unknown-door-symbol-after-the-scan
-                :error-type :unknown-door-symbol
-                :root workspace
-                :opts {:dir (named workspace) :doors "no-such-door"}}
-               {:label :source-too-large
-                :error-type :source-too-large
-                :root workspace
-                ;; This drive names a :file, so the workspace it named IS
-                ;; that file — `cli-anchor` prefers an explicit :file over
-                ;; :dir, because that is the narrower thing the caller named.
-                :expect-anchor (str (named workspace) "/src/a/one.clj")
-                :opts {:file (str (named workspace) "/src/a/one.clj")}
-                :around (fn [f]
-                          (with-redefs [census/max-source-bytes 4] (f)))}
-               ;; Sol's round-thirteen item 7: the missing-`:file` refusal,
-               ;; enumerated so it cannot ship unexercised. It names a `:file`,
-               ;; so the workspace it named IS that file — even though the file
-               ;; is not there, which is the whole point: the anchor is what
-               ;; the CALLER named, not what the filesystem confirms.
-               {:label :file-not-found
-                :error-type :file-not-found
-                :root workspace
-                :expect-anchor (str (named workspace) "/src/a/missing.clj")
-                :opts {:file (str (named workspace) "/src/a/missing.clj")}}
-               ;; Sol's round-fourteen item 7: the denied-`:file` refusal,
-               ;; enumerated so IT cannot ship unexercised either. Same shape
-               ;; as the missing one — the anchor is the file the caller
-               ;; named — and a separate row because it is a separate name.
-               {:label :file-not-readable
-                :error-type :file-not-readable
-                :root workspace
-                :expect-anchor (.getCanonicalPath denied-file)
-                :opts {:file (.getCanonicalPath denied-file)}}
-               {:label :no-fold-arms-found
-                :error-type :no-fold-arms-found
-                :root empty-ws
-                :opts {:dir (named empty-ws)}}
-               {:label :unparseable-file
-                :error-type :unparseable-file
-                :root broken
-                :opts {:dir (named broken)}}
-               {:label :census-worker-failure
-                :error-type :census-worker-failure
-                :root workspace
-                :opts {:dir (named workspace)}
-                :around (fn [f]
-                          (with-redefs [census/census-file
-                                        (fn [& _]
-                                          (throw (ex-info "boom" {})))]
-                            (f)))}
-               {:label :too-many-candidate-files
-                :error-type :too-many-candidate-files
-                :root workspace
-                :opts {:dir (named workspace)}
-                :around (fn [f]
-                          (with-redefs [census/max-scanned-files 2] (f)))}
-               {:label :too-many-walk-entries
-                :error-type :too-many-walk-entries
-                :root workspace
-                :opts {:dir (named workspace)}
-                :around (fn [f]
-                          (with-redefs [census/max-walk-entries 3] (f)))}])
-            results
-            (doall
-              (for [{:keys [label error-type root opts around expect-anchor]}
-                    drives]
-                (let [built (atom 0)
-                      thunk (fn []
-                              (with-redefs [census/cli-continuation
-                                            (counting
-                                              built census/cli-continuation)]
-                                (binding [*out* (java.io.StringWriter.)]
-                                  (core/run (assoc opts
-                                                   :op :relation-census)))))
-                      result ((or around (fn [f] (f))) thunk)]
-                  {:label label :error-type error-type :root root
-                   :expect-anchor (or expect-anchor
-                                      (.getCanonicalPath ^java.io.File root))
-                   :built @built :result result})))]
+      (let [results (run-cli-drives (cli-refusal-drives trees))]
 
         (testing "the probes cover every refusal the op declares it can emit"
           (is (= census/cli-refusal-types
@@ -3277,7 +3301,7 @@
                   (str label " continuation anchor is not absolute: "
                        command))))))
       (finally
-        (allow-reads! denied-file)
+        (allow-reads! (:denied-file trees))
         (delete-tree! parent)))))
 
 ;; @spec MCP-OP-CENSUS-014
@@ -4336,3 +4360,311 @@
       (is (re-find #"\b66\d\b" (str (:remedy result)))
           (str "the remedy does not name the value it measured: "
                (pr-str (:remedy result)))))))
+
+;; ---------------------------------------------------------------------------
+;; THE RATCHET for Sol's round-fourteen item 9.
+;;
+;; The defect was not that one site got the arithmetic wrong; it was that
+;; seven sites never did the arithmetic at all, and nothing in the suite could
+;; tell. Two witnesses close that class rather than the instance.
+;;
+;; The first drives EVERY refusal kind both entrances can express — the shared
+;; shape table for the pre-filesystem rows, `census/mcp-refusal-types` and
+;; `census/cli-refusal-types` for the rest — against a workspace root of at
+;; least 600 characters, and asserts of each answer that whatever continuation
+;; it carries fits the 512-byte wire ceiling, and that a refusal which carries
+;; none says what it measured instead. 600 characters is chosen so that the
+;; NAIVE continuation is over the ceiling for every one of them: a witness
+;; driven from a short root is green whether the ceiling is enforced or not.
+;;
+;; The second is structural, and it is the one that makes a site added NEXT
+;; round fail here. It neuters the constructor — one function, redefined to
+;; return no continuation at all — and asserts that no refusal from either
+;; entrance then publishes a `next_call` or a `next-command`. A site that
+;; spells its own map is invisible to a grep for a spelling it does not use
+;; and invisible to a byte assertion on a short path; it is not invisible to
+;; a constructor that has stopped constructing.
+;; ---------------------------------------------------------------------------
+
+(defn- deep-parent!
+  "[top deep] — a temp tree whose deepest directory's canonical path is at
+   least `n` characters. `top` is what the caller deletes."
+  [n]
+  (let [top (temp-dir)
+        segment (apply str (repeat 200 \d))]
+    (loop [dir top]
+      (if (>= (count (.getCanonicalPath ^java.io.File dir)) n)
+        [top dir]
+        (let [deeper (io/file dir segment)]
+          (.mkdirs deeper)
+          (recur deeper))))))
+
+(def ^:private long-root-chars
+  "Long enough that the NAIVE continuation of every refusal is over the
+   512-byte ceiling, so a witness driven from here cannot be green by
+   accident."
+  600)
+
+(defn- mcp-refusal-drives
+  "One drive per refusal `census/mcp-refusal-types` says the tool can return.
+
+   Each drive is a thunk so the witness can run it twice — once counting the
+   constructor's calls, once with the constructor neutered."
+  [{:keys [arms bare broken]}]
+  (let [named #(.getCanonicalPath ^java.io.File %)
+        into-tree (fn [tree params]
+                    (census-tool/execute-request!
+                      {:project-root (named tree)} params))
+        in-arms #(into-tree arms %)]
+    [{:label :invalid-workspace-root
+      :error-type :invalid-workspace-root
+      :drive #(run {:workspace_root (str (named arms) "/does-not-exist")})}
+
+     {:label :unknown-door-symbol
+      :error-type :unknown-door-symbol
+      :drive #(in-arms {:doors ["no-such-door"]})}
+
+     {:label :unreadable-source-path
+      :error-type :unreadable-source-path
+      :drive #(in-arms {:files ["src/a/one.clj" "src/a/missing.clj"]})}
+
+     {:label :source-too-large
+      :error-type :source-too-large
+      ;; `small.clj` is under the redefined cap and `one.clj` is over it, so
+      ;; the request minus the oversized entry is still a request — the branch
+      ;; that COMPUTES a continuation, which is the branch under test.
+      :drive #(with-redefs [census/max-source-bytes 8]
+                (in-arms {:files ["src/a/one.clj" "src/small.clj"]}))}
+
+     {:label :no-fold-arms-found
+      :error-type :no-fold-arms-found
+      ;; Discovered, not named: the branch that computes a continuation.
+      :drive #(into-tree bare {})}
+
+     {:label :unparseable-file
+      :error-type :unparseable-file
+      :drive #(into-tree broken {})}
+
+     {:label :census-worker-failure
+      :error-type :census-worker-failure
+      :drive #(with-redefs [census/census-file
+                            (fn [& _] (throw (ex-info "boom" {})))]
+                (in-arms {}))}
+
+     {:label :census-failed
+      :error-type :census-failed
+      ;; A plan failure that names no type of its own: the fallback.
+      :drive #(with-redefs [census/plan (fn [& _] {:ok false :error "boom"})]
+                (in-arms {}))}
+
+     {:label :too-many-candidate-files
+      :error-type :too-many-candidate-files
+      :drive #(with-redefs [census/max-scanned-files 1] (in-arms {}))}
+
+     {:label :too-many-walk-entries
+      :error-type :too-many-walk-entries
+      :drive #(with-redefs [census/max-walk-entries 2] (in-arms {}))}
+
+     {:label :census-adapter-failure
+      :error-type :census-adapter-failure
+      :drive #(with-redefs [census/discovery-facts
+                            (fn [& _] (throw (ex-info "boom" {})))]
+                (in-arms {}))}
+
+     {:label :census-resource-exhausted
+      :error-type :census-resource-exhausted
+      :drive #(with-redefs [census/discovery-facts
+                            (fn [& _] (throw (StackOverflowError.)))]
+                (in-arms {}))}
+
+     ;; Raised by the HANDLER, before a request exists: no workspace to make
+     ;; long and no params to narrow. It is here anyway, because it builds a
+     ;; continuation, and every site that builds one is in scope.
+     {:label :server-not-initialized
+      :error-type :server-not-initialized
+      :drive (fn []
+               (let [config @#'census-tool/runtime-config
+                     saved @config
+                     captured (atom nil)]
+                 (try
+                   (reset! config nil)
+                   (census-tool/handle-relation-census
+                     nil {} (fn [_ _ result] (reset! captured result)))
+                   @captured
+                   (finally (reset! config saved)))))}]))
+
+(defn- next-call-bytes
+  "The rendered size of an MCP continuation, or nil when there is none."
+  [result]
+  (when-let [next-call (:next_call result)]
+    (census/utf8-byte-count (json/generate-string next-call))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+(deftest every-continuation-either-entrance-emits-fits-the-byte-ceiling
+  (let [[arms-top arms] (deep-parent! long-root-chars)
+        [bare-top bare] (deep-parent! long-root-chars)
+        [broken-top broken] (deep-parent! long-root-chars)
+        parent (temp-dir)]
+    (try
+      (spit-file! (io/file arms "src/a/one.clj") arm-source)
+      (spit-file! (io/file arms "src/b/two.clj") arm-source)
+      (spit-file! (io/file arms "src/small.clj") "()")
+      (spit-file! (io/file bare "src/app/helpers.clj") "(ns app.helpers)")
+      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+
+      (testing "the probe roots really are long enough to break the ceiling"
+        (doseq [tree [arms bare broken]]
+          (is (<= long-root-chars (count (.getCanonicalPath ^java.io.File tree)))
+              "a probe root is short enough to pass whether the ceiling holds or not")))
+
+      (let [drives (mcp-refusal-drives {:arms arms :bare bare :broken broken})
+            results
+            (doall
+              (for [{:keys [label error-type drive]} drives]
+                (let [built (atom 0)
+                      result (with-redefs
+                               [census-tool/continuation
+                                (counting built census-tool/continuation)]
+                               (drive))]
+                  {:label label :error-type error-type
+                   :built @built :result result})))]
+
+        (testing "the probes cover every refusal the tool declares it can return"
+          (is (= census/mcp-refusal-types
+                 (set (map (comp keyword :error_type :result) results)))
+              (str "declared: " (pr-str census/mcp-refusal-types)
+                   "; driven: "
+                   (pr-str (set (map (comp keyword :error_type :result)
+                                     results))))))
+
+        (doseq [{:keys [label error-type built result]} results]
+          (testing (str label " refuses as declared")
+            (is (false? (:ok result))
+                (str label " was accepted: " (pr-str result)))
+            (is (= (name error-type) (:error_type result))
+                (str label " refused as " (pr-str (:error_type result)))))
+
+          (testing (str label " offers exactly one of a continuation and a remedy")
+            (is (not= (contains? result :next_call)
+                      (contains? result :remedy))
+                (str label " offers "
+                     (pr-str (select-keys result [:next_call :remedy])))))
+
+          (when (contains? result :next_call)
+            (testing (str label " emits a continuation that fits the wire")
+              (let [bytes (next-call-bytes result)]
+                (is (<= bytes census/max-next-call-bytes)
+                    (str label " emitted a " bytes "-byte continuation under a "
+                         census/max-next-call-bytes "-byte ceiling: "
+                         (json/generate-string (:next_call result)))))
+              (is (pos? built)
+                  (str label " spelled its own continuation instead of "
+                       "calling the constructor: "
+                       (pr-str (:next_call result))))))))
+
+      ;; The shared shape table, driven at the tool from a long root: every
+      ;; row computes a continuation of its own, which is exactly how the
+      ;; 600-byte one Sol measured got out.
+      (let [long-ws (.getCanonicalPath ^java.io.File arms)]
+        (doseq [rule census/request-shape-rules
+                :when (keyword? (:mcp rule))
+                :let [key [(:field rule) (:violation rule)]
+                      probe (:mcp (get shape-rule-probes key))]
+                :when probe]
+          (let [built (atom 0)
+                result (with-redefs
+                         [census-tool/continuation
+                          (counting built census-tool/continuation)]
+                         (run (merge {:workspace_root long-ws} probe)))]
+            (testing (str key " refuses from a 600-character root")
+              (is (false? (:ok result))
+                  (str key " was accepted: " (pr-str result))))
+            (when (contains? result :next_call)
+              (testing (str key " emits a continuation that fits the wire")
+                (let [bytes (next-call-bytes result)]
+                  (is (<= bytes census/max-next-call-bytes)
+                      (str key " emitted a " bytes "-byte continuation: "
+                           (json/generate-string (:next_call result)))))
+                (is (pos? built)
+                    (str key " spelled its own continuation instead of "
+                         "calling the constructor")))))))
+
+      ;; The CLI half, driven from the same machinery the anchor witness uses.
+      (let [trees (cli-refusal-fixture! parent)
+            results (run-cli-drives (cli-refusal-drives trees))]
+        (testing "the CLI probes cover every refusal the op declares it can emit"
+          (is (= census/cli-refusal-types
+                 (set (map (comp :error-type :result) results)))))
+        (doseq [{:keys [label built result]} results]
+          (when-let [command (:next-command result)]
+            (testing (str label " emits a command that fits the wire")
+              (let [bytes (census/utf8-byte-count command)]
+                (is (<= bytes census/max-next-call-bytes)
+                    (str label " emitted a " bytes "-byte command under a "
+                         census/max-next-call-bytes "-byte ceiling: "
+                         command)))
+              (is (pos? built)
+                  (str label " spelled its own continuation instead of "
+                       "calling cli-continuation: " command))))))
+
+      (finally
+        (delete-tree! parent)
+        (doseq [top [arms-top bare-top broken-top]] (delete-tree! top))))))
+
+;; @spec MCP-OP-CENSUS-014
+(deftest the-constructors-are-the-only-continuation-construction-sites
+  ;; Grep-free and spelling-free. Neuter the one constructor each entrance
+  ;; owns; if anything still publishes a continuation, it built that
+  ;; continuation somewhere else, whatever it named the local it built it in.
+  (let [[arms-top arms] (deep-parent! long-root-chars)
+        [bare-top bare] (deep-parent! long-root-chars)
+        [broken-top broken] (deep-parent! long-root-chars)
+        parent (temp-dir)]
+    (try
+      (spit-file! (io/file arms "src/a/one.clj") arm-source)
+      (spit-file! (io/file arms "src/b/two.clj") arm-source)
+      (spit-file! (io/file arms "src/small.clj") "()")
+      (spit-file! (io/file bare "src/app/helpers.clj") "(ns app.helpers)")
+      (spit-file! (io/file broken "src/app/broken.clj") malformed-arm-source)
+
+      (testing "with the tool's constructor neutered, no tool refusal carries a next_call"
+        (let [drives (mcp-refusal-drives {:arms arms :bare bare :broken broken})]
+          (with-redefs [census-tool/continuation
+                        (fn [_] {:candidate nil :bytes 0 :next-call nil})]
+            (doseq [{:keys [label drive]} drives]
+              (let [result (drive)]
+                (is (not (contains? result :next_call))
+                    (str label " published a next_call the constructor did "
+                         "not build: " (pr-str (:next_call result))))))
+            (doseq [rule census/request-shape-rules
+                    :when (keyword? (:mcp rule))
+                    :let [key [(:field rule) (:violation rule)]
+                          probe (:mcp (get shape-rule-probes key))]
+                    :when probe]
+              (let [result (run (merge {:workspace_root
+                                        (.getCanonicalPath ^java.io.File arms)}
+                                       probe))]
+                (is (not (contains? result :next_call))
+                    (str key " published a next_call the constructor did "
+                         "not build: " (pr-str (:next_call result)))))))))
+
+      (testing "with the op's constructor neutered, no CLI refusal carries a next-command"
+        (let [trees (cli-refusal-fixture! parent)]
+          (doseq [{:keys [label opts around]} (cli-refusal-drives trees)]
+            (let [thunk (fn []
+                          (with-redefs [census/cli-continuation (fn [& _] nil)]
+                            (binding [*out* (java.io.StringWriter.)]
+                              (core/run (assoc opts :op :relation-census)))))
+                  result ((or around (fn [f] (f))) thunk)]
+              (is (not (contains? result :next-command))
+                  (str label " published a next-command cli-continuation did "
+                       "not build: " (pr-str (:next-command result))))
+              (is (not (contains? result :next-command-argv))
+                  (str label " published a next-command-argv "
+                       "cli-continuation did not build: "
+                       (pr-str (:next-command-argv result))))))))
+
+      (finally
+        (delete-tree! parent)
+        (doseq [top [arms-top bare-top broken-top]] (delete-tree! top))))))
