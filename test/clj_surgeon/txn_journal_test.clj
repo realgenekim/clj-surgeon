@@ -1373,8 +1373,8 @@
     (let [;; the restore exists only on the fallback a filesystem without
           ;; `link(2)` takes: the ordinary path claims the tombstone name by
           ;; `Files/createLink` and never moves the LOCK, so there is no gap
-          ;; for a third acquirer to land in. `:no-hard-links true` forces the
-          ;; path this witness is about.
+          ;; for a third acquirer to land in. `:unsafe-break-by-move true`
+          ;; forces the path this witness is about.
           dir (temp-dir "lock-restore-storm")
           lock (io/file dir "LOCK")
           pid (.pid (java.lang.ProcessHandle/current))
@@ -1412,7 +1412,7 @@
             (create-lock-if-absent! dir (pr-str {:txid (str "VICTIM-" i)
                                                  :pid pid :boot-id "b"})))
           (let [outcome (@#'journal/break-lock! dir judged (str "BRK-" i)
-                                                {:no-hard-links true})
+                                                {:unsafe-break-by-move true})
                 seen @created
                 pending (subvec seen (min @cursor (count seen)))
                 _ (reset! cursor (count seen))
@@ -1474,7 +1474,7 @@
               ;; claim before the rename, so the recheck mismatches and the
               ;; restore runs; a THIRD acquirer then lands in the restore gap
               refused (begin! ws {:txid "B-DISPLACER"
-                                  :no-hard-links true
+                                  :unsafe-break-by-move true
                                   :before-break
                                   (fn [_]
                                     (.delete lock)
@@ -1521,7 +1521,7 @@
         (let [result (journal/recover!
                        (:root ws)
                        {:state-home (:state-home ws)
-                        :no-hard-links true
+                        :unsafe-break-by-move true
                         :before-break (fn [_]
                                         (.delete lock)
                                         (spit lock (pr-str {:txid "A-LIVE"
@@ -1822,7 +1822,7 @@
             name and unlinking the LOCK the claim is in two places rather than
             none: there is no gap for a third acquirer to land in, nothing to
             restore, and nothing to displace. The same injection that produces
-            a displaced claim on the no-hard-links fallback must produce none
+            a displaced claim on the break-by-move fallback must produce none
             here - and must leave the live holder's LOCK exactly as it was."
     (let [ws (workspace! "link-break-no-displacement" 2)
           child (.start (ProcessBuilder. ["sleep" "30"]))
@@ -2025,7 +2025,7 @@
           (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
-(deftest the-no-hard-links-restore-fallback-refuses-a-lock-that-reappeared
+(deftest the-break-by-move-restore-fallback-refuses-a-lock-that-reappeared
   (testing "the fallback `restore-lock!` takes on a filesystem with no
             `link(2)` at all. It is check-then-act and its docstring says so;
             what it must never do is replace a claim that arrived while the
@@ -2040,7 +2040,7 @@
           (is (false? (:restored outcome))
               (str "it refuses on EEXIST: " (pr-str outcome)))
           (is (= :lock-reappeared (:restore-cause outcome)))
-          (is (= :no-hard-links (:restore-path outcome)))
+          (is (= :move (:restore-path outcome)))
           (is (= "third-acquirer" (:txid (read-string (slurp lock))))
               "the claim that arrived is untouched")
           (is (= "displaced" (:txid (read-string (slurp tomb))))

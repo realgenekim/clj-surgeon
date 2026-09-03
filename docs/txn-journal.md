@@ -325,7 +325,15 @@ in `LOCK.broken.<txid>`, `{:restored false :cause :holder-changed :restore-cause
 callers report `:lock-break-displaced` while `begin!` writes a `lock-displaced`
 journal line — nothing else would tell the displaced holder, whose own
 `release-lock!` just finds a LOCK that does not name it and returns false. ext4
-never reaches that path; `:no-hard-links true` is the seam its witnesses use.
+never reaches that path. `:unsafe-break-by-move true` is the only way to
+select it where `link(2)` works, and it is spelled that way on purpose: the
+previous name, `:no-hard-links`, was an ordinary descriptive word on the PUBLIC
+`begin!`/`recover!` surface, one keyword from a caller who meant nothing by it.
+Which primitive took the claim is part of the receipt, not an internal:
+`:lock-broken` carries `:break-path :link` for the kernel-atomic break and
+`:break-path :move` for the fallback, from `begin!` and from `recover!` alike,
+because a reader who cannot tell them apart cannot weigh the evidence the break
+left.
 
 The tombstone is named for the BREAKER, and `begin!` takes the txid from its
 caller. It carries its OWN creation time — the file's mtime, set once the break

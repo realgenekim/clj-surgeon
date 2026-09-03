@@ -739,16 +739,16 @@
   [^File tomb ^File lock]
   (if (.exists lock)
     (do (swap! displaced-claims inc)
-        {:restored false :restore-cause :lock-reappeared :restore-path :no-hard-links})
+        {:restored false :restore-cause :lock-reappeared :restore-path :move})
     (try
       (Files/move (.toPath tomb) (.toPath lock)
                   ^"[Ljava.nio.file.CopyOption;"
                   (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE]))
-      {:restored true :restore-path :no-hard-links}
+      {:restored true :restore-path :move}
       (catch Exception cause
         (swap! displaced-claims inc)
         {:restored false :restore-cause :restore-failed
-         :restore-path :no-hard-links :restore-message (.getMessage cause)}))))
+         :restore-path :move :restore-message (.getMessage cause)}))))
 
 (defn- restore-lock!
   "Put a claim that was renamed away back, without clobbering whoever arrived.
@@ -785,8 +785,11 @@
    that shipped it as the only path: two breakers sharing one txid destroyed
    the judged claim, and BOTH were handed the same tombstone name. ext4 -
    where this kernel and every one of its witnesses run - never reaches it,
-   because `link(2)` is available there; `:no-hard-links true` is the seam a
-   witness uses to exercise it anyway."
+   because `link(2)` is available there. `:unsafe-break-by-move true` is
+   the only way to reach it where `link(2)` works, and it is spelled that way
+   deliberately: the previous name, `:no-hard-links`, was an ordinary
+   descriptive word on the PUBLIC `begin!`/`recover!` surface that silently
+   selected this path, and no receipt said which path had run."
   [_transactions-dir ^File lock ^File tomb claim opts]
   (if (.exists tomb)
     {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
@@ -802,7 +805,7 @@
            :tombstone (.getName tomb)
            :content-sha256 (:content-sha256 claim)
            :broken-at-ms (stamp-tombstone! tomb)
-           :break-path :no-hard-links}
+           :break-path :move}
           ;; somebody else's claim: put it back untouched and break nothing
           (do
             ;; the seam a witness needs to put a third acquirer in the gap
@@ -906,8 +909,11 @@
    WHAT IT DOES NOT. Unlinking the LOCK is a stat followed by `unlink(2)` with
    no I/O between, because POSIX has no unlink-if-inode; and on a filesystem
    with no `link(2)` at all the fallback `break-by-move!` is the old
-   check-then-act, which says so in its own docstring. `:no-hard-links true`
-   forces that fallback so a witness can exercise it where `link(2)` exists.
+   check-then-act, which says so in its own docstring. `:unsafe-break-by-move
+   true` forces that fallback where `link(2)` exists - named so that no caller
+   reaches the measured check-then-act path by typing an ordinary word - and
+   the outcome carries `:break-path :link` or `:break-path :move`, which BOTH
+   callers put in the `:lock-broken` line they publish.
 
    The tombstone is the break's evidence, named for the BREAKER, whose txid
    comes from the caller; `stamp-tombstone!` gives it its own creation time and
@@ -916,7 +922,7 @@
   ([transactions-dir claim txid opts]
    (let [^File lock (lock-file transactions-dir)
          ^File tomb (io/file transactions-dir (str tombstone-prefix txid))]
-     (if (:no-hard-links opts)
+     (if (:unsafe-break-by-move opts)
        (break-by-move! transactions-dir lock tomb claim opts)
        (break-by-link! transactions-dir lock tomb claim opts)))))
 
@@ -975,7 +981,13 @@
                   (recur (inc attempt)
                          (if (:broken outcome)
                            (merge (lock-broken-line holder cause)
-                                  (select-keys outcome [:tombstone :content-sha256]))
+                                  ;; :break-path travels with the receipt: a
+                                  ;; reader must be able to tell the
+                                  ;; kernel-atomic break from the fallback
+                                  ;; check-then-act one that produced this
+                                  ;; evidence
+                                  (select-keys outcome [:tombstone :content-sha256
+                                                        :break-path]))
                            broken)
                          (or (displaced-line outcome) displaced)
                          (or (when (= :tombstone-exists (:cause outcome))
@@ -2344,7 +2356,11 @@
                                       (str "recover-" (new-txid)) opts)))
            broken (when (:broken outcome)
                     (merge (lock-broken-line holder cause)
-                           (select-keys outcome [:tombstone :content-sha256])))
+                           ;; the same :break-path the acquisition path
+                           ;; publishes: which primitive took the claim is
+                           ;; part of the break's receipt, not an internal
+                           (select-keys outcome [:tombstone :content-sha256
+                                                 :break-path])))
            ;; a break that moved a claim and could not put it back is a
            ;; refusal with an owner, not a silent success
            displaced (displaced-line outcome)
