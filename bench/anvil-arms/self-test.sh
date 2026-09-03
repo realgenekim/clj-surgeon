@@ -392,6 +392,48 @@ else
 fi
 want "case14 run.json orphans after the abort" 0 "$(jqf "$A14/run.json" driver_group_orphans)"
 
+echo "== case 15: the health JSON is VALIDATED, not merely parsed =="
+# Sol, item 6: `{"ok":false,"pid":999,"project_root":"/wrong/project","port":1}` was
+# accepted with attest_ok=true, because the only test applied to it was "does it parse".
+# A receipt whose server identity came from a health document about a DIFFERENT process
+# is not evidence about the server the arm actually used.
+A15="$WORK/st-P-T-15"; mkdir -p "$A15"
+git clone -q --no-hardlinks "$BASE_REPO" "$A15/worktree"
+WT15=$(cd "$A15/worktree" && pwd -P)
+HEAD15=$(git -C "$A15/worktree" rev-parse HEAD)
+attest15 () {   # attest15 <label> <healthz-json> <want-rc> <want-reason-substring>
+  local label=$1 health=$2 wrc=$3 sub=$4 rc
+  rm -f "$A15/attest.json" "$A15/ATTEST-MISMATCH"
+  A="$A15" ARM=T PORT=7907 EXP=st RUNG=P SLOT=15 MODEL=none DRIVER=fake \
+  WORKTREE="$WT15" WORKTREE_HEAD="$HEAD15" BASE="$HEAD15" \
+  PROMPT_SHA=deadbeef RUNNER_SHA=deadbeef PORT_IN_RANGE=yes \
+  PORT_PID=$$ READY_PID=$$ READY_PROJECT_ROOT="$WT15" \
+  SERVER_PROJECT_HEAD="$HEAD15" SERVER_SHA="$HEAD15" EXPECTED_SERVER_SHA="$HEAD15" \
+  MCP_URL="http://127.0.0.1:7907/mcp" HEALTHZ="$health" \
+    python3 "$HERE/_attest_write.py" > "$WORK/$label.out" 2>&1
+  rc=$?
+  want "$label rc" "$wrc" "$rc"
+  if [ -n "$sub" ]; then
+    grep -q "$sub" "$WORK/$label.out" \
+      && ok "$label refused on $sub" || { bad "$label wrong refusal ($sub)"; cat "$WORK/$label.out"; }
+  fi
+}
+
+GOOD15="{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT15\"}"
+attest15 case15ok  "$GOOD15" 0 ""
+want "case15ok attest_ok" true "$(jqf "$A15/attest.json" attest_ok)"
+
+attest15 case15a "{\"ok\":false,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT15\"}" \
+         2 'healthz-not-ok'
+attest15 case15b "{\"ok\":true,\"pid\":999999,\"port\":7907,\"project-root\":\"$WT15\"}" \
+         2 'healthz-pid-ne-port-pid'
+attest15 case15c "{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"/wrong/project\"}" \
+         2 'healthz-project-root-ne-worktree'
+attest15 case15d "{\"ok\":true,\"pid\":$$,\"port\":1,\"project-root\":\"$WT15\"}" \
+         2 'healthz-port-ne-arm-port'
+attest15 case15e "{\"ok\":false,\"pid\":999,\"project_root\":\"/wrong/project\",\"port\":1}" \
+         2 'healthz-not-ok'
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
