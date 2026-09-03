@@ -14,8 +14,17 @@ already paid for:
     re-derived independently from the raw rollout AND from the watcher, and any
     disagreement is recorded in `meter.sources` rather than silently resolved.
 
-Exit codes: 0 scored; 2 no attestation; 3 missing/empty rollout or zero returns
-(no receipt written); 4 missing watch.jsonl.
+  * A RECEIPT IS EMITTED ONLY FROM A STREAM THAT VALIDATES.  Every non-empty line
+    must be a well-formed JSON object; call ids must be unique and no output may
+    precede its own call; the watcher's `ms_since_start` must be non-decreasing and
+    its return/call ordinals dense from 1.  A stream that fails any of these is a
+    typed abort with NO receipt -- and every abort DELETES any receipt the arm
+    directory still holds, because a refusal that leaves the old answer standing
+    is not a refusal.
+
+Exit codes: 0 scored; 2 no attestation or attest_ok=false; 3 missing/empty/invalid
+rollout or watch, or zero returns (no receipt written, any stale one removed);
+4 missing watch.jsonl.
 """
 from __future__ import annotations
 
@@ -28,7 +37,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from watch import (  # noqa: E402  (same-directory module, deliberate)
     APPLY_PATCH_CMD_RE, COMMITTING_VERBS, _shell_script,
-    is_test_command, normalize, patch_targets,
+    is_test_command, normalize, parse_utc, patch_targets,
 )
 
 READ_VERBS = {"inspect_clojure"}
@@ -39,19 +48,134 @@ LS_TREE_RE = re.compile(r'"mode"\s*:\s*"ls-tree"')
 UNV = "unverified"
 
 
-def read_jsonl(path: pathlib.Path) -> list[dict]:
-    out = []
-    for line in path.read_text(errors="replace").split("\n"):
+class StreamError(RuntimeError):
+    """A stream that does not validate.  Never a note, never a skipped line."""
+
+
+def read_jsonl_strict(path: pathlib.Path) -> list[dict]:
+    """Every non-empty line of `path` must be a well-formed JSON object.
+
+    The old reader `continue`d past anything it could not parse, so a rollout
+    whose final record was cut in half scored rc 0 and produced a citeable
+    receipt (Sol, item 1).  A line the reader cannot read is missing evidence,
+    and missing evidence is an abort -- not a smaller number.
+    """
+    raw = path.read_bytes()
+    if raw and not raw.endswith(b"\n"):
+        raise StreamError(f"truncated-final-line {path.name} "
+                          f"(no terminating newline; the last record is partial)")
+    out: list[dict] = []
+    for lineno, line in enumerate(raw.decode("utf-8", errors="replace").split("\n"), 1):
         line = line.strip()
         if not line:
             continue
         try:
             obj = json.loads(line)
-        except Exception:
-            continue
-        if isinstance(obj, dict):
-            out.append(obj)
+        except Exception as exc:
+            raise StreamError(f"malformed-line {path.name}:{lineno} ({exc})") from None
+        if not isinstance(obj, dict):
+            raise StreamError(f"non-object-line {path.name}:{lineno}")
+        out.append(obj)
     return out
+
+
+def validate_rollout(records: list[dict]) -> None:
+    """Monotonic time, unique call ids, no output before its own call.
+
+    Sol duplicated a rollout and reversed one; both produced receipts asserting
+    `sources.agree=true`, because two witnesses derived from the SAME corrupted
+    stream always agree.  Agreement is only evidence once the stream itself is.
+    """
+    prev_ts = None
+    seen: set = set()
+    open_ids: set = set()
+    for lineno, obj in enumerate(records, 1):
+        stamp = obj.get("timestamp") or obj.get("t")
+        ts = parse_utc(stamp) if stamp else None
+        if ts is not None:
+            if prev_ts is not None and ts < prev_ts:
+                raise StreamError(f"out-of-order-timestamp rollout:{lineno} ({stamp})")
+            prev_ts = ts
+        for event in normalize(obj):
+            call_id = event.get("call_id")
+            if call_id is None:
+                continue
+            if event["kind"] == "call":
+                if call_id in seen:
+                    raise StreamError(f"duplicate-call-id {call_id!r} rollout:{lineno}")
+                seen.add(call_id)
+                open_ids.add(call_id)
+            elif event["kind"] == "call_output":
+                if call_id not in seen:
+                    raise StreamError(
+                        f"output-before-call {call_id!r} rollout:{lineno}")
+                if call_id not in open_ids:
+                    raise StreamError(
+                        f"duplicate-call-output {call_id!r} rollout:{lineno}")
+                open_ids.discard(call_id)
+
+
+def validate_watch(records: list[dict]) -> None:
+    """Monotonic `ms_since_start`, unique ordinals covering 1..N, one final `end`.
+
+    `ms_since_start` is stamped inside `emit()`, so non-decreasing is a true
+    invariant of a watch stream this apparatus wrote; a decreasing one has been
+    reordered.  Return ordinals and call seqs are dense from 1, so a duplicated
+    stream (Sol, item 1) collides instead of doubling the meter.
+    """
+    prev_ms = None
+    returns: list[int] = []
+    seqs: list[int] = []
+    ended = False
+    for lineno, rec in enumerate(records, 1):
+        if ended:
+            raise StreamError(f"record-after-end watch:{lineno}")
+        ms = rec.get("ms_since_start")
+        if not isinstance(ms, int):
+            raise StreamError(f"missing-ms_since_start watch:{lineno}")
+        if prev_ms is not None and ms < prev_ms:
+            raise StreamError(f"out-of-order-ms_since_start watch:{lineno} "
+                              f"({ms} after {prev_ms})")
+        prev_ms = ms
+        kind = rec.get("kind")
+        if kind == "return":
+            n = rec.get("n")
+            if not isinstance(n, int):
+                raise StreamError(f"return-without-ordinal watch:{lineno}")
+            returns.append(n)
+        elif kind == "call":
+            seq = rec.get("seq")
+            if not isinstance(seq, int):
+                raise StreamError(f"call-without-seq watch:{lineno}")
+            seqs.append(seq)
+        elif kind == "end":
+            ended = True
+        elif kind != "abort":
+            raise StreamError(f"unknown-record-kind watch:{lineno} kind={kind!r}")
+    if sorted(returns) != list(range(1, len(returns) + 1)):
+        raise StreamError(f"return-ordinals-not-dense-from-1 "
+                          f"(n={len(returns)}, distinct={len(set(returns))})")
+    if sorted(seqs) != list(range(1, len(seqs) + 1)):
+        raise StreamError(f"call-seqs-not-dense-from-1 "
+                          f"(n={len(seqs)}, distinct={len(set(seqs))})")
+
+
+def abort(arm: pathlib.Path, code: int, reason: str) -> int:
+    """Print a typed abort AND remove any receipt this arm directory still holds.
+
+    Sol, item 2: an rc-3 abort left the previous run's receipt.json in place, so
+    the directory kept citing a receipt the current evidence cannot support.  A
+    refusal that leaves the old answer standing is not a refusal.
+    """
+    removed = []
+    for name in ("receipt.json", "receipt.md"):
+        path = arm / name
+        if path.exists():
+            path.unlink()
+            removed.append(name)
+    tail = f" (removed stale {', '.join(removed)})" if removed else " (no receipt written)"
+    print(f"SCORE-ABORT {reason}{tail}", file=sys.stderr)
+    return code
 
 
 def rollout_meters(rollout: list[dict]) -> dict:
@@ -73,39 +197,47 @@ def rollout_meters(rollout: list[dict]) -> dict:
 def score(arm: pathlib.Path, args) -> int:
     attest_path = arm / "attest.json"
     if not attest_path.exists():
-        print(f"SCORE-ABORT no-attestation {attest_path}", file=sys.stderr)
-        return 2
+        return abort(arm, 2, f"no-attestation {attest_path}")
     attest = json.loads(attest_path.read_text())
+    if not attest.get("attest_ok"):
+        return abort(arm, 2, f"attest-not-ok {attest_path} "
+                             f"refusals={attest.get('refusals')}")
 
     rollout_path = arm / "rollout.jsonl"
     if not rollout_path.exists():
-        print(f"SCORE-ABORT missing-rollout {rollout_path} "
-              f"(no receipt written)", file=sys.stderr)
-        return 3
+        return abort(arm, 3, f"missing-rollout {rollout_path}")
     if rollout_path.stat().st_size == 0:
-        print(f"SCORE-ABORT empty-rollout {rollout_path} "
-              f"(no receipt written)", file=sys.stderr)
-        return 3
-    rollout = read_jsonl(rollout_path)
+        return abort(arm, 3, f"empty-rollout {rollout_path}")
+    try:
+        rollout = read_jsonl_strict(rollout_path)
+        validate_rollout(rollout)
+    except StreamError as exc:
+        return abort(arm, 3, f"malformed-rollout {exc}")
     if not rollout:
-        print(f"SCORE-ABORT unparseable-rollout {rollout_path} "
-              f"(no receipt written)", file=sys.stderr)
-        return 3
+        return abort(arm, 3, f"unparseable-rollout {rollout_path}")
 
     raw = rollout_meters(rollout)
     if raw["returns"] == 0:
-        print(f"SCORE-ABORT zero-returns {rollout_path} "
-              f"(no receipt written)", file=sys.stderr)
-        return 3
+        return abort(arm, 3, f"zero-returns {rollout_path}")
 
     watch_path = arm / "watch.jsonl"
     if not watch_path.exists():
-        print(f"SCORE-ABORT missing-watch {watch_path}", file=sys.stderr)
-        return 4
-    watch = read_jsonl(watch_path)
+        return abort(arm, 4, f"missing-watch {watch_path}")
+    if watch_path.stat().st_size == 0:
+        return abort(arm, 3, f"empty-watch {watch_path}")
+    try:
+        watch = read_jsonl_strict(watch_path)
+        validate_watch(watch)
+    except StreamError as exc:
+        return abort(arm, 3, f"malformed-watch {exc}")
+    if not watch:
+        return abort(arm, 3, f"empty-watch {watch_path}")
     wcalls = [w for w in watch if w.get("kind") == "call"]
     wreturns = [w for w in watch if w.get("kind") == "return"]
     aborts = [w for w in watch if w.get("kind") == "abort"]
+    if not wreturns:
+        return abort(arm, 3, f"zero-metered-returns {watch_path} "
+                             f"(the rollout shows {raw['returns']} returns; the meter shows none)")
 
     run = {}
     run_path = arm / "run.json"
