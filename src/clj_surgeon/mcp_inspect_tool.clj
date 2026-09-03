@@ -453,19 +453,42 @@
                        (:max_files params) (assoc :max_files (:max_files params)))
                      overrides)})
 
+(def ^:private ls-tree-request-fields
+  "The request fields a continuation reproduces. `workspace_root` is excluded
+  on purpose: `ls-tree-next-call` never emits it, so counting it would make
+  every routed request look different from its own continuation."
+  [:mode :dir :grep :ns_grep :format :limit :max_files])
+
+(defn- ls-tree-request-arguments
+  "The arguments of the call just made, shaped exactly as a continuation is."
+  [params]
+  (merge {:mode "ls-tree" :dir "."}
+         (select-keys params ls-tree-request-fields)))
+
+;; @spec MCP-OP-STUDY-007
 (defn- ls-tree-refusal
+  "A typed ls-tree refusal, with a continuation only when replaying it could
+  differ from the call that just failed.
+
+  The `{:dir \".\"}` continuation was unconditional, so `grep` at the root
+  handed back the exact request just made — `no-clojure-files` at `\".\"`
+  proposing `no-clojure-files` at `\".\"`. Narrowing is a caller judgment
+  there, exactly as at the receipt ceiling."
   [params error-type message extra]
-  (merge
-    {:ok false
-     :operation "inspect_clojure"
-     :mode "ls-tree"
-     :error_type (name error-type)
-     :error message
-     :read_complete false
-     :source_unchanged true
-     :next_action "correct_request"
-     :next_call (ls-tree-next-call params {:dir "."})}
-    extra))
+  (let [continuation (ls-tree-next-call params {:dir "."})
+        repeats? (= (:arguments continuation)
+                    (ls-tree-request-arguments params))]
+    (merge
+      (cond-> {:ok false
+               :operation "inspect_clojure"
+               :mode "ls-tree"
+               :error_type (name error-type)
+               :error message
+               :read_complete false
+               :source_unchanged true
+               :next_action (if repeats? "narrow_scope" "correct_request")}
+        (not repeats?) (assoc :next_call continuation))
+      extra)))
 
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-006

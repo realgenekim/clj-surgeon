@@ -384,6 +384,36 @@
     (is (str/starts-with? (:error response) "No Clojure files found under "))
     (is (some? (:next_call response)))))
 
+(def ^:private absent-pattern
+  "A pattern no file in this workspace can contain, spelled so that this
+   file does not contain it either."
+  (str "zzzz" "nosuch" "pattern"))
+
+;; @spec MCP-OP-STUDY-007
+(deftest ls-tree-refusal-serves-no-continuation-identical-to-the-request
+  ;; `ls-tree-refusal` attached `{:dir "."}` unconditionally, so a failed
+  ;; scan AT the root handed back the exact request that had just failed.
+  ;;
+  ;; The pattern is assembled from pieces so the literal it greps for cannot
+  ;; occur in this file — a spelled-out pattern would match this very test
+  ;; source and the scan would succeed.
+  (doseq [request [{"mode" "ls-tree" "dir" "." "grep" absent-pattern}
+                   {"mode" "ls-tree" "grep" absent-pattern}]]
+    (testing (pr-str request)
+      (let [response (run request)]
+        (is (false? (:ok response)))
+        (is (= "no-clojure-files" (:error_type response)))
+        (is (nil? (:next_call response))
+            "the {:dir \".\"} continuation IS the call just made")
+        (is (= "narrow_scope" (:next_action response)))
+        (is (string? (:remedy response))))))
+  (testing "a refusal whose continuation can still advance keeps it"
+    (let [response (run {"mode" "ls-tree" "dir" "docs/intent/study-ops"})]
+      (is (false? (:ok response)))
+      (is (= "no-clojure-files" (:error_type response)))
+      (is (= "." (get-in response [:next_call :arguments :dir])))
+      (is (= "correct_request" (:next_action response))))))
+
 ;; @spec MCP-OP-STUDY-006
 (deftest ls-tree-refuses-a-flag-shaped-grep-or-ns-grep-over-the-wire
   ;; A pattern beginning with '-' (e.g. "--pre=/bin/sh") would otherwise
