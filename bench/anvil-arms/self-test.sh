@@ -1698,6 +1698,110 @@ cat "$WORK/case35c.out"
 PASS=$((PASS + $(grep -c '^ok   case35c' "$WORK/case35c.out")))
 FAIL=$((FAIL + $(grep -c '^FAIL case35c' "$WORK/case35c.out")))
 
+echo "== case 36: a stat that ERRORED is not a stat that said no rotation =="
+# Sol round three, finding (c).  The inode binding is re-checked every poll, and BOTH
+# checks -- the path stat() and the fd fstat() -- swallowed OSError and returned None,
+# which the caller reads as "the binding still holds".  On NFS an ESTALE means the
+# opposite: the fd no longer refers to a file this watcher can reason about, and every
+# count taken after it describes bytes nobody re-checked.  Sol mocked ESTALE and got
+# null from both.  Typed now: rollout-stat-failed:<ERRNO>, rc 8, no receipt -- proved
+# with a mocked ESTALE and, end to end, with a real EACCES.
+mkdir -p "$WORK/case36"
+python3 - "$HERE" "$WORK/case36" > "$WORK/case36.out" 2>&1 <<'PY36'
+import datetime, errno, importlib.util, json, os, pathlib, subprocess, sys, time
+from unittest import mock
+sys.dont_write_bytecode = True
+here, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("anvil_watch_36", here / "watch.py")
+watch = importlib.util.module_from_spec(spec); spec.loader.exec_module(watch)
+
+passed = failed = 0
+def check(label, cond, detail=""):
+    global passed, failed
+    if cond: passed += 1; print(f"ok   case36 {label}")
+    else: failed += 1; print(f"FAIL case36 {label} {detail}")
+
+def opened(name):
+    path = root / name
+    path.write_text('{"one":1}\n')
+    tailer = watch.Tailer(path)
+    tailer.read_lines()
+    return path, tailer
+
+# ---- (a) Sol's mocked-ESTALE probe, with a real errno on the exception ----
+path, tailer = opened("stat-error.jsonl")
+with mock.patch.object(pathlib.Path, "stat",
+                       side_effect=OSError(errno.ESTALE, "Stale file handle")):
+    detail = tailer.check_rotation()
+check("a path stat() failure is typed, not read as `no rotation`",
+      detail is not None and getattr(tailer, "abort_kind", None) == "rollout-stat-failed:ESTALE",
+      f"detail={detail!r} abort_kind={getattr(tailer, 'abort_kind', None)!r}")
+tailer.close()
+
+path, tailer = opened("fstat-error.jsonl")
+with mock.patch.object(os, "fstat", side_effect=OSError(errno.ESTALE, "Stale file handle")):
+    detail = tailer.check_rotation()
+check("an fd fstat() failure is typed, not read as `no rotation`",
+      detail is not None and getattr(tailer, "abort_kind", None) == "rollout-stat-failed:ESTALE",
+      f"detail={detail!r} abort_kind={getattr(tailer, 'abort_kind', None)!r}")
+tailer.close()
+
+# a genuine rotation is still a rotation, and an unlink is still an unlink
+path, tailer = opened("rotated.jsonl")
+path.rename(root / "old.jsonl"); path.write_text('{"two":2}\n')
+detail = tailer.check_rotation()
+check("a real inode change is still `rollout-rotated`",
+      detail is not None and "inode-changed" in detail
+      and getattr(tailer, "abort_kind", None) == "rollout-rotated",
+      f"detail={detail!r} abort_kind={getattr(tailer, 'abort_kind', None)!r}")
+tailer.close()
+
+# ---- (b) end to end: a real EACCES on the rollout's parent directory ------
+arm = root / "arm-eacces"; sub = root / "sub"
+arm.mkdir(parents=True, exist_ok=True); sub.mkdir(parents=True, exist_ok=True)
+start = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+(arm / "attest.json").write_text(json.dumps({"attest_ok": True, "start_utc": start}) + "\n")
+rollout = sub / "rollout.jsonl"
+driver = root / "eacces-driver.sh"
+driver.write_text(
+    '#!/usr/bin/env bash\nprintf \'%s\\n\' '
+    '\'{"timestamp":"2026-09-03T00:00:00Z","payload":{"type":"message","role":"assistant"}}\' '
+    '> "$1"\nsleep 10\n')
+driver.chmod(0o755)
+proc = subprocess.Popen(
+    [sys.executable, str(here / "watch.py"), "--arm", str(arm), "--rollout", str(rollout),
+     "--poll", "0.05", "--idle-timeout", "30", "--zero-return-window", "30",
+     "--max-wall", "30", "--", "bash", str(driver), str(rollout)],
+    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+time.sleep(2.0)
+os.chmod(sub, 0o000)
+try:
+    out, _ = proc.communicate(timeout=30)
+finally:
+    os.chmod(sub, 0o755)
+run = json.loads((arm / "run.json").read_text()) if (arm / "run.json").exists() else {}
+check("a stat failure the watcher cannot read through is rc 8", proc.returncode == 8,
+      f"rc={proc.returncode} out={out.strip()[:400]}")
+check("run.json types it by errno, never as `no rotation`",
+      str(run.get("abort", "")).startswith("rollout-stat-failed:"),
+      f"abort={run.get('abort')!r}")
+check("the abort names the errno", str(run.get("abort", "")).split(":")[-1] in ("EACCES", "ENOENT"),
+      f"abort={run.get('abort')!r}")
+scored = subprocess.run([sys.executable, str(here / "score.py"), str(arm)],
+                        capture_output=True, text=True,
+                        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+check("no receipt is written from a run that aborted on a stat failure",
+      scored.returncode == 3 and not (arm / "receipt.json").exists(),
+      f"rc={scored.returncode} {scored.stderr.strip()[:300]}")
+
+print(f"case36 {passed} passed, {failed} failed")
+sys.exit(1 if failed else 0)
+PY36
+cat "$WORK/case36.out"
+PASS=$((PASS + $(grep -c '^ok   case36' "$WORK/case36.out")))
+FAIL=$((FAIL + $(grep -c '^FAIL case36' "$WORK/case36.out")))
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
