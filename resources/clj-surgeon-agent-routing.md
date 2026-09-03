@@ -28,6 +28,14 @@ native patch does 21 owners in one cell); `apply_clojure_changes` with
 re-prints the whole owner — hundreds of untouched lines); the CLI wrapper as a
 substitute for MCP (a second layer, refuses 2.2x).
 
+**Every Surgeon MCP operation relays the same terminal-response contract.**
+If `terminal_response` is present and this mutation completes all remaining
+user-requested work, return its value exactly. Do not add text, reread, or
+reverify. If work remains, do not return `terminal_response`. Treat it as
+terminal evidence for this operation and continue. `next_action=none` and
+`terminal_response` describe only the completed mutation. They never prove
+that the complete user request is finished.
+
 **Lint through `~/bin/clj-kondo`**, always. This paved entrance serializes
 analyzers across agents, repositories, and JVMs; an absolute Homebrew path
 bypasses that serialization and is the cause of contention failures.
