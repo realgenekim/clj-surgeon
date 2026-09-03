@@ -10,6 +10,8 @@
 #   pf5   3 model returns, 2 tool calls, one of them a test call  (the PF-5 shape)
 #   rich  adds an MCP verb call, a typed refusal carrying next_call, a native
 #         apply_patch landing .clj bytes, and an inspect_clojure ls-tree at return 2
+#   partial   a call whose result never arrives before the driver exits
+#   makeverify a kaocha run reached through `make verify` (a non-test-named target)
 #   zero  a rollout with tool calls and NO assistant return (the abort path)
 #   hang  no returns, then sleeps, so the zero-return WINDOW fires rather than EOF
 set -euo pipefail
@@ -57,6 +59,29 @@ case "$FIXTURE" in
     out '"c5"' '"42 tests, 416 assertions, 0 failures."'
     ret '"Done.\n\nTOOLCALLS: 5"'
     printf 'TOOLCALLS: 5\n' > "$A/driver-report.md"
+    ;;
+
+  partial)
+    # A return, a completed call, then a call whose RESULT NEVER ARRIVES before the
+    # driver exits.  Sol, item 3: this flushed as `no-output` with rc 0 and stayed a
+    # citeable receipt instead of an incomplete-run refusal.
+    ret '"Reading the tree."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"ls src/\"]}"' '"c1"'
+    out '"c1"' '"fake"'
+    ret '"Landing the edit."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"apply_patch < p.diff\"]}"' '"c2"'
+    printf 'TOOLCALLS: 2\n' > "$A/driver-report.md"
+    ;;
+
+  makeverify)
+    # A test runner reached through a Make target whose NAME does not say "test".
+    # Sol, item 4: `make verify` metered as test_call=false, so a whole kaocha run
+    # counted as a non-test action.
+    ret '"Running the project verify target."'
+    call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"make verify\"]}"' '"c1"'
+    out '"c1"' '"42 tests, 416 assertions, 0 failures."'
+    ret '"Done.\n\nTOOLCALLS: 1"'
+    printf 'TOOLCALLS: 1\n' > "$A/driver-report.md"
     ;;
 
   zero)

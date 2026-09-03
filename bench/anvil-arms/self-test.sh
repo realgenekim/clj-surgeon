@@ -45,8 +45,15 @@ cat > "$BASE_REPO/src/fake/sample.clj" <<'CLJ'
 (ns fake.sample)
 (defn now [] (System/currentTimeMillis))
 CLJ
+cat > "$BASE_REPO/Makefile" <<'MK'
+KAOCHA = bin/kaocha
+verify:
+	$(KAOCHA) --focus marvin-voice-remote.bridge3-new-test
+build:
+	echo building
+MK
 git -C "$BASE_REPO" init -q
-git -C "$BASE_REPO" -c user.email=selftest@anvil -c user.name=selftest add src/fake/sample.clj
+git -C "$BASE_REPO" -c user.email=selftest@anvil -c user.name=selftest add src/fake/sample.clj Makefile
 git -C "$BASE_REPO" -c user.email=selftest@anvil -c user.name=selftest commit -qm base
 BASE_SHA=$(git -C "$BASE_REPO" rev-parse HEAD)
 
@@ -274,6 +281,71 @@ score11 "$D" case11f 2 'SCORE-ABORT attest-not-ok'
 
 D=$(mk11 g); cat "$A1/watch.jsonl" "$A1/watch.jsonl" > "$D/watch.jsonl"
 score11 "$D" case11g 3 'SCORE-ABORT malformed-watch'
+
+echo "== case 12: a call with no result is an INCOMPLETE-RUN refusal, not a receipt =="
+# Sol, item 3: the watcher flushed the open call as `no-output`, returned 0, and the
+# scorer produced a citeable receipt over a run whose last action has no outcome.
+run_arm --exp st --rung P --arm N --slot 12 --prompt "$HERE/prompts/E3-P-N.md" \
+        --worktree-src "$BASE_REPO" --base "$BASE_SHA" --fixture partial \
+        --watch-arg --zero-return-window --watch-arg 30 > "$WORK/case12.out" 2>&1
+rc12=$?
+A12="$WORK/st-P-N-12"
+want "case12 run-arm rc" 3 "$rc12"
+grep -q 'WATCH-ABORT incomplete-run' "$A12/driver.log" \
+  && ok "case12 WATCH-ABORT incomplete-run" \
+  || { bad "case12 no typed watcher refusal"; tail -5 "$A12/driver.log"; }
+want "case12 run.json abort" incomplete-run "$(jqf "$A12/run.json" abort)"
+want "case12 run.json calls_without_output" 1 "$(jqf "$A12/run.json" calls_without_output)"
+[ -e "$A12/receipt.json" ] && bad "case12 a receipt was written over an incomplete run" \
+  || ok "case12 no receipt.json written"
+grep -q 'SCORE-ABORT incomplete-run' "$A12/driver.log" \
+  && ok "case12 SCORE-ABORT incomplete-run" || bad "case12 scorer did not refuse the incomplete run"
+
+echo "== case 13: a test runner reached through a non-test-named Make target =="
+# Sol, item 4: `make verify` was test_call=false, so a whole kaocha run counted as a
+# NON-TEST action -- the exact quantity E3's pass line is stated in.
+run_arm --exp st --rung P --arm N --slot 13 --prompt "$HERE/prompts/E3-P-N.md" \
+        --worktree-src "$BASE_REPO" --base "$BASE_SHA" --fixture makeverify \
+        --watch-arg --zero-return-window --watch-arg 30 > "$WORK/case13.out" 2>&1
+A13="$WORK/st-P-N-13"
+if [ -s "$A13/receipt.json" ]; then
+  want "case13 total_actions"     1 "$(jqf "$A13/receipt.json" meter.total_actions)"
+  want "case13 test_actions"      1 "$(jqf "$A13/receipt.json" meter.test_actions)"
+  want "case13 non_test_actions"  0 "$(jqf "$A13/receipt.json" meter.non_test_actions)"
+  want "case13 meters agree"   true "$(jqf "$A13/receipt.json" meter.sources.agree)"
+else
+  bad "case13 no receipt.json written"; cat "$WORK/case13.out"
+fi
+[ -s "$A13/make-targets.json" ] \
+  && ok "case13 make targets resolved at attest time: $(jqf "$A13/make-targets.json" targets.verify)" \
+  || bad "case13 no make-targets.json written at attest time"
+want "case13 attest records the make map sha" 64 \
+     "$(printf '%s' "$(jqf "$A13/attest.json" make_targets_sha256)" | wc -c)"
+
+echo "== case 13b: make-target resolution is a MAP LOOKUP, never a name guess =="
+python3 - "$HERE" <<'PY13'
+import sys
+sys.path.insert(0, sys.argv[1])
+from watch import is_test_command
+m = {"verify": "bin/kaocha --focus marvin-voice-remote.bridge3-new-test",
+     "build": "echo building",
+     "ship": "make verify && echo shipped"}
+cases = [
+    ("make verify", m, True),           # expands to a test runner
+    ("make build", m, False),           # expands to something else
+    ("make ship", m, True),             # expands through a second target
+    ("make verify", None, False),       # no map: never guessed from the name
+    ("make test-fast", None, True),     # the name rule still stands on its own
+    ("cd sub && make verify", m, True), # still at command position
+]
+bad = [(c, w, is_test_command(c, make_map=mm)[0]) for c, mm, w in cases
+       if is_test_command(c, make_map=mm)[0] != w]
+for c, w, got in bad:
+    print(f"FAIL case13b {c!r}: expected {w}, got {got}")
+print(f"ok   case13b make-target resolution {len(cases)-len(bad)}/{len(cases)}")
+sys.exit(1 if bad else 0)
+PY13
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
