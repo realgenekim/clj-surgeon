@@ -551,11 +551,18 @@
    `IllegalArgumentException: ... is not a relative path` out of the operation
    from the read side. A boundary enforced by two resolvers is not a boundary.
 
-   THE PARENT IS RESOLVED; THE LEAF IS LEXICAL. The row path must be relative
-   and `root/p` normalized must still lie under `root` normalized — and then
-   the row's PARENT DIRECTORY (or, when that directory no longer exists, its
-   deepest existing ancestor) must really be inside the real root, symlinks
-   followed. The final component is never resolved.
+   THE PARENT IS RESOLVED; THE LEAF IS LEXICAL — EXCEPT FOR ONE CHECK: a leaf
+   that EXISTS and names a DIRECTORY refuses, symlink or not. The row path
+   must be relative and `root/p` normalized must still lie under `root`
+   normalized — and then the row's PARENT DIRECTORY (or, when that directory
+   no longer exists, its deepest existing ancestor) must really be inside the
+   real root, symlinks followed. Beyond that the final component is never
+   resolved, and the directory check is deliberately `.isDirectory`, not
+   `.isFile`: a row whose file was legitimately deleted must still reach
+   `stale-row` and its `:stale-result-cursor`, never be refused here as if it
+   had escaped. `.isDirectory` is `false` for a path that does not exist, so a
+   deleted-file row passes this check exactly as before; only a leaf that
+   still resolves to a directory — a symlinked one included — is stopped.
 
    That split is not a compromise; it is the exact shape of what DISCOVERY can
    produce, measured on this branch both ways. `find-clj-files` shells to plain
@@ -573,10 +580,18 @@
      outcome through a different spelling, and a row the EARS requirement said
      must refuse. `a-manifest-row-through-a-symlinked-DIRECTORY-is-refused-
      not-read` pins that.
+   - a LEAF naming a directory is likewise a row no scan can ever produce —
+     `find -type f` never lists a directory, symlinked or plain — and a purely
+     lexical leaf admitted it anyway: round five paged `src/leafdir` (a
+     symlink to a directory, pinned `:h nil` so staleness never fired) as a
+     typed `:error` RECORD inside a served page, wasting a page slot rather
+     than refusing. `a-manifest-row-whose-LEAF-is-a-symlinked-DIRECTORY-is-
+     refused-not-paged` pins that.
 
-   The rule the two bullets share: the guard refuses what discovery can NEVER
-   produce (an absolute path, a `..` escape, a symlinked DIRECTORY component)
-   and defers to discovery on what it can (a symlinked FILE)."
+   The rule the three bullets share: the guard refuses what discovery can
+   NEVER produce (an absolute path, a `..` escape, a symlinked DIRECTORY
+   component, a leaf naming a directory) and defers to discovery on what it
+   can (a symlinked FILE)."
   ^File [root p]
   (when (string? p)
     (try
@@ -589,7 +604,14 @@
                     anchor (deepest-existing (.getParent resolved))
                     real-anchor (when anchor (real-path anchor))]
                 (when (and real-anchor (.startsWith real-anchor real-base))
-                  (.toFile resolved)))))))
+                  (let [f (.toFile resolved)]
+                    ;; `.isDirectory`, never `.isFile`: `false` for a path
+                    ;; that no longer exists, so a legitimately deleted file
+                    ;; still returns here and reaches `stale-row`. A leaf
+                    ;; that DOES exist and names a directory — symlinked or
+                    ;; not — is a row no scan can ever produce.
+                    (when-not (.isDirectory f)
+                      f))))))))
       (catch Exception _ nil))))
 
 (defn unconfined-row
