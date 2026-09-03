@@ -1360,7 +1360,12 @@
             refuses must be reported rather than dropped: the displaced claim
             then survives only inside the tombstone, and its owner never
             learns it lost the lock unless somebody says so."
-    (let [dir (temp-dir "lock-restore-storm")
+    (let [;; the restore exists only on the fallback a filesystem without
+          ;; `link(2)` takes: the ordinary path claims the tombstone name by
+          ;; `Files/createLink` and never moves the LOCK, so there is no gap
+          ;; for a third acquirer to land in. `:no-hard-links true` forces the
+          ;; path this witness is about.
+          dir (temp-dir "lock-restore-storm")
           lock (io/file dir "LOCK")
           pid (.pid (java.lang.ProcessHandle/current))
           ;; the claim the break believes it judged: deliberately unlike
@@ -1396,7 +1401,8 @@
           (when-not (.exists lock)
             (create-lock-if-absent! dir (pr-str {:txid (str "VICTIM-" i)
                                                  :pid pid :boot-id "b"})))
-          (let [outcome (@#'journal/break-lock! dir judged (str "BRK-" i))
+          (let [outcome (@#'journal/break-lock! dir judged (str "BRK-" i)
+                                                {:no-hard-links true})
                 seen @created
                 pending (subvec seen (min @cursor (count seen)))
                 _ (reset! cursor (count seen))
@@ -1410,7 +1416,7 @@
               (when-not (contains? on-disk content) (swap! clobbered inc)))
             ;; the tombstones are accounted for above; keep the directory small
             (doseq [^java.io.File f (.listFiles (io/file dir))]
-              (when (.startsWith (.getName f) "LOCK.broken.") (.delete f))))
+              (when (.startsWith (.getName f) "LOCK.broken") (.delete f))))
           (recur (inc i))))
         (reset! running false)
         (.join hammer 5000)
@@ -1458,6 +1464,7 @@
               ;; claim before the rename, so the recheck mismatches and the
               ;; restore runs; a THIRD acquirer then lands in the restore gap
               refused (begin! ws {:txid "B-DISPLACER"
+                                  :no-hard-links true
                                   :before-break
                                   (fn [_]
                                     (.delete lock)
@@ -1504,6 +1511,7 @@
         (let [result (journal/recover!
                        (:root ws)
                        {:state-home (:state-home ws)
+                        :no-hard-links true
                         :before-break (fn [_]
                                         (.delete lock)
                                         (spit lock (pr-str {:txid "A-LIVE"
@@ -1705,6 +1713,45 @@
               (str "and the sweep lists no row for a file that is not there: "
                    (pr-str missing))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-link-break-cannot-displace-a-claim-at-all
+  (testing "the strictly stronger property the createLink order buys. The
+            break no longer MOVES the LOCK, so between claiming the tombstone
+            name and unlinking the LOCK the claim is in two places rather than
+            none: there is no gap for a third acquirer to land in, nothing to
+            restore, and nothing to displace. The same injection that produces
+            a displaced claim on the no-hard-links fallback must produce none
+            here - and must leave the live holder's LOCK exactly as it was."
+    (let [ws (workspace! "link-break-no-displacement" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")
+          before (displaced-count)]
+      (try
+        (plant-lock! ws {:txid "ghost-7" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [refused (begin! ws {:txid "B-LINKER"
+                                  :before-break
+                                  (fn [_]
+                                    (.delete lock)
+                                    (spit lock (pr-str {:txid "A-LIVE"
+                                                        :pid (.pid child)
+                                                        :boot-id (boot-id-now)})))})]
+          (is (false? (:ok refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (nil? (:lock-break-displaced refused))
+              (str "nothing was displaced, because nothing was moved: "
+                   (pr-str refused)))
+          (is (= "A-LIVE" (:txid (read-string (slurp lock))))
+              "the live holder's claim is untouched")
+          (is (not (.exists (io/file dir "LOCK.broken.B-LINKER")))
+              "and the breaker left no evidence of a break that never happened")
+          (is (= before (displaced-count))
+              "the displacement bucket did not move"))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
 (deftest two-breakers-sharing-a-txid-cannot-destroy-each-others-evidence

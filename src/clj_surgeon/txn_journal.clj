@@ -753,6 +753,110 @@
       {:restored false :restore-cause :restore-failed
        :restore-message (.getMessage cause)})))
 
+(defn- break-by-move!
+  "The break for a filesystem with no hard links at all.
+
+   `rename(2)` is the only primitive left, and it replaces unconditionally, so
+   the name guard here is `.exists` followed by a move: CHECK-THEN-ACT, which
+   this docstring says rather than claims otherwise. Measured on the branch
+   that shipped it as the only path: two breakers sharing one txid destroyed
+   the judged claim, and BOTH were handed the same tombstone name. ext4 -
+   where this kernel and every one of its witnesses run - never reaches it,
+   because `link(2)` is available there; `:no-hard-links true` is the seam a
+   witness uses to exercise it anyway."
+  [_transactions-dir ^File lock ^File tomb claim opts]
+  (if (.exists tomb)
+    {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
+    (try
+      (Files/move (.toPath lock) (.toPath tomb)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE]))
+      (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
+        (if (and (some? (:content claim))
+                 (= (:content claim) moved-content)
+                 (= (:file-key claim) (lock-file-key tomb)))
+          {:broken true
+           :tombstone (.getName tomb)
+           :content-sha256 (:content-sha256 claim)
+           :broken-at-ms (stamp-tombstone! tomb)
+           :break-path :no-hard-links}
+          ;; somebody else's claim: put it back untouched and break nothing
+          (do
+            ;; the seam a witness needs to put a third acquirer in the gap
+            (when-let [hook (:before-restore opts)] (hook tomb))
+            (let [outcome (restore-lock! tomb lock)]
+              ;; a refused restore leaves the displaced claim in the
+              ;; tombstone, so that file is evidence too and is retained
+              ;; from ITS creation, not from the claim's mtime
+              (when (false? (:restored outcome)) (stamp-tombstone! tomb))
+              (cond-> (merge {:broken false :cause :holder-changed} outcome)
+                (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
+      (catch java.nio.file.NoSuchFileException _
+        {:broken false :cause :lock-vanished})
+      (catch java.nio.file.FileAlreadyExistsException _
+        {:broken false :cause :tombstone-exists :tombstone (.getName tomb)})
+      (catch Exception cause
+        {:broken false :cause :break-failed :message (.getMessage cause)}))))
+
+(defn- break-by-link!
+  "Claim the tombstone NAME first, and unlink the LOCK only once it is held.
+
+   The order is the whole fix. A break used to rename the LOCK onto the
+   tombstone name and check afterwards, which made the name guard a
+   check-then-act in front of `rename(2)`: two breakers sharing one txid -
+   and `begin!` takes `:txid` verbatim from its caller - destroyed the judged
+   claim 13 times in 4,000 races, with BOTH handed the same tombstone name for
+   a claim only one of them owned.
+
+   `Files/createLink` is create-if-absent IN THE KERNEL: `link(2)` fails
+   EEXIST, and that refusal is the atomic guard, not a stat this code performs
+   itself. It also never moves the LOCK, so between the link and the unlink
+   the claim is in TWO places rather than none - a third acquirer cannot land
+   in a gap that no longer exists, and the whole displacement class goes with
+   it. What was a restore is now simply unlinking our own extra link.
+
+   THE RESIDUAL, exactly. Unlinking the LOCK side is a stat of its (device,
+   inode) followed by `unlink(2)`, because POSIX has no unlink-if-inode: a
+   claim that replaces the LOCK between those two syscalls is removed. That
+   window contains no I/O and is entered only after the linked claim has been
+   proved to be the judged one. A crash inside it leaves a tombstone that is a
+   second link to the LIVE LOCK, which `recover!` resolves as an
+   `:interrupted-break` rather than reporting as a break that happened."
+  [transactions-dir ^File lock ^File tomb claim opts]
+  (try
+    (Files/createLink (.toPath tomb) (.toPath lock))
+    (let [linked-content (try (slurp tomb) (catch Exception _ nil))]
+      (if (and (some? (:content claim))
+               (= (:content claim) linked-content)
+               (= (:file-key claim) (lock-file-key tomb))
+               ;; and the LOCK still IS that claim, so the unlink below takes
+               ;; the judged claim rather than whatever replaced it
+               (= (:file-key claim) (lock-file-key lock)))
+        (do
+          ;; the seam a witness needs to crash between the link and the unlink
+          (when-let [hook (:before-unlink opts)] (hook tomb))
+          (Files/deleteIfExists (.toPath lock))
+          {:broken true
+           :tombstone (.getName tomb)
+           :content-sha256 (:content-sha256 claim)
+           :broken-at-ms (stamp-tombstone! tomb)
+           :break-path :link})
+        ;; not the claim that was judged. The LOCK never left, so there is
+        ;; nothing to put back and nothing to displace: drop our own link.
+        (do (Files/deleteIfExists (.toPath tomb))
+            {:broken false
+             :cause :holder-changed
+             :restored true
+             :restore-path :lock-never-left})))
+    (catch java.nio.file.FileAlreadyExistsException _
+      {:broken false :cause :tombstone-exists :tombstone (.getName tomb)})
+    (catch java.nio.file.NoSuchFileException _
+      {:broken false :cause :lock-vanished})
+    (catch UnsupportedOperationException _
+      (break-by-move! transactions-dir lock tomb claim opts))
+    (catch Exception cause
+      {:broken false :cause :break-failed :message (.getMessage cause)})))
+
 (defn- break-lock!
   "Take EXACTLY the stale claim that was read out of the way, or nothing.
 
@@ -762,72 +866,36 @@
    brand new LOCK and acquires as well. Two live transactions then hold the
    project lock and the first to finish unlinks the other's claim.
 
-   The break is now a rename of the LOCK to a name only this breaker uses,
-   followed by a recheck of what was actually moved: the content and the
-   (device, inode) pair must still be the claim that was judged. If they are
-   not, the moved file is put back by `restore-lock!`, which links rather than
-   renames: `link(2)` is create-if-absent IN THE KERNEL, so a third acquirer
-   that landed in the gap is never overwritten. `Files/move` with no
-   REPLACE_EXISTING is NOT that guarantee - the JDK stats the target and then
-   calls `rename(2)`, which replaces unconditionally, and a measured 145 of
-   423 third-party claims died in that gap.
+   The break now CLAIMS THE TOMBSTONE NAME FIRST, by `Files/createLink` from
+   the LOCK - create-if-absent in the kernel - and unlinks the LOCK only after
+   the linked file has been proved, by content AND (device, inode), to be the
+   claim that was judged, and only while the LOCK still names that same inode.
+   The claim is therefore in two places or one, never none, so no third
+   acquirer can land in a gap and no restore is needed.
 
-   WHAT THE RESTORE GUARANTEES, exactly. It never replaces a LOCK that
-   appeared meanwhile. It does NOT guarantee the judged claim gets back: when
-   a third acquirer is there, the restore refuses, the claim that was renamed
-   away STAYS in `LOCK.broken.<txid>`, and the outcome is `{:restored false
-   :cause :holder-changed :restore-cause :lock-reappeared :tombstone ...}` -
-   counted in `displaced-claims` and reported by both callers, because the
-   displaced holder will never learn it lost the lock from anywhere else. Its
-   `release-lock!` will simply find a LOCK that does not name it.
+   WHAT THIS GUARANTEES, exactly. An existing tombstone of that name is a
+   typed refusal - `link(2)` returning EEXIST, the kernel's own verdict, not a
+   stat this code performs - taken BEFORE the LOCK is touched, never a
+   replacement. A claim that is not the judged one is never removed: the
+   outcome is `{:broken false :cause :holder-changed :restored true
+   :restore-path :lock-never-left}` and the LOCK is untouched.
 
-   The tombstone is the break's evidence and is named for the BREAKER, whose
-   txid comes from the caller: an existing tombstone of that name is a typed
-   refusal taken BEFORE the LOCK is touched, never a replacement.
-   `recover!` retires tombstones past `broken-lock-retention-ms`.
+   WHAT IT DOES NOT. Unlinking the LOCK is a stat followed by `unlink(2)` with
+   no I/O between, because POSIX has no unlink-if-inode; and on a filesystem
+   with no `link(2)` at all the fallback `break-by-move!` is the old
+   check-then-act, which says so in its own docstring. `:no-hard-links true`
+   forces that fallback so a witness can exercise it where `link(2)` exists.
 
-   The residual is two adjacent renames with no I/O between them, in place of
-   an unbounded read-judge-delete window; a third acquirer that lands in that
-   gap keeps its claim and the break reports that it displaced one."
+   The tombstone is the break's evidence, named for the BREAKER, whose txid
+   comes from the caller; `stamp-tombstone!` gives it its own creation time and
+   `recover!` retires it past `broken-lock-retention-ms`."
   ([transactions-dir claim txid] (break-lock! transactions-dir claim txid nil))
   ([transactions-dir claim txid opts]
    (let [^File lock (lock-file transactions-dir)
          ^File tomb (io/file transactions-dir (str tombstone-prefix txid))]
-     (if (.exists tomb)
-       ;; the name is the BREAKER's txid and `begin!` takes that from its
-       ;; caller, so two breaks by one txid used to overwrite each other -
-       ;; the file this build calls evidence, destroyed by name. Refuse
-       ;; BEFORE the LOCK is touched.
-       {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
-       (try
-         (Files/move (.toPath lock) (.toPath tomb)
-                     ^"[Ljava.nio.file.CopyOption;"
-                     (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE]))
-         (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
-           (if (and (some? (:content claim))
-                    (= (:content claim) moved-content)
-                    (= (:file-key claim) (lock-file-key tomb)))
-             {:broken true
-              :tombstone (.getName tomb)
-              :content-sha256 (:content-sha256 claim)
-              :broken-at-ms (stamp-tombstone! tomb)}
-             ;; somebody else's claim: put it back untouched and break nothing
-             (do
-               ;; the seam a witness needs to put a third acquirer in the gap
-               (when-let [hook (:before-restore opts)] (hook tomb))
-               (let [outcome (restore-lock! tomb lock)]
-                 ;; a refused restore leaves the displaced claim in the
-                 ;; tombstone, so that file is evidence too and is retained
-                 ;; from ITS creation, not from the claim's mtime
-                 (when (false? (:restored outcome)) (stamp-tombstone! tomb))
-                 (cond-> (merge {:broken false :cause :holder-changed} outcome)
-                   (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
-         (catch java.nio.file.NoSuchFileException _
-           {:broken false :cause :lock-vanished})
-         (catch java.nio.file.FileAlreadyExistsException _
-           {:broken false :cause :tombstone-exists :tombstone (.getName tomb)})
-         (catch Exception cause
-           {:broken false :cause :break-failed :message (.getMessage cause)}))))))
+     (if (:no-hard-links opts)
+       (break-by-move! transactions-dir lock tomb claim opts)
+       (break-by-link! transactions-dir lock tomb claim opts)))))
 
 (defn- write-lock!
   "Create the LOCK ALREADY populated, or fail because one exists.
@@ -2222,7 +2290,13 @@
                            (select-keys outcome [:tombstone :content-sha256])))
            ;; a break that moved a claim and could not put it back is a
            ;; refusal with an owner, not a silent success
-           displaced (displaced-line outcome)]
+           displaced (displaced-line outcome)
+           ;; and a break refused because the name was taken is a refusal
+           ;; nobody heard: recovery dropped it entirely, so the one verb
+           ;; whose job is to clear a stale lock returned an ordinary success
+           ;; having broken nothing
+           refused-break (when (= :tombstone-exists (:cause outcome))
+                           (select-keys outcome [:cause :tombstone]))]
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
                 :isolation compact-isolation
@@ -2234,4 +2308,5 @@
                 ;; recovery that made it.
                 :broken-locks (prune-broken-locks! transactions now-ms)}
          broken (assoc :lock-broken broken)
-         displaced (assoc :lock-break-displaced displaced))))))
+         displaced (assoc :lock-break-displaced displaced)
+         refused-break (assoc :lock-break-refused refused-break))))))
