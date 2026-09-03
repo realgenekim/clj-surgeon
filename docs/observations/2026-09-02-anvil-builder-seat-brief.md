@@ -44,3 +44,17 @@ suites may run concurrently, but the cohort lock still serialises against batter
 
 **Reporting.** Each build ends with: sha, the verify command's exact output, fails-first evidence,
 anything it was tempted to widen. The bridge logs it; the mayor queues the merge.
+
+
+## Moving the WHOLE seat (Gene, 01:03Z: "pick up session over there and have it just be like talking with you")
+
+The mechanism is the transcript: Claude Code resumes a session from its local JSONL under
+`~/.claude/projects/<key>/`, where `<key>` derives from the working directory. Copy
+`b623492c-458d-4156-a14d-a041f5a37e7c.jsonl` (24 MB) to the same key under the Anvil user's home,
+keep the layout `~/src/marvin-voice-remote/channel-connector`, and run `claude --resume <id>` from
+there. Then, in order: the memory directory (60 files) + `~/src/forge-memory`; the doctrine import
+(`/opt/claude-skills` clone; seat header rewritten for Anvil); skiff-minted creds as files (GitHub
+token + gh hosts.yml, maven-r/maven-w creds, the channel-connector token; clj-surgeon MCP on a new
+port); tools (bd, maven, clj-nrepl-eval + XDG_RUNTIME_DIR, `~/bin` scripts); repos (all on origin;
+worktrees per the resume note); crons that follow the seat (repo-watchstander, check-prompt-plate).
+Fast path: transcript + memory + GitHub token + repos. Filed as inb-20c591 for the mayor.

@@ -3246,3 +3246,12 @@ Tomorrow's first hour: the mayor's production paste decides the fold and store m
 ls-tree lands and the tree-level requirers op follows; the tester seat on Anvil takes the receipt
 ratchets. Standing rule, re-learned: answer Gene where he typed.
 
+
+## 01:03Z — seat move to Anvil: the checklist, sent to the mayor and filed (inb-20c591)
+
+Gene wants to resume THIS session on Anvil. The mechanism: the transcript JSONL (24 MB) copied under the
+same project key + `claude --resume`; then memory (60 files), doctrine import, skiff-minted creds
+(GitHub, maven, connector token; Surgeon MCP on a new port), tools, repos from origin, two crons.
+Detail in the Anvil brief and the inbox item. The seat inventory as measured: 60 memory files,
+`~/.claude.json` + `~/.claude/settings.json` + the connector's `.mcp.json` carry the MCP config,
+20 scripts in `~/bin`, 8 secret files, 4 crons.
