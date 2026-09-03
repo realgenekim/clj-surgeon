@@ -286,15 +286,43 @@ The remedy is PINNING rather than re-deriving. The first page that needs a
 cursor writes an immutable snapshot under the workspace state root
 (`~/.local/state/clj-surgeon/workspaces/<sha256 of canonical root>/ls-tree-cursors/<cursor-id>.edn`
 plus a `.rows` file): the ordered candidate list, and for every candidate its
-path and the SHA-256 of its CONTENT. Later pages are served FROM that snapshot. Four facts a caller's cursor can carry become four typed
-refusals, and each names a DIFFERENT fact:
+path and the SHA-256 of its CONTENT. Later pages are served FROM that snapshot — and only after the snapshot's own
+bytes are re-folded to the address they are filed under, on the SERVE path and
+not merely on the reuse path. Five facts become five typed refusals, and each
+names a DIFFERENT one:
 
-| the fact about the caller's cursor | the refusal |
+| the fact | the refusal |
 |---|---|
 | this server did not mint that token — the MAC does not verify | `:invalid-result-cursor` |
-| it did, but this root holds no such snapshot (another root, pruned, expired) | `:unknown-result-cursor` |
+| it did, but this root holds no such snapshot (another root — twins included — pruned, expired), or the rows filed under it no longer PROVE that address, or they cannot supply the slice they promised | `:unknown-result-cursor` |
 | it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
+| it did, the snapshot verified, and a row this page would serve names a path outside the scanned root | `:unconfined-manifest-row`, NAMING the path |
 | it did, and a file this page must serve no longer holds its pinned content | `:stale-result-cursor`, NAMING the path |
+
+**Verifying on reuse and trusting on serve makes the address a filename again
+on exactly the path a caller reads.** Round three's review tampered the rows so
+they no longer folded to their id, left the cursor untouched, and was served
+`[m06 m01 m08 m09 m10]` — `m01` silently standing in for `m07`. The serve path
+now resolves the snapshot with `verified-snapshot`, at a cost of one streaming
+pass over the manifest file.
+
+**`:returned` is MEASURED by the encoder that produced the page**, never
+computed from `(min ceiling remaining)`. The arithmetic form printed
+`:returned 5` over a page of two records, with a next cursor — a
+complete-looking page that holds nothing. The count now comes from the
+encoder's own emissions and the next cursor advances by that same number, so a
+receipt cannot outlive its page and no record can be skipped by one that
+overclaims.
+
+**One resolver, `snapshot/row-file`, turns a row into a file** at both the
+staleness check and the read. Two resolvers were a boundary in name only:
+`io/file` refused an absolute child while `fs/path` accepted it, so the file
+that was verified and the file that was read could differ, and an absolute row
+threw `IllegalArgumentException` out of the operation from the read side.
+Confinement is LEXICAL — relative, and normalized under the normalized root —
+and deliberately does not resolve symlinks, because `discover-projects` follows
+a symlinked `.clj` out of the root on a fresh scan and a realpath check here
+would refuse a page for a tree the fresh scan encodes whole.
 
 The MAC is `sha256(cursor-id ‖ offset ‖ snapshot-secret)`, keyed on a
 per-snapshot secret that is written into the snapshot and NEVER returned to a
@@ -346,7 +374,7 @@ that the tree had not moved.
 
 **`cursor-id` is now the manifest digest** — SHA-256 folded, in result order,
 over each row's `position ⇥ project-index ⇥ path ⇥ content-digest`, seeded with
-`manifest-version`. Four properties follow, and each is a witness in
+`manifest-version` AND the canonical root. Five properties follow, and each is a witness in
 `clj-surgeon.ls-tree-budget-test`:
 
 | property | why it holds |
@@ -355,6 +383,23 @@ over each row's `position ⇥ project-index ⇥ path ⇥ content-digest`, seeded
 | an unchanged tree pins ONE snapshot however often it is scanned | the id is the only thing addressing a snapshot, so a scan of an unmoved tree finds its own |
 | a changed tree gets a new id | content moved ⇒ a different fold, by construction |
 | a receipt holder still cannot mint a cursor for another offset | the mac's key is the per-snapshot secret, and publishing the id publishes nothing about it |
+| a cursor from an identical TWIN checkout is `:unknown-result-cursor`, not `:invalid-result-cursor` | the canonical root is folded into the address, so twins do not share one |
+
+The first property holds WITHIN ONE WARM SNAPSHOT STORE. Across cold stores the
+manifest digest is identical and the mac differs, because the mac's key is a
+fresh per-snapshot secret — the trade that makes forgery from published
+material impossible. A cleaned state root, or a scan after the 24 h TTL prune,
+therefore differs on the cursor line and only on the cursor line.
+
+Binding the root into the address is what makes `:unknown-result-cursor` TRUE.
+With a content-only address, two identical checkouts folded to one digest, so
+once the twin had been scanned a foreign cursor resolved to the twin's meta and
+fell through to the mac check — refusing `:invalid-result-cursor`, the remedy
+text for a forgery, about a token this server had minted. The price is that
+`:manifest_digest` no longer identifies tree content ACROSS roots; that is the
+right trade for an identifier whose whole job is to answer which repository
+page 2 is a page of. `manifest-version` is 2 for this reason: the address
+changed, so every v1 snapshot is unaddressable at once.
 
 Two boundaries this addressing draws explicitly:
 
@@ -495,10 +540,14 @@ counts calls rather than clocking them.
   remedy narrows the scope; it never says raise the heap.
 - A cursor whose pinned file's BYTES changed under a preserved path, size and
   mtime is refused as `:stale-result-cursor`, naming the path and both digests.
-- A cursor minted against another root is `:unknown-result-cursor`; a forged
-  offset is `:invalid-result-cursor`; a genuine offset past the end is
-  `:result-cursor-out-of-range`, naming the offset and the manifest total. None
-  of the four is ever an empty vector without a receipt.
+- A cursor minted against another root — an identical twin checkout included —
+  is `:unknown-result-cursor`, as are rows that no longer prove their address
+  and rows that cannot supply the slice they promised; a forged offset is
+  `:invalid-result-cursor`; a genuine offset past the end is
+  `:result-cursor-out-of-range`, naming the offset and the manifest total; a
+  row that does not resolve inside the scanned root is
+  `:unconfined-manifest-row`, naming the row. None of the five is ever an empty
+  vector without a receipt, and none is ever a throw.
 - A malformed `:max-results` is `:invalid`, never silently promoted to the cap;
   a 40-digit `:max-results` or cursor offset is that same typed refusal, never a
   `NumberFormatException`.
