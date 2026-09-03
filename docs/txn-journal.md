@@ -35,9 +35,13 @@ kernel narrows it and then names it rather than hiding it:
 - the target's current digest is read **before** the lock is taken, with a
   NOFOLLOW stat on each side of it, so what remains inside is one stat
   comparison (type, `(device, inode)`, size, `mtime` and `ctime` in
-  nanoseconds), one `write-begin` fsync and one rename — the bound is O(1) in
-  the target's size. The digest is re-read inside the lock only when that stat
-  moved, and every receipt reports how often that happened in
+  nanoseconds), one `write-begin` fsync and one rename — and none of the three
+  reads or copies the target. The size term is **reduced about four-fold, not
+  eliminated**: the in-window fsync still pays for the writeback the pre-lock
+  staging copy left behind, and 2 MiB measures 1.9x 1 KB after the change
+  against 4.4x before it (see the measured table below; `:size-term` in the
+  contract carries the same statement into every receipt). The digest is
+  re-read inside the lock only when that stat moved, and every receipt reports how often that happened in
   `:digest-rereads`, so a fast path can never be mistaken for a skipped check.
   `(:commit-window (txn-journal/contract))` names the operations, and every
   commit receipt carries the same map with the widest observed `:max-ns`;
@@ -388,3 +392,14 @@ the lock** (this box, 9 commits per cell, median `:max-ns` from the receipt):
 The size term is not zero after the change and is no longer a read of the
 target: what remains is the writeback pressure the 2 MiB pre-lock copy leaves
 for the in-lock journal fsync.
+
+The reviewer reproduced this on the same box with an independent before arm (a
+`git archive` of the pre-change tree), and the two runs agree on direction and
+magnitude: 672,439 ns / 2,939,460 ns before, 633,980 ns / 1,204,517 ns after,
+a size term of 2,267,021 ns falling to 570,537 ns (-75%). Those are the numbers
+`:size-term` quotes, because they carry an independent before arm. **What that
+forbids saying:** the window is not `O(1)` in the target's size, and the
+contract, the module docstring and MEM-007 all said it was. 2 MiB is still 1.9x
+1 KB. MEM-014's rule - every statement about an instrument shall be true of it
+in general - is the rule that sentence failed, and the honest form is the
+measurement.

@@ -1287,6 +1287,116 @@
           (.waitFor child)
           (cleanup! ws))))))
 
+;; @spec MCP-OP-MEM-013
+(deftest a-legacy-format-lock-is-named-and-fails-closed
+  (testing "Opus round 3, finding 4: a LOCK written by any earlier build
+            carries a pid and nothing else. With no boot id and no start ticks
+            both mismatch clauses are dead, so only `:process-not-alive` could
+            fire - and a REUSED pid then reads as a live holder for as long as
+            that number is in use, which is round 2's permanent deadlock
+            reachable on any workspace whose LOCK predates the checkable
+            triple. An unverifiable format is an UNKNOWN: it fails closed with
+            a typed cause that names the format, never as 'live for ever'."
+    (let [ws (workspace! "legacy-lock" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")
+          opts {:state-home (:state-home ws)}]
+      (try
+        (plant-lock! ws {:txid "old-format" :pid (.pid child)})
+        (let [refused (begin! ws {})]
+          (is (false? (:ok refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (= :legacy-format (:holder-cause refused))
+              "the cause names the format rather than pretending to a judgement")
+          (is (= :pid-only (:holder-format refused)))
+          (is (false? (:holder-live refused))
+              "it is not claimed to be live either; it is unreadable")
+          (is (str/includes? (:error refused) "earlier build"))
+          (is (true? (get-in refused [:next_call :break_legacy_lock]))
+              "and the refusal names the remedy that can clear it"))
+        (is (nil? (:lock-broken (journal/recover! (:root ws) opts)))
+            "plain recovery does not break a format it cannot check")
+        (is (.isFile lock))
+        (is (= "old-format" (:txid (read-string (slurp lock)))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-legacy-lock-break-demands-the-receipt-of-the-holders-death
+  (testing "the remedy is not a waiver. `recover! :break-legacy-lock true`
+            breaks an unverifiable claim only on a receipt of its holder's
+            death - the recorded pid naming no live process AND the claim older
+            than `legacy-lock-break-age-ms` - and refuses when either half is
+            missing. `:now-ms` pins the clock so the age boundary is exact
+            rather than a race with the wall."
+    (let [ws (workspace! "legacy-lock-break" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")
+          opts {:state-home (:state-home ws) :break-legacy-lock true}
+          stamp 1700000000000]
+      (try
+        ;; half one missing: the recorded pid is ALIVE, however old the claim
+        (plant-lock! ws {:txid "legacy-live" :pid (.pid child)})
+        (.setLastModified lock stamp)
+        (is (nil? (:lock-broken (journal/recover!
+                                  (:root ws)
+                                  (assoc opts :now-ms (+ stamp
+                                                         (* 10 journal/legacy-lock-break-age-ms))))))
+            "a live recorded pid is not a receipt of death at any age")
+        (is (.isFile lock))
+        (.delete lock)
+
+        ;; half two missing: the pid is dead, the claim is one millisecond
+        ;; short of the age the remedy requires
+        (let [dead (reaped-pid)]
+          (plant-lock! ws {:txid "legacy-dead" :pid dead})
+          (.setLastModified lock stamp)
+          (is (nil? (:lock-broken (journal/recover!
+                                    (:root ws)
+                                    (assoc opts :now-ms
+                                           (+ stamp (dec journal/legacy-lock-break-age-ms))))))
+              "one millisecond under the required age is still a refusal")
+          (is (.isFile lock))
+
+          ;; exactly at the age, with the pid dead: broken, and named
+          (let [recovery (journal/recover!
+                           (:root ws)
+                           (assoc opts :now-ms (+ stamp journal/legacy-lock-break-age-ms)))]
+            (is (= :stale-holder (get-in recovery [:lock-broken :reason])))
+            (is (= :legacy-format (get-in recovery [:lock-broken :cause])))
+            (is (= dead (get-in recovery [:lock-broken :pid])))
+            (is (not (.isFile lock)) "the claim is gone")
+            (let [txn (begin! ws {})]
+              (is (string? (:txid txn)) "and the workspace is usable again")
+              (when (:txid txn) (journal/rollback! txn)))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-014
+(deftest the-commit-window-states-its-measured-size-term-not-a-flat-bound
+  (testing "Opus round 3, finding 5: the contract value, the module docstring
+            and MEM-007 all said the window's bound is `O(1)` in the target's
+            size, and this build's own numbers say the 2 MiB window is still
+            1.9x the 1 KB one. MEM-014's own rule - every statement about an
+            instrument shall be true of it in general - is the rule that
+            sentence failed. The claim is now the measurement."
+    (let [window journal/commit-window
+          contract (journal/contract)]
+      (is (string? (:size-term window))
+          "the contract value carries the residual size term, not a flat bound")
+      (is (str/includes? (:size-term window) "1.9x")
+          "stating the measured ratio")
+      (is (str/includes? (:size-term window) "not eliminated"))
+      (is (not (str/includes? (pr-str contract) "O(1)"))
+          "and no receipt claims a bound the instrument does not have")
+      (is (= window (:commit-window contract))))))
+
 ;; @spec MCP-OP-MEM-006
 ;; @spec MCP-OP-MEM-007
 (deftest undo-refuses-a-target-another-writer-changed-after-the-commit

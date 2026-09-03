@@ -7,8 +7,10 @@
    a writer that does not take the publish lock can land between them. That
    RESIDUAL WINDOW is bounded to one NOFOLLOW stat comparison, one journal
    fsync and one rename - the staged bytes are copied into the target's own
-   directory and the pre-image digest is taken BEFORE the window opens, so the
-   bound is O(1) in the target's size - it is measured into every receipt,
+   directory and the pre-image digest is taken BEFORE the window opens, so
+   nothing inside the window reads or copies the target and its size term is
+   reduced about four-fold rather than to zero - it is measured into every
+   receipt,
    and the pinned pre-image journal is its recovery. Everything earlier than the
    window is detected and refused; a write inside it is overwritten, and the
    contract says so rather than claiming it was prevented. See `contract`.
@@ -46,7 +48,9 @@
    window cannot be closed on a POSIX filesystem - rename replaces, it does not
    compare-and-swap - so the kernel narrows it instead and names its bound.
 
-   The bound is O(1) in the target's size and it did not use to be.
+   THE SIZE TERM IS REDUCED, NOT ELIMINATED, and stating it as `O(1)` was the
+   defect MEM-014's own rule forbids - a statement about an instrument must be
+   true of that instrument in general, not only of the case that motivated it.
    `:staging-copy-inside false` was literally true - no byte COPYING happened
    inside - while the pre-image digest recheck inside the lock re-read the
    whole target, so the window grew with the file: 846 us at 1 KB, 3.0 ms at
@@ -56,7 +60,15 @@
    whose whole stat is unchanged still holds the bytes the digest described.
    If the stat moved, the digest is re-read inside the lock and the receipt
    says so in `:digest-rereads`, so the fast path can never be mistaken for a
-   skipped check. What remains inside is one stat, one fsync and one rename.
+   skipped check. What remains inside is one stat, one fsync and one rename,
+   and NONE of the three reads the target - but the fsync's cost still tracks
+   the writeback the pre-lock staging copy left behind, so the width is not
+   flat in the target's size. Measured on ext4, 2026-09-03, medians of the
+   receipt's own `:max-ns` over nine commits after a five-commit warmup:
+   633,980 ns at 1 KB and 1,204,517 ns at 2 MiB - 1.9x - against 672,439 ns
+   and 2,939,460 ns - 4.4x - before the digest moved out of the lock. The size
+   term fell about four-fold; it did not reach zero, and `:size-term` says so
+   in every receipt.
 
    The residual is unchanged in KIND and now smaller in width: a modification
    that leaves type, identity, size and both nanosecond timestamps identical
@@ -67,6 +79,11 @@
    :digest-computed-before-lock true
    :stat-fields [:kind :file-key :size :mtime-ns :ctime-ns]
    :lock :workspace-publish-lock
+   :size-term (str "reduced ~4x, not eliminated: measured on ext4 2026-09-03 the median window was "
+                   "633980 ns at 1 KB and 1204517 ns at 2 MiB (1.9x), against 672439 ns and 2939460 ns "
+                   "(4.4x) before the digest moved out of the lock; nothing inside the window reads or "
+                   "copies the target, and what still scales is writeback from the pre-lock staging copy "
+                   "paid by the in-window fsync")
    :residual "a writer that does not take the publish lock and lands inside this window is overwritten; the pinned pre-image journal is the recovery"})
 
 (defn contract
@@ -311,6 +328,11 @@
   ^File [transactions-dir]
   (io/file transactions-dir "LOCK"))
 
+(def ^:private lock-format
+  "The LOCK payload's format version. 1 was pid-only and is unverifiable; 2
+   records the checkable triple of pid, start ticks and boot id."
+  2)
+
 (defn- boot-id
   "This kernel boot's identity, or nil where the OS does not publish one.
 
@@ -366,6 +388,13 @@
         ^java.lang.ProcessHandle handle (when pid (process-handle pid))]
     (cond
       (nil? pid) :no-recorded-holder
+      ;; A claim from a build that recorded a pid and nothing else. Both
+      ;; mismatch clauses below are dead for it, so only :process-not-alive
+      ;; could ever fire - and a REUSED pid then reads as a live holder for as
+      ;; long as the number is in use, which is a lock nobody can ever break.
+      ;; The format is an UNKNOWN, so it fails closed with its own name rather
+      ;; than being silently treated as either live or dead.
+      (and current-boot (nil? recorded-boot)) :legacy-format
       (and recorded-boot current-boot (not= recorded-boot current-boot)) :boot-id-mismatch
       (nil? handle) :process-not-alive
       (not (.isAlive handle)) :process-not-alive
@@ -373,11 +402,38 @@
            (not= (:start-ticks holder) (process-start-ticks pid))) :start-ticks-mismatch
       :else nil)))
 
+(def legacy-lock-break-age-ms
+  "How old a LEGACY-format LOCK must be before `recover!` will break it.
+
+   A legacy claim carries a pid and nothing else, so nothing about it can be
+   checked: a reused pid is indistinguishable from the original holder. The
+   explicit `:break-legacy-lock` remedy therefore demands a RECEIPT of the
+   holder's death rather than a judgement - the recorded pid must name no live
+   process AND the claim must be at least this old - and refuses when either
+   half is missing. One hour is long enough that no transaction this kernel
+   opens is still running behind it, and short enough to be a remedy."
+  3600000)
+
+(defn- legacy-lock-dead?
+  "The receipt a legacy claim's break requires, and nothing weaker.
+
+   Two halves, both necessary: the recorded pid names no live process, and the
+   claim is at least `legacy-lock-break-age-ms` old. Neither alone is a
+   receipt - a pid absent right now can be a process that has not started yet
+   on a recycled number, and an old lock can belong to a long-running holder."
+  [^File lock holder now-ms]
+  (let [pid (:pid holder)
+        ^java.lang.ProcessHandle handle (when pid (process-handle pid))
+        dead? (or (nil? handle) (not (.isAlive handle)))
+        age (- (long (or now-ms (System/currentTimeMillis))) (.lastModified lock))]
+    (boolean (and dead? (>= age legacy-lock-break-age-ms)))))
+
 (def ^:private breakable-causes
   "The causes that PROVE the recorded holder is gone.
 
-   `:no-recorded-holder` is deliberately absent: an unparsable LOCK is an
-   unknown, and `begin!` must not break a lock on an unknown."
+   `:no-recorded-holder` and `:legacy-format` are deliberately absent: an
+   unparsable LOCK and a claim written before the checkable triple existed are
+   both unknowns, and `begin!` must not break a lock on an unknown."
   #{:boot-id-mismatch :process-not-alive :start-ticks-mismatch})
 
 (defn- read-holder
@@ -493,7 +549,11 @@
   [^File lock txid]
   (let [^File tmp (File/createTempFile ".LOCK-" ".tmp" (.getParentFile lock))]
     (try
-      (spit tmp (pr-str (merge {:txid txid :acquired-at (str (java.time.Instant/now))}
+      (spit tmp (pr-str (merge {:txid txid
+                                ;; stamped so a later build can name this
+                                ;; format rather than infer it from absence
+                                :lock-format lock-format
+                                :acquired-at (str (java.time.Instant/now))}
                                (holder-identity))))
       (Files/createLink (.toPath lock) (.toPath tmp))
       (finally (Files/deleteIfExists (.toPath tmp))))))
@@ -534,15 +594,31 @@
                            (merge (lock-broken-line holder cause)
                                   (select-keys outcome [:tombstone :content-sha256]))
                            broken))))
-            (refusal :txn-lock-held
-                       (str "Another transaction holds the project lock: " (:txid holder))
-                     {:holder-txid (:txid holder)
-                      :holder-pid (:pid holder)
-                      :holder-live (nil? cause)
-                      :holder-cause cause
-                      :next_call {:op :txn/recover
-                                  :workspace_root nil}
-                      :remedy "Wait for the holder, or run recovery if its process is gone."})))))))
+            (let [legacy? (= cause :legacy-format)]
+              (refusal :txn-lock-held
+                       (if legacy?
+                         (str "The project lock was written by an earlier build - a pid and no boot id, "
+                              "so a reused pid cannot be told from a live holder: " (:txid holder))
+                         (str "Another transaction holds the project lock: " (:txid holder)))
+                       (cond-> {:holder-txid (:txid holder)
+                                :holder-pid (:pid holder)
+                                :holder-live (nil? cause)
+                                :holder-cause cause
+                                :next_call {:op :txn/recover
+                                            :workspace_root nil}
+                                :remedy "Wait for the holder, or run recovery if its process is gone."}
+                         legacy?
+                         (assoc :holder-format :pid-only
+                                :lock-format-expected lock-format
+                                :next_call {:op :txn/recover
+                                            :workspace_root nil
+                                            :break_legacy_lock true}
+                                :remedy (str "This LOCK predates the checkable holder triple, so it is "
+                                             "unreadable rather than unbreakable. Run recovery with "
+                                             ":break-legacy-lock true; it breaks the claim only on a "
+                                             "receipt of the holder's death - the recorded pid naming no "
+                                             "live process AND the lock older than "
+                                             legacy-lock-break-age-ms " ms.")))))))))))
 
 (defn with-cooperating-writes
   ;; @spec MCP-OP-MEM-007
@@ -1175,8 +1251,10 @@
    target's own directory, and the target's current digest is read with a stat
    on each side of it. Inside the lock only that stat is compared - a target
    whose type, identity, size and timestamps are unchanged still holds the
-   bytes the digest described - so the window is O(1) in the target's size
-   rather than O(size). When the stat moved, the digest IS re-read inside the
+   bytes the digest described - so no read of the target happens inside the
+   window and its size term falls about four-fold rather than to zero, which is
+   what the contract's `:size-term` measures. When the stat moved, the digest
+   IS re-read inside the
    lock and the receipt reports it, so the fast path can never be mistaken for
    a skipped check.
 
@@ -1706,9 +1784,16 @@
    is back at H0 and there is nothing left to recover from. A recovery that did
    NOT verify keeps everything and records `:restore-failed`: deleting the only
    material that can repair the tree, at the moment repair is needed, is how a
-   partial failure becomes a permanent one."
+   partial failure becomes a permanent one.
+
+   `:break-legacy-lock true` is the remedy for a LOCK an earlier build wrote -
+   a pid and no boot id, which nothing can check. It is not a waiver: the break
+   still demands a receipt of the holder's death, being that the recorded pid
+   names no live process AND the claim is at least `legacy-lock-break-age-ms`
+   old, and refuses when either half is missing. `:now-ms` supplies the clock
+   that age is measured against, so a witness can pin the boundary exactly."
   ([workspace-root] (recover! workspace-root {}))
-  ([workspace-root {:keys [state-home]}]
+  ([workspace-root {:keys [state-home break-legacy-lock now-ms]}]
    (let [transactions (workspace/transactions-dir workspace-root state-home)
          dir (io/file transactions)
          candidates (when (.isDirectory dir)
@@ -1753,8 +1838,14 @@
            ;; may not delete a claim that changed under it either
            ;; recovery is the remedy for an UNREADABLE claim as well as a
            ;; provably dead one, so it acts on any cause - but through the same
-           ;; compare-and-break: it may not delete a claim that changed under it
-           broken (when (and claim cause)
+           ;; compare-and-break: it may not delete a claim that changed under it.
+           ;; A LEGACY claim is the one exception: it needs the explicit remedy
+           ;; AND the receipt of its holder's death.
+           breakable? (and claim cause
+                           (or (not= cause :legacy-format)
+                               (and break-legacy-lock
+                                    (legacy-lock-dead? lock holder now-ms))))
+           broken (when breakable?
                     (let [outcome (break-lock! transactions claim
                                                (str "recover-" (new-txid)))]
                       (when (:broken outcome)
