@@ -54,3 +54,11 @@
 
 Answer Gene in the surface he wrote from (terminal here; remote control counts as terminal). No reply
 tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when the connector arrives.
+
+## RESUME DELTA 2026-09-03T01:42Z
+
+- Cleared by Gene ("Super!!! Let's go!!"). Builder a7b68e5d3a6c673f5 running on `~/src/clj-surgeon-study`
+  (bridge/study-ops-mcp @ b3c17bb): inb-a0f37e + inb-d8a635. After its report: my own suites under
+  `flock ~/tmp/suite.lock`, push, log; tell the mayor via the log/inbox (no reply tool here).
+- Today's log: `docs/observations/2026-09-03-captains-log-anvil-seat.md`.
+- `~/acid` is not readable by forge; ports 7888–7895 are all held by other seats — pick ≥ 7900.
