@@ -261,6 +261,7 @@
 
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-015
+;; @spec MCP-OP-ALIAS-040
 (deftest expect-mismatch-refuses-closed-with-an-executable-next-call
   (let [workspace (workspace!)]
     (try
@@ -269,7 +270,7 @@
             _ (mcp-tool/handle-alias-migration
                 nil
                 (json/parse-string
-                  (json/generate-string (request workspace {:expect {:files 13}}))
+                  (json/generate-string (request workspace {:expect {:files 80}}))
                   true)
                 (fn [content error? structured]
                   (reset! captured {:content content :error? error?
@@ -279,7 +280,7 @@
         (is (false? (:ok result)))
         (is (= "alias-migration-expect-mismatch" (:error_type result)))
         (is (= 12 (:found_files result)))
-        (is (= 13 (:expected_files result)))
+        (is (= 80 (:expected_files result)))
         (is (true? (:source_unchanged result)))
         (is (false? (:write_authority result)))
         (is (number? (:elapsed_ms result)))
@@ -290,7 +291,10 @@
         (testing "the next_call is a complete executable alias_migration request"
           (let [next-call (:next_call result)]
             (is (= "alias_migration" (get next-call "op")))
-            (is (= 12 (get-in next-call ["expect" "files"])))
+            (is (= 12 (get-in next-call ["expect" "files"]))
+                "the next_call declares exactly what discovery found")
+            (is (= (:found_files result) (get-in next-call ["expect" "files"]))
+                "an over-declared expectation self-corrects in one return")
             (is (= (.getPath workspace) (get next-call "workspace_root")))
             (let [replayed (atom nil)]
               ;; sent back verbatim over the same MCP entrance
@@ -568,28 +572,6 @@
         (testing "no byte was written by the refused call"
           (doseq [[relative expected] (:pre corpus)]
             (is (= expected (slurp (io/file workspace relative))) relative))))
-      (finally
-        (delete-tree! workspace)))))
-
-;; @spec MCP-OP-ALIAS-040
-(deftest an-expectation-larger-than-the-scope-refuses-before-any-source-is-read
-  (let [workspace (workspace!)
-        receipt-dir (io/file workspace "receipts")]
-    (.mkdirs receipt-dir)
-    (try
-      (let [scanned (count (alias-migration/expand-scope
-                             (.toPath (.getCanonicalFile workspace))
-                             {:paths ["src/**"] :exclude []}))
-            result (alias-migration/execute!
-                     (config workspace receipt-dir)
-                     (request workspace {:expect {:files (+ scanned 1)}}))]
-        (is (false? (:ok result)) (pr-str result))
-        (is (= "alias-migration-expect-mismatch" (:error_type result)))
-        (is (= scanned (:scanned_files result)))
-        (is (= (inc scanned) (:expected_files result)))
-        (is (nil? (:found_files result))
-            "discovery never ran, so there is no found count to report")
-        (is (true? (:source_unchanged result))))
       (finally
         (delete-tree! workspace)))))
 

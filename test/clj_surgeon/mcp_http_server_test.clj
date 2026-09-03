@@ -727,6 +727,7 @@
 
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-015
+;; @spec MCP-OP-ALIAS-040
 (deftest alias-migration-refusal-carries-its-next-call-across-the-real-http-wire
   (let [server-project (temp-dir)
         workspace (alias-workspace!)
@@ -735,7 +736,7 @@
       (let [called (post-json client (:url running) session
                               {:jsonrpc "2.0" :id 2 :method "tools/call"
                                :params {:name "alias_migration"
-                                        :arguments (alias-arguments workspace 4)}})
+                                        :arguments (alias-arguments workspace 80)}})
             result (:result (sse-json called))
             refusal (:structuredContent result)]
         (testing "the refusal is typed, not an adapter failure"
@@ -743,7 +744,7 @@
           (is (false? (:ok refusal)))
           (is (= "alias-migration-expect-mismatch" (:error_type refusal)))
           (is (= 5 (:found_files refusal)))
-          (is (= 4 (:expected_files refusal)))
+          (is (= 80 (:expected_files refusal)))
           (is (true? (:source_unchanged refusal)))
           (is (false? (:write_authority refusal))))
 

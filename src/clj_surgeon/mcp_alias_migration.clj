@@ -234,13 +234,14 @@
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-038
 ;; @spec MCP-OP-ALIAS-039
-;; @spec MCP-OP-ALIAS-040
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
   Returns {:ok true :plan p :root r :paths {relative absolute}} or one typed
-  refusal. No bytes are written, and every bound is enforced before the first
-  file is slurped."
+  refusal. No bytes are written, and both read bounds are enforced before the
+  first file is slurped. `expect.files` is deliberately NOT one of them: an
+  over-declared expectation is the verb's self-correcting field idiom, and it
+  must reach discovery to earn a found count and an executable next_call."
   [workspace-root request]
   (let [root (mcp-paths/real-root workspace-root)
         relatives (expand-scope root (:scope request))
@@ -258,19 +259,6 @@
                 :remedy (str "Narrow scope.paths to the namespaces that can "
                              "require from.lib; expect.files declared "
                              expected ".")})
-
-      ;; discovery is a subset of the scanned set, so an expectation larger than
-      ;; the scope can never be met and is refused without reading one file
-      (and expected (< scanned expected))
-      (refusal :alias-migration-expect-mismatch
-               (str "scope.paths contains " scanned
-                    " files; expect.files declared " expected
-                    ", which discovery cannot reach")
-               {:scanned_files scanned
-                :expected_files expected
-                :next_call nil
-                :remedy (str "Widen scope.paths, or send expect.files no "
-                             "greater than the number of files in scope.")})
 
       :else
       (let [resolutions (mapv #(mcp-paths/resolve-source-path root %) relatives)
