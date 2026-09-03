@@ -19,6 +19,18 @@ is cut.
 
 ### Added
 
+- `apply_clojure_changes` now reports matched-but-unaddressed sites. Copy the
+  `file`, `file_hash`, pattern, and `match_count` from a prior `inspect_clojure`
+  `match` receipt into the new optional `expect_matched` object and the
+  transaction receipt returns `matched_count`, `addressed_matches`, and
+  `unaddressed_matches` — every matched site the transaction did not touch,
+  with its pre-image line and source hash. The basis is stateless: the file hash
+  fences it against the transaction's own frozen pre-image, and a file, hash, or
+  count disagreement refuses `expect-matched-stale` before any write. Field
+  case: 19 guard sites matched, 16 addressed, and the exclusion rationale for
+  the other 3 lived only in the driver's head.
+
+
 - Multimethod owner addressing is now discoverable from reads. Every outline row
   for a `defmethod` carries `dispatch`, the exact source spelling of that arm's
   dispatch value, so a file whose owner vocabulary collapses many arms into one

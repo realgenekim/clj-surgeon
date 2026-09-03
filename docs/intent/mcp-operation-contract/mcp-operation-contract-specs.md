@@ -152,6 +152,12 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 - [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
 
+# #Matched-But-Unaddressed Reporting
+
+- [x] **MCP-OP-MATCHED-001**: When an `apply_clojure_changes` request supplies the optional `expect_matched` basis and every guard passes, the receipt shall report the matched count, the addressed count, and the bounded list of matched sites the transaction did not address, each with its pre-image line and source hash. The evidence shall be derived from the transaction's own frozen pre-image; clj-surgeon shall retain no server-side session state between the prior `match` read and the transaction.
+- [x] **MCP-OP-MATCHED-002**: If the `expect_matched` basis names a file this transaction did not read, or its `file_hash` differs from that file's pre-image hash, or re-running its pattern on that pre-image yields a different match count, then clj-surgeon shall refuse `expect-matched-stale` before any write, naming which of those disagreed with the expected and actual values, and leaving every byte unchanged.
+- [x] **MCP-OP-MATCHED-003**: If the `expect_matched` pattern is not exactly one complete Clojure form, then clj-surgeon shall refuse `expect-matched-invalid-pattern` before any write. `expect_matched` shall remain optional; omitting it shall not change any existing receipt field or refusal.
+
 # #Multimethod Owner Addressing
 
 - [x] **MCP-OP-DISPATCH-001**: When an outline record describes a `defmethod` top-level form, clj-surgeon shall publish that form's dispatch value as a `dispatch` field carrying its exact source spelling.
@@ -253,6 +259,9 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-DISPATCH-001` | A collapsed owner name is enough to address one multimethod arm, or the dispatch value may be normalized away from its source spelling. | String, keyword, vector, and namespaced-keyword dispatch ; metadata before the name ; non-defmethod owners carry no field. |
 | `MCP-OP-DISPATCH-002` | The refusal's collapsed owner list already teaches the owner shape, or the whole dispatch vocabulary may be returned unbounded. | Bare multimethod name ; name plus an exact dispatch spelling ; name plus an unknown dispatch ; more arms than the vocabulary bound ; non-multimethod owner. |
 | `MCP-OP-DISPATCH-003` | Structured evidence is enough when the summary shows only the collapsed name. | Refusal summary for a 117-arm multimethod ; truncated vocabulary ; refusal without multimethod evidence. |
+| `MCP-OP-MATCHED-001` | The server may remember a prior match result, or the receipt may report sites from the post-image. | 19 matched and 16 addressed ; all addressed ; nothing addressed ; two files in one transaction ; more unaddressed sites than the presentation bound. |
+| `MCP-OP-MATCHED-002` | A stale basis can be recomputed automatically, or a count disagreement is a receipt note rather than a refusal. | File absent from the transaction ; changed file hash ; count too high ; count too low ; refusal leaves bytes unchanged. |
+| `MCP-OP-MATCHED-003` | An unparseable pattern is a stale basis, or `expect_matched` may become required once a caller has used it once. | Two forms in one pattern ; unbalanced pattern ; omitted `expect_matched` on an otherwise identical transaction. |
 
 # #Deferred Surface
 

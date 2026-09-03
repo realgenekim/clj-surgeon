@@ -4,8 +4,9 @@
    [clojure.test :refer [deftest is testing]]))
 
 (deftest direct-change-contract-is-projected-from-the-published-schema
+  ;; @spec MCP-OP-MATCHED-003
   (is (= {:request
-          {:allowed #{"changes" "expect" "verify"}
+          {:allowed #{"changes" "expect" "verify" "expect_matched"}
            :required #{"changes"}}
           :change
           {:allowed #{"id" "files" "forms" "owner" "find" "inside"
@@ -29,7 +30,10 @@
            :required #{"from" "to" "preserve_external_key"}}
           :assoc-entry
           {:allowed #{"key" "value"}
-           :required #{"key" "value"}}}
+           :required #{"key" "value"}}
+          :expect-matched
+          {:allowed #{"file" "file_hash" "match" "count"}
+           :required #{"file" "file_hash" "match" "count"}}}
          schema/direct-change-contract))
   (is (re-find #"Never combine edits and changes"
                (get-in schema/explicit-change-schema

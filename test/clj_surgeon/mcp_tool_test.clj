@@ -8,6 +8,7 @@
    [clj-surgeon.mcp-schema :as mcp-schema]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.mcp-workspace :as workspace]
+   [clj-surgeon.structural-lens :as structural-lens]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -1885,5 +1886,155 @@
                      {:receipt (:undo_receipt result)})]
           (is (:ok undo))
           (is (= source (slurp source-file)))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; ---------------------------------------------------------------------------
+;; Matched-but-unaddressed reporting through the public apply_clojure_changes
+;; boundary. Field case: 2026-09-02 session 4 on curtain-call folds.clj — one
+;; `match` returned 19 guard sites, the transaction addressed 16, and the
+;; receipt said nothing about the other 3.
+;; ---------------------------------------------------------------------------
+
+(def ^:private folds-guard-pattern
+  "(if-let [slug (:slug (event-by-id state (:event-id payload)))] _ state)")
+
+(defn- folds-arm-source
+  [dispatch]
+  (str "(defmethod fold-event \"" dispatch "\"\n"
+       "  [state payload]\n"
+       "  ;; INTENT: LENS-004\n"
+       "  (if-let [slug (:slug (event-by-id state (:event-id payload)))]\n"
+       "    (assoc-in state [:events slug :settings :" dispatch "] true)\n"
+       "    state))\n"))
+
+(def ^:private folds-file-source
+  (str "(ns cfp-scheduler-killer.folds)\n\n"
+       (str/join "\n" (map #(folds-arm-source (str "flag" %)) (range 19)))
+       "\n(defn event-by-id [state id] nil)\n"))
+
+(defn- folds-change
+  [dispatch]
+  {"id" (str "arm-" dispatch)
+   "files" ["src/folds.clj"]
+   "forms" [{"kind" "defmethod" "name" "fold-event"
+             "dispatch" (str "\"" dispatch "\"")}]
+   "find" (str "(if-let [slug (:slug (event-by-id state"
+               " (:event-id payload)))]\n"
+               "    (assoc-in state [:events slug :settings :"
+               dispatch "] true)\n"
+               "    state)")
+   "replace" (str "(update-settings state (:event-id payload) assoc :"
+                  dispatch " true)")
+   "expect" {"matches" 1}})
+
+(defn- folds-workspace!
+  []
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/folds.clj")]
+    (.mkdirs (.getParentFile source-file))
+    (spit source-file folds-file-source)
+    [workspace source-file]))
+
+(deftest receipt-reports-matched-sites-the-transaction-did-not-address
+  ;; @spec MCP-OP-MATCHED-001
+  (let [[workspace _source-file] (folds-workspace!)
+        file-hash (structural-lens/source-hash folds-file-source)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" (mapv #(folds-change (str "flag" %)) (range 16))
+               "expect_matched" {"file" "src/folds.clj"
+                                 "file_hash" file-hash
+                                 "match" folds-guard-pattern
+                                 "count" 19}})
+            summary (mcp-tool/concise-summary
+                      (assoc result :elapsed_ms 0.0))]
+        (is (:ok result) (pr-str result))
+        (is (= 16 (:edits result)))
+        (is (= 19 (:matched_count result)))
+        (is (= 16 (:addressed_matches result)))
+        (is (= 3 (:unaddressed_match_count result)))
+        (is (= 3 (count (:unaddressed_matches result))))
+        (is (false? (:unaddressed_matches_truncated result)))
+        (is (every? #(and (integer? (:line %))
+                          (re-matches #"[0-9a-f]{64}" (:hash %)))
+                    (:unaddressed_matches result)))
+        (is (= {:file "src/folds.clj"
+                :match folds-guard-pattern
+                :file_hash file-hash
+                :count 19}
+               (:expect_matched result)))
+        (testing "a naive reader sees the gap in the visible receipt"
+          (is (str/includes?
+                summary
+                (str "⚠ prior match basis · 3 of 19 matched sites not "
+                     "addressed by this transaction (pre-image lines "
+                     (str/join ", " (map :line (:unaddressed_matches result)))
+                     ")")))))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest receipt-reports-zero-unaddressed-when-the-transaction-covered-them-all
+  ;; @spec MCP-OP-MATCHED-001
+  (let [[workspace _source-file] (folds-workspace!)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" (mapv #(folds-change (str "flag" %)) (range 19))
+               "expect_matched"
+               {"file" "src/folds.clj"
+                "file_hash" (structural-lens/source-hash folds-file-source)
+                "match" folds-guard-pattern
+                "count" 19}})]
+        (is (:ok result) (pr-str result))
+        (is (= 0 (:unaddressed_match_count result)))
+        (is (= [] (:unaddressed_matches result)))
+        (is (str/includes? (mcp-tool/concise-summary
+                             (assoc result :elapsed_ms 0.0))
+                           "✓ prior match basis · all 19 matched sites addressed")))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest stale-expect-matched-refuses-before-any-write
+  ;; @spec MCP-OP-MATCHED-002
+  (let [[workspace source-file] (folds-workspace!)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" [(folds-change "flag0")]
+               "expect_matched"
+               {"file" "src/folds.clj"
+                "file_hash" (structural-lens/source-hash "(ns stale)\n")
+                "match" folds-guard-pattern
+                "count" 19}})]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "expect-matched-stale" (:error_type result)))
+        (is (= "file_hash" (:mismatch result)))
+        (is (true? (:source_unchanged result)))
+        (is (= folds-file-source (slurp source-file))
+            "a stale basis leaves every byte unchanged"))
+      (finally
+        (delete-tree! workspace)))))
+
+(deftest omitting-expect-matched-leaves-the-receipt-unchanged
+  ;; @spec MCP-OP-MATCHED-003
+  (let [[workspace _source-file] (folds-workspace!)]
+    (try
+      (let [result
+            (mcp-tool/execute-request!
+              {:project-root (.getPath workspace)
+               :receipt-dir (.getPath (io/file workspace "receipts"))}
+              {"changes" [(folds-change "flag0")]})]
+        (is (:ok result) (pr-str result))
+        (is (not (contains? result :matched_count)))
+        (is (not (contains? result :unaddressed_matches)))
+        (is (not (contains? result :expect_matched))))
       (finally
         (delete-tree! workspace)))))

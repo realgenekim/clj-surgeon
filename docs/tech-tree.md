@@ -28,6 +28,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | native `apply_patch` | FLOOR | agent | n1, l1: one patch cell for 21 owners |
 | `require_change` across N namespaces | WON | MCP | l1 Y-5, zero churn (churn attribution receipt) |
 | `within` + `from`/`to` surgical edit | WON | MCP | l1 A-0, A-4, Y-0, zero churn |
+| `expect_matched` basis → `unaddressed_matches` in the transaction receipt | BUILT | MCP | friction ledger item 2 (19 matched, 16 addressed); inb-a97614 |
 | `:extract!` to a new namespace | WON | CLI + MCP extraction verb | no native equivalent; safe-refactor skill |
 | `:mv` + `:fix-declares!`, `:rename-ns!` | WON | CLI | no native equivalent |
 | owner-kind-namespace insertion (whole-file churn) | LOST; mechanism corrected: Surgeon runs standard-clojure-style whole-file on changes/basis/extraction routes, never on edits | MCP | clj-surgeon-46o re-scoped to formatter scope; big-aha log |

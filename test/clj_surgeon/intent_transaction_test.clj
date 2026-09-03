@@ -2275,3 +2275,126 @@
         (is (not (fs/exists? receipt-file))))
       (finally
         (fs/delete-tree temp-dir)))))
+
+;; ---------------------------------------------------------------------------
+;; Matched-but-unaddressed reporting. Field case: 2026-09-02 session 4 on
+;; curtain-call src/cfp_scheduler_killer/folds.clj — one `match` on the guard
+;; shape returned 19 arms, the transaction addressed 16, and the exclusion
+;; rationale for the other 3 existed only in the driver's head.
+;; ---------------------------------------------------------------------------
+
+(def ^:private guard-pattern
+  "(if-let [slug (:slug (event-by-id state (:event-id payload)))] _ state)")
+
+(defn- fold-arm
+  [dispatch]
+  (str "(defmethod fold-event \"" dispatch "\"\n"
+       "  [state payload]\n"
+       "  ;; INTENT: LENS-004\n"
+       "  (if-let [slug (:slug (event-by-id state (:event-id payload)))]\n"
+       "    (assoc-in state [:events slug :settings :" dispatch "] true)\n"
+       "    state))\n"))
+
+(def ^:private folds-source
+  (str "(ns cfp-scheduler-killer.folds)\n\n"
+       (str/join "\n" (map #(fold-arm (str "flag" %)) (range 19)))
+       "\n(defn event-by-id [state id] nil)\n"))
+
+(defn- folds-transaction
+  [addressed-dispatches]
+  (transaction/compile-transaction
+    {"src/folds.clj" folds-source}
+    {:changes
+     (mapv (fn [dispatch]
+             {:id (keyword (str "arm-" dispatch))
+              :in ["src/folds.clj"]
+              :forms [{:kind :defmethod
+                       :name 'fold-event
+                       :dispatch (str "\"" dispatch "\"")}]
+              :find (str "(if-let [slug (:slug (event-by-id state"
+                         " (:event-id payload)))]\n"
+                         "    (assoc-in state [:events slug :settings :"
+                         dispatch "] true)\n"
+                         "    state)")
+              :do [:replace
+                   (str "(update-settings state (:event-id payload) assoc :"
+                        dispatch " true)")]
+              :expect {:matches 1}})
+           addressed-dispatches)
+     :expect {:changes (count addressed-dispatches)
+              :edits (count addressed-dispatches)
+              :files 1}}))
+
+(defn- folds-basis
+  [expected-count]
+  {:file "src/folds.clj"
+   :file-hash (structural-lens/source-hash folds-source)
+   :match guard-pattern
+   :count expected-count})
+
+(deftest expect-matched-lists-the-matched-sites-a-transaction-did-not-address
+  ;; @spec MCP-OP-MATCHED-001
+  (let [compiled (folds-transaction (mapv #(str "flag" %) (range 16)))
+        _ (is (:ok compiled))
+        result (transaction/matched-basis-evidence compiled (folds-basis 19))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 19 (:matched-count evidence)))
+    (is (= 16 (:addressed-matches evidence)))
+    (is (= 3 (:unaddressed-match-count evidence)))
+    (is (= 3 (count (:unaddressed-matches evidence))))
+    (is (every? #(and (integer? (:line %))
+                      (re-matches #"[0-9a-f]{64}" (:hash %)))
+                (:unaddressed-matches evidence)))
+    (testing "the reported lines are the pre-image lines of the skipped arms"
+      (let [lines (mapv :line (:unaddressed-matches evidence))
+            source-lines (vec (str/split-lines folds-source))]
+        (is (= 3 (count (distinct lines))))
+        (is (every? #(str/includes? (nth source-lines (dec %)) "if-let [slug")
+                    lines))))))
+
+(deftest expect-matched-reports-zero-when-the-transaction-addressed-everything
+  ;; @spec MCP-OP-MATCHED-001
+  (let [compiled (folds-transaction (mapv #(str "flag" %) (range 19)))
+        result (transaction/matched-basis-evidence compiled (folds-basis 19))
+        evidence (:evidence result)]
+    (is (:ok result))
+    (is (= 19 (:matched-count evidence)))
+    (is (= 19 (:addressed-matches evidence)))
+    (is (= 0 (:unaddressed-match-count evidence)))
+    (is (= [] (:unaddressed-matches evidence)))))
+
+(deftest expect-matched-refuses-a-stale-basis-before-any-write
+  ;; @spec MCP-OP-MATCHED-002
+  (let [compiled (folds-transaction ["flag0"])]
+    (testing "a file hash from a different snapshot"
+      (let [result (transaction/matched-basis-evidence
+                     compiled
+                     (assoc (folds-basis 19)
+                            :file-hash (structural-lens/source-hash "(ns other)")))]
+        (is (nil? (:ok result)))
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "file_hash" (:mismatch result)))
+        (is (= (structural-lens/source-hash folds-source)
+               (:actual-file-hash result)))))
+    (testing "a file this transaction did not read"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (assoc (folds-basis 19) :file "src/other.clj"))]
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "file_not_in_transaction" (:mismatch result)))
+        (is (= ["src/folds.clj"] (:transaction-files result)))))
+    (testing "a match count that does not describe this snapshot"
+      (let [result (transaction/matched-basis-evidence
+                     compiled (folds-basis 21))]
+        (is (= :expect-matched-stale (:error-type result)))
+        (is (= "match_count" (:mismatch result)))
+        (is (= 21 (:expected-match-count result)))
+        (is (= 19 (:actual-match-count result)))))))
+
+(deftest expect-matched-refuses-a-pattern-that-is-not-one-complete-form
+  ;; @spec MCP-OP-MATCHED-003
+  (let [compiled (folds-transaction ["flag0"])
+        result (transaction/matched-basis-evidence
+                 compiled (assoc (folds-basis 19) :match "(a) (b)"))]
+    (is (= :expect-matched-invalid-pattern (:error-type result)))
+    (is (= "src/folds.clj" (:file result)))))

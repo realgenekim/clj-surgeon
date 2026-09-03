@@ -279,7 +279,7 @@
         (is (= false (get-in tools [1 :inputSchema :additionalProperties])))
         (is (= #{:basis :decisions :verify :changes :expect :edits :programs
                  :delete_owners :create_files :extraction :workspace_root
-                 :symbol_migration :require_change}
+                 :symbol_migration :require_change :expect_matched}
                (set (keys (get-in tools [1 :inputSchema :properties])))))
         (is (str/includes?
               (get-in tools [1 :inputSchema :properties :verify :description])
