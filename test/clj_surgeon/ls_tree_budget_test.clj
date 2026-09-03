@@ -1052,6 +1052,45 @@
             (is (= :unknown-result-cursor (:error-type r)))))))))
 
 ;; @spec MCP-OP-MEM-003
+(deftest a-page-that-encodes-nothing-refuses-instead-of-advancing-by-zero
+  ;; The latent hazard round four named (item 12) and did not have to fire.
+  ;; `over?` is computed from `(- total offset)` and NOT from `encoded`, so a
+  ;; page that encoded ZERO records with rows still remaining would mint a next
+  ;; cursor AT ITS OWN OFFSET, and a caller following `:next_call` loops on a
+  ;; page that holds nothing. It is unreachable today only because of two
+  ;; facts at once — the slice guard holds, and both encoders `emit!` once per
+  ;; candidate — either of which a refactor can break without noticing. So the
+  ;; invariant gets a witness instead of a comment: a page can never advance by
+  ;; zero. Emptying the outline stream is exactly what breaking either fact
+  ;; looks like from the receipt's side.
+  (with-project [dir fixture-count "ls-tree-budget-zero-page"]
+    (let [p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          cursor (cursor-of p1)
+          v (var core/stream-outlines!)
+          real @v]
+      (alter-var-root v (constantly (fn [_candidates _consume!] nil)))
+      (try
+        (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                   :cursor cursor})
+              ;; the same reader for both shapes: the trailing receipt of an
+              ;; encoded page, and the receipt a refusal IS
+              handed-back (or (cursor-of r) (get-in r [:next_call :cursor]))]
+          (is (map? r)
+              (str "a page that encoded nothing while rows remain must REFUSE, "
+                   "never hand back a receipt with a cursor; got " (pr-str r)))
+          (is (= :empty-result-page (:error-type r))
+              (str "expected a typed refusal, got " (pr-str (:error-type r))))
+          (is (nil? handed-back)
+              "and it offers no continuation cursor at all")
+          (is (not= cursor handed-back)
+              (str "least of all one at its OWN offset, which is the cursor a "
+                   "caller would follow forever; handed back "
+                   (pr-str handed-back)))
+          (is (false? (:complete r)))
+          (is (true? (:source-unchanged r))))
+        (finally (alter-var-root v (constantly real)))))))
+
+;; @spec MCP-OP-MEM-003
 (deftest a-cursor-from-a-TWIN-root-is-unknown-and-never-merely-invalid
   ;; The `:unknown-result-cursor` receipt says a cursor from ANOTHER ROOT does
   ;; not resolve at all. Two identical checkouts fold to one manifest digest,
