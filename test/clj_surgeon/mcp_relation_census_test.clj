@@ -1772,6 +1772,151 @@
           (is (= (:next-command jvm-cli) (:next-command bb-cli)))))
       (finally (delete-tree! root)))))
 
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-thirteen review, item 3: the two MCP bound refusals told the
+;; caller something FALSE.
+;;
+;; Both compute a narrowing from the walk's own per-directory aggregates, and
+;; both then measure the rendered JSON against the shared byte ceiling and drop
+;; it when it does not fit. That much is right. What was wrong is what they say
+;; afterwards: the remedy is the one written for the case where NO fully-walked
+;; subtree fits at all — "no subtree it finished walking is known to fit" —
+;; and Sol got it from a walk that had found one and measured it at 891 bytes.
+;;
+;; A refusal that names a bound without naming the value it compared against
+;; leaves the caller to guess how much shorter is short enough; a refusal that
+;; reports the wrong REASON leaves them narrowing the wrong thing entirely. The
+;; CLI's own overflow remedy already states its measurement (round twelve); the
+;; tool's two bound refusals now do the same, and they distinguish the two
+;; cases rather than collapsing both into the more alarming one.
+;; ---------------------------------------------------------------------------
+
+(defn- long-named-workspace
+  "A workspace whose canonical path alone nearly fills the continuation
+   ceiling: three 150-character components under a temp directory.
+
+   Sol's counterexample is a real deep tree, not a synthetic string: the
+   narrowing the walk computes is `<root>/src/<dir>`, and once `<root>` is
+   long enough that rendering costs more than `max-next-call-bytes`, the
+   refusal knows a subtree it cannot carry."
+  [parent]
+  (let [segment (apply str (repeat 150 \d))]
+    (io/file parent segment segment segment)))
+
+(defn- narrowing-of
+  "The subtree the production kernel would offer for `root`, and what carrying
+   it would cost in UTF-8 bytes on the wire."
+  [root chooser]
+  (let [discover (requiring-resolve 'clj-surgeon.census-discovery/discover)
+        choose (requiring-resolve chooser)
+        discovered (discover (.toPath (io/file (.getCanonicalPath root))))
+        narrower (choose discovered)]
+    {:narrower narrower
+     :bytes (when narrower
+              (census/utf8-byte-count
+                (json/generate-string
+                  {:tool "relation_census"
+                   :workspace_root (str (.getCanonicalPath root) "/" narrower)})))}))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-027
+;; @spec MCP-OP-CENSUS-033
+(deftest a-narrowing-too-long-to-carry-says-what-it-measured
+  (let [parent (temp-dir)
+        root (long-named-workspace parent)]
+    (try
+      (spit-file! (io/file root "src/a/folds.clj") arm-source)
+      (spit-file! (io/file root "src/b/one.clj") arm-source)
+      (spit-file! (io/file root "src/b/two.clj") arm-source)
+
+      (testing "the candidate ceiling knew a narrowing and could not carry it"
+        (with-redefs [census/max-scanned-files 2]
+          (let [{:keys [narrower bytes]}
+                (narrowing-of root 'clj-surgeon.census-discovery/narrowing-subtree)
+                result (census-tool/execute-request!
+                         {:project-root (.getPath root)} {})
+                remedy (str (:remedy result))]
+            (is (some? narrower)
+                "the fixture no longer produces a narrowing to refuse")
+            (is (> bytes census/max-next-call-bytes)
+                (str "the fixture narrowing fits after all: " bytes " bytes"))
+            (is (= "too-many-candidate-files" (:error_type result)))
+            (is (not (contains? result :next_call))
+                (str "an over-long continuation was handed back: "
+                     (pr-str (:next_call result))))
+            (is (str/includes? remedy (str bytes))
+                (str "the remedy does not state the " bytes
+                     " bytes it measured: " (pr-str remedy)))
+            ;; `-byte` on purpose: `max-requested-files` happens to be 512
+            ;; too, so a bare "512" is already in the wording this witness
+            ;; exists to replace.
+            (is (str/includes? remedy (str census/max-next-call-bytes "-byte"))
+                (str "the remedy does not state the ceiling it compared "
+                     "against: " (pr-str remedy)))
+            (is (str/includes? remedy (str narrower))
+                (str "the remedy does not name the narrowing it knew about: "
+                     (pr-str remedy)))
+            (is (not (str/includes? remedy "known to fit"))
+                (str "the remedy says no subtree was known to fit, and one "
+                     "was: " (pr-str remedy))))))
+
+      (testing "the entry bound says the same true thing"
+        (with-redefs [census/max-walk-entries 4]
+          (let [{:keys [narrower bytes]}
+                (narrowing-of root
+                              'clj-surgeon.census-discovery/entry-narrowing-subtree)
+                result (census-tool/execute-request!
+                         {:project-root (.getPath root)} {})
+                remedy (str (:remedy result))]
+            (is (some? narrower)
+                "the fixture no longer produces an entry narrowing to refuse")
+            (is (> bytes census/max-next-call-bytes)
+                (str "the fixture narrowing fits after all: " bytes " bytes"))
+            (is (= "too-many-walk-entries" (:error_type result)))
+            (is (not (contains? result :next_call))
+                (str "an over-long continuation was handed back: "
+                     (pr-str (:next_call result))))
+            (is (str/includes? remedy (str bytes))
+                (str "the remedy does not state the " bytes
+                     " bytes it measured: " (pr-str remedy)))
+            ;; `-byte` on purpose: `max-requested-files` happens to be 512
+            ;; too, so a bare "512" is already in the wording this witness
+            ;; exists to replace.
+            (is (str/includes? remedy (str census/max-next-call-bytes "-byte"))
+                (str "the remedy does not state the ceiling it compared "
+                     "against: " (pr-str remedy)))
+            (is (str/includes? remedy (str narrower))
+                (str "the remedy does not name the narrowing it knew about: "
+                     (pr-str remedy)))
+            (is (not (str/includes? remedy "known to fit"))
+                (str "the remedy says no subtree was known to fit, and one "
+                     "was: " (pr-str remedy))))))
+
+      (testing "when nothing fits, the remedy still says THAT, not the other"
+        ;; The branch the over-long wording was stealing. A tree whose only
+        ;; fully-walked subtree holds no candidate source has no narrowing at
+        ;; all, and its remedy must go on saying so.
+        (let [bare (temp-dir)]
+          (try
+            (spit-file! (io/file bare "src/a/one.clj") arm-source)
+            (spit-file! (io/file bare "src/a/two.clj") arm-source)
+            (spit-file! (io/file bare "src/a/three.clj") arm-source)
+            (with-redefs [census/max-scanned-files 2]
+              (let [result (census-tool/execute-request!
+                             {:project-root (.getPath bare)} {})
+                    remedy (str (:remedy result))]
+                (is (= "too-many-candidate-files" (:error_type result)))
+                (is (not (contains? result :next_call)))
+                (is (str/includes? remedy "known to fit")
+                    (str "the no-narrowing remedy lost its own wording: "
+                         (pr-str remedy)))
+                (is (not (str/includes? remedy "ceiling a continuation must fit"))
+                    (str "a tree with no narrowing at all is being told its "
+                         "narrowing was too long: " (pr-str remedy)))))
+            (finally (delete-tree! bare)))))
+      (finally (delete-tree! parent)))))
+
 ;; @spec MCP-OP-CENSUS-027
 (deftest the-narrowing-rule-is-largest-then-deepest-then-lexicographic
   (let [choose (requiring-resolve 'clj-surgeon.census-discovery/narrowing-subtree)]
