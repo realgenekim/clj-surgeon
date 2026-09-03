@@ -23,8 +23,8 @@ already paid for:
     is not a refusal.
 
 Exit codes: 0 scored; 2 no attestation or attest_ok=false; 3 missing/empty/invalid
-rollout or watch, or zero returns (no receipt written, any stale one removed);
-4 missing watch.jsonl.
+rollout or watch, zero returns, or ANY watcher abort (no receipt written, any stale
+one removed); 4 missing watch.jsonl.
 """
 from __future__ import annotations
 
@@ -252,19 +252,34 @@ def score(arm: pathlib.Path, args) -> int:
     wreturns = [w for w in watch if w.get("kind") == "return"]
     aborts = [w for w in watch if w.get("kind") == "abort"]
     no_output = [w for w in wcalls if w.get("outcome") == "no-output"]
-    if no_output or any(a.get("error_type") == "incomplete-run" for a in aborts):
-        return abort(arm, 3, f"incomplete-run {watch_path} "
-                             f"({len(no_output)} tool call(s) whose result never "
-                             f"arrived; seq="
-                             f"{[c.get('seq') for c in no_output]})")
-    if not wreturns:
-        return abort(arm, 3, f"zero-metered-returns {watch_path} "
-                             f"(the rollout shows {raw['returns']} returns; the meter shows none)")
 
     run = {}
     run_path = arm / "run.json"
     if run_path.exists():
         run = json.loads(run_path.read_text())
+
+    if no_output or any(a.get("error_type") == "incomplete-run" for a in aborts):
+        return abort(arm, 3, f"incomplete-run {watch_path} "
+                             f"({len(no_output)} tool call(s) whose result never "
+                             f"arrived; seq="
+                             f"{[c.get('seq') for c in no_output]})")
+
+    # A WATCHER ABORT IS TERMINAL.  Sol round two, item 3: an abort was appended to
+    # `notes` and the run was scored anyway, so an idle-stop (watcher rc 5) became a
+    # receipt asserting counts nobody was still metering when the run stopped.  The
+    # meter gave up; there is no number here to print.  run.json keeps the abort as
+    # the terminal fact about this arm, and the receipt is refused -- and any stale
+    # one deleted, because a refusal that leaves the old answer standing is not one.
+    stopped = [str(a.get("error_type") or "untyped") for a in aborts]
+    if run.get("abort") and str(run["abort"]) not in stopped:
+        stopped.append(str(run["abort"]))
+    if stopped:
+        return abort(arm, 3, f"watch-abort:{','.join(stopped)} {watch_path} "
+                             f"(the watcher stopped this run; run.json carries it as "
+                             f"the terminal fact and no receipt is written)")
+    if not wreturns:
+        return abort(arm, 3, f"zero-metered-returns {watch_path} "
+                             f"(the rollout shows {raw['returns']} returns; the meter shows none)")
 
     notes: list[str] = []
 
@@ -438,8 +453,6 @@ def score(arm: pathlib.Path, args) -> int:
         gate = {"name": UNV, "green": UNV, "detail": UNV}
         notes.append("gate-unverified: no gate.json in the arm directory")
 
-    if aborts:
-        notes.extend(f"watch-abort:{a.get('error_type')}" for a in aborts)
     if attest.get("server_sha") == UNV or attest.get("port_pid") == UNV:
         if attest.get("arm") != "N":
             notes.append("receipt-unverified: attestation carries unverified server identity")
