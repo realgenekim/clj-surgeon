@@ -368,10 +368,16 @@
    ;; process happened to be standing in.
    {:field :dir
     :violation :type
+    ;; NON-EMPTY, not non-blank. Sol's round-twelve item 1: a path is the
+    ;; bytes the caller gave, and `"   "` is a legal — if peculiar — relative
+    ;; path that resolves against the cwd like any other. The EMPTY string is
+    ;; the one value that names nothing: POSIX gives the empty pathname no
+    ;; meaning and every syscall answers it with ENOENT. Refusing whitespace
+    ;; here would be a normalisation wearing a refusal's clothes.
     :predicate (fn [req]
                  (let [{:keys [present? value]} (:dir req)]
                    (or (not present?)
-                       (and (string? value) (not (str/blank? value))))))
+                       (and (string? value) (not= "" value)))))
     :mcp {:inexpressible
           (str "the tool has no :dir; its anchor is workspace_root, a ROUTING "
                "field this pass deliberately does not validate, because "
@@ -380,7 +386,7 @@
                "and refuses it as invalid-workspace-root")}
     :cli :dir-not-a-string
     :cli-message (fn [req]
-                   (str ":dir must be a non-blank path (got "
+                   (str ":dir must be a non-empty path (got "
                         (pr-str (:value (:dir req))) ")"))
     :cli-data (fn [req] {:value (:value (:dir req))})
     ;; No continuation exists for this row, and that is the honest answer.
@@ -688,17 +694,40 @@
    canonicalising is a `realpath`, and this pass runs before any filesystem
    call. So a relative `:dir` becomes its resolution against the cwd it was
    resolved in, and the refusal SAYS so in `:resolved-against` rather than
-   leaving the caller to guess which cwd a bare path meant."
+   leaving the caller to guess which cwd a bare path meant.
+
+   A PATH IS THE BYTES THE CALLER GAVE, and this function edits none of them.
+   Sol's round-twelve item 1, blocking: it ran the caller's string through
+   `str/trim` first, so `:dir \"/root \"` — a legal POSIX directory, since a
+   filename may begin and end with spaces — anchored on `/root`, a DIFFERENT
+   directory that existed and held two arm-bearing sources against the named
+   root's one. The continuation carried the trimmed sibling, replayed without
+   refusing, and reported success about a tree the caller never named. Note
+   which half was already right: `census-root` absolutizes and canonicalises,
+   both byte-preserving, so the census READ the named root while the anchor
+   NAMED its sibling — one entrance disagreeing with itself about which
+   directory the request meant.
+
+   Absolutizing is the only transformation left, and it is the one the caller
+   asked for: prefixing a relative path with the cwd adds bytes and removes
+   none. Every remaining branch is a whole-string EQUALITY, not a trim: `.`
+   and `\"\"` mean the cwd, `./x` means `cwd/x`, and anything else is
+   appended verbatim."
   [{:keys [dir file]}]
   (let [cwd (System/getProperty "user.dir")
-        named-file? (and (string? file) (not (str/blank? file)))
+        ;; The empty string is the one path that names nothing — POSIX gives
+        ;; the empty pathname no meaning and every syscall answers it with
+        ;; ENOENT — so it is the only value that counts as "no :file was
+        ;; named". `:file \"   \"` names a (peculiar) file and anchors on it;
+        ;; demoting it to the directory would be the same silent retarget one
+        ;; argument over.
+        named-file? (and (string? file) (not= "" file))
         given (str (if named-file? file (if (some? dir) dir ".")))
-        trimmed (str/trim given)
         absolute (cond
-                   (str/starts-with? trimmed "/") trimmed
-                   (or (= "." trimmed) (str/blank? trimmed)) cwd
-                   (str/starts-with? trimmed "./") (str cwd "/" (subs trimmed 2))
-                   :else (str cwd "/" trimmed))]
+                   (str/starts-with? given "/") given
+                   (or (= "." given) (= "" given)) cwd
+                   (str/starts-with? given "./") (str cwd "/" (subs given 2))
+                   :else (str cwd "/" given))]
     (cond-> {:kind (if named-file? :file :dir)
              :given given
              :absolute absolute}
