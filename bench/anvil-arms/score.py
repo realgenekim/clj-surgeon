@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""score.py — A.7 + A.10 of docs/observations/2026-09-04-e3-e6-prestaged.md.
+
+Reads one arm directory's `attest.json`, `rollout.jsonl`, `watch.jsonl`, `run.json`,
+`diff.patch` and `gate.json`, and writes `receipt.json` + `receipt.md`.
+
+Two rules govern every line of this file, and they are the scars this program has
+already paid for:
+
+  * COMPUTED COUNTS ONLY.  Nothing prints a verdict word over a missing number.  A
+    missing or empty rollout is exit 3 with NO receipt written -- not a zero, not a
+    "pass", not an empty table row.
+  * TWO WITNESSES, AND THE DISAGREEMENT IS THE SIGNAL.  Returns and tool calls are
+    re-derived independently from the raw rollout AND from the watcher, and any
+    disagreement is recorded in `meter.sources` rather than silently resolved.
+
+Exit codes: 0 scored; 2 no attestation; 3 missing/empty rollout or zero returns
+(no receipt written); 4 missing watch.jsonl.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import re
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from watch import (  # noqa: E402  (same-directory module, deliberate)
+    APPLY_PATCH_CMD_RE, COMMITTING_VERBS, _shell_script,
+    is_test_command, normalize, patch_targets,
+)
+
+READ_VERBS = {"inspect_clojure"}
+WRITE_MARKERS = ("apply_patch", *sorted(COMMITTING_VERBS))
+CLJ_FILE_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_/.\-]*\.cljc?\b")
+TOOLCALLS_RE = re.compile(r"^\s*TOOLCALLS:\s*(\d+)\s*$", re.M)
+LS_TREE_RE = re.compile(r'"mode"\s*:\s*"ls-tree"')
+UNV = "unverified"
+
+
+def read_jsonl(path: pathlib.Path) -> list[dict]:
+    out = []
+    for line in path.read_text(errors="replace").split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            out.append(obj)
+    return out
+
+
+def rollout_meters(rollout: list[dict]) -> dict:
+    """Predicates 1-3, re-derived from the raw rollout, independent of the watcher."""
+    returns = calls = test_calls = 0
+    for obj in rollout:
+        for event in normalize(obj):
+            if event["kind"] == "return":
+                returns += 1
+            elif event["kind"] == "call":
+                calls += 1
+                script = _shell_script(event.get("args") or "")
+                if script and is_test_command(script)[0]:
+                    test_calls += 1
+    return {"returns": returns, "total_actions": calls, "test_actions": test_calls,
+            "non_test_actions": calls - test_calls}
+
+
+def score(arm: pathlib.Path, args) -> int:
+    attest_path = arm / "attest.json"
+    if not attest_path.exists():
+        print(f"SCORE-ABORT no-attestation {attest_path}", file=sys.stderr)
+        return 2
+    attest = json.loads(attest_path.read_text())
+
+    rollout_path = arm / "rollout.jsonl"
+    if not rollout_path.exists():
+        print(f"SCORE-ABORT missing-rollout {rollout_path} "
+              f"(no receipt written)", file=sys.stderr)
+        return 3
+    if rollout_path.stat().st_size == 0:
+        print(f"SCORE-ABORT empty-rollout {rollout_path} "
+              f"(no receipt written)", file=sys.stderr)
+        return 3
+    rollout = read_jsonl(rollout_path)
+    if not rollout:
+        print(f"SCORE-ABORT unparseable-rollout {rollout_path} "
+              f"(no receipt written)", file=sys.stderr)
+        return 3
+
+    raw = rollout_meters(rollout)
+    if raw["returns"] == 0:
+        print(f"SCORE-ABORT zero-returns {rollout_path} "
+              f"(no receipt written)", file=sys.stderr)
+        return 3
+
+    watch_path = arm / "watch.jsonl"
+    if not watch_path.exists():
+        print(f"SCORE-ABORT missing-watch {watch_path}", file=sys.stderr)
+        return 4
+    watch = read_jsonl(watch_path)
+    wcalls = [w for w in watch if w.get("kind") == "call"]
+    wreturns = [w for w in watch if w.get("kind") == "return"]
+    aborts = [w for w in watch if w.get("kind") == "abort"]
+
+    run = {}
+    run_path = arm / "run.json"
+    if run_path.exists():
+        run = json.loads(run_path.read_text())
+
+    notes: list[str] = []
+
+    # ---- meters ------------------------------------------------------------
+    metered = {
+        "returns": len(wreturns),
+        "total_actions": len(wcalls),
+        "test_actions": sum(1 for c in wcalls if c.get("test_call")),
+    }
+    metered["non_test_actions"] = metered["total_actions"] - metered["test_actions"]
+    for key in ("returns", "total_actions", "test_actions", "non_test_actions"):
+        if raw[key] != metered[key]:
+            notes.append(f"meter-disagreement:{key} rollout={raw[key]} watch={metered[key]}")
+
+    elapsed = [c.get("elapsed_ms") for c in wcalls if isinstance(c.get("elapsed_ms"), int)]
+    test_elapsed = [c.get("elapsed_ms") for c in wcalls
+                    if c.get("test_call") and isinstance(c.get("elapsed_ms"), int)]
+
+    self_reported = None
+    report_text = ""
+    for candidate in ("driver-report.md", "driver.log"):
+        path = arm / candidate
+        if path.exists():
+            report_text += path.read_text(errors="replace")
+    match = None
+    for match in TOOLCALLS_RE.finditer(report_text):
+        pass
+    if match:
+        self_reported = int(match.group(1))
+
+    wall_s = run.get("wall_s")
+    if wall_s is None:
+        notes.append("wall-unverified: no run.json completion stamp")
+
+    meter = {
+        "wall_s": wall_s if wall_s is not None else UNV,
+        "returns": metered["returns"],
+        "total_actions": metered["total_actions"],
+        "test_actions": metered["test_actions"],
+        "non_test_actions": metered["non_test_actions"],
+        "in_run_test_s": round(sum(test_elapsed) / 1000.0, 1) if test_elapsed else 0.0,
+        "tool_exec_s": round(sum(elapsed) / 1000.0, 1) if elapsed else 0.0,
+        "self_reported_toolcalls": self_reported if self_reported is not None else UNV,
+        "sources": {"rollout": raw, "watch": metered,
+                    "agree": raw == {k: metered[k] for k in raw}},
+    }
+    if wall_s and meter["tool_exec_s"]:
+        meter["tool_exec_pct_of_wall"] = round(100.0 * meter["tool_exec_s"] / wall_s, 1)
+
+    # ---- verbs, writes, fallback ------------------------------------------
+    verbs: dict[str, int] = {}
+    for call in wcalls:
+        verbs[call.get("tool") or "unknown"] = verbs.get(call.get("tool") or "unknown", 0) + 1
+
+    via_verb = [c for c in wcalls if c.get("verb")]
+    via_verb_committed = [c for c in via_verb if c.get("outcome") == "ok"]
+
+    # Predicate 6.  The watcher already extracted each apply_patch payload's targets
+    # from the FULL arguments; score.py only holds a truncated copy, so it trusts the
+    # watcher's fields when present and re-derives from the truncated text only for a
+    # watch.jsonl written by an older watcher.
+    apply_patch_calls = 0
+    apply_patch_clj = 0
+    apply_patch_clj_files: set[str] = set()
+    for call in wcalls:
+        text = call.get("args") or ""
+        head = call.get("cmd_head") or ""
+        tool = (call.get("tool") or "").split("__")[-1]
+        if "apply_patch" in call:
+            looks_like_patch = bool(call["apply_patch"])
+            targets = call.get("patch_clj_files") or []
+        else:
+            looks_like_patch = (
+                tool == "apply_patch"
+                or "*** Begin Patch" in text
+                or APPLY_PATCH_CMD_RE.search(head) is not None
+            )
+            targets = [f for f in patch_targets(_shell_script(text) or "", text)
+                       if f.endswith((".clj", ".cljc"))]
+        if not looks_like_patch:
+            continue
+        apply_patch_calls += 1
+        if targets:
+            apply_patch_clj += 1
+            apply_patch_clj_files.update(targets)
+
+    diff_path = arm / "diff.patch"
+    if diff_path.exists():
+        diff_text = diff_path.read_text(errors="replace")
+        insertions = sum(1 for ln in diff_text.split("\n")
+                         if ln.startswith("+") and not ln.startswith("+++"))
+        deletions = sum(1 for ln in diff_text.split("\n")
+                        if ln.startswith("-") and not ln.startswith("---"))
+        diff_clj = sorted({f for f in patch_targets(diff_text)
+                           if f.endswith((".clj", ".cljc"))})
+        churn = {"insertions": insertions, "deletions": deletions,
+                 "status": "computed", "clj_files_touched": len(diff_clj)}
+    else:
+        churn = {"insertions": UNV, "deletions": UNV, "status": UNV,
+                 "clj_files_touched": UNV}
+        notes.append("churn-unverified: diff.patch missing (see DIFF-FAILED in driver.log)")
+
+    band = None
+    within = None
+    if args.churn_band:
+        try:
+            lo_i, hi_i, lo_d, hi_d = [int(x) for x in args.churn_band.split(",")]
+            band = [lo_i, hi_i, lo_d, hi_d]
+            if churn["status"] == "computed":
+                within = (lo_i <= churn["insertions"] <= hi_i
+                          and lo_d <= churn["deletions"] <= hi_d)
+        except ValueError:
+            notes.append(f"churn-band-unparseable:{args.churn_band}")
+    churn["band"] = band
+    churn["within_band"] = within if within is not None else UNV
+
+    # ---- refusal ledger (A.6) ---------------------------------------------
+    refusals = []
+    errored = [c for c in wcalls if c.get("outcome") not in (None, "ok")]
+    for i, call in enumerate(errored, start=1):
+        seq = call.get("seq")
+        later_ok_same_tool = any(
+            c.get("tool") == call.get("tool") and c.get("outcome") == "ok"
+            and (c.get("seq") or 0) > (seq or 0) for c in wcalls)
+        next_write = next(
+            (c for c in wcalls
+             if (c.get("seq") or 0) > (seq or 0) and c.get("verb")
+             and c.get("outcome") == "ok"), None)
+        refusals.append({
+            "n": i,
+            "seq": seq,
+            "t_offset_s": round((call.get("ms_since_start") or 0) / 1000.0, 1),
+            "verb": call.get("tool"),
+            "error_type": call.get("error_type") or UNV,
+            "class": UNV,                       # a human judgement (A.6), not computed
+            "next_call_present": "next_call" in (call.get("output_head") or ""),
+            "next_call_sent_verbatim": UNV,     # a human judgement (A.6)
+            "returns_to_recover": ((next_write.get("n") or 0) - (call.get("n") or 0))
+                                  if next_write else UNV,
+            "agent_visible": UNV,               # a human judgement (A.6)
+            "abandoned_route": not later_ok_same_tool,
+            "outcome": "recovered" if later_ok_same_tool else "abandoned",
+        })
+
+    # ---- E6 observables ----------------------------------------------------
+    ls_tree = [c for c in wcalls
+               if (c.get("tool") or "").split("__")[-1] in READ_VERBS
+               and LS_TREE_RE.search(c.get("args") or "")]
+    adoption = {
+        "ls_tree_calls": len(ls_tree),
+        "first_ls_tree_return": ls_tree[0].get("n") if ls_tree else None,
+        "early": bool(ls_tree) and (ls_tree[0].get("n") or 99) <= 3,
+    }
+
+    files_before_write: set[str] = set()
+    for call in sorted(wcalls, key=lambda c: c.get("seq") or 0):
+        blob = (call.get("args") or "") + " " + (call.get("cmd_head") or "")
+        if call.get("verb") or any(m in blob for m in WRITE_MARKERS):
+            break
+        files_before_write.update(CLJ_FILE_RE.findall(blob))
+    reads = {"clj_files_before_first_write": len(files_before_write),
+             "files": sorted(files_before_write)[:50]}
+
+    # ---- gate --------------------------------------------------------------
+    gate_path = arm / "gate.json"
+    if gate_path.exists():
+        gate = json.loads(gate_path.read_text())
+        for key in ("name", "green", "detail"):
+            gate.setdefault(key, UNV)
+    else:
+        gate = {"name": UNV, "green": UNV, "detail": UNV}
+        notes.append("gate-unverified: no gate.json in the arm directory")
+
+    if aborts:
+        notes.extend(f"watch-abort:{a.get('error_type')}" for a in aborts)
+    if attest.get("server_sha") == UNV or attest.get("port_pid") == UNV:
+        if attest.get("arm") != "N":
+            notes.append("receipt-unverified: attestation carries unverified server identity")
+    if run.get("driver_rc") not in (0, None):
+        notes.append(f"driver-rc:{run.get('driver_rc')}")
+
+    receipt = {
+        "exp": attest.get("exp"), "rung": attest.get("rung"),
+        "arm": attest.get("arm"), "slot": attest.get("slot"),
+        "driver": attest.get("driver"), "model": attest.get("model"),
+        "attest": {
+            "start_utc": attest.get("start_utc"),
+            "end_utc": run.get("end_utc", UNV),
+            "worktree": attest.get("worktree"),
+            "worktree_head": attest.get("worktree_head"),
+            "base": attest.get("base"),
+            "prompt_path": attest.get("prompt_path"),
+            "prompt_sha256": attest.get("prompt_sha256"),
+            "runner_sha256": attest.get("runner_sha256"),
+            "watch_sha256": attest.get("watch_sha256"),
+            "score_sha256": attest.get("score_sha256"),
+            "mcp_url": attest.get("mcp_url"),
+            "mcp_port": attest.get("mcp_port"),
+            "expected_server_sha": attest.get("expected_server_sha"),
+            "server_sha": attest.get("server_sha"),
+            "server_cwd": attest.get("server_cwd"),
+            "server_project_head": attest.get("server_project_head"),
+            "healthz": attest.get("healthz"),
+            "port_pid": attest.get("port_pid"),
+            "mcp_absent_proof": attest.get("mcp_absent_proof"),
+            "attest_ok": attest.get("attest_ok"),
+        },
+        "meter": meter,
+        "verbs": verbs,
+        "writes": {
+            "via_verb": len(via_verb),
+            "via_verb_committed": len(via_verb_committed),
+            "via_verb_by_name": {
+                v: sum(1 for c in via_verb_committed if c.get("verb") == v)
+                for v in sorted({c.get("verb") for c in via_verb_committed})
+            },
+            "native_apply_patch_calls": apply_patch_calls,
+            "native_apply_patch_clj": apply_patch_clj,
+            "native_apply_patch_clj_files": sorted(apply_patch_clj_files),
+        },
+        "churn": churn,
+        "refusals": refusals,
+        "refusal_rate": (round(len(refusals) / metered["total_actions"], 3)
+                         if metered["total_actions"] else UNV),
+        "adoption": adoption,
+        "reads": reads,
+        "gate": gate,
+        "notes": notes,
+    }
+
+    (arm / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    (arm / "receipt.md").write_text(receipt_md(receipt))
+    print(json.dumps({
+        "arm": arm.name,
+        "returns": meter["returns"],
+        "total_actions": meter["total_actions"],
+        "non_test_actions": meter["non_test_actions"],
+        "wall_s": meter["wall_s"],
+        "via_verb": receipt["writes"]["via_verb"],
+        "native_apply_patch_clj": apply_patch_clj,
+        "churn": [churn["insertions"], churn["deletions"]],
+        "refusals": len(refusals),
+        "gate_green": gate["green"],
+        "notes": len(notes),
+    }))
+    return 0
+
+
+def receipt_md(r: dict) -> str:
+    m, w, c = r["meter"], r["writes"], r["churn"]
+    head = ("| exp | rung | arm | slot | wall s | returns | non-test actions | "
+            "write calls via verb | native .clj patches | churn +/- | refusals | gate |\n"
+            "|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+    row = (f"| {r['exp']} | {r['rung']} | {r['arm']} | {r['slot']} | {m['wall_s']} | "
+           f"{m['returns']} | {m['non_test_actions']} | {w['via_verb']} | "
+           f"{w['native_apply_patch_clj']} | +{c['insertions']}/-{c['deletions']} | "
+           f"{len(r['refusals'])} | {r['gate']['green']} |\n")
+    tail = f"\nattest_ok={r['attest']['attest_ok']} server_sha={r['attest']['server_sha']} " \
+           f"prompt_sha256={r['attest']['prompt_sha256']}\n"
+    if r["notes"]:
+        tail += "\nnotes:\n" + "".join(f"- {n}\n" for n in r["notes"])
+    return head + row + tail
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("arm")
+    ap.add_argument("--churn-band", default=None,
+                    help="lo_ins,hi_ins,lo_del,hi_del, e.g. 47,71,27,41")
+    args = ap.parse_args()
+    return score(pathlib.Path(args.arm).resolve(), args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
