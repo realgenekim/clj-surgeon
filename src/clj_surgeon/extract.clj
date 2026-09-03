@@ -550,6 +550,20 @@
   {:command (compile-argv-for namespaces aliases)
    :command_shell (compile-command-shell namespaces aliases)})
 
+;; @spec MCP-OP-EXTRACT-026
+(def ^:private compile-trust-fields
+  "What the compile check costs a reader who did not choose it.
+
+  A receipt that reports a compile without saying whose code ran lets an agent
+  treat `:ok true` as free. It is not free: requiring a namespace runs the
+  workspace's top-level forms. The flag is published on every surface -- dry
+  run, apply, and the not-run branch -- so the boundary is visible before the
+  subprocess starts, not only in a docstring nobody reads at a receipt."
+  {:runs-workspace-code true
+   :opt-out (str "pass :compile-check false for a repository you did not "
+                 "author; the extraction still applies and the receipt reports "
+                 ":status :not-run instead of claiming a verification")})
+
 ;; @spec MCP-OP-EXTRACT-019
 (defn- project-build-file
   "The nearest build file at a project root, or nil."
@@ -565,11 +579,24 @@
   Compiling is the only way this transaction's correctness gets checked, so the
   apply performs it rather than leaving a reader to discover that nothing was
   verified. It is a subprocess on purpose: loading the rewritten namespaces into
-  the running process would mutate the very namespaces a server is serving."
+  the running process would mutate the very namespaces a server is serving.
+
+  TRUST BOUNDARY. `(require 'the.ns)` EXECUTES this workspace's code -- every
+  top-level form in every touched namespace and everything they require, with
+  the chosen alias's `:extra-paths` first on the classpath, in a subprocess with
+  this process's user and filesystem. That is a deliberate default, kept because
+  an unchecked apply is a receipt that proves nothing, and it is the right
+  default for a repository the operator wrote. For a repository the operator did
+  NOT write, pass `:compile-check false`: the extraction completes and the
+  receipt reports `:status :not-run` with `:runs-workspace-code false` rather
+  than claiming a verification it did not perform. The subprocess is bounded by
+  `timeout-ms` and an output limit; it is not a sandbox."
   [{:keys [namespaces root timeout-ms aliases touched-files]
     :or {timeout-ms 30000}}]
   (let [aliases (normalize-aliases aliases)
         base (cond-> (merge {:namespaces (vec namespaces)}
+                            ;; @spec MCP-OP-EXTRACT-026
+                            compile-trust-fields
                             (compile-command-fields namespaces aliases))
                (seq aliases) (assoc :aliases aliases))
         run! (fn [argv ms]
@@ -714,6 +741,8 @@
                                  :status :not-run
                                  :will-check (boolean (:_will-check plan))
                                  :namespaces namespaces}
+                                ;; @spec MCP-OP-EXTRACT-026
+                                compile-trust-fields
                                 (compile-command-fields
                                   namespaces (:_compile-aliases plan)))
                         (seq (:_compile-aliases plan))
@@ -1436,8 +1465,10 @@
                     ;; auto-reverted -- the receipt names how to revert.
                     compile-result
                     (if (false? (:compile-check opts))
+                      ;; @spec MCP-OP-EXTRACT-026
                       {:checked false :status :not-run
                        :namespaces (:_touched-namespaces p)
+                       :runs-workspace-code false
                        :reason :disabled-by-caller}
                       (compile-check!
                         {:namespaces (:_touched-namespaces p)

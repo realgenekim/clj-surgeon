@@ -1690,3 +1690,33 @@
       (is (= token out)
           (str "quoting " (pr-str token) " as " (pr-str quoted)
                " produced " (pr-str out))))))
+
+;; @spec MCP-OP-EXTRACT-026
+(deftest the-compile-check-states-that-it-runs-workspace-code
+  (let [root (create-caller-project!)
+        source (io/file root "src" "app" "core.clj")
+        target (io/file root "src" "app" "moved.clj")]
+    (try
+      (testing "the dry run says the check WILL run this workspace's code"
+        (let [preview (extract/plan {:file (.getPath source)
+                                     :forms '[moved-one moved-two]
+                                     :to (.getPath target)
+                                     :alias "moved"})]
+          (is (true? (get-in preview [:compile :runs-workspace-code]))
+              (str "the trust boundary must be in the receipt, not only the "
+                   "docstring: " (pr-str (:compile preview))))
+          (is (str/includes? (str (get-in preview [:compile :opt-out]))
+                             "compile-check")
+              "and the receipt names the opt-out for a repo the operator did not author")))
+
+      (testing "the opt-out turns it off and the receipt says so"
+        (let [result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath target)
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (true? (:applied result)))
+          (is (false? (get-in result [:compile :runs-workspace-code]))
+              "nothing from the workspace was executed")
+          (is (= :disabled-by-caller (get-in result [:compile :reason])))))
+      (finally (delete-recursive! root)))))
