@@ -233,8 +233,9 @@ receipt refcount, and whether the row may be evicted.
 - `evict!` is the quota-driven release. It refuses a `:restore-failed` journal
   AND one a receipt still references; `release-receipt!` drops that reference.
 - `retained-transactions` is what a quota sweep reads. Its rows are `:kind
-  :transaction` for journals and `:kind :broken-lock` for the `LOCK.broken.*`
-  tombstones beside them; a tombstone row carries its bytes, its age and the
+  :transaction` for journals, `:kind :broken-lock` for the `LOCK.broken.*`
+  tombstones beside them and `:kind :orphan-sidecar` for a `LOCK.broken-at.*`
+  whose tombstone is gone; a tombstone row carries its bytes, its age and the
   verb that retires it (`:txn/recover`), because `evict!` operates on journals
   only. A tombstone whose break never COMPLETED — what a crash between the
   break's link and its unlink leaves — is `:kind :interrupted-break :status
@@ -343,8 +344,10 @@ that sentence was false: two breakers sharing one txid destroyed the judged clai
 Two residuals are stated rather than claimed away. Unlinking the LOCK is a stat
 of its `(device, inode)` followed by `unlink(2)`, with no I/O between, because
 POSIX has no unlink-if-inode; a crash inside that window leaves one inode under
-two names, which `recover!` resolves as an `:interrupted-break` and the sweep
-types apart from a break that happened. And on a filesystem with no `link(2)` at
+two names, which `recover!` resolves as one of its `:interrupted-breaks` and
+the sweep types apart from a break that happened — by the tombstone's own
+`:phase :linked` marker, which outlives that inode, and by the inode itself for
+a crash that lands before the marker is written. And on a filesystem with no `link(2)` at
 all, `break-by-move!` is the old rename-and-restore, check-then-act in its name
 guard, with the whole displacement machinery behind it: the displaced claim stays
 in `LOCK.broken.<txid>`, `{:restored false :cause :holder-changed :restore-cause

@@ -1048,8 +1048,10 @@
    claim that replaces the LOCK between those two syscalls is removed. That
    window contains no I/O and is entered only after the linked claim has been
    proved to be the judged one. A crash inside it leaves a tombstone that is a
-   second link to the LIVE LOCK, which `recover!` resolves as an
-   `:interrupted-break` rather than reporting as a break that happened."
+   second link to the LIVE LOCK, which `recover!` resolves - as one of its
+   `:interrupted-breaks` - rather than reporting as a break that happened. The
+   tombstone's own `:phase :linked` marker says so too, and outlives that
+   inode."
   [transactions-dir ^File lock ^File tomb claim opts]
   (try
     (Files/createLink (.toPath tomb) (.toPath lock))
