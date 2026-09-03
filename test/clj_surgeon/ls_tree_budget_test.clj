@@ -507,3 +507,51 @@
           (is (= 1 @discoveries)
               "a fresh scan does discover — the counter is wired in"))
         (finally (alter-var-root v (constantly real)))))))
+
+;; ============================================================
+;; Malformed NUMBERS refuse; they never escape as exceptions
+;;
+;; Sol finding 3: ordinary malformed cursors and ceilings were typed, but a
+;; well-FORMED forty-digit integer was not. `Long/parseLong` threw
+;; `NumberFormatException` out of the operation, so the caller got a stack
+;; trace where the contract promises a receipt. An untyped throw is not a
+;; smaller version of a refusal — it carries no limit, no observed value, no
+;; remedy, and no `:source-unchanged`, which is the field that tells a caller
+;; its repository was not touched.
+;; ============================================================
+
+(def ^:private forty-digits "1234567890123456789012345678901234567890")
+
+;; @spec MCP-OP-MEM-003
+(deftest an-unrepresentable-max-results-is-typed-not-thrown
+  (with-project [dir 3 "ls-tree-budget-bignum-ceiling"]
+    (testing "as a string"
+      (is (= :invalid (budget/parse-ceiling forty-digits)))
+      (let [r (core/run-ls-tree {:dir dir :format :edn :max-results forty-digits})]
+        (is (= :invalid-result-ceiling (:error-type r)))
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r)))
+        (is (= budget/max-result-records (get-in r [:limit :server-max])))))
+    (testing "as an integer too large to be a record count"
+      (is (= :invalid (budget/parse-ceiling (* 1000000000000N 1000000000000N))))
+      (let [r (core/run-ls-tree {:dir dir :format :edn
+                                 :max-results (* 1000000000000N 1000000000000N)})]
+        (is (= :invalid-result-ceiling (:error-type r)))))
+    (testing "a ceiling that IS representable still resolves"
+      (is (= 2 (budget/resolve-ceiling "2"))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest an-unrepresentable-cursor-offset-is-typed-not-thrown
+  (with-project [dir 3 "ls-tree-budget-bignum-offset"]
+    (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 2})
+          cursor (get-in (receipt page-1) [:next_call :cursor])
+          huge (edit-offset cursor (apply str (repeat 40 "9")))]
+      (is (nil? (budget/parse-cursor huge))
+          "a forty-digit offset is not a cursor this server could have minted")
+      (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 2
+                                 :cursor huge})]
+        (is (= :invalid-result-cursor (:error-type r)))
+        (is (false? (:complete r)))
+        (is (true? (:source-unchanged r))))
+      (testing "the ordinary offset in the same token still parses"
+        (is (= 2 (:offset (budget/parse-cursor cursor))))))))
