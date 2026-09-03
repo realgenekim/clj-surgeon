@@ -393,9 +393,96 @@
    :holder-txid (:txid holder)
    :broken-at (str (java.time.Instant/now))})
 
+(defn- lock-file-key
+  "The LOCK's filesystem identity, or nil when it is not there."
+  [^File lock]
+  (try
+    (let [attrs (Files/readAttributes
+                  (.toPath lock)
+                  BasicFileAttributes
+                  ^"[Ljava.nio.file.LinkOption;"
+                  (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))]
+      (str (.fileKey attrs)))
+    (catch Exception _ nil)))
+
+(defn- read-lock-claim
+  "The LOCK's holder together with the IDENTITY of the claim that was read.
+
+   A holder value alone cannot be broken safely: between reading it and acting
+   on it the file can be replaced by a live holder's own claim, and then a
+   break removes something the breaker never judged. The content and the
+   (device, inode) pair are what make the judgement re-checkable at the moment
+   it is acted on."
+  [^File lock]
+  (let [content (try (slurp lock) (catch Exception _ nil))]
+    {:holder (if content
+               (try (read-string content) (catch Exception _ {}))
+               {})
+     :content content
+     :content-sha256 (when content (sha256-string content))
+     :file-key (lock-file-key lock)}))
+
 (defn- release-lock!
-  [transactions-dir]
-  (Files/deleteIfExists (.toPath (lock-file transactions-dir))))
+  "Unlink the LOCK, but only when it still names this transaction.
+
+   A bare `deleteIfExists` deletes whoever's claim it finds. That is how one
+   transaction's ordinary `finish!` removes a DIFFERENT live transaction's
+   lock, which turns a lost race into a shared lock nobody notices."
+  ([transactions-dir] (Files/deleteIfExists (.toPath (lock-file transactions-dir))))
+  ([transactions-dir txid]
+   (let [^File lock (lock-file transactions-dir)]
+     (if (or (nil? txid)
+             (= txid (:txid (read-holder lock))))
+       (Files/deleteIfExists (.toPath lock))
+       false))))
+
+(defn- break-lock!
+  "Take EXACTLY the stale claim that was read out of the way, or nothing.
+
+   Breaking used to be a read followed by an unconditional delete, and the gap
+   between the two is real: a second transaction can break the same stale claim
+   and acquire inside it, after which the first breaker deletes a LIVE holder's
+   brand new LOCK and acquires as well. Two live transactions then hold the
+   project lock and the first to finish unlinks the other's claim.
+
+   The break is now a rename of the LOCK to a name only this breaker uses,
+   followed by a recheck of what was actually moved: the content and the
+   (device, inode) pair must still be the claim that was judged. If they are
+   not, the moved file is put straight back - `Files/move` with no
+   REPLACE_EXISTING refuses if a LOCK has appeared meanwhile - and the break
+   reports that it broke nothing. The renamed claim stays on disk as
+   `LOCK.broken.<txid>`: a receipt line saying a lock was broken is worth more
+   beside the claim it broke.
+
+   The residual is two adjacent renames with no I/O between them, in place of
+   an unbounded read-judge-delete window; a third acquirer that lands in that
+   gap is refused by the restore rather than silently joined."
+  [transactions-dir claim txid]
+  (let [^File lock (lock-file transactions-dir)
+        ^File tomb (io/file transactions-dir (str "LOCK.broken." txid))]
+    (try
+      (Files/move (.toPath lock) (.toPath tomb)
+                  ^"[Ljava.nio.file.CopyOption;"
+                  (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
+                                          StandardCopyOption/REPLACE_EXISTING]))
+      (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
+        (if (and (some? (:content claim))
+                 (= (:content claim) moved-content)
+                 (= (:file-key claim) (lock-file-key tomb)))
+          {:broken true
+           :tombstone (.getName tomb)
+           :content-sha256 (:content-sha256 claim)}
+          ;; somebody else's claim: put it back untouched and break nothing
+          {:broken false
+           :cause :holder-changed
+           :restored (try (Files/move (.toPath tomb) (.toPath lock)
+                                      (make-array CopyOption 0))
+                          true
+                          (catch Exception _ false))}))
+      (catch java.nio.file.NoSuchFileException _
+        {:broken false :cause :lock-vanished})
+      (catch Exception cause
+        {:broken false :cause :break-failed :message (.getMessage cause)}))))
 
 (defn- write-lock!
   "Create the LOCK ALREADY populated, or fail because one exists.
@@ -431,16 +518,22 @@
    did not clear it. The claim now records pid, start ticks and boot id, and a
    lock that fails all three is broken exactly ONCE with a typed line. A LIVE
    holder's lock is never broken, however old it is."
-  [transactions-dir txid]
+  [transactions-dir txid opts]
   (let [^File lock (lock-file transactions-dir)]
     (loop [attempt 0 broken nil]
       (if (try-write-lock! lock txid)
         (if broken {:ok true :lock-broken broken} {:ok true})
-        (let [holder (read-holder lock)
+        (let [claim (read-lock-claim lock)
+              holder (:holder claim)
               cause (stale-holder holder)]
           (if (and (contains? breakable-causes cause) (zero? attempt))
-            (do (release-lock! transactions-dir)
-                (recur (inc attempt) (lock-broken-line holder cause)))
+            (do (when-let [hook (:before-break opts)] (hook claim))
+                (let [outcome (break-lock! transactions-dir claim txid)]
+                  (recur (inc attempt)
+                         (if (:broken outcome)
+                           (merge (lock-broken-line holder cause)
+                                  (select-keys outcome [:tombstone :content-sha256]))
+                           broken))))
             (refusal :txn-lock-held
                        (str "Another transaction holds the project lock: " (:txid holder))
                      {:holder-txid (:txid holder)
@@ -482,7 +575,12 @@
 
    Returns the transaction value, or a typed refusal. Nothing about the
    repository is read here: the read set arrives one entry at a time through
-   `record-read!` and goes straight to the sorted manifest on disk."
+   `record-read!` and goes straight to the sorted manifest on disk.
+
+   `:before-break` is an injection point, the same kind `commit!` offers: it is
+   called with the claim a stale-lock break has judged, immediately before the
+   break acts on it, so a witness can put a live holder's claim in the way."
+  ;; `:before-break` is read straight from `opts` by `acquire-lock!`
   [workspace-root {:keys [state-home txid scope-walk] :as opts}]
   (let [resolved (workspace/canonical-root workspace-root)]
     (if-not (:ok resolved)
@@ -491,7 +589,7 @@
             transactions (workspace/transactions-dir root state-home)
             _ (.mkdirs (io/file transactions))
             txid (or txid (new-txid))
-            lock (acquire-lock! transactions txid)]
+            lock (acquire-lock! transactions txid opts)]
         (if-not (:ok lock)
           lock
           (let [dir (io/file transactions txid)
@@ -1048,7 +1146,7 @@
                                :restore-failed failed?})
      (when-let [^FileOutputStream stream (:journal-stream state)]
        (try (.close stream) (catch Exception _ nil)))
-     (release-lock! (:transactions-dir txn))
+     (release-lock! (:transactions-dir txn) (:txid txn))
      (if retain?
        (do (when (= :committed status) (reclaim-staging! txn))
            (write-lease! txn status))
@@ -1148,7 +1246,8 @@
   (try
     (finish! txn :rolled-back (rollback-written! txn))
     (catch Throwable _
-      (try (release-lock! (:transactions-dir txn)) (catch Throwable _ nil)))))
+      (try (release-lock! (:transactions-dir txn) (:txid txn))
+           (catch Throwable _ nil)))))
 
 (defn commit!
   ;; @spec MCP-OP-MEM-006
@@ -1647,11 +1746,20 @@
      ;; finished leaves a LOCK with no journal beside it, and releasing only
      ;; `(when (seq results))` left that workspace deadlocked for ever.
      (let [^File lock (lock-file transactions)
-           holder (when (.isFile lock) (read-holder lock))
-           cause (when holder (stale-holder holder))
-           broken (when (and holder cause)
-                    (release-lock! transactions)
-                    (lock-broken-line holder cause))]
+           claim (when (.isFile lock) (read-lock-claim lock))
+           holder (:holder claim)
+           cause (when claim (stale-holder holder))
+           ;; the same compare-and-break the acquisition path uses: recovery
+           ;; may not delete a claim that changed under it either
+           ;; recovery is the remedy for an UNREADABLE claim as well as a
+           ;; provably dead one, so it acts on any cause - but through the same
+           ;; compare-and-break: it may not delete a claim that changed under it
+           broken (when (and claim cause)
+                    (let [outcome (break-lock! transactions claim
+                                               (str "recover-" (new-txid)))]
+                      (when (:broken outcome)
+                        (merge (lock-broken-line holder cause)
+                               (select-keys outcome [:tombstone :content-sha256])))))]
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
                 :isolation compact-isolation

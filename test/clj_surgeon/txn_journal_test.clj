@@ -1194,6 +1194,99 @@
               (when (:txid next-txn) (journal/rollback! next-txn)))))
         (finally (cleanup! ws))))))
 
+;; @spec MCP-OP-MEM-013
+(deftest breaking-a-stale-lock-cannot-delete-a-live-holders-fresh-lock
+  (testing "Opus round 3, blocker 3: the break was a READ followed by an
+            UNCONDITIONAL delete. Between the two, a second transaction can
+            legitimately break the same stale lock and take it - and the first
+            breaker then deletes the LIVE holder's brand new LOCK and takes it
+            as well. Two live transactions then hold the project lock at once,
+            and the first to finish deletes the other's claim. A break must
+            remove the exact claim it judged, or remove nothing."
+    (let [ws (workspace! "lock-break-race" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (plant-lock! ws {:txid "ghost-3" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [refused (begin! ws {:txid "B-BREAKER"
+                                  :before-break
+                                  (fn [_]
+                                    ;; A breaks the same ghost and acquires,
+                                    ;; while B is mid-break. A is genuinely
+                                    ;; alive, so its lock is inviolable.
+                                    (.delete lock)
+                                    (spit lock (pr-str {:txid "A-LIVE"
+                                                        :pid (.pid child)
+                                                        :boot-id (boot-id-now)})))})]
+          (is (false? (:ok refused))
+              (str "the breaker must refuse rather than take a live holder's "
+                   "lock: " (pr-str refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (= "A-LIVE" (:holder-txid refused))
+              "and it names the holder it found, not the ghost it judged")
+          (is (true? (:holder-live refused)))
+          (is (.isFile lock) "the live holder's LOCK survives")
+          (is (= "A-LIVE" (:txid (read-string (slurp lock))))
+              "unchanged, still naming the live holder")
+          (is (not (.isFile (io/file dir "LOCK.broken.B-BREAKER")))
+              "and the breaker left no claim of its own behind"))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-broken-lock-is-renamed-to-the-claim-it-broke
+  (testing "the other half: a genuine break must still happen, and it must
+            leave the exact claim it removed on disk under its breaker's name.
+            That is what makes the break checkable after the fact - the receipt
+            line says a lock was broken, and the tombstone says WHICH one."
+    (let [ws (workspace! "lock-break-tombstone" 2)
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (let [dead (reaped-pid)
+              holder {:txid "ghost-4" :pid dead :boot-id (boot-id-now)}
+              _ (plant-lock! ws holder)
+              txn (begin! ws {:txid "B-TOMB"})
+              tomb (io/file dir "LOCK.broken.B-TOMB")]
+          (is (string? (:txid txn)) "the stale lock is still broken")
+          (is (= :process-not-alive (get-in txn [:lock-broken :cause])))
+          (is (.isFile tomb) "and the claim it broke is kept as evidence")
+          (is (= "ghost-4" (:txid (read-string (slurp tomb))))
+              "naming the holder the break judged, byte for byte")
+          (is (= "B-TOMB" (:txid (read-string (slurp lock))))
+              "while the LOCK now names the breaker")
+          (journal/rollback! txn))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest finishing-a-transaction-does-not-delete-a-lock-it-no-longer-owns
+  (testing "the release side of the same defect. `release-lock!` was a bare
+            `deleteIfExists`, so a transaction whose claim had been replaced -
+            by any of the races above, or by a hand-edited state directory -
+            deleted whoever's LOCK it found when it finished. A release must
+            unlink its OWN claim and nothing else."
+    (let [ws (workspace! "lock-release-scope" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (let [txn (begin! ws {})]
+          (is (string? (:txid txn)))
+          (.delete lock)
+          (spit lock (pr-str {:txid "SOMEBODY-ELSE" :pid (.pid child)
+                              :boot-id (boot-id-now)}))
+          (journal/rollback! txn)
+          (is (.isFile lock)
+              "finishing must not unlink a claim this transaction does not own")
+          (is (= "SOMEBODY-ELSE" (:txid (read-string (slurp lock))))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
 ;; @spec MCP-OP-MEM-006
 ;; @spec MCP-OP-MEM-007
 (deftest undo-refuses-a-target-another-writer-changed-after-the-commit
