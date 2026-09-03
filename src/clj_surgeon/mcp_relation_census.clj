@@ -131,14 +131,34 @@
 
 (def ^:private census-fields #{:files :doors :pool_size})
 
+;; `workspace_root` is a routing field, not a census field: it is validated
+;; and canonicalised later, by `workspace/resolve-request`, and this pass
+;; must not treat its presence as an unknown field nor its value as anything
+;; to check — checking it here would mean resolving it, which is exactly the
+;; filesystem work this pass runs before.
+(def ^:private routing-fields #{:workspace_root})
+
 ;; @spec MCP-OP-CENSUS-016
 ;; @spec MCP-OP-CENSUS-029
-(defn validate-census-params
-  "Validate relation_census parameters before any filesystem work.
+(defn validate-request-shape
+  "Validate relation_census parameters, pure and before ANY filesystem work.
+
+   This runs before `workspace/resolve-request`, not merely before the
+   scanned sources are read: `workspace_root` canonicalisation is itself a
+   stat, so a malformed `doors`, `files`, or `pool_size` must refuse before
+   that resolver ever touches the filesystem, not only before this tool
+   reads a source. Sol's round-eight finding was exactly this — `doors=[1]`
+   was refused only AFTER `workspace/resolve-request` had already `stat`ed
+   the workspace root.
 
    The JSON schema this tool advertises is a hint to a well-behaved caller. A
    malformed call reaches the server anyway, so every bound the schema states is
    re-checked here and refused with a typed reason and an executable next_call.
+
+   The checks run in ONE fixed order — `doors`, then `files`, then
+   `pool_size` — so that a malformed `doors` entry refuses before a request
+   that also names an oversized `files` list or an unresolvable
+   `workspace_root` ever reaches those checks or performs a single stat.
 
    TYPES are re-checked too, not only ranges. `coerce-pool-size` reads decimal
    digits because the CLI hands every value over as a string; the wire does not,
@@ -148,14 +168,19 @@
    a non-string entry is refused here, by index and value, before it can
    reach the oversized-source branch of execute-in-context!, which copies
    `doors` into its next_call unchanged and would otherwise hand back a
-   continuation the tool's own schema rejects."
-  [params workspace-root]
-  (let [next-call (cond-> {:tool "relation_census" :pool_size 8}
-                    workspace-root (assoc :workspace_root workspace-root))
+   continuation the tool's own schema rejects.
+
+   The `next_call` this pass computes never carries `workspace_root`: no
+   canonical value exists yet at this point, and the caller's own raw value
+   is not carried through either, because a value this pass has not itself
+   validated is not a smaller promise than a real one."
+  [params]
+  (let [next-call {:tool "relation_census" :pool_size 8}
         refuse (fn [reason message data]
                  (refusal :invalid-mcp-request message next-call
                           (merge {:reason (name reason)} data)))
-        unknown (vec (sort (map name (remove census-fields (keys params)))))
+        unknown (vec (sort (map name (remove (into census-fields routing-fields)
+                                              (keys params)))))
         files (:files params)
         doors (:doors params)
         pool-size (:pool_size params)]
@@ -165,6 +190,28 @@
               (str "relation_census does not accept " (str/join ", " unknown))
               {:unknown unknown
                :accepted (vec (sort (map name census-fields)))})
+
+      (and (some? doors) (not (sequential? doors)))
+      (refuse :doors-not-an-array "doors must be a JSON array of symbols" {})
+
+      (and (some? doors) (> (count doors) census/max-doors))
+      (refuse :too-many-doors "doors exceeds the maximum door count"
+              {:maximum census/max-doors :actual (count doors)})
+
+      ;; Every doors entry must be the JSON string the advertised schema
+      ;; states, checked here — before any filesystem work, before `files`
+      ;; and `pool_size` are even looked at, and before the oversized-source
+      ;; branch of execute-in-context! can copy `doors` UNCHANGED into a
+      ;; next_call. A non-string entry that survived to that branch produced
+      ;; an unexecutable continuation: the schema rejects it, even though
+      ;; this validator had not yet refused it.
+      (and (some? doors) (not (every? string? doors)))
+      (let [bad-index (first (keep-indexed (fn [i d] (when-not (string? d) i))
+                                            doors))
+            bad-value (nth doors bad-index)]
+        (refuse :doors-not-strings
+                "every entry in doors must be a JSON string"
+                {:index bad-index :value bad-value}))
 
       (and (some? files) (not (sequential? files)))
       (refuse :files-not-an-array "files must be a JSON array of paths" {})
@@ -181,27 +228,6 @@
 
       (and (some? files) (not (every? #(and (string? %) (not (str/blank? %))) files)))
       (refuse :file-not-a-string "every entry in files must be a non-blank string" {})
-
-      (and (some? doors) (not (sequential? doors)))
-      (refuse :doors-not-an-array "doors must be a JSON array of symbols" {})
-
-      (and (some? doors) (> (count doors) census/max-doors))
-      (refuse :too-many-doors "doors exceeds the maximum door count"
-              {:maximum census/max-doors :actual (count doors)})
-
-      ;; Every doors entry must be the JSON string the advertised schema
-      ;; states, checked here — before any filesystem work, and before the
-      ;; oversized-source branch of execute-in-context! can copy `doors`
-      ;; UNCHANGED into a next_call. A non-string entry that survived to that
-      ;; branch produced an unexecutable continuation: the schema rejects it,
-      ;; even though this validator had not yet refused it.
-      (and (some? doors) (not (every? string? doors)))
-      (let [bad-index (first (keep-indexed (fn [i d] (when-not (string? d) i))
-                                            doors))
-            bad-value (nth doors bad-index)]
-        (refuse :doors-not-strings
-                "every entry in doors must be a JSON string"
-                {:index bad-index :value bad-value}))
 
       ;; Present but not an integer — including an explicit null, which the
       ;; range check below would read as "absent" and never look at.
@@ -802,28 +828,29 @@
   "Route and execute one relation_census request."
   [config params]
   (let [normalized (json/parse-string (json/generate-string params) true)
-        router (or (:workspace-router config) (workspace/router config))
-        routed (workspace/resolve-request router normalized)]
-    (if-not (:ok routed)
-      ;; No root resolved, so there is no root from which a narrower call
-      ;; could be computed, and a caption describing the argument the caller
-      ;; got wrong is not a call. MCP-OP-CENSUS-014: a remedy instead.
-      (-> routed
-          (assoc :ok false
-                 :operation "relation-census"
-                 :error_type (or (:error_type routed) "invalid-workspace-root")
-                 :read_complete false
-                 :remedy (str "The workspace root this request resolved to is "
-                              "not an existing absolute directory, so nothing "
-                              "about it can be narrowed: retry with "
-                              "workspace_root naming a directory that exists."))
-          (dissoc :next_call))
-      (let [validated (validate-census-params (:params routed)
-                                              (:workspace-root routed))]
-        (if-not (:ok validated)
-          (assoc validated :workspace_root (:workspace-root routed))
+        shaped (validate-request-shape normalized)]
+    (if-not (:ok shaped)
+      ;; Refused on shape alone — before workspace_root is ever resolved, so
+      ;; before any filesystem work at all. MCP-OP-CENSUS-016/029.
+      shaped
+      (let [router (or (:workspace-router config) (workspace/router config))
+            routed (workspace/resolve-request router (:params shaped))]
+        (if-not (:ok routed)
+          ;; No root resolved, so there is no root from which a narrower call
+          ;; could be computed, and a caption describing the argument the caller
+          ;; got wrong is not a call. MCP-OP-CENSUS-014: a remedy instead.
+          (-> routed
+              (assoc :ok false
+                     :operation "relation-census"
+                     :error_type (or (:error_type routed) "invalid-workspace-root")
+                     :read_complete false
+                     :remedy (str "The workspace root this request resolved to is "
+                                  "not an existing absolute directory, so nothing "
+                                  "about it can be narrowed: retry with "
+                                  "workspace_root naming a directory that exists."))
+              (dissoc :next_call))
           (assoc (try
-                   (execute-in-context! (:config routed) (:params validated))
+                   (execute-in-context! (:config routed) (:params routed))
                    (catch Throwable error
                      (exhaustion-refusal error)))
                  :workspace_root (:workspace-root routed)))))))
