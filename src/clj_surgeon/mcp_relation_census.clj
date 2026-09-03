@@ -261,7 +261,7 @@
    arm-defining sources is ever held at once, and a source above
    `max-source-bytes` is refused rather than read."
   ([root relatives] (collect-inputs root relatives {}))
-  ([root relatives _opts]
+  ([root relatives {:keys [declared?]}]
    (reduce
      (fn [acc relative]
        (let [resolved (mcp-paths/resolve-source-path root relative)]
@@ -279,8 +279,14 @@
                  acc (update acc :read inc)]
              (if (census/defines-arms? source)
                (update acc :inputs conj {:file relative :source source})
-               acc)))))
-     {:inputs [] :read 0}
+               ;; Not an arm file: its text is dropped here. Only its top-level
+               ;; names survive, and only when a caller's doors need checking
+               ;; against them.
+               (cond-> acc
+                 declared?
+                 (update :declared into
+                         (census/source-declared-names source))))))))
+     {:inputs [] :read 0 :declared #{}}
      relatives)))
 
 ;; ---------------------------------------------------------------------------
@@ -411,16 +417,30 @@
 ;; ---------------------------------------------------------------------------
 
 ;; @spec MCP-OP-CENSUS-014
+(defn- door-refusal
+  [invalid canonical]
+  (refusal :unknown-door-symbol
+           (str "Unknown identity door " (:invalid invalid) ": " (:why invalid))
+           {:tool "relation_census"
+            :workspace_root canonical
+            :doors (vec (sort (map str census/default-doors)))}
+           {:door (:invalid invalid)
+            :known_doors (vec (sort (map str census/default-doors)))}))
+
+;; @spec MCP-OP-CENSUS-023
 (defn- execute-in-context!
   [{:keys [project-root]} {:keys [files doors pool_size]}]
   (let [root (mcp-paths/real-root project-root)
         canonical (.toString root)
+        want-declared? (boolean (seq doors))
         t0 (System/nanoTime)
         requested (when (seq files) (mapv str files))
         discovered (when-not requested (candidate-files root))
         scanned (or requested (:files discovered))
         skipped-outside-root (:skipped-outside-root discovered 0)
-        loaded (collect-inputs root scanned {})]
+        t-discovered (System/nanoTime)
+        loaded (collect-inputs root scanned {:declared? want-declared?})
+        t-read (System/nanoTime)]
     (cond
       (:refusal loaded)
       (refusal :unreadable-source-path
@@ -442,8 +462,7 @@
                 :maximum census/max-source-bytes})
 
       :else
-      (let [candidates (:inputs loaded)
-            t1 (System/nanoTime)]
+      (let [candidates (:inputs loaded)]
         (if (empty? candidates)
           (refusal :no-fold-arms-found
                    (str "No file defines defmethod fold-event arms. Scanned "
@@ -455,35 +474,37 @@
                             :scanned (vec (take max-listed-files scanned))}
                      (pos? skipped-outside-root)
                      (assoc :skipped_outside_root skipped-outside-root)))
-          (let [declared (reduce into #{}
-                                 (map #(:declared (census/census-file
-                                                    (select-keys % [:file :source])))
-                                      candidates))
-                resolved-doors (if (seq doors)
-                                 (census/parse-doors doors declared)
-                                 census/default-doors)]
-            (if (map? resolved-doors)
-              (refusal :unknown-door-symbol
-                       (str "Unknown identity door " (:invalid resolved-doors)
-                            ": " (:why resolved-doors))
-                       {:tool "relation_census"
-                        :workspace_root canonical
-                        :doors (vec (sort (map str census/default-doors)))}
-                       {:door (:invalid resolved-doors)
-                        :known_doors (vec (sort (map str census/default-doors)))})
+          ;; The door symbols themselves are checked before any census runs;
+          ;; whether a door is DEFINED anywhere can only be answered once the
+          ;; scan has been parsed, so that half waits for the plan's own
+          ;; `:declared` rather than parsing every file a second time.
+          (let [syntactic (if want-declared?
+                            (census/parse-doors doors nil)
+                            census/default-doors)]
+            (if (map? syntactic)
+              (door-refusal syntactic canonical)
               (let [requested-pool (or pool_size (census-pool/default-pool-size))
                     pool-size (census/effective-pool-size requested-pool)
-                    t2 (System/nanoTime)
                     planned (census/plan {:inputs candidates
-                                          :doors resolved-doors
-                                          :map-fn (census-pool/pooled-map pool-size)})]
-                (if-not (:ok planned)
+                                          :doors syntactic
+                                          :map-fn (census-pool/pooled-map pool-size)})
+                    declared (when want-declared?
+                               (into (:declared loaded #{}) (:declared planned)))
+                    confirmed (when want-declared?
+                                (census/parse-doors doors declared))]
+                (cond
+                  (not (:ok planned))
                   (refusal (or (:error-type planned) :census-failed)
                            (:error planned)
                            {:tool "relation_census"
                             :workspace_root canonical
                             :files [(:file planned)]}
                            {:file (:file planned)})
+
+                  (map? confirmed)
+                  (door-refusal confirmed canonical)
+
+                  :else
                   (build-receipt
                     {:merged planned
                      :reserved (+ receipt-envelope-allowance (count canonical))
@@ -491,10 +512,11 @@
                      :requested-pool requested-pool
                      :scanned (count scanned)
                      :skipped-outside-root skipped-outside-root
-                     :phases (-> {:discover (/ (- t1 t0) 1e6)
-                                  :parse (/ (- t2 t1) 1e6)}
-                                 (assoc :classify (get-in planned [:phases :classify])
-                                        :merge (get-in planned [:phases :merge])))}))))))))))
+                     :phases (cond-> {:read (/ (- t-read t-discovered) 1e6)
+                                      :classify (get-in planned [:phases :classify])
+                                      :merge (get-in planned [:phases :merge])}
+                               discovered
+                               (assoc :discover (/ (- t-discovered t0) 1e6)))}))))))))))
 
 ;; @spec MCP-OP-CENSUS-017
 (defn- exhaustion-refusal

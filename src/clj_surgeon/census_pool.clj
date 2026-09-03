@@ -14,6 +14,7 @@
   (census/effective-pool-size census/max-pool-size))
 
 ;; @spec MCP-OP-CENSUS-010
+;; @spec MCP-OP-CENSUS-020
 (defn pooled-map
   "Return a map-fn that runs `f` over the inputs on a shutdown-bound pool.
 

@@ -680,6 +680,18 @@
          :outside-arms outside
          :counts (merge empty-counts (frequencies (map :class sites)))}))))
 
+(defn source-declared-names
+  "Top-level `def`/`defn`/`defn-`/`defmacro` names in one source.
+
+   A door may be defined in a helper namespace that defines no arms, so door
+   validation needs the names of every scanned file, not only the censused
+   ones. Returns the empty set for a source that cannot be parsed: an
+   unparseable file is the census's refusal to report, not this predicate's."
+  [source]
+  (try
+    (declared-names (sig-children (parser/parse-string-all source)))
+    (catch Throwable _ #{})))
+
 (defn defines-arms?
   "Cheap discovery predicate: does this source define arms of `multi`?"
   ([source] (defines-arms? source 'fold-event))

@@ -85,8 +85,9 @@
     (testing "per-file counts, phase timings and next_action"
       (is (= {:door 2 :set 1 :guarded 1 :raw 1 :unknown 2 :arms 9 :sites 7}
              (get (:by_file result) fixture)))
-      (is (= #{:discover :parse :classify :merge}
-             (set (keys (:phases_elapsed_ms result)))))
+      (is (= #{:read :classify :merge}
+             (set (keys (:phases_elapsed_ms result))))
+          "an explicit file list discovers nothing, so no discover phase is claimed")
       (is (every? number? (vals (:phases_elapsed_ms result))))
       (is (every? #(not (neg? %)) (vals (:phases_elapsed_ms result))))
       (is (str/starts-with? (:next_action result) "review the raw sites")))
@@ -376,3 +377,33 @@
         (is (pos? (get-in result [:counts :raw]))
             "trimming evidence must not touch the counts"))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-023
+(deftest the-phases-are-the-phases-that-actually-ran
+  (testing "without doors nothing is parsed twice"
+    (let [calls (atom 0)
+          original census/census-file]
+      (with-redefs [census/census-file (fn [m] (swap! calls inc) (original m))]
+        (let [result (run {:files [fixture second-fixture]})]
+          (is (true? (:ok result)))
+          (is (= 2 @calls)
+              "every arm file was parsed and classified more than once")))))
+
+  (testing "a census that discovered nothing reports no discover phase"
+    (let [result (run {:files [fixture]})]
+      (is (= #{:read :classify :merge}
+             (set (keys (:phases_elapsed_ms result)))))
+      (is (nil? (get-in result [:phases_elapsed_ms :parse]))
+          "the parse phase was a second serial census, not a parse")))
+
+  (testing "a census that walked the tree reports what the walk cost"
+    (let [result (run {})]
+      (is (= #{:discover :read :classify :merge}
+             (set (keys (:phases_elapsed_ms result)))))
+      (is (every? #(and (number? %) (not (neg? %)))
+                  (vals (:phases_elapsed_ms result))))))
+
+  (testing "with doors, door confirmation still refuses an undefined door"
+    (let [result (run {:files [fixture] :doors ["made-up-door"]})]
+      (is (false? (:ok result)))
+      (is (= "unknown-door-symbol" (:error_type result))))))

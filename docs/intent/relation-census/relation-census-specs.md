@@ -31,7 +31,7 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 ## Receipt and refusals
 
-- [x] **MCP-OP-CENSUS-013**: When a census succeeds, clj-surgeon shall publish `census_version`, per-file counts by class, the `:raw` sites, the `:guarded` sites with their guard lines, the `:unknown` sites with their reasons, `outside_arms`, `files`, `arms`, `sites`, numeric `phases_elapsed_ms` for `:discover`, `:parse`, `:classify`, and `:merge`, the pool size, and a `next_action`; the published receipt shall be at most 4096 bytes, shall contain no file text beyond one-line site sources, and shall report when listed evidence was trimmed to fit.
+- [x] **MCP-OP-CENSUS-013**: When a census succeeds, clj-surgeon shall publish `census_version`, per-file counts by class, the `:raw` sites, the `:guarded` sites with their guard lines, the `:unknown` sites with their reasons, `outside_arms`, `files`, `arms`, `sites`, numeric `phases_elapsed_ms` for each phase that ran (see MCP-OP-CENSUS-023), the pool size, and a `next_action`; the published receipt shall be at most 4096 bytes, shall contain no file text beyond one-line site sources, and shall report when listed evidence was trimmed to fit.
 - [x] **MCP-OP-CENSUS-014**: If the workspace root does not resolve to an existing absolute directory, if no scanned file defines `defmethod fold-event` arms, if a scanned file cannot be parsed, or if a supplied door is not a symbol, shadows a collection write head, or is defined in no scanned file, clj-surgeon shall refuse with the corresponding typed reason, shall name the offending workspace, files, or door, shall publish no counts, and shall carry an executable `next_call`.
 - [x] **MCP-OP-CENSUS-015**: When clj-surgeon exposes the census, it shall expose it as the read-only `relation_census` MCP tool and as the `:relation-census` CLI op, and neither surface shall write any file.
 
@@ -50,6 +50,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 - [x] **MCP-OP-CENSUS-021**: When clj-surgeon runs the plan phase from either entrance, it shall run it on the bounded `census_pool` pool whenever a pool larger than one is both requested and available, and the receipt's pool size shall be the pool that actually ran; when the pool that ran is smaller than the pool requested, clj-surgeon shall publish the requested size alongside it.
 
 - [x] **MCP-OP-CENSUS-022**: When clj-surgeon bounds a census receipt, the 4096-byte budget shall hold for the receipt as PUBLISHED, including the workspace root and elapsed time appended after bounding, and clj-surgeon shall trim listed sites first and per-file counts last, marking any trimmed receipt `receipt_truncated`.
+
+- [x] **MCP-OP-CENSUS-023**: When no `doors` are supplied, clj-surgeon shall not run a declaration pass and shall parse each censused file exactly once; when `doors` are supplied, clj-surgeon shall check the door symbols before the census and confirm that each is defined using the declarations the plan phase already returns; and `phases_elapsed_ms` shall name only phases that ran — `discover` only when a tree was walked, `read` for resolving and reading the scan, and `classify` and `merge` from the plan.
 
 ## Falsifiers
 
