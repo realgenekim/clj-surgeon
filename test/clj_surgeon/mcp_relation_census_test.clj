@@ -3291,3 +3291,132 @@
       (finally
         (delete-tree! spaced)
         (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
+;; Sol's round-twelve review, item 2 (blocking): a non-decodable path silently
+;; retargets.
+;;
+;; Sol created a directory whose name ended in the raw byte `0xff` and handed
+;; it to the CLI as `:dir`. The JVM decodes argv before `-main` runs, so what
+;; the op received was `…root�` — the replacement character — and the
+;; rendered and vector argv agreed with each other about that corrupted path.
+;; The census then answered `no-fold-arms-found` with `files-scanned 0` about
+;; a directory that DOES NOT EXIST, while the directory the caller actually
+;; named held one arm-bearing source. A confident count about a tree nobody
+;; asked for, from a request whose target was already lost.
+;;
+;; The raw byte cannot be recovered: by the time any code in this process can
+;; look, the decoder has already replaced it, and the replacement is lossy —
+;; every undecodable byte becomes the SAME character. So there is nothing to
+;; carry into a continuation and nothing to canonicalise. What is detectable
+;; is the replacement character itself, and the honest answer is a typed
+;; refusal that names the argument and the encoding, offers NO continuation
+;; (the correct bytes cannot be rendered), and says what to do instead.
+;;
+;; The rule refuses a legitimately-named path containing U+FFFD too. That is
+;; a stated cost, not an oversight: after decoding, a real U+FFFD and a
+;; decoding failure are the same character, and a false refusal that explains
+;; itself is worth more than a census of the wrong directory that cannot be
+;; detected at all.
+;; ---------------------------------------------------------------------------
+
+(defn- raw-byte-fixture-script!
+  "A bash script — written as BYTES — that builds a `<prefix>0xff` workspace
+   and censuses it through the babashka CLI.
+
+   The byte cannot travel through a Clojure string: this process only ever
+   holds the DECODED argument, so the only way to put a non-decodable name in
+   front of a JVM from inside one is to hand the bytes to `execve` through a
+   file bash reads as bytes."
+  [^java.io.File script prefix arm-file]
+  (let [line (fn [^java.io.OutputStream out before after]
+               (.write out (.getBytes ^String before "UTF-8"))
+               (.write out (int 0xff))
+               (.write out (.getBytes ^String after "UTF-8")))]
+    (with-open [out (java.io.FileOutputStream. script)]
+      (.write out (.getBytes (str "#!/bin/bash\ncd '" repo-root "'\n") "UTF-8"))
+      (line out (str "mkdir -p '" prefix) "/src/app'\n")
+      (line out (str "cp '" arm-file "' '" prefix) "/src/app/only.clj'\n")
+      (line out (str "exec bb -cp '" repo-root "/src' -m clj-surgeon.core "
+                     ":op relation-census :dir '" prefix)
+            "'\n")))
+  (.setExecutable script true))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+(deftest a-path-that-did-not-decode-is-refused-and-never-censused
+  (let [parent (temp-dir)
+        arm-file (io/file parent "arm.clj")
+        script (io/file parent "census.sh")
+        undecodable (str (.getCanonicalPath parent) "/root\ufffd")]
+    (try
+      (spit-file! arm-file arm-source)
+      (raw-byte-fixture-script! script (str (.getCanonicalPath parent) "/root")
+                                (.getPath arm-file))
+
+      (testing "the raw 0xff root reaches the CLI as U+FFFD and is refused"
+        (let [{:keys [out exit]} (proc/shell {:out :string :err :string
+                                              :continue true}
+                                             "bash" (.getPath script))
+              result (try (edn/read-string out) (catch Exception _ {::out out}))]
+          (is (zero? exit) (str "the fixture script failed: " (pr-str out)))
+          (is (false? (:ok result))
+              (str "a census of a path that did not decode reported success: "
+                   (pr-str result)))
+          (is (= :dir-not-decodable (:error-type result))
+              (str "the undecodable :dir was not refused; it answered "
+                   (pr-str (:error-type result)) " about a directory that "
+                   "does not exist: " (pr-str result)))
+          (is (not (contains? result :next-command))
+              (str "a continuation was offered for a path whose correct "
+                   "bytes cannot be rendered: "
+                   (pr-str (:next-command result))))
+          (is (not (contains? result :next-command-argv)))
+          (is (string? (:remedy result))
+              "the refusal offers neither a continuation nor a remedy")
+          (is (str/includes? (str (:remedy result)) "U+FFFD")
+              (str "the remedy does not say what was detected: "
+                   (pr-str (:remedy result))))
+          (is (= (System/getProperty "sun.jnu.encoding") (:encoding result))
+              (str "the refusal does not name the encoding that decoded the "
+                   "argument: " (pr-str result)))
+          (is (= ":dir" (:argument result))
+              (str "the refusal does not name the argument: "
+                   (pr-str result)))))
+
+      (testing "the same rule holds in process, for every path argument"
+        (let [from-dir (core/run-relation-census {:dir undecodable})
+              from-file (census/validate-cli-request-shape
+                          {:file (str undecodable "/src/app/only.clj")})]
+          (is (= :dir-not-decodable (:error-type from-dir)))
+          (is (= :dir-not-decodable (:error-type from-file))
+              (str ":file was not checked for decodability: "
+                   (pr-str from-file)))
+          (is (= ":file" (:argument from-file))
+              (str "the refusal blamed the wrong argument: "
+                   (pr-str from-file)))))
+
+      (testing "the tool refuses an undecodable workspace_root the same way"
+        (let [result (run {:workspace_root undecodable})]
+          (is (false? (:ok result)))
+          (is (= "workspace-root-not-decodable"
+                 (or (:reason result) (:error_type result)))
+              (str "the tool routed on a path that did not decode: "
+                   (pr-str result)))
+          (is (not (contains? result :next_call))
+              (str "a continuation was offered for a path whose correct "
+                   "bytes cannot be rendered: " (pr-str (:next_call result))))
+          (is (string? (:remedy result)))
+          (is (= "workspace_root" (:argument result)))
+          (is (= (System/getProperty "sun.jnu.encoding") (:encoding result)))))
+
+      (testing "the remedy states the cost of the rule it is enforcing"
+        (let [remedy (:remedy (core/run-relation-census {:dir undecodable}))]
+          (is (str/includes? remedy "legitimately")
+              (str "the remedy does not admit that a path which really "
+                   "contains U+FFFD is refused too: " (pr-str remedy)))))
+      (finally
+        ;; Java cannot name the 0xff directory to delete it — encoding the
+        ;; decoded U+FFFD back out yields three different bytes — so the
+        ;; cleanup goes through the shell that created it.
+        (proc/shell {:continue true} "rm" "-rf" (.getCanonicalPath parent))))))
