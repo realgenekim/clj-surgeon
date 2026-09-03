@@ -648,6 +648,56 @@ grep -q 'spawned.pid' "$HERE/run-arm.sh" \
   && ok "case19d run-arm.sh records the pid it spawned" \
   || bad "case19d run-arm.sh still trusts whatever pid ready.edn holds"
 
+echo "== case 20: every write path is confined to the runner root and the worktree =="
+# Sol, item 12: --root was unconstrained, the sol driver wrote into $HOME/.codex/sessions,
+# and --check built into the system temp dir.  An apparatus whose write paths are wherever
+# the caller points it cannot say afterwards which bytes were part of the experiment.
+ARMS_BASE=/home/forge/tmp/arms
+
+bash "$HERE/run-arm.sh" --root /tmp/anvil-arms-escape --exp st --rung P --arm N --slot 20 \
+     --prompt "$HERE/prompts/E3-P-N.md" --driver fake --dry-run > "$WORK/case20a.out" 2>&1
+want "case20a --root outside $ARMS_BASE rc" 2 "$?"
+grep -q 'ROOT-REFUSED' "$WORK/case20a.out" \
+  && ok "case20a typed refusal: $(grep -m1 ROOT-REFUSED "$WORK/case20a.out")" \
+  || { bad "case20a an unconfined --root was accepted"; cat "$WORK/case20a.out"; }
+[ -e /tmp/anvil-arms-escape ] && bad "case20a it created /tmp/anvil-arms-escape anyway" \
+  || ok "case20a nothing was created outside the runner root"
+
+bash "$HERE/run-arm.sh" --root "$ARMS_BASE/../arms-escape-via-dotdot" --exp st --rung P \
+     --arm N --slot 20 --prompt "$HERE/prompts/E3-P-N.md" --driver fake --dry-run \
+     > "$WORK/case20a2.out" 2>&1
+want "case20a2 a ../ escape rc" 2 "$?"
+grep -q 'ROOT-REFUSED' "$WORK/case20a2.out" \
+  && ok "case20a2 the refusal is on the RESOLVED path, not the spelling" \
+  || bad "case20a2 a ../ escape slipped through"
+
+case "$WORK" in "$ARMS_BASE"/*) ok "case20b this self-test itself runs under $ARMS_BASE";;
+  *) bad "case20b the self-test workdir $WORK is outside $ARMS_BASE";; esac
+
+# The prompt check must BUILD SOMEWHERE IT NAMES, under the apparatus, not into an
+# ambient system temp dir.  (Probing this with TMPDIR does not work: Python's tempfile
+# silently falls back to /tmp when TMPDIR is unusable, so the test would pass either way.
+# The honest test is that the tool states the directory it used.)
+python3 "$HERE/prompts/build-prompts.py" --check > "$WORK/case20c.out" 2>&1
+want "case20c --check rc" 0 "$?"
+cdir=$(sed -n 's/^check-dir: //p' "$WORK/case20c.out" | head -n1)
+if [ -z "$cdir" ]; then
+  bad "case20c --check does not say which directory it built into"; cat "$WORK/case20c.out"
+else
+  case "$cdir" in
+    "$HERE"/*) ok "case20c --check built under the apparatus: $cdir";;
+    *) bad "case20c --check built outside the apparatus: $cdir";;
+  esac
+  [ -e "$cdir" ] && bad "case20c --check left $cdir behind" || ok "case20c --check removed its build dir"
+fi
+
+# no apparatus file may reach a shared codex home (comments about its removal excepted)
+grep -rn 'codex/sessions' "$HERE" --include='*.sh' --include='*.py' 2>/dev/null \
+  | grep -v '/self-test.sh:' | grep -vE ':[0-9]+:[[:space:]]*#' > "$WORK/case20d.out"
+[ -s "$WORK/case20d.out" ] \
+  && { bad "case20d a shared codex sessions path survives"; cat "$WORK/case20d.out"; } \
+  || ok "case20d no apparatus file writes or reads a shared codex sessions dir"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
