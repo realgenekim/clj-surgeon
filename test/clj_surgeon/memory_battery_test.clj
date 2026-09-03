@@ -141,45 +141,92 @@
     (is (contains? (lines-of result) :oom))
     (is (= 1 (:exit result)))))
 
-;; @spec MCP-OP-MEM-001
-(deftest peak-above-start-plus-headroom-fails
-  (testing "264.0 is the budget at start 40 and Xmx 512; 264.1 breaks it"
-    (let [cells [(cell :ls-tree 1000 :warm 264.1 50.0)]
-          result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (false? (:pass? result)))
-      (is (contains? (lines-of result) :peak-over-budget))))
-  (testing "exactly at the budget passes"
-    (let [cells [(cell :ls-tree 1000 :warm 264.0 50.0)]
-          result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (not (contains? (lines-of result) :peak-over-budget))))))
+;; The two peak lines are TREND signals, not gates. peak_mb is a 5 ms sampled,
+;; process-wide used-heap peak containing garbage, and G1 moves it with -Xmx and
+;; collector scheduling: Sol re-ran an IDENTICAL cell (cli-ls-tree, N=1,000,
+;; fresh) and it fell 274.8 -> 246.5 MB, a 28.3 MB swing that crossed the verdict
+;; line in both directions. A gate that flips on a rerun of the same work is a
+;; flaky gate; the numbers still belong in the receipt as a regression signal.
+(defn- trend-lines-of
+  [result]
+  (set (map :line (:trends result))))
 
 ;; @spec MCP-OP-MEM-001
-(deftest peak-above-the-xmx-fraction-fails-even-with-headroom-to-spare
+(deftest peak-above-start-plus-headroom-is-a-trend-not-a-gate
+  (testing "264.0 is the budget at start 40 and Xmx 512; 264.1 crosses it"
+    (let [cells [(cell :ls-tree 1000 :warm 264.1 50.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= [] (:failures result))
+          "a sampled process-wide peak never fails the battery on its own")
+      (is (contains? (trend-lines-of result) :peak-over-budget))
+      (is (= 264.0 (:limit (first (:trends result)))))))
+  (testing "exactly at the budget reports nothing"
+    (let [cells [(cell :ls-tree 1000 :warm 264.0 50.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (not (contains? (trend-lines-of result) :peak-over-budget))))))
+
+;; @spec MCP-OP-MEM-001
+(deftest peak-above-the-xmx-fraction-is-a-trend-too
   (testing "start 300 leaves 524 MB of headroom but 0.80 x 512 = 409.6 binds"
     (let [cells [(cell :ls-tree 1000 :warm 500.0 50.0 :start 300.0)]
           result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (false? (:pass? result)))
-      (is (contains? (lines-of result) :peak-over-budget)))))
+      (is (= [] (:failures result)))
+      (is (contains? (trend-lines-of result) :peak-over-budget)))))
 
 ;; @spec MCP-OP-MEM-001
-(deftest peak-that-scales-with-n-fails
-  (testing "10k peak may exceed the 1k peak by at most 32 MB"
+(deftest peak-that-scales-with-n-is-reported-as-a-trend
+  (testing "10k peak more than 32 MB above the 1k peak is a trend, not a failure"
     (let [cells [(cell :ls-tree 1000 :warm 120.0 50.0)
                  (cell :ls-tree 10000 :warm 152.0 50.0)]
           result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (true? (:pass? result))))
+      (is (true? (:pass? result)))
+      (is (= #{} (trend-lines-of result))))
     (let [cells [(cell :ls-tree 1000 :warm 120.0 50.0)
                  (cell :ls-tree 10000 :warm 152.1 50.0)]
           result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (false? (:pass? result)))
-      (is (contains? (lines-of result) :peak-scales-with-n))))
-  (testing "the worst rep at each N is the one compared"
+      (is (= [] (:failures result)))
+      (is (true? (:pass? result))
+          "a trend line does not change the terminal state")
+      (is (contains? (trend-lines-of result) :peak-scales-with-n))))
+  (testing "the worst rep at each N is still the one compared"
     (let [cells [(cell :ls-tree 1000 :fresh 120.0 50.0)
                  (cell :ls-tree 1000 :warm 100.0 50.0)
                  (cell :ls-tree 10000 :fresh 100.0 50.0)
                  (cell :ls-tree 10000 :warm 160.0 50.0)]
           result (battery/verdict {:xmx-mb 512 :cells cells})]
-      (is (contains? (lines-of result) :peak-scales-with-n)))))
+      (is (contains? (trend-lines-of result) :peak-scales-with-n)))))
+
+;; @spec MCP-OP-MEM-001
+;; @spec MCP-OP-MEM-011
+(deftest the-hard-lines-stay-hard-while-the-peak-lines-do-not
+  (testing "OOM, parity, reserved peak, held and persistent growth all fail"
+    (doseq [[label cells]
+            [[:oom [(cell :ls-tree 1000 :warm 120.0 50.0 :oom? true)]]
+             [:parity [(cell :ls-tree 1000 :warm 120.0 50.0
+                             :result-hash "bounded" :reference-hash "unbounded")]]
+             [:reserved [(cell :ls-tree 1000 :warm 120.0 50.0 :reserved-peak 192.1)]]
+             [:held [(cell :ls-tree 1000 :warm 120.0 50.0 :held 1.0)
+                     (cell :ls-tree 10000 :warm 120.0 50.0 :held 3.1)]]
+             [:growth [(cell :ls-tree 1000 :warm 120.0 45.0 :start 40.0)
+                       (cell :ls-tree 10000 :warm 120.0 45.0 :start 20.0)]]]]
+      (testing (str label)
+        (let [result (battery/verdict {:xmx-mb 512 :cells cells})]
+          (is (= :fail (:status result)))
+          (is (= 1 (:exit result)))))))
+  (testing "a peak far over every budget, alone, is not a failure"
+    (let [cells [(cell :ls-tree 1000 :warm 500.0 50.0)
+                 (cell :ls-tree 10000 :warm 500.0 50.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= [] (:failures result)))
+      (is (= :pass (:status result)))
+      (is (= 0 (:exit result)))))
+  (testing "the table marks trend cells and prints the trend lines"
+    (let [cells [(cell :ls-tree 1000 :warm 500.0 50.0)
+                 (cell :ls-tree 10000 :warm 500.0 50.0)]
+          table (battery/render-table {:xmx-mb 512 :cells cells})]
+      (is (str/includes? table "TREND peak-over-budget"))
+      (is (str/includes? table "trend"))
+      (is (not (str/includes? table "FAIL"))))))
 
 ;; @spec MCP-OP-MEM-001
 (deftest retention-that-scales-with-n-fails

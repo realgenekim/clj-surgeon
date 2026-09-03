@@ -101,18 +101,44 @@ operation.
 The constants live in exactly one place: `pass-lines` in
 `src/clj_surgeon/memory_battery.clj`. They are Sol's measured set, verbatim.
 
-| line | rule |
-|---|---|
-| `oom` | no operation may exhaust the configured heap |
-| `peak-over-budget` | sampled process-wide used-heap peak ≤ min(used-heap start + **224 MiB**, **80 %** of `-Xmx`) — about 410 MiB at 512m |
-| `reserved-peak-over-budget` | attributable reserved peak ≤ **192 MiB** |
-| `peak-scales-with-n` | peak at 10,000 files ≤ peak at 1,000 files + **32 MiB** |
-| `held-scales-with-n` | `max(held_mb at N=10,000)` ≤ `max(held_mb at N=1,000)` + **2.0 MiB** |
-| `retained-scales-with-n` | persistent growth (`grow_mb`) at 10,000 files ≤ persistent growth at 1,000 files + **8 MiB** |
-| `reference-mismatch` | the bounded result must hash identically to the unbounded reference result at the same N |
+Each line is either **HARD** (it decides the verdict) or a **TREND** (measured
+and reported, never gated).
 
-The key graph is peak against N. Once the bounded buffers fill it must visibly
-flatten. Wall time and spill bytes may grow with N; retained heap may not.
+| line | kind | rule |
+|---|---|---|
+| `oom` | HARD | no operation may exhaust the configured heap |
+| `reference-mismatch` | HARD | the bounded result must hash identically to the attested unbounded reference at the same N |
+| `reserved-peak-over-budget` | HARD (once measurable) | attributable reserved peak ≤ **192 MiB** |
+| `held-scales-with-n` | HARD | `max(held_mb at N=10,000)` ≤ `max(held_mb at N=1,000)` + **2.0 MiB** |
+| `retained-scales-with-n` | HARD | persistent growth (`grow_mb`) at 10,000 files ≤ persistent growth at 1,000 files + **8 MiB** |
+| `peak-over-budget` | TREND | sampled process-wide used-heap peak vs min(used-heap start + **224 MiB**, **80 %** of `-Xmx`) |
+| `peak-scales-with-n` | TREND | peak at 10,000 files vs peak at 1,000 files + **32 MiB** |
+
+**The `min` binds at the start term, not the `-Xmx` fraction.** At `-Xmx512m`,
+80 % is 409.6 MiB, but with a JVM starting near 24 MiB of used heap the enforced
+figure is `start + 224` ≈ **248 MiB**. (An earlier version of this document said
+"about 410 MiB at 512m"; that was arithmetic about the wrong term of the `min`.)
+
+### Why the peak lines are trends and not gates
+
+`peak_mb` is an honest measurement and a poor requirement. It is a 5 ms sampled,
+**process-wide** used-heap peak that includes garbage, and G1 moves it with
+`-Xmx` and collector scheduling. Re-running an identical cell — `cli-ls-tree`,
+N=1,000, fresh — moved it from 274.8 to 246.5 MB: a **28.3 MB swing that crossed
+the verdict line on work that had not changed at all**.
+
+A gate that flips on a rerun of the same work is a flaky gate, and a flaky gate
+is eventually disabled, taking the honest signal with it. So the peak numbers are
+kept, printed, and compared run-to-run under identical JVM, collector and heap
+settings — as regression signals, not as proofs of live boundedness. What stays
+HARD is what does not drift: exhausting the heap, output parity, the attributable
+reserved peak (once an admission accountant exists), and the two cross-N
+retention lines, whose measured values reproduced to within 0.2 MiB across runs.
+
+The key graph is **held heap** against N: once the bounded buffers fill, what an
+operation retains must visibly flatten. Wall time and spill bytes may grow with
+N; retained heap may not. Peak against N is the same graph drawn with a noisier
+instrument, which is why it informs rather than decides.
 
 ### The three heap columns
 

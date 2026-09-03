@@ -25,12 +25,15 @@
   - :reserved-peak-mb        attributable reserved (admission-accounted) peak
                              ceiling; UNMEASURED until an admission accountant
                              exists, never silently passed
-  - :peak-headroom-mb        process-wide sampled peak used heap may exceed the
-                             pre-op used heap by at most this much
-  - :peak-xmx-percent        ...and may never exceed this percent of -Xmx
-                             (~410 MiB at 512m)
-  - :scale-peak-slack-mb     peak at :scale-large-n may exceed peak at
-                             :scale-small-n by at most this much
+  - :peak-headroom-mb        TREND. Process-wide sampled peak used heap is
+                             reported against the pre-op used heap plus this
+                             much...
+  - :peak-xmx-percent        ...or this percent of -Xmx, whichever is TIGHTER.
+                             At 512m with a JVM starting near 24 MiB used, the
+                             start+headroom term binds at about 248 MiB — NOT
+                             the 409.6 MiB that 80% of -Xmx would allow.
+  - :scale-peak-slack-mb     TREND. Peak at :scale-large-n is reported against
+                             peak at :scale-small-n plus this much
   - :scale-retained-slack-mb persistent growth (after-GC heap once the result is
                              released, minus start) at :scale-large-n may exceed
                              the same at :scale-small-n by at most this much
@@ -88,6 +91,24 @@
   (double
     (min (+ (double heap-start-mb) (double (:peak-headroom-mb pass-lines)))
          (/ (* (:peak-xmx-percent pass-lines) (double xmx-mb)) 100.0))))
+
+(def trend-lines
+  "Lines REPORTED on every run but never gated.
+
+  `peak_mb` is an honest measurement and a poor requirement: it is a 5 ms
+  sampled, process-wide used-heap peak that contains garbage, and G1 moves it
+  with `-Xmx` and collector scheduling. Re-running an identical cell
+  (cli-ls-tree, N=1,000, fresh) moved it 274.8 -> 246.5 MB — a 28.3 MB swing
+  that crossed the verdict line on work that had not changed at all. A gate that
+  flips on a rerun of the same work is a flaky gate, and a flaky gate is
+  eventually disabled, taking the honest signal with it.
+
+  So these two are trend/regression signals under identical JVM, collector and
+  heap settings. The HARD lines are the ones whose instruments do not drift:
+  `:oom`, output parity against the attested reference, the attributable
+  reserved peak once an admission accountant exists, `held_mb` across N, and
+  persistent growth across N."
+  #{:peak-over-budget :peak-scales-with-n})
 
 (defn- cell-identity
   [cell]
@@ -194,7 +215,10 @@
 
   Output: {:status #{:pass :fail :incomplete}
            :pass? bool :complete? bool :exit int
-           :failures [...] :unmeasured [...]}
+           :failures [...] :trends [...] :unmeasured [...]}
+
+  `:trends` carries the lines in `trend-lines`: measured, reported, and never
+  part of the terminal state. See that var for why the peak lines are there.
 
   `:complete?` is false when a line could not be evaluated (for example the
   10,000-file case was skipped for wall-clock reasons, or no admission
@@ -238,7 +262,9 @@
         unmeasured (vec (keep (fn [[status m]]
                                 (when (= :unmeasured status) m))
                               op-results))
-        failures (vec (concat per-cell op-failures))
+        observed (vec (concat per-cell op-failures))
+        failures (vec (remove #(trend-lines (:line %)) observed))
+        trends (vec (filter #(trend-lines (:line %)) observed))
         status (cond
                  (seq failures) :fail
                  (seq unmeasured) :incomplete
@@ -247,6 +273,7 @@
      :pass? (= :pass status)
      :complete? (empty? unmeasured)
      :failures failures
+     :trends trends
      :unmeasured unmeasured
      :exit (get exit-codes status)}))
 
@@ -325,14 +352,17 @@
     (str (apply str (repeat (max 0 (- width (count s))) \space)) s)))
 
 (defn cell-verdict
-  "The per-cell verdict shown in the table: :OOM, :FAIL, :DIFF or :ok."
+  "The per-cell verdict shown in the table: :OOM, :DIFF, :trend or :ok.
+
+  `:trend` is deliberately lower-case: it is a reported signal, not a failure,
+  and the table should not make a reader think the run broke."
   [xmx-mb cell]
   (let [lines (set (map :line (cell-failures xmx-mb cell)))]
     (cond
       (:skipped? cell) :skipped
       (contains? lines :oom) :OOM
-      (contains? lines :peak-over-budget) :FAIL
       (contains? lines :reference-mismatch) :DIFF
+      (contains? lines :peak-over-budget) :trend
       :else :ok)))
 
 (defn render-table
@@ -373,6 +403,10 @@
               "grow_mb = after-release minus start, the PERSISTENT growth the "
               "call left behind (this is the gated leak figure); afterGC_mb = "
               "absolute after-GC used heap once the result is released.")
+         (str "TREND lines are reported, never gated: peak_mb is a sampled "
+              "process-wide figure that G1 moves by tens of MB on identical "
+              "work. HARD lines: oom, reference parity, reserved peak, "
+              "held_mb across N, persistent growth across N.")
          sep header sep]
         rows
         [sep
@@ -387,6 +421,8 @@
               "   exit " (:exit v))]
         (for [f (:failures v)]
           (str "  FAIL " (name (:line f)) " " (pr-str (dissoc f :line))))
+        (for [t (:trends v)]
+          (str "  TREND " (name (:line t)) " " (pr-str (dissoc t :line))))
         (for [u (:unmeasured v)]
           (str "  UNMEASURED " (name (:line u)) " " (pr-str (dissoc u :line))))))))
 

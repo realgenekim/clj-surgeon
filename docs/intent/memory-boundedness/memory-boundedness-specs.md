@@ -44,16 +44,17 @@ In the requirements below:
   operation at the configured maximum N under the configured work budget in one
   bounded JVM, clj-surgeon shall for every operation reproduce the unbounded
   reference output exactly, complete without exhausting the heap, keep the
-  sampled process-wide peak at or below the tighter of the used-heap start plus
-  224 MiB and 80 percent of the configured maximum heap, keep the attributable
-  reserved peak at or below 192 MiB, keep the 10,000-file peak within 32 MiB of
-  the 1,000-file peak, keep the largest 10,000-file heap retained WHILE THE
+  attributable reserved peak at or below 192 MiB, keep the largest 10,000-file
+  heap retained WHILE THE
   RESULT IS STILL REFERENCED within 2.0 MiB of the largest such value at 1,000
   files, keep the growth the call leaves behind after the result is
   released (after-release used heap minus start) at 10,000 files within 8 MiB of
   the same growth at 1,000 files, and refuse before any mutation when the request
-  is over budget; and the battery shall report any of those lines it did not
-  observe as UNMEASURED rather than as a pass, terminating in exactly one of
+  is over budget; shall additionally measure and report, WITHOUT GATING, the
+  sampled process-wide peak against the tighter of the used-heap start plus
+  224 MiB and 80 percent of the configured maximum heap, and the 10,000-file
+  peak against the 1,000-file peak plus 32 MiB; and the battery shall report any
+  of the gating lines it did not observe as UNMEASURED rather than as a pass, terminating in exactly one of
   PASS, FAIL or INCOMPLETE, where a run with no failures and at least one
   UNMEASURED line terminates INCOMPLETE with a nonzero exit distinct from both
   PASS and FAIL.
@@ -98,6 +99,14 @@ MCP-OP-MEM-011:
   not bound to this run's operation sources, generator, corpus digests and JVM
   is refused, never compared.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
+- "The sampled peak crossed its budget, so the operation is unbounded." The
+  sampled peak is process-wide, contains garbage, and G1 moves it with heap and
+  collector settings: an identical cell moved 28.3 MiB across the line between
+  two runs of unchanged work. It is a regression signal under identical
+  settings, not a proof about live boundedness.
+- "The peak lines are only advisory, so drop them." They are the cheapest early
+  warning the battery has. Reported every run, compared run to run; just never
+  the thing that decides the verdict.
 - "Retention after the result is released is flat, so retained heap is bounded."
   That measures leaks. What a receipt itself retains is measured with the result
   still referenced, and has its own cross-N line.
@@ -137,6 +146,9 @@ MCP-OP-MEM-011:
 - A run that both fails a measured line and leaves another unobserved is a FAIL:
   the failure outranks the unmeasured line for the exit code, and the verdict row
   says `FAIL (INCOMPLETE)` so the unobserved line is not lost.
+- The two peak lines are trend signals valid only BETWEEN RUNS UNDER IDENTICAL
+  JVM, COLLECTOR AND HEAP SETTINGS. They are reported on every run and never
+  decide the verdict.
 - Wall time and spill bytes MAY grow with N; the battery records them and does
   not gate on them, except that an operation exceeding `MEMBAT_OP_TIMEOUT_MS`
   causes its larger N cells to be recorded as skipped, which makes the cross-N
