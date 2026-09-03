@@ -748,3 +748,43 @@
                    (:error-type bb-cli) " " (:error bb-cli)))
           (is (= 1 (:files bb-cli)))))
       (finally (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-032
+(deftest an-escaping-file-symlink-is-a-counted-skip-at-every-entrance
+  (let [parent (temp-dir)
+        root (io/file parent "project")
+        outside (io/file parent "outside")]
+    (try
+      (spit-file! (io/file root "src/app/folds.clj") arm-source)
+      (spit-file! (io/file outside "secrets.clj")
+                  (str arm-source
+                       "(defmethod fold-event \"escaped\" [state event]\n"
+                       "  (update state :ys conj (:y event)))\n"))
+      (Files/createSymbolicLink (.toPath (io/file root "src/escape.clj"))
+                                (.toPath (io/file "../../outside/secrets.clj"))
+                                (make-array FileAttribute 0))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool reads the one in-root source and counts the escape"
+          (is (true? (:ok mcp)) (str "refused: " (:error mcp)))
+          (is (= 1 (:files mcp)))
+          (is (= 1 (:files_scanned mcp)))
+          (is (= 1 (:skipped_outside_root mcp))))
+
+        (testing "the JVM CLI reads no file whose real path escapes the root"
+          (is (true? (:ok jvm-cli)) (str "refused: " (:error jvm-cli)))
+          (is (= 1 (:files jvm-cli))
+              "the CLI followed a symlink out of the workspace root")
+          (is (= 1 (:skipped-outside-root jvm-cli))
+              "the CLI never counted the path it refused to read"))
+
+        (testing "the babashka CLI answers identically"
+          (is (true? (:ok bb-cli)) (str "refused: " (:error bb-cli)))
+          (is (= 1 (:files bb-cli))
+              "the CLI followed a symlink out of the workspace root")
+          (is (= 1 (:skipped-outside-root bb-cli))))
+
+        (testing "the arm counts agree across the three entrances"
+          (is (= (:arms mcp) (:arms jvm-cli) (:arms bb-cli)))
+          (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli)))))
+      (finally (delete-tree! parent)))))
