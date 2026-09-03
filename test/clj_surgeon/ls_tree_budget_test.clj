@@ -12,6 +12,7 @@
    in the JVM suite."
   (:require
    [babashka.fs :as fs]
+   [babashka.process :as proc]
    [clj-surgeon.core :as core]
    [clj-surgeon.ls-tree-snapshot :as snapshot]
    [clj-surgeon.result-budget :as budget]
@@ -629,3 +630,79 @@
                   :fits 1000}
                  (:limit r)))))
       (finally (fs/delete-tree at) (fs/delete-tree over)))))
+
+;; ============================================================
+;; The empty scan — a boundary this branch fixed incidentally
+;; ============================================================
+;;
+;; `run-ls-tree` destructures `:format` out of its own opts map, which SHADOWS
+;; `clojure.core/format` for the whole body. The empty-scan branch called
+;; `format` to say what it had not found, so a scan that found nothing threw
+;; `NullPointerException` where it meant to print. The message now lives in
+;; `no-clojure-files-message`, outside the shadow.
+;;
+;; Sol's review (2026-09-03, finding 11) confirmed the fix by hand and recorded
+;; that NOTHING named or executed the boundary. A fix without a witness is a
+;; fix the next refactor can undo, and the symptom — a throw on the one input
+;; that carries no data — is exactly the shape nobody tests.
+;;
+;; ASSERT ON THE MESSAGE, NOT ON THE ABSENCE OF AN EXCEPTION. Re-introducing
+;; the shadow to check this witness fails first produced NO exception text at
+;; all: the CLI's top-level handler caught the NPE and rendered it as
+;;
+;;     {:error nil, :error-type :invalid-arguments}
+;;
+;; with exit 1. So the defect's real signature is a receipt that names NOTHING
+;; while looking like an ordinary typed refusal — and both an exit-code check
+;; and a grep for "Exception" pass straight through it. Only the message
+;; assertions below fall over, which is why they are the witness.
+;;
+;; The witness runs the REAL CLI in a subprocess, because the defect is a var
+;; shadow at a call site plus an exit code, and neither survives being tested
+;; in-process: `System/exit` would take the suite down with it, and a pure call
+;; to the extracted fn cannot reproduce a shadow it now sits outside of.
+;; Testing delivery, not identity.
+
+(defn- run-cli-ls-tree
+  "The `ls-tree` op through the real CLI, in babashka, returning `{:exit :out
+   :err}`. `bb -cp src` is the same invocation `cli-dispatch-test` uses."
+  [& args]
+  (let [src (str (fs/absolutize "src"))]
+    (apply proc/shell {:out :string :err :string :continue true}
+           "bb" "-cp" src "-m" "clj-surgeon.core" ":op" "ls-tree" args)))
+
+;; @spec MCP-OP-MEM-003
+(deftest an-empty-scan-names-what-it-searched-and-exits-one
+  (let [empty-dir (str (fs/create-temp-dir {:prefix "ls-tree-empty"}))]
+    (try
+      (testing "a directory holding no Clojure file"
+        (let [{:keys [exit out err]} (run-cli-ls-tree ":dir" empty-dir)]
+          (is (= 1 exit)
+              (str "an empty scan is a failed scan, not a crash; stderr: " err))
+          (is (str/includes? out "No Clojure files found under")
+              "it says what it did not find")
+          (is (str/includes? out empty-dir)
+              "and names the directory it searched, so the caller can see the
+               scope was wrong rather than the tool")
+          (is (not (str/includes? out ":invalid-arguments"))
+              "an empty scan is not an argument error; the shadowed-`format`
+               defect surfaced here, as a caught NPE rendered into a typed
+               refusal whose :error was nil")
+          (is (not (str/includes? (str out err) "NullPointerException"))
+              "and nothing throws in the open either")))
+      (testing "a grep that matches nothing names the pattern too"
+        (let [{:keys [exit out err]}
+              (run-cli-ls-tree ":dir" empty-dir ":grep" "zzz-no-such-symbol")]
+          (is (= 1 exit) (str "stderr: " err))
+          (is (str/includes? out "matching 'zzz-no-such-symbol'")
+              "a scan narrowed by :grep says which narrowing found nothing")
+          (is (not (str/includes? out ":invalid-arguments")))))
+      (finally (fs/delete-tree empty-dir)))))
+
+;; @spec MCP-OP-MEM-003
+(deftest the-empty-scan-message-is-pure-and-covers-both-shapes
+  (testing "extracted from the shadow, and therefore callable"
+    (is (= "No Clojure files found under /tmp/nowhere"
+           (core/no-clojure-files-message "/tmp/nowhere" nil)))
+    (is (= "No Clojure files found under /tmp/nowhere matching 'defn foo'"
+           (core/no-clojure-files-message "/tmp/nowhere" "defn foo")))))
