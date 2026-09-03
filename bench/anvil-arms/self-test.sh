@@ -1835,6 +1835,24 @@ bash "$WORK/backtick-fixed.sh" > "$WORK/backtick-fixed.out" 2> "$WORK/backtick-f
   && { bad "case37 the escaped form still wrote to stderr"; cat "$WORK/backtick-fixed.err"; } \
   || ok "case37 the escaped form executes nothing"
 
+echo "== case 38: the README never hand-types a count this suite computes =="
+# Sol round three, finding (6): README.md claimed 278 assertions while the target
+# reported 288.  A hand-typed count of a thing the run computes is the same defect as a
+# hand-typed timestamp -- it is a number about a run nobody observed, and it drifts
+# silently every time a case is added.  Either derive it or do not claim it; this suite
+# prints its own totals, so the README stops repeating them and this case keeps them out.
+readme_counts=$(grep -nE '[0-9]+ (cases|assertions)' "$HERE/README.md" || true)
+if [ -z "$readme_counts" ]; then
+  ok "case38 README hand-types no case or assertion count"
+else
+  bad "case38 README hand-types a count the run computes:"
+  printf '%s\n' "$readme_counts"
+fi
+# and the summary line the README points AT is the one this suite really prints
+grep -q 'anvil-arms self-test: \$PASS passed, \$FAIL failed' "$HERE/self-test.sh" \
+  && ok "case38 the suite prints its computed totals in the summary line" \
+  || bad "case38 the summary line no longer prints the computed totals"
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
