@@ -407,26 +407,62 @@
 
    A legacy claim carries a pid and nothing else, so nothing about it can be
    checked: a reused pid is indistinguishable from the original holder. The
-   explicit `:break-legacy-lock` remedy therefore demands a RECEIPT of the
-   holder's death rather than a judgement - the recorded pid must name no live
-   process AND the claim must be at least this old - and refuses when either
-   half is missing. One hour is long enough that no transaction this kernel
-   opens is still running behind it, and short enough to be a remedy."
+   explicit `:break-legacy-lock` remedy therefore demands a two-part receipt
+   rather than a judgement - the recorded pid must name no live process AND
+   the claim must be at least this old - and refuses when either half is
+   missing. One hour is long enough that no transaction this kernel opens is
+   still running behind it, and short enough to be a remedy.
+
+   WHICH HALF IS CHECKABLE. The pid half is: it reads the process table now.
+   The age half is a HEURISTIC over file timestamps, and it is the weaker of
+   the two - a new-format LOCK carries `:acquired-at` in the claim itself, and
+   a legacy one carries nothing, which is exactly why the timestamps are used
+   at all."
   3600000)
+
+(defn- lock-age-basis-ms
+  "The newest of a lock file's modification and change times, or nil.
+
+   mtime alone is not evidence of age. Any process may set it, and `cp -p`,
+   `rsync -t`, `tar -x` and a restore from backup all PRESERVE it while giving
+   the file a fresh ctime - so a workspace restored from a snapshot presents a
+   legacy LOCK that is old by mtime and was created moments ago in this boot.
+   ctime cannot be set to an arbitrary value through the filesystem API at
+   all; it only moves forward, on every change to the file. Taking the NEWEST
+   of the two therefore means a claim reads as old only when BOTH stamps are,
+   which is the direction that fails closed.
+
+   nil when the file is not there: `lastModified` returns 0 for an absent
+   file, which would otherwise read as infinitely old."
+  [^File lock]
+  (when (.isFile lock)
+    (let [mtime (.lastModified lock)
+          ctime (try
+                  (let [^java.nio.file.attribute.FileTime changed
+                        (Files/getAttribute (.toPath lock) "unix:ctime"
+                                            ^"[Ljava.nio.file.LinkOption;"
+                                            (into-array LinkOption [LinkOption/NOFOLLOW_LINKS]))]
+                    (.toMillis changed))
+                  (catch Exception _ nil))]
+      (max (long mtime) (long (or ctime mtime))))))
 
 (defn- legacy-lock-dead?
   "The receipt a legacy claim's break requires, and nothing weaker.
 
    Two halves, both necessary: the recorded pid names no live process, and the
-   claim is at least `legacy-lock-break-age-ms` old. Neither alone is a
-   receipt - a pid absent right now can be a process that has not started yet
-   on a recycled number, and an old lock can belong to a long-running holder."
+   claim is at least `legacy-lock-break-age-ms` old, measured against
+   `lock-age-basis-ms` - the NEWEST of mtime and ctime, because mtime alone is
+   settable and survives a copy. Neither half alone is a receipt: a pid absent
+   right now can be a process that has not started yet on a recycled number,
+   and an old lock can belong to a long-running holder. A lock file that is
+   not there is not old, it is absent."
   [^File lock holder now-ms]
   (let [pid (:pid holder)
         ^java.lang.ProcessHandle handle (when pid (process-handle pid))
         dead? (or (nil? handle) (not (.isAlive handle)))
-        age (- (long (or now-ms (System/currentTimeMillis))) (.lastModified lock))]
-    (boolean (and dead? (>= age (long legacy-lock-break-age-ms))))))
+        basis (lock-age-basis-ms lock)
+        age (when basis (- (long (or now-ms (System/currentTimeMillis))) (long basis)))]
+    (boolean (and dead? age (>= (long age) (long legacy-lock-break-age-ms))))))
 
 (def ^:private breakable-causes
   "The causes that PROVE the recorded holder is gone.
@@ -765,8 +801,10 @@
                                              "unreadable rather than unbreakable. Run recovery with "
                                              ":break-legacy-lock true; it breaks the claim only on a "
                                              "receipt of the holder's death - the recorded pid naming no "
-                                             "live process AND the lock older than "
-                                             legacy-lock-break-age-ms " ms.")))))))))))
+                                             "live process, which is checked against the process table, "
+                                             "AND the lock older than " legacy-lock-break-age-ms
+                                             " ms, measured against the NEWEST of its mtime and ctime "
+                                             "because mtime alone is settable and survives a copy.")))))))))))
 
 (defn with-cooperating-writes
   ;; @spec MCP-OP-MEM-007

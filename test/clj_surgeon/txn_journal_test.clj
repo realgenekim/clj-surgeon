@@ -87,6 +87,22 @@
     (spit lock (pr-str holder))
     lock))
 
+(defn- lock-age-basis
+  "The stamp the legacy break measures a claim's age against: the NEWEST of
+   the lock's mtime and ctime.
+
+   A witness pins that boundary with the CLOCK - `recover!`'s `:now-ms` seam -
+   and never by back-dating the file, because back-dating mtime is exactly the
+   forgery the newest-of-two rule exists to refuse, and ctime cannot be set
+   through the filesystem API at all."
+  [^java.io.File lock]
+  (let [ctime (.toMillis ^java.nio.file.attribute.FileTime
+                (Files/getAttribute (.toPath lock) "unix:ctime"
+                                    ^"[Ljava.nio.file.LinkOption;"
+                                    (into-array java.nio.file.LinkOption
+                                                [java.nio.file.LinkOption/NOFOLLOW_LINKS])))]
+    (max (.lastModified lock) ctime)))
+
 (defn- reaped-pid
   "A pid that certainly named a process and certainly names none now."
   []
@@ -1688,25 +1704,24 @@
           child (.start (ProcessBuilder. ["sleep" "30"]))
           dir (journal/transactions-dir (:root ws) (:state-home ws))
           lock (io/file dir "LOCK")
-          opts {:state-home (:state-home ws) :break-legacy-lock true}
-          stamp 1700000000000]
+          opts {:state-home (:state-home ws) :break-legacy-lock true}]
       (try
         ;; half one missing: the recorded pid is ALIVE, however old the claim
         (plant-lock! ws {:txid "legacy-live" :pid (.pid child)})
-        (.setLastModified lock stamp)
-        (is (nil? (:lock-broken (journal/recover!
-                                  (:root ws)
-                                  (assoc opts :now-ms (+ stamp
-                                                         (* 10 journal/legacy-lock-break-age-ms))))))
-            "a live recorded pid is not a receipt of death at any age")
-        (is (.isFile lock))
+        (let [stamp (lock-age-basis lock)]
+          (is (nil? (:lock-broken (journal/recover!
+                                    (:root ws)
+                                    (assoc opts :now-ms (+ stamp
+                                                           (* 10 journal/legacy-lock-break-age-ms))))))
+              "a live recorded pid is not a receipt of death at any age")
+          (is (.isFile lock)))
         (.delete lock)
 
         ;; half two missing: the pid is dead, the claim is one millisecond
         ;; short of the age the remedy requires
         (let [dead (reaped-pid)]
           (plant-lock! ws {:txid "legacy-dead" :pid dead})
-          (.setLastModified lock stamp)
+          (let [stamp (lock-age-basis lock)]
           (is (nil? (:lock-broken (journal/recover!
                                     (:root ws)
                                     (assoc opts :now-ms
@@ -1724,7 +1739,7 @@
             (is (not (.isFile lock)) "the claim is gone")
             (let [txn (begin! ws {})]
               (is (string? (:txid txn)) "and the workspace is usable again")
-              (when (:txid txn) (journal/rollback! txn)))))
+              (when (:txid txn) (journal/rollback! txn))))))
         (finally
           (.destroyForcibly child)
           (.waitFor child)
