@@ -1615,7 +1615,11 @@
 
     ;; @spec MCP-OP-ALIAS-056
     control
-    {:error (str "The configured receipt directory lies inside the workspace's "
+    ;; @spec MCP-OP-ALIAS-056
+    ;; not "the workspace's": the segment scan that makes this refusal
+    ;; reachable is the one for a control directory OUTSIDE the root — a
+    ;; linked worktree's real .git lives under the MAIN repository
+    {:error (str "The configured receipt directory lies inside a "
                  control " directory, which belongs to another tool")
      :error-type :alias-migration-receipt-dir-in-control-directory
      :source-unchanged true
@@ -1698,8 +1702,7 @@
       (control-directory-of project-root real-dir)
       (do
         (undo-creation!)
-        {:error (str "The receipt directory that now exists lies inside the "
-                     "workspace's "
+        {:error (str "The receipt directory that now exists lies inside a "
                      (control-directory-of project-root real-dir)
                      " directory, which belongs to another tool")
          :error-type :alias-migration-receipt-dir-in-control-directory
