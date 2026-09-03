@@ -262,7 +262,7 @@
           (is (:ok receipt) "the window is real: the write inside it is not caught")
           (is (= "(ns f0) (def v :ours)\n" (bytes-of victim))
               "and the racing bytes are lost, which is what the receipt must say")
-          (is (= [:recheck-digest :recheck-identity :journal-write-begin :rename]
+          (is (= [:recheck-stat :recheck-identity :journal-write-begin :rename]
                  (get-in receipt [:commit-window :ops]))
               "the receipt names every operation inside the window")
           (is (false? (get-in receipt [:commit-window :staging-copy-inside]))
@@ -276,6 +276,72 @@
         (finally (cleanup! ws))))))
 
 ;; ------------------------------------------------- MCP-OP-MEM-012 retention
+
+;; @spec MCP-OP-MEM-007
+(deftest the-commit-window-holds-no-full-file-read
+  (testing "Opus round 2 on the window: the digest recheck INSIDE the lock was
+            a full re-read of the target, so the residual window scaled with
+            file size - 846 us measured at 1 KB, 3.0 ms at 2 MiB. `:staging-copy-inside
+            false` was literally true and still hid an O(size) read. The digest
+            is now taken BEFORE the lock, and inside the lock only the NOFOLLOW
+            stat is compared."
+    (let [ws (workspace! "window-o1" 1)
+          path (first (:paths ws))
+          big (apply str (repeat (* 2 1024 1024) \x))]
+      (try
+        (spit path (str ";" big "\n"))
+        (let [txn (begin! ws {})
+              _ (record-scope! txn [path])
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn path)
+              _ (journal/stage! txn path (str ";" big "\n;; changed\n"))
+              receipt (journal/commit! txn)
+              window (:commit-window receipt)]
+          (is (:ok receipt))
+          (is (= [:recheck-stat :recheck-identity :journal-write-begin :rename]
+                 (:ops window))
+              "no digest read is named inside the window any more")
+          (is (true? (:digest-computed-before-lock window)))
+          (is (= [:kind :file-key :size :mtime-ns :ctime-ns] (:stat-fields window))
+              "and the receipt names exactly what the in-lock comparison reads")
+          (is (= 0 (:digest-rereads receipt))
+              "an uncontended commit re-reads nothing inside the lock, whatever
+               the target's size - which is the whole claim")
+          (is (pos? (:max-ns window))))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+(deftest a-same-size-write-before-the-recheck-is-still-refused
+  (testing "the guard on the O(1) recheck: moving the digest outside the lock
+            is only sound if the in-lock stat can tell that the target moved.
+            This injection replaces the target with bytes of EXACTLY the same
+            length through the same inode, so size and file identity are
+            unchanged and only the timestamps differ. It must still refuse.
+
+            Green on both sides of the change by construction - before it, the
+            in-lock full re-read caught this; after it, the stat comparison
+            must."
+    (let [ws (workspace! "same-size-recheck" 2)
+          paths (sort (:paths ws))
+          victim (first paths)]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn paths)
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn victim)
+              _ (journal/stage! txn victim "(ns f0) (def v :ours)\n")
+              receipt (journal/commit!
+                        txn {:before-recheck
+                             (fn [path]
+                               (when (= path victim)
+                                 (spit victim "(ns f0) (def v :thrs)\n")))})]
+          (is (false? (:ok receipt)))
+          (is (= :txn-conflict (:error-type receipt)))
+          (is (= :digest (:conflict receipt)))
+          (is (= 0 (:files-written receipt)))
+          (is (= "(ns f0) (def v :thrs)\n" (bytes-of victim))
+              "the same-length write survives; this transaction wrote none"))
+        (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-012
 (deftest the-read-set-is-streamed-to-disk-and-never-retained
@@ -567,7 +633,7 @@
           (is (= 0 (:files-written receipt)))
           (is (= (slurp twin) (slurp victim))
               "neither the link nor the file it points at was replaced")
-          (is (= [:recheck-digest :recheck-identity :journal-write-begin :rename]
+          (is (= [:recheck-stat :recheck-identity :journal-write-begin :rename]
                  (get-in (journal/contract) [:commit-window :ops]))
               "the identity recheck is inside the window the contract names"))
         (finally (cleanup! ws))))))

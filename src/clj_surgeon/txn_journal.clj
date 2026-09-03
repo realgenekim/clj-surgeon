@@ -5,9 +5,10 @@
    rollback. It is not snapshot isolation. An atomic rename is not a
    compare-and-swap: the pre-image recheck and the rename are two syscalls, and
    a writer that does not take the publish lock can land between them. That
-   RESIDUAL WINDOW is bounded to a digest recheck, an identity recheck, one
-   journal fsync and one rename - the staged bytes are copied into the target's
-   own directory BEFORE the window opens - it is measured into every receipt,
+   RESIDUAL WINDOW is bounded to one NOFOLLOW stat comparison, one journal
+   fsync and one rename - the staged bytes are copied into the target's own
+   directory and the pre-image digest is taken BEFORE the window opens, so the
+   bound is O(1) in the target's size - it is measured into every receipt,
    and the pinned pre-image journal is its recovery. Everything earlier than the
    window is detected and refused; a write inside it is overwritten, and the
    contract says so rather than claiming it was prevented. See `contract`.
@@ -44,12 +45,28 @@
 
    This is the honest statement of what optimistic serializability costs. The
    window cannot be closed on a POSIX filesystem - rename replaces, it does not
-   compare-and-swap - so the kernel narrows it instead and names its bound:
-   the staged bytes are already in the target's own directory, so no byte
-   copying happens inside, and what remains is a digest read, an identity stat,
-   one fsync and one rename, taken under the workspace publish lock."
-  {:ops [:recheck-digest :recheck-identity :journal-write-begin :rename]
+   compare-and-swap - so the kernel narrows it instead and names its bound.
+
+   The bound is O(1) in the target's size and it did not use to be.
+   `:staging-copy-inside false` was literally true - no byte COPYING happened
+   inside - while the pre-image digest recheck inside the lock re-read the
+   whole target, so the window grew with the file: 846 us at 1 KB, 3.0 ms at
+   2 MiB, measured. The digest is now taken BEFORE the lock with a stat on
+   each side of it, and inside the lock only that stat is compared: NOFOLLOW
+   type, (device, inode), size, modification time and change time. A target
+   whose whole stat is unchanged still holds the bytes the digest described.
+   If the stat moved, the digest is re-read inside the lock and the receipt
+   says so in `:digest-rereads`, so the fast path can never be mistaken for a
+   skipped check. What remains inside is one stat, one fsync and one rename.
+
+   The residual is unchanged in KIND and now smaller in width: a modification
+   that leaves type, identity, size and both nanosecond timestamps identical
+   is indistinguishable from no modification, and that is the same class of
+   thing the contract already refuses to claim it closes."
+  {:ops [:recheck-stat :recheck-identity :journal-write-begin :rename]
    :staging-copy-inside false
+   :digest-computed-before-lock true
+   :stat-fields [:kind :file-key :size :mtime-ns :ctime-ns]
    :lock :workspace-publish-lock
    :residual "a writer that does not take the publish lock and lands inside this window is overwritten; the pinned pre-image journal is the recovery"})
 
@@ -66,7 +83,7 @@
              :unpinned-write]
    :guarantees ["Every edit was planned against the pre-image digest recorded in the manifest."
                 "No path is knowingly overwritten unless it still holds that digest."
-                "The recheck and the rename are taken under the workspace publish lock."
+                "The recheck and the rename are taken under the workspace publish lock, and the recheck inside it is one stat rather than a re-read."
                 "Exact rollback bytes are durable before any path is changed."
                 "A crash leaves a journal from which every begun path is restored and verified."]
    :commit-window commit-window
@@ -168,6 +185,35 @@
                :else :other)
        :file-key (str (.fileKey attrs))})
     (catch Exception _ {:kind :absent :file-key nil})))
+
+(defn- path-stat
+  "The NOFOLLOW type, filesystem identity, size and timestamps of `path`.
+
+   What makes the pre-image recheck O(1). A target whose type, (device, inode),
+   size, modification time and change time are all what they were when the
+   digest was taken OUTSIDE the lock still holds the bytes that digest
+   described, so the expensive read need not happen inside. When any field
+   moved, the caller re-reads inside the lock and records that it did."
+  [path]
+  (try
+    (let [p (.toPath (io/file path))
+          ^"[Ljava.nio.file.LinkOption;" nofollow (into-array LinkOption [LinkOption/NOFOLLOW_LINKS])
+          attrs (Files/readAttributes p BasicFileAttributes nofollow)]
+      {:kind (cond
+               (.isSymbolicLink attrs) :symlink
+               (.isRegularFile attrs) :regular
+               (.isDirectory attrs) :directory
+               :else :other)
+       :file-key (str (.fileKey attrs))
+       :size (.size attrs)
+       :mtime-ns (.to (.lastModifiedTime attrs) java.util.concurrent.TimeUnit/NANOSECONDS)
+       :ctime-ns (try
+                   (let [^java.nio.file.attribute.FileTime changed
+                         (Files/getAttribute p "unix:ctime" nofollow)]
+                     (.to changed java.util.concurrent.TimeUnit/NANOSECONDS))
+                   (catch Exception _ nil))})
+    (catch Exception _ {:kind :absent :file-key nil :size nil
+                        :mtime-ns nil :ctime-ns nil})))
 
 (defn- identity-token
   "A path's NOFOLLOW identity rendered as one tab-free journal token."
@@ -1023,28 +1069,40 @@
 (defn- publish-one!
   "Prepare, recheck and rename ONE staged path.
 
-   The order is the whole point. Copying the staged bytes into the target's own
-   directory happens FIRST, outside the publish lock and outside the window,
-   because it is the only expensive step. The digest recheck, the `write-begin`
-   fsync and the rename then happen together under the publish lock, so a
-   cooperating writer cannot land between them and a non-cooperating one has
-   only two stats, one fsync and one rename to hit.
+   The order is the whole point. BOTH expensive steps happen first, outside the
+   publish lock and outside the window: the staged bytes are copied into the
+   target's own directory, and the target's current digest is read with a stat
+   on each side of it. Inside the lock only that stat is compared - a target
+   whose type, identity, size and timestamps are unchanged still holds the
+   bytes the digest described - so the window is O(1) in the target's size
+   rather than O(size). When the stat moved, the digest IS re-read inside the
+   lock and the receipt reports it, so the fast path can never be mistaken for
+   a skipped check.
 
-   Returns {:ok true :window-ns n}, {:conflict-refusal m}, or {:failed cause}."
+   Returns {:ok true :window-ns n :reread? b}, {:conflict-refusal m}, or
+   {:failed cause}."
   [txn path {:keys [h0 identity0 staging prepare-fn publish-fn before-recheck
                     in-commit-window]}]
   (let [prepared (try {:tmp (prepare-fn path staging)}
                       (catch Exception cause {:failed cause}))]
     (if (:failed prepared)
       prepared
-      (let [^File tmp (:tmp prepared)]
+      (let [^File tmp (:tmp prepared)
+            ;; the O(size) read, outside the lock. A stat on each side says
+            ;; whether it describes a file that held still while it was read.
+            stat-before (path-stat path)
+            pre-digest (try (sha256-file path) (catch Exception _ nil))
+            stat-after (path-stat path)
+            pre-stable? (boolean (and pre-digest (= stat-before stat-after)))]
         (try
           (when before-recheck (before-recheck path))
           (with-publish-lock* (:transactions-dir txn)
             (fn []
               (let [opened (System/nanoTime)
-                    current (sha256-file path)
-                    identity-now (path-identity path)]
+                    stat-now (path-stat path)
+                    reread? (not (and pre-stable? (= stat-now stat-after)))
+                    current (if reread? (sha256-file path) pre-digest)
+                    identity-now (select-keys stat-now [:kind :file-key])]
                 (cond
                   (not= current h0)
                   {:conflict-refusal (assoc (conflict path h0 current)
@@ -1059,7 +1117,9 @@
                     (append-journal! txn (str "write-begin\t" path "\t" h0))
                     (try
                       (publish-fn path tmp)
-                      {:ok true :window-ns (- (System/nanoTime) opened)}
+                      {:ok true
+                       :window-ns (- (System/nanoTime) opened)
+                       :reread? reread?}
                       (catch Exception cause {:failed cause})))))))
           (finally
             (when (.exists tmp) (.delete tmp))))))))
@@ -1100,7 +1160,7 @@
                (assoc validation :files-written 0))
            (let [paths (sort (keys staged))]
              (append-journal! txn (str "commit-begin\t" (count paths)))
-             (loop [remaining paths written 0 window-ns 0]
+             (loop [remaining paths written 0 window-ns 0 rereads 0]
                (if (empty? remaining)
                  (let [finished (finish! txn :committed)]
                      {:ok true
@@ -1110,6 +1170,7 @@
                       :files-written written
                       :read-set-files (:read-set-count @state)
                       :commit-window (assoc commit-window :max-ns window-ns)
+                      :digest-rereads rereads
                       :reserved {:journal-bytes (:journal-bytes @state)
                                  :journal-bytes-peak (:journal-bytes-peak @state 0)
                                  :journal-bytes-max (get-in txn [:limits :max-journal-bytes])
@@ -1163,7 +1224,8 @@
                        (let [actual (sha256-file path)]
                          (if (= actual result-hash)
                            (recur (rest remaining) (inc written)
-                                  (max window-ns (long (:window-ns outcome 0))))
+                                  (max window-ns (long (:window-ns outcome 0)))
+                                  (if (:reread? outcome) (inc rereads) rereads))
                            (let [restored (rollback-written! txn)]
                              (finish! txn :rolled-back restored)
                              (refusal :txn-read-back-mismatch
