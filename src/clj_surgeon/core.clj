@@ -591,20 +591,21 @@
         ;; replaying it censused the replay's cwd. A rule that lives in one
         ;; branch is a rule the other branches break, so every refusal below
         ;; carries this anchor, and every continuation below is built by
-        ;; `relation-census/cli-next-command`.
+        ;; `relation-census/cli-continuation`, which renders it shell-safe.
         anchor (relation-census/cli-anchor opts)
-        continue-with (fn [fix] (relation-census/cli-next-command anchor fix))
+        continue-with (fn [fix] (relation-census/cli-continuation anchor fix))
         ;; A continuation that NARROWS to a subtree still goes through the one
         ;; builder: the subtree is just a different anchor, made absolute the
-        ;; same way, so a narrowing can no more be relative than a retry can.
+        ;; same way, so a narrowing can no more be relative — or unquoted —
+        ;; than a retry can.
         narrow-to (fn [path]
-                    (relation-census/cli-next-command
+                    (relation-census/cli-continuation
                       (relation-census/cli-anchor {:dir path}) :none))
         ;; A refusal offers exactly one of a continuation and a remedy
         ;; (MCP-OP-CENSUS-014): a null continuation is not a smaller promise
         ;; than a real one, it is a field the caller must interpret.
-        or-remedy (fn [command remedy]
-                    (if command {:next-command command} {:remedy remedy}))
+        or-remedy (fn [continuation remedy]
+                    (or continuation {:remedy remedy}))
         pool (when (some? threads) (relation-census/coerce-pool-size threads))
         parsed-doors (if doors
                        (relation-census/parse-doors
@@ -667,7 +668,7 @@
       (:walk-exceeded? @scan)
       (let [discovered (:discovered @scan)
             narrower (census-discovery/entry-narrowing-subtree discovered)
-            next-command (when narrower
+            continuation (when narrower
                            (narrow-to (str (:root discovered) "/" narrower)))]
         (merge
           {:ok false
@@ -690,13 +691,12 @@
            :anchor anchor}
           ;; A null continuation is not a smaller promise than a real one; the
           ;; refusal offers exactly one of a next-command and a remedy.
-          (if next-command
-            {:next-command next-command}
-            {:remedy (str "The walk stopped at the entry bound, so every count "
-                          "it observed is a lower bound and no subtree it "
-                          "finished walking is known to fit; point :dir at a "
-                          "directory you know is smaller, or census one :file "
-                          "at a time.")})
+          (or-remedy
+            continuation
+            (str "The walk stopped at the entry bound, so every count it "
+                 "observed is a lower bound and no subtree it finished "
+                 "walking is known to fit; point :dir at a directory you know "
+                 "is smaller, or census one :file at a time."))
           (facts)))
 
       ;; The same ceiling semantics as the MCP entrance: a tree the census may
@@ -706,7 +706,7 @@
       (:exceeded? @scan)
       (let [discovered (:discovered @scan)
             narrower (census-discovery/narrowing-subtree discovered)
-            next-command (when narrower
+            continuation (when narrower
                            (narrow-to (str (:root discovered) "/" narrower)))]
         (merge
           {:ok false
@@ -725,13 +725,12 @@
            :files-read 0
            :read-complete false
            :anchor anchor}
-          (if next-command
-            {:next-command next-command}
-            {:remedy (str "The walk stopped at the ceiling, so every count it "
-                          "observed is a lower bound and no subtree it "
-                          "finished walking is known to fit; point :dir at a "
-                          "directory you know is smaller, or census one :file "
-                          "at a time.")})
+          (or-remedy
+            continuation
+            (str "The walk stopped at the ceiling, so every count it observed "
+                 "is a lower bound and no subtree it finished walking is "
+                 "known to fit; point :dir at a directory you know is "
+                 "smaller, or census one :file at a time."))
           (facts)))
 
       :else

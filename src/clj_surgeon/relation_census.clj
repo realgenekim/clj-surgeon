@@ -605,7 +605,7 @@
    arguments have been parsed into an opts map.
 
    Sol's round-eleven item 2, blocking: round ten routed the SHAPE refusals
-   through `cli-anchor`/`cli-next-command` and left the POST-SCAN ones
+   through `cli-anchor`/`cli-continuation` and left the POST-SCAN ones
    spelling their own command, so a door that parses as a symbol but is
    defined in no scanned file — a question only the scan can answer — still
    handed back the literal `:dir .`, and replaying it censused the replay's
@@ -614,7 +614,7 @@
    This set is the CLI's half of the anchor contract, written down so a
    witness can ENUMERATE it: every name here is driven through the entrance
    and asserted to name the workspace the caller named and to build any
-   continuation it carries through `cli-next-command`. A refusal added to the
+   continuation it carries through `cli-continuation`. A refusal added to the
    op without a probe fails that witness rather than shipping unexercised.
 
    `:duplicate-argument` is NOT here: it is raised by `parse-args`, before
@@ -704,37 +704,97 @@
              :absolute absolute}
       (not= given absolute) (assoc :resolved-against cwd))))
 
-(defn cli-next-command
-  "The continuation one CLI refusal hands back, or nil when there is none.
+(def ^:private shell-safe-token
+  "Characters a POSIX shell passes through unchanged in an unquoted word.
 
-   THE ONE PLACE a CLI continuation is built. Sol's round-eleven item 2,
-   blocking: round ten routed the SHAPE refusals through this function and
-   left the POST-SCAN ones spelling their own command, so an undefined door
-   discovered after the scan still handed back the literal
-   `:dir . :doors …`. Sol replayed that from another cwd and the census
-   answered about the client fixture — the same silent retarget the shape
-   refusals had just been fixed for, from a site the fix never reached. A
-   rule that lives in one branch is a rule the other branches break, so this
-   function is public and every refusal site calls it.
+   The same set `shlex.quote` uses: word characters plus `@%+=:,./-`. Note
+   what is NOT here — space, quote, `;`, `$`, backtick, `&`, `|`, `<`, `>`,
+   `*`, `?`, `(`, `)`, `[`, `]`, `{`, `}`, `!`, `#`, `~`, and every control
+   character, newline included."
+  #"[A-Za-z0-9_@%+=:,./-]+")
+
+;; @spec MCP-OP-CENSUS-014
+(defn shell-quote
+  "One argv token, safe to paste into a POSIX shell.
+
+   Single quotes, because inside them the shell interprets NOTHING — no
+   expansion, no substitution, no word splitting, not even a backslash. The
+   one character a single-quoted string cannot contain is a single quote, and
+   the standard escape for it is to close the quote, emit an escaped quote,
+   and reopen: `'` becomes `'\\''`.
+
+   A token made entirely of safe characters is returned unquoted, so the
+   ordinary continuation still reads as a command a human would type. That is
+   a legibility choice and not a safety one: the predicate is a WHITELIST, so
+   a character nobody thought of is quoted by default rather than passed
+   through by default."
+  [token]
+  (let [text (str token)]
+    (if (and (seq text) (re-matches shell-safe-token text))
+      text
+      (str "'" (str/replace text "'" "'\\''") "'"))))
+
+;; @spec MCP-OP-CENSUS-014
+(defn render-command
+  "One argv vector as a shell-safe command line."
+  [argv]
+  (str/join " " (map shell-quote argv)))
+
+(defn cli-next-command-argv
+  "The continuation one CLI refusal hands back, as ARGV, or nil when there is
+   none.
+
+   ARGV IS THE PRIMITIVE and the rendered string is derived from it, which is
+   Sol's round-eleven item 5 stated as a design: this used to build a string
+   by interpolation, so `:dir \"space root\"` produced a command whose replay
+   returned `:invalid-arguments`, and a root containing `;printf INJECTED`
+   became command-injection syntax in a string whose entire purpose is to be
+   pasted into a shell. A continuation is an EXECUTABLE PROMISE;
+   MCP-OP-CENSUS-014 forbids a caption in an argument position because a
+   caption is unexecutable, and an unquoted path is the same defect one turn
+   later — it executes, and it executes something else.
 
    `fix` names the narrowing the refusal suggests: `:doors` and `:threads`
    append the argument the caller must correct, `:none` narrows nothing but
-   still anchors, and `:uncomputable` says there is no continuation to
-   compute at all — that anchor was itself the thing refused.
+   still anchors, and `:uncomputable` says there is no continuation at all —
+   that anchor was itself the thing refused.
 
-   Returns nil when there is no continuation OR when the rendered command
-   would exceed `max-next-call-bytes`; the caller publishes a remedy instead.
-   A null continuation is not a smaller promise than a real one."
+   The `max-next-call-bytes` bound is measured on the RENDERED string, not on
+   the argv, because the rendered string is what the caller reads and runs."
   [anchor fix]
   (when (and anchor (not= :uncomputable fix))
-    (let [command (str "clj-surgeon :op :relation-census "
-                       (if (= :file (:kind anchor)) ":file " ":dir ")
-                       (:absolute anchor)
-                       (case fix
-                         :doors (str " :doors " @known-door-list)
-                         :threads " :threads 8"
-                         ""))]
-      (when (<= (count command) max-next-call-bytes) command))))
+    (let [argv (into ["clj-surgeon" ":op" ":relation-census"
+                      (if (= :file (:kind anchor)) ":file" ":dir")
+                      (str (:absolute anchor))]
+                     (case fix
+                       :doors [":doors" @known-door-list]
+                       :threads [":threads" "8"]
+                       []))]
+      (when (<= (count (render-command argv)) max-next-call-bytes) argv))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(defn cli-continuation
+  "The continuation FIELDS one CLI refusal publishes, or nil when it has none.
+
+   THE ONE PLACE a CLI continuation is built. Sol's round-eleven item 2,
+   blocking: round ten routed the SHAPE refusals through the anchor and left
+   the POST-SCAN ones spelling their own command, so an undefined door
+   discovered after the scan still handed back the literal `:dir . :doors …`.
+   Sol replayed that from another cwd and the census answered about the client
+   fixture — the same silent retarget MCP-OP-CENSUS-014 forbids, from a site
+   the fix never reached. A rule that lives in one branch is a rule the other
+   branches break, so every refusal site calls this.
+
+   BOTH spellings are published. `:next-command-argv` is the vector a program
+   should exec — no shell, no parsing, nothing to get wrong.
+   `:next-command` is that vector RENDERED shell-safe, because the string is
+   what a human or an agent actually pastes, and the two must denote the same
+   call."
+  [anchor fix]
+  (when-let [argv (cli-next-command-argv anchor fix)]
+    {:next-command (render-command argv)
+     :next-command-argv argv}))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-016
@@ -790,8 +850,8 @@
                :error (cli-message req)
                :anchor anchor}
               (cli-data req)
-              (if-let [command (cli-next-command anchor cli-fix)]
-                {:next-command command}
+              (or
+                (cli-continuation anchor cli-fix)
                 {:remedy
                  (if cli-remedy
                    (cli-remedy req)

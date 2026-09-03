@@ -1353,9 +1353,16 @@
         {::exit exit ::out out ::err err}))))
 
 (defn- replay-next-command
-  "Run a CLI continuation verbatim, from `cwd`."
-  [cwd next-command]
-  (apply bb-cli-in cwd (rest (str/split (str next-command) #"\s+"))))
+  "Run a CLI continuation verbatim, from `cwd`.
+
+   Prefers the refusal's own argv vector when the caller has one — that is
+   the spelling a PROGRAM replays, with no shell and nothing to re-parse.
+   The rendered string's own safety is proved separately, by replaying it
+   through a real `bash -c` (`a-cli-continuation-is-shell-safe`)."
+  ([cwd next-command]
+   (apply bb-cli-in cwd (rest (str/split (str next-command) #"\s+"))))
+  ([cwd _next-command argv]
+   (apply bb-cli-in cwd (rest argv))))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-019
@@ -2972,9 +2979,9 @@
                     drives]
                 (let [built (atom 0)
                       thunk (fn []
-                              (with-redefs [census/cli-next-command
+                              (with-redefs [census/cli-continuation
                                             (counting
-                                              built census/cli-next-command)]
+                                              built census/cli-continuation)]
                                 (binding [*out* (java.io.StringWriter.)]
                                   (core/run (assoc opts
                                                    :op :relation-census)))))
@@ -3013,7 +3020,7 @@
             (testing (str label " builds its continuation through the anchor")
               (is (pos? built)
                   (str label " spelled its own continuation instead of "
-                       "calling cli-next-command: " command))
+                       "calling cli-continuation: " command))
               (is (some? (anchor-argument command))
                   (str label " continuation names no anchor at all: "
                        command))
