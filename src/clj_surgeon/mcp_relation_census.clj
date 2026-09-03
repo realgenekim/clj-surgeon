@@ -315,17 +315,41 @@
        (filter #(seq (get receipt % [])))
        first))
 
-(defn- bound-receipt
-  "Trim listed evidence until the published receipt fits its byte budget."
+(defn- trimmable-key
+  "The next thing to drop: listed evidence first, per-file counts last.
+
+   `by_file` is the receipt's cheapest-to-read summary and the one part a
+   reviewer can act on without the site list, so it is trimmed only once every
+   listed site is gone. It is trimmable all the same: with long project paths a
+   full `by_file` alone overruns the budget."
   [receipt]
-  (loop [receipt receipt]
-    (if (or (<= (receipt-bytes receipt) max-receipt-bytes)
-            (nil? (longest-list-key receipt)))
-      receipt
-      (let [k (longest-list-key receipt)]
-        (recur (-> receipt
-                   (update k #(vec (butlast %)))
-                   (assoc :receipt_truncated true)))))))
+  (or (longest-list-key receipt)
+      (when (seq (:by_file receipt)) :by_file)))
+
+(def ^:private receipt-envelope-allowance
+  "Bytes the receipt gains after it is bounded: the operation clock's
+   `elapsed_ms` and the JSON around the workspace root."
+  64)
+
+;; @spec MCP-OP-CENSUS-022
+(defn- bound-receipt
+  "Trim listed evidence, then per-file counts, until the receipt fits.
+
+   `reserved` is the size of what the adapter and the operation clock append
+   after this returns; the budget must hold for the receipt that is PUBLISHED,
+   not for the one that is built."
+  ([receipt] (bound-receipt receipt 0))
+  ([receipt reserved]
+   (loop [receipt receipt]
+     (if (or (<= (+ (receipt-bytes receipt) reserved) max-receipt-bytes)
+             (nil? (trimmable-key receipt)))
+       receipt
+       (let [k (trimmable-key receipt)]
+         (recur (-> receipt
+                    (update k #(if (map? %)
+                                 (dissoc % (last (keys %)))
+                                 (vec (butlast %))))
+                    (assoc :receipt_truncated true))))))))
 
 (defn- listed
   [sites class-key]
@@ -345,7 +369,8 @@
 
 ;; @spec MCP-OP-CENSUS-013
 (defn- build-receipt
-  [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root]}]
+  [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root
+           reserved]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)]
     (bound-receipt
@@ -363,7 +388,7 @@
              :skipped_outside_root (when (pos? (or skipped-outside-root 0))
                                      skipped-outside-root)
              :counts counts
-             :by_file (into {}
+             :by_file (into (sorted-map)
                             (take max-listed-files
                                   (map (fn [[f v]]
                                          [f (assoc (:counts v)
@@ -378,7 +403,8 @@
                                              (> requested-pool pool-size))
                                     requested-pool)
              :phases_elapsed_ms phases
-             :next_action (next-action counts)}))))
+             :next_action (next-action counts)})
+      (or reserved 0))))
 
 ;; ---------------------------------------------------------------------------
 ;; Execution
@@ -460,6 +486,7 @@
                            {:file (:file planned)})
                   (build-receipt
                     {:merged planned
+                     :reserved (+ receipt-envelope-allowance (count canonical))
                      :pool-size pool-size
                      :requested-pool requested-pool
                      :scanned (count scanned)

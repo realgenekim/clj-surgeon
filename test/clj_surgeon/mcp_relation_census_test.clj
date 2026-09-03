@@ -347,3 +347,32 @@
     (let [{:keys [pool-size]} (core/census-plan-pool 64)]
       (is (= (census/effective-pool-size 64) pool-size))
       (is (<= pool-size (.availableProcessors (Runtime/getRuntime)))))))
+
+(defn- padded-path
+  "A project-relative source path of exactly `width` characters."
+  [width i]
+  (let [head "src/"
+        tail (format "/f%03d.clj" i)
+        fill (- width (count head) (count tail))]
+    (str head (apply str (repeat fill \a)) tail)))
+
+;; @spec MCP-OP-CENSUS-022
+(deftest the-published-receipt-holds-its-byte-budget-with-long-paths
+  (let [root (temp-dir)]
+    (try
+      (doseq [i (range 14)]
+        (let [path (padded-path 231 i)]
+          (is (= 231 (count path)))
+          (spit-file! (io/file root path) arm-source)))
+      (let [result (census-tool/execute-request!
+                     {:project-root (.getPath root)} {})
+            bytes (count (.getBytes (json/generate-string result) "UTF-8"))]
+        (is (true? (:ok result)) (str "census refused: " (:error result)))
+        (is (= 14 (:files result)))
+        (is (<= bytes 4096)
+            (str "the published receipt was " bytes " bytes"))
+        (is (true? (:receipt_truncated result))
+            "a trimmed receipt must say it was trimmed")
+        (is (pos? (get-in result [:counts :raw]))
+            "trimming evidence must not touch the counts"))
+      (finally (delete-tree! root)))))

@@ -49,6 +49,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-021**: When clj-surgeon runs the plan phase from either entrance, it shall run it on the bounded `census_pool` pool whenever a pool larger than one is both requested and available, and the receipt's pool size shall be the pool that actually ran; when the pool that ran is smaller than the pool requested, clj-surgeon shall publish the requested size alongside it.
 
+- [x] **MCP-OP-CENSUS-022**: When clj-surgeon bounds a census receipt, the 4096-byte budget shall hold for the receipt as PUBLISHED, including the workspace root and elapsed time appended after bounding, and clj-surgeon shall trim listed sites first and per-file counts last, marking any trimmed receipt `receipt_truncated`.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
