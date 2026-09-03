@@ -34,6 +34,23 @@ Knobs, all optional:
 | `MEMBAT_REPS` | `5` | reps per (op, N); rep 1 is `fresh`, the rest aggregate into `warm` |
 | `MEMBAT_SCALES` | `100,1000,10000` | default-corpus tree sizes (the adversarial arms are fixed) |
 | `MEMBAT_OP_TIMEOUT_MS` | `600000` | if one fresh rep exceeds this, its warm reps and every larger N for that operation are skipped |
+| `MEMBAT_REFERENCE` | `require` | `require` refuses (typed, exit 2) rather than rebuild a stale/missing reference as a side effect; `auto` restores the old rebuild-on-stale behavior — see below |
+| `MEMBAT_ALLOW_ANY_ROOT` | unset | set to `1` to let `MEMBAT_ROOT` resolve outside `/home/forge/tmp` — see below |
+
+`MEMBAT_ROOT` is guarded, not just a path: a **fresh** root is created and
+marked (a `.membat-root` file) by the battery itself, so a root that already
+exists **without** that marker is refused (`:membat-root-unmarked`) rather
+than written into — it might be `$HOME`, a real repository, or another tool's
+directory, and the battery has no way to tell those apart from its own corpus.
+The root's canonical path must also resolve inside `/home/forge/tmp` unless
+`MEMBAT_ALLOW_ANY_ROOT=1` (`:membat-root-outside-allowed` otherwise).
+
+By default (`MEMBAT_REFERENCE=require`), `make memory-battery` never launches
+the 4 GiB reference JVM as a side effect: a stale or missing reference refuses
+with a typed `:membat-reference-required` line naming the remedy (`make
+memory-battery-reference`), so that minutes-long, 4 GiB build only ever starts
+from an explicit invocation. Set `MEMBAT_REFERENCE=auto` to restore the old
+behavior of rebuilding it automatically.
 
 Sub-targets, if you want them separately:
 

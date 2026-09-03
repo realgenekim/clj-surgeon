@@ -400,6 +400,52 @@
                         :expected (entries-digest expected)}})
             {:status :ok})))))))
 
+(def ^:private allowed-root-prefix
+  "MEMBAT_ROOT must resolve inside this directory unless the caller sets
+  MEMBAT_ALLOW_ANY_ROOT=1. It is arbitrary and, without a marker, a fresh run
+  would create or write into whatever it pointed at."
+  "/home/forge/tmp")
+
+(defn- membat-root-marker [root] (io/file root ".membat-root"))
+
+(defn ensure-root-marker!
+  "Guard MEMBAT_ROOT against pointing at an arbitrary directory: a FRESH root
+  (does not yet exist) is created and marked; a root that already exists
+  WITHOUT the marker is refused rather than written into — it might be $HOME,
+  a real repository, or another tool's directory, and the battery has no way
+  to tell. The root's canonical path must also resolve inside
+  `allowed-root-prefix` unless `allow-any-root?` (default: the
+  MEMBAT_ALLOW_ANY_ROOT=1 env var) says otherwise.
+
+  Throws ex-info shaped like `verify-tree`'s :refuse ({:reason ... :detail
+  ...}) so -main's existing REFUSED handler catches it uniformly. Returns nil."
+  ([root] (ensure-root-marker! root (= "1" (System/getenv "MEMBAT_ALLOW_ANY_ROOT"))))
+  ([root allow-any-root?]
+   (let [rf (io/file root)
+         canonical (.getCanonicalPath rf)
+         allowed (.getCanonicalPath (io/file allowed-root-prefix))]
+     (when (and (not allow-any-root?)
+                (not (or (= canonical allowed)
+                        (str/starts-with? canonical (str allowed java.io.File/separator)))))
+       (throw (ex-info (str "MEMBAT_ROOT resolves outside " allowed-root-prefix
+                            ": " canonical)
+                       {:reason :membat-root-outside-allowed
+                        :root root :resolved canonical :allowed allowed-root-prefix
+                        :remedy "point MEMBAT_ROOT under /home/forge/tmp, or set MEMBAT_ALLOW_ANY_ROOT=1"})))
+     (if (.exists rf)
+       (when-not (.exists (membat-root-marker rf))
+         (throw (ex-info (str "MEMBAT_ROOT exists without its marker: " root)
+                         {:reason :membat-root-unmarked
+                          :root root
+                          :remedy (str "point MEMBAT_ROOT at a fresh directory, "
+                                      "or create " (str (membat-root-marker rf))
+                                      " yourself if you are certain this root "
+                                      "was built by the battery")})))
+       (.mkdirs rf))
+     (when-not (.exists (membat-root-marker rf))
+       (spit (membat-root-marker rf)
+             (str "membat root created " (java.time.Instant/now) "\n"))))))
+
 (defn generate-tree!
   "Write (or verify) the N-file tree under `root`. Returns the manifest.
 
@@ -587,6 +633,53 @@
       (println "generate_tree verification self-test: ok")
       (finally (rm-rf! root)))))
 
+;; MEMBAT_ROOT is arbitrary and, before this, had no marker or scope guard: a
+;; fresh root auto-created whatever it pointed at, and a shared/pre-existing
+;; directory (potentially unrelated to the battery) was written into on the
+;; same footing as a battery-owned one.
+(defn- root-marker-self-test! []
+  (let [base "/home/forge/tmp"
+        stamp (System/currentTimeMillis)
+        fresh-root (io/file base (str "membat-marker-selftest-" stamp))
+        unmarked-root (io/file base (str "membat-unmarked-selftest-" stamp))
+        outside-root (io/file (System/getProperty "java.io.tmpdir")
+                              (str "membat-outside-selftest-" stamp))]
+    (try
+      ;; A fresh root is created and marked by the battery itself.
+      (ensure-root-marker! (str fresh-root))
+      (assert (.isDirectory fresh-root) "a fresh root is created")
+      (assert (.exists (io/file fresh-root ".membat-root"))
+              "a fresh root is marked")
+      ;; Reusing an already-marked root is a no-op, not a refusal.
+      (ensure-root-marker! (str fresh-root))
+
+      ;; A pre-existing root with NO marker is refused, not silently adopted
+      ;; — it might be $HOME, a real repo, or another tool's directory.
+      (.mkdirs unmarked-root)
+      (let [reason (try (ensure-root-marker! (str unmarked-root)) :did-not-throw
+                        (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))]
+        (assert (= :membat-root-unmarked reason)
+                (str "an unmarked pre-existing root is refused, got " reason)))
+
+      ;; A root outside /home/forge/tmp is refused by default...
+      (let [reason (try (ensure-root-marker! (str outside-root) false) :did-not-throw
+                        (catch clojure.lang.ExceptionInfo e (:reason (ex-data e))))]
+        (assert (= :membat-root-outside-allowed reason)
+                (str "a root outside the allowed scope is refused, got " reason)))
+      (assert (not (.exists outside-root))
+              "a refused outside-scope root is never created")
+
+      ;; ...unless the caller explicitly opts in (MEMBAT_ALLOW_ANY_ROOT=1).
+      (ensure-root-marker! (str outside-root) true)
+      (assert (.isDirectory outside-root)
+              "an explicit override creates and marks an outside-scope root")
+
+      (println "generate_tree root-marker self-test: ok")
+      (finally
+        (rm-rf! fresh-root)
+        (rm-rf! unmarked-root)
+        (rm-rf! outside-root)))))
+
 (defn- self-test! []
   (let [a (file-source 3 100)
         b (file-source 3 100)
@@ -601,6 +694,7 @@
     (assert (= :medium (bucket-for 6)))
     (assert (= :large (bucket-for 9)))
     (verification-self-test!)
+    (root-marker-self-test!)
     (println "generate_tree self-test: ok")
     0))
 
@@ -609,6 +703,13 @@
     (if self-test
       (System/exit (self-test!))
       (do
+        (try
+          (ensure-root-marker! root)
+          (catch clojure.lang.ExceptionInfo e
+            (binding [*out* *err*]
+              (println "REFUSED:" (.getMessage e))
+              (println (pr-str (ex-data e))))
+            (System/exit 2)))
         (doseq [[profile n] (into (vec (for [n (sort scales)] [:default n]))
                                   profile-arms)]
           (let [t0 (System/currentTimeMillis)

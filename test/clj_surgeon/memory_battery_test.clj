@@ -647,3 +647,28 @@
             (str "make " gate
                  " must not launch the memory battery: it is a minutes-scale"
                  " measurement, deliberately kept out of the fast gates"))))))
+
+;; ------------------------------------------------------------------
+;; A fresh MEMBAT_ROOT must never auto-launch the 4g reference JVM as a
+;; side effect of `make memory-battery` — Sol's finding 8.
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-011
+(deftest membat-reference-defaults-to-require-not-auto
+  (is (str/includes? (makefile-text) "MEMBAT_REFERENCE ?= require")
+      "MEMBAT_REFERENCE must default to require, not auto, so a stale/missing"))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-stale-reference-does-not-silently-rebuild-under-the-default
+  (let [targets (battery/parse-makefile-targets (makefile-text))
+        recipe (str/join "\n" (:recipe (get targets "memory-battery")))]
+    (testing "the recipe is gated on MEMBAT_REFERENCE, not an unconditional ||"
+      (is (str/includes? recipe "MEMBAT_REFERENCE")
+          "the memory-battery recipe must consult MEMBAT_REFERENCE before rebuilding"))
+    (testing "a stale/missing reference under the default refuses with a typed reason"
+      (is (str/includes? recipe "membat-reference-required")
+          "the refusal must be typed and greppable, not a bare shell failure"))
+    (testing "the old unconditional auto-rebuild fallback is gone"
+      (is (not (re-find #"memory-battery-attest\s*\\\s*\n\s*\|\|\s*\$\(MAKE\)\s*--no-print-directory\s*memory-battery-reference\s*$"
+                        recipe))
+          "attest failure must not unconditionally fall through to the 4g reference build"))))

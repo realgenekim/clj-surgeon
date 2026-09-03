@@ -209,6 +209,25 @@ MCP-OP-MEM-011:
 - A shared build host perturbs wall time and, through GC scheduling, the sampled
   peak. The receipt records host load context; a single failing run near a line
   is re-run before it is called a regression.
+- `MEMBAT_ROOT` is guarded, not merely a path variable: a fresh root is
+  created and marked (`.membat-root`) by the battery itself; a root that
+  already exists WITHOUT that marker is refused (`:membat-root-unmarked`)
+  rather than written into, because the battery cannot tell whether an
+  existing directory it did not mark is its own corpus or something else
+  entirely; and the root's canonical path must resolve inside
+  `/home/forge/tmp` unless the caller explicitly sets
+  `MEMBAT_ALLOW_ANY_ROOT=1` (`:membat-root-outside-allowed` otherwise). None of
+  this claims MEMBAT_ROOT's *contents* are trustworthy — that is the corpus
+  and reference checks above — only that the battery does not create or write
+  into a directory it has no evidence it owns.
+- A stale or missing cached reference does NOT silently launch the 4 GiB
+  reference JVM as a side effect of `make memory-battery`. `MEMBAT_REFERENCE`
+  (default `require`) refuses that case with a typed line
+  (`:membat-reference-required`) naming the explicit remedy
+  (`make memory-battery-reference`); `MEMBAT_REFERENCE=auto` restores the
+  side-effecting rebuild for a caller who wants it. This is an operational
+  guard on WHEN the reference build runs, not a claim about the reference
+  itself — see the anchoring and ops-catalogue boundaries above for that.
 
 ## Rationale
 
