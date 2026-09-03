@@ -630,3 +630,162 @@ is honored the way the mayor asked at 2230Z: one integration branch, composed he
 | F-3 | 107 | 4 | 7 | 0 | 4 | green |
 
 Predictions scored: Opus "0/3 at 65%" — right; Sol "0/3 — an immediate measured negative" — right; Fable "≤ 2/3" — right but loosest. Mechanism candidate inb-3e298e (text content header-only). Caveat: Lb not blind. Receipt: docs/observations/2026-09-04-e6-lb-cohort.md (de5d7fb). Next wave polled from the fleet (§10 when it lands).
+
+## 10. Result poll on E6 — Opus (file /home/forge/tmp/sol/e6poll-opus.md, 22:47Z)
+
+# Opus — poll on the E6-Lb result (adoption 0/3)
+
+*Anvil seat, read-only in `/home/forge/src/clj-surgeon` @ `08bfcb1`, 2026-09-04. Sources read:
+`docs/observations/2026-09-04-e6-lb-cohort.md`, `2026-09-03-brainfleet-hills.md` §1–§9 (my own
+ranking is §5a, prediction "0/3 at 65%" — scored right), `docs/vision.md` squares 1 and 3,
+`2026-09-04-e3-e6-prestaged.md` C.1–C.3, and the six per-arm receipts under
+`/home/forge/tmp/arms/e6` including all six `rollout.jsonl`.*
+
+---
+
+## 1. Interpretation of the 0/3 — five lines
+
+1. **Routing and product, not client rendering and not wiring.** The decline is made *before any
+   receipt is seen*; each arm is a fresh `CODEX_HOME` seeded with `auth.json` only, so a
+   header-only text block the agent never saw cannot be its cause. Rendering is a downstream
+   blocker, not this mechanism.
+2. **The rollouts show `rg` is not a competitor to `ls-tree` — it is a strictly better version of
+   it for this task.** F-1's first call is `rg -n -C 5 'System/currentTimeMillis|\(ns marvin-voice-remote' src`;
+   F-3's and N-1's is `rg -n -C 8 'System/currentTimeMillis|\*now-ms\*|\(ns ' src`. One call returns
+   the 22 sites **and** every `ns` form **and** the line numbers to edit by. That is `ls-tree`'s
+   product plus the hit list, on a route the agent already types from memory.
+3. **All six arms are step-isomorphic** — `rg` → read requires/headers → one `apply_patch` →
+   `grep -rn` sweep → focused kaocha → `git diff --stat`, in 7–8 calls and 3–5 returns, F and N
+   indistinguishable. `inspect_clojure` appears exactly twice in each F rollout: both are the
+   prompt's own §5 text. No reasoning summary weighs the tool and rejects it; it is never
+   considered.
+4. **Had it been called it would have under-delivered.** PF-4's `pf4/c2.json`: at `limit=16384`
+   with `grep="System/currentTimeMillis"` on a **10-file** `src`, the receipt is
+   `6 of 10 files · read_complete=false · → narrow_scope`, and `content[0].text` is 146 chars of
+   header with zero rows. So the fix is two defects, not one — text rendering **and** a payload
+   bound that cannot serve a toy tree — and until both are fixed, square 3's foundation cannot
+   answer "exactly, once" where `rg` answers completely in one call.
+5. **The null is credible, not proven, per-arm.** The F arms' server telemetry contains only
+   `server.start`; there is no in-arm `tools/list`/session witness bound to the arm's `run_id`,
+   and `~/bin/sol-yolo`'s `-c mcp_servers.clj-surgeon.url=…` path (the one all three F arms took —
+   the worktree had no `.codex/config.toml`) **omits `required = true`**, which the config-file
+   path sets. A failed connection would have been silent. The wiring probe is a post-hoc
+   corroborator on a different port and worktree, not the authority for these three sessions.
+
+**Apparatus ratchet (one line, not an experiment):** set `required = true` on sol-yolo's `-c` path,
+and make the apparatus assert a per-arm MCP session/tools-list telemetry event carrying that arm's
+`run_id` before any adoption number is scored. Cheap; it upgrades every future free-choice null
+from credible to proven.
+
+---
+
+## 2. Four next-wave experiments
+
+Floors quoted and never crossed: wall **172 s**, non-test actions **6.1**, acceptance
+**0→4 failures on identical inputs** (a gate, never a score). Everything below runs locally on
+Anvil, servers on **7909/7910**, tip ∪ `origin/main` merged locally (the E6 server sha
+`f24812b09ddd` is reusable as-is), nothing merged, nothing pushed.
+
+### O1 — **E6-Q3: square 3 on its own terms** (correctness primary, adoption demoted)
+
+- **Why:** free-choice adoption has now been asked 13 times and answered the same way. The question
+  never asked is the one the square is actually built on: *does code-as-data answer questions grep
+  answers wrong, on this repo, better than an agent with `rg`?* A mandated arm is legitimate here
+  because the primary is capability, not choice.
+- **Design:** read-only task, no writes, no gate ambiguity. Six probes of the shapes `docs/vision.md`
+  names: (1) every caller of a named Var with the arity used; (2) which textual occurrences of a
+  symbol are inside strings/comments; (3) which reader-conditional branch is live for `:clj`;
+  (4) what a namespace requires and what it exposes publicly; (5) which callers use which arity of a
+  multi-arity Var; (6) which namespaces break if a Var is renamed. Agent writes `answers.edn`.
+  Ground truth is **built, hand-verified and frozen with its sha before any arm runs**. Three arms:
+  **N** native, **M** mandated (`inspect_clojure` required), **F** free choice.
+- **Pass line (machine-scorable):** `answers.edn` exact-match against the frozen truth;
+  **M ≥ 5 of 6 correct in ≥ 2 of 3 runs, and M − N ≥ +1 in ≥ 2 of the 3 mirrored pairs.**
+  Secondary, reported: F adoption count; returns and wall (claimed only above the floors).
+- **Predicted:** N median **4 of 6** (probes 2 and 6 are where `rg` returns candidates it must then
+  read to reject); M median **6 of 6**; the M−N line clears at **55%**; F adoption **0 of 3 at 80%**.
+- **Cost:** 9 arm-runs (~60–120 s each, read-only) ≈ **1.0–1.5 h wall**; **2 agent-hours** to build
+  and freeze the truth set + grader.
+- **Tonight on:** 7909, server `f24812b09ddd` (already built and attested by E6); `marvin-voice-remote @ ab267f9`.
+- **One reason it is waste:** if native scores 6/6, square 3 is empty and should be withdrawn like
+  the single-edit square — a real finding, but it ends the square rather than winning it. Secondary
+  risk: an arguable ground truth turns a mechanical grade into a judge call.
+
+### O2 — **PF-5: one-call sufficiency** (the fix, benched — zero arm-runs)
+
+- **Why:** every future square-3 experiment is uninterpretable while a call returns a 146-char
+  header and `read_complete=false` on ten files. This is the gate on O1/O3, not a cohort.
+- **Pass line:** on the Lb worktree, **one** `inspect_clojure mode="ls-tree" dir="src"
+  grep="System/currentTimeMillis"` call returns, in `content[0].text`, **≥ 22 hit line numbers across
+  ≥ 10 files with `read_complete=true`, in ≤ 8 KB**, and the identical call against `f24812b09ddd`
+  fails at least one of those clauses. Both receipts frozen as JSON in the log.
+- **Predicted:** pre-fix FAIL — **certain** (already measured: 6 of 10, `read_complete=false`,
+  text 146 chars). Post-fix PASS at **70%**. Payload **4–8 KB** vs the `rg -n -C 8` output the arms
+  actually used (~6 KB), i.e. **~1.0× not ≪1×, at 60%** — which, if true, is itself the product
+  verdict for this rung.
+- **Cost:** **0 arm-runs**, **2–3 agent-hours** (Sol builds: render rows into the text block, and
+  charge the limit against rows rather than the header), ~45 min wall.
+- **Tonight on:** 7910, hand-driven, tip ∪ main.
+- **One reason it is waste:** the fix cannot move adoption by itself (a fresh session cannot know
+  the payload changed), so if it is scored as an adoption experiment it will read as a 14th null.
+
+### O3 — **E6-Bb: blind rung + a "when" plate in the tool description** (a 3-run screen)
+
+- **Why:** it closes the receipt's own caveat (rung Lb still names 8 of 10 owner namespaces in
+  clauses 3–4) and the last cheap prompt-side lever, in one screening cohort. The plate belongs in
+  the **MCP tool description** — always on the model's table, and it survives when we do not own the
+  prompt — not in more §5 prose.
+- **Design:** rung **Bb** = Lb minus the namespace names in clauses 3/4 and minus the "22 textual
+  occurrences" count, with definition-of-done restated as the sweep the acceptance suite already
+  runs. Tool description gains one WHEN sentence ("call this when you do not yet know which files
+  define or use a symbol; it answers in one call what a grep answers in three"). F only, n=3,
+  against the frozen E6 N arms as the comparator.
+- **Pass line:** **≥ 1 of 3 F runs issues an `ls-tree` call within its first 3 model returns.**
+  (Deliberately lower than E6's 2/3: this is a go/no-go on spending 6 more runs to de-confound the
+  two levers.)
+- **Predicted:** **0 of 3 at 70%**, ≥1 of 3 at **30%**. If it fires, de-confound with 3 + 3
+  (plate-only, blind-only).
+- **Cost:** **3 arm-runs** ≈ 40 min wall; **1 agent-hour** (rung diff + description edit, both
+  deletions-plus-one-sentence, asserted mechanically).
+- **Tonight on:** 7909, tip ∪ main; needs O2 first only if a *positive* is to be interpretable.
+- **One reason it is waste:** two levers move at once, and the prior says the result is the
+  fourteenth null — a confounded null teaches nothing a clean null would not have.
+
+### O4 — **Route, don't ask: the read-side hook** (square 3's version of hill 4)
+
+- **Why:** `docs/vision.md` already rules the mechanism — *"A tool's presence and name are not a
+  path; a harness that routes the write through the verb is"* and *"sit on the agent's route."*
+  Thirteen nulls say asking does not work. The read side has never been hooked.
+- **Design:** a shim early on the arm worktree's `PATH` that intercepts `rg`/`grep` invocations
+  scoped to `.clj`/`.cljc`, serves them through the Surgeon read path, and appends the structural
+  rows to the ordinary hit list. **Surgeon is never named in the prompt.** Wrapper keeps a log;
+  fail-open on any refusal (the E1 grammar scar, read side).
+- **Pass line:** **100% of clj-scoped grep invocations routed** (routed count = clj-scoped count,
+  deterministic from the wrapper log); acceptance gate green in 3 of 3; wall within the **172 s**
+  floor of the unhooked N arms; **zero** runs in which the agent abandons the hooked path
+  (fallback count = 0); non-test actions within the **6.1** floor.
+- **Predicted:** coverage **100% at 85%**; correctness green **3 of 3 at 80%**; **returns saved: 0
+  (median), at 60%** — my honest prediction is that enriching an `rg` answer changes bytes, not
+  round-trips, and vision's own constraint is *count returns, not milliseconds*. A measured 0 here
+  is the most valuable number on this list, because it distinguishes "agents won't choose us" from
+  "there was nothing to choose."
+- **Cost:** **2–3 agent-hours** build; **6 arm-runs** ≈ 1.5 h wall.
+- **Tonight on:** 7909, tip ∪ main; build tonight, cohort after O2.
+- **One reason it is waste:** if the hook is fully transparent it measures nothing new; if it is not
+  transparent it is an outage on the agent's only discovery path.
+
+---
+
+## 3. Rating the four candidates against mine
+
+| candidate | verdict | rank | why |
+|---|---|---|---|
+| **(d)** drop free choice; square 3 as correctness on a read-only task, N vs F | **Best of the four — this is my O1**, upgraded with a **mandated M arm** | **1** | It changes the primary from a question answered 13 times to the one never asked. Without an M arm a decline in F makes F ≡ N and the cohort measures nothing — the exact failure mode E6-Lb just demonstrated. |
+| **(a)** fix text rendering, re-run 3 F arms on the same rung | **Split it: the fix is essential (my O2); the re-run is near-certain waste** | fix **2**, re-run **4** | The agent never called the tool, so the rendering it never saw cannot be the mechanism, and a fresh session cannot know the payload changed. Predicted re-run adoption **0/3 at 85%**. Also: rendering is only half the defect — `limit=16384` still returns 6 of 10 files on a 10-file tree. |
+| **(b)** a truly blind rung, N vs F | **Worth 3 screening runs, not 6** — my O3 | **3** | It closes the receipt's own caveat honestly, but the task stays grep-shaped: "find every `System/currentTimeMillis`" is exactly the question `rg` answers completely in one call, blind or not. Blindness fixes fairness, not the square. |
+| **(c)** routing plate (the description says WHEN) vs bare exposure | **Fuse with (b); put the plate in the tool description, not the prompt** | **3 (tied, same cohort)** | Prompt mandates are a measured loser and the prompt is not ours in the field; the tool description is always on the table. Predicted **0/3 at 70%** on its own — it earns its 3 runs only because it is the last cheap prompt-side lever and a positive would be genuinely new. |
+
+**Ranked order I would run:** **O2 (fix + bench, 0 arm-runs) → O1 (= candidate d, with an M arm)
+→ O4 (build tonight, cohort after O2) → O3 (= b+c fused, 3-run screen).** And the apparatus ratchet
+from §1.5 ships with whichever cohort runs first, because without an in-arm connection witness every
+adoption null in this program is credible rather than proven.
