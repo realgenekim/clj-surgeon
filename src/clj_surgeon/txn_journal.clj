@@ -559,6 +559,27 @@
    directory cannot grow without bound."
   86400000)
 
+(def broken-lock-stamp-tolerance-ms
+  "How far into the future a tombstone's own stamp may read before it is
+   UNREADABLE rather than a time.
+
+   The stamp lives in a `LOCK.broken-at.*` sidecar in the transactions
+   directory, and retention is measured against the NEWEST of it and the
+   file's own mtime/ctime basis - the direction that keeps evidence rather
+   than retires it early. That direction is fail-safe against a stamp in the
+   PAST and fail-open against one in the FUTURE: any writer of the directory,
+   or one forward step of a clock that later steps back, makes a file
+   permanent and publishes an age no clock produced. Measured: a stamp ten
+   years ahead gave `:age-ms -315360000000`, `:pruned 0`, and a tombstone
+   nothing would ever retire.
+
+   A stamp this far ahead or further is therefore not a time: the file falls
+   back to its own mtime/ctime basis and the row says `:stamp :unreadable`.
+   The tolerance is a clock-skew allowance, not a grace period - a minute is
+   wider than any skew between two writers of one directory on one host, and
+   far narrower than the retention it would otherwise defeat."
+  60000)
+
 (def ^:private tombstone-prefix
   "The prefix every break's evidence file carries."
   "LOCK.broken.")

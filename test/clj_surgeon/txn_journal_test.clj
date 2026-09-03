@@ -2540,3 +2540,106 @@
                    "cannot tell how: " (pr-str (:lock-broken txn))))
           (journal/rollback! txn))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-stamp-in-the-future-is-unreadable-and-an-age-is-never-negative
+  (testing "Opus round 6, finding 2. Retention is measured against the NEWEST
+            of the file's basis and the sidecar's `:broken-at-ms`, which is
+            fail-safe against a stamp in the PAST and fail-open against one in
+            the FUTURE: any writer of the transactions directory - or a clock
+            that steps forward once and back - makes a tombstone permanent and
+            publishes `:age-ms -315360000000`, a negative age no clock
+            produced, unclamped and untyped, while MEM-013 promises evidence
+            'bound by a published retention age that recovery enforces'. Sol's
+            shape at the published tolerance: one millisecond under it is a
+            stamp, the tolerance itself is not a time."
+    (let [ws (workspace! "future-stamp" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          tomb (io/file dir "LOCK.broken.FORGED-FUTURE")
+          side (io/file dir "LOCK.broken-at.FORGED-FUTURE")
+          ;; ten years ahead, exactly the reviewer's forgery
+          base (+ (System/currentTimeMillis) (* 10 365 24 60 60 1000))
+          row (fn [now-ms]
+                (first (filter #(= "LOCK.broken.FORGED-FUTURE" (:txid %))
+                               (journal/retained-transactions
+                                 (:root ws) (cond-> opts now-ms (assoc :now-ms now-ms))))))]
+      (try
+        (.mkdirs dir)
+        (spit tomb (pr-str {:txid "forged" :pid 1}))
+        (spit side (pr-str {:tombstone "LOCK.broken.FORGED-FUTURE"
+                            :broken-at-ms base}))
+
+        (let [r (row nil)]
+          (is (some? r) "the sweep lists it")
+          (is (not (neg? (long (:age-ms r))))
+              (str "a published age is never negative: " (pr-str r))))
+
+        (let [under (row (- base journal/broken-lock-stamp-tolerance-ms -1))]
+          (is (= :ok (:stamp under))
+              (str "one millisecond UNDER the tolerance is an ordinary stamp: "
+                   (pr-str under)))
+          (is (zero? (long (:age-ms under)))
+              (str "and an age that would be negative is clamped at 0, never "
+                   "published as a negative number: " (pr-str under))))
+
+        (let [at (row (- base journal/broken-lock-stamp-tolerance-ms))]
+          (is (= :unreadable (:stamp at))
+              (str "AT the tolerance the stamp is not a time, and the row says "
+                   "so: " (pr-str at)))
+          (is (> (long (:age-ms at)) (long journal/broken-lock-retention-ms))
+              (str "the age falls back to the file's own basis, which is what "
+                   "makes the published bound enforceable: " (pr-str at))))
+
+        (let [result (journal/recover!
+                       (:root ws)
+                       (assoc opts :now-ms (- base journal/broken-lock-stamp-tolerance-ms)))]
+          (is (= 1 (:pruned (:broken-locks result)))
+              (str "and recovery retires it: a bound any writer of the "
+                   "directory can lift is not a bound: "
+                   (pr-str (:broken-locks result))))
+          (is (not (.exists tomb)))
+          (is (not (.exists side)) "the sidecar goes with the evidence it stamped"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest an-orphan-stamp-sidecar-is-listed-and-retired-like-the-evidence-it-stamped
+  (testing "the smaller half of finding 2. A `LOCK.broken-at.*` whose
+            tombstone was removed by anything but the prune or the revert is
+            listed by nothing and pruned by nothing - a small unbounded
+            accumulation of exactly the kind `broken-lock-retention-ms` exists
+            to prevent, in the same directory it was written to bound."
+    (let [ws (workspace! "orphan-sidecar" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          side (io/file dir "LOCK.broken-at.ORPHAN")
+          rows (fn [] (filter #(= :orphan-sidecar (:kind %))
+                              (journal/retained-transactions (:root ws) opts)))]
+      (try
+        (.mkdirs dir)
+        (spit side (pr-str {:tombstone "LOCK.broken.ORPHAN"
+                            :broken-at-ms (System/currentTimeMillis)}))
+        (let [r (first (rows))]
+          (is (some? r)
+              (str "the sweep lists the orphan: " (pr-str (rows))))
+          (is (= "LOCK.broken-at.ORPHAN" (:txid r)))
+          (is (= :txn/recover (:retired-by r))
+              "and names the verb that retires it"))
+
+        (let [counted (:orphan-sidecars (:broken-locks (journal/recover! (:root ws) opts)))]
+          (is (= {:found 1 :pruned 0 :remaining 1} counted)
+              (str "recovery counts it in a standing bucket, fresh: "
+                   (pr-str counted)))
+          (is (.isFile side) "and keeps it while it is inside retention"))
+
+        (let [counted (:orphan-sidecars
+                        (:broken-locks
+                          (journal/recover!
+                            (:root ws)
+                            (assoc opts :now-ms (+ (System/currentTimeMillis)
+                                                   (* 2 journal/broken-lock-retention-ms))))))]
+          (is (= {:found 1 :pruned 1 :remaining 0} counted)
+              (str "and retires it on the SAME published retention: "
+                   (pr-str counted)))
+          (is (not (.exists side))))
+        (finally (cleanup! ws))))))
