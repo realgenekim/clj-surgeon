@@ -586,6 +586,28 @@
   recent twenty, the run's own document always among them, and deletes the rest."
   20)
 
+;; @spec MCP-OP-ALIAS-052
+(def details-retention
+  "How durable a published `details_path` is, in one word the receipt carries.
+
+  BEST-EFFORT, and deliberately so. The bound above is per directory, not per
+  caller: twenty concurrent migrations in one workspace publish twenty-one
+  documents between them, and the twenty-first prunes a path a peer's receipt
+  named seconds earlier. Each run protects its OWN document and nothing else.
+
+  Protecting peers was considered and rejected. An index of recently published
+  paths is read-modify-written by every call, so it carries the identical race
+  it would be fixing; making it correct needs a lock file on the hot path of
+  every migration. That is a durable, contended, failure-prone mechanism spent
+  on a diagnostic document the caller is told to read from the receipt it was
+  just handed, while the artefact that actually has to survive — the undo
+  receipt — is already transactional and untouched by this pruning.
+
+  So the receipt says the true thing instead: retention is best-effort, the
+  bound is published alongside it, and a caller who needs the detail should
+  read it now rather than assume the path keeps."
+  "best-effort")
+
 ;; @spec MCP-OP-ALIAS-045
 (defn- prune-details!
   "Delete all but the most recent `max-detail-files` detail documents.
@@ -593,7 +615,11 @@
   `keep` is the document this run just wrote; it is retained regardless of how
   the filesystem timestamps compare, so a run can never discard its own
   receipt's `details_path`. Only `.edn` files directly in the directory are
-  considered, never the `retired/` subtree, which is transactional."
+  considered, never the `retired/` subtree, which is transactional.
+
+  It protects nothing else. A concurrent peer's freshly published path is an
+  ordinary candidate here and can be deleted; `details-retention` says why that
+  is the chosen behaviour and the receipt publishes the word."
   [^java.io.File directory ^String keep]
   (let [candidates
         (->> (or (.listFiles directory) (make-array java.io.File 0))
@@ -689,6 +715,9 @@
        :string_mentions (count (:string-mentions totals))
        :lib_renamed (lib-renamed-summary plan commit)
        :details_path details-path
+       ;; @spec MCP-OP-ALIAS-052
+       :details_retention details-retention
+       :details_retained max-detail-files
        :next_action (if committed? "none" "review_receipt")}
       (verification-summary (:verification commit) (:verify-requested commit))
       (select-keys commit [:undo_receipt :receipt_hash]))))

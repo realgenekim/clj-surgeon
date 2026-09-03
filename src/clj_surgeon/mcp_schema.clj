@@ -620,5 +620,7 @@
                 "collisions_resolved" {:type "integer" :minimum 0}
                 "refer_sites" {:type "integer" :minimum 0}
                 "lib_renamed" {:type ["object" "null"]}
-                "details_path" {:type "string"}}
+                "details_path" {:type "string"}
+                "details_retention" {:type "string"}
+                "details_retained" {:type "integer" :minimum 0}}
    :required ["ok" "elapsed_ms"]})

@@ -1242,12 +1242,13 @@
                  "  %s files · %s sites · aliases %s · %s collisions resolved · %s\n\n"
                  "\u2713 atomic commit complete\n"
                  "\u2713 written bytes read back and verified\n"
-                 "\u2713 terminal evidence · per-file detail at %s")
+                 "\u2713 terminal evidence · per-file detail at %s (%s retention)")
             (:files result) (:sites result)
             (pr-str (:alias_histogram result))
             (:collisions_resolved result)
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-            (:details_path result))
+            (:details_path result)
+            (or (:details_retention result) "best-effort"))
     (format (str "alias_migration\n"
                  "  refused · %s · %s\n\n"
                  "%s\n"
@@ -1277,7 +1278,8 @@
     "Never send a per-file, per-owner, or per-site table; Surgeon discovers "
     "them. The receipt is one constant-size object: files, sites, the alias "
     "histogram, collisions resolved, the kondo delta, the focused-test result, "
-    "and a details_path holding per-file detail. Its receipt is terminal "
+    "and a details_path holding per-file detail, retained best-effort: read it "
+    "from the receipt rather than assume the path keeps. Its receipt is terminal "
     "evidence of the rewrite; do not re-read the files it changed. A refusal is "
     "fail-closed and carries an executable next_call: send that once."))
 

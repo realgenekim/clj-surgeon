@@ -1103,6 +1103,34 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-052
+(deftest detail-retention-is-published-as-best-effort-because-peers-are-pruned
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        ;; twenty peers, each holding a details_path its own receipt published
+        ;; a moment ago and its own caller may not have read yet
+        peers (mapv (fn [index]
+                      (let [peer (io/file details (str "peer-" index ".edn"))]
+                        (.mkdirs details)
+                        (spit peer "{:version 1 :files []}")
+                        peer))
+                    (range 20))]
+    (.mkdirs receipt-dir)
+    (try
+      (let [result (execute! workspace)]
+        (is (:ok result) (pr-str result))
+        (is (= "best-effort" (:details_retention result))
+            "the receipt claims a durability the directory does not have")
+        (is (= alias-migration/max-detail-files (:details_retained result)))
+        (testing "the word is earned: this run pruned a peer's published path"
+          (is (some #(not (.exists ^java.io.File %)) peers)
+              "no peer was pruned, so the claim would be untestable here"))
+        (testing "and the run's own detail document is still readable"
+          (is (.exists (io/file workspace (:details_path result))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-043
 (deftest a-rolled-back-retire-failure-deletes-its-undo-receipt
   (let [workspace (workspace!)
