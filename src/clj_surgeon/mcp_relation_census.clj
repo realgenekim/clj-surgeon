@@ -526,9 +526,12 @@
         candidate (when narrower
                     {:tool "relation_census"
                      :workspace_root (str canonical "/" narrower)})
+        ;; The shared BYTE predicate, not `count`: a JSON request body is
+        ;; bytes on the wire, and a workspace path outside ASCII costs more
+        ;; of them than it has characters (Sol's round-twelve item 3).
         next-call (when (and candidate
-                             (<= (count (json/generate-string candidate))
-                                 census/max-next-call-bytes))
+                             (census/within-next-call-bytes?
+                               (json/generate-string candidate)))
                     candidate)]
     (refusal :too-many-candidate-files
              (str "This workspace holds more than " census/max-scanned-files
@@ -574,9 +577,12 @@
         candidate (when narrower
                     {:tool "relation_census"
                      :workspace_root (str canonical "/" narrower)})
+        ;; The shared BYTE predicate, not `count`: a JSON request body is
+        ;; bytes on the wire, and a workspace path outside ASCII costs more
+        ;; of them than it has characters (Sol's round-twelve item 3).
         next-call (when (and candidate
-                             (<= (count (json/generate-string candidate))
-                                 census/max-next-call-bytes))
+                             (census/within-next-call-bytes?
+                               (json/generate-string candidate)))
                     candidate)]
     (refusal :too-many-walk-entries
              (str "This workspace holds more than " census/max-walk-entries

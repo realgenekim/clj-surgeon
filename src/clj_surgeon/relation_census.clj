@@ -888,6 +888,44 @@
   [argv]
   (str/join " " (map shell-quote argv)))
 
+(defn utf8-byte-count
+  "The length of `text` in UTF-8 BYTES.
+
+   Sol's round-twelve item 3: the continuation ceiling is named in bytes,
+   documented in bytes and reported in bytes, and was enforced with `count`,
+   which counts UTF-16 code units. The two agree on ASCII and diverge by a
+   factor of three elsewhere — 490 characters of accented path measured 890
+   bytes and was emitted under a 512-byte limit."
+  ^long [text]
+  (alength (.getBytes (str text) "UTF-8")))
+
+;; @spec MCP-OP-CENSUS-014
+(defn within-next-call-bytes?
+  "True when one rendered continuation fits the shared ceiling.
+
+   THE ONE PLACE that bound is decided, for both entrances and every refusal
+   shape. Every consumer of a continuation measures bytes — argv is bytes, a
+   JSON request body is bytes, a terminal line is bytes — so this measures
+   bytes, once, rather than leaving each call site to reach for whatever
+   length function is nearest."
+  [text]
+  (<= (utf8-byte-count text) max-next-call-bytes))
+
+(defn cli-command-argv
+  "The argv a CLI continuation would carry, before the size bound is applied.
+
+   Separate from the bounded builder because the remedy that REPLACES an
+   over-long continuation has to measure the thing it is declining to send."
+  [anchor fix]
+  (when (and anchor (not= :uncomputable fix))
+    (into ["clj-surgeon" ":op" ":relation-census"
+           (if (= :file (:kind anchor)) ":file" ":dir")
+           (str (:absolute anchor))]
+          (case fix
+            :doors [":doors" @known-door-list]
+            :threads [":threads" "8"]
+            []))))
+
 (defn cli-next-command-argv
   "The continuation one CLI refusal hands back, as ARGV, or nil when there is
    none.
@@ -910,15 +948,23 @@
    The `max-next-call-bytes` bound is measured on the RENDERED string, not on
    the argv, because the rendered string is what the caller reads and runs."
   [anchor fix]
-  (when (and anchor (not= :uncomputable fix))
-    (let [argv (into ["clj-surgeon" ":op" ":relation-census"
-                      (if (= :file (:kind anchor)) ":file" ":dir")
-                      (str (:absolute anchor))]
-                     (case fix
-                       :doors [":doors" @known-door-list]
-                       :threads [":threads" "8"]
-                       []))]
-      (when (<= (count (render-command argv)) max-next-call-bytes) argv))))
+  (when-let [argv (cli-command-argv anchor fix)]
+    (when (within-next-call-bytes? (render-command argv)) argv)))
+
+;; @spec MCP-OP-CENSUS-014
+(defn cli-continuation-overflow-remedy
+  "Why an over-long continuation was replaced by advice, with what it measured.
+
+   A refusal that names a bound without naming the value it compared against
+   leaves the caller to guess how much shorter is short enough, so this states
+   the measured length beside the ceiling."
+  [anchor fix]
+  (let [rendered (some-> (cli-command-argv anchor fix) render-command)]
+    (str "The continuation this refusal would carry renders as "
+         (if rendered (utf8-byte-count rendered) 0)
+         " UTF-8 bytes, over the " max-next-call-bytes
+         "-byte ceiling a continuation must fit, so no narrower command can "
+         "be computed: run the census from a shorter path.")))
 
 ;; @spec MCP-OP-CENSUS-014
 ;; @spec MCP-OP-CENSUS-019
@@ -1003,10 +1049,7 @@
                 {:remedy
                  (if cli-remedy
                    (cli-remedy req)
-                   (str "The workspace this request names is too long to "
-                        "carry into a continuation under " max-next-call-bytes
-                        " bytes, so no narrower command can be computed: run "
-                        "the census from a shorter path."))})))))
+                   (cli-continuation-overflow-remedy anchor cli-fix))})))))
       nil
       (shape-rules))))
 

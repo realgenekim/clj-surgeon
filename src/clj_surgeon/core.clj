@@ -594,6 +594,13 @@
         ;; `relation-census/cli-continuation`, which renders it shell-safe.
         anchor (relation-census/cli-anchor opts)
         continue-with (fn [fix] (relation-census/cli-continuation anchor fix))
+        ;; The remedy that REPLACES a continuation too large to send, from
+        ;; the one place that knows what it measured. Sol's round-twelve
+        ;; item 3: the wording was spelled out at three sites and named the
+        ;; bound without naming the value it compared against.
+        overflow-remedy (fn [fix]
+                          (relation-census/cli-continuation-overflow-remedy
+                            anchor fix))
         ;; A continuation that NARROWS to a subtree still goes through the one
         ;; builder: the subtree is just a different anchor, made absolute the
         ;; same way, so a narrowing can no more be relative — or unquoted —
@@ -638,12 +645,7 @@
          :door (:invalid parsed-doors)
          :known-doors (vec (sort (map str relation-census/default-doors)))
          :anchor anchor}
-        (or-remedy (continue-with :doors)
-                   (str "The workspace this request names is too long to carry "
-                        "into a continuation under "
-                        relation-census/max-next-call-bytes
-                        " bytes, so no narrower command can be computed: run "
-                        "the census from a shorter path.")))
+        (or-remedy (continue-with :doors) (overflow-remedy :doors)))
 
       (:oversized @scan)
       {:ok false
@@ -793,13 +795,7 @@
                  :anchor anchor}
                 ;; Sol's round-eleven item 2, exactly here: this branch spelled
                 ;; `:dir .` and the replay censused the replay's cwd.
-                (or-remedy (continue-with :doors)
-                           (str "The workspace this request names is too long "
-                                "to carry into a continuation under "
-                                relation-census/max-next-call-bytes
-                                " bytes, so no narrower command can be "
-                                "computed: run the census from a shorter "
-                                "path."))
+                (or-remedy (continue-with :doors) (overflow-remedy :doors))
                 (facts))
 
               :else
