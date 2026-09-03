@@ -91,6 +91,9 @@ publishing through `file-ops/atomic-write!` / `atomic-create!` with no lock:
 | `agent_routing.clj` | `:124` |
 | `mcp_cold_verify.clj` | `:56` |
 | `mcp_tool.clj` | `:381` |
+| `extract.clj` (receipt) | `:242` |
+| `intent_transaction.clj` | `:2187` (`atomic-create!`) |
+| `worktree_lifecycle_io.clj` | `:399` — a PRIVATE duplicate `atomic-write!`, called at `:438`. **Binding `*publish-lock-dir*` cannot reach it**, so this one needs a code change, not an opt-in. |
 
 Retrofitting them belongs to the lanes that own those files, not to the kernel
 build; until it happens, read every one of them as a non-cooperating writer and
@@ -102,6 +105,30 @@ read the residual window as the ordinary case rather than the exception.
 > writer its own transaction cannot exclude. Done when every site either binds
 > `file-ops/*publish-lock-dir*` or is recorded here as deliberately
 > non-cooperating, and this table is empty or annotated.
+
+**What the opt-in is safe for, and what it still is not.** Cooperation is now
+safe in both concurrency directions, which it was not when it was introduced:
+
+- **Threads of one process serialise before the OS lock is requested.**
+  `FileChannel/lock` is a per-PROCESS view: a second thread asking for a lock
+  this JVM already holds is thrown `OverlappingFileLockException` rather than
+  made to wait, and that throw escaped `commit!` before `finish!` could release
+  the project `LOCK` — stranding the workspace behind a LIVE pid neither
+  `begin!` nor `recover!` may break. `with-publish-lock*` now takes a
+  process-wide `ReentrantLock` keyed by the lock file's canonical path first,
+  so threads queue.
+- **Re-entrancy is the identity of the THREAD**, read off that monitor's hold
+  count. It used to be a dynamic var, and Clojure conveys dynamic bindings to
+  `future`, `send`, `pmap` and every `bound-fn`: a task spawned inside the lock
+  inherited the claim and wrote with no lock at all. A spawned task now takes
+  the lock itself and waits for whoever holds it, including another process.
+- **Every exception path out of `commit!` ends the transaction**, so a failure
+  inside the lock releases the project `LOCK` and marks the journal rather than
+  leaving the workspace held.
+
+What it still does not buy: the lock is advisory, so a writer that does not bind
+`*publish-lock-dir*` is not excluded — including the private duplicate
+`atomic-write!` in the table above, which no binding can reach.
 
 **The project `LOCK` is scoped to the STATE HOME, not to the workspace root.**
 `begin!` locks `workspace/transactions-dir root state-home`, so two
