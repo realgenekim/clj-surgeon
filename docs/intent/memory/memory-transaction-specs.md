@@ -44,7 +44,7 @@ plan unreadable.
 
 - [x] **MCP-OP-MEM-014**: When a transaction commits or refuses, clj-surgeon shall state its isolation as optimistic serializability with conflict detection and exact rollback, shall name the residual recheck-to-rename window it does not close and the operations inside it, and shall not claim snapshot isolation against a writer that ignores the lock.
 
-- [x] **MCP-OP-MEM-020**: When a scope is walked, clj-surgeon shall admit work exactly through its walk-entry, depth, per-file byte and aggregate byte ceilings, shall refuse the next unit before reading it with a narrowing `next_call`, and shall retain no file's source after the planner callback returns.
+- [x] **MCP-OP-MEM-020**: When a scope is walked, clj-surgeon shall admit work exactly through its walk-entry, depth, per-file byte and aggregate byte ceilings, shall refuse the next unit before reading it with a narrowing `next_call`, shall charge the retained discovered-path list to the same work budget as the per-file parser reservation and refuse before the first read when that list alone does not fit, and shall retain no file's source after the planner callback returns.
 
 
 ## Misreadings each requirement forbids
@@ -69,6 +69,7 @@ plan unreadable.
 | MEM-001 | "A receipt that is too big can be truncated with a continuation." A read-only projection may paginate; a mutation receipt that hides work that was done may not. |
 | MEM-020 | "The aggregate byte ceiling can be checked from the directory entries." A file that grows during the walk must be stopped against the remaining budget, from bytes actually read. |
 | MEM-020 | "Walk entries means matching files." Then an include glob conceals an unbounded walk. |
+| MEM-020 | "The reservation is the largest file's parse." The walk also holds every discovered path for the whole stream; with many small files that list is the larger term and was invisible. |
 
 ## Boundaries
 
@@ -79,7 +80,7 @@ plan unreadable.
 | MEM-012 | twenty thousand recorded entries | — | an unsorted entry is refused rather than written out of order |
 | MEM-013 | killed between pin and rename | killed between rename N and N+1 | a pre-image object is missing, which is reported, never assumed, and its journal is retained rather than deleted |
 | MEM-014 | — | an external writer lands after the rename | read-back mismatch rolls the transaction back |
-| MEM-020 | exactly at each ceiling | — | one unit past each ceiling refuses before the read |
+| MEM-020 | exactly at each ceiling; a work budget exactly equal to the path list plus one file's parse | — | one unit past each ceiling refuses before the read; a path list one byte over the budget refuses before any read |
 
 ## Falsifiers
 
@@ -91,4 +92,4 @@ plan unreadable.
 | MCP-OP-MEM-012 | Recording N read-set entries makes the transaction value's per-path record count or retained string bytes grow with N. |
 | MCP-OP-MEM-013 | A crash leaves a path holding neither its pre-image nor its verified result, or recovery reports success without verifying a digest, or a journal whose restoration failed is deleted. |
 | MCP-OP-MEM-014 | A receipt claims snapshot isolation, omits the isolation statement, omits the residual commit window, or a racing external write goes undetected. |
-| MCP-OP-MEM-020 | A walk reads a file past a ceiling, follows a symbolic link, or retains a source after its planner callback returned. |
+| MCP-OP-MEM-020 | A walk reads a file past a ceiling, follows a symbolic link, retains a source after its planner callback returned, or reports a reserved peak that omits heap it holds for the whole stream. |

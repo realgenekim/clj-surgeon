@@ -206,13 +206,64 @@
     (try
       (write-file! root "src/a.clj" (padded 1000))
       (write-file! root "src/b.clj" (padded 3000))
-      (let [receipt (scope/stream-scope! root (constantly nil) {:parse-factor 56})]
+      (let [receipt (scope/stream-scope! root (constantly nil) {:parse-factor 56})
+            path-list (get-in receipt [:reserved :path-list-bytes])]
         (is (:ok receipt))
-        (is (= (* 3000 56) (get-in receipt [:reserved :heap-reserved-peak-bytes]))
-            "reserved peak is the largest admitted file times the measured parse
-             factor, which is what a battery reads instead of UNMEASURED")
+        (is (pos? path-list))
+        (is (= (+ path-list (* 3000 56))
+               (get-in receipt [:reserved :heap-reserved-peak-bytes]))
+            "reserved peak is the retained discovered-path list PLUS the largest
+             admitted file times the measured parse factor, which is what a
+             battery reads instead of UNMEASURED")
         (is (= 4000 (get-in receipt [:reserved :aggregate-bytes]))))
       (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-MEM-020
+(deftest the-reservation-accounts-the-retained-discovered-path-list
+  (testing "Sol's finding: the accountant charged only the largest parser
+            reservation, while collect-entries retains and sorts EVERY matching
+            path for the whole walk. With many small files that list is the
+            larger of the two, and it was invisible."
+    (let [root (temp-root "path-list")]
+      (try
+        (dotimes [i 200]
+          (write-file! root (format "src/deeply/nested/name%03d.clj" i) (padded 100)))
+        (let [receipt (scope/stream-scope! root (constantly nil) {:parse-factor 56})
+              path-list (get-in receipt [:reserved :path-list-bytes])
+              reserved (get-in receipt [:reserved :heap-reserved-peak-bytes])]
+          (is (:ok receipt))
+          (is (= 200 (get-in receipt [:work :files-read])))
+          (is (> path-list (* 100 56))
+              "with 200 small files the retained path list is the bigger term")
+          (is (= (+ path-list (* 100 56)) reserved)
+              "and the reservation now says so")
+          (is (= 200 (get-in receipt [:reserved :discovered-files]))))
+        (finally (delete-tree! root))))))
+
+;; @spec MCP-OP-MEM-020
+(deftest a-path-list-that-does-not-fit-the-work-budget-refuses-before-any-read
+  (testing "accounting a cost the walk cannot pay is only half a fix: the
+            discovered path list is admitted against the same work budget, and
+            refused before the first source is read"
+    (let [root (temp-root "path-list-budget")]
+      (try
+        (dotimes [i 50] (write-file! root (format "src/n%03d.clj" i) (padded 100)))
+        (let [[seen plan] (seen-paths)
+              probe (scope/stream-scope! root (constantly nil) {})
+              path-list (get-in probe [:reserved :path-list-bytes])
+              at-limit (scope/stream-scope! root (constantly nil)
+                                            {:work-budget-bytes (+ path-list (* 100 56))
+                                             :parse-factor 56})
+              past (scope/stream-scope! root plan {:work-budget-bytes (dec path-list)
+                                                   :parse-factor 56})]
+          (is (:ok at-limit) "exactly the path list plus one file's parse is admitted")
+          (is (false? (:ok past)))
+          (is (= :scope-work-budget-exceeded (:error-type past)))
+          (is (= :discovered-path-list (:reserved-for past))
+              "the refusal names WHICH reservation did not fit")
+          (is (= path-list (:path-list-bytes past)))
+          (is (empty? @seen) "no source was read"))
+        (finally (delete-tree! root))))))
 
 ;; @spec MCP-OP-MEM-001
 ;; @spec MCP-OP-MEM-011

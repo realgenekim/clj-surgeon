@@ -12,6 +12,12 @@
    are counted from bytes actually read, never from directory entries alone, so
    a file that grows during the walk is stopped against the remaining budget.
 
+   One thing IS retained for the whole stream: the sorted list of discovered
+   relative paths. It is charged to the work budget rather than quietly
+   excluded from it - a scope of many small files costs more in that list than
+   in any one parser reservation - and a path list that does not fit the budget
+   is refused before the first source is read.
+
    Adopted by no verb yet. This is the kernel; adoption is a separate build."
   (:require
    [clj-surgeon.mcp-paths :as mcp-paths]
@@ -48,6 +54,30 @@
    :max-receipt-bytes (* 512 1024)
    :work-budget-bytes (* 1024 1024 1024)
    :parse-factor 512})
+
+(def path-entry-overhead-bytes
+  "Heap one retained relative path costs, apart from its characters.
+
+   A `String` object header plus its byte-array header and length field is
+   about 48 bytes on a 64-bit JVM with compressed object pointers, and the
+   vector slot that holds the reference is another 8. The characters are
+   counted separately at 2 bytes each, which is the worst case: a Latin-1
+   compact string costs 1. Over-reserving a path list is the safe direction."
+  56)
+
+(defn- path-list-bytes
+  "What the discovered-path list costs while the walk holds it.
+
+   `collect-entries` retains and sorts every matching relative path and keeps
+   the vector for the whole stream, so this is resident under every per-file
+   reservation - not an alternative to it. Charging only the largest parser
+   reservation, as this reader originally did, makes a scope of many small
+   files look free."
+  [relatives]
+  (reduce (fn [total ^String relative]
+            (+ total path-entry-overhead-bytes (* 2 (count relative))))
+          0
+          relatives))
 
 (def default-skip-dirs
   #{".git" ".hg" ".svn" "target" "node_modules" ".cpcache" ".clj-surgeon"})
@@ -218,12 +248,29 @@
     (if-not (:ok walked)
       walked
       (let [{:keys [max-file-bytes max-aggregate-bytes work-budget-bytes parse-factor
-                    max-receipt-records max-receipt-bytes]} limits]
+                    max-receipt-records max-receipt-bytes]} limits
+            held (path-list-bytes (:relatives walked))]
+        (if (> held work-budget-bytes)
+          ;; The list of discovered paths is itself reserved work. Refusing it
+          ;; here, before the first source is read, is the difference between
+          ;; accounting a cost and bounding it.
+          (refusal :scope-work-budget-exceeded
+                   (str "Holding " (count (:relatives walked))
+                        " discovered paths would reserve " held
+                        " bytes of heap, above the " work-budget-bytes
+                        "-byte work budget")
+                   {:reserved-for :discovered-path-list
+                    :path-list-bytes held
+                    :discovered-files (count (:relatives walked))
+                    :work-budget-bytes work-budget-bytes
+                    :next_call {:op :scope/stream
+                                :scope {:narrow-to "a subtree whose file list fits the work budget"}}
+                    :remedy "Narrow the scope: the walk holds every matching path for the whole stream, so the path list alone must fit the budget."})
         (loop [remaining (:relatives walked)
                aggregate 0
                files 0
                largest 0
-               reserved-peak 0
+               reserved-peak held
                records []
                record-bytes 0]
           (if (empty? remaining)
@@ -237,6 +284,8 @@
                     :receipt-records (count records)
                     :receipt-bytes record-bytes}
              :reserved {:heap-reserved-peak-bytes reserved-peak
+                        :path-list-bytes held
+                        :discovered-files (count (:relatives walked))
                         :work-budget-bytes work-budget-bytes
                         :parse-factor parse-factor
                         :aggregate-bytes aggregate
@@ -274,20 +323,23 @@
                               :next_call {:op :scope/stream
                                           :scope {:narrow-to "a subtree that fits the aggregate budget"}}})
 
-                    (> (* bytes parse-factor) work-budget-bytes)
+                    (> (+ held (* bytes parse-factor)) work-budget-bytes)
                     (refusal :scope-work-budget-exceeded
                              (str "Parsing " relative " would reserve "
-                                  (* bytes parse-factor) " bytes of heap, above the "
+                                  (+ held (* bytes parse-factor))
+                                  " bytes of heap beside the retained path list, above the "
                                   work-budget-bytes "-byte work budget")
                              {:path relative
                               :bytes bytes
                               :parse-factor parse-factor
+                              :reserved-for :file-parse
+                              :path-list-bytes held
                               :work-budget-bytes work-budget-bytes
                               :next_call nil
-                              :remedy "One admitted file must fit the work budget on its own; there is no correctness-preserving way to split it here."})
+                              :remedy "One admitted file must fit the work budget beside the discovered path list; there is no correctness-preserving way to split it here."})
 
                     :else
-                    (let [reserved (* bytes parse-factor)
+                    (let [reserved (+ held (* bytes parse-factor))
                           entry {:relative relative
                                  :path (:path resolved)
                                  :bytes bytes
@@ -327,4 +379,4 @@
                                (max largest bytes)
                                (max reserved-peak reserved)
                                (if record (conj records record) records)
-                               (+ record-bytes record-size))))))))))))))
+                               (+ record-bytes record-size)))))))))))))))

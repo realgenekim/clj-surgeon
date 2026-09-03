@@ -164,7 +164,7 @@ that narrows scope. A mutation receipt is refused, never truncated.
 | `max-depth` | 40 | refused per entry, never truncated |
 | `max-file-bytes` | 2 MiB | from bytes actually read |
 | `max-aggregate-bytes` | 512 MiB | from bytes actually read, against the remaining budget |
-| `work-budget-bytes` | 192 MiB | `bytes x parse-factor` reserved before the parse |
+| `work-budget-bytes` | 192 MiB | the retained discovered-path list plus `bytes x parse-factor`, reserved before the parse |
 | `max-receipt-records` | 1,000 | serialized receipt records (MEM-001) |
 | `max-receipt-bytes` | 64 KiB | serialized receipt bytes (MEM-001) |
 
@@ -220,6 +220,7 @@ witness:
 | follow symbolic links | symlink refusal | RED |
 | do not prune skip directories | pruning | RED |
 | report no reservation | accountant | RED |
+| charge only the largest parse | discovered path list accounting | RED |
 | remove path confinement | outside-workspace pin and stage | RED |
 | canonicalise before the lexical check | `..` traversal pin and stage | RED |
 
