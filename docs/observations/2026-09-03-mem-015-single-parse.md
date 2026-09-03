@@ -199,29 +199,29 @@ Read honestly:
 
 ## Gates
 
-On the final commit 46a61d2, run under `/home/forge/bin/suite-run` (the
-three-lane unit-suite runner; the battery keeps the exclusive `suite.lock`):
+Run under `/home/forge/bin/suite-run` (the three-lane unit-suite runner; the
+battery keeps the exclusive `suite.lock`).
 
-| gate | result | baseline on `origin/main`, same box, same day |
-|---|---|---|
-| `make mcp-operation-oracle` | pass | pass |
-| `clojure -M:clj-surgeon/mcp-test` | 385 tests, 3,967 assertions, **1 failure** | 1 failure |
-| `make test-fast` | 702 tests, 5,912 assertions, **5 failures** | 5 failures |
+**On ab53088 — this branch merged with `origin/main` at cb2789f — every gate is
+green:**
 
-No new failures. The two pre-existing ones are unrelated to this change:
+| gate | result |
+|---|---|
+| `make mcp-operation-oracle` | pass |
+| `clojure -M:clj-surgeon/mcp-test` | 385 tests, 3,971 assertions, **0 failures** |
+| `make test-fast` | 702 tests, 5,912 assertions, **0 failures** |
 
-- `mcp-change-buffer-test/exact-profile-compilation-is-project-owned-and-snapshot-bound`
-  expects `/opt/homebrew/bin/clj-kondo` and finds `/usr/local/bin/clj-kondo`
-  on Linux.
-- `agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work`
-  (5 assertions) — `resources/clj-surgeon-agent-routing.md` no longer contains
-  any `terminal_response` text, removed by 01f0739.
+Earlier in the day, on 46a61d2 against the base commit d0d8e53, the same three
+gates gave oracle pass / mcp-test 1 failure / test-fast 5 failures — both
+matching that base's own baseline exactly, and both fixed on main since
+(`exact-profile` clj-kondo path, and the `terminal_response` routing text).
 
 One failure was caused by this change and fixed before landing: the first draft
 had `top-level-form-records`'s 3-arity call its own 4-arity, which
 `show_form_test/show-forms-builds-top-level-records-once` counts as two calls
-through the var. `make test-fast` reported 6 failures against the 5-failure
-baseline; every arity now delegates to one private `parse-and-build-records`.
+through the var. `make test-fast` reported 6 failures against the then
+5-failure baseline; every arity now delegates to one private
+`parse-and-build-records`.
 
 ## Artifacts
 
