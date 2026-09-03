@@ -702,6 +702,59 @@ grep -rn 'codex/sessions' "$HERE" --include='*.sh' --include='*.py' 2>/dev/null 
   && { bad "case20d a shared codex sessions path survives"; cat "$WORK/case20d.out"; } \
   || ok "case20d no apparatus file writes or reads a shared codex sessions dir"
 
+echo "== case 21: item 7's witnesses — a native arm refuses a LISTENING cohort port =="
+# Sol marked attest.sh PASS: "a native arm observing an owned 7907 listener also refused",
+# and "inaccessible server-source identity became server_sha=unverified and triggered
+# ATTEST-MISMATCH".  Those are the two behaviours the COHORT_PORTS scoping above touches,
+# so they get standing witnesses rather than a note in a review.
+A21="$WORK/st-P-N-21"; mkdir -p "$A21"
+git clone -q --no-hardlinks "$BASE_REPO" "$A21/worktree"
+printf '%s\n' "$BASE_SHA" > "$A21/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A21/prompt.md"
+# a listener on 7907 -- a process THIS TEST starts, whose pid it records and reaps
+python3 -c 'import socket,time
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 7907)); s.listen(1); time.sleep(30)' &
+L21=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907 && break
+  sleep 0.3
+done
+if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907; then
+  ok "case21 a cohort-port listener is up (pid $L21, port 7907)"
+  EXP=st RUNG=P SLOT=21 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+    bash "$HERE/attest.sh" "$A21" N - "" > "$WORK/case21.out" 2>&1
+  want "case21 native arm attest rc" 2 "$?"
+  grep -q 'cohort port(s) 7907 are listening' "$WORK/case21.out" \
+    && ok "case21 refused: a stale arm server on a cohort port contaminates a native arm" \
+    || { bad "case21 wrong refusal"; cat "$WORK/case21.out"; }
+  want "case21 attest_ok" false "$(jqf "$A21/attest.json" attest_ok)"
+else
+  bad "case21 could not bind 7907 to run the witness"
+fi
+kill "$L21" 2>/dev/null; wait "$L21" 2>/dev/null
+ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907 \
+  && bad "case21 the listener this test started is still up" \
+  || ok "case21 the listener this test started was stopped"
+
+echo "== case 21b: an unreadable server source is server_sha=unverified, and refuses =="
+A21B="$WORK/st-P-T-21b"; mkdir -p "$A21B"
+git clone -q --no-hardlinks "$BASE_REPO" "$A21B/worktree"
+WT21=$(cd "$A21B/worktree" && pwd -P)
+HEAD21=$(git -C "$A21B/worktree" rev-parse HEAD)
+A="$A21B" ARM=T PORT=7907 EXP=st RUNG=P SLOT=21b MODEL=none DRIVER=fake \
+WORKTREE="$WT21" WORKTREE_HEAD="$HEAD21" BASE="$HEAD21" \
+PROMPT_SHA=deadbeef RUNNER_SHA=deadbeef PORT_IN_RANGE=yes \
+PORT_PID=$$ READY_PID=$$ READY_PROJECT_ROOT="$WT21" SERVER_PROJECT_HEAD="$HEAD21" \
+SERVER_SHA="" EXPECTED_SERVER_SHA="$HEAD21" MCP_URL="http://127.0.0.1:7907/mcp" \
+HEALTHZ="{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT21\"}" \
+  python3 "$HERE/_attest_write.py" > "$WORK/case21b.out" 2>&1
+want "case21b rc" 2 "$?"
+grep -q 'server-sha-unverified' "$WORK/case21b.out" \
+  && ok "case21b refused on server-sha-unverified" \
+  || { bad "case21b an unreadable server source attested"; cat "$WORK/case21b.out"; }
+want "case21b server_sha" unverified "$(jqf "$A21B/attest.json" server_sha)"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
