@@ -421,17 +421,26 @@
                      :payload payload
                      :fits? (<= (ls-tree-payload-size payload output-format)
                                 limit)}))
-        ;; The floor. Below it no bound can go: `names`/`edn` bottom out at the
-        ;; empty array's two characters (MCP-OP-STUDY-018), and `text` bottoms
-        ;; out at its own trailing total line — 38 characters for a two-digit
-        ;; tree — because a receipt that showed nothing must still say how much
-        ;; it omitted. At `limit 1` the text payload is therefore LARGER than
-        ;; the limit, by construction and not by accident: the alternative is a
-        ;; receipt that reports nothing about what it left out.
+        ;; The floor. Below it no bound can go: `names`/`edn` bottom out at
+        ;; the empty array's two characters (MCP-OP-STUDY-018), and `text`
+        ;; bottoms out at its trailing total line plus, when discovery found
+        ;; more than one project, one `0 shown` header per project. At
+        ;; `limit 1` the text payload is therefore LARGER than the limit, by
+        ;; construction and not by accident: the alternative is a receipt that
+        ;; reports nothing about what it left out, or one whose body
+        ;; contradicts its own `project_count`.
+        ;;
+        ;; The projects are carried through `outline-take` at n = 0 rather
+        ;; than rendered from an empty vector. Rendering `[]` here was the one
+        ;; file below MCP-OP-STUDY-024's fix: every `n >= 1` attempt kept all
+        ;; projects and only `returned = 0` dropped them, so the smallest
+        ;; receipt was the one that contradicted itself.
         empty-receipt {:returned 0
                        :omitted total
                        :truncated (pos? total)
-                       :payload (ls-tree-render [] dir output-format total)}]
+                       :payload (ls-tree-render
+                                  (study/outline-take projects 0 (atom {}))
+                                  dir output-format total)}]
     (loop [best empty-receipt
            fitting 0]
       (let [batch-end (min total (+ fitting ls-tree-outline-chunk))]
