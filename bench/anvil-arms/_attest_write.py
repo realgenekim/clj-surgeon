@@ -85,6 +85,7 @@ def main() -> int:
         "score_sha256": env("SCORE_SHA"),
         "make_targets": env("MAKE_TARGETS"),
         "make_targets_sha256": env("MAKE_TARGETS_SHA"),
+        "make_dynamic_refusal": os.environ.get("MAKE_DYNAMIC_REFUSAL", "").strip() or None,
         "mcp_url": os.environ.get("MCP_URL", "") or None,
         "mcp_port": port,
         "expected_server_sha": expected or UNV,
@@ -116,6 +117,11 @@ def main() -> int:
     )
     refuse(attest["prompt_sha256"] == UNV, "prompt-sha256-unverified")
     refuse(attest["runner_sha256"] == UNV, "runner-sha256-unverified")
+    # The attestation may not execute the repository's own Makefile to decide whether
+    # that repository may run (Sol round two, item 1).  _make_targets.py parses it as
+    # text; when the parse cannot see the whole file, no driver launches.
+    refuse(bool(attest["make_dynamic_refusal"]),
+           f"makefile-dynamic:{attest['make_dynamic_refusal']}")
 
     if arm == "N":
         # A.4: arm N with any reachable Surgeon port refuses.  attest.sh scopes

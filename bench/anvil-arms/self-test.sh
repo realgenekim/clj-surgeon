@@ -803,7 +803,7 @@ want "case22 verify resolves through \$(KAOCHA)" \
 want "case22 build resolves" "echo building" "$(jqf "$MK22/map.json" targets.build)"
 want "case22 recurse is REFUSED, not resolved" 'dynamic:+$(MAKE)' \
      "$(jqf "$MK22/map.json" refused.recurse)"
-want "case22 recurse is not in the resolved map" MISSING \
+want "case22 recurse is not in the resolved map" null \
      "$(jqf "$MK22/map.json" targets.recurse)"
 
 # 22b -- a hard `include` of a file make would GENERATE: the parse cannot see those
@@ -846,7 +846,7 @@ python3 "$HERE/_make_targets.py" "$MK22C" "$MK22C/map.json" > "$WORK/case22c.out
 want "case22c map rc" 0 "$?"
 want "case22c conditional target refused" conditional \
      "$(jqf "$MK22C/map.json" refused.conditional)"
-want "case22c conditional target not resolved" MISSING \
+want "case22c conditional target not resolved" null \
      "$(jqf "$MK22C/map.json" targets.conditional)"
 want "case22c an unconditional target beside it still resolves" "echo building" \
      "$(jqf "$MK22C/map.json" targets.build)"

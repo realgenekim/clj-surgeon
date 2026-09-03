@@ -80,6 +80,19 @@ SCORE_SHA=$(sha_of "$HERE/score.py")
 MAKE_TARGETS=${MAKE_TARGETS:-$A/make-targets.json}
 MAKE_TARGETS_SHA=$(sha_of "$MAKE_TARGETS")
 
+# A make map the parser could not trust at all -- a hard `include` of a file make
+# would GENERATE, say -- is a whole-map refusal, not a per-target one: target
+# definitions exist that the static parse never saw.  Sol round two, item 1.
+MAKE_DYNAMIC_REFUSAL=""
+if [ -f "$MAKE_TARGETS" ]; then
+  MAKE_DYNAMIC_REFUSAL=$(python3 -c 'import json,sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+print(d.get("dynamic_refusal") or "")' "$MAKE_TARGETS" 2>/dev/null)
+fi
+
 # --- listener inventory: LOCAL LISTING ONLY, we contact nothing here ---------------
 # `ss -ltn` lists; it does not connect.  We never curl a port outside COHORT_PORTS.
 LISTENERS=$(ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | sort -un | tr '\n' ' ')
@@ -132,7 +145,7 @@ fi
 # --- refusal evaluation + the write, in one place ---------------------------------
 export A ARM PORT EXP RUNG SLOT GROUP MODEL DRIVER RUNNER MCP_URL PROMPT BASE \
        WORKTREE WORKTREE_HEAD PROMPT_SHA RUNNER_SHA ATTEST_SHA WATCH_SHA SCORE_SHA \
-       MAKE_TARGETS MAKE_TARGETS_SHA \
+       MAKE_TARGETS MAKE_TARGETS_SHA MAKE_DYNAMIC_REFUSAL \
        LISTENERS HEALTHZ PORT_PID READY_PID READY_PROJECT_ROOT SERVER_PROJECT_HEAD \
        SERVER_CWD SERVER_SHA MCP_ABSENT_PROOF EXPECTED_SERVER_SHA PORT_IN_RANGE UNV
 
