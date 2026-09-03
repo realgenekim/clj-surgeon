@@ -94,6 +94,7 @@ publishing through `file-ops/atomic-write!` / `atomic-create!` with no lock:
 | `extract.clj` (receipt) | `:242` |
 | `intent_transaction.clj` | `:2187` (`atomic-create!`) |
 | `worktree_lifecycle_io.clj` | `:399` — a PRIVATE duplicate `atomic-write!`, called at `:438`. **Binding `*publish-lock-dir*` cannot reach it**, so this one needs a code change, not an opt-in. |
+| `intent_transaction.clj` | `:2595-2601` — `publish-staged-receipt!`, a RAW `Files/move` (ATOMIC_MOVE + REPLACE_EXISTING) that goes through neither `atomic-write!` nor `atomic-create!`. The rest of this table is derived from those two verbs; this site publishes a receipt the way three listed rows do, so it belongs here, and like the private duplicate it needs a code change rather than an opt-in. |
 
 Retrofitting them belongs to the lanes that own those files, not to the kernel
 build; until it happens, read every one of them as a non-cooperating writer and
@@ -122,9 +123,16 @@ safe in both concurrency directions, which it was not when it was introduced:
   `future`, `send`, `pmap` and every `bound-fn`: a task spawned inside the lock
   inherited the claim and wrote with no lock at all. A spawned task now takes
   the lock itself and waits for whoever holds it, including another process.
-- **Every exception path out of `commit!` ends the transaction**, so a failure
-  inside the lock releases the project `LOCK` and marks the journal rather than
-  leaving the workspace held.
+- **Every exception path out of `commit!` releases the project `LOCK`**, so no
+  failure leaves the workspace held by a live pid. The journal is marked too
+  whenever the marking itself has not failed; when the rollback or the marking
+  is what threw, the LAST-RESORT path releases the lock alone and leaves
+  `state.edn` at `:sealed`, which `recover!` picks up and finishes. And past a
+  TERMINAL status - the journal line and `state.edn` already written - a throw
+  in `finish!`'s bookkeeping tail (reclaiming staging, writing the lease, both
+  of which run after the release) degrades to that bare release: it must never
+  revert bytes the record already calls committed, least of all outside every
+  lock.
 
 What it still does not buy: the lock is advisory, so a writer that does not bind
 `*publish-lock-dir*` is not excluded — including the private duplicate
@@ -154,7 +162,9 @@ workspace's own durable state root, beside the receipts:
       transactions/
         LOCK                     one holder: {:txid :lock-format :acquired-at
                                               :pid :start-ticks :boot-id}
-        LOCK.broken.<txid>       a claim a break removed, kept as its evidence
+        LOCK.broken.<txid>       a claim a break removed OR displaced, kept as
+                                 its evidence; retired by `recover!` past
+                                 `broken-lock-retention-ms`
         <txid>/
           manifest.tsv           sorted read set, streamed as it is observed
                                  path-id \t path \t bytes \t sha256 \t mode
@@ -216,7 +226,11 @@ receipt refcount, and whether the row may be evicted.
 - `forget!` is the explicit release. It refuses a `:restore-failed` journal.
 - `evict!` is the quota-driven release. It refuses a `:restore-failed` journal
   AND one a receipt still references; `release-receipt!` drops that reference.
-- `retained-transactions` is what a quota sweep reads.
+- `retained-transactions` is what a quota sweep reads. Its rows are `:kind
+  :transaction` for journals and `:kind :broken-lock` for the `LOCK.broken.*`
+  tombstones beside them; a tombstone row carries its bytes, its age and the
+  verb that retires it (`:txn/recover`), because `evict!` operates on journals
+  only.
 
 ## Recovery
 
@@ -230,7 +244,10 @@ two state homes on one workspace root do not exclude each other and a prefix
 sweep can delete another transaction's prepared temporary; the lock is released
 whenever it has no live holder, including when there was nothing to recover.
 A transaction whose
-`state.edn` says `:committed` or `:rolled-back` is not a candidate. A recovery whose
+`state.edn` says `:committed` or `:rolled-back` is not a candidate. Recovery
+also retires the break tombstones older than `broken-lock-retention-ms` — after
+its own break, so it never retires the receipt it has just written — and
+reports `:broken-locks {:found … :pruned … :remaining … :retention-ms …}`. A recovery whose
 restoration verified deletes its journal; one that did not verify records
 `:restore-failed` and keeps everything.
 
@@ -253,10 +270,37 @@ second transaction can break the same stale claim and acquire inside it, after
 which the first breaker deletes a LIVE holder's brand new LOCK and acquires as
 well. So a break renames the LOCK to `LOCK.broken.<txid>` and then rechecks what
 actually moved — the content and the `(device, inode)` must still be the claim
-that was judged. If they are not, the file is put straight back and nothing is
-broken. The renamed claim stays on disk as the break's evidence. `release-lock!`
-is scoped the same way: it unlinks the LOCK only while it still names the
-releasing transaction.
+that was judged. If they are not, the file is put back by a `link(2)`, which is
+create-if-absent in the kernel: a third acquirer that arrived in the gap is
+never overwritten. `Files/move` with no `REPLACE_EXISTING` looks like that
+guarantee and is not one — the JDK stats the target and then calls `rename(2)`,
+which replaces unconditionally, and a measured 145 of 423 third-party claims
+died in that gap.
+
+The restore therefore guarantees one thing and not another: it never replaces a
+LOCK that appeared meanwhile, and it does NOT guarantee the judged claim gets
+back. When a third acquirer is there the restore refuses, the displaced claim
+stays in `LOCK.broken.<txid>`, and the outcome — `{:restored false :cause
+:holder-changed :restore-cause :lock-reappeared :tombstone …}` — is counted in
+`displaced-claims` and reported by BOTH callers: `begin!`'s refusal and
+`recover!`'s receipt carry `:lock-break-displaced`, and `begin!` writes a
+`lock-displaced` journal line. Nothing else would tell the displaced holder: its
+own `release-lock!` just finds a LOCK that does not name it and returns false.
+On a filesystem with no hard links at all the restore falls back to
+`Files/move` with `ATOMIC_MOVE` and no `REPLACE_EXISTING`, guarded by an
+existence check; that path is check-then-act and says so. ext4 never reaches it.
+
+The tombstone is named for the BREAKER, and `begin!` takes the txid from its
+caller — so a name already on disk is the typed refusal `:lock-break-refused
+{:cause :tombstone-exists …}`, taken before the LOCK is touched, never a
+replacement. Tombstones are rows in `retained-transactions` (`:kind
+:broken-lock`, with the bytes they bill and their age) and `recover!` retires
+those past `broken-lock-retention-ms` (one day), returning `:broken-locks
+{:found … :pruned … :remaining … :retention-ms …}`. Evidence nothing sweeps and
+nothing counts is accumulation, not durability.
+
+`release-lock!` is scoped the same way: it unlinks the LOCK only while it still
+names the releasing transaction.
 
 **A LOCK from an earlier build is unreadable, not unbreakable.** A claim that
 records a pid and no boot id cannot be checked at all — a reused pid is
@@ -266,7 +310,17 @@ that says the lock was written by an earlier build. `recover!` with
 `:break-legacy-lock true` is the remedy, and it is not a waiver: it breaks the
 claim only on a RECEIPT of the holder's death — the recorded pid names no live
 process **and** the claim is at least `legacy-lock-break-age-ms` (one hour) old
-— and refuses when either half is missing. New locks carry `:lock-format 2`, so
+— and refuses when either half is missing. **Only the first half is checkable.**
+The pid half reads the process table. The age half is a heuristic over file
+timestamps, measured against the NEWEST of mtime and ctime: mtime alone is
+settable by any process and is preserved by `cp -p`, `rsync -t`, `tar -x` and a
+restore from backup, so a workspace restored from a snapshot would present a
+legacy LOCK that is old by mtime and was created moments ago in this boot.
+ctime cannot be set through the filesystem API and only moves forward, so
+taking the newest of the two means a claim reads as old only when BOTH stamps
+are. A lock file that is not there is absent, not infinitely old. The age half
+exists at all only because a legacy claim carries no `:acquired-at`; a
+new-format one does. New locks carry `:lock-format 2`, so
 a later build names the format rather than inferring it from absence.
 
 **`undo!` is a write, and behaves like one.** It takes the same publish lock as

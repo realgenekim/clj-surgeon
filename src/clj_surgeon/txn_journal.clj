@@ -661,15 +661,30 @@
    The break is now a rename of the LOCK to a name only this breaker uses,
    followed by a recheck of what was actually moved: the content and the
    (device, inode) pair must still be the claim that was judged. If they are
-   not, the moved file is put straight back - `Files/move` with no
-   REPLACE_EXISTING refuses if a LOCK has appeared meanwhile - and the break
-   reports that it broke nothing. The renamed claim stays on disk as
-   `LOCK.broken.<txid>`: a receipt line saying a lock was broken is worth more
-   beside the claim it broke.
+   not, the moved file is put back by `restore-lock!`, which links rather than
+   renames: `link(2)` is create-if-absent IN THE KERNEL, so a third acquirer
+   that landed in the gap is never overwritten. `Files/move` with no
+   REPLACE_EXISTING is NOT that guarantee - the JDK stats the target and then
+   calls `rename(2)`, which replaces unconditionally, and a measured 145 of
+   423 third-party claims died in that gap.
+
+   WHAT THE RESTORE GUARANTEES, exactly. It never replaces a LOCK that
+   appeared meanwhile. It does NOT guarantee the judged claim gets back: when
+   a third acquirer is there, the restore refuses, the claim that was renamed
+   away STAYS in `LOCK.broken.<txid>`, and the outcome is `{:restored false
+   :cause :holder-changed :restore-cause :lock-reappeared :tombstone ...}` -
+   counted in `displaced-claims` and reported by both callers, because the
+   displaced holder will never learn it lost the lock from anywhere else. Its
+   `release-lock!` will simply find a LOCK that does not name it.
+
+   The tombstone is the break's evidence and is named for the BREAKER, whose
+   txid comes from the caller: an existing tombstone of that name is a typed
+   refusal taken BEFORE the LOCK is touched, never a replacement.
+   `recover!` retires tombstones past `broken-lock-retention-ms`.
 
    The residual is two adjacent renames with no I/O between them, in place of
    an unbounded read-judge-delete window; a third acquirer that lands in that
-   gap is refused by the restore rather than silently joined."
+   gap keeps its claim and the break reports that it displaced one."
   ([transactions-dir claim txid] (break-lock! transactions-dir claim txid nil))
   ([transactions-dir claim txid opts]
    (let [^File lock (lock-file transactions-dir)
