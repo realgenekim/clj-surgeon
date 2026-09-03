@@ -1668,6 +1668,9 @@
         (owned-detail! workspace (+ base 100000))
         (is (.exists swapped)
             "a document carrying another run's id was deleted as ours")
+        (owned-detail! workspace (+ base 200000))
+        (is (.exists swapped)
+            "the swapped document was taken on the next pass instead")
         (is (not (.exists next-oldest))
             "retention skipped the swapped document but pruned nothing in its place"))
       (finally

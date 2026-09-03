@@ -19,6 +19,7 @@
   (:import
    (java.nio.file FileSystems FileVisitOption FileVisitResult Files
                   LinkOption Path PathMatcher SimpleFileVisitor)
+   (java.nio.file.attribute FileAttribute)
    (java.util EnumSet UUID)))
 
 (declare unknown-profile?)
@@ -792,14 +793,34 @@
                 (= entry (.getName (io/file ^String entry))))))
 
 ;; @spec MCP-OP-ALIAS-054
+(defn- document-run-id
+  "The run id a detail document's own name encodes, or nil.
+
+  One place computes it, so the id a document is WRITTEN with and the id
+  retention reads it BACK by can never drift apart."
+  [^String file-name]
+  (when (detail-document-name? file-name)
+    (subs file-name (count detail-document-prefix) (- (count file-name) 4))))
+
+;; @spec MCP-OP-ALIAS-054
 (defn- detail-document-owned?
-  "Whether one file on disk carries this writer's ownership marker."
+  "Whether one file on disk carries this writer's ownership marker.
+
+  The marker says the bytes were written by this writer; the `:run-id` says
+  they are the bytes written for THIS file. A document copied over another —
+  a backup restored on top of it, a caller duplicating a file it read — keeps
+  the marker and gains a run id that no longer names the file it sits in, and
+  that is enough to stop deleting it. It is defence against ACCIDENTAL
+  replacement only: a forger who writes the marker writes the run id too, and
+  nothing on a cooperative local filesystem stops that."
   [^java.io.File file]
   (boolean
     (and (.isFile file)
          (<= (.length file) max-detail-document-bytes)
          (try
-           (= detail-writer-marker (:writer (edn/read-string (slurp file))))
+           (let [document (edn/read-string (slurp file))]
+             (and (= detail-writer-marker (:writer document))
+                  (= (document-run-id (.getName file)) (:run-id document))))
            (catch Exception _ false)))))
 
 ;; @spec MCP-OP-ALIAS-054
@@ -843,7 +864,16 @@
   `toRealPath` needs the path to exist, and a receipt directory the caller has
   configured but nothing has created yet does not — so the nearest EXISTING
   ancestor is resolved and the remainder appended to it. Nothing here calls
-  mkdirs: the guard has to be decidable before the first write, not after it."
+  mkdirs: the guard has to be decidable before the first write, not after it.
+
+  The remainder is CALLER TEXT and is normalised before it is appended: the
+  ancestor is a real path, but `missing/../.clj-surgeon/alias-migration` IS the
+  detail directory and appended raw it compares unequal to it, which is a
+  bypass of the guard rather than a curiosity. Normalisation is lexical and so
+  is only sound below a canonical ancestor: a remainder that still climbs after
+  it names a directory above the one whose identity was proved, and this
+  returns nil for that rather than guess. nil is `receipt-dir-escapes` at the
+  boundary — an undecidable identity is a refusal, never a pass."
   ^Path [path]
   (let [absolute (.toPath (.getAbsoluteFile (io/file (str path))))]
     (loop [candidate absolute
@@ -856,10 +886,28 @@
                      (catch java.io.IOException _ nil)
                      (catch SecurityException _ nil))]
           (if real
-            (reduce (fn [^Path acc ^Path segment] (.resolve acc segment))
-                    real remainder)
+            (if (empty? remainder)
+              real
+              (let [tail (.normalize
+                           ^Path (reduce (fn [^Path acc ^Path segment]
+                                           (.resolve acc segment))
+                                         (first remainder) (rest remainder)))]
+                (when-not (some (fn [^Path segment] (= ".." (str segment))) tail)
+                  (.normalize (.resolve real tail)))))
             (recur (.getParent candidate)
                    (into [(.getFileName candidate)] remainder))))))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn receipt-dir-escapes?
+  "Whether the configured receipt directory has no decidable identity.
+
+  It has none when the part of it that does not exist yet still climbs above
+  the nearest existing ancestor after normalisation: lexical `..` past a
+  canonical path is not the same directory the kernel would open, and the
+  guard below cannot answer honestly about a path it cannot name. The boundary
+  refuses instead, before anything is created."
+  [receipt-dir]
+  (nil? (resolved-path receipt-dir)))
 
 ;; @spec MCP-OP-ALIAS-054
 (defn receipt-detail-collision?
@@ -875,11 +923,51 @@
   Directory sameness is CANONICAL, not textual, so a receipt directory that is
   a symlink to the detail directory is the same directory here — and the whole
   predicate is answerable without creating either one, which is what lets the
-  refusal fire before any mkdirs."
+  refusal fire before any mkdirs. It is asked TWICE: once on the configured
+  path before anything exists, and once on the directory that was actually
+  created, because a path's identity is not settled until it exists.
+
+  Sameness is containment, not equality: a receipt directory that resolves
+  INSIDE the detail directory is in the detail writer's own subtree under a
+  name its retention owns, and the guard is not made honest by a directory
+  level. An unresolvable path is not a match here — `receipt-dir-escapes?`
+  refuses it first, so this never has to guess."
   [project-root receipt-dir ^String receipt-name]
-  (boolean (and (detail-document-name? receipt-name)
-                (= (resolved-path receipt-dir)
-                   (resolved-path (detail-directory project-root))))))
+  (let [receipt (resolved-path receipt-dir)
+        detail (resolved-path (detail-directory project-root))]
+    (boolean (and (detail-document-name? receipt-name)
+                  receipt
+                  detail
+                  (.startsWith receipt detail)))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- create-receipt-directory!
+  "Create the receipt directory, returning what THIS call brought into being.
+
+  The return is the directories that did not exist a moment ago, deepest
+  first, so a refusal that follows can remove exactly what this run made and
+  nothing a caller or a peer already had. `File/delete` never removes a
+  non-empty directory, so a peer that filled one in between keeps it.
+
+  Creation goes through `Files/createDirectories`, which fails loudly, but only
+  when the path is not already a directory: a receipt directory that is a
+  symlink to a real directory is a legal configuration `createDirectories`
+  would reject outright."
+  [receipt-dir]
+  (let [file (io/file (str receipt-dir))
+        path (.toPath (.getAbsoluteFile file))
+        created (loop [candidate path
+                       acc []]
+                  (if (or (nil? candidate)
+                          (Files/exists candidate (make-array LinkOption 0)))
+                    acc
+                    (recur (.getParent candidate) (conj acc candidate))))]
+    (when-not (.isDirectory file)
+      (try
+        (Files/createDirectories path (make-array FileAttribute 0))
+        (catch java.io.IOException _ nil)
+        (catch SecurityException _ nil)))
+    created))
 
 ;; @spec MCP-OP-ALIAS-045
 ;; @spec MCP-OP-ALIAS-054
@@ -947,8 +1035,10 @@
                        ;; the ownership marker retention reads back: written by
                        ;; the only code that writes one of these documents
                        :writer detail-writer-marker
-                       :run-id (subs file-name (count detail-document-prefix)
-                                     (- (count file-name) 4))
+                       ;; @spec MCP-OP-ALIAS-054
+                       ;; the id retention reads back to prove these bytes are
+                       ;; the ones written for THIS file
+                       :run-id (document-run-id file-name)
                        :files (mapv (fn [entry]
                                       (-> entry
                                           (select-keys [:file :alias :collided :sites
@@ -1043,7 +1133,11 @@
                                 (str "Re-send the same alias_migration request;"
                                      " the frozen snapshot is recomputed from"
                                      " current source."))}
-             (:change-id commit) (assoc :change_id (str (:change-id commit))))))
+             (:change-id commit) (assoc :change_id (str (:change-id commit)))
+             ;; @spec MCP-OP-ALIAS-054
+             ;; a guard asked before and after the directory exists has two
+             ;; answers, and the caller is told which one refused it
+             (:phase commit) (assoc :phase (:phase commit)))))
 
 (defn declared-file-set
   "The project-relative files one plan will change."
@@ -1167,6 +1261,18 @@
         receipt-name (new-receipt-name)]
   (cond
     ;; @spec MCP-OP-ALIAS-054
+    (receipt-dir-escapes? receipt-dir)
+    {:error (str "The configured receipt directory cannot be canonicalized: "
+                 "the part of it that does not exist yet climbs above the "
+                 "nearest directory that does")
+     :error-type :alias-migration-receipt-dir-escapes
+     :source-unchanged true
+     :remedy (str "Configure receipt-dir as a path whose missing components "
+                  "descend from an existing directory; a receipt directory "
+                  "whose identity cannot be proved cannot be checked against "
+                  (.getPath (detail-directory project-root)) ".")}
+
+    ;; @spec MCP-OP-ALIAS-054
     (receipt-detail-collision? project-root receipt-dir receipt-name)
     {:error (str "The configured receipt directory would publish this undo "
                  "receipt inside the detail writer's own name namespace")
@@ -1190,8 +1296,30 @@
      :source-unchanged true}
 
     :else
-    (let [_ (.mkdirs (io/file receipt-dir))
-        profile (selected-profile verification-profiles verify)
+    ;; @spec MCP-OP-ALIAS-054
+    ;; the identity proved above was proved on a path that did not exist yet,
+    ;; and a path's identity is not settled until it does: between that answer
+    ;; and this line a missing component can become a symlink to the detail
+    ;; directory. So the directory that was actually CREATED is re-proved
+    ;; before a byte is written into it, and a refusal removes only what this
+    ;; call made.
+    (let [created (create-receipt-directory! receipt-dir)]
+     (if (receipt-detail-collision? project-root receipt-dir receipt-name)
+      (do
+        (doseq [^Path path created]
+          (.delete (.toFile path)))
+        {:error (str "The receipt directory that now exists is the detail "
+                     "writer's own directory; the identity checked before it "
+                     "existed is not the identity it has")
+         :error-type :alias-migration-receipt-detail-collision
+         :phase "post-create"
+         :source-unchanged true
+         :remedy (str "Configure receipt-dir outside "
+                      (.getPath (detail-directory project-root))
+                      ", and check what is creating symlinks there; a receipt "
+                      "this verb may prune is a receipt that cannot be "
+                      "trusted.")})
+      (let [profile (selected-profile verification-profiles verify)
         baseline (when profile
                    (change-buffer/capture-verification-baseline!
                      project-root profile verification-profiles files))]
@@ -1265,7 +1393,7 @@
                      :error-type (or (:error-type verification) :verification-failed)
                      :verification verification
                      :rolled-back rolled-back?
-                     :source-unchanged rolled-back?})))))))))))))
+                     :source-unchanged rolled-back?})))))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
 ;; @spec MCP-OP-ALIAS-005
