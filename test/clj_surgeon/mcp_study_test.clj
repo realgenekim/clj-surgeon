@@ -1644,3 +1644,58 @@
         (is (true? (:source_unchanged response)))
         (is (nil? (:results response))
             "no partial result is returned; a truncated outline is not an option")))))
+
+;; @spec MCP-OP-STUDY-035
+;; @spec MCP-OP-STUDY-014
+(deftest a-source-path-through-a-symlink-is-a-named-skip-not-a-silent-miss
+  ;; `walk-clj-files` runs `find` with the default `-P`, which is what keeps a
+  ;; symlinked project root from being descended (MCP-OP-STUDY-014) — and what
+  ;; makes a `:paths` entry that IS a symlink yield nothing at all. The scan
+  ;; then reported `no-clojure-files` and offered "scan a directory that
+  ;; contains Clojure sources", which is exactly wrong: the directory does
+  ;; contain them. A confinement decision the caller cannot see is a silent
+  ;; false negative, so it is named in the receipt with the reason.
+  (testing "a project whose only declared path is a symlink"
+    (with-scratch-project
+      "test-fixtures/study/scratch-symlink-only"
+      (fn [dir]
+        (fs/create-dirs (str dir "/realsrc"))
+        (spit (str dir "/deps.edn") "{:paths [\"srclink\"]}")
+        (write-clj-file! (str dir "/realsrc/z.clj") "(ns z)" "(defn z [] :ok)")
+        (fs/create-sym-link (str dir "/srclink") "realsrc"))
+      (fn []
+        (let [response (run {"mode" "ls-tree"
+                             "dir" "test-fixtures/study/scratch-symlink-only"})]
+          (is (false? (:ok response)))
+          (is (= "no-clojure-files" (:error_type response)))
+          (is (= [{:project "scratch-symlink-only"
+                   :path "srclink"
+                   :reason "symlink"}]
+                 (:paths_unresolved response))
+              "the skipped declaration is named, with its reason")
+          (is (str/includes? (:remedy response) "srclink")
+              "and the remedy names it too, so it is executable")
+          (is (empty? (output-schema-violations response)))))))
+  (testing "a project that also has a real source directory still scans"
+    (with-scratch-project
+      "test-fixtures/study/scratch-symlink-mixed"
+      (fn [dir]
+        (fs/create-dirs (str dir "/realsrc"))
+        (spit (str dir "/deps.edn") "{:paths [\"src\" \"srclink\"]}")
+        (write-clj-file! (str dir "/src/a.clj") "(ns a)" "(defn a [] :ok)")
+        (write-clj-file! (str dir "/realsrc/z.clj") "(ns z)" "(defn z [] :ok)")
+        (fs/create-sym-link (str dir "/srclink") "realsrc"))
+      (fn []
+        (let [response (run {"mode" "ls-tree"
+                             "dir" "test-fixtures/study/scratch-symlink-mixed"
+                             "format" "edn" "limit" 16384})]
+          (is (true? (:ok response)))
+          (is (= 1 (:file_count response))
+              "the symlinked path contributes nothing, as it always did")
+          (is (= ["src/a.clj"] (mapv :file (:files response))))
+          (is (= [{:project "scratch-symlink-mixed"
+                   :path "srclink"
+                   :reason "symlink"}]
+                 (:paths_unresolved response))
+              "but a successful receipt still says what it could not reach")
+          (is (empty? (output-schema-violations response))))))))
