@@ -320,3 +320,37 @@ Builder prompts for the memory rounds carry this clause verbatim.
 ## 04:17Z — Gene: "Make sure to write a test (not a unit test) that confirms we don't OOM; don't want to slow the make run tests too much, tho!"
 
 Rule for the memory work: the no-OOM proof is a BATTERY, `make memory-battery`, outside `make test`/`test-fast`/`mcp-test`: each tree-scale op (ls-tree, alias migration plan, extract discovery, census, fold-diff) at 100 / 1,000 / 10,000 synthetic files (a cheap generator; sparse or templated sources), `-Xmx512m`, five reps fresh+warm, pass lines: no OOM; `heap_used_peak_mb ≤ min(start+224, 0.8×Xmx)`; the 10k peak ≤ 1k peak + 32 MiB; after-GC retained at 10k ≤ 1k + 8 MiB; over-budget cases refuse structured BEFORE any write; outputs equal the unbounded reference. Runs on Anvil on demand and as the merge gate for any MEM change. The fast suites keep only millisecond witnesses: admission arithmetic refuses before allocation; ceiling behaviour AT the ceiling on tiny fixtures; the receipt carries `heap_used_peak_mb`. The MEM intent "retained heap does not grow with repository size" links the battery by id (LID), so a refactor cannot drop it from the gate silently.
+
+## 04:48Z — the memory battery exists and main is RED (measurement half only; no op was changed)
+
+`make memory-battery` at 4ec01da: one JVM at `-Xmx512m`, 5 reps, N = 100/1,000/10,000, four arms,
+continuous 5 ms heap sampler, exit 0/1/2/3. **Exit 1.** `cli-ls-tree` fails `peak-over-budget` at
+N=1,000 (301 MB vs a 248 MB budget) and N=10,000 (433 MB) and `peak-scales-with-n` (433 vs 333);
+`workspace-sources-read-all` fails `peak-scales-with-n` (204 vs 105). No OOM anywhere, and every
+bounded result hashed identically to the `-Xmx4g` reference at every N. `reserved-peak ≤ 192 MiB` is
+reported UNMEASURED for all four arms — no operation has an admission accountant, and the sampled
+process-wide peak is not substituted for it, so the verdict prints `(INCOMPLETE)`.
+
+Retention (`held_mb`, after-GC with the result still referenced) is dead linear: ls-tree 9.4 KB/file,
+read-all 4.1 KB/file (= **1.01 heap bytes per source byte** — the instrument calibrating itself against a
+`sorted-map` of compact ASCII strings), rename full-match 1.0 KB/file. Peak above ~200 MB is GC
+scheduling, not live data (ls-tree peaks at 433 MB holding 94 MB). Table:
+`docs/observations/2026-09-03-memory-battery-baseline.md`. Generator: 10,000 files in 973 ms, 40.5 MB.
+
+Two honest limits, both in the baseline doc. (1) Sol's published lines do NOT catch a *small-constant*
+O(N) receipt: `rename-ns-plan-full-match` retains 1.0 KB/file, unambiguously linear, and passes
+everything, because 8.8 MB of growth fits inside 224 MB of headroom and `retained-scales-with-n` is
+measured after the result is released and so only sees leaks. Flagged for the kernel builder; this
+battery implements Sol's constants verbatim and invents none. (2) The narrow rename arm alone would have
+reported a false `ok` — its prefix matches 100 of 10,000 files — so a full-match arm was added. Every
+future arm needs the query that makes its result grow with N.
+
+LID: `MCP-OP-MEM-001` (per-op memory/work receipt block) and `MCP-OP-MEM-011` (the battery as release
+gate), both `[ ]` active gaps in `docs/intent/memory-boundedness/`, wired into
+`audit-current-repository` (`:ok true`). Witness is a millisecond test in the fast suite that feeds
+hand-written numbers to the pure verdict function AND asserts `memory-battery` exists in the Makefile,
+carries `@spec MCP-OP-MEM-011`, and is absent from the transitive target closure of
+test/test-fast/mcp-test/runtests. Delete the target → fast suite red; delete the witness → contract
+audit red. `make test` gains only `memory-battery-self-test` (ms-scale).
+
+Pre-existing RED found in passing, NOT mine: `agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work` fails 5 assertions on main — `resources/clj-surgeon-agent-routing.md` no longer contains any `terminal_response` text (removed by 01f0739, the routing-plate rewrite) and the test was not updated.
