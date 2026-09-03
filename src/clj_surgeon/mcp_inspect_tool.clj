@@ -896,6 +896,39 @@
             (execute-inspect-in-context! (:config routed) (:params routed))
             (:workspace-root routed)))))))
 
+;; @spec MCP-OP-FIELD-001
+(defn- missing-field-lines
+  "Name the omitted fields, their path, and the minimal valid object there."
+  [result]
+  (when (and (= "missing-fields" (some-> (:reason result) name))
+             (seq (:missing result)))
+    (let [path (:path result)]
+      (str
+        (format "  missing required field%s at %s: %s\n"
+                (if (= 1 (count (:missing result))) "" "s")
+                (if (seq path)
+                  (str/join "." (map str path))
+                  "the request root")
+                (str/join ", " (:missing result)))
+        (when (seq (:required result))
+          (format "  required there: %s\n"
+                  (str/join ", " (:required result))))
+        (when (:minimal_request result)
+          (format "  minimal valid shape: %s\n"
+                  (json/generate-string (:minimal_request result))))))))
+
+;; @spec MCP-OP-FIELD-002
+(defn- named-field-lines
+  "Name the refused field and the values it accepts."
+  [result]
+  (when (and (:field result) (seq (:accepted result)))
+    (format "  field %s accepts: %s%s\n"
+            (:field result)
+            (str/join ", " (:accepted result))
+            (if (contains? result :actual)
+              (str " · received " (pr-str (:actual result)))
+              ""))))
+
 ;; @spec MCP-OP-DISPATCH-003
 (defn- defmethod-owner-lines
   "Render the exact multimethod owner form and its bounded dispatch vocabulary."
@@ -979,6 +1012,11 @@
                         "")
                       (str/join ", " available-owners)))
             (defmethod-owner-lines defmethod-owner)))
+        (missing-field-lines result)
+        (named-field-lines result)
+        ;; @spec MCP-OP-FIELD-003
+        (when (:note result)
+          (format "  note: %s\n" (:note result)))
         (str (when (seq available-owners)
                (str "\n  All listed owners are real snapshot evidence; "
                     "ranking is non-authoritative. Semantic selection "
@@ -995,7 +1033,13 @@
                (and diagnostic? defmethod-owner)
                "\n→ send the exact defmethod owner form above, or choose one exact owner and retry"
                diagnostic? "\n→ choose one exact owner and retry"
-               :else (format "\n→ %s" (or (:next_action result) "correct_request"))))))
+               ;; @spec MCP-OP-FIELD-001
+               (= "missing-fields" (some-> (:reason result) name))
+               "\n→ add the named field(s) in the minimal valid shape above and call inspect_clojure once"
+               :else (format "\n→ %s"
+                             (or (:remedy result)
+                                 (:next_action result)
+                                 "correct_request"))))))
 
     (= "prepare-change" (:mode result))
     (prepare-change-summary result)

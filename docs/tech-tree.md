@@ -19,6 +19,7 @@ competitor) · **BUILDING** (in flight, branch named) · **OPEN** (filed, not st
 | `:ls-deps` / `:deps` / `:topo` / `:ls-extract` | WON | CLI | same |
 | `inspect_clojure` outline / forms / owners / prepare-change | KEEP | MCP | l1 taxonomy: substituted reads only under the mandate (07:36Z receipt) |
 | outline emits `defmethod` dispatch; owner refusal teaches the `{kind,name,dispatch}` form | BUILT | MCP + CLI | friction ledger item 1 (session-4 watch n=2); inb-11a6ae |
+| refusals name their own field (`missing-fields` shape, `invalid-require-policy` values, `_` wildcard note) | BUILT | MCP | friction ledger items 3, 4, 6; inb-3cb0f4 |
 | workspace-wide inspect (ls-tree through MCP) | OPEN | MCP | inb-f403aa |
 | inspect that returns the next write's literals (the dossier) | OPEN | MCP | fleet round 6, Plan 3 (mission-design) |
 

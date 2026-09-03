@@ -19,6 +19,19 @@ is cut.
 
 ### Added
 
+- Read refusals now name their own field. `inspect_clojure`'s `missing-fields`
+  refusal reports the omitted names, the complete required set at that path, and
+  the minimal valid object there, and its visible summary shows all three plus
+  the next call. `invalid-require-policy` names the field, lists `minimal` and
+  `copy-all`, echoes what it received, and states that the field is required and
+  never defaulted — the published schema declares it required, so clj-surgeon
+  does not substitute a default. A `match` result whose pattern uses `_` as a
+  standalone wildcard and returns zero, or fewer than its declared expectation,
+  now carries the note that each `_` matches exactly one subtree and a longer
+  form needs a longer pattern; a pattern without a standalone `_` carries no
+  note.
+
+
 - `apply_clojure_changes` now reports matched-but-unaddressed sites. Copy the
   `file`, `file_hash`, pattern, and `match_count` from a prior `inspect_clojure`
   `match` receipt into the new optional `expect_matched` object and the

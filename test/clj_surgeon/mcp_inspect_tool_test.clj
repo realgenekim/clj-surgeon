@@ -1164,3 +1164,110 @@
         (inspect-tool/init! nil)
         (change-buffer/clear-bases!)
         (delete-tree! project)))))
+
+;; ---------------------------------------------------------------------------
+;; Refusals that name their own field, in the visible summary. Friction ledger
+;; items 3, 4 and 6 (2026-09-02): "two refusals name no field" and "`_`
+;; silently misses longer paths".
+;; ---------------------------------------------------------------------------
+
+(deftest missing-fields-summary-names-the-field-and-the-minimal-shape
+  ;; @spec MCP-OP-FIELD-001
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj" "(ns demo)\n(def a 1)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "outline" "operation" "outline"
+                      "file" "src/demo.clj"}]}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "missing-fields" (:reason structured)))
+        (is (str/includes?
+              summary
+              "missing required field at the request root: expect"))
+        (is (str/includes? summary "required there: expect, requests"))
+        (is (str/includes?
+              summary
+              (str "minimal valid shape: "
+                   "{\"expect\":{\"requests\":1,\"files\":1},"
+                   "\"requests\":[{\"id\":\"r1\",\"operation\":\"outline\","
+                   "\"file\":\"src/example.clj\"}]}")))
+        (is (str/includes?
+              summary
+              (str "→ add the named field(s) in the minimal valid shape above "
+                   "and call inspect_clojure once"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest invalid-require-policy-summary-names-the-field-and-its-values
+  ;; @spec MCP-OP-FIELD-002
+  (let [project (temp-dir)
+        _source (write-source! project "src/demo.clj"
+                               "(ns demo)\n(defn a [] 1)\n")
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"mode" "plan-extraction"
+         "file" "src/demo.clj"
+         "to" "src/demo_moved.clj"
+         "forms" ["a"]}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "invalid-require-policy" (:error_type structured)))
+        (is (= "require_policy" (:field structured)))
+        (is (= ["minimal" "copy-all"] (:accepted structured)))
+        (is (str/includes?
+              summary "field require_policy accepts: minimal, copy-all"))
+        (is (str/includes?
+              summary
+              "require_policy is required and is never defaulted")))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))
+
+(deftest match-cardinality-refusal-summary-explains-the-wildcard
+  ;; @spec MCP-OP-FIELD-003
+  (let [project (temp-dir)
+        _source (write-source!
+                  project "src/demo.clj"
+                  (str "(ns demo)\n"
+                       "(def paths [[:events slug :settings :hero :url]\n"
+                       "            [:events slug :settings :blind :on]])\n"))
+        calls (atom [])]
+    (try
+      (inspect-tool/init! {:project-root (.getPath project)})
+      (inspect-tool/handle-inspect
+        nil
+        {"requests" [{"id" "paths" "operation" "match"
+                      "file" "src/demo.clj"
+                      "match" "[:events slug :settings _]"
+                      "expect" {"matches" 2}}]
+         "expect" {"requests" 1 "files" 1}}
+        (fn [content error? structured]
+          (swap! calls conj {:content content :error? error?
+                             :structured structured})))
+      (let [{:keys [content structured]} (first @calls)
+            summary (first content)]
+        (is (false? (:ok structured)))
+        (is (= "inspect-cardinality-mismatch" (:error_type structured)))
+        (is (str/includes?
+              summary
+              (str "note: each `_` matches exactly one subtree; "
+                   "a longer form needs a longer pattern"))))
+      (finally
+        (inspect-tool/init! nil)
+        (delete-tree! project)))))

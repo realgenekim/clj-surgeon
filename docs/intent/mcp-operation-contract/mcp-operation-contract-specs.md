@@ -152,6 +152,12 @@ These requirements define the project-owned exact-verifier fusion contract.
 - [x] **MCP-OP-READ-HYP-002**: When the hypothesis presentation exceeds its bound, clj-surgeon shall report available, returned, and omitted counts. It shall not use presentation evidence as selection authority.
 - [x] **MCP-OP-READ-PARITY-001**: When the transport-neutral exact-form selector refuses a missing or ambiguous owner, the CLI and MCP projections shall expose the same complete bounded owner vocabulary and non-authoritative per-owner hypotheses without source bodies.
 
+# #Refusals That Name Their Own Field
+
+- [x] **MCP-OP-FIELD-001**: When an `inspect_clojure` request omits a required field, the `missing-fields` refusal shall name every missing field, the complete required field set at that path, and, where clj-surgeon can stand behind one, the minimal valid object at that path. The visible summary shall show the path, the missing names, and that minimal shape.
+- [x] **MCP-OP-FIELD-002**: When an extraction request supplies no `require_policy` or an unaccepted one, the `invalid-require-policy` refusal shall name the field, list its accepted values, and state that the field is required and never defaulted. clj-surgeon shall not substitute a default for a field its published schema declares required.
+- [x] **MCP-OP-FIELD-003**: When a `match` request whose pattern uses `_` as a standalone wildcard returns zero matches, or fewer than its declared expectation, the result shall carry the note that each `_` matches exactly one subtree and that a longer form needs a longer pattern. A pattern without a standalone `_` shall carry no such note.
+
 # #Matched-But-Unaddressed Reporting
 
 - [x] **MCP-OP-MATCHED-001**: When an `apply_clojure_changes` request supplies the optional `expect_matched` basis and every guard passes, the receipt shall report the matched count, the addressed count, and the bounded list of matched sites the transaction did not address, each with its pre-image line and source hash. The evidence shall be derived from the transaction's own frozen pre-image; clj-surgeon shall retain no server-side session state between the prior `match` read and the transaction.
@@ -262,6 +268,9 @@ These requirements define the project-owned exact-verifier fusion contract.
 | `MCP-OP-MATCHED-001` | The server may remember a prior match result, or the receipt may report sites from the post-image. | 19 matched and 16 addressed ; all addressed ; nothing addressed ; two files in one transaction ; more unaddressed sites than the presentation bound. |
 | `MCP-OP-MATCHED-002` | A stale basis can be recomputed automatically, or a count disagreement is a receipt note rather than a refusal. | File absent from the transaction ; changed file hash ; count too high ; count too low ; refusal leaves bytes unchanged. |
 | `MCP-OP-MATCHED-003` | An unparseable pattern is a stale basis, or `expect_matched` may become required once a caller has used it once. | Two forms in one pattern ; unbalanced pattern ; omitted `expect_matched` on an otherwise identical transaction. |
+| `MCP-OP-FIELD-001` | A structured `missing` array is enough when the visible summary says only `correct_request`, or an example shape may be shown for a path clj-surgeon has no example for. | Omitted top-level `expect` ; omitted `expect.files` ; omitted request `operation` ; a path with no registered example. |
+| `MCP-OP-FIELD-002` | An omitted required field may be silently defaulted to `minimal` because that is the common case. | Omitted `require_policy` ; an unaccepted value ; the published schema still lists the field as required. |
+| `MCP-OP-FIELD-003` | Every miss deserves the wildcard note, or `_` inside a symbol counts as a wildcard. | Zero matches with a standalone `_` ; fewer than expected with `_` ; zero matches with no `_` ; a pattern containing `foo_bar` only. |
 
 # #Deferred Surface
 

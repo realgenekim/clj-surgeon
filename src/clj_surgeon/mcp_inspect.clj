@@ -71,6 +71,37 @@
          :next_action "correct_request"}
         data))))
 
+(def ^:private minimal-request-examples
+  {[] {"requests" [{"id" "r1" "operation" "outline" "file" "src/example.clj"}]
+       "expect" {"requests" 1 "files" 1}}
+   ["expect"] {"requests" 1 "files" 1}
+   ["requests" :index] {"id" "r1" "operation" "outline"
+                        "file" "src/example.clj"}
+   ["requests" :index "expect"] {"forms" 1}})
+
+(defn- example-path
+  [path]
+  (mapv #(if (integer? %) :index %) (vec path)))
+
+;; @spec MCP-OP-FIELD-001
+(defn- minimal-request-shape
+  "The smallest valid object at `path`, restricted to that path's required
+   fields. Returns nil when no example covers every required field, so the
+   refusal never shows a shape it cannot stand behind."
+  [path required]
+  (when-let [example (get minimal-request-examples (example-path path))]
+    (let [shape (into (sorted-map) (select-keys example (vec required)))]
+      (when (= (set (keys shape)) (set required))
+        shape))))
+
+;; @spec MCP-OP-FIELD-001
+(defn- missing-fields-evidence
+  [path required missing]
+  (cond-> {:missing (vec missing)
+           :required (vec (sort required))}
+    (minimal-request-shape path required)
+    (assoc :minimal_request (minimal-request-shape path required))))
+
 (defn- validate-fields!
   [value allowed required path]
   (when-not (map? value)
@@ -83,7 +114,7 @@
                {:unknown unknown}))
     (when (seq missing)
       (refuse! :missing-fields path "Request is missing required fields"
-               {:missing missing}))))
+               (missing-fields-evidence path required missing)))))
 
 (defn- nonblank-string!
   [value path]
@@ -191,7 +222,7 @@
     (let [actual (set (map field-name (keys request)))]
       (when-let [missing (seq (sort (remove actual common-request-fields)))]
         (refuse! :missing-fields path "Request is missing required fields"
-                 {:missing (vec missing)})))
+                 (missing-fields-evidence path common-request-fields missing))))
     (let [id (nonblank-string! (field request "id") (conj path "id"))
           operation (nonblank-string! (field request "operation")
                                       (conj path "operation"))
@@ -436,6 +467,8 @@
       (assoc :actual_match_count (:actual-match-count result))
       (contains? result :match-count)
       (assoc :match_count (:match-count result))
+      ;; @spec MCP-OP-FIELD-003
+      (contains? result :note) (assoc :note (:note result))
       (contains? result :failure-count)
       (assoc :failure_count (:failure-count result))
       (contains? result :requested-form-count)
@@ -525,6 +558,15 @@
                 {:include-string-symbols
                  (:include-string-symbols request)}))})
 
+(def ^:private wildcard-note
+  "each `_` matches exactly one subtree; a longer form needs a longer pattern")
+
+;; @spec MCP-OP-FIELD-003
+(defn- wildcard-pattern?
+  "Does this pattern use `_` as a standalone wildcard token?"
+  [pattern]
+  (boolean (re-find #"(?:^|[\s(\[{])_(?:[\s)\]}]|$)" (str pattern))))
+
 (defn- match-result
   [request snapshot]
   (let [found (structural-lens/find-subforms
@@ -536,11 +578,15 @@
 
       (and (contains? (:expect request) :matches)
            (not= (get-in request [:expect :matches]) (:match-count found)))
-      {:error "Structural match cardinality did not meet the declared expectation"
-       :error-type :inspect-cardinality-mismatch
-       :expected (get-in request [:expect :matches])
-       :actual (:match-count found)
-       :match-count (:match-count found)}
+      (cond-> {:error "Structural match cardinality did not meet the declared expectation"
+               :error-type :inspect-cardinality-mismatch
+               :expected (get-in request [:expect :matches])
+               :actual (:match-count found)
+               :match-count (:match-count found)}
+        ;; @spec MCP-OP-FIELD-003
+        (and (< (:match-count found) (get-in request [:expect :matches]))
+             (wildcard-pattern? (:match request)))
+        (assoc :note wildcard-note))
 
       :else
       (let [matches (mapv (fn [match]
@@ -549,16 +595,21 @@
                                            (:source match))
                                    :file_hash (:hash snapshot)))
                           (:matches found))]
-        {:id (:id request)
-         :operation "match"
-         :file (:file request)
-         :file_hash (:hash snapshot)
-         :match (:match request)
-         :inside (:inside request)
-         :match_count (:match-count found)
-         :source_character_count (reduce + 0 (map #(count (:source %))
-                                                  (:matches found)))
-         :matches matches}))))
+        (cond->
+          {:id (:id request)
+           :operation "match"
+           :file (:file request)
+           :file_hash (:hash snapshot)
+           :match (:match request)
+           :inside (:inside request)
+           :match_count (:match-count found)
+           :source_character_count (reduce + 0 (map #(count (:source %))
+                                                    (:matches found)))
+           :matches matches}
+          ;; @spec MCP-OP-FIELD-003
+          (and (zero? (:match-count found))
+               (wildcard-pattern? (:match request)))
+          (assoc :note wildcard-note))))))
 
 (defn- xray-result
   [request snapshot]
@@ -795,7 +846,10 @@
                       (mapv #(select-keys % [:inside :source]) matches) 1024)]
         (when compact
           (str "  " (:id result) ": "
-               (plural (:match_count result) "match") " · " compact))))
+               (plural (:match_count result) "match") " · " compact
+               ;; @spec MCP-OP-FIELD-003
+               (when (:note result)
+                 (str "\n    note: " (:note result)))))))
 
     "xray"
     (when (contains? result :value)
