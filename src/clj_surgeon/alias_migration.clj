@@ -6,6 +6,7 @@
   Nothing here touches the filesystem, so the whole closure is testable from
   literals."
   (:require
+   [cheshire.core :as json]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
    [rewrite-clj.parser :as parser]))
@@ -618,6 +619,31 @@
     (:workspace-root request)
     (assoc "workspace_root" (:workspace-root request))))
 
+;; @spec MCP-OP-ALIAS-051
+(def expect-files-unchanged-reason
+  "Why a refusal that narrowed or excluded left `expect.files` as declared."
+  (str "Not one file of the narrowed or excluded scope was read, so whether it"
+       " requires from.lib is not known and expect.files stays as declared. A"
+       " count corrected on a guess is worse than one left alone: if the"
+       " declaration is now wrong, the alias-migration-expect-mismatch refusal"
+       " carries the found count and its own executable next_call."))
+
+(def max-next-call-characters
+  "Ceiling on the JSON length of a `next_call` this verb publishes.
+
+  A refusal is a constant-size receipt or it is not a receipt. The narrowing
+  call below is bounded here rather than trusted to be short, because the one
+  thing in it that grows without limit is the caller's own workspace path."
+  512)
+
+(defn- within-next-call-bound?
+  "Whether one composed call fits the published `next_call` ceiling.
+
+  Measured on the JSON the MCP boundary actually publishes: the wire form is
+  the only form that has a length."
+  [call]
+  (<= (count (json/generate-string call)) max-next-call-characters))
+
 ;; @spec MCP-OP-ALIAS-015
 ;; @spec MCP-OP-ALIAS-051
 (defn excluding-call
@@ -642,6 +668,23 @@
         (assoc-in ["expect" "files"]
                   (max 0 (- (or (get-in request [:expect :files]) 1)
                             (count fresh)))))))
+
+;; @spec MCP-OP-ALIAS-015
+;; @spec MCP-OP-ALIAS-055
+(defn narrowing-call
+  "The same request narrowed to one subtree prefix, or nil if it would not fit.
+
+  This is the executable remedy for the two AGGREGATE ceilings, where no
+  bounded set of exclusions exists: one prefix replaces `scope.paths` outright,
+  so the call stays constant in the size of the tree it is narrowing. Any
+  exclusions the request carried are preserved, and `expect.files` is left as
+  declared, because not one file of the narrowed scope has been read."
+  [request prefix]
+  (let [exclude (vec (get-in request [:scope :exclude]))
+        call (cond-> (assoc-in (base-call request) ["scope" "paths"]
+                               [(str prefix "/**")])
+               (seq exclude) (assoc-in ["scope" "exclude"] exclude))]
+    (when (within-next-call-bound? call) call)))
 
 ;; ---------------------------------------------------------------------------
 ;; ---------------------------------------------------------------------------

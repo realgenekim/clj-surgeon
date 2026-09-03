@@ -369,6 +369,55 @@
                  :bytes (Files/size (.toPath (io/file ^String path)))))
         resolutions))
 
+;; @spec MCP-OP-ALIAS-055
+(defn- subtree-aggregates
+  "What every ancestor directory of the selected sources holds.
+
+  One pass over the walk's own output rather than a second traversal. Only
+  directory prefixes become keys: a file is never a narrowing target."
+  [entries]
+  (persistent!
+    (reduce
+      (fn [acc [^String relative bytes]]
+        (let [segments (str/split relative #"/")
+              last-index (dec (count segments))]
+          (loop [acc acc index 0 prefix nil]
+            (if (>= index last-index)
+              acc
+              (let [prefix (if prefix
+                             (str prefix "/" (nth segments index))
+                             (nth segments index))
+                    seen (get acc prefix)]
+                (recur (assoc! acc prefix
+                               {:files (inc (long (:files seen 0)))
+                                :bytes (+ (long (:bytes seen 0)) (long bytes))})
+                       (inc index)
+                       prefix))))))
+      (transient {})
+      entries)))
+
+;; @spec MCP-OP-ALIAS-055
+(defn- narrowing-prefix
+  "The LARGEST subtree that fits under one aggregate ceiling, or nil.
+
+  Largest, because the narrowing exists to cover as much of the caller's scope
+  as one legal call can; the smallest fitting subtree is executable and
+  useless. Ties go to the deepest prefix — the most specific name for the same
+  set — and then to the lexicographically first, so the refusal is a function
+  of the tree and not of the order the walk happened to visit it in.
+
+  Returns `[prefix {:files n :bytes b}]`."
+  [aggregates measure ceiling]
+  (->> aggregates
+       (filter (fn [[_ totals]]
+                 (and (pos? (long (:files totals 0)))
+                      (<= (long (get totals measure 0)) ceiling))))
+       (sort-by (fn [[prefix totals]]
+                  [(- (long (get totals measure 0)))
+                   (- (count (str/split prefix #"/")))
+                   prefix]))
+       first))
+
 ;; @spec MCP-OP-ALIAS-006
 ;; @spec MCP-OP-ALIAS-012
 ;; @spec MCP-OP-ALIAS-038
@@ -438,23 +487,47 @@
                              "back a found count that omits whatever they hold.")})
 
       (> scanned max-scope-files)
-      (refusal :alias-migration-scope-too-large
-               (str "scope.paths selects " scanned " files, above the "
-                    max-scope-files "-file ceiling one alias_migration reads")
-               {:scanned_files scanned
-                :max_files max-scope-files
-                :expected_files expected
-                :next_call nil
-                :remedy (str "Narrow scope.paths to the namespaces that can "
-                             "require from.lib; expect.files declared "
-                             expected ".")})
+      ;; @spec MCP-OP-ALIAS-055
+      (let [[prefix totals] (narrowing-prefix
+                              (subtree-aggregates
+                                (map (fn [relative] [relative 0]) relatives))
+                              :files max-scope-files)]
+        (refusal :alias-migration-scope-too-large
+                 (str "scope.paths selects " scanned " files, above the "
+                      max-scope-files "-file ceiling one alias_migration reads")
+                 (cond-> {:scanned_files scanned
+                          :max_files max-scope-files
+                          :expected_files expected
+                          :next_call (when prefix
+                                       (planner/narrowing-call request prefix))
+                          :expect_files_unchanged_reason
+                          planner/expect-files-unchanged-reason
+                          :remedy
+                          (if prefix
+                            (str "Resend the next_call: it narrows scope.paths "
+                                 "to " prefix "/**, the largest subtree of this "
+                                 "scope that fits the ceiling. expect.files "
+                                 "declared " expected " and is left as declared.")
+                            (str "Narrow scope.paths to the namespaces that can "
+                                 "require from.lib; expect.files declared "
+                                 expected ". No single subtree of this scope "
+                                 "fits the ceiling, so only the caller can "
+                                 "choose the narrowing."))}
+                   prefix (assoc :would_select_files (long (:files totals))))))
 
       :else
       (let [resolutions (mapv #(mcp-paths/resolve-source-path root %) relatives)
             bad (first (remove :ok resolutions))
             sized (when-not bad (sized-sources resolutions))
             oversized (first (filter #(> (:bytes %) max-source-bytes) sized))
-            scope-bytes (reduce + 0 (map :bytes sized))]
+            scope-bytes (reduce + 0 (map :bytes sized))
+            ;; @spec MCP-OP-ALIAS-055
+            [byte-prefix byte-totals] (when (and (not bad)
+                                                 (> scope-bytes max-scope-bytes))
+                                        (narrowing-prefix
+                                          (subtree-aggregates
+                                            (map (juxt :relative :bytes) sized))
+                                          :bytes max-scope-bytes))]
         (cond
           ;; @spec MCP-OP-ALIAS-051
           bad
@@ -485,20 +558,35 @@
                         " bytes of source across " (count sized)
                         " files, above the " max-scope-bytes
                         "-byte ceiling one alias_migration holds at once")
-                   {:scope_bytes scope-bytes
-                    :max_bytes max-scope-bytes
-                    :scanned_files (count sized)
-                    :expected_files expected
-                    ;; no bounded exclusion exists: every file is under the
-                    ;; per-file ceiling, so bringing an over-large scope under
-                    ;; this one takes at least a hundred and twenty-nine
-                    ;; exclusions, and a next_call whose length grows with the
-                    ;; scope is not a constant-size receipt. The remedy is to
-                    ;; narrow scope.paths, which only the caller can do.
-                    :next_call nil
-                    :remedy (str "Narrow scope.paths; no bounded set of "
-                                 "scope.exclude entries can bring this scope "
-                                 "under the aggregate ceiling.")})
+                   (cond-> {:scope_bytes scope-bytes
+                            :max_bytes max-scope-bytes
+                            :scanned_files (count sized)
+                            :expected_files expected
+                            ;; no bounded EXCLUSION exists: every file is under
+                            ;; the per-file ceiling, so bringing an over-large
+                            ;; scope under this one takes at least a hundred and
+                            ;; twenty-nine exclusions. A bounded NARROWING does:
+                            ;; one prefix replaces scope.paths outright and is
+                            ;; constant in the size of the tree.
+                            ;; @spec MCP-OP-ALIAS-055
+                            :next_call (when byte-prefix
+                                         (planner/narrowing-call request
+                                                                 byte-prefix))
+                            :expect_files_unchanged_reason
+                            planner/expect-files-unchanged-reason
+                            :remedy
+                            (if byte-prefix
+                              (str "Resend the next_call: it narrows scope.paths"
+                                   " to " byte-prefix "/**, the largest subtree "
+                                   "of this scope that fits the aggregate byte "
+                                   "ceiling.")
+                              (str "Narrow scope.paths; no bounded set of "
+                                   "scope.exclude entries can bring this scope "
+                                   "under the aggregate ceiling, and no single "
+                                   "subtree of it fits either."))}
+                     byte-prefix
+                     (assoc :would_select_files (long (:files byte-totals))
+                            :would_select_bytes (long (:bytes byte-totals)))))
 
           :else
           (let [sources (mapv (fn [{:keys [relative path]}]
