@@ -68,6 +68,7 @@
 #  41  a leading Make-affecting environment assignment (MAKEFLAGS and friends) is
 #      refused as a runtime override, not silently discarded by the wrapper strip
 #  42  a bare `--` in a `make` invocation is inert, not an unknown option
+#  43  the scorer requires the EXACT supported watch schema, never a floor
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -2189,6 +2190,85 @@ print("ok   case42 a bare -- in a make invocation resolves, options after it sti
 sys.exit(1 if fails else 0)
 PY42
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+echo "== case 43: the scorer requires the EXACT supported watch schema, not a floor =="
+# Sol round five, item 3 (score.py:255): a record-zero header with schema_version=3
+# scored rc 0 and wrote a receipt, because the old check was `version < WATCH_SCHEMA_MIN`
+# -- any UNKNOWN future schema passed.  Fail-closed evidence-format posture (the same
+# posture as the missing-provenance and no-header refusals right beside it) means the
+# scorer accepts the exact schema it reads, and refuses every other one, old or new.
+python3 - "$HERE" <<'PY43'
+import sys
+sys.path.insert(0, sys.argv[1])
+from score import watch_provenance, StreamError
+
+def hdr(version):
+    return [{"kind": "header", "ms_since_start": 0, "schema_version": version,
+             "rollout_dev": 1, "rollout_ino": 2, "session_id": "s"}]
+
+fails = []
+
+try:
+    watch_provenance(hdr(3))
+    fails.append("schema_version=3 (unknown, newer) was NOT refused")
+except StreamError as exc:
+    if "watch-schema-unsupported" not in str(exc):
+        fails.append(f"schema_version=3 refused for the wrong reason: {exc}")
+
+try:
+    watch_provenance(hdr(1))
+    fails.append("schema_version=1 (older) was NOT refused")
+except StreamError as exc:
+    if "watch-schema-unsupported" not in str(exc):
+        fails.append(f"schema_version=1 refused for the wrong reason: {exc}")
+
+# the control: the exact supported schema still scores.
+try:
+    watch_provenance(hdr(2))
+except StreamError as exc:
+    fails.append(f"schema_version=2 (the supported one) was wrongly refused: {exc}")
+
+for f in fails:
+    print(f"FAIL case43 {f}")
+print("ok   case43 schema_version is matched EXACTLY (2), old and new both refused"
+      if not fails else f"case43 {len(fails)} failure(s)")
+sys.exit(1 if fails else 0)
+PY43
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
+echo "== case 43b: schema 3 and schema 1 refuse at score.py's own boundary, end to end =="
+# Same finding, driven through score.py's actual CLI rather than the unit function, on
+# both sides of the supported version -- Sol asked for both schema 3 AND schema 1.
+A43="$WORK/st-P-N-43"; mkdir -p "$A43"
+git clone -q --no-hardlinks "$BASE_REPO" "$A43/worktree"
+printf '%s\n' "$BASE_SHA" > "$A43/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A43/prompt.md"
+EXP=st RUNG=P SLOT=43 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A43" N - "" > /dev/null 2>&1
+bash "$HERE/fake-driver.sh" "$A43" pf5 > /dev/null 2>&1
+for ver in 3 1; do
+  python3 - "$A43" "$ver" <<'PY43B'
+import json, sys
+arm, ver = sys.argv[1], int(sys.argv[2])
+recs = [
+    {"kind": "header", "ms_since_start": 0, "schema_version": ver,
+     "rollout_dev": 1, "rollout_ino": 2, "session_id": "s"},
+    {"kind": "return", "ms_since_start": 1, "n": 1},
+    {"kind": "end", "ms_since_start": 2, "driver_rc": 0, "wall_s": 0.1},
+]
+with open(f"{arm}/watch.jsonl", "w") as f:
+    for r in recs:
+        f.write(json.dumps(r) + "\n")
+PY43B
+  rm -f "$A43/receipt.json" "$A43/receipt.md"
+  python3 "$HERE/score.py" "$A43" > "$WORK/case43-v$ver.out" 2>&1
+  want "case43b schema_version=$ver rc" 3 "$?"
+  [ -e "$A43/receipt.json" ] && bad "case43b schema_version=$ver wrote a receipt" \
+    || ok "case43b schema_version=$ver no receipt.json written"
+  grep -q 'watch-schema-unsupported' "$WORK/case43-v$ver.out" \
+    && ok "case43b schema_version=$ver typed abort" \
+    || bad "case43b schema_version=$ver no typed abort: $(cat "$WORK/case43-v$ver.out")"
+done
 
 # --- the shell-error trap fires here, before any verdict is printed ---------------
 exec 2>&3 3>&-

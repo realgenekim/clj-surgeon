@@ -226,7 +226,12 @@ def validate_watch(records: list[dict]) -> None:
                           f"wall_s={end_record.get('wall_s')!r})")
 
 
-WATCH_SCHEMA_MIN = 2
+# EXACT match, not a floor: Sol round five, item 3.  A header naming a schema this
+# scorer has never seen -- even a NEWER one -- used to pass as long as the number was
+# >= 2, so an unknown future stream shape scored rc 0 and wrote a receipt.  Fail
+# closed on the exact contract this scorer reads, the same evidence-format posture as
+# the missing-provenance and no-header refusals right above it.
+WATCH_SCHEMA_SUPPORTED = 2
 PROVENANCE_KEYS = ("rollout_dev", "rollout_ino", "session_id")
 
 
@@ -252,10 +257,10 @@ def watch_provenance(records: list[dict]) -> dict:
             "in it says which watcher wrote it; a stream written before the "
             "inode-binding repair is syntactically identical to one written after it)")
     version = header.get("schema_version")
-    if not isinstance(version, int) or version < WATCH_SCHEMA_MIN:
+    if not isinstance(version, int) or version != WATCH_SCHEMA_SUPPORTED:
         raise StreamError(
             f"watch-schema-unsupported (schema_version={version!r}; this scorer reads "
-            f"schema_version >= {WATCH_SCHEMA_MIN} only)")
+            f"schema_version == {WATCH_SCHEMA_SUPPORTED} only)")
     missing = [key for key in PROVENANCE_KEYS if key not in header]
     if missing:
         raise StreamError(
