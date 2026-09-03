@@ -817,6 +817,48 @@
         (mcp-tool/init! nil)
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-047
+(deftest the-heap-guard-marks-the-transaction-kernel-not-the-call-that-precedes-it
+  ;; `commit!` resolves the retire source, refuses an unknown profile, and
+  ;; captures a verification baseline BEFORE the kernel is entered. A marker
+  ;; set at the call to `commit!` therefore claims a mutation was attempted for
+  ;; heap exhaustion in any of those, and tells the caller its tree may have
+  ;; been written when nothing was.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (testing "an OutOfMemoryError entering commit!, before any write"
+        (with-redefs [alias-migration/commit!
+                      (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+          (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                                 (request workspace))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-resource-exhausted" (:error_type result)))
+            (is (true? (:source_unchanged result))
+                "the heap was exhausted before the kernel wrote a byte")
+            (is (false? (:mutation_attempted result)))
+            (is (= "correct_request" (:next_action result)))
+            (testing "and the tree agrees with the refusal"
+              (doseq [[relative expected] (:pre corpus)]
+                (is (= expected (slurp (io/file workspace relative))) relative))))))
+      (testing "an OutOfMemoryError after the kernel wrote still says so"
+        (with-redefs [alias-migration/write-details!
+                      (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+          (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                                 (request workspace))]
+            (is (false? (:ok result)) (pr-str result))
+            (is (= "alias-migration-resource-exhausted" (:error_type result)))
+            (is (false? (:source_unchanged result)))
+            (is (true? (:mutation_attempted result)))
+            (is (= "review_receipt" (:next_action result)))
+            (testing "and the tree agrees with that refusal too"
+              (doseq [[relative expected] (:post corpus)]
+                (is (= expected (slurp (io/file workspace relative)))
+                    relative))))))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 
