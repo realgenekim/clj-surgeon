@@ -58,6 +58,14 @@
   [result]
   (vec (keep :file result)))
 
+(defn- entry-records
+  "Every RECORD of an EDN result, in result order — outlines and typed error
+   records alike, receipt maps dropped. `entry-files` compares the paths a
+   result names; this compares what it actually said about each one, which is
+   what \"the paged walk equals the unbounded scan record for record\" means."
+  [result]
+  (vec (filter :file result)))
+
 (defn- receipt
   "The trailing receipt map of an EDN result, or nil when the result is a plain
    complete vector."
@@ -1387,6 +1395,256 @@
             "and the pages concatenate to exactly the fresh scan, symlink
              included: the guard never diverges from discovery")
         (is (nil? (cursor-of p3)) "the last page carries no cursor")))))
+
+;; ============================================================
+;; What DISCOVERY can produce — the predicate the confinement
+;; guard is written against (round-six blockers 1, 2, 3)
+;; ============================================================
+
+(defn- bounded
+  "Run `f` on a DAEMON thread and return its value, or `::timeout` after
+   `ms`. A daemon thread so a witness that reproduces a BLOCKING open —
+   `open(2)` on a FIFO is not interruptible — fails in `ms` and never hangs
+   the suite or holds the JVM open at exit."
+  [ms f]
+  (let [p (promise)]
+    (doto (Thread. ^Runnable
+                   (fn [] (deliver p (try (f) (catch Throwable e {:threw (str e)})))))
+      (.setDaemon true)
+      (.start))
+    (deref p ms ::timeout)))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-DIRECTORY-named-like-a-source-file-is-never-discovered-and-never-blocks-a-page
+  ;; Round-six blockers 1 and 2, together. `row-file` refuses a LEAF that
+  ;; names a directory and justified it with "`find -type f` never lists a
+  ;; directory" — but `find-clj-files` passed NO `-type` predicate, so a
+  ;; DIRECTORY named `src/mydir.clj` was discovered, pinned as an honest row,
+  ;; and then refused by the guard: `:unconfined-manifest-row` naming a path
+  ;; that IS inside the root, two innocent files lost, and a pagination no
+  ;; cursor could finish, while an unbounded scan of the same tree still
+  ;; served every record.
+  ;;
+  ;; NOTHING here is tampered: the row is the one DISCOVERY produced, which is
+  ;; the only shape in which the refusal is wrong, and the only shape the
+  ;; `repin-row!` witnesses could never reach.
+  (with-project [dir fixture-count "ls-tree-budget-dir-named-clj"]
+    (fs/create-dirs (str dir "/src/mydir.clj"))
+    (let [whole (core/run-ls-tree {:dir dir :format :edn})
+          p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+          p2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                :cursor (cursor-of p1)})
+          p3 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                :cursor (cursor-of p2)})]
+      (is (not (some #{"src/mydir.clj"} (entry-files whole)))
+          (str "discovery lists only regular files and symlinks to regular "
+               "files: a DIRECTORY named like a source file is not a "
+               "candidate; got " (pr-str (entry-files whole))))
+      (is (= fixture-count (count (entry-files whole)))
+          (str "so the tree has exactly " fixture-count " candidates, not "
+               (count (entry-files whole))))
+      (is (vector? p3)
+          (str "the final page must SERVE, not refuse a row discovery itself "
+               "produced; got " (pr-str p3)))
+      (is (= ["src/fixt/mod010.clj" "src/fixt/mod011.clj"] (entry-files p3))
+          (str "and it carries the last two files; got "
+               (pr-str (entry-files p3))))
+      (is (= (entry-records whole)
+             (into (into (entry-records p1) (entry-records p2))
+                   (entry-records p3)))
+          "the paged walk equals the unbounded scan record for record"))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-DISCOVERED-row-whose-parent-becomes-a-symlink-out-of-the-root-refuses
+  ;; Round-six blocker 3: every confinement witness reached its refusal
+  ;; through `repin-row!`, so the suite could stay green while the guard was
+  ;; broken for rows DISCOVERY produced. This one tampers with the TREE, never
+  ;; the manifest: page 1 pins the ordinary project, and only then does
+  ;; `src/fixt` become a symlink to an identical directory OUTSIDE the root.
+  ;;
+  ;; The bytes are the SAME bytes, so `:stale-result-cursor` cannot fire and
+  ;; the refusal is confinement's doing and nothing else's.
+  (with-project [dir fixture-count "ls-tree-budget-confine-discovered-parent"]
+    (let [outside (str (fs/create-temp-dir {:prefix "ls-tree-budget-parent-OUTSIDE"}))]
+      (try
+        (let [p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})]
+          (is (= 5 (count (entry-files p1))) "page 1 is an ordinary page")
+          (fs/move (str dir "/src/fixt") (str outside "/fixt"))
+          (fs/create-sym-link (str dir "/src/fixt") (str outside "/fixt"))
+          (is (fs/readable? (str dir "/src/fixt/mod005.clj"))
+              "the pinned row still names a readable file with its pinned bytes")
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor (cursor-of p1)})]
+            (is (map? r)
+                (str "a pinned row whose PARENT now resolves outside the root "
+                     "must refuse; served instead: " (pr-str (entry-files r))))
+            (is (= :unconfined-manifest-row (:error-type r))
+                (str "expected the confinement refusal, got "
+                     (pr-str (:error-type r)) "; full result " (pr-str r)))
+            (is (str/includes? (pr-str (:limit r)) "src/fixt/mod005.clj")
+                (str "and it NAMES the first offending row; got "
+                     (pr-str (:limit r))))))
+        (finally (fs/delete-tree outside))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-tree-of-every-non-regular-shape-pages-exactly-as-the-unbounded-scan-lists-it
+  ;; The parity witness round six asked for: ONE tree carrying a directory
+  ;; named `*.clj`, a symlinked FILE, a symlinked DIRECTORY and a DANGLING
+  ;; symlink, walked to exhaustion and compared with the unbounded scan RECORD
+  ;; FOR RECORD. Discovery admits exactly one of the four — the symlinked file
+  ;; — and the paged path must agree with the unbounded path about all of it.
+  ;;
+  ;; This is the assertion whose absence let the round-six regression ship: a
+  ;; guard that refuses what discovery produces shows up here as a page that
+  ;; is a refusal where the scan has records, and nowhere else.
+  (with-outside-file [outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-every-shape"]
+      (let [linkdir (str outside "/adir")]
+        (fs/create-dirs linkdir)
+        (fs/create-dirs (str dir "/src/mydir.clj"))                       ; a real DIRECTORY
+        (fs/create-sym-link (str dir "/src/linkdir.clj") linkdir)         ; -> a DIRECTORY
+        (fs/create-sym-link (str dir "/src/dangling.clj")
+                            (str outside "/gone-forever.clj"))            ; -> nothing
+        (fs/create-sym-link (str dir "/src/fixt/zlinked.clj") secret)     ; -> a regular FILE
+        (let [whole (core/run-ls-tree {:dir dir :format :edn})
+              p1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+              p2 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                    :cursor (cursor-of p1)})
+              p3 (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                    :cursor (cursor-of p2)})
+              files (entry-files whole)]
+          (is (= ["src/fixt/zlinked.clj"]
+                 (vec (filter #{"src/mydir.clj" "src/linkdir.clj"
+                                "src/dangling.clj" "src/fixt/zlinked.clj"}
+                              files)))
+              (str "of the four shapes only the symlinked FILE is a "
+                   "candidate; got " (pr-str files)))
+          (is (= (inc fixture-count) (count files))
+              (str "so the tree has " (inc fixture-count) " candidates; got "
+                   (count files) " -> " (pr-str files)))
+          (is (vector? p3)
+              (str "the walk finishes — no page refuses a row the scan "
+                   "serves; got " (pr-str p3)))
+          (is (nil? (cursor-of p3)) "and the last page carries no cursor")
+          (is (= (entry-records whole)
+                 (into (into (entry-records p1) (entry-records p2))
+                       (entry-records p3)))
+              "the paged walk equals the unbounded scan record for record"))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-manifest-row-whose-LEAF-is-a-DANGLING-symlink-is-refused-not-paged
+  ;; Round-six follow-up 8. `.isDirectory` is FALSE for a dangling symlink, so
+  ;; the leaf gate did not fire, `content-digest` returned nil, the pinned nil
+  ;; matched, and the encoder opened it, failed, and spent a page slot on a
+  ;; typed error record.
+  ;;
+  ;; The typed outcome chosen here is `:unconfined-manifest-row`, the same
+  ;; refusal as the live-directory leaf, and the reason is the DISCOVERY
+  ;; PREDICATE rather than a preference: `find ... \( -type f -o \( -type l
+  ;; -xtype f \) \)` lists a path only when it is a regular file or a symlink
+  ;; that RESOLVES to one, so a leaf whose directory entry still exists and
+  ;; does not resolve to a regular file — a directory, a symlink to one, a
+  ;; dangling symlink, a FIFO — is a row no scan can ever produce, exactly
+  ;; like a `..` row. The alternative, `:stale-result-cursor`, is reserved for
+  ;; the one case that is NOT a tamper: a row whose file was legitimately
+  ;; DELETED, whose entry no longer exists at all, and which must still reach
+  ;; staleness. That is the line the predicate draws, and both sides of it are
+  ;; witnessed — here, and by `a-cursor-is-refused-once-a-pinned-file-is-gone`.
+  (with-project [dir fixture-count "ls-tree-budget-dangling-leaf"]
+    (let [outside (str (fs/create-temp-dir {:prefix "ls-tree-budget-dangling-OUTSIDE"}))
+          target (str outside "/adir")
+          row "src/leafdir"]
+      (try
+        (fs/create-dirs target)
+        (fs/create-sym-link (str dir "/" row) target)
+        (let [page-1 (core/run-ls-tree {:dir dir :format :edn :max-results 5})
+              cursor-id (:cursor-id (budget/parse-cursor (cursor-of page-1)))
+              cursor (repin-row! dir cursor-id 6 {:p row :h nil} 5)]
+          ;; the target goes away BEFORE the page: the leaf is now a DANGLING
+          ;; symlink, for which `.isDirectory` is false
+          (fs/delete-tree target)
+          (is (not (fs/exists? (str dir "/" row)))
+              "the leaf no longer resolves (fs/exists? follows the link)")
+          (is (fs/exists? (str dir "/" row) {:nofollow-links true})
+              "but its directory entry is still there — this is the shape
+               that slipped the `.isDirectory` gate")
+          (let [r (core/run-ls-tree {:dir dir :format :edn :max-results 5
+                                     :cursor cursor})]
+            (is (map? r)
+                (str "a dangling-symlink leaf must REFUSE, not spend a page "
+                     "slot on an error record; served instead: "
+                     (pr-str (entry-files r))))
+            (is (= :unconfined-manifest-row (:error-type r))
+                (str "expected the confinement refusal, got "
+                     (pr-str (:error-type r)) "; full result " (pr-str r)))
+            (is (str/includes? (pr-str (:limit r)) row)
+                (str "and the refusal NAMES the offending row path; got "
+                     (pr-str (:limit r))))))
+        (finally (fs/delete-tree outside))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest a-FIFO-named-like-a-source-file-never-blocks-a-scan
+  ;; Round-six follow-up 9, PRE-EXISTING at `0914a37` and `3cedd44`: because
+  ;; discovery passed no `-type` predicate, a named pipe called `src/pipe.clj`
+  ;; was a candidate, and `io/input-stream` blocks in `open(2)` until a writer
+  ;; appears. A scan of that tree produced no output, forever, and survived
+  ;; SIGTERM — an operation whose whole contract is a typed receipt returning
+  ;; nothing at all.
+  ;;
+  ;; The deadline is the assertion. The scan runs on a DAEMON thread because a
+  ;; blocking `open(2)` is not interruptible: on failure this witness reports
+  ;; in five seconds and the suite continues, rather than hanging the run it
+  ;; is supposed to be protecting.
+  (with-project [dir fixture-count "ls-tree-budget-fifo"]
+    (let [fifo (str dir "/src/fixt/pipe.clj")]
+      (proc/shell {:out :string :err :string} "mkfifo" fifo)
+      (is (fs/exists? fifo) "the fixture really is a FIFO on disk")
+      (let [r (bounded 5000 #(core/run-ls-tree {:dir dir :format :edn}))]
+        (is (not= ::timeout r)
+            "a tree containing a FIFO must scan to COMPLETION within 5 s")
+        (when (not= ::timeout r)
+          (is (nil? (:threw r))
+              (str "and it must not throw; got " (pr-str (:threw r))))
+          (is (not (some #{"src/fixt/pipe.clj"} (entry-files r)))
+              (str "a FIFO is not a regular file, so it is not a candidate; "
+                   "got " (pr-str (entry-files r))))
+          (is (= fixture-count (count (entry-files r)))
+              (str "and every real file is still served; got "
+                   (pr-str (entry-files r)))))))))
+
+;; @spec MCP-OP-MEM-003
+(deftest the-encoder-refuses-a-source-that-is-not-a-regular-file-at-read-time
+  ;; Discovery now excludes every non-regular shape, so the encoder should
+  ;; never SEE one — but "should never" is the premise the round-six blocker
+  ;; was built on. Between discovery and the read there is a real window: a
+  ;; path listed as a regular file can be a FIFO by the time it is opened, and
+  ;; that open BLOCKS rather than throwing, so the usual `catch Exception`
+  ;; cannot make it typed.
+  ;;
+  ;; The predicate is `Files/isRegularFile` FOLLOWING links — NOT
+  ;; `NOFOLLOW_LINKS`, which is false for a symlink to a regular file and
+  ;; would refuse `src/fixt/zlinked.clj`, a path discovery deliberately admits
+  ;; (`a-symlinked-file-inside-the-root-pages-exactly-as-it-is-discovered`).
+  (with-outside-file [_outside secret]
+    (with-project [dir fixture-count "ls-tree-budget-unreadable-source"]
+      (let [fifo (str dir "/src/fixt/pipe.clj")
+            linked (str dir "/src/fixt/zlinked.clj")]
+        (proc/shell {:out :string :err :string} "mkfifo" fifo)
+        (fs/create-sym-link linked secret)
+        (let [r (bounded 5000 #(#'core/safe-outline fifo))]
+          (is (not= ::timeout r)
+              "the encoder's source open must not BLOCK on a FIFO")
+          (when (not= ::timeout r)
+            (is (= :unreadable-source (:refusal r))
+                (str "it must be a TYPED refusal, not a stringified throw; "
+                     "got " (pr-str r)))
+            (is (= fifo (:file r)) "naming the path it refused")))
+        (let [ok (bounded 5000 #(#'core/safe-outline linked))]
+          (is (not= ::timeout ok) "and a symlinked regular file still outlines")
+          (when (not= ::timeout ok)
+            (is (nil? (:refusal ok))
+                (str "the guard follows links: a symlink to a regular file is "
+                     "readable and must NOT be refused; got " (pr-str ok)))))))))
 
 ;; @spec MCP-OP-MEM-003
 (deftest an-unchanged-tree-scans-identically-only-within-a-WARM-snapshot-store
