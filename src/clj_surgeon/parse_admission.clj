@@ -354,29 +354,49 @@
 ;; The scan's own cost
 ;; ============================================================
 
-(def ^:private scan-nanos
-  "Nanoseconds spent inside `scan-shape` since the last `reset-scan-clock!`.
+(def ^:dynamic *scan-meter*
+  "The accumulator a tree-scale caller binds around ITS OWN scan, or nil.
 
-   Measured on anvil 2026-09-03 the charge is 1.27% of the outline it precedes
-   (0.647 ms scan against 51.032 ms outline on a 126,596 B file), exactly one
-   scan per parse entry. That is small — and an unreported cost is one nobody
-   notices regressing: the first draft of `scan-shape` was 638x slower and
-   every test still passed. So a tree-scale receipt charges it.
+   Measured on anvil 2026-09-03 the scan charges 1.27% of the outline it
+   precedes (0.647 ms scan against 51.032 ms outline on a 126,596 B file),
+   exactly one scan per parse entry. That is small — and an unreported cost is
+   one nobody notices regressing: the first draft of `scan-shape` was 638x
+   slower and every test still passed. So a tree-scale receipt charges it.
 
-   A plain atom rather than a dynamic var on purpose: the scan runs inside
-   `pmap` workers, and a counter that depends on binding conveyance to be
-   correct is a counter that reads zero on the day the executor changes."
-  (atom 0))
+   This was one global atom, reset at the top of each tree scan. Two concurrent
+   `ls-tree` calls — and the MCP server is multi-client — zeroed each other's
+   clock and both published a wrong figure. A receipt number that is silently
+   wrong under concurrency is worse than an absent one, so the accumulator is
+   now PER SCAN and belongs to the caller that made it.
 
-(defn reset-scan-clock!
-  "Zero the scan clock. A tree-scale caller does this once before its scan."
+   Correctness does not depend on binding conveyance: `outline-all-files` closes
+   over its meter lexically and rebinds this var inside each worker, so the
+   count survives a change of executor."
+  nil)
+
+(defn new-meter
+  "A fresh per-scan accumulator: nanoseconds spent scanning, and bytes scanned."
   []
-  (reset! scan-nanos 0))
+  {:nanos (atom 0) :bytes (atom 0)})
 
-(defn scan-ms
-  "Milliseconds spent in admission scans since the last reset, to 3 decimals."
-  []
-  (/ (Math/round (* 1000.0 (/ (double @scan-nanos) 1e6))) 1000.0))
+(defn record-scan!
+  "Charge one scan of `nbytes` bytes costing `nanos` to the current meter, if a
+   caller installed one. A single-file read installs none and pays nothing."
+  [nanos nbytes]
+  (when-let [m *scan-meter*]
+    (swap! (:nanos m) + nanos)
+    (swap! (:bytes m) + nbytes))
+  nil)
+
+(defn meter-resources
+  "The `:resources` block for a receipt: the scan's own cost WITH its
+   denominator, so a reader can tell a slow scan from a large one. A figure
+   without a rate is a figure nobody can act on."
+  [meter]
+  (if meter
+    {:scan_ms (/ (Math/round (* 1000.0 (/ (double @(:nanos meter)) 1e6))) 1000.0)
+     :bytes_scanned @(:bytes meter)}
+    {:scan_ms 0.0 :bytes_scanned 0}))
 
 ;; ============================================================
 ;; Admission
@@ -454,7 +474,7 @@
    (let [{:keys [max-parse-nodes max-parse-depth]} ceilings
          t0 (System/nanoTime)
          {:keys [parse-nodes parse-depth]} (scan-shape source)
-         _ (swap! scan-nanos + (- (System/nanoTime) t0))
+         _ (record-scan! (- (System/nanoTime) t0) (.length ^String source))
          measured {:parse-nodes parse-nodes :parse-depth parse-depth}
          over (cond
                 (> parse-depth max-parse-depth)

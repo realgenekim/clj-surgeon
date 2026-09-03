@@ -663,14 +663,61 @@
                projects root)
           text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
                 projects root)
-          ms (get-in (last edn) [:receipt :resources :scan_ms])]
-      (is (number? ms) "the EDN receipt carries no :resources block")
-      (is (pos? ms) "the scan really ran and the clock really measured it")
+          {:keys [scan_ms bytes_scanned]} (get-in (last edn) [:receipt :resources])]
+      (is (number? scan_ms) "the EDN receipt carries no :resources block")
+      (is (pos? scan_ms) "the scan really ran and the clock really measured it")
+      (is (pos? bytes_scanned)
+          "a duration with no denominator cannot tell slow from large")
       (is (str/includes? text "scan_ms") "the text receipt charges it too"))))
 
 ;; @spec MCP-OP-MEM-005
+(deftest concurrent-scans-charge-their-own-meters
+  (testing "two scans at once do not zero each other's clock"
+    ;; The counter was ONE GLOBAL ATOM, reset at the top of each tree scan. The
+    ;; MCP server is multi-client, so two concurrent `ls-tree` calls each reset
+    ;; the other's clock and both published a wrong figure — silently. Bytes are
+    ;; the assertion rather than milliseconds because bytes are EXACT: each
+    ;; scan must account for its own tree's source bytes and nobody else's.
+    (let [tree! (fn [n]
+                  (let [dir (java.nio.file.Files/createTempDirectory
+                              "mem005conc"
+                              (into-array java.nio.file.attribute.FileAttribute []))
+                        root (.toFile dir)
+                        src (io/file root "src" "fixture")]
+                    (.mkdirs src)
+                    (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+                    (doseq [i (range n)]
+                      (spit (io/file src (str "f" i ".clj"))
+                            (str "(ns fixture.f" i ")\n"
+                                 "(defn hello [x] (inc x))\n")))
+                    (.getPath root)))
+          bytes-under (fn [root]
+                        (reduce + (for [^java.io.File f (file-seq (io/file root "src"))
+                                        :when (.isFile f)]
+                                    (count (slurp f)))))
+          small (tree! 2)
+          big (tree! 40)
+          scan (fn [root]
+                 (let [projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
+                                 ((requiring-resolve 'clj-surgeon.core/discover-projects)
+                                  root))
+                       edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+                            projects root)]
+                   (get-in (last edn) [:receipt :resources])))
+          a (future (scan small))
+          b (future (scan big))
+          ra @a
+          rb @b]
+      (is (= (bytes-under small) (:bytes_scanned ra))
+          "the small scan charged itself the big scan's bytes")
+      (is (= (bytes-under big) (:bytes_scanned rb))
+          "the big scan charged itself the small scan's bytes")
+      (is (number? (:scan_ms ra)))
+      (is (number? (:scan_ms rb))))))
+
+;; @spec MCP-OP-MEM-005
 (deftest ls-tree-output-is-unchanged-when-nothing-is-refused
-  (testing "a scan with no refusal carries no receipt entry at all"
+  (testing "a clean scan's HUMAN output is byte-identical; its EDN meters"
     (let [dir (java.nio.file.Files/createTempDirectory
                 "mem005ok" (into-array java.nio.file.attribute.FileAttribute []))
           root (.toFile dir)
@@ -682,7 +729,22 @@
                       ((requiring-resolve 'clj-surgeon.core/discover-projects)
                        (.getPath root)))
             edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
-                 projects (.getPath root))]
-        (is (= 1 (count edn)) "no trailing receipt map is appended")
-        (is (nil? (:receipt (last edn))))
-        (is (= 'fixture.ok (:ns (first edn))))))))
+                 projects (.getPath root))
+            text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+                  projects (.getPath root))]
+        ;; The text contract is unchanged: nothing about a refusal, and no
+        ;; resources line, so a human reading an ordinary scan sees exactly what
+        ;; they saw before this control existed.
+        (is (not (str/includes? text "parser_admission_refused")))
+        (is (not (str/includes? text "resources")))
+        ;; The EDN receipt is where the meter lives, and it is unconditional:
+        ;; a scan regression appears on ORDINARY scans, which is the ~100% of
+        ;; production runs the old placement could never see.
+        (is (= 2 (count edn)) "one entry per file, plus the receipt")
+        (is (= 'fixture.ok (:ns (first edn))))
+        (is (nil? (:parser_admission_refused (:receipt (last edn))))
+            "nothing was refused, so nothing is named")
+        (is (number? (get-in (last edn) [:receipt :resources :scan_ms]))
+            "the meter is dark on exactly the scans it exists to watch")
+        (is (= (count "(ns fixture.ok)\n(defn hello [x] (inc x))\n")
+               (get-in (last edn) [:receipt :resources :bytes_scanned])))))))

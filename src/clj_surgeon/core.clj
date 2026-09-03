@@ -396,23 +396,36 @@
   "Compute outlines for all files across projects, in parallel.
    Returns projects with :outlines — a vec of [file outline] pairs."
   [projects]
-  ;; @spec MCP-OP-MEM-005 — charge the admission scan against this scan only
-  (admission/reset-scan-clock!)
-  (let [;; Collect all [project-idx file] pairs
+  ;; @spec MCP-OP-MEM-005 — charge the admission scan against THIS scan only.
+  ;; The meter is made here and closed over lexically, then rebound inside each
+  ;; worker: two concurrent ls-tree calls each charge their own, and the count
+  ;; does not depend on binding conveyance surviving a change of executor.
+  (let [meter (admission/new-meter)
+        ;; Collect all [project-idx file] pairs
         all-files (for [[pidx project] (map-indexed vector projects)
                         f (:files project)]
                     [pidx f])
         ;; Parse all files in parallel
         results (pmap (fn [[pidx f]]
-                        [pidx f (safe-outline f)])
+                        (binding [admission/*scan-meter* meter]
+                          [pidx f (safe-outline f)]))
                       all-files)
         ;; Group back by project index
-        by-project (group-by first results)]
-    (mapv (fn [[pidx project]]
-            (let [file-results (mapv (fn [[_ f outline]] [f outline])
-                                     (get by-project pidx []))]
-              (assoc project :outlines file-results)))
-          (map-indexed vector projects))))
+        by-project (group-by first results)
+        outlined (mapv (fn [[pidx project]]
+                         (let [file-results (mapv (fn [[_ f outline]] [f outline])
+                                                  (get by-project pidx []))]
+                           (assoc project :outlines file-results)))
+                       (map-indexed vector projects))]
+    (with-meta outlined {::scan-resources (admission/meter-resources meter)})))
+
+(defn- scan-resources
+  "The scan's own cost, carried on the projects vector `outline-all-files`
+   returned. Zeroed when a caller assembled the projects some other way."
+  ;; @spec MCP-OP-MEM-005
+  [projects]
+  (or (::scan-resources (meta projects))
+      (admission/meter-resources nil)))
 
 (defn format-file-text
   "Pure: format a single file's outline map as compact text lines."
@@ -481,20 +494,27 @@
                         (format "   %s  %s\n"
                                 file
                                 (admission/public-ceiling-name reason)))))
-        ;; @spec MCP-OP-MEM-005 — charge the control's own cost where a reader
-        ;; will see it regress. Inside the refusal block, so an ordinary scan's
-        ;; output stays byte-identical to before this control existed.
-        (.append sb (format "── resources: scan_ms %s\n" (admission/scan-ms)))))
+        ;; @spec MCP-OP-MEM-005 — charge the control's own cost with its
+        ;; denominator. The TEXT rendering stays inside the refusal block, so an
+        ;; ordinary scan's human output is byte-identical to before this control
+        ;; existed; the EDN receipt carries it unconditionally, because that is
+        ;; the surface a regression check reads.
+        (let [{:keys [scan_ms bytes_scanned]} (scan-resources projects)]
+          (.append sb (format "── resources: scan_ms %s, bytes_scanned %s\n"
+                              scan_ms bytes_scanned)))))
     (str sb)))
 
 (defn format-ls-tree-edn
   "Pure: format ls-tree results as EDN vector.
    Expects projects with :outlines already computed.
 
-   When parser admission refused one or more files, ONE trailing receipt map is
-   appended naming and counting them. Nothing is appended when nothing was
-   refused, so an ordinary scan's EDN is byte-identical to before this control
-   existed."
+   ONE trailing receipt map is always appended. It carries `:resources`
+   unconditionally — the scan's own cost with its `bytes_scanned` denominator,
+   because a scan regression appears on ORDINARY scans and a meter wired to the
+   rare refusal branch is one nobody ever sees move — and it names and counts
+   `:parser_admission_refused` only when something actually was refused. The
+   human TEXT rendering keeps the older, quieter contract: an ordinary scan's
+   text is byte-identical to before this control existed."
   ;; @spec MCP-OP-MEM-005
   [projects dir]
   (let [entries (vec
@@ -505,12 +525,18 @@
                     (-> result
                         (assoc :file rel-path)
                         (dissoc :forward-refs))))
-        refused (admission-refusals projects dir)]
-    (if (seq refused)
-      (conj entries {:receipt {:parser_admission_refused
-                               {:count (count refused) :files refused}
-                               :resources {:scan_ms (admission/scan-ms)}}})
-      entries)))
+        refused (admission-refusals projects dir)
+        ;; @spec MCP-OP-MEM-005
+        ;; `:resources` is UNCONDITIONAL. The meter exists to catch a scan
+        ;; regression — the first draft was 638x slower and every test passed —
+        ;; and a regression shows up on ORDINARY scans, which are ~100% of
+        ;; production runs and were 0% of the runs that printed the number. A
+        ;; gauge wired to the rare branch is a gauge nobody will see move.
+        receipt (cond-> {:resources (scan-resources projects)}
+                  (seq refused)
+                  (assoc :parser_admission_refused
+                         {:count (count refused) :files refused}))]
+    (conj entries {:receipt receipt})))
 
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."
