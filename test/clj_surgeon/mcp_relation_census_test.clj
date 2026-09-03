@@ -1014,3 +1014,203 @@
         (is (nil? (choose {:subtree-counts {"" 4001 "src" 4001
                                             "src/a" 4001}
                            :partial-dirs #{"" "src"}})))))))
+
+;; ---------------------------------------------------------------------------
+;; Refusal shapes publish the SAME discovery facts a success publishes
+;;
+;; A receipt whose evidence disappears exactly when the census refuses is a
+;; receipt the caller cannot audit: the escaping link, the collapsed link
+;; chain and the oversized source are precisely what the caller must be told
+;; about when the census found nothing to report.
+;; ---------------------------------------------------------------------------
+
+;; @spec MCP-OP-CENSUS-032
+(deftest a-refusal-counts-the-escaping-link-at-every-entrance
+  (let [parent (temp-dir)
+        root (io/file parent "project")
+        outside (io/file parent "outside")]
+    (try
+      (spit-file! (io/file root "src/app/plain.clj") filler-source)
+      (spit-file! (io/file outside "secrets.clj") filler-source)
+      (Files/createSymbolicLink (.toPath (io/file root "src/escape.clj"))
+                                (.toPath (io/file "../../outside/secrets.clj"))
+                                (make-array FileAttribute 0))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool refuses with no arms and still says what it skipped"
+          (is (false? (:ok mcp)))
+          (is (= "no-fold-arms-found" (:error_type mcp)))
+          (is (= 1 (:files_scanned mcp)))
+          (is (= 1 (:skipped_outside_root mcp))
+              "the refusal dropped the escaping-path count the success publishes"))
+
+        (testing "the JVM CLI publishes the same figures in the same refusal"
+          (is (= :no-fold-arms-found (:error-type jvm-cli)))
+          (is (= 1 (:files-scanned jvm-cli))
+              "the CLI refusal never said how many files it scanned")
+          (is (= 1 (:skipped-outside-root jvm-cli))
+              "the CLI refusal dropped the escaping-path count"))
+
+        (testing "the babashka CLI answers identically"
+          (is (= :no-fold-arms-found (:error-type bb-cli)))
+          (is (= 1 (:files-scanned bb-cli)))
+          (is (= 1 (:skipped-outside-root bb-cli)))))
+      (finally (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-030
+(deftest a-refusal-reports-the-collapsed-link-chain-at-every-entrance
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/real/plain.clj") filler-source)
+      (Files/createSymbolicLink (.toPath (io/file root "src/link2.clj"))
+                                (.toPath (io/file "real/plain.clj"))
+                                (make-array FileAttribute 0))
+      (Files/createSymbolicLink (.toPath (io/file root "src/link1.clj"))
+                                (.toPath (io/file "link2.clj"))
+                                (make-array FileAttribute 0))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool refuses with no arms and still says what collapsed"
+          (is (= "no-fold-arms-found" (:error_type mcp)))
+          (is (= 1 (:files_scanned mcp)))
+          (is (= 2 (:duplicates_collapsed mcp))
+              "the refusal dropped the collapse count the success publishes"))
+
+        (testing "the JVM CLI publishes the same collapse in the same refusal"
+          (is (= :no-fold-arms-found (:error-type jvm-cli)))
+          (is (= 1 (:files-scanned jvm-cli)))
+          (is (= 2 (:duplicates-collapsed jvm-cli))))
+
+        (testing "the babashka CLI answers identically"
+          (is (= :no-fold-arms-found (:error-type bb-cli)))
+          (is (= 1 (:files-scanned bb-cli)))
+          (is (= 2 (:duplicates-collapsed bb-cli)))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-028
+(deftest a-refusal-names-the-oversized-sources-at-every-entrance
+  (let [root (temp-dir)
+        listed census/max-listed-files
+        total (inc listed)]
+    (try
+      (doseq [i (range total)]
+        (spit-file! (io/file root (format "src/app/over%02d.clj" i))
+                    (padded-source (inc census/max-source-bytes))))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool names what it did not look at, even with no arms"
+          (is (= "no-fold-arms-found" (:error_type mcp)))
+          (is (= 0 (:files_scanned mcp)))
+          (is (= total (get-in mcp [:oversized_skipped :count]))
+              "the refusal published none of the oversized evidence")
+          (is (= listed (count (get-in mcp [:oversized_skipped :files]))))
+          (is (= (- total listed) (:oversized_skipped_omitted mcp))))
+
+        (testing "the JVM CLI names the same sources in the same refusal"
+          (is (= :no-fold-arms-found (:error-type jvm-cli)))
+          (is (= 0 (:files-scanned jvm-cli)))
+          (is (= total (get-in jvm-cli [:oversized-skipped :count])))
+          (is (= listed (count (get-in jvm-cli [:oversized-skipped :files]))))
+          (is (= (- total listed) (:oversized-skipped-omitted jvm-cli))))
+
+        (testing "the babashka CLI answers identically"
+          (is (= :no-fold-arms-found (:error-type bb-cli)))
+          (is (= 0 (:files-scanned bb-cli)))
+          (is (= total (get-in bb-cli [:oversized-skipped :count])))
+          (is (= listed (count (get-in bb-cli [:oversized-skipped :files]))))
+          (is (= (- total listed) (:oversized-skipped-omitted bb-cli))))
+
+        (testing "the three entrances name the same files in the same order"
+          (is (= (get-in mcp [:oversized_skipped :files])
+                 (get-in jvm-cli [:oversized-skipped :files])
+                 (get-in bb-cli [:oversized-skipped :files])))))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
+;; The walk is bounded by the entries it VISITS, not only by the candidates
+;; it collects: a tree of 60,000 non-sources holds no candidate at all, so the
+;; scanned-file ceiling never fires and the walk reads the whole directory
+;; tree to discover nothing.
+;; ---------------------------------------------------------------------------
+
+(defn- build-entry-heavy-tree!
+  "One arm file plus `n` non-source entries spread over 1,000-entry directories."
+  [root n]
+  (spit-file! (io/file root "src/a/folds.clj") arm-source)
+  (doseq [d (range (quot n 1000))]
+    (let [dir (io/file root (format "src/junk/d%02d" d))]
+      (.mkdirs dir)
+      (doseq [i (range 1000)]
+        (.createNewFile (io/file dir (format "f%04d.txt" i)))))))
+
+;; @spec MCP-OP-CENSUS-033
+(deftest the-walk-is-bounded-by-the-entries-it-visits-at-every-entrance
+  (let [bound 50000
+        shared (some-> (requiring-resolve 'clj-surgeon.relation-census/max-walk-entries)
+                       deref)
+        root (temp-dir)]
+    (is (= bound shared)
+        "the entry bound is not a shared bound both entrances read")
+    (try
+      (build-entry-heavy-tree! root 60000)
+      (let [t0 (System/nanoTime)
+            {:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))
+            elapsed-ms (/ (- (System/nanoTime) t0) 1e6)]
+        (testing "the tool refuses the entry-heavy tree instead of walking it"
+          (is (false? (:ok mcp))
+              "60,000 non-sources were walked because none of them counted")
+          (is (= "too-many-walk-entries" (:error_type mcp)))
+          (is (= bound (:maximum mcp)))
+          (is (= (inc bound) (:observed mcp))
+              "the walk did not stop at one entry past the bound")
+          (is (true? (:observed_at_least mcp)))
+          (is (= 0 (:files_read mcp)))
+          (is (false? (:read_complete mcp)))
+          (is (nil? (:counts mcp))))
+
+        (testing "the refusal narrows to a subtree it finished walking"
+          (let [narrowed (get-in mcp [:next_call :workspace_root])]
+            (if (some? narrowed)
+              (do (is (not= (:workspace_root mcp) narrowed)
+                      "the continuation hands back the root it just refused")
+                  (is (not-any? #(str/includes? (str %) "<")
+                                (vals (dissoc (:next_call mcp) :tool)))
+                      "the continuation carries a placeholder, not a call")
+                  (is (not= "too-many-walk-entries"
+                            (:error_type (census-tool/execute-request!
+                                           {:project-root narrowed}
+                                           (dissoc (:next_call mcp)
+                                                   :tool :workspace_root))))
+                      "the narrowing the refusal handed back hits the same wall"))
+              (is (string? (:remedy mcp))
+                  "no continuation and no remedy: the caller is told nothing"))))
+
+        (testing "the JVM CLI refuses the same tree with the same figures"
+          (is (= :too-many-walk-entries (:error-type jvm-cli)))
+          (is (= bound (:maximum jvm-cli)))
+          (is (= (inc bound) (:observed jvm-cli)))
+          (is (true? (:observed-at-least jvm-cli)))
+          (is (or (string? (:next-command jvm-cli)) (string? (:remedy jvm-cli)))))
+
+        (testing "the babashka CLI answers identically"
+          (is (= :too-many-walk-entries (:error-type bb-cli)))
+          (is (= bound (:maximum bb-cli)))
+          (is (= (inc bound) (:observed bb-cli)))
+          (is (= (:next-command jvm-cli) (:next-command bb-cli))))
+
+        (testing "all three answered in bounded time"
+          (is (< elapsed-ms 120000)
+              (str "the three entrances took " (long elapsed-ms) "ms"))))
+      (finally (delete-tree! root)))))
+
+;; @spec MCP-OP-CENSUS-017
+(deftest an-exhausted-census-offers-no-placeholder-continuation
+  (with-redefs [census-tool/collect-inputs
+                (fn [& _] (throw (OutOfMemoryError. "Java heap space")))]
+    (let [result (run {:files [fixture]})
+          wire (json/generate-string result)]
+      (is (false? (:ok result)))
+      (is (= "census-resource-exhausted" (:error_type result)))
+      (is (not (contains? result :next_call))
+          "the exhaustion refusal still hands back a call it cannot compute")
+      (is (string? (:remedy result))
+          "no continuation and no remedy: the caller is told nothing")
+      (is (not (str/includes? wire "<"))
+          (str "the exhaustion receipt carries a placeholder: " wire)))))
