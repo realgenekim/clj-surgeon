@@ -296,9 +296,48 @@ names a DIFFERENT one:
 | this server did not mint that token — the MAC does not verify | `:invalid-result-cursor` |
 | it did, but this root holds no such snapshot (another root — twins included — pruned, expired), or the rows filed under it no longer PROVE that address, or they cannot supply the slice they promised | `:unknown-result-cursor` |
 | it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
-| it did, the snapshot verified, and a row this page would serve names a path whose PARENT DIRECTORY resolves outside the scanned root (the final component is taken lexically) | `:unconfined-manifest-row`, NAMING the path |
+| it did, the snapshot verified, and a row this page would serve does not resolve to a source file inside the scanned root — its PARENT DIRECTORY resolving outside it, or its LEAF still existing as a directory entry that does not resolve to a regular file | `:unconfined-manifest-row`, NAMING the path |
 | it did, and `stale-row`'s digest check — taken ONCE, at page start, against every candidate's source file — found the file no longer matched its pinned content | `:stale-result-cursor`, NAMING the path |
 | it did, everything verified, and the page encoded ZERO records with rows still remaining — a continuation would carry a cursor at its own offset | `:empty-result-page`, carrying no cursor |
+
+**The guard's whole premise is the DISCOVERY PREDICATE, so the predicate is
+written down.** `core/find-clj-files` runs
+
+```
+find <dir> ( -name '*.clj' -o -name '*.cljs' -o -name '*.cljc' )
+           ( -type f -o ( -type l -xtype f ) )
+```
+
+as argv tokens, with no `-L`. A candidate is therefore a REGULAR FILE, or a
+SYMLINK THAT RESOLVES TO ONE, and nothing else: not a directory, not a symlink
+to a directory, not a dangling symlink, not a FIFO, not a socket. Every
+confinement rule above is stated as "what discovery can never produce", so a
+guard is only as true as this line is.
+
+It is written here because the paraphrase was FALSE and the falsehood shipped.
+The command carried NO `-type` predicate at all, while `row-file`'s docstring
+justified refusing a directory-leaf row with "`find -type f` never lists a
+directory". A DIRECTORY named `src/mydir.clj` was therefore discovered, pinned
+as an honest manifest row, and then refused by that guard: a
+`:unconfined-manifest-row` receipt naming a path that IS inside the root, two
+innocent files never served, and a pagination no cursor could finish, while an
+unbounded scan of the same tree still served every record (Opus, 2026-09-03).
+Three traps sat in the one-line repair: `-type f` ALONE is false for a symlink,
+which would have stopped listing symlinked `.clj` files the design deliberately
+admits; the `-o` chain was UNPARENTHESISED, so a `-type` in front of it would
+have bound to the first `-name` only; and the same missing predicate made a
+FIFO named `src/pipe.clj` a candidate, where `open(2)` blocks rather than
+throwing and the scan returned nothing, forever, surviving SIGTERM.
+
+The leaf check in `row-file` is now the exact negation of the predicate —
+refuse when the leaf EXISTS as a directory entry (`NOFOLLOW_LINKS`) and does
+not resolve to a regular file (links FOLLOWED) — and neither half opens the
+file, because for a FIFO the open is the hang. `NOFOLLOW` on the existence test
+is what keeps an ordinary DELETION out of this refusal: a deleted file has no
+entry and still reaches `:stale-result-cursor`. Links are FOLLOWED on the
+regularity test because a symlink to a regular file is a candidate discovery
+admits, and testing it `NOFOLLOW` would refuse `src/fixt/zlinked.clj` and
+reintroduce the page-1/page-2 divergence the lexical leaf exists to avoid.
 
 **`:stale-result-cursor` is a boundary, not a read-time seal.** The digest
 check above runs ONCE per candidate, at page start; the encoder reopens each
@@ -580,8 +619,12 @@ counts calls rather than clocking them.
   and rows that cannot supply the slice they promised; a forged offset is
   `:invalid-result-cursor`; a genuine offset past the end is
   `:result-cursor-out-of-range`, naming the offset and the manifest total; a
-  row that does not resolve inside the scanned root is
-  `:unconfined-manifest-row`, naming the row. None of the five is ever an empty
+  row that does not resolve to a source file inside the scanned root is
+  `:unconfined-manifest-row`, naming the row — its parent resolving outside the
+  root, or its leaf still existing as a directory entry that does not resolve to
+  a regular file (a directory, a symlink to one, a dangling symlink, a FIFO); a
+  row whose file was simply DELETED has no entry at all, is not refused here,
+  and reaches `:stale-result-cursor` instead. None of the five is ever an empty
   vector without a receipt, and none is ever a throw.
 - A malformed `:max-results` is `:invalid`, never silently promoted to the cap;
   a 40-digit `:max-results` or cursor offset is that same typed refusal, never a
