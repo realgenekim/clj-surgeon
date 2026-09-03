@@ -129,16 +129,19 @@
 ;; Parameter validation (server-side; the advertised schema is only a hint)
 ;; ---------------------------------------------------------------------------
 
-;; Both field sets live in `clj-surgeon.relation-census`, next to the shared
-;; refusal table, because the CLI entrance must be able to read them and
-;; cannot require this namespace (claypoole does not load under babashka).
-;; `workspace_root` is a routing field, not a census field: it is validated
+;; The accepted field sets live in `clj-surgeon.relation-census`
+;; (`mcp-census-fields` / `mcp-routing-fields`), next to the shared refusal
+;; table, because the CLI entrance must be able to read them and cannot
+;; require this namespace (claypoole does not load under babashka). The
+;; unknown-field row of that table reads them directly, so this namespace no
+;; longer keeps aliases of its own: a second name for one set is a second
+;; place for the two to drift.
+;;
+;; `workspace_root` is a ROUTING field, not a census field: it is validated
 ;; and canonicalised later, by `workspace/resolve-request`, and this pass
 ;; must not treat its presence as an unknown field nor its value as anything
 ;; to check — checking it here would mean resolving it, which is exactly the
 ;; filesystem work this pass runs before.
-(def ^:private census-fields census/mcp-census-fields)
-(def ^:private routing-fields census/mcp-routing-fields)
 
 ;; @spec MCP-OP-CENSUS-016
 ;; @spec MCP-OP-CENSUS-029
@@ -219,104 +222,46 @@
                                          "directory, or omit it to census "
                                          "the server's workspace.")})
                                  data)))
-        ;; The shape questions themselves — which fields are unknown, which
-        ;; values violate which bound — are the shared table's, not this
-        ;; function's. `req` is this request in the normalised shape the
-        ;; table checks; `violated?` and `reason` read the same rows the CLI
-        ;; entrance reads, so a renamed reason or a loosened bound reaches
-        ;; both entrances at once and neither can drift. What stays here is
-        ;; the ORDER (MCP-OP-CENSUS-029 states it) and this entrance's own
-        ;; refusal payloads, which differ per branch.
+        ;; The shape questions AND THEIR ORDER are the shared table's, not
+        ;; this function's. Sol's round-eleven item 3: this validator read the
+        ;; table's PREDICATES through `shape-violated?` but kept its own
+        ;; `cond` for the ORDER, so moving `files` before `doors` in the table
+        ;; changed the CLI's refusal and left the tool's unmoved — and the
+        ;; parity witness, which enumerates predicates, stayed green while the
+        ;; two entrances disagreed. MCP-OP-CENSUS-029 states the order as a
+        ;; requirement, so it is now a fact about the table: this walks the
+        ;; rows in the table's order and stops at the first one violated.
+        ;;
+        ;; The per-branch PAYLOADS the `cond` existed to carry did not go
+        ;; away; they moved into the rows as `:mcp-message` and `:mcp-data`
+        ;; formatters, beside the predicate that decides them and the name
+        ;; each entrance publishes. A row this entrance cannot express carries
+        ;; no `:mcp` keyword and is skipped; a row this entrance applies at a
+        ;; different PHASE says so in `:mcp-phase` — door VOCABULARY is
+        ;; decided after discovery here, so its refusal can carry the
+        ;; discovery facts, and the table records that rather than leaving it
+        ;; to a comment the walk cannot read.
         req (census/normalise-request :mcp params)
-        violated? (fn [field violation]
-                    (census/shape-violated? req field violation))
-        reason (fn [field violation]
-                 (census/shape-name :mcp field violation))
-        unknown (:unknown req)
-        files (:files params)
-        doors (:doors params)
+        violated (some (fn [rule]
+                         (when (and (keyword? (:mcp rule))
+                                    (= :shape (:mcp-phase rule :shape))
+                                    (not ((:predicate rule) req)))
+                           rule))
+                       (census/shape-rules))
         pool-size (:pool_size params)]
-    (cond
-      (violated? :unknown-fields :present)
-      (refuse (reason :unknown-fields :present)
-              (str "relation_census does not accept " (str/join ", " unknown))
-              {:unknown unknown
-               ;; The accepted list is what the caller retries with, so it
-               ;; names every field this tool accepts — the routing field
-               ;; included. Sol's round-nine item 6: advertising only the
-               ;; census fields tells a caller that the workspace_root it
-               ;; legitimately supplied is not accepted, and workspace_root
-               ;; is the field that decides which tree gets censused.
-               :accepted (vec (sort (map name (into census-fields
-                                                    routing-fields))))})
-
-      (violated? :doors :container-type)
-      (refuse (reason :doors :container-type)
-              "doors must be a JSON array of symbols" {})
-
-      (violated? :doors :too-many)
-      (refuse (reason :doors :too-many) "doors exceeds the maximum door count"
-              {:maximum census/max-doors :actual (count doors)})
-
-      ;; Every doors entry must be the JSON string the advertised schema
-      ;; states, checked here — before any filesystem work, before `files`
-      ;; and `pool_size` are even looked at, and before the oversized-source
-      ;; branch of execute-in-context! can copy `doors` UNCHANGED into a
-      ;; next_call. A non-string entry that survived to that branch produced
-      ;; an unexecutable continuation: the schema rejects it, even though
-      ;; this validator had not yet refused it.
-      (violated? :doors :entry-type)
-      (let [bad-index (first (keep-indexed (fn [i d] (when-not (string? d) i))
-                                            doors))
-            bad-value (nth doors bad-index)]
-        (refuse (reason :doors :entry-type)
-                "every entry in doors must be a JSON string"
-                {:index bad-index :value bad-value}))
-
-      (violated? :files :container-type)
-      (refuse (reason :files :container-type)
-              "files must be a JSON array of paths" {})
-
-      (violated? :files :empty)
-      (refuse (reason :files :empty)
-              "files must name at least one path; omit files to census the tree"
-              {})
-
-      (violated? :files :too-many)
-      (refuse (reason :files :too-many)
-              "files exceeds the maximum file count"
-              {:maximum census/max-requested-files :actual (count files)})
-
-      (violated? :files :entry-type)
-      (refuse (reason :files :entry-type)
-              "every entry in files must be a non-blank string" {})
-
-      ;; Present but not an integer — including an explicit null, which the
-      ;; range check below would read as "absent" and never look at.
-      (violated? :pool-size :not-an-integer)
-      (refuse (reason :pool-size :not-an-integer)
-              (str "pool_size must be a JSON integer between 1 and "
-                   census/max-pool-size)
-              {:maximum census/max-pool-size :value pool-size})
-
-      :else
-      (let [coerced (when (some? pool-size) (census/coerce-pool-size pool-size))]
-        (cond
-          (and coerced (not (:ok coerced)) (= :not-an-integer (:reason coerced)))
-          (refuse (reason :pool-size :not-an-integer)
-                  (str "pool_size must be an integer between 1 and "
-                       census/max-pool-size)
-                  {:maximum census/max-pool-size :value (:value coerced)})
-
-          (and coerced (not (:ok coerced)))
-          (refuse (reason :pool-size :out-of-range)
-                  (str "pool_size must be between 1 and " census/max-pool-size)
-                  {:maximum census/max-pool-size :value (:value coerced)})
-
-          :else
-          {:ok true
-           :params (cond-> params
-                     coerced (assoc :pool_size (:size coerced)))})))))
+    (if violated
+      (refuse (:mcp violated)
+              ((:mcp-message violated) req)
+              ((:mcp-data violated) req))
+      ;; Every reachable non-integer refuses above, so what is left is either
+      ;; absent or an in-range integer. Sol's round-eleven item 9 found the
+      ;; old `:else` block's second `pool-size-not-an-integer` branch had no
+      ;; constructible request; walking the table deletes it rather than
+      ;; leaving dead code behind a comment claiming it is reachable.
+      {:ok true
+       :params (cond-> params
+                 (some? pool-size)
+                 (assoc :pool_size (:size (census/coerce-pool-size pool-size))))})))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery

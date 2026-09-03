@@ -336,6 +336,18 @@
     :violation :present
     :predicate (fn [req] (empty? (:unknown req)))
     :mcp :unknown-fields
+    :mcp-message (fn [req]
+                   (str "relation_census does not accept "
+                        (str/join ", " (:unknown req))))
+    ;; The accepted list is what the caller retries with, so it names every
+    ;; field this tool accepts — the ROUTING field included. Sol's round-nine
+    ;; item 6: advertising only the census fields tells a caller that the
+    ;; workspace_root it legitimately supplied is not accepted, and
+    ;; workspace_root is the field that decides which tree gets censused.
+    :mcp-data (fn [req]
+                {:unknown (:unknown req)
+                 :accepted (vec (sort (map name (into mcp-census-fields
+                                                      mcp-routing-fields))))})
     :cli :unknown-arguments
     :cli-message (fn [req]
                    (str ":op :relation-census does not accept "
@@ -397,6 +409,8 @@
                          (string? value)
                          (sequential? value)))))
     :mcp :doors-not-an-array
+    :mcp-message (fn [_req] "doors must be a JSON array of symbols")
+    :mcp-data (fn [_req] {})
     :cli :doors-not-a-string
     :cli-message (fn [req]
                    (str ":doors must be a comma-separated string of door "
@@ -408,6 +422,9 @@
     :violation :too-many
     :predicate (fn [req] (doors-ok? req #(<= (count %) max-doors)))
     :mcp :too-many-doors
+    :mcp-message (fn [_req] "doors exceeds the maximum door count")
+    :mcp-data (fn [req] {:maximum max-doors
+                         :actual (count (:value (:doors req)))})
     :cli :too-many-doors
     :cli-message (fn [req]
                    (str ":doors names "
@@ -421,6 +438,18 @@
     :violation :entry-type
     :predicate (fn [req] (doors-ok? req #(every? string? %)))
     :mcp :doors-not-strings
+    ;; Refused BEFORE `files` and `pool_size` are even looked at, and before
+    ;; the oversized-source branch of execute-in-context! can copy `doors`
+    ;; UNCHANGED into a next_call. A non-string entry that survived to that
+    ;; branch produced an unexecutable continuation: the schema rejects it,
+    ;; even though this validator had not yet refused it.
+    :mcp-message (fn [_req] "every entry in doors must be a JSON string")
+    :mcp-data (fn [req]
+                (let [doors (:value (:doors req))
+                      index (first (keep-indexed
+                                     (fn [i d] (when-not (string? d) i))
+                                     doors))]
+                  {:index index :value (nth doors index)}))
     :cli {:inexpressible
           (str "the CLI's :doors is one string split on commas, so every "
                "entry it yields is a string by construction; a CLI :doors "
@@ -441,6 +470,10 @@
                  (doors-ok? req #(or (not (every? string? %))
                                      (not (map? (parse-doors % nil))))))
     :mcp :unknown-door-symbol
+    ;; The tool applies this row AFTER discovery, so its refusal can carry the
+    ;; discovery facts and the canonical root; the shape walk skips it and the
+    ;; table says so here rather than in a comment the walk cannot read.
+    :mcp-phase :post-discovery
     :cli :unknown-door-symbol
     :cli-message (fn [req]
                    (let [bad (parse-doors (:entries (:doors req)) nil)]
@@ -458,6 +491,8 @@
                  (let [{:keys [present? value]} (:files req)]
                    (or (not present?) (sequential? value))))
     :mcp :files-not-an-array
+    :mcp-message (fn [_req] "files must be a JSON array of paths")
+    :mcp-data (fn [_req] {})
     :cli {:inexpressible
           (str "the CLI names at most one source, with :file; there is no "
                "list whose container could have the wrong type")}}
@@ -468,6 +503,10 @@
                  (let [{:keys [present? value]} (:files req)]
                    (or (not present?) (not (sequential? value)) (seq value))))
     :mcp :empty-file-list
+    :mcp-message (fn [_req]
+                   (str "files must name at least one path; omit files to "
+                        "census the tree"))
+    :mcp-data (fn [_req] {})
     :cli {:inexpressible
           (str "the CLI names at most one source, with :file; an absent "
                ":file censuses the tree and is not an empty list")}}
@@ -480,6 +519,9 @@
                        (not (sequential? value))
                        (<= (count value) max-requested-files))))
     :mcp :too-many-files
+    :mcp-message (fn [_req] "files exceeds the maximum file count")
+    :mcp-data (fn [req] {:maximum max-requested-files
+                         :actual (count (:value (:files req)))})
     :cli {:inexpressible
           (str "the CLI names at most one source, with :file, so its file "
                "count can never exceed the maximum")}}
@@ -493,6 +535,8 @@
                        (every? #(and (string? %) (not (str/blank? %)))
                                entries))))
     :mcp :file-not-a-string
+    :mcp-message (fn [_req] "every entry in files must be a non-blank string")
+    :mcp-data (fn [_req] {})
     :cli :file-not-a-string
     :cli-message (fn [req]
                    (str ":file must be a non-blank path (got "
@@ -515,6 +559,11 @@
                          (not= :not-an-integer (:reason (coerce-pool-size value)))
                          (integer? value)))))
     :mcp :pool-size-not-an-integer
+    :mcp-message (fn [_req]
+                   (str "pool_size must be a JSON integer between 1 and "
+                        max-pool-size))
+    :mcp-data (fn [req] {:maximum max-pool-size
+                         :value (:value (:pool-size req))})
     :cli :invalid-pool-size
     :cli-message (fn [req]
                    (str ":threads must be an integer between 1 and "
@@ -532,6 +581,11 @@
                          (or (:ok coerced)
                              (not= :out-of-range (:reason coerced)))))))
     :mcp :pool-size-out-of-range
+    :mcp-message (fn [_req]
+                   (str "pool_size must be between 1 and " max-pool-size))
+    :mcp-data (fn [req]
+                {:maximum max-pool-size
+                 :value (:value (coerce-pool-size (:value (:pool-size req))))})
     ;; The CLI publishes ONE name for both pool-size violations, and has
     ;; since the op shipped; its message names the bound and the value, so
     ;; the caller is not told less. This is the documented many-to-one half
