@@ -2930,6 +2930,10 @@
                {:label :source-too-large
                 :error-type :source-too-large
                 :root workspace
+                ;; This drive names a :file, so the workspace it named IS
+                ;; that file — `cli-anchor` prefers an explicit :file over
+                ;; :dir, because that is the narrower thing the caller named.
+                :expect-anchor (str (named workspace) "/src/a/one.clj")
                 :opts {:file (str (named workspace) "/src/a/one.clj")}
                 :around (fn [f]
                           (with-redefs [census/max-source-bytes 4] (f)))}

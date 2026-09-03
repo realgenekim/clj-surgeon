@@ -583,6 +583,28 @@
         ;; and the validator destructured `{:keys [threads]}`, so every other
         ;; malformed shape reached the filesystem first.
         shape-refusal (relation-census/validate-cli-request-shape opts)
+        ;; The workspace the caller named, computed once, by the SAME pure
+        ;; function the shape pass uses. Sol's round-eleven item 2, blocking:
+        ;; round ten anchored the shape refusals and left the post-scan ones
+        ;; spelling their own command, so an undefined door — a question only
+        ;; the scan can answer — still handed back the literal `:dir .` and
+        ;; replaying it censused the replay's cwd. A rule that lives in one
+        ;; branch is a rule the other branches break, so every refusal below
+        ;; carries this anchor, and every continuation below is built by
+        ;; `relation-census/cli-next-command`.
+        anchor (relation-census/cli-anchor opts)
+        continue-with (fn [fix] (relation-census/cli-next-command anchor fix))
+        ;; A continuation that NARROWS to a subtree still goes through the one
+        ;; builder: the subtree is just a different anchor, made absolute the
+        ;; same way, so a narrowing can no more be relative than a retry can.
+        narrow-to (fn [path]
+                    (relation-census/cli-next-command
+                      (relation-census/cli-anchor {:dir path}) :none))
+        ;; A refusal offers exactly one of a continuation and a remedy
+        ;; (MCP-OP-CENSUS-014): a null continuation is not a smaller promise
+        ;; than a real one, it is a field the caller must interpret.
+        or-remedy (fn [command remedy]
+                    (if command {:next-command command} {:remedy remedy}))
         pool (when (some? threads) (relation-census/coerce-pool-size threads))
         parsed-doors (if doors
                        (relation-census/parse-doors
@@ -607,18 +629,25 @@
       shape-refusal
 
       (map? parsed-doors)
-      {:ok false
-       :error-type :unknown-door-symbol
-       :error (str "Unknown identity door " (:invalid parsed-doors) ": "
-                   (:why parsed-doors))
-       :door (:invalid parsed-doors)
-       :known-doors (vec (sort (map str relation-census/default-doors)))
-       :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
-                          (str/join "," (sort (map str relation-census/default-doors))))}
+      (merge
+        {:ok false
+         :error-type :unknown-door-symbol
+         :error (str "Unknown identity door " (:invalid parsed-doors) ": "
+                     (:why parsed-doors))
+         :door (:invalid parsed-doors)
+         :known-doors (vec (sort (map str relation-census/default-doors)))
+         :anchor anchor}
+        (or-remedy (continue-with :doors)
+                   (str "The workspace this request names is too long to carry "
+                        "into a continuation under "
+                        relation-census/max-next-call-bytes
+                        " bytes, so no narrower command can be computed: run "
+                        "the census from a shorter path.")))
 
       (:oversized @scan)
       {:ok false
        :error-type :source-too-large
+       :anchor anchor
        :error (str (:oversized @scan) " is larger than "
                    relation-census/max-source-bytes " bytes")
        :file (:oversized @scan)
@@ -638,13 +667,8 @@
       (:walk-exceeded? @scan)
       (let [discovered (:discovered @scan)
             narrower (census-discovery/entry-narrowing-subtree discovered)
-            candidate (when narrower
-                        (str "clj-surgeon :op :relation-census :dir "
-                             (:root discovered) "/" narrower))
-            next-command (when (and candidate
-                                    (<= (count candidate)
-                                        relation-census/max-next-call-bytes))
-                           candidate)]
+            next-command (when narrower
+                           (narrow-to (str (:root discovered) "/" narrower)))]
         (merge
           {:ok false
            :error-type :too-many-walk-entries
@@ -662,7 +686,8 @@
            :observed-at-least true
            :entries-yielded (:entries-yielded @scan)
            :files-read 0
-           :read-complete false}
+           :read-complete false
+           :anchor anchor}
           ;; A null continuation is not a smaller promise than a real one; the
           ;; refusal offers exactly one of a next-command and a remedy.
           (if next-command
@@ -681,13 +706,8 @@
       (:exceeded? @scan)
       (let [discovered (:discovered @scan)
             narrower (census-discovery/narrowing-subtree discovered)
-            candidate (when narrower
-                        (str "clj-surgeon :op :relation-census :dir "
-                             (:root discovered) "/" narrower))
-            next-command (when (and candidate
-                                    (<= (count candidate)
-                                        relation-census/max-next-call-bytes))
-                           candidate)]
+            next-command (when narrower
+                           (narrow-to (str (:root discovered) "/" narrower)))]
         (merge
           {:ok false
            :error-type :too-many-candidate-files
@@ -703,7 +723,8 @@
            :observed (:observed @scan)
            :observed-at-least true
            :files-read 0
-           :read-complete false}
+           :read-complete false
+           :anchor anchor}
           (if next-command
             {:next-command next-command}
             {:remedy (str "The walk stopped at the ceiling, so every count it "
@@ -722,6 +743,7 @@
              :error-type :no-fold-arms-found
              :error "No file defines defmethod fold-event arms"
              :dir (census-root dir)
+             :anchor anchor
              ;; Nothing was found, so there is no subtree to narrow to and no
              ;; command to compute: the refusal names what it scanned instead
              ;; of captioning the directory the caller was supposed to pick.
@@ -743,7 +765,20 @@
                               (str/split (str doors-arg) #",")
                               (into (:declared @scan #{}) (:declared result))))]
             (cond
-              (not (:ok result)) result
+              ;; A per-file refusal from the plan phase — an unparseable
+              ;; source, or a worker that threw. It names the file it failed
+              ;; on, which is not a narrower REQUEST: the tree minus one
+              ;; source is not expressible in this grammar. So it carries the
+              ;; anchor and a remedy, and no continuation at all.
+              (not (:ok result))
+              (merge result
+                     {:anchor anchor
+                      :remedy (str (:file result)
+                                   " could not be censused, and a request "
+                                   "cannot name a tree minus one source, so "
+                                   "no narrower command can be computed: fix "
+                                   "that source, or census a directory that "
+                                   "excludes it with :dir.")})
 
               ;; Whether a door is DEFINED can only be answered once the scan
               ;; has been parsed: confirm it against the plan's own :declared
@@ -756,8 +791,16 @@
                              (:why confirmed))
                  :door (:invalid confirmed)
                  :known-doors (vec (sort (map str relation-census/default-doors)))
-                 :next-command (str "clj-surgeon :op :relation-census :dir . :doors "
-                                    (str/join "," (sort (map str relation-census/default-doors))))}
+                 :anchor anchor}
+                ;; Sol's round-eleven item 2, exactly here: this branch spelled
+                ;; `:dir .` and the replay censused the replay's cwd.
+                (or-remedy (continue-with :doors)
+                           (str "The workspace this request names is too long "
+                                "to carry into a continuation under "
+                                relation-census/max-next-call-bytes
+                                " bytes, so no narrower command can be "
+                                "computed: run the census from a shorter "
+                                "path."))
                 (facts))
 
               :else
@@ -1563,7 +1606,19 @@
 
 (defn parse-args
   "Parse CLI arg strings into an opts map.
-   Pure: string sequence in, map out."
+   Pure: string sequence in, map out.
+
+   A REPEATED flag is refused, naming it. Sol's round-eleven item 7: this fn
+   built its map with `(into {})`, so `:file one.clj :file two.clj` collapsed
+   last-one-wins and the census reported `:ok true` over `two.clj` alone —
+   the caller asked about two sources and got a receipt claiming completeness
+   about one. That is the failure MCP-OP-CENSUS-019 already names for an
+   argument the op does not accept, in a different disguise: an argument
+   silently DROPPED tells the caller a bound was applied that never existed,
+   and here the drop is invisible in the receipt as well. No op in this CLI
+   has a repeatable flag, so a repeat is a malformed request rather than a
+   list, and the refusal is generic for the same reason the collapse was: this
+   fn builds the map before anything knows which op it is for."
   [args]
   (let [help-flags #{"--help" "-h"}
         has-help?  (some help-flags args)
@@ -1571,13 +1626,31 @@
     (when (odd? (count kv-args))
       (throw (ex-info "Arguments must be key-value pairs"
                       {:error-type :invalid-arguments})))
-    (cond-> (->> kv-args
-                 (partition 2)
-                 (map (fn [[k v]]
-                        (let [key (keyword (subs k 1))]
-                          [key (if (#{:match :with :contains :query :expr :expect} key) v (parse-val v))])))
-                 (into {}))
-      has-help? (assoc :help true))))
+    (let [pairs (->> kv-args
+                     (partition 2)
+                     (mapv (fn [[k v]]
+                             (let [key (keyword (subs k 1))]
+                               [key (if (#{:match :with :contains :query :expr :expect} key) v (parse-val v))]))))
+          repeated (->> (map first pairs)
+                        frequencies
+                        (filter (fn [[_ n]] (> n 1)))
+                        (map first)
+                        (sort-by name)
+                        first)]
+      (when repeated
+        (let [flag (str ":" (name repeated))
+              times (count (filter #(= repeated (first %)) pairs))]
+          (throw (ex-info
+                   (str flag " was given " times
+                        " times; every clj-surgeon argument is given at most "
+                        "once, and a repeated one would be silently dropped")
+                   {:error-type :duplicate-argument
+                    :argument flag
+                    :occurrences times
+                    :values (mapv second
+                                  (filter #(= repeated (first %)) pairs))}))))
+      (cond-> (into {} pairs)
+        has-help? (assoc :help true)))))
 
 (defn -main [& args]
   (try
