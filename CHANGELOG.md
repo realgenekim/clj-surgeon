@@ -10,6 +10,14 @@ is cut.
 
 ### Fixed
 
+- Public tool schemas now advertise exactly what their entrances accept. The
+  `apply_clojure_changes` schema advertised `expect_matched` on the edits,
+  extraction, and basis branches that refuse it, and `edit_clojure` — whose
+  schema declares neither `changes` nor `expect_matched` — accepted both,
+  because both entrances share one handler. The schema branches now exclude
+  the field, and `edit_clojure` refuses any undeclared field before any
+  effect, naming the fields and pointing at `apply_clojure_changes`.
+
 - `defmethod` dispatch values behind a `#_` discard or a `^meta` wrapper are
   now read as the reader reads them. The outline used to emit `#_skipped`
   and `^:meta :withmeta` as dispatch spellings, and the exact-owner selector

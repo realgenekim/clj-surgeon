@@ -496,6 +496,9 @@
                       (:properties editor-hybrid-schema)
                       (:properties extraction-schema))
    :allOf (:allOf editor-hybrid-schema)
+   ;; @spec MCP-OP-MATCHED-005
+   ;; `expect_matched` belongs to the direct changes transaction only. Every
+   ;; other branch refuses it at validation, so no other branch advertises it.
    :oneOf
    [{:required ["basis" "decisions"]
      :not {:anyOf [{:required ["changes"]} {:required ["expect"]}
@@ -503,6 +506,7 @@
                    {:required ["delete_owners"]}
                    {:required ["symbol_migration"]}
                    {:required ["require_change"]}
+                   {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
     {:required ["changes" "expect"]
      :not {:anyOf [{:required ["basis"]}
@@ -521,6 +525,7 @@
                    {:required ["decisions"]}
                    {:required ["changes"]}
                    {:required ["expect"]}
+                   {:required ["expect_matched"]}
                    {:required ["extraction"]}]}}
     {:required ["extraction"]
      :not {:anyOf [{:required ["basis"]}
@@ -531,6 +536,7 @@
                    {:required ["delete_owners"]}
                    {:required ["symbol_migration"]}
                    {:required ["require_change"]}
+                   {:required ["expect_matched"]}
                    {:required ["expect"]}]}}]})
 
 (defn closed-object-shape

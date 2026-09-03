@@ -1052,6 +1052,73 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; ---------------------------------------------------------------------------
+;; edit_clojure's published schema declares neither `changes` nor
+;; `expect_matched`, but both entrances share one handler, so the handler took
+;; them anyway. A tool that accepts what its schema denies has no contract.
+;; ---------------------------------------------------------------------------
+
+(defn- invoke-tool!
+  [tool config params]
+  (mcp-tool/init! config)
+  (let [captured (promise)]
+    ((:tool-fn tool) nil params
+     (fn [content error? structured]
+       (deliver captured {:content content :error? error?
+                          :structured structured})))
+    @captured))
+
+(deftest edit-clojure-entrance-refuses-fields-its-schema-omits
+  ;; @spec MCP-OP-MATCHED-005
+  (let [workspace (temp-dir)
+        source-file (io/file workspace "src/sample/app.clj")
+        original "(ns sample.app)\n(defn f [] :old)\n"
+        config {:project-root (.getPath workspace)
+                :receipt-dir (.getPath (io/file workspace "receipts"))}]
+    (try
+      (.mkdirs (.getParentFile source-file))
+      (spit source-file original)
+      (testing "the declared editor gesture still commits"
+        (let [{:keys [structured]}
+              (invoke-tool! mcp-tool/edit-clojure-tool config
+                            {"edits" [{"file" "src/sample/app.clj"
+                                       "within" {"form" "f"}
+                                       "from" ":old" "to" ":new"}]})]
+          (is (:ok structured) (pr-str structured))))
+      (spit source-file original)
+      (doseq [[label expected-unexpected undeclared]
+              [["changes" ["changes" "expect"] {"changes" [{"id" "c1"
+                                       "files" ["src/sample/app.clj"]
+                                       "forms" ["f"]
+                                       "find" ":old"
+                                       "replace" ":new"
+                                       "expect" {"matches" 1}}]
+                           "expect" {"changes" 1 "edits" 1 "files" 1}}]
+               ["expect_matched" ["expect_matched"] {"edits" [{"file" "src/sample/app.clj"
+                                            "within" {"form" "f"}
+                                            "from" ":old" "to" ":new"}]
+                                  "expect_matched"
+                                  {"file" "src/sample/app.clj"
+                                   "file_hash" (apply str (repeat 64 "a"))
+                                   "match" "(f)"
+                                   "count" 1}}]]]
+        (testing label
+          (let [{:keys [error? structured]}
+                (invoke-tool! mcp-tool/edit-clojure-tool config undeclared)]
+            (is error?)
+            (is (false? (:ok structured)))
+            (is (= "invalid-mcp-request" (:error_type structured)))
+            (is (= expected-unexpected (:unexpected_fields structured)))
+            (is (str/includes? (:remedy structured) "apply_clojure_changes"))
+            (is (true? (:source_unchanged structured)))
+            (is (false? (:mutation_attempted structured)))
+            (is (false? (:write_authority structured)))
+            (is (= original (slurp source-file))))))
+      (finally
+        (mcp-tool/init! nil)
+        (delete-tree! workspace)))))
+
 (deftest direct-change-runs-the-declared-verification-profile
   (let [workspace (temp-dir)
         receipt-dir (io/file workspace "receipts")

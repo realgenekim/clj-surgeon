@@ -1182,6 +1182,22 @@
     "edit_clojure"
     "apply_clojure_changes"))
 
+(def ^:private editor-tool-fields
+  (set (keys (:properties mcp-schema/editor-tool-schema))))
+
+;; @spec MCP-OP-MATCHED-005
+(defn- undeclared-editor-fields
+  "Request fields `edit_clojure`'s published schema does not declare.
+
+   Both public entrances share one handler, so without this the handler accepts
+   `changes` and `expect_matched` on a tool whose schema denies them."
+  [params]
+  (->> (keys (or params {}))
+       (map #(if (keyword? %) (name %) (str %)))
+       (remove editor-tool-fields)
+       sort
+       vec))
+
 (defn- handle-operation
   [operation exchange params callback]
   (mcp-operation/invoke!
@@ -1207,6 +1223,20 @@
                     :mutation_attempted false
                     :write_authority false
                     :remedy "Use apply_clojure_changes when verification must share rollback authority."}
+
+                   ;; @spec MCP-OP-MATCHED-005
+                   (and (= "edit_clojure" operation)
+                        (seq (undeclared-editor-fields params)))
+                   {:ok false
+                    :error_type "invalid-mcp-request"
+                    :error "edit_clojure does not authorize fields its published schema omits"
+                    :unexpected_fields (undeclared-editor-fields params)
+                    :source_unchanged true
+                    :mutation_attempted false
+                    :write_authority false
+                    :remedy (str "edit_clojure accepts only the fields its schema "
+                                 "declares. Send changes, expect, and expect_matched "
+                                 "to apply_clojure_changes instead.")}
 
                    @runtime-config
                    (execute-request!
