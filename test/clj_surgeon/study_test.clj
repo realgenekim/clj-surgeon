@@ -359,3 +359,20 @@
                   nil
                   (catch clojure.lang.ExceptionInfo e e)))
           "the flat floor threw ns-grep-match-budget-exceeded here before this fix"))))
+
+;; ============================================================
+;; The ns_grep budget refusal names the actual cost class
+;; (round-4 re-review fix 2)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-ns-grep-budget-refusal-does-not-blame-a-nesting-the-pattern-lacks
+  ;; The remedy said "without nested unbounded repetition", but the pattern
+  ;; that trips this in practice — `.*handler.*internal.*` — has no nesting
+  ;; at all: several unbounded `.*` in SEQUENCE is what costs O(len^2), not
+  ;; nesting. An agent reading the old remedy would hunt for a nesting that
+  ;; is not there.
+  (let [response (study/ls-tree {:dir "src" :ns-grep "(.*.*.*.*.*.*)*x"})]
+    (is (false? (:ok response)))
+    (is (= :ns-grep-match-budget-exceeded (:error-type response)))
+    (is (not (str/includes? (:remedy response) "nested unbounded repetition"))

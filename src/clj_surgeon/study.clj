@@ -1075,9 +1075,11 @@
          :error (format (str "Matching :ns-grep %s under %s exhausted the "
                              "%d-character match budget for this scan")
                         (pr-str ns-grep) named (:budget filtered))
-         :remedy (str "Use an ns_grep pattern without nested unbounded "
-                      "repetition: it matches a file's path, so a literal "
-                      "namespace segment or a simple alternation is enough.")}
+         :remedy (str "This ns_grep pattern's cost grows with path length: "
+                      "several unbounded .* in sequence, or nested "
+                      "quantifiers, are the usual cause. Anchor the "
+                      "pattern, or use a literal path segment or a simple "
+                      "alternation instead.")}
 
         ;; Refused DURING discovery — which only lists names — and before any
         ;; file is opened. The count and the cap are both named so the caller
