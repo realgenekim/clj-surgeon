@@ -1342,9 +1342,12 @@
            (:ok (extract/attribute-compile-failure
                   "Syntax error at (untouched_thing.clj:12)." ["a.clj" "b.clj"])))
         "an error raised inside a file this change never touched is unverified")
+    ;; @spec MCP-OP-EXTRACT-028
+    ;; Named as a PATH, because that is what a compiler prints and because a
+    ;; bare `a.clj` could be any a.clj in any project on the classpath.
     (is (= {:ok false}
            (extract/attribute-compile-failure
-             "Unable to resolve symbol: helper (a.clj:5)." ["src/x/a.clj"]))
+             "Unable to resolve symbol: helper (x/a.clj:5)." ["src/x/a.clj"]))
         "an error inside a file we DID change is attributable")))
 
 ;; ============================================================
@@ -1765,3 +1768,43 @@
                               ".clj-surgeon.edn")
               "the receipt names the file whose declaration it obeyed"))
         (finally (delete-recursive! root))))))
+
+;; @spec MCP-OP-EXTRACT-028
+(deftest compile-failure-is-attributed-by-path-not-basename
+  (let [touched ["/ws/src/app/core.clj" "/ws/src/app/moved.clj"]]
+    (testing "a FOREIGN file that merely shares a basename is not ours"
+      (let [result (extract/attribute-compile-failure
+                     "Syntax error compiling at (vendor/core.clj:3:1).\n"
+                     touched)]
+        (is (= :unverified (:ok result))
+            (str "a basename match told the reader to revert correct work: "
+                 (pr-str result)))
+        (is (= :failure-outside-the-changed-files (:reason result)))
+        (is (= ["vendor/core.clj"] (:raised-in result)))))
+
+    (testing "a bare basename cannot be attributed to anything, so it is not"
+      (let [result (extract/attribute-compile-failure
+                     "Syntax error compiling at (core.clj:3:1).\n"
+                     touched)]
+        (is (= :unverified (:ok result))
+            "evidence that cannot name its subject never says :ok false")))
+
+    (testing "a path that IS one of the changed files stays attributable"
+      (let [result (extract/attribute-compile-failure
+                     "Syntax error compiling at (app/core.clj:3:1).\n"
+                     touched)]
+        (is (false? (:ok result))
+            (str "this failure really is ours: " (pr-str result)))))
+
+    (testing "an absolute path naming a changed file is still ours"
+      (let [result (extract/attribute-compile-failure
+                     "Syntax error compiling at (/ws/src/app/moved.clj:3:1).\n"
+                     touched)]
+        (is (false? (:ok result)))))
+
+    (testing "a missing dependency still outranks everything"
+      (let [result (extract/attribute-compile-failure
+                     "Could not locate foo/bar__init.class on classpath\n"
+                     touched)]
+        (is (= :unverified (:ok result)))
+        (is (= :classpath-incomplete (:reason result)))))))

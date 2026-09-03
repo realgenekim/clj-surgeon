@@ -494,9 +494,23 @@
   the project at all -- reporting that as `:ok false` would tell a reader to
   undo work that is in fact correct."
   [output touched-files]
-  (let [named (set (map #(second %) (re-seq #"\(([A-Za-z0-9_.\-]+\.clj[cs]?):" output)))
-        ours (set (map #(last (str/split (str %) #"/")) touched-files))
-        foreign (seq (remove ours named))]
+  (let [named (set (map second
+                        (re-seq #"\(([A-Za-z0-9_.\-/]+\.clj[cs]?):" output)))
+        ours (set (map #(str/replace (str %) "\\" "/") touched-files))
+        ;; @spec MCP-OP-EXTRACT-028
+        ;; Path suffix, never basename. `vendor/core.clj` and `src/app/core.clj`
+        ;; share a basename and nothing else; treating them as the same file is
+        ;; how a failure raised in a namespace this extraction never touched
+        ;; became `:ok false` and told a reader to revert correct work. A name
+        ;; carrying no directory at all cannot be attributed to anything, so it
+        ;; is not attributed: unattributable evidence reports `:unverified`.
+        ours? (fn [candidate]
+                (and (str/includes? candidate "/")
+                     (boolean
+                       (some #(or (= % candidate)
+                                  (str/ends-with? % (str "/" candidate)))
+                             ours))))
+        foreign (seq (remove ours? named))]
     (cond
       (re-find #"Could not locate .* on classpath" output)
       {:ok :unverified :reason :classpath-incomplete}
