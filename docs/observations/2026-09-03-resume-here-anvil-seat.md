@@ -1,0 +1,56 @@
+# Resume here — the Anvil seat (forge@anvil), written 2026-09-03T01:20Z
+
+**Read this first after any compaction, together with
+`docs/observations/2026-09-02-resume-here-bridge-program.md` (the program state).**
+
+## Host facts (changed under the seat on 2026-09-03 ~01:15Z; the mayor moved the transcript + 60 memory files)
+
+- Host **Anvil** (100.66.152.23), 16 cores; user **forge**, home `/home/forge`; **no sudo**, by design.
+- Project keys rewritten `-home-genek-forge-…` → `-home-forge-…`; cwd `~/src/marvin-voice-remote/channel-connector`.
+- Identity exported in the shell: `forge-anvil <forge-anvil@anvil>`; every commit carries
+  `Co-Authored-By: Gene Kim <genek@itrevolution.com>` (plus the session trailers).
+- claude 2.1.259 (`~/.local/bin`), account marvin.openclaw@itrevolution.net — the mayor's pool, so long
+  batteries are not free. Remote control ACTIVE (Gene can reach this seat from his phone).
+- GitHub: `~/secrets/gh-token` (600 in a 700 dir), `gh` as marvin-openclaw777. Never an env var.
+- Repos: `~/src/clj-surgeon` (main), `~/src/marvin-voice-remote`. Worktrees from Buster do NOT exist here;
+  every branch is on origin (list below). Recreate with `git worktree add` when needed.
+- Present: bd (/usr/local/bin), clj-kondo (/usr/local/bin — the bare binary, not the `~/bin` wrapper),
+  clojure, java, codex, claude.
+
+## Not here yet (the mayor provisions in the morning; say if urgent)
+
+- The marvin-channel connector: **the phone channel terminates on Buster; the reply tool does not exist
+  here.** Reach Gene/the mayor durably: captain's log, maven inbox (when creds arrive), commit messages,
+  and tell the mayor.
+- maven reader/writer creds (`maven-r`/`maven-w`), clj-nrepl-eval (+ XDG_RUNTIME_DIR), the `~/bin` scripts
+  (bridge-reply, check-prompt-plate, mvr-logs), `/opt/claude-skills` (so `~/.claude/CLAUDE.md`'s doctrine
+  @-import does not resolve — house rules live in memory + the repo CLAUDE.md until then), the two crons.
+
+## Hard boundaries on this box
+
+- NEVER contact port 7888 (another seat's production Surgeon, user `surgeon`), nor 7894/7895 (cohort
+  servers). Start my own Surgeon on a free port: `clojure -X:clj-surgeon/mcp :port <N>` from a worktree
+  (`make mcp-serve` ignores MCP_PORT until inb-d8a635 lands).
+- NEVER touch `~/acid/GO-*`, `~/acid/.cohort-lock`, `chain-*.sh`, or any curtain-call fleet directory
+  (tester, dev-a/b/c, foreman, merger, kentbeck). A stray write wrecks a running battery.
+- Nothing merges from here. Push branches; the mayor merges after independent verification.
+- Suites: this box has 16 cores; still one full suite per repo at a time under
+  `flock ~/tmp/suite.lock`; never while a GO file or the cohort lock exists.
+
+## Program state at the move (details in the bridge resume note)
+
+- Pushed, awaiting merge — clj-surgeon (mayor's queue): rf2 5e6cdd2, census 7244141, study ops b3c17bb
+  (+ possibly the S1/S3 builder's commits if they were pushed before the move — check origin), q5z
+  2753f23, admit-gate 17125fe, close-losers 205e13a, format-form-scope 62981ee.
+  curtain-call (Gene, in order): fold f115cc2d → store 96387535 → settings-lens aebb7b9a; fold-diff
+  f2d8f6eb for the mayor's production check (inb-3a9818); specimen settings-lens-native 74a3d7e6.
+- A builder for inb-a0f37e (names-only `ls-tree`) + inb-d8a635 (MCP_PORT) was running on Buster at the
+  move; its worktree `~/src/clj-surgeon-study` stayed on Buster. Treat its result as UNKNOWN until
+  origin shows commits after b3c17bb on `bridge/study-ops-mcp`; if none, re-run it here.
+- Prosecution list (12 inbox items with owners/triggers) in the bridge resume note delta of 00:xxZ.
+- Waiting on: the mayor's `pg_get_indexdef` paste + fold-diff output; Gene's decisions (report §9).
+
+## Routing
+
+Answer Gene in the surface he wrote from (terminal here; remote control counts as terminal). No reply
+tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when the connector arrives.
