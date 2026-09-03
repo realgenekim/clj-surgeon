@@ -988,7 +988,18 @@
    `:orphan-sidecars` is the same discipline one file down. A
    `LOCK.broken-at.*` whose tombstone is gone was listed by nothing and
    retired by nothing; it is retired here on the SAME published retention, and
-   counted, because a bucket nothing sweeps is accumulation whatever its size."
+   counted, because a bucket nothing sweeps is accumulation whatever its size.
+
+   `:unreadable-stamps` is that discipline applied to a CONDITION rather than
+   a file. A stamp `broken-lock-stamp-tolerance-ms` or more ahead of the clock
+   is correctly refused as a time, but the fact was typed per row and counted
+   by nothing - so on two hosts sharing one filesystem, where the drift the
+   tolerance was sized for does not hold, every tombstone the skewed host
+   writes reads `:stamp :unreadable` and no standing count says the stamp
+   mechanism has stopped working. Harmless to retention, invisible to the
+   operator whose clock drifted: the same class as the `:vanished` bucket the
+   822 ghost rows produced. A non-zero value here is an alarm about a clock,
+   not an archive."
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
@@ -1018,6 +1029,10 @@
                      :pruned pruned
                      :remaining (- found pruned)
                      :vanished (- (long (count entries)) found)}))
+        unreadable (long (count (filter (fn [entry]
+                                          (= :unreadable
+                                             (:stamp (nth entry 1))))
+                                        (concat aged orphans))))
         tombs (retire! aged (fn [^File f]
                               (Files/deleteIfExists
                                 (.toPath ^File (broken-at-file f)))
@@ -1030,6 +1045,7 @@
      :vanished (:vanished tombs)
      :interrupted (long (count live))
      :orphan-sidecars (select-keys sidecars [:found :pruned :remaining])
+     :unreadable-stamps unreadable
      :retention-ms broken-lock-retention-ms}))
 
 (defn- displaced-line

@@ -3156,3 +3156,61 @@
                      (pr-str (:broken-locks late))))
             (is (not (.exists ghost)))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest an-unreadable-stamp-is-counted-by-the-sweep
+  (testing "Opus round 7, finding 4, probes F and F59. A stamp
+            `broken-lock-stamp-tolerance-ms` or more ahead of the clock is
+            correctly refused as a time - but the fact was typed PER ROW in
+            `retained-transactions` and counted by NOTHING, so a caller had to
+            go and read the rows to learn it. The tolerance's own justification
+            is scoped to `two writers of one directory on one host`, and the
+            deployment that breaks it is two hosts sharing a filesystem: every
+            tombstone the skewed host writes then reads `:stamp :unreadable`,
+            silently, with `:broken-locks` unchanged. Harmless to retention -
+            the basis falls back to the file's own and the age clamps to
+            zero, so the file retires late rather than early - and invisible to
+            the operator whose clock has drifted. That is the same defect class
+            as the `:vanished` bucket the 822 ghost rows produced: a condition
+            typed per row and absent from the standing count. A non-zero
+            `:unreadable-stamps` is an alarm about a clock, not an archive."
+    (let [skewed
+          (fn [label skew-ms]
+            (let [ws (workspace! label 2)
+                  dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+                  opts {:state-home (:state-home ws)}]
+              (try
+                (plant-lock! ws {:txid "CRASHED-HOLDER"
+                                 :pid (reaped-pid)
+                                 :boot-id (boot-id-now)})
+                (let [tomb-name (:tombstone (:lock-broken
+                                              (journal/recover! (:root ws) opts)))
+                      side (io/file dir (str "LOCK.broken-at."
+                                             (subs tomb-name
+                                                   (count "LOCK.broken."))))]
+                  ;; the skewed host wrote BOTH halves from its own clock
+                  (spit side (pr-str {:tombstone tomb-name
+                                      :broken-at-ms (+ (System/currentTimeMillis)
+                                                       skew-ms)}))
+                  {:row (first (filter #(= tomb-name (:txid %))
+                                       (journal/retained-transactions
+                                         (:root ws) opts)))
+                   :bucket (:broken-locks (journal/recover! (:root ws) opts))})
+                (finally (cleanup! ws)))))
+          ahead (skewed "stamp-skew-61s" 61000)
+          under (skewed "stamp-skew-59s" 59000)]
+      (is (= :unreadable (:stamp (:row ahead)))
+          (str "61 s of skew is not a time: " (pr-str (:row ahead))))
+      (is (= 1 (:unreadable-stamps (:bucket ahead)))
+          (str "and the sweep COUNTS it, so an operator does not have to read "
+               "the rows to find out the stamp mechanism stopped working: "
+               (pr-str (:bucket ahead))))
+      (is (= 1 (:remaining (:bucket ahead)))
+          (str "the evidence is still standing, not retired early: "
+               (pr-str (:bucket ahead))))
+      (is (= :ok (:stamp (:row under)))
+          (str "59 s of skew is within the published tolerance: "
+               (pr-str (:row under))))
+      (is (zero? (long (:unreadable-stamps (:bucket under) -1)))
+          (str "and the count is a zero that is present, not an absent key: "
+               (pr-str (:bucket under)))))))
