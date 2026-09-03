@@ -192,3 +192,5 @@ removed the verb's self-correcting field behaviour (the anchor: declared 176, fo
 ceilings stay; the over-declared tests are restored as witnesses of the idiom. Builder resumed for that
 one commit; my suites and a re-review after.
 
+
+## 03:31Z — Surgeon server for this seat: 127.0.0.1:7906, `:telemetry :full`, started from clj-surgeon main (Gene: "Do you have watcher loop running to time your every surgeon operation" — answer: no; the watcher is per hand-drive session; zero Surgeon calls from this seat since the move because the session MCP config was bound to 7888 at start and must never be used here). Standing meter from now: server-side telemetry on 7906 for every call (builders included when pointed at it), `make study-agent-usage` for the readout; the watcher stays reserved for hand-drives.
