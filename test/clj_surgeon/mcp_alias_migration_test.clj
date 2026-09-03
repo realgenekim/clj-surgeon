@@ -839,6 +839,39 @@
       (finally
         (delete-tree! workspace)))))
 
+;; @spec MCP-OP-ALIAS-041
+(deftest a-symlinked-defining-file-refuses-instead-of-retiring-the-link
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")
+        defining (io/file workspace "src/acid/fanout/store.clj")
+        real (io/file workspace "vendor/store.clj")
+        original (get (:pre corpus) "src/acid/fanout/store.clj")]
+    (.mkdirs receipt-dir)
+    (.mkdirs (.getParentFile real))
+    (try
+      ;; the definition lives outside scope and the scoped path is a link to it,
+      ;; so the edits address the real file while the retire would move the link
+      (Files/move (.toPath defining) (.toPath real)
+                  (make-array java.nio.file.CopyOption 0))
+      (symlink! defining real)
+      (let [result (alias-migration/execute! (config workspace receipt-dir)
+                                             (lib-request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-retire-symlink-refused" (:error_type result)))
+        (is (true? (:source_unchanged result)))
+
+        (testing "the link and its target are both exactly as they were"
+          (is (Files/isSymbolicLink (.toPath defining)))
+          (is (= original (slurp real))))
+
+        (testing "no stray file remains"
+          (is (not (.exists (io/file workspace "src/acid/fanout/event_store.clj"))))
+          (is (not (.exists (io/file workspace ".clj-surgeon" "alias-migration"
+                                     "retired"))))))
+      (finally
+        (Files/deleteIfExists (.toPath defining))
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-028
 (deftest verification-is-opt-in-and-an-unknown-profile-refuses-before-writing
   (let [workspace (workspace!)

@@ -516,20 +516,49 @@
   [project-root relative]
   (str (io/file project-root ".clj-surgeon" "alias-migration" "retired" relative)))
 
-(defn- retire-file!
-  "Move the superseded defining file out of the source tree, reversibly."
+;; @spec MCP-OP-ALIAS-041
+(defn resolve-retire-source
+  "The real, root-confined path of the defining file a lib migration supersedes.
+
+  The transaction's edits addressed the canonical path `resolve-source-path`
+  returned, so the retire must move that same path. A symbolic link at the
+  defining path is a typed refusal rather than a guess between two wrong moves:
+  retiring the link leaves the real definition in the tree under a name nothing
+  requires, and retiring its target retires a file the request never named."
   [project-root relative]
-  (let [source (io/file project-root relative)
-        target (io/file (retire-path project-root relative))]
+  (let [root (mcp-paths/real-root project-root)
+        lexical (.normalize (.resolve root ^String relative))]
+    (if (Files/isSymbolicLink lexical)
+      {:ok false
+       :error-type :alias-migration-retire-symlink-refused
+       :error (str relative " is a symbolic link, so the superseded defining"
+                   " file cannot be retired reversibly")}
+      (let [resolved (mcp-paths/resolve-source-path root relative)]
+        (if (:ok resolved)
+          {:ok true :path (:path resolved)}
+          {:ok false
+           :error-type :alias-migration-retire-path-refused
+           :error (or (:error resolved)
+                      "The superseded defining file is outside the project root")})))))
+
+;; @spec MCP-OP-ALIAS-041
+(defn- retire-file!
+  "Move the superseded defining file out of the source tree, reversibly.
+
+  `real-source` is the same canonical path the transaction's edits addressed."
+  [project-root relative ^String real-source]
+  (let [target (io/file (retire-path project-root relative))]
     (.mkdirs (.getParentFile target))
-    (Files/move (.toPath source) (.toPath target)
+    (Files/move (.toPath (io/file real-source)) (.toPath target)
                 (into-array java.nio.file.CopyOption
                             [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))
     (.getPath target)))
 
+;; @spec MCP-OP-ALIAS-041
 (defn- restore-retired!
-  [project-root relative]
-  (let [target (io/file project-root relative)
+  "Put the retired defining file back at the same canonical path it came from."
+  [project-root relative ^String real-source]
+  (let [target (io/file real-source)
         retired (io/file (retire-path project-root relative))]
     (when (.exists retired)
       (.mkdirs (.getParentFile target))
@@ -548,10 +577,21 @@
   ([config project-root spec files] (commit! config project-root spec files nil))
   ([{:keys [verification-profiles receipt-dir verify]} project-root spec files retire]
   (.mkdirs (io/file receipt-dir))
-  (if (unknown-profile? verification-profiles verify)
+  (let [retire-source (when retire (resolve-retire-source project-root retire))]
+  (cond
+    (unknown-profile? verification-profiles verify)
     {:error (str "Unknown verification profile: " verify)
      :error-type :unknown-verification-profile
      :source-unchanged true}
+
+    ;; the defining file is resolved before the transaction writes, so a path
+    ;; the retire could not honour refuses with nothing yet mutated
+    (and retire-source (not (:ok retire-source)))
+    {:error (:error retire-source)
+     :error-type (:error-type retire-source)
+     :source-unchanged true}
+
+    :else
     (let [profile (selected-profile verification-profiles verify)
         baseline (when profile
                    (change-buffer/capture-verification-baseline!
@@ -570,7 +610,9 @@
         (if (:error result)
           result
           (let [retired (try
-                          (when retire (retire-file! project-root retire))
+                          (when retire
+                            (retire-file! project-root retire
+                                          (:path retire-source)))
                           (catch Exception error
                             {:retire-error (.getMessage error)}))]
             (cond
@@ -594,7 +636,9 @@
                 (if (:ok verification)
                   (cond-> (assoc result :verification verification)
                     retired (assoc :retired-file retired))
-                  (let [_ (when retire (restore-retired! project-root retire))
+                  (let [_ (when retire
+                            (restore-retired! project-root retire
+                                              (:path retire-source)))
                         rollback (transaction/execute-undo!
                                    {:receipt (:receipt-file result)})
                         rolled-back? (boolean (:ok rollback))]
@@ -604,7 +648,7 @@
                      :error-type (or (:error-type verification) :verification-failed)
                      :verification verification
                      :rolled-back rolled-back?
-                     :source-unchanged rolled-back?}))))))))))))
+                     :source-unchanged rolled-back?})))))))))))))
 
 ;; @spec MCP-OP-ALIAS-001
 ;; @spec MCP-OP-ALIAS-005
