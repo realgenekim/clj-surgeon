@@ -33,7 +33,7 @@ kernel narrows it and then names it rather than hiding it:
 - the recheck and the rename are taken under an advisory `PUBLISH.lock` on the
   workspace state root, which excludes any writer that asks for it;
 - what remains inside is a digest recheck, one `write-begin` fsync and one
-  rename — `(:commit-window (txn-journal/contract))` names them, and every
+  rename, plus the identity stat — `(:commit-window (txn-journal/contract))` names them, and every
   commit receipt carries the same map with the widest observed `:max-ns`;
 - a writer that does not take the publish lock and lands inside that window is
   **overwritten**, not detected. The pinned pre-image journal is its recovery.
@@ -91,18 +91,20 @@ replacement is still one atomic rename, and the target's permissions survive it.
 2. `record-read!` — one read-set entry at a time, in ascending path order,
    straight to the manifest. A step backwards is refused (`txn-manifest-unsorted`)
    rather than sorted in memory.
-3. `pin!` — copy a path's exact pre-image bytes into `objects/<digest>`. No path
-   may be written until this has succeeded for it.
+3. `pin!` — copy a path's exact pre-image bytes into `objects/<digest>` and record
+   the path's NOFOLLOW type and file identity (device/inode). No path may be
+   written until this has succeeded for it.
 4. `stage!` — write the future bytes to a staging file. Nothing is retained.
 5. `seal-read-set!` — close the manifest, freeze the read-set membership digest
    and, when the transaction carries a `:scope-walk`, the scope-membership digest
    over path, NOFOLLOW type and file identity.
-6. `revalidate!` — re-hash the WHOLE read set and re-derive the scope-membership
+6. `revalidate!` — re-hash the WHOLE read set, recheck every pinned path's type
+   and file identity, and re-derive the scope-membership
    DIGEST, comparing it with the one sealed at plan time. A count is not a set:
    `[a b]` planned against `[c d]` observed is a conflict at equal count.
 7. `commit!` — for each staged path in sorted order: copy the staged bytes into
    the target's own directory; then, under the workspace publish lock, recheck
-   its pre-image digest, fsync `write-begin` and rename; then release the lock,
+   its pre-image digest and its file identity, fsync `write-begin` and rename; then release the lock,
    fsync `write-done`, read back and verify.
 8. `rollback!` / `recover!` — restore the pinned bytes and verify each digest.
 
@@ -172,6 +174,7 @@ witness:
 | defeat read-set revalidation | read-only drift | RED |
 | defeat read-set revalidation | scope membership | RED |
 | compare member counts instead of the digest | equal-count scope swap | RED |
+| pin bytes without identity | file replaced by a symlink to identical bytes | RED |
 | defeat pre-image restoration | crash between renames | RED |
 | park a repository-wide read-set map in the transaction | retention | RED |
 | claim snapshot isolation | contract statement | RED |

@@ -5,8 +5,8 @@
    rollback. It is not snapshot isolation. An atomic rename is not a
    compare-and-swap: the pre-image recheck and the rename are two syscalls, and
    a writer that does not take the publish lock can land between them. That
-   RESIDUAL WINDOW is bounded to a digest recheck, one journal fsync and one
-   rename - the staged bytes are copied into the target's
+   RESIDUAL WINDOW is bounded to a digest recheck, an identity recheck, one
+   journal fsync and one rename - the staged bytes are copied into the target's
    own directory BEFORE the window opens - it is measured into every receipt,
    and the pinned pre-image journal is its recovery. Everything earlier than the
    window is detected and refused; a write inside it is overwritten, and the
@@ -44,9 +44,9 @@
    window cannot be closed on a POSIX filesystem - rename replaces, it does not
    compare-and-swap - so the kernel narrows it instead and names its bound:
    the staged bytes are already in the target's own directory, so no byte
-   copying happens inside, and what remains is two stats, one fsync and one
-   rename, taken under the workspace publish lock."
-  {:ops [:recheck-digest :journal-write-begin :rename]
+   copying happens inside, and what remains is a digest read, an identity stat,
+   one fsync and one rename, taken under the workspace publish lock."
+  {:ops [:recheck-digest :recheck-identity :journal-write-begin :rename]
    :staging-copy-inside false
    :lock :workspace-publish-lock
    :residual "a writer that does not take the publish lock and lands inside this window is overwritten; the pinned pre-image journal is the recovery"})
@@ -602,13 +602,18 @@
         (if-not (:ok admitted)
           admitted
           (let [digest (sha256-file path)
-                object (io/file (:objects-dir txn) digest)]
+                object (io/file (:objects-dir txn) digest)
+                identity (path-identity path)]
             (when-not (.exists object)
               (copy-file! file object))
             (swap! (:state txn) assoc-in [:pinned path]
-                   {:sha256 digest :bytes bytes :object (.getCanonicalPath object)})
-            (append-journal! txn (str "pin\t" path "\t" digest "\t" bytes))
-            {:ok true :path path :sha256 digest :bytes bytes}))))))
+                   {:sha256 digest :bytes bytes :identity identity
+                    :object (.getCanonicalPath object)})
+            (append-journal! txn (str "pin\t" path "\t" digest "\t" bytes
+                                      "\t" (name (:kind identity))
+                                      "\t" (:file-key identity)))
+            {:ok true :path path :sha256 digest :bytes bytes
+             :identity identity}))))))
 
 ;; ------------------------------------------------------------------- stage
 
@@ -677,22 +682,53 @@
                         :scope {:replan "re-plan against the current bytes"}}
             :remedy "Re-plan: a file whose facts shaped this plan no longer holds the bytes it was planned against."}))
 
+(defn- identity-conflict
+  [path expected actual]
+  (refusal :txn-conflict
+           (str "The path " path " no longer names the file whose pre-image was pinned")
+           {:path path
+            :conflict :identity-changed
+            :expected-identity expected
+            :actual-identity actual
+            :files-written 0
+            :next_call {:op :txn/begin
+                        :scope {:replan "re-plan against the file that is there now"}}
+            :remedy (str "Re-plan: the bytes may still match, but the path now names a "
+                         "different filesystem object - a new inode, or a symbolic link "
+                         "where a regular file was pinned. Writing through it would "
+                         "replace something this transaction never read.")}))
+
+(defn- identity-drift
+  "The first pinned path whose NOFOLLOW type or file identity is not the pinned
+   one, as a typed conflict, or nil."
+  [txn]
+  (some (fn [[path {:keys [identity]}]]
+          (let [current (path-identity path)]
+            (when (not= identity current)
+              (identity-conflict path identity current))))
+        (sort-by key (:pinned @(:state txn)))))
+
 (defn revalidate!
   ;; @spec MCP-OP-MEM-007
-  "Re-hash the whole semantic read set, and re-walk scope membership.
+  "Re-hash the whole semantic read set, re-check pinned identity, and re-walk
+   scope membership.
 
    Every file whose facts influenced the plan is checked, not only the files
    about to be written: a caller or alias that shaped the plan can live in a
-   file the transaction never touches. When the transaction was opened with a
-   `:scope-walk`, membership is re-derived and compared against the digest
-   sealed at plan time - not against its COUNT - so an ADDED file, a REMOVED
-   file, and a swap that leaves the count unchanged are all conflicts."
+   file the transaction never touches. Every PINNED path is checked twice over -
+   its bytes and its NOFOLLOW type and file identity - because a regular file
+   swapped for a symbolic link to identical bytes has the same digest and is not
+   the same file. When the transaction was opened with a `:scope-walk`,
+   membership is re-derived and compared against the digest sealed at plan time
+   - not against its COUNT - so an ADDED file, a REMOVED file, and a swap that
+   leaves the count unchanged are all conflicts."
   [txn]
   (let [state @(:state txn)]
     (if-not (:sealed? state)
       (refusal :txn-not-sealed "The read set must be sealed before revalidation" {})
       (let [walk (:scope-walk state)
             walked (when walk (scope-membership-digest walk))
+            drift (identity-drift txn)
             result
             (reduce
               (fn [acc [path expected]]
@@ -710,6 +746,8 @@
               (manifest-entries txn))]
         (cond
           (not (:ok result)) result
+
+          drift drift
 
           (and walked (not= (:digest walked) (:scope-digest-hex state)))
           (refusal :txn-scope-membership-changed
@@ -782,9 +820,9 @@
    cooperating writer cannot land between them and a non-cooperating one has
    only two stats, one fsync and one rename to hit.
 
-   Returns {:ok true :window-ns n}, {:conflict :digest :actual-hash h}, or
-   {:failed cause}."
-  [txn path {:keys [h0 staging prepare-fn publish-fn before-recheck in-commit-window]}]
+   Returns {:ok true :window-ns n}, {:conflict-refusal m}, or {:failed cause}."
+  [txn path {:keys [h0 identity0 staging prepare-fn publish-fn before-recheck
+                    in-commit-window]}]
   (let [prepared (try {:tmp (prepare-fn path staging)}
                       (catch Exception cause {:failed cause}))]
     (if (:failed prepared)
@@ -795,9 +833,17 @@
           (with-publish-lock* txn
             (fn []
               (let [opened (System/nanoTime)
-                    current (sha256-file path)]
-                (if (not= current h0)
-                  {:conflict :digest :actual-hash current}
+                    current (sha256-file path)
+                    identity-now (path-identity path)]
+                (cond
+                  (not= current h0)
+                  {:conflict-refusal (assoc (conflict path h0 current)
+                                            :conflict :digest)}
+
+                  (not= identity-now identity0)
+                  {:conflict-refusal (identity-conflict path identity0 identity-now)}
+
+                  :else
                   (do
                     (when in-commit-window (in-commit-window path))
                     (append-journal! txn (str "write-begin\t" path "\t" h0))
@@ -865,18 +911,18 @@
                        _ (when before-publish (before-publish path))
                        outcome (publish-one! txn path
                                              {:h0 h0
+                                              :identity0 (get-in pinned [path :identity])
                                               :staging staging
                                               :prepare-fn prepare-fn
                                               :publish-fn publish-fn
                                               :before-recheck before-recheck
                                               :in-commit-window in-commit-window})]
                    (cond
-                     (:conflict outcome)
+                     (:conflict-refusal outcome)
                      (let [restored (rollback-written! txn)]
                        (finish! txn :rolled-back)
-                       (merge (conflict path h0 (:actual-hash outcome))
-                              {:conflict (:conflict outcome)
-                               :files-written written
+                       (merge (:conflict-refusal outcome)
+                              {:files-written written
                                :rolled-back (every? #(= :verified (:status %)) restored)
                                :recovery restored}))
 

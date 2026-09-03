@@ -191,7 +191,7 @@
           (is (:ok receipt) "the window is real: the write inside it is not caught")
           (is (= "(ns f0) (def v :ours)\n" (bytes-of victim))
               "and the racing bytes are lost, which is what the receipt must say")
-          (is (= [:recheck-digest :journal-write-begin :rename]
+          (is (= [:recheck-digest :recheck-identity :journal-write-begin :rename]
                  (get-in receipt [:commit-window :ops]))
               "the receipt names every operation inside the window")
           (is (false? (get-in receipt [:commit-window :staging-copy-inside]))
@@ -429,6 +429,76 @@
           (is (:ok (journal/pin! txn inside))
               "the same file, named without traversal, is still admitted")
           (journal/rollback! txn))
+        (finally (cleanup! ws))))))
+
+(defn- swap-for-symlink!
+  "Replace `path` with a symbolic link to `twin`, which holds identical bytes."
+  [path twin]
+  (Files/delete (.toPath (io/file path)))
+  (Files/createSymbolicLink (.toPath (io/file path))
+                            (.toPath (io/file twin))
+                            (make-array java.nio.file.attribute.FileAttribute 0)))
+
+;; @spec MCP-OP-MEM-006
+;; @spec MCP-OP-MEM-007
+(deftest a-pinned-file-replaced-by-a-symlink-to-identical-bytes-is-a-conflict
+  (testing "Sol's finding: content is not identity. A regular file swapped for a
+            symbolic link to the same bytes has the same digest, passed
+            revalidation, and the commit replaced the LINK. The pinned NOFOLLOW
+            type and file identity are what tell the two apart."
+    (let [ws (workspace! "identity-revalidate" 2)
+          victim (first (sort (:paths ws)))
+          twin (write-file! (:root ws) "src/twin.clj" (slurp victim))]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn [victim])
+              _ (journal/seal-read-set! txn)
+              pinned (journal/pin! txn victim)
+              _ (journal/stage! txn victim "(ns f0) (def v :ours)\n")
+              _ (swap-for-symlink! victim twin)
+              after-swap (journal/sha256-file victim)
+              receipt (journal/commit! txn)]
+          (is (:ok pinned))
+          (is (= after-swap (:sha256 pinned))
+              "the bytes read through the link are identical to the pinned bytes:
+               only identity has changed, and a digest cannot see it")
+          (is (false? (:ok receipt)))
+          (is (= :txn-conflict (:error-type receipt)))
+          (is (= :identity-changed (:conflict receipt)))
+          (is (= :regular (get-in receipt [:expected-identity :kind])))
+          (is (= :symlink (get-in receipt [:actual-identity :kind])))
+          (is (= 0 (:files-written receipt)))
+          (is (= (slurp twin) (slurp victim))
+              "the link and its target are untouched"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-007
+(deftest a-file-swapped-for-a-symlink-inside-the-commit-loop-is-a-conflict
+  (testing "identity is rechecked under the publish lock immediately before the
+            rename, not only at revalidation"
+    (let [ws (workspace! "identity-recheck" 2)
+          victim (first (sort (:paths ws)))
+          twin (write-file! (:root ws) "src/twin.clj" (slurp victim))]
+      (try
+        (let [txn (begin! ws {})
+              _ (record-scope! txn [victim])
+              _ (journal/seal-read-set! txn)
+              _ (journal/pin! txn victim)
+              _ (journal/stage! txn victim "(ns f0) (def v :ours)\n")
+              receipt (journal/commit!
+                        txn {:before-recheck
+                             (fn [path]
+                               (when (= path victim)
+                                 (swap-for-symlink! victim twin)))})]
+          (is (false? (:ok receipt)))
+          (is (= :txn-conflict (:error-type receipt)))
+          (is (= :identity-changed (:conflict receipt)))
+          (is (= 0 (:files-written receipt)))
+          (is (= (slurp twin) (slurp victim))
+              "neither the link nor the file it points at was replaced")
+          (is (= [:recheck-digest :recheck-identity :journal-write-begin :rename]
+                 (get-in (journal/contract) [:commit-window :ops]))
+              "the identity recheck is inside the window the contract names"))
         (finally (cleanup! ws))))))
 
 ;; ------------------------------------------- MCP-OP-MEM-007 lock + read set
