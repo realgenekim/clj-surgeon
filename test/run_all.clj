@@ -17,6 +17,7 @@
    [clj-surgeon.failure-report-test]
    [clj-surgeon.file-ops-test]
    [clj-surgeon.fix-declares-test]
+   [clj-surgeon.forward-refs-test]
    [clj-surgeon.forms-test]
    [clj-surgeon.help-test]
    [clj-surgeon.insertion-gap-test]
@@ -46,6 +47,7 @@
    [clojure.test :refer [run-tests]]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
+                   'clj-surgeon.forward-refs-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test
