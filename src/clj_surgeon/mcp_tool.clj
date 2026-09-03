@@ -1230,6 +1230,93 @@
    :structured? true
    :tool-fn #'handle-edit-clojure})
 
+;; @spec MCP-OP-ALIAS-059
+(def alias-migration-refusal-envelope-keys
+  "Receipt keys the refusal text renders structurally rather than as facts."
+  #{:ok :operation :error_type :error :source_unchanged :mutation_attempted
+    :write_authority :next_action :next_call :remedy :elapsed_ms
+    :workspace_root :expect_files_unchanged_reason :receipt_hash
+    :undo_receipt :details_path :details_retained :details_retention})
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-fact-characters
+  "Ceiling on ONE rendered discriminating fact.
+
+  The text block is constant-size or it is not a receipt, and the one thing in
+  a fact that grows without limit is a caller-supplied path."
+  160)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-refusal-facts
+  "How many discriminating facts one refusal text renders."
+  12)
+
+;; @spec MCP-OP-ALIAS-059
+(def max-rendered-next-call-characters
+  "Ceiling on the next_call JSON one refusal text inlines.
+
+  Twice the planner's own 512-character next_call bound, so every call the verb
+  composes is inlined and only a pathological one is replaced by a POINTER that
+  names its length — never dropped in silence."
+  1024)
+
+;; @spec MCP-OP-ALIAS-059
+(defn- renderable-fact?
+  [value]
+  (or (string? value) (number? value) (boolean? value)
+      (and (sequential? value) (every? #(or (string? %) (number? %)) value))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn refusal-fact-line
+  "The refusal's own discriminating fields, rendered for a text-reading client.
+
+  A refusal has two faces — `structuredContent` and `content[0].text` — and a
+  client that reads only the text must not be told less than one that reads the
+  structure. In the E3-P cohort (2026-09-03) the structured refusal carried
+  `found_files 0` and `scanned_files 0`, the two numbers that separate `your
+  glob matched nothing` from `nothing here requires that lib`; the text carried
+  neither, and the arm that read the text sent the same wrong scope twice.
+
+  Sorted by field name so the line is a function of the refusal and not of map
+  order, and bounded in both count and per-fact length."
+  [result]
+  (let [facts (->> result
+                   (remove (fn [[field _]]
+                             (contains? alias-migration-refusal-envelope-keys
+                                        field)))
+                   (filter (fn [[_ value]] (renderable-fact? value)))
+                   (sort-by key)
+                   (take max-refusal-facts)
+                   (map (fn [[field value]]
+                          (let [rendered (pr-str value)]
+                            (str (name field) "="
+                                 (if (> (count rendered)
+                                        max-refusal-fact-characters)
+                                   (str (subs rendered 0
+                                              max-refusal-fact-characters)
+                                        "…")
+                                   rendered))))))]
+    (when (seq facts)
+      (str "facts · " (str/join " · " facts)))))
+
+;; @spec MCP-OP-ALIAS-059
+(defn rendered-next-call
+  "The next_call line: sendable JSON, a bounded pointer, or a stated absence.
+
+  A refusal that carries an executable remedy the caller never sees costs a
+  model return at random — whichever face of the receipt that caller happens to
+  read. An absent next_call is STATED rather than omitted, because a missing
+  line and an uncomputable remedy are indistinguishable in silence."
+  [result]
+  (if-let [call (:next_call result)]
+    (let [encoded (json/generate-string call)]
+      (if (<= (count encoded) max-rendered-next-call-characters)
+        (str "next_call · " encoded)
+        (str "next_call · " (count encoded)
+             " characters, in structuredContent.next_call — send it verbatim")))
+    (str "next_call · none — this refusal has no mechanically composable "
+         "correction; the remedy above names what only the caller can decide")))
+
 ;; @spec MCP-OP-ALIAS-042
 (defn alias-migration-summary
   "Render one compact visible summary whose length is constant in N.
@@ -1249,18 +1336,25 @@
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
             (:details_path result)
             (or (:details_retention result) "best-effort"))
-    (format (str "alias_migration\n"
-                 "  refused · %s · %s\n\n"
-                 "%s\n"
-                 "\u2192 %s")
-            (or (:error_type result) (:reason result) "unknown-error")
-            (mcp-operation/format-elapsed-ms (:elapsed_ms result))
-            (if (or (:source_unchanged result) (:source-unchanged result))
-              "\u2713 source unchanged"
-              "\u26a0 source state requires structured receipt review")
-            (or (:error result)
-                (:remedy result)
-                "Correct the request and retry once."))))
+    (str/join
+      "\n"
+      (remove
+        nil?
+        [(format (str "alias_migration\n"
+                      "  refused · %s · %s\n\n"
+                      "%s")
+                 (or (:error_type result) (:reason result) "unknown-error")
+                 (mcp-operation/format-elapsed-ms (:elapsed_ms result))
+                 (if (or (:source_unchanged result) (:source-unchanged result))
+                   "\u2713 source unchanged"
+                   "\u26a0 source state requires structured receipt review"))
+         (str "\u2192 " (or (:error result)
+                            (:remedy result)
+                            "Correct the request and retry once."))
+         (refusal-fact-line result)
+         (when-let [remedy (:remedy result)]
+           (str "remedy · " remedy))
+         (rendered-next-call result)]))))
 
 (def alias-migration-tool-description
   (str
