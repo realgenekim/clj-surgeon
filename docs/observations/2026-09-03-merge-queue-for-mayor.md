@@ -13,3 +13,4 @@
 | 9 | curtain-call bridge/fold-diff-tool | round 3 building | HOLD | mayor runs bin/ directly after GO |
 | 10 | curtain-call bridge/lens-followups | 934716dc | ready | last in the curtain-call order |
 | — | claude-skills PR #1 | — | ready | sol-yolo in the codex skill |
+| 11 | clj-surgeon bridge/memory-battery | 2bae68b | pushed; Sol review running | tooling: `make memory-battery` (not in make test); main is RED under it by design (ls-tree peak 274.8/418.3 MB vs 247.8 limit at 1k/10k; read-all scales with N); outputs identical to the 4g reference |
