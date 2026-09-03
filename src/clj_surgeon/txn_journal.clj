@@ -511,6 +511,48 @@
   []
   @displaced-claims)
 
+(def broken-lock-retention-ms
+  "How long a `LOCK.broken.*` tombstone is kept before recovery retires it.
+
+   The tombstone is the break's evidence: the exact claim that was removed,
+   beside the journal line that says a lock was broken. Evidence nothing
+   sweeps is not durability, it is accumulation - one 30,000-break storm left
+   20,356 of them permanent in a single transactions directory, invisible to
+   the quota, to recovery and to every listing. A day is long enough that
+   whoever is investigating a break still finds it, and short enough that the
+   directory cannot grow without bound."
+  86400000)
+
+(defn- broken-lock-files
+  "Every `LOCK.broken.*` tombstone in a transactions directory."
+  [transactions-dir]
+  (let [dir (io/file transactions-dir)]
+    (vec (sort-by #(.getName ^File %)
+                  (filter (fn [^File f]
+                            (and (.isFile f)
+                                 (str/starts-with? (.getName f) "LOCK.broken.")))
+                          (seq (or (.listFiles dir) (make-array File 0))))))))
+
+(defn- prune-broken-locks!
+  "Retire the tombstones older than `broken-lock-retention-ms`, and count them.
+
+   Returns the bucket both `recover!` and any caller reading it can see. A
+   non-zero `:remaining` is a standing count, not an archive."
+  [transactions-dir now-ms]
+  (let [now (long (or now-ms (System/currentTimeMillis)))
+        tombstones (broken-lock-files transactions-dir)
+        pruned (reduce (fn [n ^File f]
+                         (if (>= (- now (.lastModified f))
+                                 (long broken-lock-retention-ms))
+                           (if (Files/deleteIfExists (.toPath f)) (inc n) n)
+                           n))
+                       0
+                       tombstones)]
+    {:found (count tombstones)
+     :pruned pruned
+     :remaining (- (count tombstones) pruned)
+     :retention-ms broken-lock-retention-ms}))
+
 (defn- displaced-line
   "The typed, counted line a refused restore is reported as, or nil.
 
@@ -596,29 +638,36 @@
   ([transactions-dir claim txid opts]
    (let [^File lock (lock-file transactions-dir)
          ^File tomb (io/file transactions-dir (str "LOCK.broken." txid))]
-     (try
-       (Files/move (.toPath lock) (.toPath tomb)
-                   ^"[Ljava.nio.file.CopyOption;"
-                   (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE
-                                           StandardCopyOption/REPLACE_EXISTING]))
-       (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
-         (if (and (some? (:content claim))
-                  (= (:content claim) moved-content)
-                  (= (:file-key claim) (lock-file-key tomb)))
-           {:broken true
-            :tombstone (.getName tomb)
-            :content-sha256 (:content-sha256 claim)}
-           ;; somebody else's claim: put it back untouched and break nothing
-           (do
-             ;; the seam a witness needs to put a third acquirer in the gap
-             (when-let [hook (:before-restore opts)] (hook tomb))
-             (let [outcome (restore-lock! tomb lock)]
-               (cond-> (merge {:broken false :cause :holder-changed} outcome)
-                 (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
-       (catch java.nio.file.NoSuchFileException _
-         {:broken false :cause :lock-vanished})
-       (catch Exception cause
-         {:broken false :cause :break-failed :message (.getMessage cause)})))))
+     (if (.exists tomb)
+       ;; the name is the BREAKER's txid and `begin!` takes that from its
+       ;; caller, so two breaks by one txid used to overwrite each other -
+       ;; the file this build calls evidence, destroyed by name. Refuse
+       ;; BEFORE the LOCK is touched.
+       {:broken false :cause :tombstone-exists :tombstone (.getName tomb)}
+       (try
+         (Files/move (.toPath lock) (.toPath tomb)
+                     ^"[Ljava.nio.file.CopyOption;"
+                     (into-array CopyOption [StandardCopyOption/ATOMIC_MOVE]))
+         (let [moved-content (try (slurp tomb) (catch Exception _ nil))]
+           (if (and (some? (:content claim))
+                    (= (:content claim) moved-content)
+                    (= (:file-key claim) (lock-file-key tomb)))
+             {:broken true
+              :tombstone (.getName tomb)
+              :content-sha256 (:content-sha256 claim)}
+             ;; somebody else's claim: put it back untouched and break nothing
+             (do
+               ;; the seam a witness needs to put a third acquirer in the gap
+               (when-let [hook (:before-restore opts)] (hook tomb))
+               (let [outcome (restore-lock! tomb lock)]
+                 (cond-> (merge {:broken false :cause :holder-changed} outcome)
+                   (false? (:restored outcome)) (assoc :tombstone (.getName tomb)))))))
+         (catch java.nio.file.NoSuchFileException _
+           {:broken false :cause :lock-vanished})
+         (catch java.nio.file.FileAlreadyExistsException _
+           {:broken false :cause :tombstone-exists :tombstone (.getName tomb)})
+         (catch Exception cause
+           {:broken false :cause :break-failed :message (.getMessage cause)}))))))
 
 (defn- write-lock!
   "Create the LOCK ALREADY populated, or fail because one exists.
@@ -660,11 +709,12 @@
    holder's lock is never broken, however old it is."
   [transactions-dir txid opts]
   (let [^File lock (lock-file transactions-dir)]
-    (loop [attempt 0 broken nil displaced nil]
+    (loop [attempt 0 broken nil displaced nil refused-break nil]
       (if (try-write-lock! lock txid)
         (cond-> {:ok true}
           broken (assoc :lock-broken broken)
-          displaced (assoc :lock-break-displaced displaced))
+          displaced (assoc :lock-break-displaced displaced)
+          refused-break (assoc :lock-break-refused refused-break))
         (let [claim (read-lock-claim lock)
               holder (:holder claim)
               cause (stale-holder holder)]
@@ -676,7 +726,10 @@
                            (merge (lock-broken-line holder cause)
                                   (select-keys outcome [:tombstone :content-sha256]))
                            broken)
-                         (or (displaced-line outcome) displaced))))
+                         (or (displaced-line outcome) displaced)
+                         (or (when (= :tombstone-exists (:cause outcome))
+                               (select-keys outcome [:cause :tombstone]))
+                             refused-break))))
             (let [legacy? (= cause :legacy-format)]
               (refusal :txn-lock-held
                        (if legacy?
@@ -692,6 +745,15 @@
                                 :remedy "Wait for the holder, or run recovery if its process is gone."}
                          displaced
                          (assoc :lock-break-displaced displaced)
+
+                         refused-break
+                         (assoc :lock-break-refused
+                                (assoc refused-break
+                                       :remedy (str "A tombstone of that name already exists, so "
+                                                    "breaking would destroy the evidence of an "
+                                                    "earlier break. Retry with a different "
+                                                    ":txid, or retire the tombstone by running "
+                                                    "recovery.")))
 
                          legacy?
                          (assoc :holder-format :pid-only
@@ -1735,25 +1797,48 @@
 
 (defn retained-transactions
   ;; @spec MCP-OP-MEM-006
-  "Every journal still on disk for this workspace, with its lease.
+  "Every journal still on disk for this workspace, with its lease - AND every
+   break's tombstone beside them.
 
    What a quota sweep reads. `:evictable false` means the row is a
    `:restore-failed` journal: the tree is not at H0 and this is the only
-   material that can repair it."
+   material that can repair it.
+
+   The listing used to filter `.isDirectory`, which made `LOCK.broken.*` files
+   invisible to it, to the quota and to recovery alike - a receipt nobody
+   could read and nobody could retire, accumulating without bound. They are
+   rows now, `:kind :broken-lock`, carrying the bytes they bill and the age
+   that retires them. `recover!` is what retires one; `evict!` operates on
+   journals only, so a tombstone row says `:evictable false` and names what
+   does retire it."
   ([workspace-root] (retained-transactions workspace-root {}))
-  ([workspace-root {:keys [state-home]}]
-   (let [dir (io/file (transactions-dir workspace-root state-home))]
-     (vec (for [^File d (sort-by #(.getName ^File %)
-                                 (seq (or (.listFiles dir) (make-array File 0))))
-                :when (.isDirectory d)
-                :let [lease (read-lease d)
-                      state (read-edn-file (io/file d "state.edn"))]]
-            {:txid (.getName d)
-             :status (or (:status lease) (:status state))
-             :receipt-refs (:receipt-refs lease 1)
-             :evictable (:evictable lease false)
-             :lease (:lease lease)
-             :bytes (dir-bytes d)})))))
+  ([workspace-root {:keys [state-home now-ms]}]
+   (let [transactions (transactions-dir workspace-root state-home)
+         dir (io/file transactions)
+         now (long (or now-ms (System/currentTimeMillis)))]
+     (into
+       (vec (for [^File d (sort-by #(.getName ^File %)
+                                   (seq (or (.listFiles dir) (make-array File 0))))
+                  :when (.isDirectory d)
+                  :let [lease (read-lease d)
+                        state (read-edn-file (io/file d "state.edn"))]]
+              {:txid (.getName d)
+               :kind :transaction
+               :status (or (:status lease) (:status state))
+               :receipt-refs (:receipt-refs lease 1)
+               :evictable (:evictable lease false)
+               :lease (:lease lease)
+               :bytes (dir-bytes d)}))
+       (for [^File f (broken-lock-files transactions)]
+         {:txid (.getName f)
+          :kind :broken-lock
+          :status :lock-broken
+          :receipt-refs 0
+          :evictable false
+          :retired-by :txn/recover
+          :age-ms (- now (.lastModified f))
+          :retention-ms broken-lock-retention-ms
+          :bytes (.length f)})))))
 
 (defn undo!
   ;; @spec MCP-OP-MEM-006
@@ -1971,6 +2056,12 @@
        (cond-> {:ok (every? :ok results)
                 :transactions-recovered (count results)
                 :isolation compact-isolation
-                :paths (vec (mapcat :paths results))}
+                :paths (vec (mapcat :paths results))
+                ;; the break's evidence is bounded and counted: a bucket that
+                ;; nothing sweeps and nothing reports is accumulation, not
+                ;; durability. Pruned AFTER this run's own break, so a
+                ;; tombstone made a moment ago is never retired by the
+                ;; recovery that made it.
+                :broken-locks (prune-broken-locks! transactions now-ms)}
          broken (assoc :lock-broken broken)
          displaced (assoc :lock-break-displaced displaced))))))
