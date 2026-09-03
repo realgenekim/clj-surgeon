@@ -361,3 +361,5 @@ Reds worth recording: `pool_size 0` HUNG the tool forever (a zero-thread claypoo
 ## 04:38Z — census pushed ef545c5 (suites baseline-only, oracle pass), Sol re-review running. Answered the mayor's /tmp/ask.txt (policy-10 shape; `answer-to-mayor-ask.md`, copy at /tmp/anvil-answer-to-mayor.txt): only kondo f8a9ef9 is at GO; asked for a 30-min pulse watch, PR #1, three items carried to Gene.
 
 ## 04:42Z — routing-doc fix pushed a9d8701 (GO): the five terminal-response-routing baseline failures were doc drift — 01f0739 rewrote the routing doc for the Surgeon-default ruling and dropped the MCP-OP-RELAY-004 paragraph; restored verbatim-shape, test-fast 702/5912/0. With kondo f8a9ef9 the baseline failure set on main goes to zero once both merge.
+
+## 04:44Z — Sol content filter refused the rf2 round-3 re-check (two "flagged for possible cybersecurity risk" lines on the confinement fixtures, 110k tokens, no report). Fallback per the standing rule: Opus re-review launched on a scratch clone, report to ~/tmp/sol/rf2-opus-review.md; receipt will say so.
