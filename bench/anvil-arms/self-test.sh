@@ -48,22 +48,31 @@ mkdir -p "$ARMS_ROOT_BASE"
 # __pycache__ into the repo -- and one such .pyc is already tracked, so a self-test run
 # showed up as a dirty worktree.
 export PYTHONDONTWRITEBYTECODE=1
+# THE CALLER'S PORT SCOPE WINS.  The apparatus default (7907-7910) is a range a shared
+# box may not entirely own -- on 2026-09-03 another seat's JVM held 7908 and every
+# native arm correctly refused with `mcp-absent-proof: cohort port(s) 7908 are
+# listening`.  That refusal is the instrument working; scoping the smoke test keeps it
+# measuring the apparatus rather than the box's other tenants.
+#
+# Sol round two, item 10: this used to be a forced assignment, which overrode a
+# reviewer's COHORT_PORTS and left them unable to run the checked-in target on a shared
+# box at all.  A caller who names their ports is honoured; only an unset COHORT_PORTS
+# takes the single-port default.  Every port named is preflighted, and a held port is a
+# refusal BEFORE anything is created.
+export COHORT_PORTS=${COHORT_PORTS:-7907}
+SELFTEST_PORT=${COHORT_PORTS%% *}
+for p in $COHORT_PORTS; do
+  if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$p"; then
+    echo "SELFTEST-REFUSED: port $p already has a listener; this self-test owns" >&2
+    echo "COHORT_PORTS=$COHORT_PORTS.  Stop that server (only one you started), or set" >&2
+    echo "COHORT_PORTS to ports you hold, and re-run.  Nothing was executed." >&2
+    exit 2
+  fi
+done
+
 WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "$ARMS_ROOT_BASE/selftest.XXXXXX")}
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
-
-# The ONLY port this self-test names.  The apparatus default (7907-7910) is a range
-# a shared box may not entirely own -- on 2026-09-03 another seat's JVM held 7908 and
-# every native arm correctly refused with `mcp-absent-proof: cohort port(s) 7908 are
-# listening`.  That refusal is the instrument working; scoping it here keeps the smoke
-# test measuring the apparatus rather than the box's other tenants.  A real cohort must
-# likewise set COHORT_PORTS to the ports it actually holds.
-export COHORT_PORTS=7907
-if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907; then
-  echo "SELFTEST-REFUSED: port 7907 already has a listener; this self-test owns it." >&2
-  echo "Stop that server (only one you started) and re-run.  Nothing was executed." >&2
-  exit 2
-fi
 
 ok   () { PASS=$((PASS+1)); printf 'ok   %s\n' "$1"; }
 bad  () { FAIL=$((FAIL+1)); printf 'FAIL %s\n' "$1"; }
@@ -217,7 +226,7 @@ git clone -q --no-hardlinks "$BASE_REPO" "$A7/worktree"
 printf '%s\n' "$BASE_SHA" > "$A7/base.sha"
 cp "$HERE/prompts/E3-P-N.md" "$A7/prompt.md"
 EXP=st RUNG=P SLOT=7 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
-  MCP_URL="http://127.0.0.1:7907/mcp" \
+  MCP_URL="http://127.0.0.1:$SELFTEST_PORT/mcp" \
   bash "$HERE/attest.sh" "$A7" N - "" > "$WORK/case7.out" 2>&1
 want "case7 attest rc" 2 "$?"
 grep -q 'mcp-absent-proof' "$WORK/case7.out" \
@@ -234,7 +243,7 @@ grep -q 'REFUSING port' "$WORK/case7b.out" \
 
 echo "== case 8: the mirrored cohort order =="
 ORDER=$(bash "$HERE/run-cohort.sh" --root "$WORK/cohort" --exp st --rung P --arms N,T \
-        --n 3 --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+        --n 3 --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=$SELFTEST_PORT" \
         --dry-run 2>&1 | sed -n 's/^ORDER //p')
 want "case8 mirrored order" "N-1 T-1 T-2 N-2 N-3 T-3" "$ORDER"
 
@@ -429,12 +438,12 @@ HEAD15=$(git -C "$A15/worktree" rev-parse HEAD)
 attest15 () {   # attest15 <label> <healthz-json> <want-rc> <want-reason-substring>
   local label=$1 health=$2 wrc=$3 sub=$4 rc
   rm -f "$A15/attest.json" "$A15/ATTEST-MISMATCH"
-  A="$A15" ARM=T PORT=7907 EXP=st RUNG=P SLOT=15 MODEL=none DRIVER=fake \
+  A="$A15" ARM=T PORT=$SELFTEST_PORT EXP=st RUNG=P SLOT=15 MODEL=none DRIVER=fake \
   WORKTREE="$WT15" WORKTREE_HEAD="$HEAD15" BASE="$HEAD15" \
   PROMPT_SHA=deadbeef RUNNER_SHA=deadbeef PORT_IN_RANGE=yes \
   PORT_PID=$$ READY_PID=$$ READY_PROJECT_ROOT="$WT15" \
   SERVER_PROJECT_HEAD="$HEAD15" SERVER_SHA="$HEAD15" EXPECTED_SERVER_SHA="$HEAD15" \
-  MCP_URL="http://127.0.0.1:7907/mcp" HEALTHZ="$health" \
+  MCP_URL="http://127.0.0.1:$SELFTEST_PORT/mcp" HEALTHZ="$health" \
     python3 "$HERE/_attest_write.py" > "$WORK/$label.out" 2>&1
   rc=$?
   want "$label rc" "$wrc" "$rc"
@@ -444,15 +453,15 @@ attest15 () {   # attest15 <label> <healthz-json> <want-rc> <want-reason-substri
   fi
 }
 
-GOOD15="{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT15\"}"
+GOOD15="{\"ok\":true,\"pid\":$$,\"port\":$SELFTEST_PORT,\"project-root\":\"$WT15\"}"
 attest15 case15ok  "$GOOD15" 0 ""
 want "case15ok attest_ok" true "$(jqf "$A15/attest.json" attest_ok)"
 
-attest15 case15a "{\"ok\":false,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT15\"}" \
+attest15 case15a "{\"ok\":false,\"pid\":$$,\"port\":$SELFTEST_PORT,\"project-root\":\"$WT15\"}" \
          2 'healthz-not-ok'
-attest15 case15b "{\"ok\":true,\"pid\":999999,\"port\":7907,\"project-root\":\"$WT15\"}" \
+attest15 case15b "{\"ok\":true,\"pid\":999999,\"port\":$SELFTEST_PORT,\"project-root\":\"$WT15\"}" \
          2 'healthz-pid-ne-port-pid'
-attest15 case15c "{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"/wrong/project\"}" \
+attest15 case15c "{\"ok\":true,\"pid\":$$,\"port\":$SELFTEST_PORT,\"project-root\":\"/wrong/project\"}" \
          2 'healthz-project-root-ne-worktree'
 attest15 case15d "{\"ok\":true,\"pid\":$$,\"port\":1,\"project-root\":\"$WT15\"}" \
          2 'healthz-port-ne-arm-port'
@@ -583,7 +592,7 @@ echo "== case 18: the cohort STOPS on the first refused arm =="
 # the instrument has already refused once is spending it on evidence nobody may cite.
 C18="$WORK/cohort18"
 bash "$HERE/run-cohort.sh" --root "$C18" --exp st --rung P --arms N,T --n 1 \
-     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=$SELFTEST_PORT" \
      --driver fake --fixture pf5 --worktree-src "$BASE_REPO" \
      --base 0000000000000000000000000000000000000000 > "$WORK/case18.out" 2>&1
 rc18=$?
@@ -604,14 +613,14 @@ echo "== case 18b: a cohort of n<1 is refused, not silently empty =="
 # receipt over zero evidence, which is the verdict-label-was-a-noun defect again.
 C18B="$WORK/cohort18b"
 bash "$HERE/run-cohort.sh" --root "$C18B" --exp st --rung P --arms N,T --n 0 \
-     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+     --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=$SELFTEST_PORT" \
      --dry-run > "$WORK/case18b.out" 2>&1
 want "case18b n=0 rc" 64 "$?"
 grep -q 'run-cohort: --n' "$WORK/case18b.out" \
   && ok "case18b typed refusal of n=0" || { bad "case18b n=0 was accepted"; cat "$WORK/case18b.out"; }
 for bad_n in -1 abc 1.5; do
   bash "$HERE/run-cohort.sh" --root "$C18B" --exp st --rung P --arms N,T --n "$bad_n" \
-       --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=7907" \
+       --prompt-dir "$HERE/prompts" --prompt-prefix E3-P --ports "T=$SELFTEST_PORT" \
        --dry-run > "$WORK/case18b-$bad_n.out" 2>&1
   want "case18b n=$bad_n rc" 64 "$?"
 done
@@ -738,28 +747,28 @@ git clone -q --no-hardlinks "$BASE_REPO" "$A21/worktree"
 printf '%s\n' "$BASE_SHA" > "$A21/base.sha"
 cp "$HERE/prompts/E3-P-N.md" "$A21/prompt.md"
 # a listener on 7907 -- a process THIS TEST starts, whose pid it records and reaps
-python3 -c 'import socket,time
+python3 -c 'import socket,sys,time
 s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(("127.0.0.1", 7907)); s.listen(1); time.sleep(30)' &
+s.bind(("127.0.0.1", int(sys.argv[1]))); s.listen(1); time.sleep(30)' "$SELFTEST_PORT" &
 L21=$!
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907 && break
+  ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$SELFTEST_PORT" && break
   sleep 0.3
 done
-if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907; then
-  ok "case21 a cohort-port listener is up (pid $L21, port 7907)"
+if ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$SELFTEST_PORT"; then
+  ok "case21 a cohort-port listener is up (pid $L21, port $SELFTEST_PORT)"
   EXP=st RUNG=P SLOT=21 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
     bash "$HERE/attest.sh" "$A21" N - "" > "$WORK/case21.out" 2>&1
   want "case21 native arm attest rc" 2 "$?"
-  grep -q 'cohort port(s) 7907 are listening' "$WORK/case21.out" \
+  grep -q "cohort port(s) $SELFTEST_PORT are listening" "$WORK/case21.out" \
     && ok "case21 refused: a stale arm server on a cohort port contaminates a native arm" \
     || { bad "case21 wrong refusal"; cat "$WORK/case21.out"; }
   want "case21 attest_ok" false "$(jqf "$A21/attest.json" attest_ok)"
 else
-  bad "case21 could not bind 7907 to run the witness"
+  bad "case21 could not bind $SELFTEST_PORT to run the witness"
 fi
 kill "$L21" 2>/dev/null; wait "$L21" 2>/dev/null
-ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx 7907 \
+ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | sed 's/.*://' | grep -qx "$SELFTEST_PORT" \
   && bad "case21 the listener this test started is still up" \
   || ok "case21 the listener this test started was stopped"
 
@@ -768,12 +777,12 @@ A21B="$WORK/st-P-T-21b"; mkdir -p "$A21B"
 git clone -q --no-hardlinks "$BASE_REPO" "$A21B/worktree"
 WT21=$(cd "$A21B/worktree" && pwd -P)
 HEAD21=$(git -C "$A21B/worktree" rev-parse HEAD)
-A="$A21B" ARM=T PORT=7907 EXP=st RUNG=P SLOT=21b MODEL=none DRIVER=fake \
+A="$A21B" ARM=T PORT=$SELFTEST_PORT EXP=st RUNG=P SLOT=21b MODEL=none DRIVER=fake \
 WORKTREE="$WT21" WORKTREE_HEAD="$HEAD21" BASE="$HEAD21" \
 PROMPT_SHA=deadbeef RUNNER_SHA=deadbeef PORT_IN_RANGE=yes \
 PORT_PID=$$ READY_PID=$$ READY_PROJECT_ROOT="$WT21" SERVER_PROJECT_HEAD="$HEAD21" \
-SERVER_SHA="" EXPECTED_SERVER_SHA="$HEAD21" MCP_URL="http://127.0.0.1:7907/mcp" \
-HEALTHZ="{\"ok\":true,\"pid\":$$,\"port\":7907,\"project-root\":\"$WT21\"}" \
+SERVER_SHA="" EXPECTED_SERVER_SHA="$HEAD21" MCP_URL="http://127.0.0.1:$SELFTEST_PORT/mcp" \
+HEALTHZ="{\"ok\":true,\"pid\":$$,\"port\":$SELFTEST_PORT,\"project-root\":\"$WT21\"}" \
   python3 "$HERE/_attest_write.py" > "$WORK/case21b.out" 2>&1
 want "case21b rc" 2 "$?"
 grep -q 'server-sha-unverified' "$WORK/case21b.out" \
@@ -1258,12 +1267,14 @@ if [ -z "$p31" ]; then
 else
   want "case31 the port under test is the first COHORT_PORTS entry" "${COHORT_PORTS%% *}" "$p31"
 fi
-n31=$(grep -n '790[7-9]\|7910' "$HERE/self-test.sh" \
-      | grep -v 'COHORT_PORTS:-' | grep -vE '^[0-9]+:[[:space:]]*#' | wc -l)
+# The scan excludes its own line by the marker at its end, so the witness cannot be
+# satisfied by the very literal it is looking for.
+scan31 () {
+  grep -n '790[7-9]\|7910' "$HERE/self-test.sh" | grep -v 'COHORT_PORTS:-' | grep -v 'PORT-LITERAL-SCAN' | grep -vE '^[0-9]+:[[:space:]]*#'   # PORT-LITERAL-SCAN
+}
+n31=$(scan31 | wc -l)
 [ "$n31" -eq 0 ] && ok "case31 no port literal outside the single default assignment" \
-  || { bad "case31 $n31 hardcoded cohort-port literal(s) survive"
-       grep -n '790[7-9]\|7910' "$HERE/self-test.sh" | grep -v 'COHORT_PORTS:-' \
-         | grep -vE '^[0-9]+:[[:space:]]*#' | head -5; }
+  || { bad "case31 $n31 hardcoded cohort-port literal(s) survive"; scan31 | head -5; }
 
 # the preflight must FAIL CLOSED on a held port, for whatever ports the caller named,
 # and it must refuse before it creates anything
