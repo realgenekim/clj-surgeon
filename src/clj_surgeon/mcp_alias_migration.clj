@@ -1333,8 +1333,19 @@
   published beside prose that claimed the rollback happened. Absent still
   falls back; an explicit `false` is now the answer.
 
+  `mutated?` is the transaction kernel's OWN write-boundary answer, handed in
+  by the caller that holds it, and it is a THIRD question again. `refusal`
+  hardcoded `mutation_attempted false` for every refusal this verb publishes,
+  so a post-write refusal over twelve written files told a caller that gates
+  its retry on that field to retry over a mid-migration workspace. It is not a
+  restatement of `source_unchanged` either: a rollback that SUCCEEDS restores
+  the tree, and the kernel still crossed its write boundary to get there. The
+  argument is required rather than defaulted, because a default is how the
+  constant came back.
+
+  @spec MCP-OP-ALIAS-047
   @spec MCP-OP-ALIAS-056"
-  [plan commit]
+  [plan commit mutated?]
   (let [source-unchanged (cond
                            (contains? commit :source-unchanged)
                            (:source-unchanged commit)
@@ -1349,6 +1360,8 @@
              (cond-> {:files (get-in plan [:totals :files])
                       :sites (get-in plan [:totals :sites])
                       :source_unchanged (boolean source-unchanged)
+                      ;; @spec MCP-OP-ALIAS-056
+                      :mutation_attempted (boolean mutated?)
                       :remedy (or (:remedy commit)
                                   (str "Re-send the same alias_migration request;"
                                        " the frozen snapshot is recomputed from"
@@ -1804,7 +1817,10 @@
                                 (get-in plan [:lib-rename :file]))]
             ;; @spec MCP-OP-ALIAS-042
             (if (or (:error commit) (not (:committed commit)))
-              (commit-refusal plan commit)
+              ;; @spec MCP-OP-ALIAS-056
+              ;; the kernel's own write boundary, not a literal: the same
+              ;; volatile ALIAS-047's heap guard reads
+              (commit-refusal plan commit @attempted)
               (receipt plan
                        (-> commit
                            (assoc :undo_receipt (:receipt-file commit)

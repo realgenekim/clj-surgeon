@@ -263,7 +263,7 @@
             (is (= (get (:pre corpus) twelfth)
                    (slurp (io/file workspace twelfth))))))
         (testing "the public refusal is typed and fail-closed"
-          (let [refusal (alias-migration/commit-refusal plan commit)]
+          (let [refusal (alias-migration/commit-refusal plan commit false)]
             (is (false? (:ok refusal)))
             (is (= "alias_migration" (:operation refusal)))
             (is (true? (:source_unchanged refusal)))
