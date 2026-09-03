@@ -1148,6 +1148,42 @@
       (str path)))
 
 ;; @spec MCP-OP-ALIAS-056
+(def ^:private undo-recovery-unmigrated-statuses
+  "Per-file recovery statuses that PROVE a file no longer carries the migration.
+
+  `commit-compiled!`'s `:recovery` map answers about the transaction it was
+  running, and the transaction running here is the UNDO. Recovery restores each
+  file to the state that transaction READ — which for an undo is the MIGRATED
+  content — so `:original` (never rewritten) and `:restored` (rewritten and put
+  back) both mean the file is STILL MIGRATED. The one status that leaves
+  pre-migration bytes on disk is `:restore-failed`: the undo's write landed and
+  recovery could not reverse it.
+
+  Every other status names a state this process cannot pin — a hash that
+  matches neither side, a read that failed — and an unnamed file is counted as
+  still migrated. That over-states the work a human has left to do, which costs
+  a wasted look; under-stating it loses a file."
+  #{:restore-failed})
+
+;; @spec MCP-OP-ALIAS-056
+(defn- undo-recovery-counts
+  "How many of `file-count` files one FAILED undo left migrated, measured.
+
+  `(count files)` is the plan's number and is never a measurement: an undo that
+  restored six of twelve published twelve, in the field a human reads to decide
+  what to undo by hand. A rollback that offers no `:recovery` map has told this
+  verb nothing per file, and the whole plan is counted as still migrated."
+  [rollback file-count]
+  (let [recovery (:recovery rollback)
+        unmigrated (if (sequential? recovery)
+                     (count (filter (comp undo-recovery-unmigrated-statuses
+                                          :status)
+                                    recovery))
+                     0)
+        restored (min unmigrated file-count)]
+    {:still-migrated (- file-count restored) :restored restored}))
+
+;; @spec MCP-OP-ALIAS-056
 (defn- rollback-report
   "The fields a post-write refusal owes its caller about the tree it left.
 
@@ -1156,12 +1192,21 @@
   same shape, and the difference is the only thing the caller needs: whether
   its working tree is mid-migration. The orphan receipt is named by its REAL
   path — the receipt name is canonicalised before staging, so the path the
-  caller configured is not necessarily where the bytes are."
-  [rolled-back? receipt-file file-count]
-  {:rolled-back rolled-back?
-   :source-unchanged rolled-back?
-   :receipt-file (real-path-string receipt-file)
-   :files-still-migrated (if rolled-back? 0 file-count)})
+  caller configured is not necessarily where the bytes are.
+
+  `files-still-migrated` and `files-restored` are MEASURED from the rollback's
+  own per-file answers rather than counted off the plan, and they sum to the
+  plan's file count."
+  [rolled-back? rollback receipt-file file-count]
+  (let [{:keys [still-migrated restored]}
+        (if rolled-back?
+          {:still-migrated 0 :restored file-count}
+          (undo-recovery-counts rollback file-count))]
+    {:rolled-back rolled-back?
+     :source-unchanged rolled-back?
+     :receipt-file (real-path-string receipt-file)
+     :files-still-migrated still-migrated
+     :files-restored restored}))
 
 ;; @spec MCP-OP-ALIAS-056
 (defn- rollback-sentence
@@ -1383,7 +1428,7 @@
                ;; answers, and the caller is told which one refused it
                (:phase commit) (assoc :phase (:phase commit))
                ;; @spec MCP-OP-ALIAS-056
-               ;; a refusal that attempted a rollback owes the caller three
+               ;; a refusal that attempted a rollback owes the caller the
                ;; facts about the tree it left, and an allowlist that computes
                ;; them and drops them tells the caller nothing
                (contains? commit :rolled-back)
@@ -1391,6 +1436,13 @@
 
                (contains? commit :files-still-migrated)
                (assoc :files_still_migrated (:files-still-migrated commit))
+
+               ;; @spec MCP-OP-ALIAS-056
+               ;; the other half of the same measurement: a caller told six
+               ;; files are still migrated cannot tell whether the rollback
+               ;; reached the other six or never got to them
+               (contains? commit :files-restored)
+               (assoc :files_restored (:files-restored commit))
 
                (:receipt-file commit)
                (assoc :receipt_file (str (:receipt-file commit)))
@@ -1689,9 +1741,12 @@
           (let [rollback (transaction/execute-undo!
                            {:receipt (:receipt-file result)})
                 rolled-back? (boolean (:ok rollback))
-                count-migrated (count files)
-                report (rollback-report rolled-back? (:receipt-file result)
-                                        count-migrated)]
+                ;; @spec MCP-OP-ALIAS-056
+                ;; the count the prose repeats is the MEASURED one, read back
+                ;; out of the report rather than counted off the plan twice
+                report (rollback-report rolled-back? rollback
+                                        (:receipt-file result) (count files))
+                count-migrated (:files-still-migrated report)]
             (when rolled-back?
               (.delete (io/file (:receipt-file result))))
             (merge
@@ -1729,9 +1784,11 @@
               (let [rollback (transaction/execute-undo!
                                {:receipt (:receipt-file result)})
                     rolled-back? (boolean (:ok rollback))
-                    count-migrated (count files)
-                    report (rollback-report rolled-back? (:receipt-file result)
-                                            count-migrated)]
+                    ;; @spec MCP-OP-ALIAS-056
+                    report (rollback-report rolled-back? rollback
+                                            (:receipt-file result)
+                                            (count files))
+                    count-migrated (:files-still-migrated report)]
                 ;; the same discipline as the verification-failure branch: an
                 ;; undo receipt for a transaction that has already been undone
                 ;; would invite a second, destructive undo
@@ -1763,10 +1820,11 @@
                         rollback (transaction/execute-undo!
                                    {:receipt (:receipt-file result)})
                         rolled-back? (boolean (:ok rollback))
-                        count-migrated (count files)
-                        report (rollback-report rolled-back?
+                        ;; @spec MCP-OP-ALIAS-056
+                        report (rollback-report rolled-back? rollback
                                                 (:receipt-file result)
-                                                count-migrated)]
+                                                (count files))
+                        count-migrated (:files-still-migrated report)]
                     (when rolled-back?
                       (.delete (io/file (:receipt-file result))))
                     (merge
