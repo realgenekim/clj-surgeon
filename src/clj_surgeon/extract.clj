@@ -487,45 +487,6 @@
    :source-unchanged true
    :target-unchanged true})
 
-;; @spec MCP-OP-EXTRACT-024
-(defn- confine-workspace-paths
-  "Refuse the FIRST workspace path that resolves outside the project root.
-
-  Returns nil when every path is confined, or one typed refusal naming the
-  offending path. Called twice on purpose -- once where the walk turns the
-  workspace into a read set, and once in the instant before the first
-  `atomic-write!` -- because rewiring turns that read set into a WRITE set and
-  the filesystem can change between proving a plan and committing it. A path
-  that escapes is never dropped quietly: silently skipping a caller would ship a
-  half-rewired workspace under a success receipt."
-  [root paths]
-  (let [real (try {:root (mcp-paths/real-root root)}
-                  (catch Exception error {:error (.getMessage error)}))]
-    (if-let [root-error (:error real)]
-      {:ok false
-       :error (str "The extraction project root could not be resolved: "
-                   root-error)
-       :error-type :project-root-unresolvable
-       :root (str root)
-       :source-unchanged true
-       :target-unchanged true}
-      (let [real-root (:root real)]
-        (some (fn [path]
-                (let [resolved (mcp-paths/resolve-discovered-source-path
-                                 real-root path)]
-                  (when-not (:ok resolved)
-                    {:ok false
-                     :error (str "A workspace path resolves outside the "
-                                 "extraction project root and was refused "
-                                 "before any write: " path)
-                     :error-type :caller-path-outside-root
-                     :path (str path)
-                     :root (.toString real-root)
-                     :refusal (select-keys resolved [:error_type :error])
-                     :source-unchanged true
-                     :target-unchanged true})))
-              paths)))))
-
 ;; @spec MCP-OP-EXTRACT-037
 (defn- skipped-tree-prefixes
   "The canonical real paths of the trees the walk declined to enter -- the ones
@@ -586,6 +547,103 @@
         paths))
 
 ;; @spec MCP-OP-EXTRACT-037
+;; @spec MCP-OP-EXTRACT-041
+(defn- in-pruned-tree-fn
+  "One predicate, shared by BOTH confinement calls: given a canonical path, the
+  pruned tree it lands under, or nil.
+
+  Shared on purpose. The plan-time call and the pre-write call are described as
+  one gate called twice; they were two different checks, and only one of them
+  had the prune half."
+  [skipped-directories read-paths]
+  (let [pruned (skipped-tree-prefixes skipped-directories read-paths)]
+    (fn [candidate]
+      (some (fn [tree]
+              (when (or (= tree candidate)
+                        (str/starts-with? candidate (str tree "/")))
+                tree))
+            pruned))))
+
+;; @spec MCP-OP-EXTRACT-037
+;; @spec MCP-OP-EXTRACT-041
+(defn- pruned-tree-refusal
+  "One typed refusal for a path whose real file lives in a tree the walk
+  declined to enter -- the same map whichever confinement call raises it."
+  [real-root path resolved-path tree]
+  {:ok false
+   :error (str "A workspace path resolves into a tree this walk does not "
+               "read, and this extraction will not write there: " path
+               " -> " resolved-path)
+   :error-type :caller-path-in-skipped-tree
+   :path (str path)
+   :resolves-to resolved-path
+   :tree tree
+   :root (.toString real-root)
+   :remedy (str "point the link at a source inside the workspace, or remove "
+                "it; build trees and repository metadata are pruned because "
+                "nothing in them is a source this verb may edit")
+   :source-unchanged true
+   :target-unchanged true})
+
+;; @spec MCP-OP-EXTRACT-024
+(defn- confine-workspace-paths
+  "Refuse the FIRST workspace path that resolves outside the project root, or
+  into a tree the walk declined to enter.
+
+  Returns nil when every path is confined, or one typed refusal naming the
+  offending path. Called twice on purpose -- once where the walk turns the
+  workspace into a read set (inside `canonical-workspace-paths`, which adds the
+  dedup this call does not need), and once in the instant before the first
+  `atomic-write!` -- because rewiring turns that read set into a WRITE set and
+  the filesystem can change between proving a plan and committing it.
+
+  BOTH halves run in both calls. That is the whole point and it was not true:
+  the plan-time call checked outside-root AND the pruned tree, the pre-write
+  call checked only outside-root, and the docstring described them as one gate
+  anyway. A caller path that becomes a link into `.git` after the plan was
+  proved is now refused here as well.
+
+  A path that escapes is never dropped quietly: silently skipping a caller
+  would ship a half-rewired workspace under a success receipt."
+  [root paths skipped-directories]
+  (let [real (try {:root (mcp-paths/real-root root)}
+                  (catch Exception error {:error (.getMessage error)}))]
+    (if-let [root-error (:error real)]
+      {:ok false
+       :error (str "The extraction project root could not be resolved: "
+                   root-error)
+       :error-type :project-root-unresolvable
+       :root (str root)
+       :source-unchanged true
+       :target-unchanged true}
+      (let [real-root (:root real)
+            in-pruned-tree (in-pruned-tree-fn skipped-directories
+                                              (walked-read-paths paths))]
+        (some (fn [path]
+                (let [resolved (mcp-paths/resolve-discovered-source-path
+                                 real-root path)
+                      tree (when (:ok resolved)
+                             (in-pruned-tree (:path resolved)))]
+                  (cond
+                    (not (:ok resolved))
+                    {:ok false
+                     :error (str "A workspace path resolves outside the "
+                                 "extraction project root and was refused "
+                                 "before any write: " path)
+                     :error-type :caller-path-outside-root
+                     :path (str path)
+                     :root (.toString real-root)
+                     :refusal (select-keys resolved [:error_type :error])
+                     :source-unchanged true
+                     :target-unchanged true}
+
+                    ;; @spec MCP-OP-EXTRACT-041
+                    tree
+                    (pruned-tree-refusal real-root path (:path resolved)
+                                         tree))))
+              paths)))))
+
+;; @spec MCP-OP-EXTRACT-037
 (defn- canonical-workspace-paths
   "Confine every discovered path through the same gate, collapse the ones that
   name the SAME real file onto the canonical real path, and refuse any whose
@@ -623,16 +681,9 @@
        :source-unchanged true
        :target-unchanged true}
       (let [real-root (:root real)
-            pruned (skipped-tree-prefixes skipped-directories
-                                          (walked-read-paths paths))
             ;; returns the pruned tree itself, so the refusal can name it
-            in-pruned-tree (fn [candidate]
-                             (some (fn [tree]
-                                     (when (or (= tree candidate)
-                                               (str/starts-with?
-                                                 candidate (str tree "/")))
-                                       tree))
-                                   pruned))
+            in-pruned-tree (in-pruned-tree-fn skipped-directories
+                                              (walked-read-paths paths))
             result (reduce
                      (fn [acc path]
                        (let [resolved (mcp-paths/resolve-discovered-source-path
@@ -656,25 +707,8 @@
 
                            ;; @spec MCP-OP-EXTRACT-037
                            tree
-                           (reduced
-                             {:ok false
-                              :error (str "A workspace path resolves into a "
-                                          "tree this walk does not read, and "
-                                          "this extraction will not write "
-                                          "there: " path " -> "
-                                          (:path resolved))
-                              :error-type :caller-path-in-skipped-tree
-                              :path (str path)
-                              :resolves-to (:path resolved)
-                              :tree tree
-                              :root (.toString real-root)
-                              :remedy (str "point the link at a source inside "
-                                           "the workspace, or remove it; build "
-                                           "trees and repository metadata are "
-                                           "pruned because nothing in them is a "
-                                           "source this verb may edit")
-                              :source-unchanged true
-                              :target-unchanged true})
+                           (reduced (pruned-tree-refusal
+                                      real-root path (:path resolved) tree))
 
                            (contains? (:seen acc) (:path resolved)) acc
 
@@ -2185,9 +2219,15 @@
             ;; @spec MCP-OP-EXTRACT-030
             verified (volatile! {:parsed false :atomic-write false
                                  :read-back false})
+            ;; @spec MCP-OP-EXTRACT-041
+            ;; The walk's own `:skipped-directories` travel with the plan, so
+            ;; the pre-write call is the SAME gate -- outside-root AND pruned
+            ;; tree -- and not a weaker one.
             caller-escape (delay (confine-workspace-paths
                                    (:_project-root p)
-                                   (map :file caller-plans)))
+                                   (map :file caller-plans)
+                                   (get-in p [:discovery
+                                              :skipped-directories])))
             receipt (extraction-receipt
                       {:source-file source-file
                        :target-file target-file
