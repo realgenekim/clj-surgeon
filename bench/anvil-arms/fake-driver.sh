@@ -90,8 +90,16 @@ case "$FIXTURE" in
     ;;
 
   hang)
+    # No returns, then a long child.  The child's pid is RECORDED so the self-test can
+    # prove by pid -- not by name -- that aborting the watcher reaped it.  Sol, item 5:
+    # the watcher signalled only the driver's own pid, and this `sleep` survived under
+    # PPID 1 until it was cleaned up by hand.
     call '"shell"' '"{\"command\":[\"bash\",\"-lc\",\"sleep 60\"]}"' '"c1"'
-    sleep 60
+    sleep 60 &
+    child=$!
+    printf '%s\n' "$$" > "$A/fake-driver.pid"
+    printf '%s\n' "$child" > "$A/fake-driver-child.pid"
+    wait "$child"
     ;;
 
   *)

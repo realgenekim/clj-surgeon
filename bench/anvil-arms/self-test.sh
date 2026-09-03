@@ -360,6 +360,38 @@ sys.exit(1 if bad else 0)
 PY13
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 14: aborting the watcher reaps the driver's WHOLE process group =="
+# Sol, item 5: the driver was not placed in its own session, the timeout signalled only
+# its pid, and the executed probe left `sleep 60` alive under PPID 1.  An orphan of an
+# aborted arm keeps writing into a run nobody is metering any more.
+A14="$WORK/st-P-N-14"; mkdir -p "$A14"
+git clone -q --no-hardlinks "$BASE_REPO" "$A14/worktree"
+printf '%s\n' "$BASE_SHA" > "$A14/base.sha"
+cp "$HERE/prompts/E3-P-N.md" "$A14/prompt.md"
+EXP=st RUNG=P SLOT=14 MODEL=none DRIVER=fake RUNNER="$HERE/run-arm.sh" \
+  bash "$HERE/attest.sh" "$A14" N - "" > /dev/null 2>&1
+python3 "$HERE/watch.py" --arm "$A14" --zero-return-window 2 --poll 0.2 \
+  -- bash "$HERE/fake-driver.sh" "$A14" hang > "$WORK/case14.out" 2>&1
+want "case14 watch rc" 4 "$?"
+dpid=$(jqf "$A14/run.json" driver_pid)
+dpgid=$(jqf "$A14/run.json" driver_pgid)
+case "$dpid" in ''|MISSING|null|*[!0-9]*) bad "case14 run.json records no driver_pid: $dpid";;
+  *) ok "case14 run.json records driver_pid = $dpid";; esac
+want "case14 the driver leads its own process group" "$dpid" "$dpgid"
+case "$dpgid" in ''|MISSING|null|*[!0-9]*) bad "case14 run.json records no driver_pgid: $dpgid";;
+  *) if pgrep -g "$dpgid" > /dev/null 2>&1; then
+       bad "case14 processes survive in group $dpgid: $(pgrep -g "$dpgid" | tr '\n' ' ')"
+     else ok "case14 no process left in the driver's group $dpgid"; fi;;
+esac
+child=$(cat "$A14/fake-driver-child.pid" 2>/dev/null)
+if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+  bad "case14 ORPHAN: the driver's child $child outlived the abort"
+  kill -9 "$child" 2>/dev/null          # a process this self-test started; clean it up
+else
+  ok "case14 the driver's recorded child (${child:-none}) was reaped by the abort"
+fi
+want "case14 run.json orphans after the abort" 0 "$(jqf "$A14/run.json" driver_group_orphans)"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
