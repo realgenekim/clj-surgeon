@@ -1262,6 +1262,202 @@
         (finally (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
+(defn- displaced-count
+  "The kernel's running count of claims a break displaced and did not restore.
+
+   Resolved rather than referred so this witness fails on its ASSERTION when
+   the count does not exist yet, not on a namespace that will not compile."
+  []
+  (if-let [v (resolve 'clj-surgeon.txn-journal/displaced-claim-count)] (v) 0))
+
+(defn- create-lock-if-absent!
+  "Create the LOCK holding `content`, create-if-absent, the way `write-lock!`
+   does. Returns true when this caller is the one that created it."
+  [dir content]
+  (let [^java.io.File lock (io/file dir "LOCK")
+        ^java.io.File tmp (java.io.File/createTempFile ".LOCK-" ".tmp" (io/file dir))]
+    (try
+      (spit tmp content)
+      (Files/createLink (.toPath lock) (.toPath tmp))
+      true
+      (catch java.nio.file.FileAlreadyExistsException _ false)
+      (finally (Files/deleteIfExists (.toPath tmp))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-breaks-restore-cannot-clobber-a-third-acquirers-claim
+  (testing "Opus round 4, blocker 1: the break's RESTORE was `Files/move` with
+            no REPLACE_EXISTING, which the JDK implements as a `statx` of the
+            target followed by `rename(2)` - and POSIX rename replaces
+            unconditionally. A third acquirer that creates its LOCK between
+            those two syscalls is destroyed silently, which is round three's
+            two-live-holders end state reached THROUGH the fix. The restore
+            must be create-if-absent at the kernel level, and a restore that
+            refuses must be reported rather than dropped: the displaced claim
+            then survives only inside the tombstone, and its owner never
+            learns it lost the lock unless somebody says so."
+    (let [dir (temp-dir "lock-restore-storm")
+          lock (io/file dir "LOCK")
+          pid (.pid (java.lang.ProcessHandle/current))
+          ;; the claim the break believes it judged: deliberately unlike
+          ;; anything on disk, so the RESTORE branch runs every time
+          judged {:holder {:txid "GHOST"}
+                  :content "{:txid \"GHOST\"}"
+                  :content-sha256 "deadbeef"
+                  :file-key "(dev=0,ino=0)"}
+          created (atom [])
+          running (atom true)
+          hammer (Thread.
+                   (fn []
+                     (loop [n 0]
+                       (when @running
+                         (let [content (pr-str {:txid (str "THIRD-" n)
+                                                :pid pid :boot-id "b"})]
+                           (if (create-lock-if-absent! dir content)
+                             (do (swap! created conj content) (recur (inc n)))
+                             (recur n)))))))
+          cursor (atom 0)
+          clobbered (atom 0)
+          checked (atom 0)
+          displaced (atom [])
+          before-count (displaced-count)]
+      (try
+        (create-lock-if-absent! dir (pr-str {:txid "VICTIM-0" :pid pid :boot-id "b"}))
+        (.start hammer)
+        (dotimes [i 2000]
+          (when-not (.exists lock)
+            (create-lock-if-absent! dir (pr-str {:txid (str "VICTIM-" i)
+                                                 :pid pid :boot-id "b"})))
+          (let [outcome (@#'journal/break-lock! dir judged (str "BRK-" i))
+                seen @created
+                pending (subvec seen (min @cursor (count seen)))
+                _ (reset! cursor (count seen))
+                on-disk (into #{} (keep (fn [^java.io.File f]
+                                          (when (.isFile f)
+                                            (try (slurp f) (catch Exception _ nil))))
+                                        (.listFiles (io/file dir))))]
+            (when (false? (:restored outcome)) (swap! displaced conj outcome))
+            (doseq [content pending]
+              (swap! checked inc)
+              (when-not (contains? on-disk content) (swap! clobbered inc)))
+            ;; the tombstones are accounted for above; keep the directory small
+            (doseq [^java.io.File f (.listFiles (io/file dir))]
+              (when (.startsWith (.getName f) "LOCK.broken.") (.delete f)))))
+        (reset! running false)
+        (.join hammer 5000)
+
+        (is (pos? @checked)
+            (str "the storm must actually land third-party claims inside the "
+                 "restore gap, or it proves nothing: checked=" @checked))
+        (is (zero? @clobbered)
+            (str "a third acquirer's live claim must never be destroyed by the "
+                 "restore: " @clobbered " of " @checked " were"))
+        (is (pos? (count @displaced))
+            "and the storm must exercise the refused restore at least once")
+        (let [untyped (remove #(and (= :holder-changed (:cause %))
+                                    (false? (:restored %))
+                                    (string? (:tombstone %))
+                                    (keyword? (:restore-cause %)))
+                              @displaced)]
+          (is (zero? (count untyped))
+              (str "every refused restore is a TYPED outcome naming the "
+                   "tombstone the displaced claim is in; first untyped: "
+                   (pr-str (first untyped)))))
+        (is (= (+ before-count (count @displaced)) (displaced-count))
+            "and every one of them is counted, so the bucket is visible")
+        (finally
+          (reset! running false)
+          (.join hammer 5000)
+          (delete-tree! dir))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-displaced-claim-is-reported-to-the-caller-that-displaced-it
+  (testing "the other half of blocker 1. When the restore refuses, the claim
+            that was renamed away is NOT put back: the LOCK names the third
+            acquirer and the displaced claim survives only inside the
+            tombstone. Both callers used to keep `(:broken outcome)` alone, so
+            `:restored false` and its cause were dropped and the refusal named
+            the third acquirer with no hint that a claim had been displaced -
+            a silent refusal with no owner. Both must surface it."
+    (let [ws (workspace! "lock-displaced" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (plant-lock! ws {:txid "ghost-5" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [;; the claim the break judges is replaced by a LIVE holder's own
+              ;; claim before the rename, so the recheck mismatches and the
+              ;; restore runs; a THIRD acquirer then lands in the restore gap
+              refused (begin! ws {:txid "B-DISPLACER"
+                                  :before-break
+                                  (fn [_]
+                                    (.delete lock)
+                                    (spit lock (pr-str {:txid "A-LIVE"
+                                                        :pid (.pid child)
+                                                        :boot-id (boot-id-now)})))
+                                  :before-restore
+                                  (fn [_]
+                                    (spit lock (pr-str {:txid "C-THIRD"
+                                                        :pid (.pid child)
+                                                        :boot-id (boot-id-now)})))})
+              displaced (:lock-break-displaced refused)]
+          (is (false? (:ok refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (= "C-THIRD" (:txid (read-string (slurp lock))))
+              "the third acquirer's claim is untouched")
+          (is (some? displaced)
+              (str "and the refusal SAYS a claim was displaced: " (pr-str refused)))
+          (is (false? (:restored displaced)))
+          (is (= :holder-changed (:cause displaced)))
+          (is (pos? (long (:displaced-claims-total displaced 0)))
+              "with the running count of displacements this process has made")
+          (let [tomb (io/file dir (:tombstone displaced))]
+            (is (.isFile tomb)
+                "the displaced claim is on disk, in the tombstone the refusal names")
+            (is (= "A-LIVE" (:txid (read-string (slurp tomb))))
+                "byte for byte the claim that was renamed away")))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest recovery-reports-a-claim-its-break-displaced
+  (testing "the same displacement seen from the second caller. `recover!` kept
+            `(:broken outcome)` too, so a recovery that displaced a claim
+            returned an ordinary success."
+    (let [ws (workspace! "lock-displaced-recover" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          lock (io/file dir "LOCK")]
+      (try
+        (plant-lock! ws {:txid "ghost-6" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [result (journal/recover!
+                       (:root ws)
+                       {:state-home (:state-home ws)
+                        :before-break (fn [_]
+                                        (.delete lock)
+                                        (spit lock (pr-str {:txid "A-LIVE"
+                                                            :pid (.pid child)
+                                                            :boot-id (boot-id-now)})))
+                        :before-restore (fn [_]
+                                          (spit lock (pr-str {:txid "C-THIRD"
+                                                              :pid (.pid child)
+                                                              :boot-id (boot-id-now)})))})
+              displaced (:lock-break-displaced result)]
+          (is (nil? (:lock-broken result)) "nothing was broken")
+          (is (some? displaced)
+              (str "but a claim was displaced, and the receipt says so: "
+                   (pr-str result)))
+          (is (= :holder-changed (:cause displaced)))
+          (is (false? (:restored displaced)))
+          (is (= "A-LIVE" (:txid (read-string (slurp (io/file dir (:tombstone displaced))))))
+              "and names the tombstone the displaced claim is in"))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
 (deftest finishing-a-transaction-does-not-delete-a-lock-it-no-longer-owns
   (testing "the release side of the same defect. `release-lock!` was a bare
             `deleteIfExists`, so a transaction whose claim had been replaced -
