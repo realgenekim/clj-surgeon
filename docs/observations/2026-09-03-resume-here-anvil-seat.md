@@ -285,3 +285,8 @@ GO (eight) unchanged; fold-diff production read at 347fe6d3 (inb-3a9818).
 Live reviews: Sol MEM-003 streaming ls-tree (8c1087f); Opus kernel round 2 (7c9a9b1); Opus MEM-005 round 2 (ad439f4). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), census round 6 (~/src/clj-surgeon-census), q5z round 9 (~/src/clj-surgeon-q5z), arms apparatus round 4 (~/src/clj-surgeon-arms: whitelist Make grammar, child subreaper, schema v2).
 Memory program state: MEM-015 GO (2aa648a) · battery GO (5534e94) · MEM-005 round 2 under Opus (ad439f4) · MEM-003 under Sol (8c1087f: ls-tree held 94 → 9.5 MB at 10k) · kernel round 2 under Opus (7c9a9b1) · remaining battery RED rows: workspace-sources-read-all 41.1 MB (MEM-004 streaming fold/spill, unbuilt) and rename-ns-plan-full-match 10.0 MB (the ungated rename planner, inb-07c5e7).
 Follow-ups filed tonight: inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7, inb-ddb845 (7890 self-test), inb-fa5d68 (MCP ls-tree adoption of MEM-003).
+
+## RESUME DELTA (ninth refresh; commit time is the timestamp)
+GO (eight) unchanged; fold-diff production read at 347fe6d3.
+Live: Sol MEM-003 (8c1087f); Opus q5z round 9 (f51ceae — rule the builder's dispute first: :rolled-back true on an undo = migration still in place). Builders: fold-diff round 6 (~/src/curtaincall-cfp-folddiff), arms apparatus round 4 (~/src/clj-surgeon-arms), kernel round 3 (~/src/clj-surgeon-txn: stale LOCK, lease fail-closed, undo! under lock), MEM-005 round 3 (~/src/clj-surgeon-admit: unmatched-close clamp + malformed corpus, meta counting), census round 7 (~/src/clj-surgeon-census: two continuation gaps).
+Follow-ups filed since the eighth refresh: inb-9c5826 (timing/HEAD-stamp test fragility under parallel lanes).
