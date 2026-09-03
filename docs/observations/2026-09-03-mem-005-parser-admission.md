@@ -325,3 +325,35 @@ possible way to lose a reader's trust in the rest of the receipt.
 All unit suites ran under `~/bin/suite-run`; the battery and `memory-red` took
 the exclusive `~/tmp/suite.lock`. The battery ran exactly once, and `memory-red`
 ran exactly once per round.
+
+### A candidate cause for round 2's one unexplained suite failure
+
+Round 2 reported a single `make test-fast` failure at load 10 that never
+reproduced in six subsequent full runs, and whose test NAME was lost to a
+`tail -4` — so the review correctly left it `:unverified`.
+
+A run in this round reproduced a failure of that shape, and its mechanism is
+now known: **`install_test/stable-install-isolates-cli-and-both-agent-skills`
+is HEAD-sha-sensitive.** The installer stamps each stable skill copy with
+`Stable copy installed from commit <HEAD>`, and the test installs twice and
+compares the two files. A commit landing BETWEEN the two installs makes them
+differ by exactly that line — which is what happened here, because a `git
+commit --amend` was made while the suite was running:
+
+```
+FAIL in (stable-install-isolates-cli-and-both-agent-skills) install_test.clj:283
+  Codex and Claude resolve the same copied package
+  ... Stable copy installed from commit 39a58dbf16fc...
+  ... Stable copy installed from commit 38e5c4e731db...
+```
+
+Re-run at a stable HEAD: `clj-surgeon.install-test` 10 tests, 385 assertions,
+0 failures. Full `make test-fast` re-run at the same stable HEAD: 748 / 6196 /
+0 / 0.
+
+This is a CANDIDATE, not an attribution: round 2's failing test name is
+unrecoverable, so nobody can say this was the same test. The mechanism is
+proven; the identification is not. Two ratchets fall out, neither of them
+MEM-005's to land: resolve HEAD once per test rather than per install (or drop
+the sha from the compared bytes), and keep suite output whole so a failing test
+name is never lost to a pipe again.
