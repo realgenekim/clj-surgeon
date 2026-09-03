@@ -34,6 +34,12 @@ import pathlib
 import re
 import sys
 
+# score.py imports watch.py from its own directory, which is INSIDE the repository
+# being measured.  Without this, every direct run leaves bench/anvil-arms/__pycache__
+# in the checkout and every later `git status` is ambiguous about what the experiment
+# touched.  The self-test's PYTHONDONTWRITEBYTECODE covers the suite; this covers the
+# reviewer who runs the scorer by hand.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from watch import (  # noqa: E402  (same-directory module, deliberate)
     APPLY_PATCH_CMD_RE, COMMITTING_VERBS, _shell_script,
