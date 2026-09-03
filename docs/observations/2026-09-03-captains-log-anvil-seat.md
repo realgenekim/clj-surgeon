@@ -281,3 +281,19 @@ delta → then the mayor's production run (inb-3a9818 updated with the new comma
 ## 04:02Z — study re-review: NO-GO lifted to GO-WITH-FIX (10× on the motivating workload; twelve items dead); four blockers (outline regression from the budget semantics, quadratic discovery via `:paths [".."]`, ns_grep unguarded, limit-spelling defeats item 6); round three launched.
 
 ## 04:03Z — Gene: memory as files grow ("so afraid of huge heaps — but dont want to OOM… have sol figure out a clever way"). Question filed for Sol (docs/observations/2026-09-03-memory-design-question-for-sol.md); codex is unauthenticated on this seat, so an Opus design consult runs now and the mayor is asked to put the same question to Sol on the skiff; the two get reconciled.
+
+## 04:05Z — Sol is live on this seat (mayor's /tmp/sol.txt; re-verified READY from my shell); provisioning closed
+
+Account genekkanban@gmail.com — a different pool from the skiff surgeon seats (genek@itrevolution.net hit
+0% spark / 8% general weekly tonight and wedged a seat mid-fix); Gene chose the split so this seat's lanes
+cannot starve the seats he talks to. Operational rules, learned the hard way tonight by the mayor:
+`</dev/null` always (codex hangs reading stdin); `codex exec` auto-cancels MCP write tools without
+`--dangerously-bypass-approvals-and-sandbox` (invalidated a measurement run); OpenAI's content filter
+refused twice to review our own path-confinement/symlink fixtures — route that class to Opus and say so.
+Memory saved (`sol-live-on-anvil-seat`). First Sol job on this seat: the memory-vs-files design question
+(running, high reasoning, output → docs/observations/2026-09-03-memory-design-sol-answer.md); the Opus
+consult continues in parallel for reconciliation. Provisioning final: 1 phone channel CLOSED by ruling;
+2 codex DONE; 3 maven DONE; 4 bin/nrepl DONE; 5 crons partial (check-prompt-plate here; repo-watchstander
+stays on Buster by Gene's ruling — Buster is mission critical, migration is a later decision); 6 ports
+DONE; 7 GCP deferred; 8 beads = inbox. Reviews from here route to Sol (high) first, Opus for the
+filter-refused class and as the second voice.

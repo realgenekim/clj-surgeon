@@ -171,3 +171,9 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 
 - Study: re-review GO-WITH-FIX (docs/observations/2026-09-03-study-ops-rereview.md; NO-GO doc marked superseded); round three acffa7722710273de running on `~/src/clj-surgeon-study` (items 1–11; blockers 1–4). After: my suites (full mcp-test) → push → a short re-check → queue.
 - Still running: fold-diff production re-review a94e2e37c80843f35; rf2 round three; census; template-upsert; ratchets; q5z round three; kondo-path test. Eight lanes.
+
+## RESUME DELTA 2026-09-03T04:05Z — Sol live; provisioning closed
+
+- Sol WORKS here (genekkanban pool): `codex exec -m gpt-5.6-sol -c model_reasoning_effort="high" --skip-git-repo-check --sandbox read-only -o out.md "…" </dev/null`. Reviews route to Sol first; Opus for filter-refused (symlink/confinement fixtures) and as the second voice.
+- Nothing missing now except by ruling: no phone channel; repo-watchstander stays on Buster; GCP deferred.
+- Running: Sol memory design answer (`~/tmp/sol/memory-sol-answer.md`, waiter bm3owhhzt); Opus memory consult a2d936e48f3423a0c; fold-diff production re-review; rf2/q5z/study round threes; census; template-upsert; ratchets; kondo-path test.
