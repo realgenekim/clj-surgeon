@@ -435,6 +435,42 @@
           (is (= 2 (:files result)) "the skipped source was censused anyway")))
       (finally (delete-tree! root)))))
 
+;; @spec MCP-OP-CENSUS-030
+(deftest a-source-named-many-times-is-read-and-counted-once
+  (testing "512 copies of one path are one file, not 512"
+    (let [result (run {:files (vec (repeat census/max-requested-files fixture))})]
+      (is (true? (:ok result)) (str "refused: " (:error result)))
+      (is (= 1 (:files result))
+          "a repeated path multiplied every count in the receipt")
+      (is (= 9 (:arms result)))
+      (is (= 7 (:sites result)))
+      (is (= {:door 2 :set 1 :guarded 1 :raw 1 :unknown 2} (:counts result)))
+      (is (= (dec census/max-requested-files) (:duplicates_collapsed result)))
+      (is (= 1 (:files_scanned result)))
+      (is (= [fixture] (vec (keys (:by_file result)))))))
+
+  (testing "two strings that canonicalise to one real path collapse too"
+    (let [root (temp-dir)]
+      (try
+        (spit-file! (io/file root "src/app/folds.clj") arm-source)
+        (Files/createSymbolicLink (.toPath (io/file root "src/alias"))
+                                  (.toPath (io/file "app"))
+                                  (make-array FileAttribute 0))
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)}
+                       {:files ["src/app/folds.clj" "src/alias/folds.clj"]})]
+          (is (true? (:ok result)) (str "refused: " (:error result)))
+          (is (= 1 (:files result))
+              "one real file was censused twice under two names")
+          (is (= 1 (:duplicates_collapsed result)))
+          (is (= 1 (get-in result [:counts :raw]))))
+        (finally (delete-tree! root)))))
+
+  (testing "a census with no repeated path says nothing about duplicates"
+    (let [result (run {:files [fixture second-fixture]})]
+      (is (= 2 (:files result)))
+      (is (nil? (:duplicates_collapsed result))))))
+
 ;; @spec MCP-OP-CENSUS-021
 (deftest the-cli-plan-pool-is-the-bounded-pool-on-the-jvm
   (testing "a threads request above one runs on census_pool, not core pmap"

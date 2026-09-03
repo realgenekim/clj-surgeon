@@ -63,6 +63,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-029**: When clj-surgeon validates a `relation_census` request server-side, it shall accept for `pool_size` only a JSON integer, exactly as the schema it advertises states, and shall refuse a string, a float, a boolean, a null, or an array with reason `pool-size-not-an-integer`, the offending value, the bound, and an executable `next_call`, before any filesystem work.
 
+- [ ] **MCP-OP-CENSUS-030**: When a census request names the same source more than once, whether by the same string or by different strings that canonicalise to one real path, clj-surgeon shall read, classify and count that source exactly once, and shall publish `duplicates_collapsed` naming how many repeated entries it collapsed; a request with no repeated path shall publish no `duplicates_collapsed`.
+
 ## Published surfaces
 
 - [x] **MCP-OP-CENSUS-026**: When clj-surgeon publishes its tool catalog in prose, that prose shall state five tools, shall name `relation_census` in the README, in CLAUDE.md, and in the clj-surgeon skill reference and its mirror, shall state that the census locates review work rather than proving idempotency, and shall state that the census is the one tool that enumerates the workspace tree; the tool's own description shall state the same.
