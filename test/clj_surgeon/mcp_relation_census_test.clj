@@ -857,6 +857,17 @@
 ;; syscalls cannot be counted in-process; it is asserted for behavioural
 ;; parity only, alongside the JVM CLI witness that runs the identical op
 ;; function `core/run-relation-census` in-process and IS instrumented.
+;;
+;; READ THE NEXT TWO DEFTESTS BEFORE TRUSTING THIS ONE. Both counters below
+;; are wrapped around functions the OP BODY calls. Neither can see what the
+;; ENTRANCE does before it dispatches, and at the time this was written the
+;; entrance was loading project aliases — stat, read, ancestor walk — on
+;; requests it was about to refuse. This witness was green throughout. What
+;; it proves is that `run-relation-census` touches nothing; the entrance is
+;; proved by `the-cli-entrance-validates-the-request-shape-before-it-loads-
+;; any-config` and `the-babashka-entrance-refuses-before-it-reads-the-
+;; workspace-config`, and the bb block below remains a parity check, not a
+;; meter.
 ;; ---------------------------------------------------------------------------
 
 (defn- counting
