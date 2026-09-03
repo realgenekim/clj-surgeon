@@ -1304,6 +1304,140 @@
           (str ":threads won the order at the CLI: " (pr-str cli))))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-ten review, item 5 (blocking): CLI continuations retarget
+;; across cwd.
+;;
+;; Every CLI shape refusal handed back the fixed string
+;; `"clj-surgeon :op :relation-census :dir . :threads 8"`. Sol refused a
+;; request naming an absolute workspace, replayed the returned continuation
+;; from `/tmp/census11-sol-fx/client-cwd`, and the census answered about the
+;; CLIENT fixture — a continuation that validates, runs, reports success, and
+;; describes a tree the caller never named.
+;;
+;; This is the CLI's half of the round-nine finding the tool has already
+;; closed (MCP-OP-CENSUS-014: a continuation may narrow WHAT is censused; it
+;; may never change WHERE). `.` is not a workspace. It is whatever directory
+;; the next shell happens to be standing in, which is precisely the thing a
+;; continuation exists to stop the caller from having to remember.
+;;
+;; The witness replays from a DIFFERENT cwd on purpose, and that cwd holds
+;; two arm-bearing sources against the workspace's one, so a retargeted
+;; census is visible as a count and not only as a path.
+;; ---------------------------------------------------------------------------
+
+(defn- bb-cli-in
+  "Run the babashka CLI as a subprocess from a named working directory."
+  [cwd & args]
+  (let [{:keys [out err exit]}
+        (apply proc/shell {:out :string :err :string :continue true
+                           :dir (str cwd)}
+               "bb" "-cp" (str repo-root "/src") "-m" "clj-surgeon.core" args)]
+    (try
+      (assoc (edn/read-string out) ::exit exit)
+      (catch Exception _
+        {::exit exit ::out out ::err err}))))
+
+(defn- replay-next-command
+  "Run a CLI continuation verbatim, from `cwd`."
+  [cwd next-command]
+  (apply bb-cli-in cwd (rest (str/split (str next-command) #"\s+"))))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(deftest a-cli-continuation-censuses-the-workspace-the-caller-named
+  (let [parent (temp-dir)
+        workspace (io/file parent "workspace")
+        client (io/file parent "client-cwd")]
+    (try
+      (spit-file! (io/file workspace "src/app/folds.clj") arm-source)
+      (spit-file! (io/file client "src/app/one.clj") arm-source)
+      (spit-file! (io/file client "src/app/two.clj") arm-source)
+      (let [named (.getCanonicalPath workspace)
+            elsewhere (.getCanonicalPath client)]
+
+        (testing "the replay cwd is a workspace of its own, so a retarget shows"
+          (let [here (bb-cli-in elsewhere ":op" "relation-census" ":dir" ".")]
+            (is (true? (:ok here)))
+            (is (= 2 (:files here))
+                "the client cwd no longer differs from the named workspace")))
+
+        (testing "an absolute :dir travels into the continuation verbatim"
+          (let [refusal (bb-cli-in elsewhere ":op" "relation-census"
+                                   ":dir" named ":threads" "not-a-number")]
+            (is (= :invalid-pool-size (:error-type refusal))
+                (str "the request was not refused on shape: " (pr-str refusal)))
+            (is (= {:kind :dir :given named :absolute named} (:anchor refusal))
+                (str "the refusal does not name the workspace it was given: "
+                     (pr-str (:anchor refusal))))
+            (is (str/includes? (str (:next-command refusal)) named)
+                (str "the continuation retargets the census: "
+                     (pr-str (:next-command refusal))))
+
+            (testing "and replaying it from another cwd censuses that workspace"
+              (let [replay (replay-next-command elsewhere
+                                                (:next-command refusal))]
+                (is (true? (:ok replay))
+                    (str "the continuation refused: " (pr-str replay)))
+                (is (= 1 (:files replay))
+                    (str "the replay censused " (:files replay)
+                         " arm-bearing file(s) from " elsewhere
+                         "; the workspace the caller named holds 1 and the "
+                         "replay cwd holds 2"))
+                (is (= 1 (:files-scanned replay))
+                    (str "the replay scanned " (:files-scanned replay)
+                         " file(s); the workspace the caller named holds 1"))))))
+
+        (testing "a relative :dir is resolved against the cwd it was given in, and says so"
+          (let [refusal (bb-cli-in named ":op" "relation-census"
+                                   ":dir" "." ":threads" "not-a-number")]
+            (is (= :invalid-pool-size (:error-type refusal)))
+            (is (= {:kind :dir :given "." :absolute named
+                    :resolved-against named}
+                   (:anchor refusal))
+                (str "a relative :dir left the caller to guess which cwd it "
+                     "meant: " (pr-str (:anchor refusal))))
+            (is (str/includes? (str (:next-command refusal)) named)
+                (str "the continuation still carries a relative anchor: "
+                     (pr-str (:next-command refusal))))
+
+            (testing "so the replay still hits the same tree from elsewhere"
+              (let [replay (replay-next-command elsewhere
+                                                (:next-command refusal))]
+                (is (true? (:ok replay))
+                    (str "the continuation refused: " (pr-str replay)))
+                (is (= 1 (:files replay))
+                    (str "the replay censused " (:files replay)
+                         " arm-bearing file(s); the relative :dir named a "
+                         "workspace holding 1"))))))
+
+        (testing "every CLI shape refusal carries the workspace, not a bare dot"
+          ;; The anchor is not a property of the :threads refusal; it is a
+          ;; property of every refusal the pure pass can return.
+          (doseq [{:keys [label args]} cli-shape-refusals]
+            (let [refusal (apply bb-cli-in elsewhere ":op" "relation-census"
+                                 ":dir" named args)]
+              (is (= named (:absolute (:anchor refusal)))
+                  (str label " lost the workspace the caller named: "
+                       (pr-str (:anchor refusal))))
+              (when-let [command (:next-command refusal)]
+                (is (not (str/includes? command " :dir . "))
+                    (str label " hands back a continuation anchored on the "
+                         "replay's cwd: " command))
+                (is (str/includes? command named)
+                    (str label " continuation does not name the workspace: "
+                         command))))))
+
+        (testing "the JVM CLI op agrees with the bb subprocess"
+          (let [refusal (core/run-relation-census
+                          {:dir named :doors "conj"})]
+            (is (= :unknown-door-symbol (:error-type refusal)))
+            (is (= named (:absolute (:anchor refusal))))
+            (is (str/includes? (str (:next-command refusal)) named)
+                (str "the JVM CLI hands back a bare dot: "
+                     (pr-str (:next-command refusal)))))))
+      (finally (delete-tree! parent)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-nine finding, item 4: a refusal targeting
 ;; /tmp/census10-fx/workspace handed back
 ;; `next_call={tool:"relation_census",pool_size:8}`. Replaying it verbatim
