@@ -353,6 +353,17 @@
          (remove #(empty? (:files %)))
          vec)))
 
+(defn- source-kind
+  "What a non-regular candidate actually is, for the receipt. Descriptive, not
+   load-bearing: the refusal is decided by `fs/regular-file?` alone."
+  ;; @spec MCP-OP-MEM-003
+  [file]
+  (cond
+    (not (fs/exists? file {:nofollow-links true})) :absent
+    (fs/directory? file)                           :directory
+    (fs/sym-link? file)                            :unresolvable-symlink
+    :else                                          :not-a-regular-file))
+
 (defn- safe-outline
   "Run outline on a file, returning error map on parse errors.
 
@@ -361,20 +372,45 @@
    and `:observed` so the scan's receipt can name and count it. It stays a
    per-file skip — before this, a file deep enough to exhaust the reader's
    stack threw a StackOverflowError, which is an `Error` and not an
-   `Exception`, and killed the whole scan."
+   `Exception`, and killed the whole scan.
+
+   THE SOURCE OPEN IS GUARDED BEFORE IT HAPPENS. `find-clj-files` now lists
+   only regular files and symlinks resolving to them, so the encoder should
+   never see anything else — but \"should never\" is exactly the premise the
+   round-six blocker was built on, and between discovery and this read there
+   is a real window: a path listed as a regular file can be a FIFO by the
+   time it is opened. That matters more than a stale stat, because `open(2)`
+   on a FIFO BLOCKS until a writer appears rather than throwing, so the
+   `catch Exception` below can never make it typed — the operation simply
+   returns nothing, forever (Opus, 2026-09-03: a scan of such a tree survived
+   SIGTERM). A refusal a caller can read beats a hang a caller cannot.
+
+   The predicate is `fs/regular-file?`, which is `Files/isRegularFile`
+   FOLLOWING links — deliberately NOT `NOFOLLOW_LINKS`, which is false for a
+   symlink to a regular file and would refuse `src/fixt/zlinked.clj`, a
+   candidate discovery admits on purpose. It costs one `stat` per file, which
+   is noise beside the parse it guards."
   ;; @spec MCP-OP-MEM-005
+  ;; @spec MCP-OP-MEM-003
   [file]
-  (try
-    (outline/outline file)
-    (catch clojure.lang.ExceptionInfo e
-      (let [data (ex-data e)]
-        (if (= :parser_admission_refused (:refusal data))
-          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
-                 :file file
-                 :error (ex-message e))
-          {:file file :error (str (ex-message e))})))
-    (catch Exception e
-      {:file file :error (str (.getMessage e))})))
+  (if-not (fs/regular-file? file)
+    {:file file
+     :refusal :unreadable-source
+     :reason "source is not a regular file"
+     :observed (source-kind file)
+     :remedy "rescan; this path is not a source file the scan can read"
+     :error (str file " is not a regular file")}
+    (try
+      (outline/outline file)
+      (catch clojure.lang.ExceptionInfo e
+        (let [data (ex-data e)]
+          (if (= :parser_admission_refused (:refusal data))
+            (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                   :file file
+                   :error (ex-message e))
+            {:file file :error (str (ex-message e))})))
+      (catch Exception e
+        {:file file :error (str (.getMessage e))}))))
 
 (defn- admission-refusals
   "Every parser-admission refusal in a scan, as receipt rows in path order."

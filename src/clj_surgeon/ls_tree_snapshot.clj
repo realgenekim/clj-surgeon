@@ -177,12 +177,28 @@
 
    `nil` when the file cannot be read. A candidate that has vanished since the
    snapshot is exactly as stale as one whose bytes moved, and the caller turns
-   the nil into that refusal rather than guessing."
+   the nil into that refusal rather than guessing.
+
+   IT NEVER OPENS A NON-REGULAR FILE. `Files/isRegularFile` — links FOLLOWED,
+   for the same reason as in `row-file`: a symlink to a regular file is a
+   candidate discovery admits — runs BEFORE the open, because for one shape
+   the open cannot be caught. `open(2)` on a FIFO BLOCKS until a writer
+   appears, so a `try/catch` around it does not produce `nil`, it produces
+   nothing at all, forever. A directory and a socket already reached `nil`
+   through the exception; the FIFO reached a hang (Opus, 2026-09-03), and a
+   guard is the only thing that can turn it into an answer. Discovery no
+   longer lists any of them, so this is the check-to-use window rather than
+   the ordinary path: a file digested here can be a FIFO by the time it is
+   read, and vice versa."
   [path]
   (try
     (let [md (MessageDigest/getInstance "SHA-256")
-          buf (byte-array 65536)]
-      (with-open [in (io/input-stream (io/file (str path)))]
+          buf (byte-array 65536)
+          f (io/file (str path))]
+      (when-not (Files/isRegularFile (.toPath f) (into-array LinkOption []))
+        (throw (java.io.FileNotFoundException.
+                 (str f " is not a regular file"))))
+      (with-open [in (io/input-stream f)]
         (loop []
           (let [n (.read in buf)]
             (when (pos? n)
