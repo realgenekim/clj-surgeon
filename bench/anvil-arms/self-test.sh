@@ -910,6 +910,52 @@ want "case24 control (no abort) score rc" 0 "$?"
 [ -s "$D/receipt.json" ] && ok "case24 control still produces a receipt" \
   || bad "case24 control lost its receipt — the refusal is too broad"
 
+echo "== case 25: a watch stream with no final `end` is unterminated, not scoreable =="
+# Sol round two, item 4: validate_watch documents "one final `end`" in its own docstring
+# and never checks for it.  Sol deleted the end record from a good stream and the scorer
+# returned 0 with a receipt.  The `end` record IS the completion stamp -- driver rc and
+# wall are carried nowhere else in the stream -- so a stream without one is a run whose
+# ending nobody witnessed, and wall_s on that receipt would be a number about a moment
+# the meter never observed.
+mk25 () {
+  local d="$WORK/st-P-N-25$1"
+  rm -rf "$d"; mkdir -p "$d"
+  cp "$A1/attest.json" "$A1/rollout.jsonl" "$A1/watch.jsonl" "$A1/run.json" "$d/"
+  printf '%s' "$d"
+}
+edit_end () {                   # edit_end <dir> drop|strip-rc|strip-wall
+  python3 - "$1/watch.jsonl" "$2" <<'PY25'
+import json, sys
+path, how = sys.argv[1], sys.argv[2]
+recs = [json.loads(l) for l in open(path) if l.strip()]
+assert recs[-1].get("kind") == "end", f"fixture has no end record: {recs[-1]}"
+if how == "drop":
+    recs.pop()
+elif how == "strip-rc":
+    recs[-1].pop("driver_rc", None)
+elif how == "strip-wall":
+    recs[-1].pop("wall_s", None)
+open(path, "w").write("".join(json.dumps(r) + "\n" for r in recs))
+PY25
+}
+for how in drop strip-rc strip-wall; do
+  D=$(mk25 "-$how")
+  edit_end "$D" "$how" || bad "case25 $how could not edit the fixture"
+  printf '{"stale":true}\n' > "$D/receipt.json"
+  python3 "$HERE/score.py" "$D" > "$WORK/case25-$how.out" 2>&1
+  want "case25 $how score rc" 3 "$?"
+  grep -q 'watch-unterminated' "$WORK/case25-$how.out" \
+    && ok "case25 $how typed refusal: watch-unterminated" \
+    || { bad "case25 $how untyped refusal"; cat "$WORK/case25-$how.out"; }
+  [ -e "$D/receipt.json" ] && bad "case25 $how a receipt survived an unterminated stream" \
+    || ok "case25 $how no receipt.json — the stale one was removed too"
+done
+D=$(mk25 -control)
+python3 "$HERE/score.py" "$D" > "$WORK/case25-control.out" 2>&1
+want "case25 control (end intact) score rc" 0 "$?"
+want "case25 control wall_s comes from the end stamp" \
+     "$(jqf "$A1/run.json" wall_s)" "$(jqf "$D/receipt.json" meter.wall_s)"
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
