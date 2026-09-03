@@ -424,6 +424,62 @@
                      :target-unchanged true})))
               paths)))))
 
+;; @spec MCP-OP-EXTRACT-037
+(defn- canonical-workspace-paths
+  "Confine every discovered path through the same gate, and collapse the ones
+  that name the SAME real file, keeping the canonical real path.
+
+  A walk yields locations, and two locations can be one file: `alias_caller.clj
+  -> caller.clj` in one directory is discovered twice, compiled into two caller
+  plans, and written twice. The second write is not merely redundant --
+  `atomic-write!` renames a temporary over the path it was given, so writing to
+  the LINK replaces the link with a regular file and leaves the real caller
+  holding a require for Vars the source no longer has. Deduplicating on the
+  real path makes one plan, writes the file the workspace actually compiles,
+  and leaves the link a link.
+
+  Returns `{:paths [...]}` or one typed refusal."
+  [root paths]
+  (let [real (try {:root (mcp-paths/real-root root)}
+                  (catch Exception error {:error (.getMessage error)}))]
+    (if-let [root-error (:error real)]
+      {:ok false
+       :error (str "The extraction project root could not be resolved: "
+                   root-error)
+       :error-type :project-root-unresolvable
+       :root (str root)
+       :source-unchanged true
+       :target-unchanged true}
+      (let [real-root (:root real)
+            result (reduce
+                     (fn [acc path]
+                       (let [resolved (mcp-paths/resolve-discovered-source-path
+                                        real-root path)]
+                         (cond
+                           (not (:ok resolved))
+                           (reduced
+                             {:ok false
+                              :error (str "A workspace path resolves outside "
+                                          "the extraction project root and was "
+                                          "refused before any write: " path)
+                              :error-type :caller-path-outside-root
+                              :path (str path)
+                              :root (.toString real-root)
+                              :refusal (select-keys resolved
+                                                    [:error_type :error])
+                              :source-unchanged true
+                              :target-unchanged true})
+
+                           (contains? (:seen acc) (:path resolved)) acc
+
+                           :else
+                           (-> acc
+                               (update :seen conj (:path resolved))
+                               (update :paths conj (:path resolved))))))
+                     {:seen #{} :paths []}
+                     paths)]
+        (if (:paths result) {:paths (:paths result)} result)))))
+
 (defn- project-root-for-source
   [file source-paths]
   (let [path (-> file io/file .getCanonicalFile .toPath)
@@ -1726,20 +1782,24 @@
             walked (walk-workspace-sources (io/file project-root)
                                            (mcp-paths/real-root project-root)
                                            cap byte-cap)
-            discovered
-            (->> (:files walked)
-                 (remove #(= source-canonical-path
-                             (.getCanonicalPath (io/file %))))
-                 vec)
             ;; @spec MCP-OP-EXTRACT-024
-            ;; Confine the read set at the moment the walk produces it: this is
-            ;; where a directory symlink turns a path that LOOKS like it is under
-            ;; the root into one that is not.
+            ;; @spec MCP-OP-EXTRACT-037
+            ;; Confine the read set at the moment the walk produces it -- this
+            ;; is where a directory symlink turns a path that LOOKS like it is
+            ;; under the root into one that is not -- and collapse the paths
+            ;; that name one file to that file's canonical real path.
+            confined (when-not (:escape walked)
+                       (canonical-workspace-paths project-root (:files walked)))
             ;; @spec MCP-OP-EXTRACT-035
             escape (or (when-let [escaped (:escape walked)]
                          (link-escape-refusal project-root escaped
                                               (:escape-real walked)))
-                       (confine-workspace-paths project-root discovered))
+                       (when-not (:paths confined) confined))
+            discovered
+            (->> (:paths confined)
+                 (remove #(= source-canonical-path
+                             (.getCanonicalPath (io/file %))))
+                 vec)
             over-cap (:over-cap walked)
             explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
             declared-compile (declared-compile-config project-root)

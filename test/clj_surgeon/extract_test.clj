@@ -1559,9 +1559,41 @@
       (finally (delete-recursive! base)))))
 
 ;; @spec MCP-OP-EXTRACT-024
+;; @spec MCP-OP-EXTRACT-037
 (deftest a-symlinked-caller-file-inside-the-root-is-still-rewired
-  (testing "a link whose real target is inside the root is admitted, and the
-            write replaces the LINK with a regular file, exactly as before"
+  (testing "the reviewer's probe: alias_caller.clj -> caller.clj, both inside
+            the root. Both paths are discovered, they are ONE file, and the
+            rewire lands on the real file with the link left alone"
+    (let [root (create-caller-project!)
+          src (io/file root "src" "app")
+          real (io/file src "caller.clj")
+          link (io/file src "alias_caller.clj")]
+      (try
+        (spit real (str "(ns app.caller\n"
+                        "  (:require\n"
+                        "   [app.core :as core]))\n\n"
+                        "(defn go [x] (core/moved-two x))\n"))
+        (symlink! link "caller.clj")
+        (let [result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})
+              plans (filterv #(str/includes? (str (:file %)) "caller.clj")
+                             (:external-callers-rewired result))]
+          (is (true? (:applied result)) (pr-str (:error result)))
+          (is (= 1 (count plans))
+              (str "two names for one file are one caller plan, not two "
+                   "writes of the same bytes: " (pr-str plans)))
+          (is (str/includes? (slurp real) "[app.moved :as moved]")
+              "the real file is the one that was rewired")
+          (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))
+              (str "and the link survives: writing through it would replace "
+                   "it with a regular file and leave the real caller stale")))
+        (finally (delete-recursive! root)))))
+
+  (testing "a link is admitted, and rewiring it repairs the file the workspace
+            actually compiles, even when only the link was discovered"
     (let [root (create-caller-project!)
           src (io/file root "src" "app")
           hidden (io/file root ".git")
@@ -1573,26 +1605,27 @@
                         "  (:require\n"
                         "   [app.core :as core]))\n\n"
                         "(defn go [x] (core/moved-two x))\n"))
-        (let [before-real (slurp real)]
-          ;; the walk already skips /.git/, so ONLY the link is discovered
-          (symlink! link "../../.git/real_caller.clj")
-          (let [source (io/file src "core.clj")
-                target (io/file src "moved.clj")
-                result (extract/execute! {:file (.getPath source)
-                                          :forms '[moved-one moved-two]
-                                          :to (.getPath target)
-                                          :alias "moved"
-                                          :compile-check false})]
-            (is (nil? (:error-type result))
-                (str "an in-root symlink must not refuse: "
-                     (pr-str (:error result))))
-            (is (true? (:applied result)))
-            (is (str/includes? (slurp link) "[app.moved :as moved]")
-                "the linked caller was rewired")
-            (is (false? (java.nio.file.Files/isSymbolicLink (.toPath link)))
-                "atomic-write! replaces the link itself, never following it")
-            (is (= before-real (slurp real))
-                "so the link's real target is untouched — today's behaviour")))
+        ;; the walk skips /.git/, so ONLY the link is discovered
+        (symlink! link "../../.git/real_caller.clj")
+        (let [source (io/file src "core.clj")
+              target (io/file src "moved.clj")
+              result (extract/execute! {:file (.getPath source)
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath target)
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (nil? (:error-type result))
+              (str "an in-root symlink must not refuse: "
+                   (pr-str (:error result))))
+          (is (true? (:applied result)))
+          (is (str/includes? (slurp link) "[app.moved :as moved]")
+              "the linked caller was rewired")
+          (is (str/includes? (slurp real) "[app.moved :as moved]")
+              (str "through the link, onto the real file: replacing the link "
+                   "with a regular file would leave the real caller requiring "
+                   "vars the source no longer has"))
+          (is (true? (java.nio.file.Files/isSymbolicLink (.toPath link)))
+              "and the link is still a link"))
         (finally (delete-recursive! root))))))
 
 (defn- stub-bin!
