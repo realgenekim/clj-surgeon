@@ -53,6 +53,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-023**: When no `doors` are supplied, clj-surgeon shall not run a declaration pass and shall parse each censused file exactly once; when `doors` are supplied, clj-surgeon shall check the door symbols before the census and confirm that each is defined using the declarations the plan phase already returns; and `phases_elapsed_ms` shall name only phases that ran — `discover` only when a tree was walked, `read` for resolving and reading the scan, and `classify` and `merge` from the plan.
 
+- [x] **MCP-OP-CENSUS-025**: When clj-surgeon censuses an arm, it shall count every call inside that arm whose head is neither a modelled form nor an identity door, shall publish that count with up to five named examples carrying file, line, and arm, and when no site is `:raw` and no site is `:unknown` but such calls exist, its `next_action` shall name them and state that a write behind one of them is not a site; clj-surgeon shall never publish `next_action` `none` for a census that could not see inside the arm's own calls.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |

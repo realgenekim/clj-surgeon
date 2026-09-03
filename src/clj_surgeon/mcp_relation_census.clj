@@ -25,6 +25,7 @@
 (def max-receipt-bytes 4096)
 (def max-listed-sites 12)
 (def max-listed-files 12)
+(def max-listed-unrecognised 5)
 
 ;; @spec MCP-OP-CENSUS-009
 (def census-tool-description
@@ -321,16 +322,25 @@
        (filter #(seq (get receipt % [])))
        first))
 
-(defn- trimmable-key
-  "The next thing to drop: listed evidence first, per-file counts last.
+(defn- trim-once
+  "Drop the cheapest remaining evidence, or nil when nothing is left to drop.
 
-   `by_file` is the receipt's cheapest-to-read summary and the one part a
-   reviewer can act on without the site list, so it is trimmed only once every
-   listed site is gone. It is trimmable all the same: with long project paths a
-   full `by_file` alone overruns the budget."
+   Unmodelled-call examples go first (their count carries the signal), then
+   listed sites, and `by_file` last: it is the summary a reviewer can act on
+   without the site list, but with long project paths it alone overruns the
+   budget, so it must be trimmable too."
   [receipt]
-  (or (longest-list-key receipt)
-      (when (seq (:by_file receipt)) :by_file)))
+  (cond
+    (seq (get-in receipt [:unrecognised_calls :examples]))
+    (update-in receipt [:unrecognised_calls :examples] #(vec (butlast %)))
+
+    (longest-list-key receipt)
+    (update receipt (longest-list-key receipt) #(vec (butlast %)))
+
+    (seq (:by_file receipt))
+    (update receipt :by_file #(dissoc % (last (keys %))))
+
+    :else nil))
 
 (def ^:private receipt-envelope-allowance
   "Bytes the receipt gains after it is bounded: the operation clock's
@@ -347,29 +357,32 @@
   ([receipt] (bound-receipt receipt 0))
   ([receipt reserved]
    (loop [receipt receipt]
-     (if (or (<= (+ (receipt-bytes receipt) reserved) max-receipt-bytes)
-             (nil? (trimmable-key receipt)))
+     (if (<= (+ (receipt-bytes receipt) reserved) max-receipt-bytes)
        receipt
-       (let [k (trimmable-key receipt)]
-         (recur (-> receipt
-                    (update k #(if (map? %)
-                                 (dissoc % (last (keys %)))
-                                 (vec (butlast %))))
-                    (assoc :receipt_truncated true))))))))
+       (if-let [trimmed (trim-once receipt)]
+         (recur (assoc trimmed :receipt_truncated true))
+         receipt)))))
 
 (defn- listed
   [sites class-key]
   (let [matching (filterv #(= class-key (:class %)) sites)]
     (mapv public-site (take max-listed-sites matching))))
 
+;; @spec MCP-OP-CENSUS-025
 (defn- next-action
-  [counts]
+  [counts unrecognised]
   (cond
     (pos? (:raw counts 0))
     "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
 
     (pos? (:unknown counts 0))
     "review the unknown sites: this census version declines to decide them; the reason names why"
+
+    (pos? (:count unrecognised 0))
+    (str "no site is unguarded, but " (:count unrecognised)
+         " call(s) inside arms are not modelled by this census version ("
+         (str/join ", " (take 3 (map :call (:examples unrecognised))))
+         "): a write behind one of them is not a site here")
 
     :else "none"))
 
@@ -378,7 +391,9 @@
   [{:keys [merged pool-size requested-pool phases scanned skipped-outside-root
            reserved]}]
   (let [counts (:counts merged)
-        sites (:all-sites merged)]
+        sites (:all-sites merged)
+        unrecognised (census/unrecognised-summary
+                       (:unrecognised merged) max-listed-unrecognised)]
     (bound-receipt
       (into {}
             (remove (comp nil? val))
@@ -409,7 +424,8 @@
                                              (> requested-pool pool-size))
                                     requested-pool)
              :phases_elapsed_ms phases
-             :next_action (next-action counts)})
+             :unrecognised_calls unrecognised
+             :next_action (next-action counts unrecognised)})
       (or reserved 0))))
 
 ;; ---------------------------------------------------------------------------

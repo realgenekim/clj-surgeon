@@ -407,3 +407,54 @@
     (let [result (run {:files [fixture] :doors ["made-up-door"]})]
       (is (false? (:ok result)))
       (is (= "unknown-door-symbol" (:error_type result))))))
+
+;; @spec MCP-OP-CENSUS-025
+(deftest a-write-behind-an-unmodelled-helper-is-not-a-clean-bill
+  (let [root (temp-dir)]
+    (try
+      (spit-file!
+        (io/file root "src/app/folds.clj")
+        (str "(ns app.folds)\n"
+             "(defn- record-event [state x]\n"
+             "  (update state :xs conj x))\n"
+             "(defmethod fold-event \"e\" [state event]\n"
+             "  (record-event state (:x event)))\n"))
+      (let [result (census-tool/execute-request!
+                     {:project-root (.getPath root)} {})]
+        (is (true? (:ok result)))
+        (is (= 0 (get-in result [:counts :raw]))
+            "the write is behind a helper, so the census finds no site")
+        (is (= 0 (:sites result)))
+        (testing "the receipt says which calls it could not see through"
+          (is (= 1 (get-in result [:unrecognised_calls :count])))
+          (is (= ["record-event"]
+                 (mapv :call (get-in result [:unrecognised_calls :examples]))))
+          (is (= "src/app/folds.clj"
+                 (:file (first (get-in result [:unrecognised_calls :examples])))))
+          (is (= "e" (:arm (first (get-in result [:unrecognised_calls :examples]))))))
+        (testing "next_action refuses to read as a clean bill of health"
+          (is (not= "none" (:next_action result)))
+          (is (str/includes? (:next_action result) "record-event"))
+          (is (str/includes? (:next_action result) "not modelled"))))
+      (finally (delete-tree! root))))
+
+  (testing "modelled vocabulary is not reported as unmodelled"
+    (let [root (temp-dir)]
+      (try
+        (spit-file!
+          (io/file root "src/app/folds.clj")
+          (str "(ns app.folds)\n"
+               "(defmethod fold-event \"e\" [state event]\n"
+               "  (if (get-in state [:seen (:id event)])\n"
+               "    state\n"
+               "    (update-in state [:xs] (fnil conj []) (:x event))))\n"))
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {})]
+          (is (true? (:ok result)))
+          (is (nil? (:unrecognised_calls result))
+              "if, get-in, update-in and fnil are all modelled"))
+        (finally (delete-tree! root)))))
+
+  (testing "a raw site still outranks unmodelled calls in next_action"
+    (let [result (run {:files [fixture]})]
+      (is (str/starts-with? (:next_action result) "review the raw sites")))))

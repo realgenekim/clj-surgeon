@@ -621,6 +621,34 @@
           (assoc base :class :raw))))))
 
 ;; ---------------------------------------------------------------------------
+;; Calls this version does not model
+;; ---------------------------------------------------------------------------
+
+(def ^:private analyzed-heads
+  "Call heads the census reasons about. Everything else inside an arm is a call
+   whose effect on the state this version cannot see."
+  (set/union recognised-containers
+             recognised-test-heads
+             write-heads
+             '#{defmethod fnil}))
+
+;; @spec MCP-OP-CENSUS-025
+(defn- unrecognised-calls
+  "Calls inside one arm whose head this census version does not model.
+
+   The census reports `raw 0` when it finds no site at all, and a write hidden
+   behind an ordinary helper produces exactly that: no site, no raw, a clean
+   next_action. These are the calls that could be hiding one."
+  [arm-node event-type doors]
+  (into []
+        (keep (fn [n]
+                (when-let [h (head-name n)]
+                  (when-not (or (contains? analyzed-heads h)
+                                (contains? doors h))
+                    {:call (str h) :line (line-of n) :arm event-type}))))
+        (node-seq arm-node)))
+
+;; ---------------------------------------------------------------------------
 ;; File census
 ;; ---------------------------------------------------------------------------
 
@@ -670,13 +698,21 @@
                                    (mapcat #(collect-sites % doors))
                                    (map #(assoc (classify-site % arm) :file file))))))
                         arm-nodes)
-            outside (reduce + 0 (map #(count (collect-sites % doors)) other-nodes))]
+            outside (reduce + 0 (map #(count (collect-sites % doors)) other-nodes))
+            unmodelled (into []
+                             (mapcat
+                               (fn [an]
+                                 (map #(assoc % :file file)
+                                      (unrecognised-calls
+                                        an (:event-type (arm-of an)) doors))))
+                             arm-nodes)]
         {:ok true
          :file file
          :arms (count arm-nodes)
          :arm-types (mapv #(:event-type (arm-of %)) arm-nodes)
          :declared (declared-names forms)
          :sites sites
+         :unrecognised unmodelled
          :outside-arms outside
          :counts (merge empty-counts (frequencies (map :class sites)))}))))
 
@@ -729,6 +765,29 @@
     #{}
     doors))
 
+;; @spec MCP-OP-CENSUS-025
+(defn unrecognised-summary
+  "The count of unmodelled calls inside arms, with up to `limit` named examples.
+
+   Shared by both entrances so the tool and the CLI report the same thing."
+  [unrecognised limit]
+  (when (seq unrecognised)
+    {:count (count unrecognised)
+     :examples (->> (sort-by (juxt :file :line) unrecognised)
+                    (reduce (fn [{:keys [seen out] :as acc} call]
+                              (cond
+                                (>= (count out) limit)
+                                (reduced acc)
+
+                                (contains? seen (:call call))
+                                acc
+
+                                :else {:seen (conj seen (:call call))
+                                       :out (conj out call)}))
+                            {:seen #{} :out []})
+                    :out
+                    (mapv #(select-keys % [:call :file :line :arm])))}))
+
 (defn merge-results
   "Merge per-file results, re-keyed by path. Order is by path, always."
   [results]
@@ -743,6 +802,7 @@
      :outside-arms (reduce + 0 (map :outside-arms ordered))
      :counts (apply merge-with + empty-counts (map :counts ordered))
      :all-sites (vec (mapcat :sites ordered))
+     :unrecognised (vec (mapcat :unrecognised ordered))
      :declared (reduce into #{} (map :declared ordered))}))
 
 ;; @spec MCP-OP-CENSUS-012

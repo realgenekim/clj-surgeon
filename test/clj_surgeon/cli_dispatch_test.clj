@@ -387,3 +387,28 @@
           result (edn/read-string out)]
       (is (= 1 (:pool-size result)))
       (is (nil? (:pool-size-requested result))))))
+
+;; @spec MCP-OP-CENSUS-025
+(deftest cli-relation-census-names-the-calls-it-cannot-see-through
+  (let [dir (java.io.File. (System/getProperty "java.io.tmpdir")
+                           (str "clj-surgeon-census-cli-" (System/nanoTime)))
+        folds (io/file dir "src/app/folds.clj")]
+    (try
+      (.mkdirs (.getParentFile folds))
+      (spit folds (str "(ns app.folds)\n"
+                       "(defn- record-event [state x]\n"
+                       "  (update state :xs conj x))\n"
+                       "(defmethod fold-event \"e\" [state event]\n"
+                       "  (record-event state (:x event)))\n"))
+      (let [{:keys [exit out]} (run-cli ":op" "relation-census" ":dir" (.getPath dir))
+            result (edn/read-string out)]
+        (is (zero? exit))
+        (is (= 0 (get-in result [:counts :raw])))
+        (is (= 1 (get-in result [:unrecognised-calls :count])))
+        (is (= ["record-event"]
+               (mapv :call (get-in result [:unrecognised-calls :examples]))))
+        (is (str/includes? (:next-action result) "record-event"))
+        (is (not (contains? result :unrecognised))
+            "the raw per-call vector must not leak into the CLI receipt"))
+      (finally
+        (doseq [f (reverse (file-seq dir))] (.delete f))))))

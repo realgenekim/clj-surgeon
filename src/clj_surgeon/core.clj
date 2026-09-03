@@ -563,23 +563,32 @@
                          {:inputs inputs
                           :doors doors
                           :map-fn map-fn})]
-        (if-not (:ok result)
-          result
-          (-> result
-              (dissoc :all-sites :declared)
-              (assoc :pool-size pool-size
-                     :pool-size-requested (when (and threads (> threads pool-size))
-                                            threads)
-                     :raw (filterv #(= :raw (:class %)) (:all-sites result))
-                     :guarded (filterv #(= :guarded (:class %)) (:all-sites result))
-                     :unknown (filterv #(= :unknown (:class %)) (:all-sites result))
-                     :next-action
-                     (cond
-                       (pos? (get-in result [:counts :raw] 0))
-                       "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
-                       (pos? (get-in result [:counts :unknown] 0))
-                       "review the unknown sites: this census version declines to decide them"
-                       :else "none"))))))))))
+            (if-not (:ok result)
+              result
+              (let [unrecognised (relation-census/unrecognised-summary
+                                   (:unrecognised result) 5)]
+                (-> result
+                    (dissoc :all-sites :declared :unrecognised)
+                    (assoc :pool-size pool-size
+                           :pool-size-requested (when (and threads
+                                                          (> threads pool-size))
+                                                  threads)
+                           :unrecognised-calls unrecognised
+                           :raw (filterv #(= :raw (:class %)) (:all-sites result))
+                           :guarded (filterv #(= :guarded (:class %)) (:all-sites result))
+                           :unknown (filterv #(= :unknown (:class %)) (:all-sites result))
+                           :next-action
+                           (cond
+                             (pos? (get-in result [:counts :raw] 0))
+                             "review the raw sites: each is a collection write in a fold arm with no dominating recognised guard"
+                             (pos? (get-in result [:counts :unknown] 0))
+                             "review the unknown sites: this census version declines to decide them"
+                             (pos? (:count unrecognised 0))
+                             (str "no site is unguarded, but " (:count unrecognised)
+                                  " call(s) inside arms are not modelled by this census version ("
+                                  (str/join ", " (take 3 (map :call (:examples unrecognised))))
+                                  "): a write behind one of them is not a site here")
+                             :else "none")))))))))))
 
 (defn run-ls-tree [{:keys [dir format grep] :as _opts}]
   (when-not dir
