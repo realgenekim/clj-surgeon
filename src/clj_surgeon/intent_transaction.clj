@@ -2172,6 +2172,25 @@
                [file result-hash]))
         file-plans))
 
+(def ^:dynamic *on-write-boundary*
+  "Called once, immediately before a transaction writes its first source byte.
+
+  A DYNAMIC binding rather than an extra argument, deliberately. `change!` has
+  exactly one runtime path — the single-arity `commit-compiled!` — and that is
+  a ratchet the architecture tests hold: threading this through the injected io
+  map would fork the public commit onto a second arity, and hoisting the io map
+  out of `commit-compiled!` to share it would move the raw filesystem effects
+  out of the one form whose effect inventory is bounded. Nothing here is
+  asynchronous, so a thread-local binding is exactly scoped to the commit it
+  wraps.
+
+  It exists because heap exhaustion has to be answerable: everything before
+  this point — spec validation, the frozen read, compilation, receipt staging,
+  the whole-file hash preflight — leaves the tree byte-identical, and a caller
+  that reports `mutation_attempted` from its own call site cannot tell the
+  difference."
+  nil)
+
 (defn commit-compiled!
   "Commit a successfully compiled transaction through injected source I/O.
    Ordinary handled failures restore files that still equal either the original
@@ -2179,7 +2198,15 @@
 
    A compiled transaction may also carry :created-files, which are written only
    after every edit has committed and read back, and :deleted-files, which an
-   inverse transaction uses to retire what a forward creation made."
+   inverse transaction uses to retire what a forward creation made.
+
+   `*on-write-boundary*`, when bound, is called exactly once immediately before
+   the first source byte is written and after every read-only preflight has
+   passed. It is the transaction's own write boundary: a caller that has to tell
+   an operator whether its tree may have been mutated reads it from here rather
+   than from the entrance of the call, which precedes spec validation, the
+   frozen read, compilation, receipt staging, and the whole-file hash
+   preflight."
   ([compiled]
    (commit-compiled! compiled
                      {:read-source slurp
@@ -2217,6 +2244,10 @@
              (refuse! :target-already-exists
                       (str "Creation target already exists: " file)
                       {:file file :path file})))
+         ;; the write boundary: every refusal above this line leaves the tree
+         ;; exactly as the caller left it, and every byte written is below it
+         (when-let [notify *on-write-boundary*]
+           (notify))
          (try
            (execute-writes! read-source write-source! futures file-plans)
            (execute-creations! read-source (or create-source! write-source!)
@@ -2691,11 +2722,11 @@
   "Compile, commit, verify, and publish one durable inverse receipt."
   [context
    {:keys [spec receipt-out prepare-compiled! prepare-spec
-           write-refusal-context]
+           write-refusal-context on-write-boundary]
     :as opts}]
   (try
     (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
-                                       :write-refusal-context}
+                                       :write-refusal-context :on-write-boundary}
                                      (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
@@ -2748,7 +2779,8 @@
                   :receipt-stage capabilities compiled nil stage-error)
                 (let [staged (:staged staged-result)]
                   (try
-                    (let [commit (commit-compiled! compiled)]
+                    (let [commit (binding [*on-write-boundary* on-write-boundary]
+                                   (commit-compiled! compiled))]
                       (if (:error commit)
                         (observe-change-result
                           :commit capabilities compiled nil commit)

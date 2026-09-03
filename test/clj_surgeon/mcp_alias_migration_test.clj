@@ -89,6 +89,14 @@
      (alias-migration/execute! (config workspace receipt-dir)
                                (request workspace overrides)))))
 
+(defn- owned-detail!
+  "One detail document written by the production writer, stamped `stamp`."
+  [workspace stamp]
+  (let [relative (alias-migration/write-details! (.toPath workspace) {:files []})
+        file (io/file workspace relative)]
+    (.setLastModified file stamp)
+    file))
+
 (defn- babashka-available?
   []
   (try
@@ -1303,16 +1311,20 @@
     (.mkdirs details)
     (try
       ;; thirty older runs, each with a distinct and strictly older timestamp.
-      ;; They carry the detail writer's own name prefix, because that prefix is
-      ;; now what retention recognises as its own to delete.
-      (dotimes [index 30]
-        (let [stale (io/file details (str "detail-old-" index ".edn"))]
-          (spit stale "{:version 1 :files []}")
-          (.setLastModified stale (- (System/currentTimeMillis)
-                                     (* 1000 (- 60 index))))))
-      (let [result (execute! workspace)
+      ;; They are written by the production writer, because a document is only
+      ;; retention's to delete when this writer can prove it wrote it: the name
+      ;; prefix says a file COULD be ours and is not proof of ownership.
+      (let [old (mapv (fn [index]
+                        (owned-detail! workspace
+                                       (- (System/currentTimeMillis)
+                                          (* 1000 (- 60 index)))))
+                      (range 30))
+            result (execute! workspace)
+            manifest-name @(ns-resolve 'clj-surgeon.mcp-alias-migration
+                                       'detail-manifest-name)
             remaining (->> (.listFiles details)
                            (filter #(str/ends-with? (.getName %) ".edn"))
+                           (remove #(= manifest-name (.getName %)))
                            (mapv #(.getName %)))]
         (is (:ok result) (pr-str result))
         (is (= alias-migration/max-detail-files (count remaining))
@@ -1325,8 +1337,8 @@
                                                          (:details_path result)))))))
                  "src/acid/fanout/t01.clj")))
         (testing "the oldest runs are the ones dropped"
-          (is (not (contains? (set remaining) "detail-old-0.edn")))
-          (is (contains? (set remaining) "detail-old-29.edn"))))
+          (is (not (contains? (set remaining) (.getName ^java.io.File (first old)))))
+          (is (contains? (set remaining) (.getName ^java.io.File (last old))))))
       (finally
         (delete-tree! workspace)))))
 
@@ -1336,15 +1348,14 @@
         receipt-dir (io/file workspace "receipts")
         details (io/file workspace ".clj-surgeon" "alias-migration")
         ;; twenty peers, each holding a details_path its own receipt published
-        ;; a moment ago and its own caller may not have read yet. A peer's
-        ;; document IS a detail document, so it stays within retention's reach
-        ;; even now that retention deletes nothing else.
+        ;; a moment ago and its own caller may not have read yet. They are real
+        ;; runs of this writer, recorded in the manifest every run shares, so a
+        ;; peer's document stays within retention's reach even now that
+        ;; retention deletes nothing it cannot prove it wrote.
         peers (mapv (fn [index]
-                      (let [peer (io/file details
-                                          (str "detail-peer-" index ".edn"))]
-                        (.mkdirs details)
-                        (spit peer "{:version 1 :files []}")
-                        peer))
+                      (owned-detail! workspace
+                                     (- (System/currentTimeMillis)
+                                        (* 1000 (- 60 index)))))
                     (range 20))]
     (.mkdirs receipt-dir)
     (try
@@ -1426,14 +1437,6 @@
                              "detail-0dd1.edn")))))
       (finally
         (delete-tree! workspace)))))
-
-(defn- owned-detail!
-  "One detail document written by the production writer, stamped `stamp`."
-  [workspace stamp]
-  (let [relative (alias-migration/write-details! (.toPath workspace) {:files []})
-        file (io/file workspace relative)]
-    (.setLastModified file stamp)
-    file))
 
 ;; @spec MCP-OP-ALIAS-054
 (deftest detail-pruning-deletes-only-documents-it-can-prove-it-wrote

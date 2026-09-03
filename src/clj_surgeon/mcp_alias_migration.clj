@@ -12,6 +12,7 @@
    [clj-surgeon.intent-transaction :as transaction]
    [clj-surgeon.mcp-change-buffer :as change-buffer]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.string :as str])
@@ -689,18 +690,25 @@
 
   Every call writes one per-file detail document under
   `.clj-surgeon/alias-migration/`. They are diagnostic, not transactional — the
-  undo receipt is the durable artefact — so the directory retains the most
-  recent twenty, the run's own document always among them, and deletes the rest."
+  undo receipt is the durable artefact — so the writer retains the most recent
+  twenty OF ITS OWN, the run's own document always among them, and deletes the
+  rest. The bound counts only documents this writer can prove it wrote; a
+  directory a caller has filled with files of its own can hold any number of
+  them and this writer will not touch one."
   20)
 
 ;; @spec MCP-OP-ALIAS-052
 (def details-retention
   "How durable a published `details_path` is, in one word the receipt carries.
 
-  BEST-EFFORT, and deliberately so. The bound above is per directory, not per
+  BEST-EFFORT, and deliberately so. The bound above is per writer, not per
   caller: twenty concurrent migrations in one workspace publish twenty-one
-  documents between them, and the twenty-first prunes a path a peer's receipt
-  named seconds earlier. Each run protects its OWN document and nothing else.
+  documents between them, all of them recorded in the writer's shared manifest,
+  and the twenty-first prunes a path a peer's receipt named seconds earlier.
+  Each run protects its OWN document and nothing else. The bound is best-effort
+  in the same breath: two runs that read the manifest at once and write it back
+  in turn lose one another's entries, and a document dropped from the manifest
+  is never deleted again, so the directory can hold more than the bound.
 
   Protecting peers was considered and rejected. An index of recently published
   paths is read-modify-written by every call, so it carries the identical race
@@ -730,17 +738,128 @@
 
 ;; @spec MCP-OP-ALIAS-054
 (defn detail-document-name?
-  "Whether one file name is a detail document this writer produced."
+  "Whether one file name is inside the detail writer's own name namespace.
+
+  A NAME test, and only that. It answers the question the receipt/detail
+  collision guard asks — could this name be one the detail writer generates —
+  and it is deliberately NOT the ownership test: a caller may create a file
+  called `detail-anything.edn` for its own reasons, and a name it happens to
+  share with us is not consent to delete it. See `detail-document-owned?`."
   [^String file-name]
   (boolean (and file-name
                 (str/starts-with? file-name detail-document-prefix)
                 (str/ends-with? file-name ".edn"))))
 
 ;; @spec MCP-OP-ALIAS-054
+(def detail-writer-marker
+  "The value every detail document carries under a top-level `:writer` key.
+
+  Prefix matching is not proof of ownership. The prefix says a name COULD be
+  ours; this marker, written inside the document by the only code that writes
+  one, says it IS. Retention deletes a file only when the marker is in it and
+  the name is in the manifest below — two independent facts, both produced by
+  this writer, neither of them a guess about a stranger's file."
+  "clj-surgeon.alias-migration")
+
+;; @spec MCP-OP-ALIAS-054
+(def detail-manifest-name
+  "The manifest naming the detail documents this writer has written.
+
+  It lives in the detail directory, inside the writer's own name namespace so
+  that the collision guard covers it too, and it is the writer's record of what
+  it owns. A document absent from it is never a pruning candidate however its
+  name reads, which is what makes a caller's own `detail-*.edn` files safe."
+  "detail-manifest.edn")
+
+(def ^:private max-detail-document-bytes
+  "How large a document retention will read to check its ownership marker.
+
+  Reading is bounded because an unbounded read on the pruning path is a heap
+  risk in the one place that must not fail. A document past the bound is not
+  proved ours, so it is not deleted — the bound fails toward keeping files."
+  (* 8 1024 1024))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- detail-manifest-entry?
+  "Whether one manifest entry names a file this writer could have written.
+
+  The manifest is a file on disk and therefore editable; an entry is only ever
+  a bare document name in this directory, never a path, never the manifest."
+  [entry]
+  (boolean (and (string? entry)
+                (detail-document-name? entry)
+                (not= detail-manifest-name entry)
+                (= entry (.getName (io/file ^String entry))))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- detail-document-owned?
+  "Whether one file on disk carries this writer's ownership marker."
+  [^java.io.File file]
+  (boolean
+    (and (.isFile file)
+         (<= (.length file) max-detail-document-bytes)
+         (try
+           (= detail-writer-marker (:writer (edn/read-string (slurp file))))
+           (catch Exception _ false)))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- read-detail-manifest
+  "The document names this writer has recorded, or none."
+  [^java.io.File directory]
+  (let [file (io/file directory detail-manifest-name)]
+    (if-not (and (.isFile file) (<= (.length file) max-detail-document-bytes))
+      []
+      (try
+        (let [document (edn/read-string (slurp file))]
+          (if (= detail-writer-marker (:writer document))
+            (into [] (comp (filter detail-manifest-entry?) (distinct))
+                  (:documents document))
+            []))
+        (catch Exception _ [])))))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- write-detail-manifest!
+  "Record exactly the documents this writer still owns in this directory."
+  [^java.io.File directory names]
+  (file-ops/atomic-write!
+    (.getPath (io/file directory detail-manifest-name))
+    (pr-str {:version 1
+             :writer detail-writer-marker
+             :documents (vec (sort names))})))
+
+;; @spec MCP-OP-ALIAS-054
 (defn detail-directory
   "The directory `alias_migration` publishes its per-run detail documents in."
   ^java.io.File [project-root]
   (io/file (io/file (str project-root)) ".clj-surgeon" "alias-migration"))
+
+;; @spec MCP-OP-ALIAS-054
+(defn- resolved-path
+  "One path's canonical identity, resolving symlinks, creating nothing.
+
+  Textual absolute-path equality is not directory identity: a symlink and the
+  directory it points at are one directory and compare unequal as strings, so a
+  guard written on strings misses exactly the aliasing it exists to catch.
+  `toRealPath` needs the path to exist, and a receipt directory the caller has
+  configured but nothing has created yet does not — so the nearest EXISTING
+  ancestor is resolved and the remainder appended to it. Nothing here calls
+  mkdirs: the guard has to be decidable before the first write, not after it."
+  ^Path [path]
+  (let [absolute (.toPath (.getAbsoluteFile (io/file (str path))))]
+    (loop [candidate absolute
+           remainder []]
+      (if (nil? candidate)
+        (.normalize absolute)
+        (let [real (try
+                     (when (Files/exists candidate (make-array LinkOption 0))
+                       (.toRealPath candidate (make-array LinkOption 0)))
+                     (catch java.io.IOException _ nil)
+                     (catch SecurityException _ nil))]
+          (if real
+            (reduce (fn [^Path acc ^Path segment] (.resolve acc segment))
+                    real remainder)
+            (recur (.getParent candidate)
+                   (into [(.getFileName candidate)] remainder))))))))
 
 ;; @spec MCP-OP-ALIAS-054
 (defn receipt-detail-collision?
@@ -751,40 +870,66 @@
   keeps the namespaces disjoint, so this predicate is false for every name the
   two actually generate. It exists so that a future change to either naming
   scheme fails as a typed refusal at the boundary rather than as a silently
-  deleted undo receipt in the field."
+  deleted undo receipt in the field.
+
+  Directory sameness is CANONICAL, not textual, so a receipt directory that is
+  a symlink to the detail directory is the same directory here — and the whole
+  predicate is answerable without creating either one, which is what lets the
+  refusal fire before any mkdirs."
   [project-root receipt-dir ^String receipt-name]
   (boolean (and (detail-document-name? receipt-name)
-                (= (.getAbsoluteFile (io/file (str receipt-dir)))
-                   (.getAbsoluteFile (detail-directory project-root))))))
+                (= (resolved-path receipt-dir)
+                   (resolved-path (detail-directory project-root))))))
 
 ;; @spec MCP-OP-ALIAS-045
+;; @spec MCP-OP-ALIAS-054
 (defn- prune-details!
-  "Delete all but the most recent `max-detail-files` detail documents.
+  "Delete all but the most recent `max-detail-files` documents THIS WRITER WROTE.
 
   `keep` is the document this run just wrote; it is retained regardless of how
   the filesystem timestamps compare, so a run can never discard its own
-  receipt's `details_path`. Only documents this writer produced are candidates
-  at all — files matching `detail-document-name?` directly in the directory —
-  never the `retired/` subtree, which is transactional, and never a document
-  written by anything else. A caller may point `receipt-dir` at this same
-  directory; an undo receipt sitting here is not retention's to delete, and
-  deleting one would publish a committed receipt naming an inverse that no
-  longer exists.
+  receipt's `details_path`.
 
-  It protects no PEER's detail document. A concurrent peer's freshly published
-  path is an ordinary candidate here and can be deleted; `details-retention`
-  says why that is the chosen behaviour and the receipt publishes the word."
+  A candidate has to be PROVED ours, twice over: its name is in the manifest
+  this writer maintains in the directory, AND the file on disk carries
+  `detail-writer-marker` under a top-level `:writer` key. A name prefix alone is
+  not proof of ownership — a caller is free to keep its own `detail-*.edn`
+  files here, and a name we happen to share with it is not consent to delete
+  it. So a manifest entry whose file lacks the marker is left alone (the file
+  is no longer the one we wrote), and a marked file we never recorded is left
+  alone too (we cannot show we wrote it). The directory is never listed for
+  candidates; the manifest is the only source of them.
+
+  Never the `retired/` subtree, which is transactional, and never the manifest
+  itself. A caller may point `receipt-dir` at this same directory; an undo
+  receipt sitting here is not retention's to delete, and deleting one would
+  publish a committed receipt naming an inverse that no longer exists.
+
+  It protects no PEER's detail document. Peers share this manifest, so a
+  concurrent peer's freshly published path is an ordinary candidate here and
+  can be deleted; `details-retention` says why that is the chosen behaviour and
+  the receipt publishes the word."
   [^java.io.File directory ^String keep]
-  (let [candidates
-        (->> (or (.listFiles directory) (make-array java.io.File 0))
-             (filter (fn [^java.io.File file]
-                       (and (.isFile file)
-                            (detail-document-name? (.getName file))
-                            (not= keep (.getName file)))))
-             (sort-by (juxt (fn [^java.io.File file] (- (.lastModified file)))
-                            (fn [^java.io.File file] (.getName file)))))]
-    (doseq [^java.io.File stale (drop (dec max-detail-files) candidates)]
-      (.delete stale))))
+  (let [owned (->> (conj (vec (remove #{keep} (read-detail-manifest directory)))
+                         keep)
+                   (map (fn [^String name] (io/file directory name)))
+                   (filterv detail-document-owned?))
+        candidates (->> owned
+                        (remove (fn [^java.io.File file]
+                                  (= keep (.getName file))))
+                        (sort-by (juxt (fn [^java.io.File file]
+                                         (- (.lastModified file)))
+                                       (fn [^java.io.File file]
+                                         (.getName file)))))
+        stale (vec (drop (dec max-detail-files) candidates))
+        deleted (into #{} (map (fn [^java.io.File file] (.getName file))) stale)]
+    (doseq [^java.io.File file stale]
+      (.delete file))
+    (write-detail-manifest!
+      directory
+      (into [] (comp (map (fn [^java.io.File file] (.getName file)))
+                     (remove deleted))
+            owned))))
 
 ;; @spec MCP-OP-ALIAS-020
 ;; @spec MCP-OP-ALIAS-045
@@ -798,6 +943,12 @@
     (file-ops/atomic-write!
       (.getPath target)
       (pr-str (cond-> {:version 1
+                       ;; @spec MCP-OP-ALIAS-054
+                       ;; the ownership marker retention reads back: written by
+                       ;; the only code that writes one of these documents
+                       :writer detail-writer-marker
+                       :run-id (subs file-name (count detail-document-prefix)
+                                     (- (count file-name) 4))
                        :files (mapv (fn [entry]
                                       (-> entry
                                           (select-keys [:file :alias :collided :sites
@@ -1009,7 +1160,9 @@
   ([config project-root spec files] (commit! config project-root spec files nil))
   ([{:keys [verification-profiles receipt-dir verify attempted]}
     project-root spec files retire]
-  (.mkdirs (io/file receipt-dir))
+  ;; the receipt directory is NOT created here. Every refusal below decides on
+  ;; paths alone, and a refusal that first mkdirs the very directory it is
+  ;; refusing to write in has already mutated the tree it reports untouched.
   (let [retire-source (when retire (resolve-retire-source project-root retire))
         receipt-name (new-receipt-name)]
   (cond
@@ -1037,7 +1190,8 @@
      :source-unchanged true}
 
     :else
-    (let [profile (selected-profile verification-profiles verify)
+    (let [_ (.mkdirs (io/file receipt-dir))
+        profile (selected-profile verification-profiles verify)
         baseline (when profile
                    (change-buffer/capture-verification-baseline!
                      project-root profile verification-profiles files))]
@@ -1047,14 +1201,20 @@
        :verification baseline
        :source-unchanged true}
       (let [;; @spec MCP-OP-ALIAS-047
-            ;; the transaction kernel's entrance, and the first write of the
-            ;; whole call: everything above this line — the retire resolution,
-            ;; the profile check, the baseline capture — can exhaust the heap
-            ;; with the tree still exactly as the caller left it
-            _ (when attempted (vreset! attempted true))
+            ;; the marker is set by the transaction's OWN write boundary, not
+            ;; by this call site. Entering `execute-mcp-change!` is not a
+            ;; mutation: spec validation, the frozen read, compilation, receipt
+            ;; staging and the whole-file hash preflight all run inside it
+            ;; before a source byte is written, and heap exhaustion in any of
+            ;; them leaves the tree exactly as the caller left it — as do the
+            ;; retire resolution, the profile check and the baseline capture
+            ;; above. The kernel calls this back immediately before its first
+            ;; write, which is the only moment at which the answer changes.
             result (transaction/execute-mcp-change!
                      {:spec spec
                       :receipt-out (str (io/file receipt-dir receipt-name))
+                      :on-write-boundary (when attempted
+                                           #(vreset! attempted true))
                       :write-refusal-context {:operation "alias_migration"
                                               :project-root project-root}})]
         (if (:error result)
