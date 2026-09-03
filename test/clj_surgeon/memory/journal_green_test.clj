@@ -10,7 +10,7 @@
    workload - including the journal quota, which is derived as twice the
    reader's aggregate ceiling precisely so that a scope the read path accepts
    is never one the journal refuses to stage. Before that derivation this arm
-   had to raise the quota to 2 GiB to run, and "the defaults admit it" was a
+   had to raise the quota to 2 GiB to run, and `the defaults admit it` was a
    claim nothing tested.
 
    The pass lines are the hard ones. Sampled peak used heap is reported as a
