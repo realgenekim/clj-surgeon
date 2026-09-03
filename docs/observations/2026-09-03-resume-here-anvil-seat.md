@@ -318,3 +318,8 @@ Next memory leaf after MEM-003 lands: MEM-004 (workspace-sources read-all stream
 ## RESUME DELTA (fifteenth refresh; commit time is the timestamp)
 GO (ten) unchanged. Live: Sol census round 8 (dae5d9c), Sol apparatus round 5 (e9a40dc), Sol fold-diff round 6 at the tip (66325423; production GO stays at 347fe6d3); builders MEM-003 round 2 (~/src/clj-surgeon-stream), kernel round 4 (~/src/clj-surgeon-txn: in-JVM mutex before the file lock, per-thread re-entrancy, atomic stale-lock break, finish! on every exception path).
 Memory added: jvm-file-locks-are-per-process (bash flock does not block FileChannel.lock; second thread → OverlappingFileLockException).
+
+## RESUME DELTA (sixteenth refresh; commit time is the timestamp)
+GO (ten) unchanged. Live: Sol fold-diff round 6 at the tip (66325423); builders kernel round 4 (~/src/clj-surgeon-txn), apparatus round 6 (~/src/clj-surgeon-arms), census round 9 (~/src/clj-surgeon-census: validation before routing), MEM-003 round 3 (~/src/clj-surgeon-stream: content-addressed cursor id + snapshot reuse; then Sol reviews the cursor surface).
+Follow-ups since the fifteenth refresh: inb-276378 (MEM-003 cursor identity bead).
+Memory added: cursor-mac-needs-an-unpublished-secret.
