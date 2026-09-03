@@ -498,6 +498,12 @@
       (assoc :required (:required result))
       (contains? result :limit)
       (assoc :limit (:limit result))
+      ;; A refusal that knows a better next action than "correct the request"
+      ;; says so; the base value stays the default for everything else.
+      (contains? result :next-action)
+      (assoc :next_action (:next-action result))
+      (contains? result :remedy)
+      (assoc :remedy (:remedy result))
       (contains? result :next-call)
       (assoc :next_call (json-data (:next-call result))))))
 
@@ -706,15 +712,30 @@
      :next-call (study-next-call request
                                  {:form "REPLACE-WITH-ONE-EXACT-OWNER"})}))
 
+;; @spec MCP-OP-STUDY-007
 (defn- study-oversized
+  "One atomic result that cannot be split refuses rather than half-serialized.
+
+  A continuation is served only while raising `limit` can still advance.
+  `(min study-max-limit (max required limit))` EQUALS `limit` at the ceiling,
+  so the old unconditional next_call handed back the exact call just made —
+  the loop MCP-OP-STUDY-007 forbids. Mirrors `study-truncation`: at the
+  ceiling, a narrower scope is a caller judgment, so the receipt names it
+  instead of serving an executable call."
   [request required limit]
-  {:error "One atomic study result exceeds the receipt limit"
-   :error-type :study-output-limit
-   :required required
-   :limit limit
-   :next-call (study-next-call
-                request
-                {:limit (min study-max-limit (max required limit))})})
+  (let [raised (min study-max-limit (max required limit))
+        raisable? (> raised limit)]
+    (cond-> {:error "One atomic study result exceeds the receipt limit"
+             :error-type :study-output-limit
+             :required required
+             :limit limit
+             :next-action (if raisable?
+                            "raise_limit_or_narrow_scope"
+                            "narrow_scope")
+             :remedy (if raisable?
+                       "Replay next_call to widen the receipt, or narrow the request."
+                       "The receipt is already at the maximum limit; request one exact form instead.")}
+      raisable? (assoc :next-call (study-next-call request {:limit raised})))))
 
 (defn- deps-result
   [request snapshot]

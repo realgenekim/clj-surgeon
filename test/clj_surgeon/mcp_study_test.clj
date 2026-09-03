@@ -429,6 +429,23 @@
       (is (pos? (:required response)))
       (is (= "inspect_clojure" (get-in response [:next_call :tool])))))
 
+  (testing "an oversized atomic result at the ceiling serves no call that cannot advance"
+    ;; `study-oversized` computed its continuation as
+    ;; `(min study-max-limit (max required limit))`, which EQUALS limit at the
+    ;; ceiling: the receipt handed back the exact call just made. No single
+    ;; file in this repository has an ls-deps tree over 16384 characters, so
+    ;; the ceiling is lowered to reach the branch on real bytes.
+    (with-redefs [inspect/study-max-limit 50]
+      (let [response (one "ls-deps" {"form" "extraction-closure" "limit" 50})]
+        (is (false? (:ok response)))
+        (is (= "study-output-limit" (:error_type response)))
+        (is (= 50 (:limit response)))
+        (is (pos? (:required response)))
+        (is (nil? (:next_call response))
+            "an executable call identical to the one just made is a loop")
+        (is (= "narrow_scope" (:next_action response)))
+        (is (string? (:remedy response))))))
+
   (testing "ls-tree truncates whole files and stays a valid tree"
     (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "text"
                          "limit" 700})]
