@@ -1207,6 +1207,44 @@ grep -q 'boot_id' "$HERE/run-arm.sh" \
   && ok "case29d run-arm.sh records the boot id with the pid it spawned" \
   || bad "case29d run-arm.sh records a pid whose identity cannot survive a reboot"
 
+echo "== case 30: every identity component is validated before it becomes a path segment =="
+# Sol round two, item 9: --root is checked on its resolved path, and then exp/rung/arm/
+# slot are interpolated into the arm directory unvalidated.  Sol's `--exp
+# ../component-escape` created a directory OUTSIDE the runner root the caller had just
+# been checked for.  Confining the root and then building the path out of unchecked
+# caller strings confines nothing.
+ESC30="component-escape-30"
+for comp in exp rung slot; do
+  for badv in "../$ESC30" ".." "a/b" "a b" "0123456789012345678901234567890123456789X"; do
+    args=(--root "$WORK" --exp st --rung P --arm N --slot 30 --driver fake --dry-run
+          --prompt "$HERE/prompts/E3-P-N.md")
+    case "$comp" in
+      exp)  args=(--root "$WORK" --exp "$badv" --rung P --arm N --slot 30 --driver fake --dry-run --prompt "$HERE/prompts/E3-P-N.md");;
+      rung) args=(--root "$WORK" --exp st --rung "$badv" --arm N --slot 30 --driver fake --dry-run --prompt "$HERE/prompts/E3-P-N.md");;
+      slot) args=(--root "$WORK" --exp st --rung P --arm N --slot "$badv" --driver fake --dry-run --prompt "$HERE/prompts/E3-P-N.md");;
+    esac
+    bash "$HERE/run-arm.sh" "${args[@]}" > "$WORK/case30.out" 2>&1
+    rc30=$?
+    if [ "$rc30" -eq 2 ] && grep -q 'IDENTITY-REFUSED' "$WORK/case30.out"; then
+      ok "case30 --$comp '$badv' refused: $(grep -m1 -o 'IDENTITY-REFUSED.*' "$WORK/case30.out" | cut -c1-90)"
+    else
+      bad "case30 --$comp '$badv' was accepted (rc $rc30)"; head -2 "$WORK/case30.out"
+    fi
+  done
+done
+n30=$(ls -a /home/forge/tmp/arms 2>/dev/null | grep -c "$ESC30")
+want "case30 directories created outside the caller's runner root" 0 "$n30"
+
+# the control: a legal identity still plans an arm dir INSIDE the caller's root
+bash "$HERE/run-arm.sh" --root "$WORK" --exp st --rung P --arm N --slot 30 \
+     --driver fake --dry-run --prompt "$HERE/prompts/E3-P-N.md" > "$WORK/case30ok.out" 2>&1
+want "case30 control rc" 0 "$?"
+plan30=$(sed -n 's/^PLAN arm=\([^ ]*\).*/\1/p' "$WORK/case30ok.out" | head -n1)
+case "$plan30" in
+  "$WORK"/st-P-N-30) ok "case30 the planned arm dir is inside the runner root: $plan30";;
+  *) bad "case30 unexpected planned arm dir: $plan30";;
+esac
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
