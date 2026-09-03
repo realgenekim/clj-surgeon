@@ -788,3 +788,42 @@
           (is (= (:arms mcp) (:arms jvm-cli) (:arms bb-cli)))
           (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli)))))
       (finally (delete-tree! parent)))))
+
+;; @spec MCP-OP-CENSUS-030
+;; @spec MCP-OP-CENSUS-032
+(deftest a-link-chain-to-one-real-source-is-censused-once-at-every-entrance
+  (let [root (temp-dir)]
+    (try
+      (spit-file! (io/file root "src/real/folds.clj") arm-source)
+      (Files/createSymbolicLink (.toPath (io/file root "src/link2.clj"))
+                                (.toPath (io/file "real/folds.clj"))
+                                (make-array FileAttribute 0))
+      (Files/createSymbolicLink (.toPath (io/file root "src/link1.clj"))
+                                (.toPath (io/file "link2.clj"))
+                                (make-array FileAttribute 0))
+      (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+        (testing "the tool reads the real source once and says what collapsed"
+          (is (true? (:ok mcp)) (str "refused: " (:error mcp)))
+          (is (= 1 (:files mcp)))
+          (is (= ["src/real/folds.clj"] (vec (keys (:by_file mcp)))))
+          (is (= 1 (:arms mcp)))
+          (is (= 2 (:duplicates_collapsed mcp))
+              "the two links onto one real path were never counted"))
+
+        (testing "the JVM CLI collapses the same chain onto the same path"
+          (is (true? (:ok jvm-cli)) (str "refused: " (:error jvm-cli)))
+          (is (= 1 (:files jvm-cli))
+              "the CLI censused one real file three times")
+          (is (= 1 (:arms jvm-cli)))
+          (is (= 2 (:duplicates-collapsed jvm-cli))))
+
+        (testing "the babashka CLI answers identically"
+          (is (true? (:ok bb-cli)) (str "refused: " (:error bb-cli)))
+          (is (= 1 (:files bb-cli))
+              "the CLI censused one real file three times")
+          (is (= 1 (:arms bb-cli)))
+          (is (= 2 (:duplicates-collapsed bb-cli))))
+
+        (testing "the site counts agree across the three entrances"
+          (is (= (:counts mcp) (:counts jvm-cli) (:counts bb-cli)))))
+      (finally (delete-tree! root)))))
