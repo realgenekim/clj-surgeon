@@ -476,6 +476,7 @@
 
 ;; @spec MCP-OP-STUDY-015
 ;; @spec MCP-OP-STUDY-024
+;; @spec MCP-OP-STUDY-028
 (defn outline-take
   "Outline the FIRST n files across projects in scan order, and return the
    projects rebuilt with `:outlines`. Every project is kept, `:files` intact,

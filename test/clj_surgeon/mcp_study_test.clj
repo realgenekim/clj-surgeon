@@ -12,6 +12,7 @@
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parallel :as parallel]
    [clj-surgeon.study :as study]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]))
@@ -1129,6 +1130,45 @@
     (is (= ["deps" "forms" "ls-deps" "ls-extract" "match" "outline" "topo"
             "xray"]
            (:supported response)))))
+
+;; ============================================================
+;; The parallel strategy
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-028
+(deftest an-mcp-ls-tree-outlines-through-the-bounded-parallel-strategy
+  ;; Nothing pinned the strategy: `clj-surgeon.parallel/bounded-map` could be
+  ;; swapped for serial `map` in `ls-tree-bounded` and every test still
+  ;; passed, silently giving back the measured 10x an ls-tree over a real tree
+  ;; gains. The kernel deliberately defaults to serial `map` so it keeps
+  ;; loading under babashka, so the JVM entrance passing the pool is the ONLY
+  ;; thing that makes the parallel path run — and it went unwitnessed.
+  (let [calls (atom 0)
+        real-bounded-map parallel/bounded-map]
+    (with-redefs [parallel/bounded-map (fn [f coll]
+                                         (swap! calls inc)
+                                         (real-bounded-map f coll))]
+      (let [response (run {"mode" "ls-tree" "dir" fixture-dir
+                           "format" "text" "limit" 16384})]
+        (is (true? (:ok response)))
+        (is (pos? (:returned response)))
+        (is (pos? @calls)
+            "an MCP ls-tree that outlines through serial map fails here")))))
+
+;; @spec MCP-OP-STUDY-028
+(deftest the-strategy-changes-the-order-of-work-and-nothing-else
+  ;; `upmap` yields in COMPLETION order. `outline-take` re-keys by file, so a
+  ;; partial receipt must be identical whichever strategy produced it — this
+  ;; is what makes the strategy safe to pin rather than merely fast.
+  (let [scan (study/ls-tree {:dir fixture-dir :max-files 2000})
+        projects (:projects scan)
+        total (study/total-file-count projects)]
+    (is (true? (:ok scan)))
+    (doseq [n (range 1 total)]
+      (testing (str "n = " n " of " total)
+        (is (= (study/outline-take projects n (atom {}) map)
+               (study/outline-take projects n (atom {})
+                                   parallel/bounded-map)))))))
 
 ;; ============================================================
 ;; One kernel

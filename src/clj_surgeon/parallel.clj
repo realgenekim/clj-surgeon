@@ -16,12 +16,18 @@
    fan-out over a whole source tree is what this replaces."
   (max 1 (min 8 (cp/ncpus))))
 
+;; @spec MCP-OP-STUDY-028
 (defn bounded-map
   "Eagerly map f over coll on a bounded claypoole pool that is always shut
    down, and return a fully realized vector.
 
    `upmap` yields in completion order, so f must return a value that carries
-   its own identity (callers re-key the results)."
+   its own identity (callers re-key the results).
+
+   This is the JVM read entrance's outlining strategy, and it is pinned by a
+   witness: nothing else in the suite noticed when it was swapped for serial
+   `map`, which is exactly the regression that would silently give back the
+   10x an `ls-tree` over a real tree was measured to gain."
   [f coll]
   (if (empty? coll)
     []
