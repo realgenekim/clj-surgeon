@@ -14,8 +14,10 @@
    longer admits this repository's own sources is the failure mode a retune
    causes."
   (:require
+   [clj-surgeon.analyze :as analyze]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parse-admission :as admission]
+   [clj-surgeon.structural-lens :as lens]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
@@ -233,6 +235,67 @@
         (is (= :max-parse-depth (:reason r)))
         (is (zero? @calls) "no tree constructor was invoked")
         (is (< ms 50.0) (str "refusal took " ms " ms"))))))
+
+;; ------------------------------------------------------------------
+;; every read-path tree constructor, not only the outline's two
+;; ------------------------------------------------------------------
+
+(defn- tower-file!
+  "The 710-byte prefix tower, on disk."
+  []
+  (let [f (doto (java.io.File/createTempFile "mem005tower" ".clj") .deleteOnExit)]
+    (spit f (prefix-tower "@" 700))
+    (.getPath f)))
+
+;; @spec MCP-OP-MEM-005
+(deftest the-analyze-constructor-is-gated
+  (testing "analyze does not COMPLETE on this shape — it overflows the reader"
+    ;; The receipt's section 5 left `analyze` ungated on the stated ground that
+    ;; gating it "would convert an operation that completes into one that
+    ;; throws". Measured false: it throws either way. Gating swaps an
+    ;; uncatchable Error for a typed ExceptionInfo, which is strictly better for
+    ;; every caller.
+    (let [src (prefix-tower "@" 700)
+          path (tower-file!)]
+      (doseq [[label thunk] [["string->zloc" #(analyze/string->zloc src)]
+                             ["file->zloc"   #(analyze/file->zloc path)]]]
+        (let [e (try (thunk) nil (catch clojure.lang.ExceptionInfo e e))]
+          (is (some? e) (str label " built a tree instead of refusing"))
+          (is (= :parser_admission_refused (:refusal (ex-data e))) label)
+          (is (= :max-parse-depth (:reason (ex-data e))) label)))))
+  (testing "the CLI ops over analyze return a NAMED plan refusal"
+    (let [path (tower-file!)]
+      (doseq [op ['clj-surgeon.core/run-topo
+                  'clj-surgeon.core/run-deps
+                  'clj-surgeon.core/run-ls-deps
+                  'clj-surgeon.core/run-closure
+                  'clj-surgeon.core/run-declares]]
+        (let [r ((requiring-resolve op) {:file path :form "x"})]
+          (is (= :parser_admission_refused (:refusal r)) (str op))
+          (is (= :max-parse-depth (:reason r)) (str op))
+          (is (seq (:remedy r)) (str op)))))))
+
+;; @spec MCP-OP-MEM-005
+(deftest the-structural-lens-constructor-is-gated
+  (testing "find_subforms is on the MCP read surface and was ungated"
+    ;; Reached from mcp_inspect's match_result and the CLI :find-subform op.
+    (let [src (prefix-tower "@" 700)
+          calls (atom 0)
+          real z/of-string
+          r (with-redefs [z/of-string (fn [& args] (swap! calls inc) (apply real args))]
+              (lens/find-subforms src {:match 'x}))]
+      (is (= :parser_admission_refused (:refusal r))
+          "the refusal reaches the caller TYPED, not flattened to a string")
+      (is (= :max-parse-depth (:reason r)))
+      (is (some? (:limit r)))
+      (is (some? (:observed r)))
+      (is (seq (:remedy r)))
+      (is (zero? @calls) "no tree constructor was invoked")))
+  (testing "find_file names the file it refused"
+    (let [path (tower-file!)
+          r (lens/find-file {:file path :match 'x})]
+      (is (= :parser_admission_refused (:refusal r)))
+      (is (= path (:file r))))))
 
 ;; ------------------------------------------------------------------
 ;; the shipped defaults, against real corpora
