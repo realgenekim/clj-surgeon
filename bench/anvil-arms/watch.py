@@ -27,7 +27,8 @@ Meters, and why each exists:
 
 Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall cap;
 6 incomplete run (a tool call whose result never arrived); 7 the rollout could not be
-bound to THIS driver's own announced session.
+bound to THIS driver's own announced session; 8 the bound rollout was ROTATED --
+replaced or truncated -- while the run was being metered.
 The driver's own exit status is recorded in run.json, never conflated with these.
 """
 from __future__ import annotations
@@ -320,22 +321,73 @@ def extract_error_type(output: str) -> str | None:
 # tailing
 # ---------------------------------------------------------------------------
 class Tailer:
+    """One open fd on ONE inode, bound at open time and never re-resolved by path.
+
+    Sol round two, item 2: the watcher read this fd while the retained copy was
+    taken by PATH after the run.  A rollout replaced mid-run therefore produced two
+    witnesses of two different files -- each internally consistent, so `sources.agree`
+    said true -- and a receipt reporting a verb call the surviving bytes do not
+    contain.  The identity is (st_ino, st_dev) taken from the fd itself, the retained
+    copy comes from that same fd, and a path that stops naming it is a typed abort.
+    """
+
     def __init__(self, path: pathlib.Path):
         self.path = path
         self.handle = None
         self.buffer = ""
+        self.ino = None
+        self.dev = None
+        self.rotation: str | None = None
 
     def read_lines(self) -> list[str]:
         if self.handle is None:
             if not self.path.exists():
                 return []
             self.handle = self.path.open("r", errors="replace")
+            bound = os.fstat(self.handle.fileno())
+            self.ino, self.dev = bound.st_ino, bound.st_dev
         chunk = self.handle.read()
         if not chunk:
             return []
         self.buffer += chunk
         *lines, self.buffer = self.buffer.split("\n")
         return [ln for ln in lines if ln.strip()]
+
+    def check_rotation(self) -> str | None:
+        """A typed reason the bound path no longer names the bound inode, or None."""
+        if self.handle is None or self.ino is None:
+            return None
+        try:
+            live = self.path.stat()
+        except FileNotFoundError:
+            self.rotation = f"unlinked (inode {self.ino} is no longer at {self.path})"
+            return self.rotation
+        except OSError:
+            return None
+        if (live.st_ino, live.st_dev) != (self.ino, self.dev):
+            self.rotation = (f"inode-changed at {self.path} "
+                             f"({self.dev}:{self.ino} -> {live.st_dev}:{live.st_ino})")
+            return self.rotation
+        try:
+            bound = os.fstat(self.handle.fileno())
+        except OSError:
+            return None
+        if live.st_size < bound.st_size:
+            self.rotation = (f"truncated in place at {self.path} "
+                             f"({bound.st_size} -> {live.st_size} bytes)")
+            return self.rotation
+        return None
+
+    def snapshot(self) -> bytes:
+        """The whole file AS THIS WATCHER HOLDS IT -- from its own fd, never by path."""
+        if self.handle is None:
+            return b""
+        try:
+            with os.fdopen(os.dup(self.handle.fileno()), "rb") as dup:
+                dup.seek(0)
+                return dup.read()
+        except OSError:
+            return b""
 
     def close(self):
         if self.handle:
@@ -605,12 +657,14 @@ def main() -> int:
             pass
 
     tailer: Tailer | None = None
+    retained: bytes | None = None       # the metered bytes, taken from the open fd
     if not args.capture_stdout and codex_home is None:
         tailer = Tailer(rollout_path)
 
     stdout_sink = rollout_path.open("a") if args.capture_stdout else None
     abort_reason: str | None = None
     bind_error: str | None = None
+    rotation_detail: str | None = None
 
     def pump_lines(lines: list[str]) -> None:
         for line in lines:
@@ -645,6 +699,9 @@ def main() -> int:
                         tailer = Tailer(found)
                 if tailer is not None:
                     pump_lines(tailer.read_lines())
+                    if tailer.check_rotation():
+                        abort_reason = "rollout-rotated"
+                        break
 
             done = proc.poll() is not None
             now = time.time()
@@ -672,6 +729,8 @@ def main() -> int:
                         pump_lines(rest.split("\n"))
                 elif tailer is not None:
                     pump_lines(tailer.read_lines())
+                    if tailer.check_rotation():
+                        abort_reason = "rollout-rotated"
                 break
             time.sleep(args.poll)
     finally:
@@ -687,6 +746,8 @@ def main() -> int:
             kill_group(signal.SIGKILL)
             driver_group_orphans = len(group_members())
         if tailer is not None:
+            retained = tailer.snapshot()
+            rotation_detail = tailer.rotation
             tailer.close()
         if stdout_sink is not None:
             stdout_sink.close()
@@ -703,6 +764,10 @@ def main() -> int:
             rollout_path, rollout_binding = found, how
             tailer = Tailer(found)
             pump_lines(tailer.read_lines())
+            if tailer.check_rotation():
+                abort_reason = "rollout-rotated"
+                rotation_detail = tailer.rotation
+            retained = tailer.snapshot()
             tailer.close()
         elif abort_reason is None:
             abort_reason = "rollout-unbound"
@@ -715,8 +780,13 @@ def main() -> int:
 
     # If a rollout was discovered elsewhere, land a copy in the arm directory so the
     # receipt and the rollout live together.
-    if rollout_path.resolve() != (arm / "rollout.jsonl").resolve() and rollout_path.exists():
-        (arm / "rollout.jsonl").write_bytes(rollout_path.read_bytes())
+    if rollout_path.resolve() != (arm / "rollout.jsonl").resolve():
+        # FROM THE OPEN FD.  Reading the path again here is what let a replacement
+        # inode become the retained evidence for bytes this watcher never metered.
+        if retained is not None:
+            (arm / "rollout.jsonl").write_bytes(retained)
+        elif rollout_path.exists():
+            (arm / "rollout.jsonl").write_bytes(rollout_path.read_bytes())
 
     calls = state["seq"]
     run = {
@@ -728,6 +798,7 @@ def main() -> int:
         "driver_group_orphans": driver_group_orphans,
         "rollout_path": str(rollout_path),
         "rollout_binding": rollout_binding,
+        "rollout_rotation": rotation_detail,
         "codex_home": str(codex_home) if codex_home else None,
         "start_utc": attest["start_utc"],
         "end_utc": end_utc,
@@ -738,6 +809,21 @@ def main() -> int:
         "calls_without_output": incomplete,
         "watch_jsonl": str(watch_path),
     }
+
+    if abort_reason == "rollout-rotated":
+        # The bound path stopped naming the bound inode.  Everything after that point
+        # was written to a file this watcher never read, so no count here describes one
+        # session: refuse, and keep the bytes actually metered as the retained evidence.
+        detail = (rotation_detail or "the bound rollout was replaced mid-run") + \
+                 "; the metered bytes are retained from the watcher's own fd"
+        emit({"kind": "abort", "error_type": "rollout-rotated", "detail": detail,
+              "returns": state["returns"]})
+        run["abort"] = "rollout-rotated"
+        (arm / "run.json").write_text(json.dumps(run, indent=2) + "\n")
+        sink.close()
+        print(f"WATCH-ABORT rollout-rotated arm={arm.name} rollout={rollout_path} "
+              f"driver_rc={driver_rc} detail={detail}", file=sys.stderr)
+        return 8
 
     if abort_reason in ("rollout-unbound", "rollout-ambiguous"):
         detail = bind_error or (
