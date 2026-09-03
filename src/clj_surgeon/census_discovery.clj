@@ -279,28 +279,41 @@
      :partial-dirs #{}}))
 
 (defn- largest-fitting-subtree
-  "The largest fully-walked subtree that fits, by one measure, or nil.
+  "The largest fully-walked subtree that fits and has something to census.
 
    The walk STOPS one past whichever bound it hit, so the only counts it knows
    exactly are the ones for directories it FINISHED: every ancestor of the
    entry it stopped on holds a lower bound, and offering one of those as a
-   narrowing would hand back a call that refuses again. Those are excluded,
-   and of what remains the LARGEST subtree that fits wins, ties broken deepest
-   first and then lexicographically — the deepest of two equal subtrees is the
-   one that excludes the most, and the name is the tiebreak of last resort so
-   the answer is stable across runs.
+   narrowing would hand back a call that refuses again. Those are excluded.
+
+   A subtree holding NO candidate Clojure source is excluded too, whatever its
+   size. The entry bound fires precisely on trees of junk, so the largest
+   subtree the walk finished is very often junk — and a continuation onto junk
+   is not a smaller census, it is `no-fold-arms-found` on a workspace that has
+   arms. `subtree-counts` is the candidate count for every directory, and the
+   rule reads it whether or not it is the measure being ranked.
+
+   Of what remains the LARGEST subtree by `measure` wins, ties broken by the
+   MOST candidate sources, then deepest, then lexicographically — the richest
+   of two equal subtrees is the one the caller most wants, the deepest of two
+   equal subtrees is the one that excludes the most, and the name is the
+   tiebreak of last resort so the answer is stable across runs.
 
    nil means the walk learned nothing it can promise: the caller is told that,
    and told why, rather than handed a call that cannot work."
-  [measure partial-dirs fits?]
+  [measure subtree-counts partial-dirs fits?]
   (->> measure
-       (remove (fn [[dir n]]
-                 (or (str/blank? dir)
-                     (contains? partial-dirs dir)
-                     (not (pos? n))
-                     (not (fits? dir n)))))
-       (sort-by (fn [[dir n]]
-                  [(- n) (- (count (str/split dir #"/"))) dir]))
+       (keep (fn [[dir n]]
+               (let [candidates (get subtree-counts dir 0)]
+                 (when (and (not (str/blank? dir))
+                            (not (contains? partial-dirs dir))
+                            (pos? n)
+                            (pos? candidates)
+                            (fits? dir n))
+                   [dir n candidates]))))
+       (sort-by (fn [[dir n candidates]]
+                  [(- n) (- candidates)
+                   (- (count (str/split dir #"/"))) dir]))
        ffirst))
 
 ;; @spec MCP-OP-CENSUS-027
@@ -308,6 +321,7 @@
   "The subtree a caller should retry after the CANDIDATE ceiling, or nil."
   [{:keys [subtree-counts partial-dirs]}]
   (largest-fitting-subtree subtree-counts
+                           subtree-counts
                            partial-dirs
                            (fn [_ n] (<= n census/max-scanned-files))))
 
@@ -317,11 +331,14 @@
 
    Ranked by the entries beneath it rather than the candidates, because
    entries are what was exhausted — but a subtree is only offered when BOTH
-   bounds hold for it: a narrowing that replays into the candidate ceiling is
-   a call that cannot work, which is the one thing this must never hand back."
+   bounds hold for it AND it holds at least one candidate source: a narrowing
+   that replays into the candidate ceiling, or onto a subtree with nothing to
+   census, is a call that cannot work, which is the one thing this must never
+   hand back."
   [{:keys [subtree-entries subtree-counts partial-dirs]}]
   (largest-fitting-subtree
     subtree-entries
+    subtree-counts
     partial-dirs
     (fn [dir n]
       (and (<= n census/max-walk-entries)

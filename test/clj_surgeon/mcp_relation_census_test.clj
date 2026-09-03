@@ -1173,22 +1173,28 @@
           (is (false? (:read_complete mcp)))
           (is (nil? (:counts mcp))))
 
-        (testing "the refusal narrows to a subtree it finished walking"
-          (let [narrowed (get-in mcp [:next_call :workspace_root])]
-            (if (some? narrowed)
-              (do (is (not= (:workspace_root mcp) narrowed)
-                      "the continuation hands back the root it just refused")
-                  (is (not-any? #(str/includes? (str %) "<")
-                                (vals (dissoc (:next_call mcp) :tool)))
-                      "the continuation carries a placeholder, not a call")
-                  (is (not= "too-many-walk-entries"
-                            (:error_type (census-tool/execute-request!
-                                           {:project-root narrowed}
-                                           (dissoc (:next_call mcp)
-                                                   :tool :workspace_root))))
-                      "the narrowing the refusal handed back hits the same wall"))
-              (is (string? (:remedy mcp))
-                  "no continuation and no remedy: the caller is told nothing"))))
+        (testing "the refusal narrows to the arm-bearing subtree, not the junk"
+          (let [narrowed (get-in mcp [:next_call :workspace_root])
+                arms-dir (str (.getCanonicalPath root) "/src/a")]
+            (is (some? narrowed)
+                (str "the walk finished a subtree that holds arms and offered "
+                     "no continuation; remedy: " (pr-str (:remedy mcp))))
+            (when narrowed
+              (is (not= (:workspace_root mcp) narrowed)
+                  "the continuation hands back the root it just refused")
+              (is (not-any? #(str/includes? (str %) "<")
+                            (vals (dissoc (:next_call mcp) :tool)))
+                  "the continuation carries a placeholder, not a call")
+              (is (= arms-dir narrowed)
+                  "the continuation offers a subtree that holds no source")
+              (let [replay (census-tool/execute-request!
+                             {:project-root narrowed}
+                             (dissoc (:next_call mcp) :tool :workspace_root))]
+                (is (true? (:ok replay))
+                    (str "the narrowing the refusal handed back refuses too: "
+                         (:error_type replay) " " (:error replay)))
+                (is (= 1 (:arms replay))
+                    "the narrowing replayed onto a subtree with no fold arms")))))
 
         (testing "the JVM CLI refuses the same tree with the same figures"
           (is (= :too-many-walk-entries (:error-type jvm-cli)))
@@ -1202,6 +1208,23 @@
           (is (= bound (:maximum bb-cli)))
           (is (= (inc bound) (:observed bb-cli)))
           (is (= (:next-command jvm-cli) (:next-command bb-cli))))
+
+        (testing "both CLI entrances narrow to the same replayable subtree"
+          (let [command (:next-command jvm-cli)
+                arms-dir (str (.getCanonicalPath root) "/src/a")]
+            (is (string? command)
+                (str "the JVM CLI offered no continuation; remedy: "
+                     (pr-str (:remedy jvm-cli))))
+            (when command
+              (is (= arms-dir (second (re-find #":dir (.+)$" command)))
+                  "the CLI continuation offers a subtree that holds no source")
+              ;; `bb-cli` names the receipt map in this scope, so the replay
+              ;; goes back through `census-entrances`, which runs both CLIs.
+              (let [replay (census-entrances arms-dir)]
+                (is (= 1 (:arms (:jvm-cli replay)))
+                    "the JVM CLI narrowing replays onto a subtree with no arms")
+                (is (= 1 (:arms (:bb-cli replay)))
+                    "the babashka narrowing replays onto a subtree with no arms")))))
 
         (testing "all three answered in bounded time"
           (is (< elapsed-ms 120000)
@@ -1295,25 +1318,52 @@
         (is (= "src/b"
                (choose {:subtree-entries {"" 50001 "src" 50001
                                           "src/a" 1000 "src/b" 4000}
-                        :subtree-counts {}
+                        :subtree-counts {"src/a" 1 "src/b" 1}
                         :partial-dirs #{"" "src"}}))))
 
       (testing "a subtree that would trip the CANDIDATE ceiling is not offered"
         (is (= "src/a"
                (choose {:subtree-entries {"" 50001 "src" 50001
                                           "src/a" 1000 "src/b" 4000}
-                        :subtree-counts {"src/b" (inc census/max-scanned-files)}
+                        :subtree-counts {"src/a" 1
+                                         "src/b" (inc census/max-scanned-files)}
                         :partial-dirs #{"" "src"}}))
             "the narrowing replays straight into the other refusal"))
 
       (testing "a subtree the walk did not finish is never offered"
         (is (nil? (choose {:subtree-entries {"" 50001 "src" 50001
                                              "src/b" 50000}
-                           :subtree-counts {}
+                           :subtree-counts {"src/b" 1}
                            :partial-dirs #{"" "src" "src/b"}}))))
 
       (testing "a subtree over the entry bound never wins"
         (is (nil? (choose {:subtree-entries {"" 50001 "src" 50001
                                              "src/a" (inc census/max-walk-entries)}
+                           :subtree-counts {"src/a" 1}
+                           :partial-dirs #{"" "src"}}))))
+
+      ;; The entry bound fires on trees of JUNK: that is what it is for. So
+      ;; the biggest fully-walked subtree is very often the junk itself, and
+      ;; offering it hands the caller a call that replays into
+      ;; `no-fold-arms-found` on a workspace that has arms.
+      (testing "a bigger subtree with no candidate source loses to a small one"
+        (is (= "src/a"
+               (choose {:subtree-entries {"" 50001 "src" 50001
+                                          "src/a" 3 "src/junk" 49997}
+                        :subtree-counts {"src/a" 1}
+                        :partial-dirs #{"" "src"}}))
+            "the narrowing offers a subtree the replay can find nothing in"))
+
+      (testing "no fully-walked subtree holds a source: no narrowing at all"
+        (is (nil? (choose {:subtree-entries {"" 50001 "src" 50001
+                                             "src/junk" 49997}
                            :subtree-counts {}
-                           :partial-dirs #{"" "src"}})))))))
+                           :partial-dirs #{"" "src"}}))
+            "a subtree with nothing to census is not a continuation"))
+
+      (testing "equal entry counts are broken by the most candidate sources"
+        (is (= "src/b"
+               (choose {:subtree-entries {"" 50001 "src" 50001
+                                          "src/a" 100 "src/b" 100}
+                        :subtree-counts {"src/a" 1 "src/b" 4}
+                        :partial-dirs #{"" "src"}})))))))
