@@ -78,3 +78,7 @@ requirement.
 # #Repository Hygiene
 
 - [x] **MCP-OP-ALIAS-036**: The clj-surgeon repository shall track no path under `.cpcache/` and shall carry a gitignore rule covering that directory, because a classpath cache records absolute paths belonging to the machine that produced it and is never portable.
+
+# #Bounded, Confined Discovery
+
+- [x] **MCP-OP-ALIAS-037**: When `alias_migration` expands `scope.paths`, the walk shall not follow a symlinked directory and shall be bounded in depth, so that a link cycle inside the project root terminates and a directory link pointing out of the root is never entered, before any confinement check runs.

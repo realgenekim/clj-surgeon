@@ -454,6 +454,57 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- symlink!
+  [link target]
+  (Files/createSymbolicLink (.toPath (io/file link)) (.toPath (io/file target))
+                            (make-array FileAttribute 0)))
+
+;; @spec MCP-OP-ALIAS-037
+(deftest a-symlink-cycle-inside-the-root-terminates-scope-expansion
+  (let [workspace (workspace!)
+        link (io/file workspace "src/acid/fanout/loop")]
+    (try
+      (symlink! link (io/file workspace "src"))
+      (let [expanded (deref (future
+                              (alias-migration/expand-scope
+                                (.toPath (.getCanonicalFile workspace))
+                                {:paths ["**/*.clj"] :exclude []}))
+                            60000 ::timed-out)]
+        (is (not= ::timed-out expanded)
+            "scope expansion did not terminate over a symlink cycle")
+        (is (not-any? #(str/includes? % "/loop/") expanded)
+            "the walk descended a symlinked directory")
+        (testing "the cycle contributes nothing to the scope"
+          (let [_ (Files/deleteIfExists (.toPath link))
+                without-link (alias-migration/expand-scope
+                               (.toPath (.getCanonicalFile workspace))
+                               {:paths ["**/*.clj"] :exclude []})]
+            (is (= without-link expanded)))))
+      (finally
+        (Files/deleteIfExists (.toPath link))
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-037
+(deftest a-symlinked-directory-out-of-the-root-is-never-entered
+  (let [workspace (workspace!)
+        outside (temp-dir)
+        link (io/file workspace "src/vendor")]
+    (try
+      (spit (io/file outside "escape.clj")
+            "(ns escape\n  (:require\n   [acid.fanout.store :as store]))\n")
+      (symlink! link outside)
+      (let [expanded (alias-migration/expand-scope
+                       (.toPath (.getCanonicalFile workspace))
+                       {:paths ["**/*.clj"] :exclude []})]
+        (is (not-any? #(str/starts-with? % "src/vendor/") expanded)
+            "the walk entered a directory symlinked out of the project root")
+        (is (not-any? #(str/ends-with? % "escape.clj") expanded)
+            "a file outside the project root reached the scope"))
+      (finally
+        (Files/deleteIfExists (.toPath link))
+        (delete-tree! workspace)
+        (delete-tree! outside)))))
+
 ;; ---------------------------------------------------------------------------
 ;; the lib-only migration (the curtaincall-cfp anchor's shape)
 

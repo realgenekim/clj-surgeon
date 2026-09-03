@@ -16,8 +16,9 @@
    [clojure.set :as set]
    [clojure.string :as str])
   (:import
-   (java.nio.file FileSystems Files Path)
-   (java.util UUID)))
+   (java.nio.file FileSystems FileVisitOption FileVisitResult Files
+                  LinkOption Path PathMatcher SimpleFileVisitor)
+   (java.util EnumSet UUID)))
 
 (declare unknown-profile?)
 
@@ -136,35 +137,69 @@
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
 
+(def ^:private max-scope-depth
+  "Directory depth bound for one scope walk.
+
+  The walk never follows a symlinked directory, so no link cycle can form; this
+  bound is a second, independent stop for a pathologically deep real tree."
+  64)
+
+;; @spec MCP-OP-ALIAS-037
+(defn- scope-files
+  "Every regular file under root, without following symlinked directories.
+
+  `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
+  off: a symlinked directory is reported once and never descended. A link cycle
+  inside the root therefore terminates, and a directory link pointing out of the
+  root is never entered — the realpath gate downstream then has nothing to
+  refuse rather than a whole foreign tree. Build output and version-control
+  directories are pruned as whole subtrees rather than filtered afterwards."
+  [^Path root]
+  (let [found (java.util.ArrayList.)
+        visitor
+        (proxy [SimpleFileVisitor] []
+          (preVisitDirectory [dir _attrs]
+            (let [^Path directory dir]
+              (if (and (not (.equals root directory))
+                       (contains? skipped-directories
+                                  (str (.getFileName directory))))
+                FileVisitResult/SKIP_SUBTREE
+                FileVisitResult/CONTINUE)))
+          (visitFile [file _attrs]
+            (let [^Path candidate file]
+              (when (Files/isRegularFile candidate (make-array LinkOption 0))
+                (.add found (relative-path root candidate))))
+            FileVisitResult/CONTINUE)
+          (visitFileFailed [_file _error]
+            FileVisitResult/CONTINUE))]
+    (Files/walkFileTree root
+                        (EnumSet/noneOf FileVisitOption)
+                        (int max-scope-depth)
+                        visitor)
+    (vec found)))
+
 ;; @spec MCP-OP-ALIAS-004
+;; @spec MCP-OP-ALIAS-037
 (defn expand-scope
   "Every confined project-relative Clojure source under scope.paths.
 
-  The walk is bounded to the workspace root and skips build output and version
-  control directories; it never leaves the configured project root."
+  The walk is bounded to the workspace root, skips build output and version
+  control directories, and follows no directory symlink; it never leaves the
+  configured project root."
   [^Path root {:keys [paths exclude]}]
   (let [matchers (mapv glob-matcher paths)
-        excluded (set exclude)
-        root-file (.toFile root)]
-    (->> (file-seq root-file)
-         (remove (fn [file]
-                   (some skipped-directories
-                         (str/split (str/replace
-                                      (relative-path root (.toPath file))
-                                      "\\" "/")
-                                    #"/"))))
-         (filter #(.isFile ^java.io.File %))
-         (keep (fn [file]
-                 (let [relative (relative-path root (.toPath file))]
-                   (when (and (mcp-paths/relative-source-path? relative)
-                              (not (str/ends-with? relative ".edn"))
-                              (not (contains? excluded relative))
-                              (some #(.matches ^java.nio.file.PathMatcher %
-                                               (.getPath (FileSystems/getDefault)
-                                                         relative
-                                                         (make-array String 0)))
-                                    matchers))
-                     relative))))
+        excluded (set exclude)]
+    (->> (scope-files root)
+         (keep (fn [relative]
+                 (when (and (mcp-paths/relative-source-path? relative)
+                            (not (str/ends-with? relative ".edn"))
+                            (not (contains? excluded relative))
+                            (some #(.matches ^PathMatcher %
+                                             (.getPath (FileSystems/getDefault)
+                                                       relative
+                                                       (make-array String 0)))
+                                  matchers))
+                   relative)))
          sort
          vec)))
 
