@@ -1,7 +1,7 @@
 ---
 parent: mcp-operation-contract-design
 prefix: MCP-OP-MEM
-status: "measurement half implemented; the bound itself is an open gap (RED baseline 2026-09-03)"
+status: "measurement half implemented; the read path is bounded (MCP-OP-MEM-003/005/015, read-path-memory leaf); the streaming kernel for the write/whole-workspace paths (006, 007, 012 … 014) is still an open gap"
 ---
 
 # Memory Boundedness
@@ -38,15 +38,30 @@ operation. Two things must exist before a kernel change can be believed:
 
 ## Ownership of the MCP-OP-MEM prefix
 
-| ids | owner |
-|---|---|
-| MCP-OP-MEM-001 | this leaf — the per-operation memory/work receipt block |
-| MCP-OP-MEM-002 … 010 | reserved |
-| MCP-OP-MEM-011 | this leaf — the battery as a release gate |
-| MCP-OP-MEM-006, 007, 012 … 014 | the streaming-kernel builder |
+| ids | owner | status |
+|---|---|---|
+| MCP-OP-MEM-001 | this leaf — the per-operation memory/work receipt block | implemented |
+| MCP-OP-MEM-002 | reserved | — |
+| MCP-OP-MEM-003 | the `read-path-memory` leaf — the bounded `ls-tree` output budget | implemented |
+| MCP-OP-MEM-004 | reserved | — |
+| MCP-OP-MEM-005 | the `read-path-memory` leaf — bounded lexical/parser admission | implemented |
+| MCP-OP-MEM-008 … 010 | reserved | — |
+| MCP-OP-MEM-011 | this leaf — the battery as a release gate | implemented |
+| MCP-OP-MEM-015 | the `read-path-memory` leaf — the single-parse outline read path | implemented |
+| MCP-OP-MEM-006, 007, 012 … 014 | the streaming-kernel builder | open |
 
 Ids are forever stable. They are retired or superseded, never renumbered or
 repurposed.
+
+**This table is merge-facing, and it lied.** Until 2026-09-03 it read
+`MCP-OP-MEM-002 … 010 | reserved` while 003, 005 and 015 were owned,
+specified and implemented in the `read-path-memory` leaf — so a reviewer who
+consulted the central table to ask "who owns 003?" was told nobody did (Sol,
+finding 10). A registry that disagrees with the leaves is worse than no
+registry: it is the artifact people trust INSTEAD of looking. Ids implemented
+elsewhere are listed here by owner, not folded into a `reserved` range; the
+authority for each id's requirement text remains its owning leaf's specs file
+(`docs/intent/read-path-memory/read-path-memory-specs.md`).
 
 ## What the battery is
 
