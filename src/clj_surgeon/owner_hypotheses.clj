@@ -177,6 +177,25 @@
     (= :multi-line (n/tag node))
     (n/string-node (unwrapped-pr-str (n/sexpr node)))
 
+    ;; A regex literal (`#"..."`) is a `:regex` leaf carrying a single
+    ;; `pattern` string, never a `:multi-line` node -- rewrite-clj's regex
+    ;; reader copies pattern text verbatim, including a raw newline typed
+    ;; between the quotes, and never splits it into `lines` the way a plain
+    ;; string does. The branch above therefore never fires for it, so a raw
+    ;; newline in a regex dispatch passed through `n/string` unchanged.
+    ;; Escape each such newline as the two characters `\` `n`: inside a
+    ;; regex literal that pair is the regex engine's own newline escape, so
+    ;; the presented pattern still matches exactly what the original
+    ;; compiled to (a literal newline in the target text) even though the
+    ;; read-back `.pattern` string is no longer byte-identical to the
+    ;; original -- it trades the raw newline byte for the two-character
+    ;; escape. Collapsing to one physical line is the invariant this buys;
+    ;; surface byte-identity of `.pattern` is not preserved and is not the
+    ;; goal.
+    (and (= :regex (n/tag node))
+         (str/includes? (:pattern node) "\n"))
+    (n/regex-node (str/replace (:pattern node) "\n" "\\n"))
+
     :else
     node))
 

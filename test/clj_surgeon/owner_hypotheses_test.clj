@@ -295,3 +295,40 @@
                         (str "fold-event " presented) records)]
         (is (true? (:owner-form-is-exact attempted)))
         (is (= presented (get-in attempted [:owner-form :dispatch])))))))
+
+;; ---------------------------------------------------------------------------
+;; A dispatch spelling that is a regex literal with a raw newline inside the
+;; quotes (`#"a<newline>b"`, real Enter, not an escaped `\n`) is a `:regex`
+;; leaf, not a `:multi-line` string node -- `presentation-node` only handled
+;; the latter, so the newline passed through `n/string` unchanged and the
+;; presented dispatch still spanned two physical lines.
+;; ---------------------------------------------------------------------------
+
+(deftest defmethod-owner-evidence-escapes-a-multiline-regex-dispatch
+  ;; @spec MCP-OP-DISPATCH-004
+  (let [multiline-dispatch (str "#\"a" \newline "b\"")
+        records (fold-arms [multiline-dispatch])
+        evidence (hypotheses/defmethod-owner-evidence "fold-event" records)
+        presented (get-in evidence [:owner-form :dispatch])
+        original-pattern (read-string multiline-dispatch)
+        presented-pattern (read-string presented)]
+    (testing "the presented dispatch is exactly one physical line"
+      (is (not (str/includes? presented "\n")))
+      (is (= 1 (count (str/split-lines presented)))))
+    (testing "the presented dispatch still reads back to a behaviorally identical regex"
+      ;; Inside a regex literal a backslash-n is the regex engine's own
+      ;; newline escape, not a Clojure string escape, so the presented
+      ;; spelling trades the raw newline byte for the two characters `\` `n`.
+      ;; The read-back `.pattern` text is therefore NOT byte-identical to the
+      ;; original -- only the compiled matching behavior is.
+      (is (= "a\\nb" (.pattern presented-pattern)))
+      (is (= (boolean (re-find original-pattern (str "a" \newline "b")))
+             (boolean (re-find presented-pattern (str "a" \newline "b")))))
+      (is (true? (boolean (re-find presented-pattern (str "a" \newline "b")))))
+      (is (= (boolean (re-find original-pattern "axb"))
+             (boolean (re-find presented-pattern "axb")))))
+    (testing "the selector chooses the right arm from the presented spelling"
+      (let [attempted (hypotheses/defmethod-owner-evidence
+                        (str "fold-event " presented) records)]
+        (is (true? (:owner-form-is-exact attempted)))
+        (is (= presented (get-in attempted [:owner-form :dispatch])))))))
