@@ -635,3 +635,75 @@
       (is (false? (:ok plan)))
       (is (= "alias-migration-empty-scope" (:error_type plan))
           "store-pg is a different namespace, so nothing in this file is a site"))))
+
+;; @spec MCP-OP-ALIAS-035
+(deftest a-quoted-fully-qualified-symbol-keeps-its-full-qualification
+  ;; PF-4, the hand-drive the pre-registration insists on
+  ;; (/home/forge/tmp/arms/e3/pf4-cfp-shapes, 2026-09-03). The three shapes of
+  ;; the real cfp anchor, migrated in one call. SHAPE B came back
+  ;; ALIAS-qualified:
+  ;;
+  ;;   before  {:lookup 'acid.fanout.store/find-event}
+  ;;   after   {:lookup 'store2/fetch-event}
+  ;;
+  ;; measured in that same worktree —
+  ;;   resolve inside the defining namespace : #'acid.fanout.store2/fetch-event
+  ;;   requiring-resolve of the VALUE from outside it :
+  ;;     ERR Could not locate store2.bb, store2.clj or store2.cljc on classpath
+  ;;
+  ;; A quoted symbol's whole purpose is to be resolved somewhere else, and
+  ;; MCP-OP-ALIAS-035 says this shape rewrites to `'to.lib/x` for exactly that
+  ;; reason. The verb's own contract also makes `'alias/x` a typed refusal — a
+  ;; literal nothing resolves — so producing one is producing a shape the same
+  ;; verb refuses to read.
+  (let [source (str "(ns acid.fanout.shapes\n"
+                    "  (:require [acid.fanout.store :as store]))\n\n"
+                    ";; SHAPE A — a qualified symbol in BINDING-VECTOR position"
+                    " (a value, not a call).\n"
+                    "(defn bind-position\n"
+                    "  [id]\n"
+                    "  (let [lookup store/find-event]\n"
+                    "    (lookup id)))\n\n"
+                    ";; SHAPE B — a QUOTED fully-qualified symbol in DATA"
+                    " position.\n"
+                    "(def handlers\n"
+                    "  {:lookup 'acid.fanout.store/find-event})\n\n"
+                    ";; an ordinary call site, for contrast\n"
+                    "(defn call-position\n"
+                    "  [id]\n"
+                    "  (store/find-event id))\n")
+        plan (alias-migration/plan
+               {:workspace-root "/workspace"
+                :from {:lib fixture/from-lib :var fixture/from-var}
+                :to {:lib fixture/to-lib :var fixture/to-var
+                     :alias-policy ["store2" "st2" "es"]}
+                :scope {:paths ["src/**"]}
+                :expect {:files 1}}
+               [{:file "src/acid/fanout/shapes.clj" :source source}])
+        entry (first (:files plan))
+        migrated (apply-edits source (:edits entry))]
+    (is (:ok plan) (pr-str plan))
+    (is (= 3 (:sites entry)) "the arm's own receipt: 1 files · 3 sites")
+    (testing "SHAPE B keeps a spelling that resolves from anywhere"
+      (is (str/includes? migrated "'acid.fanout.store2/fetch-event")
+          "the quoted fully-qualified symbol was narrowed to an alias")
+      (is (not (str/includes? migrated "'store2/fetch-event"))
+          "the verb produced the very shape it refuses to read"))
+    (testing "the other two shapes stay alias-qualified"
+      (is (str/includes? migrated "(let [lookup store2/fetch-event]"))
+      (is (str/includes? migrated "(store2/fetch-event id)")))
+    (testing "and the require moved once"
+      (is (str/includes? migrated "[acid.fanout.store2 :as store2]")))))
+
+;; @spec MCP-OP-ALIAS-035
+(deftest a-quoted-fully-qualified-symbol-keeps-full-qualification-in-lib-mode
+  ;; The same shape in a file that DOES require the lib. The existing witness
+  ;; covered only the file that does not, where the chosen alias happens to BE
+  ;; to.lib, so the defect could not show.
+  (let [result (migrate-one
+                 (str "(def handlers\n"
+                      "  {:lookup 'acid.fanout.store/find-event})\n"))]
+    (is (:ok result) (pr-str result))
+    (is (= 1 (:sites (:entry result))))
+    (is (str/includes? (:migrated result) "'acid.fanout.store2/find-event")
+        "the quoted fully-qualified symbol was narrowed to an alias")))
