@@ -98,6 +98,17 @@ MCP-OP-MEM-011:
   present file may hold hashes from other code over another corpus; a reference
   not bound to this run's operation sources, generator, corpus digests and JVM
   is refused, never compared.
+- "The attestation fields all match, so the reference is trustworthy." Attested
+  fields say WHAT was measured; they say nothing about whether the `:hashes`
+  on disk are the bytes that measurement actually produced. A hand-written
+  reference carrying today's correct attestation and a forged or extra
+  `:hashes` key passed attestation cleanly. A reference is also anchored
+  (`:reference-unanchored` when its sha256 sidecar is missing or does not
+  match its own canonical bytes) and its `:hashes` are checked against the ops
+  catalogue exactly (`:reference-ops-mismatch`) — see the honest-boundary note
+  in `docs/memory-battery.md`: this is a stale/hand-edit check, not a
+  signature; a party with write access to both the reference and its sidecar
+  can still forge both together.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
 - "The sampled peak crossed its budget, so the operation is unbounded." The
   sampled peak is process-wide, contains garbage, and G1 moves it with heap and
@@ -139,6 +150,13 @@ MCP-OP-MEM-011:
   sha is recorded for forensics but not compared: the source digest already
   covers every change that could alter an operation's output, and binding to
   HEAD would force a minutes-long reference rebuild on every unrelated commit.
+  The reference is also anchored to its own bytes via a sha256 sidecar written
+  only by `memory-battery-reference`, and its `:hashes` are checked against
+  the ops catalogue exactly — a hand-edited or partially-forged reference
+  refuses (`:reference-unanchored`, `:reference-ops-mismatch`) even when every
+  attested field matches. This anchor is a stale/hand-edit check, not a
+  signature: a party able to write both the reference and its sidecar can
+  still forge both together.
 - Two of Sol's pass lines are NOT implemented by this battery and are out of
   scope for its current arms: the 450 x 1.9 MiB aggregate-admission case, and
   injected conflict at staging, validation, every commit boundary, and rollback.

@@ -371,6 +371,76 @@
          :detail "the cached reference measured a different experiment"}))))
 
 ;; ============================================================
+;; Reference anchoring — attestation names WHAT the reference measured;
+;; anchoring binds it to its OWN bytes, so a hand-written reference
+;; with correct-looking attestation fields but forged hashes cannot
+;; pass. This is deliberately a WEAKER guarantee than a signature: see
+;; the boundary note in docs/memory-battery.md — it catches a stale or
+;; hand-edited cache, not an adversary with write access to both files.
+;; ============================================================
+
+(defn canonicalize
+  "Recursively normalize `x` for deterministic serialization: every map
+  becomes a sorted-map (by key), through nested values, so `pr-str`
+  produces identical bytes regardless of insertion order or on-disk key
+  order. Vectors and other seqable collections are walked the same way;
+  scalars pass through unchanged."
+  [x]
+  (cond
+    (map? x) (into (sorted-map) (map (fn [[k v]] [k (canonicalize v)])) x)
+    (vector? x) (mapv canonicalize x)
+    (set? x) (into (sorted-set) (map canonicalize x))
+    (seq? x) (map canonicalize x)
+    :else x))
+
+(defn canonical-reference-str
+  "The deterministic bytes a reference document's sha256 anchor is
+  computed over. Order-independent — re-pretty-printing the same
+  content with different key order anchors identically — but sensitive
+  to any actual value change, including a forged or extra key under
+  `:hashes`."
+  [reference]
+  (pr-str (canonicalize reference)))
+
+;; @spec MCP-OP-MEM-011
+(defn reference-anchor-mismatch
+  "nil when `sidecar-hash` (the sha256 hex read from the reference's
+  `.sha256` sidecar file, or nil when that file does not exist) equals
+  `computed-hash` (the sha256 of the reference's own canonical bytes,
+  via `canonical-reference-str`); otherwise a typed map naming which.
+
+  The sidecar is written ONLY by `memory-battery-reference`, at the
+  moment it writes the reference — never by anything that reads or
+  compares a reference. That asymmetry is what makes a hand-edited
+  reference-hashes.edn refuse: editing the reference alone leaves the
+  sidecar naming the OLD bytes' hash."
+  [sidecar-hash computed-hash]
+  (when (not= sidecar-hash computed-hash)
+    {:reason :reference-unanchored
+     :detail (if (nil? sidecar-hash)
+               {:sidecar :missing
+                :remedy "run `make memory-battery-reference`"}
+               {:sidecar :mismatch
+                :expected computed-hash :found sidecar-hash
+                :remedy "run `make memory-battery-reference`"})}))
+
+;; @spec MCP-OP-MEM-011
+(defn reference-ops-mismatch
+  "nil when `reference`'s `:hashes` names EXACTLY the ops catalogue
+  `op-ids` (a coll of keyword ids) — none missing, none extra;
+  otherwise a typed map naming which. Without this a hand-written
+  reference can carry an arbitrary `:hashes` map — including a key no
+  operation ever produced — and attestation alone never looks at its
+  shape."
+  [reference op-ids]
+  (let [expected (set op-ids)
+        found (set (keys (:hashes reference)))]
+    (when (not= expected found)
+      {:reason :reference-ops-mismatch
+       :detail {:missing (vec (sort (remove found expected)))
+                :extra (vec (sort (remove expected found)))}})))
+
+;; ============================================================
 ;; One-screen table
 ;; ============================================================
 

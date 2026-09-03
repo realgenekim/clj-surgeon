@@ -538,6 +538,69 @@
                        :hashes {}}))))))
 
 ;; ------------------------------------------------------------------
+;; Attestation names WHAT the reference measured; anchoring binds it to
+;; its OWN bytes, so a hand-written reference with correct-looking
+;; attestation fields but forged hashes cannot pass. Sol's probe:
+;; "A hand-written reference with current attestation fields and
+;; :hashes {:forged "arbitrary"} passed memory-battery-attest."
+;; ------------------------------------------------------------------
+
+;; @spec MCP-OP-MEM-011
+(deftest reference-canonicalization-is-order-independent-and-value-sensitive
+  (testing "key insertion order never changes the canonical bytes"
+    (is (= (battery/canonical-reference-str {:b 2 :a 1 :hashes {:z 1 :y 2}})
+           (battery/canonical-reference-str {:a 1 :hashes {:y 2 :z 1} :b 2}))))
+
+  (testing "nested maps under vectors and maps are canonicalized too"
+    (is (= (battery/canonical-reference-str {:xs [{:b 1 :a 2}]})
+           (battery/canonical-reference-str {:xs [{:a 2 :b 1}]}))))
+
+  (testing "an actual value change produces different bytes"
+    (is (not= (battery/canonical-reference-str {:hashes {:ls-tree "h1"}})
+              (battery/canonical-reference-str {:hashes {:ls-tree "h2"}})))))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-reference-not-anchored-to-its-own-bytes-is-refused
+  (testing "a missing sidecar is refused, typed :reference-unanchored"
+    (let [issue (battery/reference-anchor-mismatch nil "computed-hash")]
+      (is (= :reference-unanchored (:reason issue)))
+      (is (= :missing (get-in issue [:detail :sidecar])))))
+
+  (testing "a sidecar that does not match the reference's own bytes is refused —
+            this is Sol's forged-reference probe: correct attestation, forged :hashes"
+    (let [issue (battery/reference-anchor-mismatch "sidecar-says-abc" "computed-says-xyz")]
+      (is (= :reference-unanchored (:reason issue)))
+      (is (= :mismatch (get-in issue [:detail :sidecar])))
+      (is (= "computed-says-xyz" (get-in issue [:detail :expected])))
+      (is (= "sidecar-says-abc" (get-in issue [:detail :found])))))
+
+  (testing "a sidecar matching the reference's own bytes is fresh"
+    (is (nil? (battery/reference-anchor-mismatch "same-hash" "same-hash")))))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-reference-naming-the-wrong-ops-catalogue-is-refused
+  (testing "hashes for exactly the ops catalogue is fresh"
+    (is (nil? (battery/reference-ops-mismatch
+                {:hashes {:ls-tree {} :workspace-sources {}}}
+                [:ls-tree :workspace-sources]))))
+
+  (testing "an extra key the ops catalogue never named — Sol's :forged \"arbitrary\" —
+            is refused, typed :reference-ops-mismatch"
+    (let [issue (battery/reference-ops-mismatch
+                  {:hashes {:ls-tree {} :forged "arbitrary"}}
+                  [:ls-tree :workspace-sources])]
+      (is (= :reference-ops-mismatch (:reason issue)))
+      (is (= [:forged] (get-in issue [:detail :extra])))
+      (is (= [:workspace-sources] (get-in issue [:detail :missing])))))
+
+  (testing "a missing op is refused the same way"
+    (let [issue (battery/reference-ops-mismatch
+                  {:hashes {:ls-tree {}}}
+                  [:ls-tree :workspace-sources])]
+      (is (= [:workspace-sources] (get-in issue [:detail :missing])))
+      (is (= [] (get-in issue [:detail :extra]))))))
+
+;; ------------------------------------------------------------------
 ;; The battery is a gate, and it is not in the fast gates
 ;; ------------------------------------------------------------------
 

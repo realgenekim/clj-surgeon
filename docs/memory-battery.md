@@ -73,6 +73,38 @@ This matters because `MEMBAT_ROOT` defaults to a path **shared between
 worktrees**: before attestation, a `reference-hashes.edn` written from another
 branch over a different corpus was accepted simply because the file existed.
 
+### The reference is anchored, not merely attested — and this is not a signature
+
+Attestation says WHAT the reference measured; it does not say the reference's
+own bytes are the ones `memory-battery-reference` actually wrote.
+Attestation-only had a hole: a hand-written `reference-hashes.edn` carrying
+today's correct `:attestation` fields but a forged `:hashes` (or an extra key
+no operation produces) passed `memory-battery-attest` cleanly — every field
+attestation compares matched, and nothing looked at `:hashes` at all.
+
+So `memory-battery-reference` also writes a sidecar,
+`reference-hashes.edn.sha256`, holding the sha256 of the reference document's
+canonical bytes (every map sorted by key, then `pr-str`, so re-pretty-printing
+the same content in a different key order still anchors — only an actual
+value change does not). `memory-battery-attest` and the battery recompute that
+hash from the reference on disk and refuse `:reference-unanchored` when the
+sidecar is missing or does not match, and separately refuse
+`:reference-ops-mismatch` when `:hashes` names anything other than exactly the
+current ops catalogue — no extra key, none missing.
+
+**Honest boundary: this is a cache-staleness check, not a signature.** The
+sidecar is written by the same process, to the same directory, with the same
+write access as the reference file itself. Anyone who can hand-edit
+`reference-hashes.edn` can recompute and hand-write a matching
+`reference-hashes.edn.sha256` right alongside it — there is no secret, no
+asymmetric key, nothing an attacker lacks that a legitimate writer has. What
+it DOES catch: a reference that was correct when written and has since been
+partially hand-edited (the common real failure — someone patches one hash by
+hand, or a merge/copy leaves the sidecar behind), because editing the
+reference alone, without also recomputing and rewriting the sidecar, leaves
+the sidecar naming the OLD bytes' hash. It does not catch a deliberate forger
+willing to edit both files together.
+
 To force a fresh reference by hand, delete `$MEMBAT_ROOT/reference-hashes.edn`
 or run `make memory-battery-reference`.
 
