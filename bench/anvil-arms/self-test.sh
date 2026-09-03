@@ -1357,6 +1357,47 @@ grep -q 'never announced a session id' "$WORK/case16b.out" \
   && ok "case32 a genuinely silent driver is still reported as silent (case 16b)" \
   || { bad "case32 the silent-driver wording was lost"; cat "$WORK/case16b.out"; }
 
+echo "== case 22d: Sol's own make probe, replayed as a standing witness =="
+# The exact Makefile from /home/forge/tmp/arms/solreview2/make-probe.  Sol's run of the
+# old mapper created BOTH side-effect files and then resolved `conditional` to a recipe
+# whose executed command depends on a file at run time -- so `make conditional` was
+# metered as one more non-test action even though it may run Kaocha.  Which command a
+# recipe RUNS has to be knowable from the text, or the target is unresolved.
+MK22D="$WORK/mk22d"; mkdir -p "$MK22D"
+{ printf 'SHELL_EFFECT := $(shell touch %s/shell-expansion-ran)\n\n' "$MK22D"
+  printf '.PHONY: recursive child conditional safe\n\n'
+  printf 'recursive:\n\t+$(MAKE) --no-print-directory child\n\n'
+  printf 'child:\n\t+touch %s/recursive-recipe-ran\n\n' "$MK22D"
+  printf 'conditional:\n\tif test -f RUN_KAOCHA; then bin/kaocha --focus conditional; else echo skipped; fi\n\n'
+  printf 'safe:\n\techo safe\n'
+} > "$MK22D/Makefile"
+python3 "$HERE/_make_targets.py" "$MK22D" "$MK22D/map.json" > "$WORK/case22d.out" 2>&1
+want "case22d map rc" 0 "$?"
+[ -e "$MK22D/shell-expansion-ran" ] && bad "case22d Sol's \$(shell …) fired again" \
+  || ok "case22d Sol's \$(shell …) did not fire"
+[ -e "$MK22D/recursive-recipe-ran" ] && bad "case22d Sol's + recipe fired again" \
+  || ok "case22d Sol's + recipe did not fire"
+want "case22d recursive refused" 'dynamic:+$(MAKE)' "$(jqf "$MK22D/map.json" refused.recursive)"
+want "case22d conditional refused" shell-conditional "$(jqf "$MK22D/map.json" refused.conditional)"
+want "case22d conditional not resolved" null "$(jqf "$MK22D/map.json" targets.conditional)"
+want "case22d safe still resolves" "echo safe" "$(jqf "$MK22D/map.json" targets.safe)"
+python3 - "$HERE" "$MK22D/map.json" <<'PY22D'
+import sys, json
+sys.path.insert(0, sys.argv[1])
+from watch import unresolved_make_targets as u
+m = json.load(open(sys.argv[2]))["targets"]
+fails = []
+if u("make conditional", m) != ["conditional"]:
+    fails.append(f"`make conditional` is not unresolved: {u('make conditional', m)}")
+if u("make safe", m) != []:
+    fails.append(f"`make safe` is unresolved: {u('make safe', m)}")
+for f in fails:
+    print(f"FAIL case22d {f}")
+print(f"ok   case22d a run calling Sol's conditional target is incomplete ({2-len(fails)}/2)")
+sys.exit(1 if fails else 0)
+PY22D
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+
 echo
 echo "anvil-arms self-test: $PASS passed, $FAIL failed  (workdir $WORK)"
 [ "$CLEAN" = "1" ] || rm -rf "$WORK"
