@@ -4178,6 +4178,13 @@
             (is (= denied-path (:file result)))
             (is (string? (:remedy result)))
             (is (not (contains? result :next-command))))))
+      ;; Sol's round-fifteen item 8: this witness drives `:file` and a
+      ;; babashka `:file` subprocess only, which is why it was green while the
+      ;; `:dir` WALK still read whatever it was handed. The `:dir` drives, and
+      ;; the two shapes this one never names — a FIFO and a directory carrying
+      ;; a source name — live in
+      ;; `every-path-the-census-reads-passes-one-fence-before-any-open` and
+      ;; `a-named-pipe-is-refused-before-any-open-on-both-entrances`.
       (finally
         (allow-reads! denied-file)
         (allow-reads! denied-too-file)
@@ -4398,7 +4405,50 @@
                      (pr-str (:error result))))
             (is (str/includes? (str (:error result)) "directory")
                 (str "the error does not say a DIRECTORY is what may not be "
-                     "read: " (pr-str (:error result)))))))
+                     "read: " (pr-str (:error result))))))
+
+        (testing "the tool refuses the same shapes through files"
+          ;; Sol's round-fifteen item 8: the round-fourteen witness drove the
+          ;; CLI through `:file` and a babashka `:file` subprocess and the tool
+          ;; through one denied entry, which is why it was green over all of
+          ;; this. The three shapes are driven at BOTH entrances or the class
+          ;; recurs at whichever one was left out.
+          (let [here (fn [params]
+                       (census-tool/execute-request!
+                         {:project-root plain-root} params))]
+            (doseq [[label bad] [[:a-directory-named-clj dirfile]
+                                 [:a-file-under-a-denied-parent inner]]]
+              (let [result (here {:files [arm bad]
+                                  :doors ["upsert-by"]
+                                  :pool_size 1})]
+                (is (= "unreadable-source-path" (:error_type result))
+                    (str label " answered " (pr-str result)))
+                (is (= bad (:file result))
+                    (str label " does not name the entry: " (pr-str result)))
+                (is (= [bad] (:files_removed result))
+                    (str label " does not name what it removed: "
+                         (pr-str (:files_removed result))))
+                (is (= {:tool "relation_census"
+                        :workspace_root plain-root
+                        :files [arm]
+                        :doors ["upsert-by"]
+                        :pool_size 1}
+                       (:next_call result))
+                    (str label " lost the readable remainder: "
+                         (pr-str (:next_call result))))))))
+
+        (testing "a directory named *.clj cannot arrive from the walk at all"
+          ;; The one shape of the three that the WALK cannot produce, asserted
+          ;; rather than assumed: `census-discovery` asks whether an entry is a
+          ;; real directory BEFORE it asks whether the name looks like a
+          ;; source, so a directory called `*.clj` is descended and never
+          ;; becomes a candidate. It reaches the census only when a caller
+          ;; NAMES it, which is the drive above.
+          (is (not (contains? (set (:files (census-discovery/discover
+                                             plain-root)))
+                              dirfile))
+              (str "the walk yielded a directory as a candidate source: "
+                   (pr-str (:files (census-discovery/discover plain-root)))))))
       (finally
         (allow-reads! denied-file)
         (allow-traversal! locked-dir)
