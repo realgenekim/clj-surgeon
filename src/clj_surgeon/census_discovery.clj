@@ -28,7 +28,9 @@
      is reported as `:exceeded?` with nothing read;
    - the walk also stops at one ENTRY past `max-walk-entries`, counting every
      entry it visits of any name, because the candidate ceiling bounds what
-     the census READS and not what the walk COSTS;
+     the census READS and not what the walk COSTS, and each directory is
+     STREAMED so the bound is charged as a name is yielded rather than after
+     the complete listing has been materialised and sorted;
    - a source above `max-source-bytes` is collected BY NAME instead of read,
      so the receipt can say what it did not look at."
   (:require
@@ -109,6 +111,7 @@
      :observed n
      :walk-exceeded? bool
      :entries-observed n
+     :entries-yielded n
      :subtree-counts {project-relative directory -> candidates beneath it}
      :subtree-entries {project-relative directory -> entries beneath it}
      :partial-dirs #{directories whose counts are lower bounds}}`
@@ -117,7 +120,10 @@
    `:exceeded?` it is a LOWER BOUND, because the walk stops rather than
    enumerating the rest of the tree. `:entries-observed` is the same shape for
    the ENTRY bound: every entry the walk visited, of any name, and a lower
-   bound once `:walk-exceeded?`.
+   bound once `:walk-exceeded?`. `:entries-yielded` is how many names the walk
+   actually OBTAINED from the filesystem, which is at most `:entries-observed`
+   — the evidence that the walk streamed the listings instead of materialising
+   them and charging the bound afterwards.
 
    A root that does not resolve to a directory yields an empty walk with
    `:unresolved-root? true`; deciding what to say about that belongs to the
@@ -132,6 +138,7 @@
           exceeded (volatile! false)
           walk-exceeded (volatile! false)
           visited (volatile! 0)
+          yielded (volatile! 0)
           per-directory (volatile! {})
           per-directory-entries (volatile! {})
           terminated-in (volatile! nil)
@@ -166,32 +173,71 @@
                 :else (do (.add found (relative real))
                           (vswap! per-directory update rel-dir (fnil inc 0))
                           :continue))))
+          admit
+          (fn [^File dir ^String rel-dir]
+            ;; The directory is STREAMED, never materialised. `.list` asked
+            ;; the filesystem for the COMPLETE name array and `sort` realised
+            ;; every element of it BEFORE the counter charged the first entry:
+            ;; a directory of any size was fully enumerated on the way to
+            ;; refusing it, which is the one thing the entry bound exists to
+            ;; prevent. `Files/newDirectoryStream` yields one name at a time,
+            ;; the bound is charged as each name is yielded, and the walk stops
+            ;; at one entry past the bound without asking the directory for the
+            ;; rest of it.
+            ;;
+            ;; Only the ADMITTED names are sorted. A walk that stays under the
+            ;; bound therefore visits the tree in exactly the sorted order it
+            ;; always did; a walk that does not is stopping, and the order of
+            ;; what it never looked at is not a promise anyone can use.
+            ;;
+            ;; Returns `[outcome sorted-admitted-names]`.
+            (let [admitted (java.util.ArrayList.)
+                  outcome
+                  (try
+                    (let [stream (Files/newDirectoryStream (.toPath dir))]
+                      (try
+                        (let [it (.iterator ^Iterable stream)]
+                          (loop []
+                            (if (.hasNext ^java.util.Iterator it)
+                              ;; Charged BEFORE the name is pulled: the
+                              ;; iterator has already told us an entry exists,
+                              ;; and the bound is about what the walk may
+                              ;; touch, not about what it managed to read.
+                              (if (> (vswap! visited inc) census/max-walk-entries)
+                                :terminate
+                                (let [^Path entry (.next ^java.util.Iterator it)]
+                                  (vswap! yielded inc)
+                                  (.add admitted
+                                        (.toString (.getFileName entry)))
+                                  (vswap! per-directory-entries
+                                          update rel-dir (fnil inc 0))
+                                  (recur)))
+                              :continue)))
+                        (finally (.close ^java.io.Closeable stream))))
+                    ;; A directory that cannot be opened or read contributes
+                    ;; nothing; it is not a fatal refusal, exactly as an
+                    ;; unlistable directory was not one before.
+                    (catch java.io.IOException _ :continue))]
+              [outcome (sort admitted)]))
           walk
           (fn walk [^File dir ^String rel-dir]
-            ;; Names, not files: `.list` asks the directory what it holds
-            ;; without stat'ing anything, the sort orders plain strings, and
-            ;; the ENTRY BOUND is charged before the entry is looked at. A
-            ;; walk that stat'ed every entry of a 60,000-entry directory to
-            ;; decide whether it had exceeded its budget has already spent it.
-            (loop [names (sort (or (seq (.list dir)) []))]
-              (if-let [^String name (first names)]
-                (let [outcome
-                      (if (> (vswap! visited inc) census/max-walk-entries)
-                        (do (vreset! walk-exceeded true)
-                            (vreset! terminated-in rel-dir)
-                            :terminate)
-                        (let [^File entry (File. dir name)]
-                          (vswap! per-directory-entries
-                                  update rel-dir (fnil inc 0))
-                          (if (real-directory? entry)
-                            (if (contains? census/skipped-directories name)
-                              :continue
-                              (walk entry (child-relative rel-dir name)))
-                            (visit-file entry rel-dir))))]
-                  (if (= :terminate outcome)
-                    :terminate
-                    (recur (rest names))))
-                :continue)))
+            (let [[outcome names] (admit dir rel-dir)]
+              (if (= :terminate outcome)
+                (do (vreset! walk-exceeded true)
+                    (vreset! terminated-in rel-dir)
+                    :terminate)
+                (loop [names names]
+                  (if-let [^String name (first names)]
+                    (let [^File entry (File. dir name)
+                          outcome (if (real-directory? entry)
+                                    (if (contains? census/skipped-directories name)
+                                      :continue
+                                      (walk entry (child-relative rel-dir name)))
+                                    (visit-file entry rel-dir))]
+                      (if (= :terminate outcome)
+                        :terminate
+                        (recur (rest names))))
+                    :continue)))))
           subtree-totals
           (fn [per-dir]
             (reduce (fn [totals [rel-dir n]]
@@ -211,6 +257,7 @@
        :observed (cond-> (.size found) @exceeded inc)
        :walk-exceeded? @walk-exceeded
        :entries-observed @visited
+       :entries-yielded @yielded
        :subtree-counts (subtree-totals @per-directory)
        :subtree-entries (subtree-totals @per-directory-entries)
        :partial-dirs (if (or @exceeded @walk-exceeded)
@@ -226,6 +273,7 @@
      :observed 0
      :walk-exceeded? false
      :entries-observed 0
+     :entries-yielded 0
      :subtree-counts {}
      :subtree-entries {}
      :partial-dirs #{}}))

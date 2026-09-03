@@ -510,6 +510,11 @@
                              :fits census/max-walk-entries
                              :observed (:entries-observed discovered)
                              :observed_at_least true
+                             ;; The names the walk actually OBTAINED from the
+                             ;; filesystem: the receipt for the promise that
+                             ;; it stopped the directory rather than measured
+                             ;; it. It is at most the bound.
+                             :entries_yielded (:entries-yielded discovered)
                              :files_read 0}
                             facts)
                (not next-call)

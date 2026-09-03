@@ -1208,6 +1208,68 @@
               (str "the three entrances took " (long elapsed-ms) "ms"))))
       (finally (delete-tree! root)))))
 
+(defn- build-flat-directory!
+  "`n` entries in ONE directory: `n` - 1 non-sources and one arm source whose
+   name sorts LAST.
+
+   The source sorts last on purpose. A walk that materialises the complete
+   directory listing, sorts it, and only then charges the entry bound spends
+   the whole directory before it can refuse it; a walk that streams the
+   listing charges as the filesystem yields, and the only way to prove which
+   one is running is a source that a truncated front-of-the-sort never
+   reaches."
+  [root n]
+  (.mkdirs ^java.io.File root)
+  (doseq [i (range (dec n))]
+    (.createNewFile (io/file root (format "f%06d.txt" i))))
+  (spit (io/file root "zzz_folds.clj") arm-source))
+
+;; @spec MCP-OP-CENSUS-033
+(deftest the-walk-streams-a-directory-instead-of-materialising-it
+  (let [bound census/max-walk-entries
+        root (temp-dir)]
+    (try
+      (build-flat-directory! root bound)
+      (testing "a flat directory of exactly the bound is censused, source last"
+        (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+          (is (true? (:ok mcp))
+              (str "the walk refused a tree that is exactly at the bound: "
+                   (:error_type mcp) " " (:error mcp)))
+          (is (= 1 (:arms mcp)))
+          (is (true? (:ok jvm-cli)) (str "refused: " (:error jvm-cli)))
+          (is (= 1 (:arms jvm-cli)))
+          (is (true? (:ok bb-cli)) (str "refused: " (:error bb-cli)))
+          (is (= 1 (:arms bb-cli)))))
+
+      ;; 1,000 entries PAST the bound, not one: the walk must stop at
+      ;; `bound` + 1 names, so a listing that materialised the directory
+      ;; before charging is caught by the 999 names it had no business
+      ;; obtaining.
+      (doseq [i (range 1000)]
+        (.createNewFile (io/file root (format "z%06d.txt" i))))
+      (testing "past the bound the walk refuses without realising the rest"
+        (let [{:keys [mcp jvm-cli bb-cli]} (census-entrances (.getPath root))]
+          (is (= "too-many-walk-entries" (:error_type mcp)))
+          (is (= (inc bound) (:observed mcp)))
+          (is (some? (:entries_yielded mcp))
+              "the refusal publishes no count of the names it obtained")
+          (is (<= (:entries_yielded mcp 0) (inc bound))
+              (str "the walk obtained " (:entries_yielded mcp)
+                   " names from a directory it stopped at " (inc bound)))
+          (is (= :too-many-walk-entries (:error-type jvm-cli)))
+          (is (some? (:entries-yielded jvm-cli))
+              "the JVM CLI refusal publishes no count of the names it obtained")
+          (is (<= (:entries-yielded jvm-cli 0) (inc bound))
+              (str "the JVM CLI walk obtained " (:entries-yielded jvm-cli)
+                   " names"))
+          (is (= :too-many-walk-entries (:error-type bb-cli)))
+          (is (some? (:entries-yielded bb-cli))
+              "the babashka refusal publishes no count of the names it obtained")
+          (is (<= (:entries-yielded bb-cli 0) (inc bound))
+              (str "the babashka walk obtained " (:entries-yielded bb-cli)
+                   " names"))))
+      (finally (delete-tree! root)))))
+
 ;; @spec MCP-OP-CENSUS-017
 (deftest an-exhausted-census-offers-no-placeholder-continuation
   (with-redefs [census-tool/collect-inputs

@@ -510,6 +510,7 @@
        (:walk-exceeded? discovered)
        {:walk-exceeded? true
         :entries-observed (:entries-observed discovered)
+        :entries-yielded (:entries-yielded discovered)
         :discovered discovered
         :scanned 0
         :oversized-skipped (vec (:oversized discovered))
@@ -647,6 +648,7 @@
            :fits relation-census/max-walk-entries
            :observed (:entries-observed @scan)
            :observed-at-least true
+           :entries-yielded (:entries-yielded @scan)
            :files-read 0
            :read-complete false}
           ;; A null continuation is not a smaller promise than a real one; the
