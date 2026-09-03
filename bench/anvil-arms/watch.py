@@ -82,6 +82,17 @@ SPLITTERS = re.compile(r"\|\||&&|[;\n|&]")
 MAKE_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(:=|::=|\+=|\?=|=)")
 
 
+# Environment variables GNU Make itself reads at startup and treats as if they were
+# additional command-line flags/assignments (info make "Options/Recursion",
+# "Communicating Options" and "MAKEFILES Variable").  Sol round five: a LEADING
+# `MAKEFLAGS=CMD=/bin/echo` on the invocation is not a plain environment variable to
+# the recipe -- GNU Make folds it into its own option/variable parsing exactly as if
+# `CMD=/bin/echo` had been typed on the command line, and it substituted into
+# `verify`'s recipe while the attest-time map still named the un-overridden one.
+MAKE_AFFECTING_ENV = {"MAKEFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS", "MAKEFILES",
+                      "MAKELEVEL"}
+
+
 def make_runtime_override(rest: list[str]) -> str | None:
     """The first token in a `make` invocation's arguments the attest-time map cannot
     account for: a variable assignment, or any option at all.
@@ -145,12 +156,22 @@ def parse_utc(stamp: str) -> datetime | None:
         return None
 
 
-def strip_wrappers(tokens: list[str]) -> list[str]:
+def strip_wrappers(tokens: list[str]) -> tuple[list[str], list[str]]:
+    """Returns (leading_env_assignments, remaining_tokens).
+
+    Sol round five, item 1: a leading `VAR=value` used to be discarded outright, so a
+    command carrying `MAKEFLAGS=CMD=/bin/echo make verify` was indistinguishable from
+    plain `make verify` by the time any `make`-specific check ran.  The assignments
+    are now kept alongside the stripped tokens so a caller that cares which NAMES were
+    set (Make-affecting ones, in particular) still can.
+    """
     i = 0
+    env_assignments: list[str] = []
     while i < len(tokens):
         tok = tokens[i]
         if "=" in tok and not tok.startswith("=") and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
-            i += 1                      # leading VAR=value assignment
+            env_assignments.append(tok)   # leading VAR=value assignment
+            i += 1
             continue
         base = os.path.basename(tok)
         if base in WRAPPERS:
@@ -163,12 +184,15 @@ def strip_wrappers(tokens: list[str]) -> list[str]:
             i += WRAPPERS_WITH_ARG[base]   # then its operand (lock target, duration)
             continue
         break
-    return tokens[i:]
+    return env_assignments, tokens[i:]
 
 
-def command_position_tokens(script: str) -> list[list[str]]:
-    """Every simple command in `script`, tokenised, wrappers stripped."""
-    out: list[list[str]] = []
+def command_position_tokens(script: str) -> list[tuple[list[str], list[str]]]:
+    """Every simple command in `script`, tokenised, wrappers stripped.
+
+    Each entry is `(leading_env_assignments, tokens)` -- see `strip_wrappers`.
+    """
+    out: list[tuple[list[str], list[str]]] = []
     for piece in SPLITTERS.split(script):
         piece = piece.strip().strip("()")
         if not piece:
@@ -177,10 +201,26 @@ def command_position_tokens(script: str) -> list[list[str]]:
             tokens = shlex.split(piece)
         except ValueError:
             tokens = piece.split()
-        tokens = strip_wrappers(tokens)
+        env_assignments, tokens = strip_wrappers(tokens)
         if tokens:
-            out.append(tokens)
+            out.append((env_assignments, tokens))
     return out
+
+
+def make_affecting_env_override(env_assignments: list[str]) -> str | None:
+    """A leading env assignment whose NAME GNU Make itself reads at startup.
+
+    Sol round five, item 1: `MAKEFLAGS=CMD=/bin/echo` is not an ordinary environment
+    variable as far as the recipe is concerned -- GNU Make parses `MAKEFLAGS` (and
+    `MAKEOVERRIDES`/`GNUMAKEFLAGS`/`MAKEFILES`/`MAKELEVEL`) out of its own environment
+    and folds their content into its option/variable handling, same as if it had been
+    typed on the command line.  The attest-time map cannot see through it.
+    """
+    for assignment in env_assignments:
+        name = assignment.split("=", 1)[0]
+        if name in MAKE_AFFECTING_ENV:
+            return name
+    return None
 
 
 MAX_MAKE_DEPTH = 4          # a target may reach a runner through another target
@@ -211,7 +251,7 @@ def is_test_command(script: str, make_map: dict | None = None,
     the meter entirely, so `make verify` counted a whole test run as a non-test action.
     The name rule stays as a fallback for a run with no map.
     """
-    for tokens in command_position_tokens(script):
+    for env_assignments, tokens in command_position_tokens(script):
         head, rest = tokens[0], tokens[1:]
         base = os.path.basename(head)
         if base in SHELL_RUNNERS and rest:
@@ -230,12 +270,15 @@ def is_test_command(script: str, make_map: dict | None = None,
             operands = [a for a in rest if not a.startswith("-")]
             if any(MAKE_TEST_TARGET.match(a) for a in operands):
                 return True, f"make {' '.join(rest)}"
-            # A runtime assignment/option (Sol round four) means the attest-time map
-            # cannot be trusted for this call -- GNU Make may substitute a different
-            # recipe than the one the map recorded.  Do not resolve through it; the
-            # name check above still catches an explicitly-named test target.
+            # A runtime assignment/option (Sol round four), OR a leading Make-affecting
+            # environment assignment (Sol round five, item 1), means the attest-time
+            # map cannot be trusted for this call -- GNU Make may substitute a
+            # different recipe than the one the map recorded.  Do not resolve through
+            # it; the name check above still catches an explicitly-named test target.
             # `unresolved_make_targets` is what turns this into an incomplete-run.
-            if make_map and _depth < MAX_MAKE_DEPTH and not make_runtime_override(rest):
+            if (make_map and _depth < MAX_MAKE_DEPTH
+                    and not make_runtime_override(rest)
+                    and not make_affecting_env_override(env_assignments)):
                 for target in operands:
                     recipe = make_map.get(target)
                     if not recipe:
@@ -268,7 +311,7 @@ def unresolved_make_targets(script: str, make_map: dict | None,
     if _depth > 3:
         return []
     out: list[str] = []
-    for tokens in command_position_tokens(script):
+    for env_assignments, tokens in command_position_tokens(script):
         head, rest = tokens[0], tokens[1:]
         base = os.path.basename(head)
         if base in SHELL_RUNNERS and rest:
@@ -279,6 +322,14 @@ def unresolved_make_targets(script: str, make_map: dict | None,
                 break
             continue
         if base != "make":
+            continue
+        env_override = make_affecting_env_override(env_assignments)
+        if env_override:
+            # Sol round five, item 1: a leading `MAKEFLAGS=CMD=/bin/echo` changed
+            # GNU Make's own option/variable parsing -- it substituted into `verify`'s
+            # recipe -- while carrying no assignment or option in `rest` at all, so
+            # `make_runtime_override(rest)` alone saw nothing to refuse.
+            out.append(f"make-runtime-override:env:{env_override}")
             continue
         override = make_runtime_override(rest)
         if override:

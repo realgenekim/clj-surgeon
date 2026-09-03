@@ -61,6 +61,12 @@
 #  37  a backticked word in a case header EXECUTES -- the positive control for the
 #      suite-wide stderr trap installed below
 #  38  the README never hand-types a count this run computes
+#
+# Cases 41-44 are the repairs for Sol's FIFTH executed review of 2026-09-03
+# (/home/forge/tmp/sol/arms5-sol-review.md, GO-WITH-FIX, 4 items), each written RED
+# first:
+#  41  a leading Make-affecting environment assignment (MAKEFLAGS and friends) is
+#      refused as a runtime override, not silently discarded by the wrapper strip
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -2095,6 +2101,53 @@ if [ -s "$A1/receipt.json" ]; then
 else
   bad "case40 case1's receipt.json is missing — cannot prove the pass-through"
 fi
+
+echo "== case 41: a leading MAKE-AFFECTING ENVIRONMENT assignment is refused =="
+# Sol round five, item 1 (watch.py:152): Sol's own reproduction --
+# `MAKEFLAGS=CMD=/bin/echo make verify` -- GNU Make reads MAKEFLAGS out of its own
+# environment and folds its content into its option/variable parsing exactly as if
+# `CMD=/bin/echo` had been typed on the command line, substituting into `verify`'s
+# recipe.  The attest-time map still named the un-overridden recipe.  Before this fix,
+# `strip_wrappers` discarded every leading `VAR=value` token outright, so by the time
+# `make_runtime_override` ran on `rest` there was nothing left naming the override:
+# `unresolved_make_targets` returned `[]` and `is_test_command` "resolved" through the
+# stale map -- Sol's own words, "resolved with `[]`".
+python3 - "$HERE" <<'PY41'
+import sys
+sys.path.insert(0, sys.argv[1])
+from watch import is_test_command, unresolved_make_targets as u
+
+m = {"verify": "echo DEFAULT-RUNNER"}
+fails = []
+
+# Sol's exact reproduction.
+got = u("MAKEFLAGS=CMD=/bin/echo make verify", m)
+if got != ["make-runtime-override:env:MAKEFLAGS"]:
+    fails.append(f"MAKEFLAGS override not refused, typed: got {got}")
+hit, why = is_test_command("MAKEFLAGS=CMD=/bin/echo make verify", m)
+if hit:
+    fails.append(f"is_test_command certified a stale-map recipe as a test hit: {why}")
+
+# Every Make-affecting env name Sol's fix must cover, one at a time.
+for name in ("MAKEFLAGS", "MAKEOVERRIDES", "GNUMAKEFLAGS", "MAKEFILES", "MAKELEVEL"):
+    got = u(f"{name}=x make verify", m)
+    if got != [f"make-runtime-override:env:{name}"]:
+        fails.append(f"{name}= not refused: {got}")
+
+# The control the fix must not break: an ORDINARY leading env var (not one Make reads
+# out of its own environment) must not poison a plain, resolvable `make verify`.
+if u("FOO=1 make verify", m) != []:
+    fails.append(f"plain FOO=1 make verify wrongly refused: {u('FOO=1 make verify', m)}")
+if not is_test_command("MAKEFLAGS=x make test", m)[0]:
+    fails.append("`MAKEFLAGS=x make test` (named test target) stopped being detected")
+
+for f in fails:
+    print(f"FAIL case41 {f}")
+print(f"ok   case41 Make-affecting environment override refusal (8/8)" if not fails
+      else f"case41 {len(fails)} failure(s)")
+sys.exit(1 if fails else 0)
+PY41
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
 # --- the shell-error trap fires here, before any verdict is printed ---------------
 exec 2>&3 3>&-
