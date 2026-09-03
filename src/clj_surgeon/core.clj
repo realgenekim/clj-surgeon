@@ -675,27 +675,29 @@
                                         relation-census/max-next-call-bytes))
                            candidate)]
         (merge
-         {:ok false
-         :error-type :too-many-candidate-files
-         :error (str "This directory holds more than "
-                     relation-census/max-scanned-files
-                     " candidate Clojure sources (" (:observed @scan)
-                     " seen before the walk stopped). The census reads at most "
-                     relation-census/max-scanned-files
-                     " and will not report a truncated tree as a complete census")
-         :maximum relation-census/max-scanned-files
-         :fits relation-census/max-scanned-files
-         :observed (:observed @scan)
-         :observed-at-least true
-         :files-read 0
-         :read-complete false}
-         (if next-command
-           {:next-command next-command}
-           {:remedy (str "The walk stopped at the ceiling, so every count it "
-                         "observed is a lower bound and no subtree it finished "
-                         "walking is known to fit; point :dir at a directory you "
-                         "know is smaller, or census one :file at a time.")})
-         (facts)))
+          {:ok false
+           :error-type :too-many-candidate-files
+           :error (str "This directory holds more than "
+                       relation-census/max-scanned-files
+                       " candidate Clojure sources (" (:observed @scan)
+                       " seen before the walk stopped). The census reads at "
+                       "most " relation-census/max-scanned-files
+                       " and will not report a truncated tree as a complete "
+                       "census")
+           :maximum relation-census/max-scanned-files
+           :fits relation-census/max-scanned-files
+           :observed (:observed @scan)
+           :observed-at-least true
+           :files-read 0
+           :read-complete false}
+          (if next-command
+            {:next-command next-command}
+            {:remedy (str "The walk stopped at the ceiling, so every count it "
+                          "observed is a lower bound and no subtree it "
+                          "finished walking is known to fit; point :dir at a "
+                          "directory you know is smaller, or census one :file "
+                          "at a time.")})
+          (facts)))
 
       :else
       (let [inputs (:inputs @scan)
