@@ -1,10 +1,10 @@
-# Gene peek report — Surgeon program, 2026-09-02 17:02 PDT (00:02Z UTC)
+# Gene peek report — Surgeon program, 2026-09-02 20:13 PDT (03:13Z UTC), seat now on Anvil
 
 ## 1. Headline
 
-**Two receipt-backed wins today, both on real repos: the rewiring extract verb beat native on every cross-pair (243 s vs 336 s, zero native bytes after the verb, rf2 n=3+3), and on the curtain-call anchor the fixed alias-migration verb beat native on every cost axis where native was predicted to win (228 s vs 283 s, 0.69× actions, 0.64× tokens, both PASS, sl1-R n=1).** The session-4 refactor then shipped through Surgeon: 18 fold arms migrated in two transactions with zero churn outside the replaced forms, pushed as `bridge/settings-lens` aebb7b9a with 1053 tests green.
+**The two receipt-backed wins stand (rf2: 243 s vs 336 s on every cross-pair; the anchor: 228 s vs 283 s where native was predicted to win), and the settings-lens refactor shipped through Surgeon with zero outside churn. Tonight's finding is the other half of "winner": of the four clj-surgeon branches the mayor's queue held as ready, none was mergeable as it stood.** Executed red-teams found two code-execution holes reachable from one inspect call on the study-ops branch (ripgrep flag injection through `grep`; reader eval on scanned deps.edn), a witnessed write outside the project root on rf2 (a directory symlink turned an unconfined read walk into an unconfined write set), schema-only bounds on census, and committed build caches on q5z. Every one has a fix round; rf2's eight fixes are already pushed and under re-review; the fence-review doctrine is widened so a read verb is reviewed like a write.
 
-*Events to the contrary:* the gate is wall-neutral at n=6 (z7c: 339 s vs 348 s, p 0.79); z7b's 0.76× is withdrawn as a slow native arm. The gate's claim is correctness (6/6 complete, `verify none` never used), not speed. Free-choice adoption is still 0 of 10. Two apparatus false greens were found and fixed today (the chain's hardcoded "pass"; no FAN arm ever wrote a diff). The finder's first structural scan produced one false positive (a guarded write), which is why the census verb classifies by enclosing guard. Session 5 (the new study ops, hand-driven on curtain-call with the watcher) came back MIXED: the intra-file ops answer in 50–90 ms, but `ls-tree` bounded out at 13 of 116 files and no exposed op answers "who requires this namespace", the one question rg gets wrong. Two fixes are building; the adoption cohort waits on them.
+*Events to the contrary:* the gate is wall-neutral at n=6; free-choice adoption is still 0 of 10; the study ops as first built could not answer the tree-level questions they exist for (session 5, MIXED) and are now gated on the names-only rendering (landed) and the security round. Codex is unauthenticated on this seat, so Sol is unavailable until the mayor provisions it; Opus did tonight's reviews.
 
 ## 2. Wins vs native
 
@@ -83,44 +83,42 @@ NATIVE (stripped, n=3, mean 336 s, 17.3 returns)        VERB :extract! :rewire-c
 
 ## 5. Surprises
 
-- Native was predicted to win the anchor ("uniform alias, one sed") and lost every cost axis; a uniform alias does not make the verification uniform.
-- The chain's "pass" was a hardcoded word over an empty glob, and no fan-out arm had ever written a diff: one negative git pathspec on an ignored path.
-- Native's dry plan touched 149 lines outside the change (86 whitespace) — the reprint cost landed on the native side this time.
-- Three of Sol's nine store findings, and the mayor's composition finding, were false premises in "winners": `:extract!` wrote what `:ls` could not read. "Winner" now means composition (vision.md 47c1eee).
-- 23j (target ns from the server root) reproduced live on main and was already fixed on the rf2 branch that nobody had merged.
-- The study ops' `ls-tree` cannot list a 116-file tree inside its own receipt ceiling; the CLI text golden is compact, the MCP receipt is not. Built is not won.
+- A read-only verb had two RCE-class holes without touching any fence file: `grep` reached ripgrep as a flag (`--pre=/bin/sh` executed files in the reviewer's probe), and `clojure.core/read-string` with read-eval ran on every scanned deps.edn.
+- rf2's compile check was designed right (argv, `-A` not `-M`, no `:main-opts`) and the branch still escaped the root, because the pre-existing discovery walk became a write set.
+- The receipt ratchet built to catch missed sites counted two sites on one line as one: wrong failure direction, caught by its own review.
+- Two fix rounds swept `.cpcache/` into commits with `git add -A`; one caught itself and rewrote its own history. `.cpcache/` is now ignored on main.
+- Hand-driving the second mode of the alias rule found a ninth hole the review had not named.
+- The reminder-schedule fix from yesterday was itself a regression: a slug-only payload would be silently dropped. The reviewer measured it; the writer has always carried an event id, so the practical risk is near zero, and it is still being fixed.
 
 ## 6. Learnings crystallized
 
-- A winner is a receipt the next verb accepts without hand repair; A = 0 and B = 0 on real bytes promote it (vision.md "What winner is allowed to mean").
-- Characterization before every edit: whole-projection replay equality with a readable first-difference report was the gate for 18 arms (LENS-001, curtain-call).
-- Structural match sees the write, not the guard: classify by dominance, target, identity, polarity, else `:unknown` (census verb, Sol's rule).
-- A scoring step prints computed counts, never a label; an empty glob aborts (memory: verdict-label-was-a-noun).
-- Two builders and one suite at a time on Buster; batteries on Anvil (memory: buster-builder-cap).
+- Fence review scope now covers every reachable subprocess (argv, `--`, no interpolation), every reader on repo bytes (edn only), every walked path (realpath in root), bounds before parsing, and `next_call` termination; executed, before a branch enters the queue (CLAUDE.md; memory security-boundary-review-before-merge).
+- "Ready" in a queue means "unreviewed" until an executed verdict is filed beside it. Four of four failed tonight.
+- Every refusal paid by hand becomes a ledger item with text, ratchet, and trigger; three built, reviewed, and now in a fix round of their own (memory friction-ledger-to-ratchets).
+- Builders never `git add -A`; add files by name.
+- A characterization golden proves only the histories it contains: 4 of 18 lens arms appear in the real log; the rest are pinned synthetically, adequate for a guard collapse, not for a semantics change.
 
 ## 7. Best news / worst news
 
-Best: the anchor. On the point chosen because native should win, the tool won wall, actions and tokens with an identical tree, and the refactor it enabled shipped the same afternoon through Surgeon with zero outside churn.
-Worst: the gate is a correctness ratchet, not a speed win, and nobody picks any of this unprompted.
+Best: the review machinery works at the speed of the build machinery. Eight branches red-teamed, seven fix rounds running or landed, rf2 already pushed with every original probe closed, all in one night on Anvil at load 3 to 5 on 16 cores.
+Worst: nothing in the clj-surgeon queue was mergeable when the night began, and the study ops built on your nudge were the least mergeable of all.
 
 ## 8. Board (Pacific)
 
-- Branches awaiting your merge, in order: `bridge/fold-idempotence` f115cc2d (inb-d603ce) → `bridge/store-idempotency` 96387535 (inb-70711c, after the mayor's index paste) → `bridge/settings-lens` aebb7b9a (inb-554636). Main auto-deploys to live Postgres, so I did not merge.
-- Mayor's owner ops on live Postgres (inb-3a9818): create the idempotency index and paste `pg_get_indexdef`; run `bin/fold-diff-checkpoint` from `bridge/fold-diff-tool` f2d8f6eb (pushed; read-only by construction; the naive read path would have created the index as a side effect).
-- **2026-09-03 on Anvil (seat moved):** study ops b3c17bb is **NO-GO** until its security round lands — rg flag injection via `grep`, read-eval on scanned deps.edn, symlink escape, unbounded pre-parse (docs/observations/2026-09-03-study-ops-redteam-NO-GO.md). Executed red-teams now running on census, rf2 and q5z before they merge. `bridge/template-upsert` 619d3192 pushed (FOLD-IDEM-004, stacked on settings-lens). Fence-review doctrine widened (CLAUDE.md).
-- Running now: one builder on the study branch — names-only `ls-tree` default + `ns_grep` (inb-a0f37e) and `make mcp-serve` honouring MCP_PORT (inb-d8a635). The E6 adoption cohort (inb-c973d2) is gated on it and on the tree-level requirers op (inb-0a6315).
-- Every open suggestion is a maven inbox item with owner + trigger (12 filed at your ask; list in the resume note 6eb3e68).
-- clj-surgeon branches for the mayor's queue: rf2 5e6cdd2 (closes 23j/3s5/c37/dk9), census 7244141, **study ops b3c17bb** (your ls-tree nudge: inside inspect_clojure, one kernel, parity witness, a latent `format`-shadow bug found; adoption unmeasured), q5z 2753f23, admit-gate 17125fe, close-losers, format-form-scope. Contract note: the "two public tools" invariant in the one-compiler plan needs your ruling before census merges.
-- Anvil: idle, lock free. Builder seat per your ruling: the existing `tester` user (brief amended: worktrees under `~/build`, never while a GO file or the lock exists; fleet seats untouched).
+- Seat: forge@anvil since ~18:15 PDT. Missing until the mayor provisions: the phone channel (no reply tool), maven creds, codex auth, clj-nrepl-eval, `~/bin`, `/opt/claude-skills`, crons, swipl (the Prolog gate cannot run here).
+- clj-surgeon, pushed and re-reviewing: rf2 5ccb4f0. Fix rounds running: study ops (items 2–12), census (11), q5z (7), ratchets (8). Each → my suites → push → re-review → queue. The queue is frozen until then.
+- curtain-call, for your merge in order: fold f115cc2d → store 96387535 → settings-lens aebb7b9a (GO, measured) → template-upsert (fix running: raw-id identity) → lens-followups (fix running: slug cross-check). The fold-diff tool gets its seven fixes before the mayor runs it against production; its read-only claim was near-vacuous under Postgres and its default baseline compared main against the whole stack.
+- Verdict documents on main: study-ops NO-GO, census GO-WITH-FIX, rf2-q5z, folddiff-lens, ratchets.
+- Prosecution list: twelve items filed yesterday plus S9 (inspect's `forms` should accept the defmethod owner map); inbox updates wait on maven creds here.
 
 ## 9. Decisions waiting on Gene
 
-- Merge order above — recommend fold first once the mayor's fold-diff output is reviewed, store after the index paste, lens last.
-- Product rules the fold branch deliberately did not guess: name-vs-id merging, adoption-collision winner, blank identities — recommend keep-not-merge until you rule.
-- The announce UI has no unannounce control (both writer arities are dead) — recommend a bead; without it no generation ever advances in production.
-- The one-compiler plan's "two public tools" invariant is stale and census adds a fifth — inb-78e75c — recommend: amend the invariant to "read tools compose through inspect; write tools stay gated", then merge census.
-- Start the tester@anvil builder seat? Recommend yes when you have ten minutes: token into `~/secrets`, point it at the brief; I hand it inb-11a6ae/a97614/3cb0f4 first.
+- Curtain-call merge order above. Recommend: fold after the mayor's fold-diff run (post-fix), store after the index paste, then the lens stack with goldens re-run at each step.
+- The "two public tools" invariant in the one-compiler plan (inb-78e75c) before census merges. Recommend amend to "read tools compose through inspect; write tools stay gated".
+- The announce UI has no unannounce control (inb-041b28). Product call.
+- rf2's chosen posture: an out-of-root directory symlink anywhere under a repo now refuses every extraction there. Fail-visible as mandated; say if you want a skip-and-name posture instead before it meets a monorepo.
+- Provisioning priority for the mayor: codex auth (Sol) and maven creds first, the phone channel second.
 
 ## 10. Answers to your questions today
 
-- *Found Ann's error and triggered it?* Yes: pinned by replay witness (f115cc2d). *Kickass LID, generalized?* The relation law; the census verb ships it with evidence and `:unknown`. *Primitives that humiliate grep?* Match with enclosing path and hashes, defmethod-addressed replacement, extract-with-rewire, alias migration, relation census. *Value at all levels?* §2/§3. *Isn't the getter cleaner?* Yes; shipped as the lens. *pmap at large n?* Read verbs yes (claypoole, measured 319 → 197 ms on 48 files), write path no. *Why hadn't we moved ls-tree?* My ordering mistake; building now. *Tweezering, useful friction data?* Yes; six-item ledger with ratchets (8392477). *Load / farm to Anvil / single-task?* Cap set; a second seat on Anvil recommended, not a move. *What user?* You ruled: existing seats; `tester`. *Why did the forge answer land on dictation?* The connector's seat "bridge" is that page; answers now go to whichever surface you wrote from. *What did you learn about Surgeon usage?* Eight lines in the log (280c8d3): the win is site discovery; form-scoped replacement is the clean write; the tool does not say how to address what it shows; receipts are thinner than the driver's head; winners must compose; match sees the write not the guard; the gate buys correctness; hand-driving finds what suites miss. *Suggestions in a trusted place?* Twelve inbox items with owners and triggers (6eb3e68).
+- *What model?* Fable 5.1, same as before the move. *What host?* Anvil, user forge, 16 cores. *Crank up parallelism?* Done: up to nine lanes, suites serialized behind one lock, load 3–5. *Friction ledger?* Ratified and saved as practice. *On deck / exploring / option value?* Answered in full earlier; the highest-option item is still the tree-level requirers op, now behind the q5z merge. *Prosecution list in a trusted place?* Twelve inbox items; S9 waits on creds.
