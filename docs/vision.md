@@ -596,3 +596,49 @@ fallback. Wall and churn are reported alongside, never alone. `:extract! :rewire
 first verb promoted under this definition (rf2, 3/3, `~/acid/receipts/rf2-score.md`); the older
 `:extract!`, `:ls` and `require_change` entries above are demoted to "fast, composition
 unproven" until the rf2 branch that fixes their composition merges and the fixes are re-measured.
+
+## How we work, so the goal is surely reached (Gene, 2026-09-03, night)
+
+The goal above is a claim about the agent's route. It is reached only by a way of working that
+keeps the claim under measurement every day. Gene, going to sleep on the first night the seat ran
+on Anvil: *"capture the magic moments of tweezering, watcher doing timings, and parallel tests going
+on anvil. And constantly watching how surgeon is or isn't used, and steering towards decisively
+winning in the squares we choose to compete against native. that's what your work should feel like."*
+
+**The loop, in order, every day:**
+
+1. **Tweezer the verbs by hand, with a watcher timing every operation.** A human or a seat drives a
+   verb one call at a time on a real repo; a separate watcher records every tool call and every
+   model return with wall time. The watcher's figure is the report, never the driver's own count
+   (a driver reported 15 returns; the watcher counted 35 in 797 s). Every refusal paid by hand goes
+   into the friction ledger with its exact text, a ratchet, and a trigger; the ledger is built,
+   not remembered.
+2. **Fan out multi-arm experiments on Anvil, locally.** Sixteen cores on this box; no ssh, no other
+   seat needed. Native is the positive control in every cohort; the variance floor is measured
+   before any comparison; every arm is attested (server sha read from the server, prompt hash,
+   worktree commit, port) or its receipt is blind. New apparatus runs one unit at a time and earns
+   its batch size by clean completions. After each result, poll Sol and Opus for interpretations
+   and next-wave experiments with a prediction and a cost each; run several in parallel; never pick
+   one by hand.
+3. **Watch how Surgeon is or isn't used, on a clock.** `make study-agent-usage` on an hourly cron
+   during any program; the collector's figures go into the log verbatim; a false zero is a
+   telemetry-root question, not a finding. Free-choice adoption is the acceptance test: a feature
+   the agent declines when the tool is optional has not shipped.
+4. **Steer toward decisively winning the chosen squares, and withdraw from the rest.** Every
+   result is judged by the square it wins or loses: the gate on the agent's own patch, fan-out
+   across N owners, questions grep answers wrong, proof before write. A square where the numbers
+   say native is at parity is not defended; it is withdrawn from, in writing, with the measurement.
+5. **Ship only what carries a receipt the next verb accepts without hand repair.** Every fix
+   reproduces its defect first (for resource failures, a subprocess at a small explicit heap that
+   asserts the failure), enters its new requirement as a linked intent with fail-first witnesses,
+   and, where the bound is a resource, is gated by a battery rather than a unit test so the fast
+   suites stay fast. Every branch gets an executed, independent red-team before the merge queue;
+   nothing merges on the builder's word.
+6. **Chronicle as you go.** The captain's log gets each moment with the quote and the number the
+   same hour; the resume note is refreshed at every material change; the morning report leads with
+   the table. LIVE feeds CHRONICLE, or the field notes are lost.
+
+**What it feels like when it is working:** one call landing what native took nine returns to land,
+a watcher's number contradicting a confident self-report, ten lanes on sixteen cores with every
+suite under one lock, a usage meter read every hour, and a square conceded on the evidence as
+readily as one is claimed.
