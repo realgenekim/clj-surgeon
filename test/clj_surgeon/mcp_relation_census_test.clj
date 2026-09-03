@@ -2336,17 +2336,29 @@
 (deftest no-refusal-anywhere-puts-a-caption-in-an-argument-position
   (let [root (temp-dir)
         empty-root (temp-dir)
+        ;; Sol's round-fourteen item 7 shape needs a tree of its OWN: a
+        ;; chmod-000 entry inside `root` would refuse the rows above that
+        ;; WALK it, rather than the refusal each of those exists to probe.
+        denied-root (temp-dir)
         big "src/app/huge.clj"
-        small "src/app/small.clj"]
+        small "src/app/small.clj"
+        arm "src/app/folds.clj"
+        denied "src/app/denied.clj"]
     (try
       (spit-file! (io/file root big)
                   (str "(defmethod fold-event \"a\" [state event] state)\n"
                        (apply str (repeat (inc census/max-source-bytes) \;))))
       (spit-file! (io/file root small) arm-source)
       (.mkdirs (io/file empty-root "src"))
+      (spit-file! (io/file denied-root arm) arm-source)
+      (spit-file! (io/file denied-root denied) arm-source)
+      (deny-reads! (io/file denied-root denied))
       (let [here (fn [params]
                    (census-tool/execute-request!
                      {:project-root (.getPath root)} params))
+            denied-here (fn [params]
+                          (census-tool/execute-request!
+                            {:project-root (.getPath denied-root)} params))
             empty-here (fn [params]
                          (census-tool/execute-request!
                            {:project-root (.getPath empty-root)} params))
@@ -2403,7 +2415,19 @@
              ;; has no faithful narrowing, so the decodability row is asked
              ;; FIRST OVERALL rather than fourth.
              :not-decodable-with-unknown-field
-             [run {:workspace_root undecodable-probe-path :bogus 1}]}
+             [run {:workspace_root undecodable-probe-path :bogus 1}]
+             ;; Sol's round-fourteen item 7: a source that EXISTS and cannot
+             ;; be read. It belongs in this battery and not only in its own
+             ;; witness, because the continuation it computes has to satisfy
+             ;; the SAME two global properties every other continuation does
+             ;; — it validates against the published schema, and it names the
+             ;; workspace the request named — and neither is asserted by a
+             ;; witness that only reads the refusal it expected.
+             :unreadable-denied-mixed
+             [denied-here {:files [arm denied]
+                           :doors ["upsert-by"]
+                           :pool_size 1}]
+             :unreadable-denied-only [denied-here {:files [denied]}]}
             mcp-refusals (into {}
                                (map (fn [[label [entrance params]]]
                                       [label (entrance params)]))
@@ -2634,7 +2658,11 @@
                          "request named " (pr-str asked) ", the continuation "
                          (pr-str (:workspace_root next-call)) " — "
                          (pr-str next-call))))))))
-      (finally (delete-tree! root) (delete-tree! empty-root)))))
+      (finally
+        (allow-reads! (io/file denied-root denied))
+        (delete-tree! root)
+        (delete-tree! empty-root)
+        (delete-tree! denied-root)))))
 
 ;; @spec MCP-OP-CENSUS-033
 (deftest the-entry-narrowing-fits-under-both-bounds
