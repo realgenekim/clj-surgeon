@@ -440,6 +440,20 @@
     (alias-flag aliases) (conj (alias-flag aliases))))
 
 ;; @spec MCP-OP-EXTRACT-021
+;; @spec MCP-OP-EXTRACT-027
+(defn declared-compile-config
+  "The compile declaration governing one workspace, and the file it came from.
+
+  The search is BOUNDED at `root`: a `.clj-surgeon.edn` above the workspace
+  governs somebody else's tree, and letting it choose this compile's classpath
+  aliases would let a directory the operator never named put its own
+  `:extra-paths` first on a classpath that then runs workspace code."
+  [root]
+  (let [config (forms/project-config root root)]
+    {:aliases (normalize-aliases (some-> config :compile :aliases))
+     :config-file (:config-file config)}))
+
+;; @spec MCP-OP-EXTRACT-021
 (defn declared-compile-aliases
   "The aliases a workspace declares for compiling itself, from its own
   `.clj-surgeon.edn` under `{:compile {:aliases [\"...\"]}}`.
@@ -448,7 +462,7 @@
   classpath; the tool cannot know it. Declaring it is how a correct extraction
   stops being handed a command that is red for a reason it did not cause."
   [root]
-  (normalize-aliases (some-> (forms/project-config root) :compile :aliases)))
+  (:aliases (declared-compile-config root)))
 
 ;; @spec MCP-OP-EXTRACT-022
 (defn candidate-compile-aliases
@@ -591,14 +605,16 @@
   receipt reports `:status :not-run` with `:runs-workspace-code false` rather
   than claiming a verification it did not perform. The subprocess is bounded by
   `timeout-ms` and an output limit; it is not a sandbox."
-  [{:keys [namespaces root timeout-ms aliases touched-files]
+  [{:keys [namespaces root timeout-ms aliases touched-files config-file]
     :or {timeout-ms 30000}}]
   (let [aliases (normalize-aliases aliases)
         base (cond-> (merge {:namespaces (vec namespaces)}
                             ;; @spec MCP-OP-EXTRACT-026
                             compile-trust-fields
                             (compile-command-fields namespaces aliases))
-               (seq aliases) (assoc :aliases aliases))
+               (seq aliases) (assoc :aliases aliases)
+               ;; @spec MCP-OP-EXTRACT-027
+               config-file (assoc :config-file config-file))
         run! (fn [argv ms]
                (try
                  (process-env/run-bounded!
@@ -746,7 +762,11 @@
                                 (compile-command-fields
                                   namespaces (:_compile-aliases plan)))
                         (seq (:_compile-aliases plan))
-                        (assoc :aliases (:_compile-aliases plan))))
+                        (assoc :aliases (:_compile-aliases plan))
+
+                        ;; @spec MCP-OP-EXTRACT-027
+                        (:_compile-config-file plan)
+                        (assoc :config-file (:_compile-config-file plan))))
          :new-file-preview (:_target-outline plan)
          :quoted-var-references-unrewired (:quoted-var-references plan)
          :note "quoted-var-references-unrewired: Vars reached by quoting, never rewritten here."
@@ -898,7 +918,7 @@
   workspace source map. No file, process, clock, or registry access occurs."
   [{:keys [file source forms to target-ns workspace-sources require-policy
            public-forms derive-required-public-forms doc alias rewire-callers
-           project-root compile-aliases]
+           project-root compile-aliases compile-config-file]
     :or {workspace-sources {} require-policy :minimal public-forms []
          derive-required-public-forms false rewire-callers true}}]
   (let [lines (vec (str/split-lines source))
@@ -1214,6 +1234,8 @@
            :_project-root project-root
            ;; @spec MCP-OP-EXTRACT-021
            :_compile-aliases (normalize-aliases compile-aliases)
+           ;; @spec MCP-OP-EXTRACT-027
+           :_compile-config-file compile-config-file
            :_target-outline (assoc (target-outline (:ns-form header-result)
                                                    publicized-texts)
                                    :lines (count (str/split-lines new-file-content)))
@@ -1305,6 +1327,8 @@
           ;; where a directory symlink turns a path that LOOKS like it is under
           ;; the root into one that is not.
           escape (confine-workspace-paths project-root discovered)
+          explicit-compile-aliases (not-empty (normalize-aliases compile-alias))
+          declared-compile (declared-compile-config project-root)
           workspace-sources
           (when-not escape
             (into (sorted-map)
@@ -1320,8 +1344,11 @@
            :workspace-sources workspace-sources
            :require-policy require-policy
            :project-root (str project-root)
-           :compile-aliases (or (not-empty (normalize-aliases compile-alias))
-                                (declared-compile-aliases project-root))
+           :compile-aliases (or explicit-compile-aliases
+                                (:aliases declared-compile))
+           ;; @spec MCP-OP-EXTRACT-027
+           :compile-config-file (when-not explicit-compile-aliases
+                                  (:config-file declared-compile))
            :public-forms (or public public-forms [])
            ;; @spec MCP-OP-EXTRACT-011
            ;; When the caller does not name the promotions, DERIVE them. The
@@ -1476,6 +1503,7 @@
                                         (normalize-aliases
                                           (:compile-alias opts)))
                                       (:_compile-aliases p))
+                         :config-file (:_compile-config-file p)
                          :touched-files (concat [file to]
                                                 (map :file caller-plans))
                          :root (project-root-for-source file

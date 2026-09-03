@@ -178,20 +178,36 @@
 ;; Config file resolution
 ;; ============================================================
 
+(defn- canonical-path
+  "The canonical path of `f`, or its absolute path when it cannot be resolved."
+  [^java.io.File f]
+  (try (.getCanonicalPath f) (catch Exception _ (.getAbsolutePath f))))
+
+;; @spec MCP-OP-EXTRACT-027
 (defn- find-config-file
   "Walk up from `start` (a file or dir path) looking for `.clj-surgeon.edn`.
-   Return the java.io.File for the first one found, or nil."
-  [start]
-  (let [start-file (some-> start io/file .getAbsoluteFile)
-        start-dir (if (and start-file (.isDirectory start-file))
-                    start-file
-                    (some-> start-file .getParentFile))]
-    (loop [dir start-dir]
-      (when dir
-        (let [cfg (io/file dir ".clj-surgeon.edn")]
-          (if (.exists cfg)
-            cfg
-            (recur (.getParentFile dir))))))))
+   Return the java.io.File for the first one found, or nil.
+
+   With `stop-root`, the walk STOPS after checking that directory: a
+   configuration ABOVE a workspace is not that workspace's configuration, and a
+   tool that reads one is taking instructions from outside the tree it was
+   pointed at. The one-arity walk to `/` is deliberately unchanged -- its
+   callers resolve aliases for a path the operator named, not for a workspace
+   boundary -- and changing it would need its own witness."
+  ([start] (find-config-file start nil))
+  ([start stop-root]
+   (let [start-file (some-> start io/file .getAbsoluteFile)
+         start-dir (if (and start-file (.isDirectory start-file))
+                     start-file
+                     (some-> start-file .getParentFile))
+         stop (some-> stop-root io/file canonical-path)]
+     (loop [dir start-dir]
+       (when dir
+         (let [cfg (io/file dir ".clj-surgeon.edn")]
+           (cond
+             (.exists cfg) cfg
+             (and stop (= stop (canonical-path dir))) nil
+             :else (recur (.getParentFile dir)))))))))
 
 (defn- read-config
   "Read + compile a `.clj-surgeon.edn` file. Throws on malformed EDN or
@@ -221,12 +237,15 @@
 
   The alias reader ignores top-level keys it does not know, so a new section is
   additive: a workspace can declare things about itself here without any risk to
-  form classification."
-  [start]
-  (when-let [f (find-config-file start)]
-    (try (let [parsed (edn/read-string (slurp f))]
-           (when (map? parsed) (assoc parsed :config-file (.getPath f))))
-         (catch Exception _ nil))))
+  form classification.
+
+  With `stop-root` the search is bounded at that directory."
+  ([start] (project-config start nil))
+  ([start stop-root]
+   (when-let [f (find-config-file start stop-root)]
+     (try (let [parsed (edn/read-string (slurp f))]
+            (when (map? parsed) (assoc parsed :config-file (.getPath f))))
+          (catch Exception _ nil)))))
 
 (defn load-project-aliases
   "Find `.clj-surgeon.edn` by walking up from `start` (a file or dir path).

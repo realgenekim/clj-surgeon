@@ -1720,3 +1720,48 @@
               "nothing from the workspace was executed")
           (is (= :disabled-by-caller (get-in result [:compile :reason])))))
       (finally (delete-recursive! root)))))
+
+;; @spec MCP-OP-EXTRACT-027
+(deftest compile-aliases-are-read-only-from-inside-the-workspace
+  (testing "a .clj-surgeon.edn in the PARENT of the workspace is not consulted"
+    (let [base (java.io.File/createTempFile "extract-config-escape" "")
+          _ (.delete base)
+          _ (.mkdirs base)
+          root (io/file base "proj")]
+      (try
+        (.mkdirs (io/file root "src" "app"))
+        (spit (io/file base ".clj-surgeon.edn")
+              "{:compile {:aliases [\"parent-alias\"]}}\n")
+        (spit (io/file root "deps.edn") "{:paths [\"src\"]}\n")
+        (spit (io/file root "src" "app" "core.clj")
+              (str "(ns app.core)\n\n(defn moved [] :ok)\n\n"
+                   "(defn stays [] (moved))\n"))
+        (is (= [] (extract/declared-compile-aliases (.getPath root)))
+            "the walk stops at the project root")
+        (let [preview (extract/plan
+                        {:file (.getPath (io/file root "src" "app" "core.clj"))
+                         :forms '[moved]
+                         :to (.getPath (io/file root "src" "app" "moved.clj"))
+                         :alias "moved"})]
+          (is (= ["clojure" "-Spath"]
+                 (first (get-in preview [:compile :command])))
+              "so no alias from outside the workspace reaches the classpath")
+          (is (nil? (get-in preview [:compile :config-file]))
+              "and the receipt says no config governed this run"))
+        (finally (delete-recursive! base)))))
+
+  (testing "a .clj-surgeon.edn at the workspace root still governs, and is named"
+    (let [root (workspace-with-config! true)]
+      (try
+        (is (= ["app/test"] (extract/declared-compile-aliases (.getPath root))))
+        (let [preview (extract/plan
+                        {:file (.getPath (io/file root "src" "app" "core.clj"))
+                         :forms '[moved]
+                         :to (.getPath (io/file root "src" "app" "moved.clj"))
+                         :alias "moved"})]
+          (is (= ["clojure" "-Spath" "-A:app/test"]
+                 (first (get-in preview [:compile :command]))))
+          (is (str/ends-with? (str (get-in preview [:compile :config-file]))
+                              ".clj-surgeon.edn")
+              "the receipt names the file whose declaration it obeyed"))
+        (finally (delete-recursive! root))))))
