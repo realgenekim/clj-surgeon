@@ -182,6 +182,8 @@ beads DB: a `bd` issue — `bd create` fails "no beads database found" from this
 record is inbox **inb-d27b79** plus `/tmp/anvil-andon.txt` and the ANDON note on inb-1165ce. Follow-up
 already filed: **inb-75aaf7** (find expression-start tokens `( ) ! ,`).
 
+**CLEARED (added 21:47Z, source: captain's log 21:4xZ entry quoting /tmp/mayor-2100.txt).** The mayor merged the fix to clj-surgeon main at **a6df86ee** at 21:00Z after (1) reproducing the injection on unmodified main — "CREATED THE CANARY FILE on my disk … the attacker controlled the return value as well as executing the command"; (2) verifying the fix on the merged tree — both hostile forms refuse, no canary, zero `sh -c` in src; (3) sabotaging the ratchet — "It went RED, named the file, quoted the exact offending form back at me, and fired TWO independent rules"; (4) binding the two mcp-test failures to unmodified main at the same box load (clj-surgeon-fdo, not a regression). Freeze LIFTED; bead clj-surgeon-0me unblocked. Seat-verified from Anvil: a6df86ee is an ancestor of origin/main, `"sh" "-c"` literals in src = 0, the ratchet test is present. Pull-to-lift: 34 minutes. The mayor's own note for the record: "my ack was 8 minutes late and you had to escalate on a second channel to get it. That failure is the most useful thing in the record."
+
 ## Outage — six hours dark, 13:03Z → 19:03Z
 
 The seat's **Claude WEEKLY limit** hit at ~13:03Z. Exact text from the harness, verbatim from the
