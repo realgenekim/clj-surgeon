@@ -572,15 +572,17 @@
 ;; @spec MCP-OP-CENSUS-021
 (defn run-relation-census
   "Census collection writes inside fold arms. Reads only; writes nothing."
-  [{:keys [dir file doors threads]}]
+  [{:keys [dir file doors threads] :as opts}]
   (let [doors-arg doors
         ;; The SAME pure pass the entrance (`run`) runs ahead of its config
         ;; load, called again here so an in-process caller of this op
         ;; function gets the identical refusal without going through the CLI
         ;; dispatch. Pure, so running it twice costs nothing and cannot
-        ;; differ.
-        shape-refusal (relation-census/validate-cli-request-shape
-                        {:threads threads})
+        ;; differ. It is handed the WHOLE request, not one field of it: Sol's
+        ;; round-ten item 4 was that this call passed `{:threads threads}`
+        ;; and the validator destructured `{:keys [threads]}`, so every other
+        ;; malformed shape reached the filesystem first.
+        shape-refusal (relation-census/validate-cli-request-shape opts)
         pool (when (some? threads) (relation-census/coerce-pool-size threads))
         parsed-doors (if doors
                        (relation-census/parse-doors

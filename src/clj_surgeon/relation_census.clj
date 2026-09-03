@@ -156,49 +156,6 @@
       :else {:ok true :size parsed})))
 
 ;; @spec MCP-OP-CENSUS-016
-;; @spec MCP-OP-CENSUS-019
-;; @spec MCP-OP-CENSUS-029
-(defn validate-cli-request-shape
-  "Pure request-shape validation for the CLI/babashka relation-census request.
-
-   Returns nil when the request's shape is acceptable, and the typed refusal
-   otherwise. It reads its argument and nothing else: no path is resolved, no
-   directory is stat'ed, no `.clj-surgeon.edn` is looked for.
-
-   It exists so `clj-surgeon.core/run` can refuse a malformed request BEFORE
-   it loads project aliases. Sol's round-nine finding was that ordering:
-   `bb … :threads not-a-number` returned `invalid-pool-size` only after the
-   entrance had stat'ed the workspace, stat'ed and read its
-   `.clj-surgeon.edn`, and walked the ancestor chain for more — filesystem
-   work on a request the tool had already decided it would not honour.
-   MCP-OP-CENSUS-016 says \"before any filesystem work\", and config
-   discovery is filesystem work.
-
-   It is a SIBLING of the MCP entrance's `validate-request-shape` rather than
-   the same function, and the reason is mechanical, not stylistic: that one
-   lives in `clj-surgeon.mcp-relation-census`, which requires
-   `clj-surgeon.census-pool` and through it claypoole, a dependency babashka
-   cannot load (`Could not locate com/climate/claypoole.bb, …`). A require of
-   it from `clj-surgeon.core` would not slow the bb entrance down, it would
-   delete it. What the two entrances DO share is the predicate underneath
-   both — `coerce-pool-size`, above — so the CLI's `:threads` and the tool's
-   `pool_size` cannot disagree about which values are integers in range. The
-   CLI has no equivalent of the other two shape checks: every CLI argument
-   arrives as a string, so `doors` and `files` have no type to violate here.
-
-   The continuation is a full command, not a caption in an argument position
-   (MCP-OP-CENSUS-014)."
-  [{:keys [threads]}]
-  (let [pool (when (some? threads) (coerce-pool-size threads))]
-    (when (and pool (not (:ok pool)))
-      {:ok false
-       :error-type :invalid-pool-size
-       :error (str ":threads must be an integer between 1 and "
-                   max-pool-size
-                   " (got " (pr-str threads) ")")
-       :next-command "clj-surgeon :op :relation-census :dir . :threads 8"})))
-
-;; @spec MCP-OP-CENSUS-016
 (defn effective-pool-size
   "The pool a census may actually use: never more than the box has processors.
 
@@ -210,6 +167,433 @@
 (def default-doors
   "Identity doors: a write routed through one of these is already keyed."
   #{'conj-once 'cons-once 'upsert-by 'conj-distinct-by 'cons-distinct-by})
+
+;; ---------------------------------------------------------------------------
+;; The shared request-shape refusal table
+;;
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
+;;
+;; ONE table, read by BOTH entrances. Each row names one logical field, one
+;; violation of it, the PREDICATE that decides the violation, and the name
+;; each entrance publishes when it refuses. A field the two entrances would
+;; otherwise be free to disagree about — Sol's round-ten item 6, where the
+;; tool refused `format` and `max_files` as unknown fields while the CLI
+;; accepted them SILENTLY — cannot disagree here, because there is only one
+;; place to say what the field is.
+;;
+;; What the entrances are still allowed to differ on is SPELLING, and the
+;; difference is real: the tool takes JSON arrays over the wire, the CLI takes
+;; one comma-separated `:doors` string and one `:file`. `normalise-request`
+;; is where that difference lives and where it ends; every predicate below
+;; reads the normalised request, not the caller's.
+;;
+;; A row whose `:cli` (or `:mcp`) entry is a map rather than a keyword is one
+;; that entrance CANNOT express — it is not an oversight, and the map says
+;; why. `:file` is one path, so it has no list to be empty or oversized;
+;; splitting a `:doors` string yields strings, so no CLI entry can have the
+;; wrong type. Those are the only such rows, and the parity witness asserts
+;; each one is genuinely inexpressible rather than merely unimplemented.
+;; ---------------------------------------------------------------------------
+
+(def mcp-census-fields
+  "The census fields the `relation_census` tool accepts."
+  #{:files :doors :pool_size})
+
+(def mcp-routing-fields
+  "The routing field the tool accepts.
+
+   `workspace_root` is a routing field, not a census field: it is validated
+   and canonicalised later, by `workspace/resolve-request`. The shape pass
+   must not treat its presence as an unknown field nor its value as anything
+   to check — checking it would mean resolving it, which is exactly the
+   filesystem work this pass runs before."
+  #{:workspace_root})
+
+(def cli-census-fields
+  "The arguments the `:relation-census` CLI op accepts.
+
+   The op registry's own `:args` map must name exactly these; a witness
+   asserts it, so a new argument cannot be added to the CLI without this
+   table learning about it and the shape pass refusing everything else."
+  #{:dir :file :doors :threads})
+
+(def cli-dispatch-fields
+  "Arguments the CLI DISPATCH owns rather than the op.
+
+   `core/run` is handed the parsed argument map whole, `:op` included, and
+   `--help` is answered before dispatch but survives in the map. Neither is
+   an unknown field."
+  #{:op :help})
+
+(declare parse-doors)
+
+(defn cli-door-names
+  "The door names one CLI `:doors` argument denotes. Pure.
+
+   The limit of -1 keeps trailing empties, so `\"conj-once,\"` names two
+   doors, the second blank, and is refused rather than silently trimmed to
+   one."
+  [value]
+  (mapv str/trim (str/split (str value) #"," -1)))
+
+(defn normalise-request
+  "One census request in the shape the shared refusal table checks.
+
+   Normalising is the ONLY place the two entrances' spellings are allowed to
+   differ. Everything after it is one implementation."
+  [entrance params]
+  (let [unknown (fn [accepted]
+                  (vec (sort (map name (remove accepted (keys params))))))]
+    (case entrance
+      :mcp {:entrance :mcp
+            :params params
+            :unknown (unknown (into mcp-census-fields mcp-routing-fields))
+            :doors {:present? (some? (:doors params))
+                    :value (:doors params)
+                    :entries (:doors params)}
+            :files {:present? (some? (:files params))
+                    :value (:files params)
+                    :entries (:files params)}
+            :pool-size {:present? (contains? params :pool_size)
+                        :value (:pool_size params)}}
+      :cli (let [doors (:doors params)
+                 file (:file params)]
+             {:entrance :cli
+              :params params
+              :unknown (unknown (into cli-census-fields cli-dispatch-fields))
+              :doors {:present? (some? doors)
+                      :value doors
+                      :entries (when (string? doors) (cli-door-names doors))}
+              :files {:present? (some? file)
+                      :value file
+                      :entries (when (some? file) [file])}
+              :pool-size {:present? (some? (:threads params))
+                          :value (:threads params)}}))))
+
+(def ^:private known-door-list
+  (delay (str/join "," (sort (map str default-doors)))))
+
+(defn- doors-ok?
+  "True when `pred` holds for the normalised doors, or there are none to check."
+  [req pred]
+  (let [{:keys [present? entries]} (:doors req)]
+    (or (not present?) (not (sequential? entries)) (pred entries))))
+
+(def request-shape-rules
+  "The ONE ordered refusal table both census entrances validate against.
+
+   Order is the order MCP-OP-CENSUS-016 states — unknown fields, then
+   `doors`, then `files`, then `pool_size` — and both entrances refuse on
+   the FIRST row that fails.
+
+   Per row: `:predicate` is true when the request is ACCEPTABLE for that row.
+   `:mcp` and `:cli` are the names the two entrances publish; a map instead
+   of a keyword means that entrance cannot express the violation and says
+   why. `:cli-message`, `:cli-data` and `:cli-fix` are the CLI's refusal
+   payload — the CLI validator below is driven entirely from this table. The
+   tool's validator keeps its own `cond` (its per-branch payloads differ)
+   but takes its predicates and its published names from these same rows, so
+   a rename or a loosened bound reaches both entrances at once."
+  [{:field :unknown-fields
+    :violation :present
+    :predicate (fn [req] (empty? (:unknown req)))
+    :mcp :unknown-fields
+    :cli :unknown-arguments
+    :cli-message (fn [req]
+                   (str ":op :relation-census does not accept "
+                        (str/join ", " (map #(str ":" %) (:unknown req)))))
+    :cli-data (fn [_req]
+                {:accepted (vec (sort (map #(str ":" (name %))
+                                           cli-census-fields)))})
+    :cli-fix :none}
+
+   {:field :doors
+    :violation :container-type
+    ;; The tool is handed a JSON array; the CLI is handed one comma-separated
+    ;; string. Same question — "is this a doors LIST at all?" — asked of the
+    ;; two shapes the two wires can carry.
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:doors req)]
+                   (or (not present?)
+                       (if (= :cli (:entrance req))
+                         (string? value)
+                         (sequential? value)))))
+    :mcp :doors-not-an-array
+    :cli :doors-not-a-string
+    :cli-message (fn [req]
+                   (str ":doors must be a comma-separated string of door "
+                        "names (got " (pr-str (:value (:doors req))) ")"))
+    :cli-data (fn [req] {:value (:value (:doors req))})
+    :cli-fix :doors}
+
+   {:field :doors
+    :violation :too-many
+    :predicate (fn [req] (doors-ok? req #(<= (count %) max-doors)))
+    :mcp :too-many-doors
+    :cli :too-many-doors
+    :cli-message (fn [req]
+                   (str ":doors names "
+                        (count (:entries (:doors req)))
+                        " doors; the maximum is " max-doors))
+    :cli-data (fn [req] {:maximum max-doors
+                         :actual (count (:entries (:doors req)))})
+    :cli-fix :doors}
+
+   {:field :doors
+    :violation :entry-type
+    :predicate (fn [req] (doors-ok? req #(every? string? %)))
+    :mcp :doors-not-strings
+    :cli {:inexpressible
+          (str "the CLI's :doors is one string split on commas, so every "
+               "entry it yields is a string by construction; a CLI :doors "
+               "value that is not a string is refused one row earlier, as "
+               ":doors-not-a-string")}}
+
+   {:field :doors
+    :violation :vocabulary
+    ;; The syntactic half of the door check: is this name a symbol at all,
+    ;; and does it shadow a collection write head? Whether a door is DEFINED
+    ;; can only be answered after a scan, so that half is not a shape rule
+    ;; and is not here. The tool applies THIS predicate after discovery, so
+    ;; its refusal can carry the discovery facts; the CLI applies it in the
+    ;; shape pass, because the CLI entrance's next filesystem act is a config
+    ;; read it has not yet earned. Same predicate, same published name, same
+    ;; answer — different moment, for a stated reason.
+    :predicate (fn [req]
+                 (doors-ok? req #(or (not (every? string? %))
+                                     (not (map? (parse-doors % nil))))))
+    :mcp :unknown-door-symbol
+    :cli :unknown-door-symbol
+    :cli-message (fn [req]
+                   (let [bad (parse-doors (:entries (:doors req)) nil)]
+                     (str "Unknown identity door " (:invalid bad) ": "
+                          (:why bad))))
+    :cli-data (fn [req]
+                (let [bad (parse-doors (:entries (:doors req)) nil)]
+                  {:door (:invalid bad)
+                   :known-doors (vec (sort (map str default-doors)))}))
+    :cli-fix :doors}
+
+   {:field :files
+    :violation :container-type
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:files req)]
+                   (or (not present?) (sequential? value))))
+    :mcp :files-not-an-array
+    :cli {:inexpressible
+          (str "the CLI names at most one source, with :file; there is no "
+               "list whose container could have the wrong type")}}
+
+   {:field :files
+    :violation :empty
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:files req)]
+                   (or (not present?) (not (sequential? value)) (seq value))))
+    :mcp :empty-file-list
+    :cli {:inexpressible
+          (str "the CLI names at most one source, with :file; an absent "
+               "  :file censuses the tree and is not an empty list")}}
+
+   {:field :files
+    :violation :too-many
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:files req)]
+                   (or (not present?)
+                       (not (sequential? value))
+                       (<= (count value) max-requested-files))))
+    :mcp :too-many-files
+    :cli {:inexpressible
+          (str "the CLI names at most one source, with :file, so its file "
+               "count can never exceed the maximum")}}
+
+   {:field :files
+    :violation :entry-type
+    :predicate (fn [req]
+                 (let [{:keys [present? entries]} (:files req)]
+                   (or (not present?)
+                       (not (sequential? entries))
+                       (every? #(and (string? %) (not (str/blank? %)))
+                               entries))))
+    :mcp :file-not-a-string
+    :cli :file-not-a-string
+    :cli-message (fn [req]
+                   (str ":file must be a non-blank path (got "
+                        (pr-str (:value (:files req))) ")"))
+    :cli-data (fn [req] {:value (:value (:files req))})
+    :cli-fix :none}
+
+   {:field :pool-size
+    :violation :not-an-integer
+    ;; The wire carries JSON, so the tool accepts only a JSON integer and
+    ;; refuses a string, float, boolean, null or array. The CLI hands every
+    ;; argument over as a string, so its kernel reads decimal digits — the
+    ;; documented spelling difference, not a looser bound: both run the same
+    ;; `coerce-pool-size`, and both refuse everything that is not an integer
+    ;; in range.
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:pool-size req)]
+                   (or (not present?)
+                       (if (= :cli (:entrance req))
+                         (not= :not-an-integer (:reason (coerce-pool-size value)))
+                         (integer? value)))))
+    :mcp :pool-size-not-an-integer
+    :cli :invalid-pool-size
+    :cli-message (fn [req]
+                   (str ":threads must be an integer between 1 and "
+                        max-pool-size
+                        " (got " (pr-str (:value (:pool-size req))) ")"))
+    :cli-data (fn [_req] {})
+    :cli-fix :threads}
+
+   {:field :pool-size
+    :violation :out-of-range
+    :predicate (fn [req]
+                 (let [{:keys [present? value]} (:pool-size req)]
+                   (or (not present?)
+                       (let [coerced (coerce-pool-size value)]
+                         (or (:ok coerced)
+                             (not= :out-of-range (:reason coerced)))))))
+    :mcp :pool-size-out-of-range
+    ;; The CLI publishes ONE name for both pool-size violations, and has
+    ;; since the op shipped; its message names the bound and the value, so
+    ;; the caller is not told less. This is the documented many-to-one half
+    ;; of the CLI/MCP name mapping, and the parity witness uses it
+    ;; explicitly rather than papering over it.
+    :cli :invalid-pool-size
+    :cli-message (fn [req]
+                   (str ":threads must be an integer between 1 and "
+                        max-pool-size
+                        " (got " (pr-str (:value (:pool-size req))) ")"))
+    :cli-data (fn [_req] {})
+    :cli-fix :threads}])
+
+(defn shape-rule
+  "One row of the shared refusal table, by field and violation."
+  [field violation]
+  (first (filter #(and (= field (:field %)) (= violation (:violation %)))
+                 request-shape-rules)))
+
+(defn shape-name
+  "The name `entrance` publishes for one row of the shared table, or nil when
+   that entrance cannot express the violation."
+  [entrance field violation]
+  (let [published (get (shape-rule field violation) entrance)]
+    (when (keyword? published) published)))
+
+(defn shape-violated?
+  "True when the normalised request violates one row of the shared table."
+  [req field violation]
+  (not ((:predicate (shape-rule field violation)) req)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-019
+(defn cli-anchor
+  "Where a CLI continuation must point: the workspace the caller named, made
+   absolute WITHOUT touching the filesystem.
+
+   Sol's round-ten item 5, blocking: every CLI shape refusal handed back the
+   fixed `:dir .`, so a caller who named an absolute workspace and replayed
+   the continuation from anywhere else censused THAT directory instead — a
+   continuation that validates, runs, reports success, and answers about a
+   tree the caller never named. `.` is not a workspace; it is whatever the
+   next shell happens to be standing in.
+
+   Absolute is computed from `user.dir`, not from `getCanonicalPath`:
+   canonicalising is a `realpath`, and this pass runs before any filesystem
+   call. So a relative `:dir` becomes its resolution against the cwd it was
+   resolved in, and the refusal SAYS so in `:resolved-against` rather than
+   leaving the caller to guess which cwd a bare path meant."
+  [{:keys [dir file]}]
+  (let [cwd (System/getProperty "user.dir")
+        named-file? (and (string? file) (not (str/blank? file)))
+        given (str (if named-file? file (if (some? dir) dir ".")))
+        trimmed (str/trim given)
+        absolute (cond
+                   (str/starts-with? trimmed "/") trimmed
+                   (or (= "." trimmed) (str/blank? trimmed)) cwd
+                   (str/starts-with? trimmed "./") (str cwd "/" (subs trimmed 2))
+                   :else (str cwd "/" trimmed))]
+    (cond-> {:kind (if named-file? :file :dir)
+             :given given
+             :absolute absolute}
+      (not= given absolute) (assoc :resolved-against cwd))))
+
+(defn- cli-next-command
+  "The continuation one CLI shape refusal hands back, or nil when it does not
+   fit the shared continuation bound."
+  [anchor fix]
+  (let [command (str "clj-surgeon :op :relation-census "
+                     (if (= :file (:kind anchor)) ":file " ":dir ")
+                     (:absolute anchor)
+                     (case fix
+                       :doors (str " :doors " @known-door-list)
+                       :threads " :threads 8"
+                       ""))]
+    (when (<= (count command) max-next-call-bytes) command)))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+;; @spec MCP-OP-CENSUS-029
+(defn validate-cli-request-shape
+  "Pure request-shape validation for the CLI/babashka relation-census request.
+
+   Returns nil when the request's shape is acceptable, and the typed refusal
+   otherwise. It reads its argument, `user.dir`, and nothing else: no path is
+   resolved, no directory is stat'ed, no `.clj-surgeon.edn` is looked for.
+
+   It exists so `clj-surgeon.core/run` can refuse a malformed request BEFORE
+   it loads project aliases. Sol's round-nine finding was that ordering:
+   `bb … :threads not-a-number` returned `invalid-pool-size` only after the
+   entrance had stat'ed the workspace, stat'ed and read its
+   `.clj-surgeon.edn`, and walked the ancestor chain for more — filesystem
+   work on a request the tool had already decided it would not honour.
+   MCP-OP-CENSUS-016 says \"before any filesystem work\", and config
+   discovery is filesystem work.
+
+   Round ten fixed that for `:threads` and for `:threads` alone: this
+   function destructured `{:keys [threads]}` and read nothing else, so
+   `bb … :doors conj` against a workspace with unparseable `.clj-surgeon.edn`
+   still returned the EDN error (Sol's round-ten item 4). It now validates
+   the WHOLE shape, and it validates it against `request-shape-rules`, the
+   same table the tool's `validate-request-shape` reads, so the two
+   entrances cannot disagree about which shapes are refusable.
+
+   It remains a SIBLING of the tool's validator rather than the same
+   function, and the reason is mechanical, not stylistic: that one lives in
+   `clj-surgeon.mcp-relation-census`, which requires
+   `clj-surgeon.census-pool` and through it claypoole, a dependency babashka
+   cannot load (`Could not locate com/climate/claypoole.bb, …`). A require of
+   it from `clj-surgeon.core` would not slow the bb entrance down, it would
+   delete it. The TABLE is what the two share, and it is loadable by both.
+
+   The continuation is a full command, not a caption in an argument position
+   (MCP-OP-CENSUS-014), and it names the workspace the caller named, not the
+   cwd the replay happens to run in (MCP-OP-CENSUS-014, again)."
+  [params]
+  (let [req (normalise-request :cli params)
+        anchor (cli-anchor params)]
+    (reduce
+      (fn [_ {:keys [predicate cli cli-message cli-data cli-fix] :as _rule}]
+        (if (or (not (keyword? cli)) (predicate req))
+          nil
+          (reduced
+            (merge
+              {:ok false
+               :error-type cli
+               :error (cli-message req)
+               :anchor anchor}
+              (cli-data req)
+              (if-let [command (cli-next-command anchor cli-fix)]
+                {:next-command command}
+                {:remedy
+                 (str "The workspace this request names is too long to carry "
+                      "into a continuation under " max-next-call-bytes
+                      " bytes, so no narrower command can be computed: run "
+                      "the census from a shorter path.")})))))
+      nil
+      request-shape-rules)))
 
 (def ^:private write-heads '#{conj cons into concat})
 

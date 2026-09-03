@@ -129,14 +129,16 @@
 ;; Parameter validation (server-side; the advertised schema is only a hint)
 ;; ---------------------------------------------------------------------------
 
-(def ^:private census-fields #{:files :doors :pool_size})
-
+;; Both field sets live in `clj-surgeon.relation-census`, next to the shared
+;; refusal table, because the CLI entrance must be able to read them and
+;; cannot require this namespace (claypoole does not load under babashka).
 ;; `workspace_root` is a routing field, not a census field: it is validated
 ;; and canonicalised later, by `workspace/resolve-request`, and this pass
 ;; must not treat its presence as an unknown field nor its value as anything
 ;; to check — checking it here would mean resolving it, which is exactly the
 ;; filesystem work this pass runs before.
-(def ^:private routing-fields #{:workspace_root})
+(def ^:private census-fields census/mcp-census-fields)
+(def ^:private routing-fields census/mcp-routing-fields)
 
 ;; @spec MCP-OP-CENSUS-016
 ;; @spec MCP-OP-CENSUS-029
@@ -217,14 +219,26 @@
                                          "directory, or omit it to census "
                                          "the server's workspace.")})
                                  data)))
-        unknown (vec (sort (map name (remove (into census-fields routing-fields)
-                                              (keys params)))))
+        ;; The shape questions themselves — which fields are unknown, which
+        ;; values violate which bound — are the shared table's, not this
+        ;; function's. `req` is this request in the normalised shape the
+        ;; table checks; `violated?` and `reason` read the same rows the CLI
+        ;; entrance reads, so a renamed reason or a loosened bound reaches
+        ;; both entrances at once and neither can drift. What stays here is
+        ;; the ORDER (MCP-OP-CENSUS-029 states it) and this entrance's own
+        ;; refusal payloads, which differ per branch.
+        req (census/normalise-request :mcp params)
+        violated? (fn [field violation]
+                    (census/shape-violated? req field violation))
+        reason (fn [field violation]
+                 (census/shape-name :mcp field violation))
+        unknown (:unknown req)
         files (:files params)
         doors (:doors params)
         pool-size (:pool_size params)]
     (cond
-      (seq unknown)
-      (refuse :unknown-fields
+      (violated? :unknown-fields :present)
+      (refuse (reason :unknown-fields :present)
               (str "relation_census does not accept " (str/join ", " unknown))
               {:unknown unknown
                ;; The accepted list is what the caller retries with, so it
@@ -236,11 +250,12 @@
                :accepted (vec (sort (map name (into census-fields
                                                     routing-fields))))})
 
-      (and (some? doors) (not (sequential? doors)))
-      (refuse :doors-not-an-array "doors must be a JSON array of symbols" {})
+      (violated? :doors :container-type)
+      (refuse (reason :doors :container-type)
+              "doors must be a JSON array of symbols" {})
 
-      (and (some? doors) (> (count doors) census/max-doors))
-      (refuse :too-many-doors "doors exceeds the maximum door count"
+      (violated? :doors :too-many)
+      (refuse (reason :doors :too-many) "doors exceeds the maximum door count"
               {:maximum census/max-doors :actual (count doors)})
 
       ;; Every doors entry must be the JSON string the advertised schema
@@ -250,34 +265,36 @@
       ;; next_call. A non-string entry that survived to that branch produced
       ;; an unexecutable continuation: the schema rejects it, even though
       ;; this validator had not yet refused it.
-      (and (some? doors) (not (every? string? doors)))
+      (violated? :doors :entry-type)
       (let [bad-index (first (keep-indexed (fn [i d] (when-not (string? d) i))
                                             doors))
             bad-value (nth doors bad-index)]
-        (refuse :doors-not-strings
+        (refuse (reason :doors :entry-type)
                 "every entry in doors must be a JSON string"
                 {:index bad-index :value bad-value}))
 
-      (and (some? files) (not (sequential? files)))
-      (refuse :files-not-an-array "files must be a JSON array of paths" {})
+      (violated? :files :container-type)
+      (refuse (reason :files :container-type)
+              "files must be a JSON array of paths" {})
 
-      (and (some? files) (empty? files))
-      (refuse :empty-file-list
+      (violated? :files :empty)
+      (refuse (reason :files :empty)
               "files must name at least one path; omit files to census the tree"
               {})
 
-      (and (some? files) (> (count files) census/max-requested-files))
-      (refuse :too-many-files
+      (violated? :files :too-many)
+      (refuse (reason :files :too-many)
               "files exceeds the maximum file count"
               {:maximum census/max-requested-files :actual (count files)})
 
-      (and (some? files) (not (every? #(and (string? %) (not (str/blank? %))) files)))
-      (refuse :file-not-a-string "every entry in files must be a non-blank string" {})
+      (violated? :files :entry-type)
+      (refuse (reason :files :entry-type)
+              "every entry in files must be a non-blank string" {})
 
       ;; Present but not an integer — including an explicit null, which the
       ;; range check below would read as "absent" and never look at.
-      (and (contains? params :pool_size) (not (integer? pool-size)))
-      (refuse :pool-size-not-an-integer
+      (violated? :pool-size :not-an-integer)
+      (refuse (reason :pool-size :not-an-integer)
               (str "pool_size must be a JSON integer between 1 and "
                    census/max-pool-size)
               {:maximum census/max-pool-size :value pool-size})
@@ -286,13 +303,13 @@
       (let [coerced (when (some? pool-size) (census/coerce-pool-size pool-size))]
         (cond
           (and coerced (not (:ok coerced)) (= :not-an-integer (:reason coerced)))
-          (refuse :pool-size-not-an-integer
+          (refuse (reason :pool-size :not-an-integer)
                   (str "pool_size must be an integer between 1 and "
                        census/max-pool-size)
                   {:maximum census/max-pool-size :value (:value coerced)})
 
           (and coerced (not (:ok coerced)))
-          (refuse :pool-size-out-of-range
+          (refuse (reason :pool-size :out-of-range)
                   (str "pool_size must be between 1 and " census/max-pool-size)
                   {:maximum census/max-pool-size :value (:value coerced)})
 
