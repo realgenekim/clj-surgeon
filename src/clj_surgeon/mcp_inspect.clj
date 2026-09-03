@@ -10,7 +10,9 @@
    [clj-surgeon.outline :as outline]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [rewrite-clj.node :as node]
+   [rewrite-clj.parser :as parser]))
 
 (def max-requests 64)
 (def max-files 32)
@@ -562,10 +564,19 @@
   "each `_` matches exactly one subtree; a longer form needs a longer pattern")
 
 ;; @spec MCP-OP-FIELD-003
+;; @spec MCP-OP-FIELD-005
 (defn- wildcard-pattern?
-  "Does this pattern use `_` as a standalone wildcard token?"
+  "Does this pattern use `_` as a standalone wildcard token?
+
+   Decided from the parsed pattern, because bytes cannot tell a wildcard from an
+   underscore inside a string literal or inside one symbol, and cannot see a
+   wildcard whose only neighbour is a comma. An unreadable pattern carries no
+   note; the match request refuses on its own terms."
   [pattern]
-  (boolean (re-find #"(?:^|[\s(\[{])_(?:[\s)\]}]|$)" (str pattern))))
+  (try
+    (let [form (node/sexpr (parser/parse-string (str pattern)))]
+      (boolean (some #(= '_ %) (tree-seq coll? seq form))))
+    (catch Exception _ false)))
 
 (defn- match-result
   [request snapshot]

@@ -589,4 +589,22 @@
         (is (= "inspect-cardinality-mismatch" (:error_type refusal)))
         (is (= (str "each `_` matches exactly one subtree; "
                     "a longer form needs a longer pattern")
-               (:note refusal)))))))
+               (:note refusal)))))
+    ;; @spec MCP-OP-FIELD-005
+    ;; The note used to be decided from the pattern's raw bytes, which cannot
+    ;; tell a wildcard from an underscore inside a string, and cannot see one
+    ;; behind a comma.
+    (testing "`_` inside a string literal is data, not a wildcard"
+      (let [result (get-in (run "(missing \"a _ b\")" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (nil? (:note result)))))
+    (testing "`_` behind a comma is still a wildcard"
+      (let [result (get-in (run "[:events,_]" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (= (str "each `_` matches exactly one subtree; "
+                    "a longer form needs a longer pattern")
+               (:note result)))))
+    (testing "an underscore inside one symbol is not a wildcard"
+      (let [result (get-in (run "(missing_thing 1)" nil) [:results 0])]
+        (is (= 0 (:match_count result)))
+        (is (nil? (:note result)))))))

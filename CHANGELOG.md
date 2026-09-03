@@ -10,6 +10,11 @@ is cut.
 
 ### Fixed
 
+- The `_` wildcard note is now decided from the parsed `match` pattern rather
+  than its bytes. An underscore inside a string literal produced a spurious
+  note, and a wildcard whose only neighbour was a comma (`[a,_]`) was
+  missed.
+
 - Public tool schemas now advertise exactly what their entrances accept. The
   `apply_clojure_changes` schema advertised `expect_matched` on the edits,
   extraction, and basis branches that refuse it, and `edit_clojure` — whose
