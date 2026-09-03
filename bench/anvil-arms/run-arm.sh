@@ -25,6 +25,10 @@
 #   * --root must resolve inside /home/forge/tmp/arms; anything else is ROOT-REFUSED
 #     before a single directory is created.  The driver's CODEX_HOME is per-arm, so
 #     nothing writes into a shared ~/.codex either.
+#   * every identity component (exp/rung/arm/slot) is a PATH SEGMENT, so each is
+#     validated against ^[A-Za-z0-9._-]{1,40}$ with no `..`, and the resolved arm
+#     directory must itself lie inside the validated root: IDENTITY-REFUSED otherwise,
+#     again before a single directory is created.
 #   * a tool/free-choice arm's port must be in COHORT_PORTS (default 7907-7910).
 #     Nothing here ever contacts 7888, 7894, 7895 or 7906.
 #   * it kills only a server process THIS script started, by the pid in ready.edn.
@@ -83,7 +87,34 @@ case "$ROOT_REAL" in
 esac
 ROOT=$ROOT_REAL
 
+# EVERY IDENTITY COMPONENT BECOMES A PATH SEGMENT of the arm directory.  Sol round two,
+# item 9: --root was refused on its resolved path and then exp/rung/arm/slot were
+# interpolated in unvalidated, so `--exp ../component-escape` created a directory
+# outside the runner root the caller had just been checked for.  Confining the root and
+# then building the path out of unchecked caller strings confines nothing.
+for component in EXP RUNG ARM SLOT; do
+  value=${!component}
+  case "$value" in
+    *..*) echo "run-arm: IDENTITY-REFUSED --${component,,} '$value' contains '..' — nothing was created" >&2
+          exit 2;;
+  esac
+  if [[ ! $value =~ ^[A-Za-z0-9._-]{1,40}$ ]]; then
+    echo "run-arm: IDENTITY-REFUSED --${component,,} '$value' is not [A-Za-z0-9._-]{1,40} — nothing was created" >&2
+    exit 2
+  fi
+done
+
 A="$ROOT/$EXP-$RUNG-$ARM-$SLOT"
+# Belt and braces: the arm directory itself must resolve INSIDE the validated root,
+# whatever the components spelled.  A refusal on the resolved path is the only one a
+# spelling cannot walk around.
+A_REAL=$(readlink -m "$A")
+case "$A_REAL" in
+  "$ROOT"/*) ;;
+  *) echo "run-arm: IDENTITY-REFUSED arm dir '$A' resolves to '$A_REAL', outside the runner root $ROOT — nothing was created" >&2
+     exit 2;;
+esac
+A=$A_REAL
 case "$ARM" in
   N) PORT="-"; URL="";;
   T|F)
