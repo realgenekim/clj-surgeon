@@ -458,3 +458,28 @@
               (study/compile-pattern "(mcp)_(inspect)")
               "clj_surgeon/mcp_inspect_tool.clj"
               (study/ns-grep-pool 1000000)))))
+
+;; ============================================================
+;; The cap-stops-the-walk comment names what it actually bounds
+;; (round-4 re-review fix 5)
+;; ============================================================
+
+;; @spec MCP-OP-STUDY-033
+(deftest the-discover-projects-comment-names-canonicalisation-not-syscalls
+  ;; "keeps the syscalls proportional to the cap instead of to the tree" is
+  ;; true of toRealPath canonicalisation only. `find` itself still enumerates
+  ;; the WHOLE tree and `:out :string` materialises all of its stdout into
+  ;; one JVM string before the cap+1 transducer ever runs — measured:
+  ;; 1,130,000 bytes of find stdout entering the heap at max_files 10 over a
+  ;; 10,000-file corpus, with wall time still tracking tree size. The comment
+  ;; must say what it actually bounds.
+  (let [source (slurp "src/clj_surgeon/study.clj")]
+    (is (not (str/includes? source
+                            (str "stopping there is what keeps the "
+                                "syscalls\n        ;; proportional to the "
+                                "cap instead of to the tree.")))
+        "the old claim named the wrong bounded quantity")
+    (is (str/includes? source "canonicalisation")
+        "the comment must name toRealPath canonicalisation specifically")
+    (is (str/includes? source "find still enumerates")
+        "and say plainly that the walk itself is not bounded by the cap")))

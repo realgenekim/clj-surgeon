@@ -381,8 +381,14 @@
         cache (atom {})
         skipped! (atom [])
         ;; One file past the cap is all any walk needs to produce: it is
-        ;; already a refusal, and stopping there is what keeps the syscalls
-        ;; proportional to the cap instead of to the tree.
+        ;; already a refusal, and stopping there is what keeps the
+        ;; toRealPath canonicalisation syscalls proportional to the cap
+        ;; instead of to the tree. That bound does NOT extend to the walk
+        ;; itself: find still enumerates the whole tree and `:out :string`
+        ;; materialises its entire stdout into one JVM string before this
+        ;; transducer ever runs (measured: 1,130,000 bytes at max_files 10
+        ;; over a 10,000-file corpus, wall time still tracking tree size).
+        ;; Fine at today's ceilings; the real bound on a huge tree.
         limit (inc cap)
         build-files (find-build-files root dir)
         ;; Group by project root, keep first build file per root
