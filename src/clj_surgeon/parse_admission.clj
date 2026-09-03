@@ -317,6 +317,36 @@
          "first once MCP-OP-MEM-002 lands.")))
 
 ;; @spec MCP-OP-MEM-005
+(defn stack-overflow-refusal
+  "The typed refusal for a file whose parse exhausted the reader's stack DESPITE
+   being admitted.
+
+   The lexical estimator will always be an ESTIMATE, so the tree-scale caller
+   closes the scan-kill class independently of it: an `Error` escaping one
+   file's parse becomes the same named, counted, per-file skip a ceiling refusal
+   does, never a dead scan. Measured on anvil 2026-09-03: before this, a single
+   overflowing file killed the whole `ls-tree` pmap as
+   `{:FATAL \"ExecutionException\"}` and no file's outline was returned.
+
+   It carries no `:limit` or `:observed` because nothing was measured — the
+   reader ran out of stack before anything could be. Its presence is also a
+   report against the estimator, and the remedy says so."
+  [file]
+  {:refusal :parser_admission_refused
+   :error-type :parser-admission-refused
+   :file file
+   :reason :stack-overflow-during-parse
+   :limit nil
+   :observed nil
+   :remedy (str "A structural read of this file exhausted the reader's stack, "
+                "and the lexical pre-scan admitted it — so it nests deeper than "
+                "the estimator can currently see. Read it with a line-ranged "
+                "text tool, or split the nested literal into named forms. Every "
+                "clj-surgeon structural read of this file builds the same tree, "
+                "so there is no narrower call to retry. The estimator missing "
+                "this shape is a defect: report it with the file.")})
+
+;; @spec MCP-OP-MEM-005
 (defn refusal
   "Nil when `source` is admitted; otherwise a typed refusal map.
 

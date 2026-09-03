@@ -331,6 +331,18 @@
                  :file file
                  :error (ex-message e))
           {:file file :error (str (ex-message e))})))
+    (catch StackOverflowError _
+      ;; @spec MCP-OP-MEM-005
+      ;; The estimator is an ESTIMATE, and this catch is what makes the
+      ;; scan-kill class closed WITHOUT depending on it being complete. An
+      ;; Error is not an Exception, so before this one overflowing file killed
+      ;; the whole pmap scan and no file's outline came back at all.
+      (let [r (admission/stack-overflow-refusal file)]
+        (assoc (select-keys r [:refusal :reason :limit :observed :remedy])
+               :file file
+               :error (str "parser admission refused "
+                           (admission/public-ceiling-name (:reason r))
+                           ": " file))))
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
 
@@ -426,10 +438,15 @@
         (.append sb (format "── parser_admission_refused: %d file(s)\n"
                             (count refused)))
         (doseq [{:keys [file reason limit observed]} refused]
-          (.append sb (format "   %s  %s limit %d, observed %d\n"
-                              file
-                              (admission/public-ceiling-name reason)
-                              limit observed)))))
+          ;; A stack-overflow skip measured nothing, so it names no limit.
+          (.append sb (if (and limit observed)
+                        (format "   %s  %s limit %d, observed %d\n"
+                                file
+                                (admission/public-ceiling-name reason)
+                                limit observed)
+                        (format "   %s  %s\n"
+                                file
+                                (admission/public-ceiling-name reason)))))))
     (str sb)))
 
 (defn format-ls-tree-edn
