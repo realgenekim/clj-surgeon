@@ -239,7 +239,38 @@
    unnormalized escape used to be handed straight to `find` and moved the
    whole scan outside the root."
   [root project-root src-paths]
-  (keep #(mcp-paths/normalized-path-within root project-root %) src-paths))
+  (keep (fn [src-path]
+          (when-let [resolved (mcp-paths/normalized-path-within
+                                root project-root src-path)]
+            [(str src-path) resolved]))
+        src-paths))
+
+;; @spec MCP-OP-STUDY-035
+(defn- unresolved-source-dir
+  "The typed reason a declared source directory cannot be walked, or nil.
+
+   `find` runs with the default `-P`, which is what keeps a symlinked project
+   root from being descended (MCP-OP-STUDY-014) — and what makes a `:paths`
+   entry that IS a symlink yield nothing: `find` prints the link by its own
+   name and stops. The scan then reported `no-clojure-files` and offered
+   \"scan a directory that contains Clojure sources\", which is exactly wrong
+   for a directory that does contain them. A confinement decision the caller
+   cannot see is a silent false negative, so it becomes a named skip."
+  [declared resolved]
+  (when (fs/sym-link? resolved)
+    {:path declared :reason :symlink}))
+
+;; @spec MCP-OP-STUDY-035
+(defn- walkable-source-dirs
+  "Split a project's confined source directories into the ones a walk can
+   reach and the ones it must skip by name. `skipped!` records each skip
+   against the project that declared it."
+  [skipped! project-name confined]
+  (vec (for [[declared resolved] confined
+             :let [unresolved (unresolved-source-dir declared resolved)]]
+         (do (when unresolved
+               (swap! skipped! conj (assoc unresolved :project project-name)))
+             (when-not unresolved resolved)))))
 
 (def ^:private empty-accumulation
   {:seen #{} :projects []})
@@ -313,15 +344,20 @@
   "One thunk per project root, DEEPEST root first, so the most specific
    project owns its own files and an outer project that declares `:paths
    [\".\"]` takes only what is left."
-  [cache root by-root limit]
+  [cache root by-root limit skipped!]
   (map (fn [[project-root files]]
          (fn []
            (let [build-file (first files)
                  src-paths (extract-source-paths build-file)
                  root-path (fs/path project-root)
+                 project-name (str (fs/file-name root-path))
                  walks (mapv #(source-dir-files cache root % limit)
-                             (confined-source-dirs root root-path src-paths))]
-             {:name (str (fs/file-name root-path))
+                             (remove nil?
+                                     (walkable-source-dirs
+                                       skipped! project-name
+                                       (confined-source-dirs
+                                         root root-path src-paths))))]
+             {:name project-name
               :root (str root-path)
               :files (vec (apply concat walks))
               :truncated? (boolean (some #(>= (count %) limit) walks))})))
@@ -340,6 +376,7 @@
   [root dir cap]
   (let [dir (fs/path dir)
         cache (atom {})
+        skipped! (atom [])
         ;; One file past the cap is all any walk needs to produce: it is
         ;; already a refusal, and stopping there is what keeps the syscalls
         ;; proportional to the cap instead of to the tree.
@@ -347,24 +384,27 @@
         build-files (find-build-files root dir)
         ;; Group by project root, keep first build file per root
         by-root (group-by #(str (fs/parent %)) build-files)]
-    (by-name
-      (if (seq by-root)
-        (accumulate-projects cap
-                             (build-project-candidates cache root by-root limit)
-                             empty-accumulation)
+    (assoc
+      (by-name
+        (if (seq by-root)
+          (accumulate-projects cap
+                               (build-project-candidates
+                                 cache root by-root limit skipped!)
+                               empty-accumulation)
         ;; No build files — fallback to recursive scan. The skip-directory
         ;; test goes INTO the walk, so it can never shrink a listing below the
         ;; limit the walk stopped at.
-        (accumulate-projects
-          cap
-          [(fn []
-             (let [walk (source-dir-files cache root dir limit
-                                          #(not (in-skip-dir? % dir)))]
-               {:name (str (fs/file-name dir))
-                :root (str dir)
-                :files walk
-                :truncated? (>= (count walk) limit)}))]
-          empty-accumulation)))))
+          (accumulate-projects
+            cap
+            [(fn []
+               (let [walk (source-dir-files cache root dir limit
+                                            #(not (in-skip-dir? % dir)))]
+                 {:name (str (fs/file-name dir))
+                  :root (str dir)
+                  :files walk
+                  :truncated? (>= (count walk) limit)}))]
+            empty-accumulation)))
+      :paths-unresolved @skipped!)))
 
 (defn- rg-available?
   "Check if ripgrep (rg) is on the PATH."
@@ -777,6 +817,7 @@
    underneath it."
   [root grep-hits dir cap]
   (let [cache (atom {})
+        skipped! (atom [])
         limit (inc cap)
         build-files #{"deps.edn" "project.clj" "bb.edn"}
         {build-hits true src-hits false}
@@ -788,12 +829,18 @@
                 (map (fn [build-file]
                        (fn []
                          (let [project-root (str (fs/parent (fs/path build-file)))
+                               project-name (str (fs/file-name
+                                                   (fs/path project-root)))
                                walks (mapv
                                        #(source-dir-files cache root % limit)
-                                       (confined-source-dirs
-                                         root (fs/path project-root)
-                                         (extract-source-paths build-file)))]
-                           {:name (str (fs/file-name (fs/path project-root)))
+                                       (remove
+                                         nil?
+                                         (walkable-source-dirs
+                                           skipped! project-name
+                                           (confined-source-dirs
+                                             root (fs/path project-root)
+                                             (extract-source-paths build-file)))))]
+                           {:name project-name
                             :root project-root
                             :files (vec (apply concat walks))
                             :truncated? (boolean
@@ -802,7 +849,7 @@
                               (or build-hits [])))
                 empty-accumulation)]
     (if-not (:ok built)
-      built
+      (assoc built :paths-unresolved @skipped!)
       (let [build-roots (set (map :root (:projects built)))
             ;; Source file hits not in a build-matched project → group by
             ;; nearest project root
@@ -810,10 +857,11 @@
                                              (str/starts-with? (str %) (str r "/")))
                                            build-roots)
                                     (or src-hits []))]
-        (by-name
-          (accumulate-projects
-            cap
-            (->> orphan-src-hits
+        (assoc
+          (by-name
+            (accumulate-projects
+              cap
+              (->> orphan-src-hits
                  (map (fn [file]
                         (let [info (find-nearest-build-file file dir)]
                           (if info
@@ -843,7 +891,8 @@
                              :root project-root
                              :files files
                              :truncated? (>= (count files) limit)})))))
-            (select-keys built [:seen :projects])))))))
+              (select-keys built [:seen :projects])))
+          :paths-unresolved @skipped!)))))
 
 
 ;; ============================================================
@@ -972,7 +1021,12 @@
                            {:ok false :budget (:budget (ex-data error))}
                            (throw error)))))
           projects (if filtered (:projects filtered) (:projects discovery))
-          file-count (total-file-count projects)]
+          file-count (total-file-count projects)
+          ;; Declared source directories a `-P` walk cannot reach. Reported on
+          ;; success AND on refusal: a scan that found nothing because every
+          ;; declared path was a symlink must not be told to find a directory
+          ;; with Clojure sources in it.
+          unresolved (vec (:paths-unresolved discovery))]
       (cond
         (and filtered (not (:ok filtered)))
         {:ok false
@@ -1010,23 +1064,37 @@
                          max-scan-files-ceiling)}
 
         (empty? projects)
-        {:ok false
-         :error-type :no-clojure-files
-         :dir dir
-         :grep grep
-         :ns-grep ns-grep
+        (cond->
+          {:ok false
+           :error-type :no-clojure-files
+           :dir dir
+           :grep grep
+           :ns-grep ns-grep
          ;; `(when grep ...)` here would render the literal string "null" into
          ;; the message; this branch was unreachable before the format shadow
          ;; was removed, so no caller depended on that spelling.
-         :error (format "No Clojure files found under %s%s%s"
-                        named
-                        (if grep (str " matching '" grep "'") "")
-                        (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
+           :error (format "No Clojure files found under %s%s%s"
+                          named
+                          (if grep (str " matching '" grep "'") "")
+                          (if ns-grep (str " with ns/path matching '" ns-grep "'") ""))}
+          (seq unresolved)
+          (assoc :paths-unresolved unresolved
+                 :remedy (format (str "Declared source %s %s could not be "
+                                      "walked (%s): scan the directory the "
+                                      "link resolves to, or declare its real "
+                                      "path in :paths.")
+                                 (if (= 1 (count unresolved)) "path" "paths")
+                                 (str/join ", " (map (comp pr-str :path)
+                                                     unresolved))
+                                 (str/join ", " (distinct
+                                                  (map (comp name :reason)
+                                                       unresolved))))))
 
         :else
-        {:ok true
-         :dir dir
-         :grep grep
-         :ns-grep ns-grep
-         :file-count file-count
-         :projects projects}))))
+        (cond-> {:ok true
+                 :dir dir
+                 :grep grep
+                 :ns-grep ns-grep
+                 :file-count file-count
+                 :projects projects}
+          (seq unresolved) (assoc :paths-unresolved unresolved))))))

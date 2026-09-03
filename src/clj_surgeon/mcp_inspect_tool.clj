@@ -393,6 +393,18 @@
     ;; line cannot contradict the receipt's own file_count.
     (study/format-ls-tree-text projects dir {:file-count total})))
 
+;; @spec MCP-OP-STUDY-035
+(defn- ls-tree-unresolved-paths
+  "Declared source directories the scan could not walk, shaped for the wire.
+
+  The kernel's reason is a keyword; a receipt carries the name. An empty list
+  is omitted entirely rather than sent as `[]`, so the key's presence is
+  itself the signal that something was skipped."
+  [scan]
+  (mapv (fn [{:keys [project path reason]}]
+          {:project project :path path :reason (name reason)})
+        (:paths-unresolved scan)))
+
 (defn- ls-tree-payload-size
   [payload output-format]
   (if (contains? #{"edn" "names"} output-format)
@@ -703,6 +715,9 @@
                              (contains? scan :observed-at-least)
                              (assoc :observed_at_least
                                     (:observed-at-least scan))
+                             (seq (:paths-unresolved scan))
+                             (assoc :paths_unresolved
+                                    (ls-tree-unresolved-paths scan))
                              (:match-budget scan) (assoc :match_budget
                                                          (:match-budget scan))
                              (:grep params) (assoc :grep (:grep params))
@@ -749,6 +764,12 @@
                               :else "narrow_scope")}
               (contains? #{"edn" "names"} output-format) (assoc :files (:payload bounded))
               (= "text" output-format) (assoc :tree (:payload bounded))
+              ;; A successful receipt still says what it could not reach: a
+              ;; project with one real source directory and one symlinked one
+              ;; answers, and the symlinked declaration is invisible unless
+              ;; the receipt names it.
+              (seq (:paths-unresolved scan))
+              (assoc :paths_unresolved (ls-tree-unresolved-paths scan))
               ;; An executable continuation only while raising the limit can
               ;; still advance; a narrower dir or grep is a caller judgment.
               (and (:truncated bounded) (< limit ls-tree-max-limit))
@@ -880,6 +901,8 @@
     "max_files" {:type "integer"}
     "match_budget" {:type "integer"}
     "observed_at_least" {:type "boolean"}
+    "paths_unresolved" {:type "array"}
+    "remedy" {:type "string"}
     "format" {:type "string"}
     "limit" {:type "integer"}
     "project_count" {:type "integer"}
