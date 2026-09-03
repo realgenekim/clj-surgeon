@@ -127,12 +127,18 @@
 (def ^:private census-fields #{:files :doors :pool_size})
 
 ;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-029
 (defn validate-census-params
   "Validate relation_census parameters before any filesystem work.
 
    The JSON schema this tool advertises is a hint to a well-behaved caller. A
    malformed call reaches the server anyway, so every bound the schema states is
-   re-checked here and refused with a typed reason and an executable next_call."
+   re-checked here and refused with a typed reason and an executable next_call.
+
+   TYPES are re-checked too, not only ranges. `coerce-pool-size` reads decimal
+   digits because the CLI hands every value over as a string; the wire does not,
+   so a JSON string, float, boolean, null or array for `pool_size` is refused
+   here rather than quietly coerced into a pool the schema never advertised."
   [params workspace-root]
   (let [next-call (cond-> {:tool "relation_census" :pool_size 8}
                     workspace-root (assoc :workspace_root workspace-root))
@@ -172,6 +178,14 @@
       (and (some? doors) (> (count doors) census/max-doors))
       (refuse :too-many-doors "doors exceeds the maximum door count"
               {:maximum census/max-doors :actual (count doors)})
+
+      ;; Present but not an integer — including an explicit null, which the
+      ;; range check below would read as "absent" and never look at.
+      (and (contains? params :pool_size) (not (integer? pool-size)))
+      (refuse :pool-size-not-an-integer
+              (str "pool_size must be a JSON integer between 1 and "
+                   census/max-pool-size)
+              {:maximum census/max-pool-size :value pool-size})
 
       :else
       (let [coerced (when (some? pool-size) (census/coerce-pool-size pool-size))]
