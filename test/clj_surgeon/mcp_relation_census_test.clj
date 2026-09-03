@@ -328,6 +328,50 @@
         (is (= 1 (get-in result [:counts :raw]))))
       (finally (delete-tree! parent)))))
 
+(def ^:private filler-source
+  "(ns app.filler)\n(def x 1)\n")
+
+(defn- build-candidate-tree!
+  "A workspace holding exactly `n` candidate Clojure sources, one with arms."
+  [root n]
+  (spit-file! (io/file root "src/app/folds.clj") arm-source)
+  (doseq [i (range (dec n))]
+    (spit-file! (io/file root (format "src/filler/d%02d/f%04d.clj" (quot i 100) i))
+                filler-source)))
+
+;; @spec MCP-OP-CENSUS-027
+(deftest discovery-refuses-at-the-scanned-file-ceiling-instead-of-truncating
+  (let [root (temp-dir)]
+    (try
+      (build-candidate-tree! root census/max-scanned-files)
+      (testing "exactly the ceiling is censused and completion is claimed"
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {})]
+          (is (true? (:ok result))
+              (str "the census refused AT the ceiling: " (:error result)))
+          (is (true? (:read_complete result)))
+          (is (= census/max-scanned-files (:files_scanned result)))
+          (is (= 1 (:files result)))))
+
+      (testing "one candidate past the ceiling refuses typed before any read"
+        (spit-file! (io/file root "src/filler/one-too-many.clj") filler-source)
+        (let [result (census-tool/execute-request!
+                       {:project-root (.getPath root)} {})]
+          (is (false? (:ok result))
+              "a tree over the ceiling was censused as if it were complete")
+          (is (= "too-many-candidate-files" (:error_type result)))
+          (is (false? (:read_complete result)))
+          (is (= 0 (:files_read result)))
+          (is (= census/max-scanned-files (:maximum result)))
+          (is (= census/max-scanned-files (:fits result)))
+          (is (= (inc census/max-scanned-files) (:observed result)))
+          (is (true? (:observed_at_least result)))
+          (is (nil? (:counts result)))
+          (is (nil? (:by_file result)))
+          (is (= "relation_census" (get-in result [:next_call :tool])))
+          (is (seq (get-in result [:next_call :files])))))
+      (finally (delete-tree! root)))))
+
 ;; @spec MCP-OP-CENSUS-021
 (deftest the-cli-plan-pool-is-the-bounded-pool-on-the-jvm
   (testing "a threads request above one runs on census_pool, not core pmap"

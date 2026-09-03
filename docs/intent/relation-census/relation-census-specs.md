@@ -57,6 +57,8 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-CENSUS-024**: When clj-surgeon confirms that a supplied identity door is defined, it shall consider the top-level declarations of every scanned file, not only of the files that define arms, and both the MCP tool and the CLI op shall accept a door defined in a scanned helper namespace and refuse one defined nowhere.
 
+- [ ] **MCP-OP-CENSUS-027**: While discovering the files to census by walking the workspace tree, when the number of candidate Clojure sources reaches `max-scanned-files`, clj-surgeon shall refuse the census before reading any source with error type `too-many-candidate-files`, shall name the ceiling, the count that fits, the candidate count it observed and that the observed count is a lower bound, shall publish `files_read` 0, no counts and `read_complete` false, and shall carry an executable `next_call` that narrows the scan; both the `relation_census` tool and the `:relation-census` CLI op shall bound the walk itself rather than enumerating the whole tree and truncating the result.
+
 ## Published surfaces
 
 - [x] **MCP-OP-CENSUS-026**: When clj-surgeon publishes its tool catalog in prose, that prose shall state five tools, shall name `relation_census` in the README, in CLAUDE.md, and in the clj-surgeon skill reference and its mirror, shall state that the census locates review work rather than proving idempotency, and shall state that the census is the one tool that enumerates the workspace tree; the tool's own description shall state the same.
