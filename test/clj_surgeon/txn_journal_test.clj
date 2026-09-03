@@ -2701,3 +2701,130 @@
             (is (zero? (long (:bytes row))))
             (is (number? (:age-ms row)))))
         (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest an-interrupted-break-stays-typed-after-its-holder-releases-the-lock
+  (testing "Opus round 6, finding 4(i), probe A. An interrupted break was
+            recognised ONLY by sharing an inode with the live LOCK, which is
+            evidence that expires: the moment the wrongly-broken holder
+            releases its own claim - cleanly, txid-scoped, exactly as it
+            should - the inode is gone and the sweep silently re-types the
+            tombstone as `:kind :broken-lock :status :lock-broken`. A break
+            that never happened is then billed for 24 hours as evidence of one,
+            naming a holder that released cleanly, blocking every later break
+            by that txid with `:tombstone-exists`, and `recover!` reports
+            `{:found 1 :remaining 1}` with no resolution at all. State
+            inferred from a neighbour dies with the neighbour: an interrupted
+            break must be typed by its OWN marker."
+    (let [ws (workspace! "interrupted-after-release" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          tomb (io/file dir "LOCK.broken.BRK-INTERRUPTED")
+          row (fn [] (first (filter #(= "LOCK.broken.BRK-INTERRUPTED" (:txid %))
+                                    (journal/retained-transactions (:root ws) opts))))]
+      (try
+        (plant-lock! ws {:txid "A-LIVE" :pid (.pid child) :boot-id (boot-id-now)})
+        (let [claim (@#'journal/read-lock-claim lock)
+              outcome (@#'journal/break-lock!
+                        dir claim "BRK-INTERRUPTED"
+                        {:before-unlink
+                         (fn [_] (throw (java.io.IOException.
+                                          "killed between the link and the unlink")))})]
+          (is (= :break-failed (:cause outcome))
+              (str "the break died inside the window: " (pr-str outcome)))
+          (is (.isFile tomb) "the half-made tombstone is there")
+          (is (.isFile lock) "and so is the LOCK it was linked from"))
+
+        (is (= :interrupted-break (:kind (row)))
+            (str "typed while the LOCK is still there: " (pr-str (row))))
+
+        (is (true? (@#'journal/release-lock! dir "A-LIVE"))
+            "now the wrongly-broken holder releases its OWN claim, cleanly")
+        (is (not (.exists lock)))
+
+        (let [after (row)]
+          (is (= :interrupted-break (:kind after))
+              (str "the type must survive the holder it was inferred from: "
+                   (pr-str after)))
+          (is (= :lock-break-interrupted (:status after))))
+
+        (let [result (journal/recover! (:root ws) opts)
+              resolved (first (:interrupted-breaks result))]
+          (is (= 1 (count (:interrupted-breaks result)))
+              (str "recovery resolves it rather than billing it: "
+                   (pr-str result)))
+          (is (= "LOCK.broken.BRK-INTERRUPTED" (:tombstone resolved)))
+          (is (= :interrupted-break-reverted (:resolution resolved))
+              (str "the claim it was linked from is gone, so the break never "
+                   "happened and its evidence is not evidence: "
+                   (pr-str resolved)))
+          (is (not (.exists tomb)))
+          (is (zero? (:found (:broken-locks result)))
+              (str "and nothing is billed for a day as a break that happened: "
+                   (pr-str (:broken-locks result)))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest recovery-resolves-every-interrupted-break-in-one-call
+  (testing "Opus round 6, finding 4(ii), probe M1. `interrupted-break-file`
+            took the FIRST match while the prune excluded ALL of them, so with
+            two interrupted breaks at once the listing typed one and published
+            the other as `:kind :broken-lock :status :lock-broken` - false
+            evidence of a break, naming the claim that currently holds the
+            lock - and two `recover!` calls were needed to clear them.
+            Self-healing, and wrong while it lasts. One recovery resolves
+            every one of them, and both typing rules find them: the marker
+            written at link time, and the inode a crash before that marker
+            leaves."
+    (let [ws (workspace! "interrupted-many" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          dir (journal/transactions-dir (:root ws) (:state-home ws))
+          opts {:state-home (:state-home ws)}
+          lock (io/file dir "LOCK")
+          tomb-a (io/file dir "LOCK.broken.BRK-A")
+          tomb-b (io/file dir "LOCK.broken.BRK-B")
+          rows (fn [] (into {} (map (juxt :txid :kind))
+                            (filter #(contains? #{:broken-lock :interrupted-break}
+                                                (:kind %))
+                                    (journal/retained-transactions (:root ws) opts))))]
+      (try
+        (plant-lock! ws {:txid "A-LIVE" :pid (.pid child) :boot-id (boot-id-now)})
+        ;; the first through the real break, which marks its own window
+        (let [claim (@#'journal/read-lock-claim lock)]
+          (@#'journal/break-lock!
+            dir claim "BRK-A"
+            {:before-unlink (fn [_] (throw (java.io.IOException. "crash")))}))
+        ;; the second exactly as a crash BEFORE the marker leaves it
+        (Files/createLink (.toPath tomb-b) (.toPath lock))
+        (is (.isFile tomb-a))
+        (is (.isFile tomb-b))
+
+        (is (= {"LOCK.broken.BRK-A" :interrupted-break
+                "LOCK.broken.BRK-B" :interrupted-break}
+               (rows))
+            (str "EVERY interrupted break is typed, not the first of them: "
+                 (pr-str (rows))))
+
+        (let [result (journal/recover! (:root ws) opts)]
+          (is (= 2 (count (:interrupted-breaks result)))
+              (str "and ONE recovery resolves all of them: " (pr-str result)))
+          (is (= #{"LOCK.broken.BRK-A" "LOCK.broken.BRK-B"}
+                 (set (map :tombstone (:interrupted-breaks result)))))
+          (is (every? #(= :interrupted-break-reverted (:resolution %))
+                      (:interrupted-breaks result))
+              "the holder is alive, so neither break is finished on its behalf")
+          (is (not (.exists tomb-a)))
+          (is (not (.exists tomb-b)))
+          (is (.isFile lock) "and the live holder's LOCK is untouched")
+          (is (= "A-LIVE" (:txid (read-string (slurp lock)))))
+          (is (zero? (:found (:broken-locks result)))
+              (str "nothing is billed: " (pr-str (:broken-locks result)))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
