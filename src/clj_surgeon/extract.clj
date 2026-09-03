@@ -668,8 +668,13 @@
   unaffected: a link to a non-pruned file inside the root is still one caller
   plan with the link preserved.
 
-  Returns `{:paths [...]}` or one typed refusal."
-  [root paths skipped-directories]
+  When `report-pruned?` is true the pruned callers are COLLECTED under
+  `:pruned` and left out of `:paths` instead of refusing, for the runs that
+  write no caller byte -- see MCP-OP-EXTRACT-042. An out-of-root path is a hard
+  refusal either way.
+
+  Returns `{:paths [...] :pruned [...]}` or one typed refusal."
+  [root paths skipped-directories report-pruned?]
   (let [real (try {:root (mcp-paths/real-root root)}
                   (catch Exception error {:error (.getMessage error)}))]
     (if-let [root-error (:error real)]
@@ -706,9 +711,15 @@
                               :target-unchanged true})
 
                            ;; @spec MCP-OP-EXTRACT-037
+                           ;; @spec MCP-OP-EXTRACT-042
                            tree
-                           (reduced (pruned-tree-refusal
-                                      real-root path (:path resolved) tree))
+                           (if report-pruned?
+                             (update acc :pruned conj
+                                     {:path (str path)
+                                      :resolves-to (:path resolved)
+                                      :tree tree})
+                             (reduced (pruned-tree-refusal
+                                        real-root path (:path resolved) tree)))
 
                            (contains? (:seen acc) (:path resolved)) acc
 
@@ -716,9 +727,11 @@
                            (-> acc
                                (update :seen conj (:path resolved))
                                (update :paths conj (:path resolved))))))
-                     {:seen #{} :paths []}
+                     {:seen #{} :paths [] :pruned []}
                      paths)]
-        (if (:paths result) {:paths (:paths result)} result)))))
+        (if (:paths result)
+          {:paths (:paths result) :pruned (:pruned result)}
+          result)))))
 
 ;; @spec MCP-OP-EXTRACT-029
 ;; @spec MCP-OP-EXTRACT-032
@@ -743,9 +756,17 @@
   Returns `{:ok true :paths [...] :discovery {...}}`, where `:paths` are
   canonical real paths with two names for one file collapsed onto one, or one
   typed refusal (`:workspace-file-cap-exceeded`, `:caller-path-outside-root`,
-  `:caller-path-in-skipped-tree`, `:invalid-workspace-cap`)."
-  ([root] (discover-workspace-sources root nil nil))
+  `:caller-path-in-skipped-tree`, `:invalid-workspace-cap`). Every refusal
+  carries the `:discovery` it had reached, because a refusal that drops what
+  was scanned makes the reader re-run the scan by hand.
+
+  `:report-pruned-callers` softens exactly one of those refusals, for the runs
+  that write no caller byte: the pruned paths are left out of `:paths` and
+  named in `:discovery :skipped-callers` instead. See MCP-OP-EXTRACT-042."
+  ([root] (discover-workspace-sources root nil nil nil))
   ([root max-files max-file-bytes]
+   (discover-workspace-sources root max-files max-file-bytes nil))
+  ([root max-files max-file-bytes {:keys [report-pruned-callers]}]
    (let [cap (workspace-cap :max-workspace-files max-files
                             default-max-workspace-files)
          byte-cap (workspace-cap :max-workspace-file-bytes max-file-bytes
@@ -774,23 +795,31 @@
             :seen (:over-cap walked)
             :remedy (str "extract from a smaller root, or raise the cap with "
                          ":max-workspace-files <n>")
+            :discovery discovery
             :source-unchanged true
             :target-unchanged true}
 
            ;; @spec MCP-OP-EXTRACT-035
            (:escape walked)
-           (link-escape-refusal root-file (:escape walked)
-                                (:escape-real walked))
+           (assoc (link-escape-refusal root-file (:escape walked)
+                                       (:escape-real walked))
+                  :discovery discovery)
 
            :else
            (let [confined (canonical-workspace-paths
                             root-file (:files walked)
-                            (:skipped-directories walked))]
+                            (:skipped-directories walked)
+                            (boolean report-pruned-callers))]
              (if-not (:paths confined)
-               confined
+               ;; @spec MCP-OP-EXTRACT-042
+               (assoc confined :discovery discovery)
                {:ok true
                 :paths (:paths confined)
-                :discovery discovery}))))))))
+                ;; @spec MCP-OP-EXTRACT-042
+                :discovery (cond-> discovery
+                             (seq (:pruned confined))
+                             (assoc :skipped-callers
+                                    (vec (:pruned confined))))}))))))))
 
 (defn- project-root-for-source
   [file source-paths]
@@ -1430,16 +1459,24 @@
   (let [large (mapv :file (:skipped-large discovery))
         dirs (->> (:skipped-directories discovery)
                   (remove #(contains? harmless-directory-skips (:reason %)))
-                  (mapv :dir))]
-    (when (or (seq large) (seq dirs))
+                  (mapv :dir))
+        ;; @spec MCP-OP-EXTRACT-042
+        ;; A caller left out because its real file is inside a pruned tree is
+        ;; an unread source like any other: this is what a run that writes no
+        ;; caller byte reports in place of the refusal an apply would raise.
+        pruned (mapv :path (:skipped-callers discovery))]
+    (when (or (seq large) (seq dirs) (seq pruned))
       (cond-> {:file :workspace-scan
                :reason :workspace-scan-incomplete
                :remedy (str "discovery did not read every Clojure source under "
                             "the root, so a caller in one of these may still "
                             "require the source namespace; read them by hand, "
-                            "or raise :max-workspace-file-bytes and re-run")}
+                            "raise :max-workspace-file-bytes and re-run, or -- "
+                            "for a path whose real file is inside a pruned tree "
+                            "-- point the link at a source inside the workspace")}
         (seq large) (assoc :sources-too-large large)
-        (seq dirs) (assoc :directories-not-read dirs)))))
+        (seq dirs) (assoc :directories-not-read dirs)
+        (seq pruned) (assoc :callers-in-skipped-trees pruned)))))
 
 ;; @spec MCP-OP-EXTRACT-015
 ;; @spec MCP-OP-EXTRACT-016
@@ -2106,8 +2143,16 @@
             ;; directory symlink turns a path that LOOKS like it is under the
             ;; root into one that is not -- and the collapse of two names for
             ;; one file onto that file's canonical real path.
+            ;; @spec MCP-OP-EXTRACT-042
+            ;; A run that writes no caller byte -- the dry run, or
+            ;; `:rewire-callers false` -- REPORTS a pruned caller rather than
+            ;; refusing to preview a write it was never going to make.
             found (when-not target-refusal
-                    (discover-workspace-sources project-root cap byte-cap))
+                    (discover-workspace-sources
+                      project-root cap byte-cap
+                      {:report-pruned-callers
+                       (boolean (or (::preview opts)
+                                    (false? rewire-callers)))}))
             escape (when-not (:ok found) found)
             discovered
             (->> (:paths found)
@@ -2173,7 +2218,8 @@
   "Preview one extraction as the SAME receipt the executor emits, with
   :applied false and the command that would apply it."
   [opts]
-  (dry-run-receipt (plan-raw opts) opts))
+  ;; @spec MCP-OP-EXTRACT-042
+  (dry-run-receipt (plan-raw (assoc opts ::preview true)) opts))
 
 ;; ============================================================
 ;; Effects: Execute the extraction
