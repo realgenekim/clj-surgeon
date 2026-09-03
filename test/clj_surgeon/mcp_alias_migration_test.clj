@@ -368,6 +368,71 @@
       (finally
         (delete-tree! workspace)))))
 
+
+;; @spec MCP-OP-ALIAS-058
+(deftest a-scope-that-matches-no-file-names-the-spelling-not-the-domain
+  ;; `alias-migration-empty-scope` announced a DOMAIN cause — "No namespace
+  ;; under scope requires acid.fanout.store" — for a SPELLING cause, and a
+  ;; refusal that cannot tell "your glob matched nothing" from "nothing in this
+  ;; tree requires that lib" teaches the wrong lesson. The two states are now
+  ;; two refusals: this one fires only when the scope matched no file at all.
+  (let [workspace (workspace!)
+        receipt-dir (io/file workspace "receipts")]
+    (.mkdirs receipt-dir)
+    (try
+      (let [result (execute! workspace {:scope {:paths ["srk/**"]}
+                                        :expect {:files 12}})]
+        (is (false? (:ok result)))
+        (is (= "alias-migration-scope-matches-nothing" (:error_type result))
+            "a glob that matched nothing was reported as a fact about the tree")
+        (is (= ["srk/**"] (:paths result))
+            "the refusal does not name the paths as the caller gave them")
+        (is (= 0 (:files_matched result)))
+        (is (not (str/includes? (str (:error result)) "requires"))
+            "a spelling cause was announced as a domain cause")
+        (is (string? (:remedy result)))
+        (is (true? (:source_unchanged result)))
+        (testing "the corrected spelling is executable, not merely described"
+          (let [next-call (:next_call result)]
+            (is (some? next-call) "the refusal carried no executable next_call")
+            (is (contains? (set (get-in next-call ["scope" "paths"])) "src/**")
+                "the remedy does not name the tree's own source root")
+            (let [replayed (alias-migration/execute!
+                             (config workspace receipt-dir)
+                             (json/parse-string (json/generate-string next-call)
+                                                true))]
+              (is (not= "alias-migration-scope-matches-nothing"
+                        (:error_type replayed))
+                  "the corrected spelling still matched nothing")
+              (is (or (:ok replayed)
+                      (= "alias-migration-expect-mismatch" (:error_type replayed)))
+                  (pr-str replayed))
+              (when-not (:ok replayed)
+                (is (pos? (long (:found_files replayed))))
+                (let [committed (alias-migration/execute!
+                                  (config workspace receipt-dir)
+                                  (json/parse-string
+                                    (json/generate-string (:next_call replayed))
+                                    true))]
+                  (is (:ok committed) (pr-str committed))))))))
+      (finally
+        (delete-tree! workspace)))))
+
+;; @spec MCP-OP-ALIAS-006
+(deftest the-domain-refusal-fires-only-when-the-scope-matched-files
+  ;; The counterpart of ALIAS-058: three files matched, none of them requires
+  ;; from.lib. That IS a fact about the tree, and it keeps its own name.
+  (let [workspace (workspace!)]
+    (try
+      (let [result (execute! workspace {:scope {:paths ["src/acid/fanout/n0*.clj"]}
+                                        :expect {:files 0}})]
+        (is (false? (:ok result)))
+        (is (= "alias-migration-empty-scope" (:error_type result)))
+        (is (= 3 (:scanned_files result))
+            "the domain refusal fired over a scope that matched no file"))
+      (finally
+        (delete-tree! workspace)))))
+
 ;; @spec MCP-OP-ALIAS-013
 (deftest an-indirect-reference-refuses-closed-and-names-the-file
   (let [workspace (workspace!)]
