@@ -63,6 +63,8 @@
   (is (.isThreadAllocatedMemoryEnabled
         ^com.sun.management.ThreadMXBean thread-mx-bean)))
 
+
+;; @spec MCP-OP-MEM-015
 (deftest outline-of-one-file-allocates-within-its-ceiling
   (testing "outline-source builds no per-form source text it does not return"
     (let [source @fixture-source
@@ -76,6 +78,8 @@
                bytes " source bytes = " (format "%.1f" ratio)
                "x, ceiling " allocated-bytes-per-source-byte-ceiling "x")))))
 
+
+;; @spec MCP-OP-MEM-015
 (deftest outline-parses-each-file-exactly-once
   (testing "one outline call reaches the rewrite-clj parse entry once"
     (let [source @fixture-source
