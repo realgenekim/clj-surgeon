@@ -160,9 +160,22 @@
   [candidate]
   (let [stamped (when (map? candidate)
                   (assoc candidate :tool "relation_census"))
+        ;; Sol's round-fifteen item 10. The empty-`files` question was asked
+        ;; because the published schema declares `minItems 1`; the SAME schema
+        ;; declares the items are strings, and that half was never asked — so
+        ;; `[nil]`, `[42]` and even `"x"` travelled, and the `:census-failed`
+        ;; fallback published `files [null]` from a plan failure that named no
+        ;; source. A call the tool's own schema rejects is the same
+        ;; unexecutable promise a caption in an argument position is, and
+        ;; MCP-OP-CENSUS-014 forbids both by the same sentence.
+        publishable-files?
+        (fn [files]
+          (and (sequential? files)
+               (seq files)
+               (every? #(and (string? %) (not (str/blank? %))) files)))
         faithful (when (and stamped
-                            (not (and (contains? stamped :files)
-                                      (not (seq (:files stamped))))))
+                            (or (not (contains? stamped :files))
+                                (publishable-files? (:files stamped))))
                    stamped)
         rendered (when faithful (json/generate-string faithful))]
     {:candidate faithful
@@ -187,6 +200,25 @@
        "REQUEST is not the problem, the length of the workspace path in it "
        "is: retry with workspace_root reaching the same tree by a shorter "
        "path, and fix what this refusal named."))
+
+;; @spec MCP-OP-CENSUS-014
+(defn- continuation-refused-remedy
+  "Why a refusal published no continuation, when the constructor refused one.
+
+   The constructor returns a MEASURED byte length beside a candidate it dropped
+   for LENGTH, and no byte length at all beside one it dropped for SHAPE. The
+   two are different facts and the caller must be able to tell them apart: one
+   says retry from a shorter path, the other says there was no call to make.
+   Reading the first wording over the second prints the measurement of
+   something that was never measurable."
+  [bytes]
+  (if (some? bytes)
+    (continuation-overflow-remedy bytes)
+    (str "The narrowest continuation this refusal can compute is not a call "
+         "the schema this tool publishes would accept — it names no source "
+         "this tool could carry — so none is offered: name the sources to "
+         "census with files, or point workspace_root at a smaller tree, and "
+         "fix what this refusal named.")))
 
 ;; ---------------------------------------------------------------------------
 ;; Parameter validation (server-side; the advertised schema is only a hint)
@@ -307,7 +339,7 @@
                                  (when (and (not uncomputable)
                                             carriable?
                                             (nil? next-call))
-                                   {:remedy (continuation-overflow-remedy
+                                   {:remedy (continuation-refused-remedy
                                               (:bytes computed))})
                                  data)))
         ;; The shape questions AND THEIR ORDER are the shared table's, not
@@ -809,7 +841,7 @@
              (cond-> (merge {:door (:invalid invalid) :known_doors known}
                             facts)
                (nil? next-call)
-               (assoc :remedy (continuation-overflow-remedy bytes))))))
+               (assoc :remedy (continuation-refused-remedy bytes))))))
 
 ;; @spec MCP-OP-CENSUS-023
 ;; @spec MCP-OP-CENSUS-031
@@ -892,7 +924,7 @@
                  next-call
                  (cond-> (merge {:file (:file loaded)} facts)
                    (and (seq remaining) (nil? next-call))
-                   (assoc :remedy (continuation-overflow-remedy bytes))
+                   (assoc :remedy (continuation-refused-remedy bytes))
 
                    (seq unreadable)
                    (merge {:files_removed (vec (take max-listed-files
@@ -949,7 +981,7 @@
                                  (max 0 (- (count over) max-listed-files))}
                                 facts)
                    (and (seq remaining) (nil? next-call))
-                   (assoc :remedy (continuation-overflow-remedy over-bytes))
+                   (assoc :remedy (continuation-refused-remedy over-bytes))
 
                    (empty? remaining)
                    (assoc :remedy
@@ -993,7 +1025,7 @@
                      next-call
                      (cond-> (merge {:scanned named} facts)
                        (and (seq named) (not explicit?) (nil? next-call))
-                       (assoc :remedy (continuation-overflow-remedy bytes))
+                       (assoc :remedy (continuation-refused-remedy bytes))
 
                        (or (empty? named) explicit?)
                        (assoc :remedy
@@ -1035,16 +1067,27 @@
                                 (census/parse-doors doors declared))]
                 (cond
                   (not (:ok planned))
+                  ;; Sol's round-fifteen item 10: this handed the constructor
+                  ;; `{:files [(:file planned)]}` unconditionally, and a plan
+                  ;; failure that names no `:file` — the documented reason this
+                  ;; fallback exists at all — made that `[nil]`. There is
+                  ;; nothing to narrow to when nothing was named, so nothing is
+                  ;; offered, and the null `:file` is omitted rather than
+                  ;; published as a fact about the failure.
                   (let [{:keys [next-call bytes]}
-                        (continuation {:workspace_root canonical
-                                       :files [(:file planned)]})]
+                        (continuation (when (:file planned)
+                                        {:workspace_root canonical
+                                         :files [(:file planned)]}))]
                     (refusal (or (:error-type planned) :census-failed)
                              (:error planned)
                              next-call
-                             (cond-> (merge {:file (:file planned)} facts)
+                             (cond-> facts
+                               (:file planned)
+                               (assoc :file (:file planned))
+
                                (nil? next-call)
                                (assoc :remedy
-                                      (continuation-overflow-remedy bytes)))))
+                                      (continuation-refused-remedy bytes)))))
 
                   (map? confirmed)
                   (door-refusal confirmed canonical facts)
