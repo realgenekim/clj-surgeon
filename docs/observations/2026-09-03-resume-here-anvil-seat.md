@@ -267,3 +267,9 @@ Live: Sol q5z round 7 (f4d196b). Builders: study round 5 (length-scaled budget t
 Gene report DRAFT at docs/observations/2026-09-03-gene-report-night.md — refresh at ~08:30Z from the captain's log (every number verbatim with its entry time).
 Sol content filter refuses: rf2, study, MEM-005 branches → Opus fallback each time (recorded per lane). sol-yolo neutralises repo .codex/config.toml (two 7888 contacts reported on inb-1165ce at 06:05Z and 06:57Z).
 Inbox: inb-1165ce (night orders, seven GO notes, incidents), inb-3a9818 (fold-diff production read GO with conditions), inb-2f78f5, inb-46f90f, inb-c19ce6, inb-5aaad4, inb-07c5e7 (MEM-005 follow-ups).
+
+## RESUME DELTA (sixth refresh; commit time is the timestamp) — cadence corrected
+Gene's nine hours end ~13:35Z. Gene report DRAFT (docs/observations/2026-09-03-gene-report-night.md) refreshes at ~10:30Z and ~13:00Z, from the captain's log, numbers verbatim with entry times.
+Live Sol reviews: census round 5 (869bbce), kernel round 2 (7c9a9b1), fold-diff round 5 (347fe6d3, curtain-call). Opus: q5z round 7 (f4d196b). Builders: study round 5 (~/src/clj-surgeon-study), MEM-005 round 2 (~/src/clj-surgeon-admit), arms apparatus round 3 relaunched (~/src/clj-surgeon-arms), B4 MEM-003 streaming ls-tree (~/src/clj-surgeon-stream, based on the MEM-005 tip 8a55dbc).
+fold-diff production read: pinned GO at 2b56a484 on inb-3a9818; 347fe6d3 replaces it only after Sol confirms.
+Everything else as in the fifth refresh.
