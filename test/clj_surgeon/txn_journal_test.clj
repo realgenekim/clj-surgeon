@@ -1505,6 +1505,114 @@
           (.waitFor child)
           (cleanup! ws))))))
 
+
+;; @spec MCP-OP-MEM-013
+(deftest a-broken-lock-tombstone-is-visible-counted-and-retired
+  (testing "Opus round 4, finding 5: the tombstone is called evidence and
+            nothing reads it. `recover!` and `retained-transactions` both
+            filter `.isDirectory`, so no verb listed, counted, billed or
+            retired a `LOCK.broken.*` file - one 30,000-break storm left
+            20,356 of them permanent in a single transactions directory. A
+            receipt nobody can read and nobody can retire is not a receipt: it
+            must appear in the sweep's own listing, be counted in recovery's
+            own value, and be bounded by a published age."
+    (let [ws (workspace! "lock-tombstones" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          opts {:state-home (:state-home ws)}
+          fresh (io/file dir "LOCK.broken.FRESH")
+          stale (io/file dir "LOCK.broken.STALE")]
+      (try
+        (.mkdirs dir)
+        (spit fresh (pr-str {:txid "ghost-fresh" :pid 1}))
+        (spit stale (pr-str {:txid "ghost-stale" :pid 2}))
+        (.setLastModified stale (- (System/currentTimeMillis)
+                                   (* 30 24 60 60 1000)))
+        (let [rows (journal/retained-transactions (:root ws) opts)
+              tombstone-rows (filter #(= :broken-lock (:kind %)) rows)]
+          (is (= 2 (count tombstone-rows))
+              (str "the sweep's listing sees both tombstones: " (pr-str rows)))
+          (is (= #{"LOCK.broken.FRESH" "LOCK.broken.STALE"}
+                 (set (map :txid tombstone-rows)))
+              "each named by the file it is")
+          (is (every? #(and (number? (:bytes %)) (number? (:age-ms %)))
+                      tombstone-rows)
+              "with the bytes it bills and the age that retires it"))
+
+        (let [result (journal/recover! (:root ws) opts)
+              counted (:broken-locks result)]
+          (is (some? counted)
+              (str "recovery counts them in its own value: " (pr-str result)))
+          (is (= 2 (:found counted)) "both were found")
+          (is (= 1 (:pruned counted)) "the one past the published age is retired")
+          (is (= 1 (:remaining counted)))
+          (is (pos? (long (:retention-ms counted 0)))
+              "and the age it used is published, not implicit")
+          (is (.isFile fresh) "a fresh break's evidence is kept")
+          (is (not (.exists stale)) "an old one is not kept for ever"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-tombstone-name-that-would-collide-refuses-instead-of-overwriting
+  (testing "the other half of finding 5. The tombstone is named for the
+            BREAKER's txid, `begin!` accepts `:txid` from its caller, and the
+            rename carried REPLACE_EXISTING - so two breaks by one txid
+            overwrote each other silently and the file this build calls
+            evidence was destroyed by name. A collision is a typed refusal
+            taken BEFORE the LOCK is touched, never a replacement."
+    (let [ws (workspace! "lock-tombstone-collision" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")
+          tomb (io/file dir "LOCK.broken.SAME-TXID")]
+      (try
+        (plant-lock! ws {:txid "ghost-a" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [first-txn (begin! ws {:txid "SAME-TXID"})]
+          (is (string? (:txid first-txn)) "the first break happens")
+          (is (= "ghost-a" (:txid (read-string (slurp tomb)))))
+          (journal/rollback! first-txn))
+
+        (plant-lock! ws {:txid "ghost-b" :pid (reaped-pid) :boot-id (boot-id-now)})
+        (let [refused (begin! ws {:txid "SAME-TXID"})]
+          (is (false? (:ok refused))
+              (str "the second break refuses rather than overwriting the first "
+                   "break's evidence: " (pr-str refused)))
+          (is (= :txn-lock-held (:error-type refused)))
+          (is (= :tombstone-exists (get-in refused [:lock-break-refused :cause]))
+              "with the reason the break did not happen, named")
+          (is (= "LOCK.broken.SAME-TXID"
+                 (get-in refused [:lock-break-refused :tombstone])))
+          (is (= "ghost-a" (:txid (read-string (slurp tomb))))
+              "the first break's receipt is intact")
+          (is (= "ghost-b" (:txid (read-string (slurp lock))))
+              "and the claim it refused to break was never touched"))
+        (finally (cleanup! ws))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest the-no-hard-links-restore-fallback-refuses-a-lock-that-reappeared
+  (testing "the fallback `restore-lock!` takes on a filesystem with no
+            `link(2)` at all. It is check-then-act and its docstring says so;
+            what it must never do is replace a claim that arrived while the
+            tombstone was away."
+    (let [dir (temp-dir "restore-fallback")
+          lock (io/file dir "LOCK")
+          tomb (io/file dir "LOCK.broken.T")]
+      (try
+        (spit tomb (pr-str {:txid "displaced" :pid 1}))
+        (spit lock (pr-str {:txid "third-acquirer" :pid 2}))
+        (let [outcome (@#'journal/restore-by-move! tomb lock)]
+          (is (false? (:restored outcome))
+              (str "it refuses on EEXIST: " (pr-str outcome)))
+          (is (= :lock-reappeared (:restore-cause outcome)))
+          (is (= :no-hard-links (:restore-path outcome)))
+          (is (= "third-acquirer" (:txid (read-string (slurp lock))))
+              "the claim that arrived is untouched")
+          (is (= "displaced" (:txid (read-string (slurp tomb))))
+              "and the displaced claim is still in its tombstone"))
+        (.delete lock)
+        (let [outcome (@#'journal/restore-by-move! tomb lock)]
+          (is (true? (:restored outcome)) "and it restores when the LOCK is free")
+          (is (= "displaced" (:txid (read-string (slurp lock))))))
+        (finally (delete-tree! dir))))))
+
 ;; @spec MCP-OP-MEM-013
 (deftest finishing-a-transaction-does-not-delete-a-lock-it-no-longer-owns
   (testing "the release side of the same defect. `release-lock!` was a bare
