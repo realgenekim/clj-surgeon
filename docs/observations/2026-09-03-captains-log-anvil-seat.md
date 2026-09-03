@@ -375,3 +375,70 @@ test/test-fast/mcp-test/runtests. Delete the target → fast suite red; delete t
 audit red. `make test` gains only `memory-battery-self-test` (ms-scale).
 
 Pre-existing RED found in passing, NOT mine: `agent-routing-test/terminal-response-routing-is-conditional-on-complete-user-work` fails 5 assertions on main — `resources/clj-surgeon-agent-routing.md` no longer contains any `terminal_response` text (removed by 01f0739, the routing-plate rewrite) and the test was not updated.
+
+## 06:36Z — B1 landed: the disk-journaled transaction kernel, RED to GREEN (`bridge/txn-journal`, 8 commits)
+
+Gene: *"B. Go."* … *"Use TDD style; replicate OOM first."* Both honoured; every commit's tests were
+written before its code, and fail-first was re-established per guard by mutating the implementation
+and re-running the single witness (18 probes, all RED under mutation).
+
+**The measurement, on a 600-file / 314,772,270-byte synthetic scope where every file is a quarter of
+the 2 MiB per-file ceiling and the count is under a third of the 2000-file ceiling:**
+
+| arm | Xmx | result | wall | retained peak |
+|---|---|---|---:|---:|
+| frozen read (RED) | 256m | `OutOfMemoryError`, exit 3 | — | — |
+| frozen read (reference) | 2g | completed, 2046.8 MB used | 155,663 ms | — |
+| journal + scope-stream (GREEN) | 256m | committed 600 files | 176,349 ms | **14.2 MB** |
+
+Three-way output parity, exact: the reference's digest over its 600 result hashes, the journal arm's
+streamed digest, and a digest the test parent recomputes from the tree on disk after the commit all
+equal `55423110f805a112cd6b353252ccd5183e035dfb8fe4b50da52e5f310a762440`. Retention is flat: 13.95 MB
+at 60 files, 14.15 MB at 600 — ten times the files cost 0.2 MB. Attributable reserved peak
+29,378,776 B, inside the 192 MiB work budget.
+
+**Two meter findings that change how memory claims should be read here.** Sampled `heap-used-peak` is
+useless as a gate at a small heap: the EIGHT-file control that retains 12 MB peaks at 251 MB of used
+heap at -Xmx256m, because eden fills to near the ceiling before a young collection runs. The pool
+MXBeans' after-GC figure is inflated the same way (243 MB for the arm that retains 14 MB). Only the
+forced-full-collection reading is a retention meter, and only retention-at-N-versus-N/10 is a
+flatness meter. Reported both, gated on neither sampled figure — which matches Sol's instrument
+review calling peak a trend line.
+
+**Contract, stated not implied:** optimistic serializability with conflict detection and exact
+rollback; NOT snapshot isolation. A writer that ignores the lock and lands after our rename is
+detected at read-back and rolled over, not prevented, and there is a witness for exactly that. A
+transaction restores what IT changed and never clobbers a write it did not make.
+
+**Location follows Sol's second answer:** journal, manifest and pre-image CAS live under
+`~/.local/state/clj-surgeon/workspaces/<digest>/transactions/<txid>/`, beside the receipts, never in
+the tree being mutated. `mcp-workspace/state-dir` + `transactions-dir` additive; `receipt-dir`
+unchanged.
+
+**Ids:** MEM-006/007 (Sol's numbering), MEM-012/013/014 for retention, crash recovery and the
+contract statement, MEM-020 for the bounded walk — 015 was taken by the read-path lane mid-build, and
+the allocation table in `docs/intent/memory/memory-transaction-specs.md` records who owns what. The
+serialized receipt ceiling is registered under MEM-001 per the ruling, not as a new id, and no slope
+line of my own was added.
+
+**Three probes were findings, not confirmations.** (1) The first crash-recovery mutation stayed GREEN
+because `(every? … [])` is true — a recovery that restored nothing passed; both crash witnesses now
+assert the COUNT of restored paths. (2) The reader's retention witness passed a mutation that
+retained the whole scope inside the returned receipt, because the JVM may collect a local after its
+last use; the forced collection now happens before the receipt is read. (3) Writing the "what I was
+tempted to widen" section found that the journal took ABSOLUTE paths with no confinement — unlike
+every other write surface here — so `pin!` and `stage!` now route through the same
+`mcp-paths/resolve-source-path`. No verb had adopted the kernel, so nothing shipped with the hole.
+
+**Merge gate.** `make memory-battery` cherry-picked (2bae68b) and run once on this branch: FAIL
+(INCOMPLETE), exit 1, identical to the main RED baseline within its own noise — cli-ls-tree 281.3 MB
+at N=1,000 and 433.3 at N=10,000, read-all peak-scales 203.5 vs 103.3, and reserved-peak still
+UNMEASURED on all four arms. That is the correct result: the kernel is adopted by NO verb, so it
+changes nothing the battery's four arms measure. The accountant exists and is proven in the kernel's
+own receipt; the battery will read it at B2 adoption, not before. Suites after the cherry-pick:
+test-fast 718/5967 (baseline five), mcp-test 407/4103 (baseline one), battery self-test 16/55 clean.
+Kernel witnesses: 30 tests, 158 assertions, 0 failures; `make memory-red` 4 tests, 25 assertions, 0
+failures.
+
+Not pushed (this seat does not push). B2 — adoption in `alias_migration` and `extract!` — waits on
+their open rounds.
