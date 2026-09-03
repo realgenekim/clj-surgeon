@@ -104,11 +104,13 @@
   ;; other means. Captures the real subprocess argv via with-redefs rather
   ;; than asserting on live rg/grep output.
   (let [captured (atom nil)
+        probes (atom 0)
         grep-tree #'study/grep-tree]
     (with-redefs [babashka.process/shell
                   (fn [_opts & args]
                     (if (= ["rg" "--version"] (vec args))
-                      {:exit 0 :out "ripgrep 14.0.0" :err ""}
+                      (do (swap! probes inc)
+                          {:exit 0 :out "ripgrep 14.0.0" :err ""})
                       (do (reset! captured (vec args))
                           {:exit 1 :out "" :err ""})))]
       (grep-tree "some-pattern" "/tmp/somewhere"))
@@ -118,7 +120,12 @@
           pattern-idx (.indexOf ^java.util.List args "some-pattern")]
       (is (not= -1 dash-dash-idx))
       (is (= (inc dash-dash-idx) pattern-idx)
-          "the pattern must immediately follow the -- argv separator"))))
+          "the pattern must immediately follow the -- argv separator"))
+    ;; The availability probe was called twice — once to decide whether to
+    ;; warn, once to build the argv — so every scan spawned `rg --version`
+    ;; twice before doing any work.
+    (is (= 1 @probes)
+        "ripgrep availability must be probed once per scan, not once per use")))
 
 ;; ============================================================
 ;; Reading a build file is a read, never an evaluation

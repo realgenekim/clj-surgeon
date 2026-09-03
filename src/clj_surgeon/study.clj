@@ -242,38 +242,42 @@
    Uses ripgrep (rg) if available — faster and respects .gitignore.
    Falls back to system grep (MUCH slower on large trees)."
   [pattern dir]
-  (when-not (rg-available?)
-    (binding [*out* *err*]
-      (println "WARNING: ripgrep (rg) not found. Falling back to grep (much slower).")
-      (println "Install: brew install ripgrep  OR  apt install ripgrep")))
-  (try
-    (let [;; "--" ends option parsing for both rg and grep, so a caller-
-          ;; supplied pattern (e.g. "--pre=/bin/sh", which rg would run as a
-          ;; per-file preprocessor command) is always taken as a plain
-          ;; positional pattern, never as a flag.
-          args (if (rg-available?)
-                 ;; ripgrep: fast, respects .gitignore automatically
-                 ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
-                 ["rg" "-li"
-                  "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
-                  "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
-                  "--" pattern (str dir)]
-                 ;; fallback: system grep
-                 (let [exclude-args (mapcat #(vector "--exclude-dir" %)
-                                            [".git" ".cpcache" ".gitlibs" "target"
-                                             "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
-                   (concat ["grep" "-rliE"
-                            "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
-                            "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
-                           exclude-args
-                           ["--" pattern (str dir)])))
-          result (apply babashka.process/shell
-                        {:out :string :err :string :continue true}
-                        args)]
-      (if (zero? (:exit result))
-        (set (str/split-lines (str/trim (:out result))))
-        #{}))
-    (catch Exception _e #{})))
+  ;; One probe per scan. `rg --version` was spawned twice — once to decide
+  ;; whether to warn, once to build the argv — so every grep scan paid for two
+  ;; subprocesses before doing any work.
+  (let [rg? (rg-available?)]
+    (when-not rg?
+      (binding [*out* *err*]
+        (println "WARNING: ripgrep (rg) not found. Falling back to grep (much slower).")
+        (println "Install: brew install ripgrep  OR  apt install ripgrep")))
+    (try
+      (let [;; "--" ends option parsing for both rg and grep, so a caller-
+            ;; supplied pattern (e.g. "--pre=/bin/sh", which rg would run as a
+            ;; per-file preprocessor command) is always taken as a plain
+            ;; positional pattern, never as a flag.
+            args (if rg?
+                   ;; ripgrep: fast, respects .gitignore automatically
+                   ;; Note: rg uses -i for case-insensitive (not -E which means encoding)
+                   ["rg" "-li"
+                    "-g" "*.clj" "-g" "*.cljs" "-g" "*.cljc"
+                    "-g" "deps.edn" "-g" "project.clj" "-g" "bb.edn"
+                    "--" pattern (str dir)]
+                   ;; fallback: system grep
+                   (let [exclude-args (mapcat #(vector "--exclude-dir" %)
+                                              [".git" ".cpcache" ".gitlibs" "target"
+                                               "node_modules" ".clj-kondo" ".lsp" ".shadow-cljs"])]
+                     (concat ["grep" "-rliE"
+                              "--include=*.clj" "--include=*.cljs" "--include=*.cljc"
+                              "--include=deps.edn" "--include=project.clj" "--include=bb.edn"]
+                             exclude-args
+                             ["--" pattern (str dir)])))
+            result (apply babashka.process/shell
+                          {:out :string :err :string :continue true}
+                          args)]
+        (if (zero? (:exit result))
+          (set (str/split-lines (str/trim (:out result))))
+          #{}))
+      (catch Exception _e #{}))))
 
 ;; @spec MCP-OP-STUDY-012
 (defn- ns-grep-hit?
