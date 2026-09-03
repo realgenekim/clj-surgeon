@@ -164,3 +164,5 @@ confined (only caller plans, as specified); the undo receipt's `:command` is sti
 symlink anywhere under the root now refuses EVERY extraction in that repo (fail visibly, as mandated —
 worth a second look before a monorepo). My suites running; push after; then an independent re-review.
 Ratchets fix round (a90f9ebd74d4100af) launched on the ratchets worktree.
+
+## 03:12Z — `bridge/rf2-extract-rewire` pushed at 5ccb4f0 (my suites: test-fast 744/6301 baseline five; mcp JVM 385/4071 baseline one; 0 errors). Not in the queue yet: Opus re-review a9f6694ffe16d0d1e re-runs every original probe and hunts holes the fixes introduced (the new discovered-path resolver, shell quoting, the raisable cap, the parent-config walk still serving outline/load-project-aliases, the tempted-not-done items).
