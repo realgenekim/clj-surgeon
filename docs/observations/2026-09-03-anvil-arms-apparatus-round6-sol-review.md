@@ -49,3 +49,44 @@ Verdict: **GO** for cohort readiness. Item 8 CLOSED.
 4. Item 8: CLOSED — [score.py:51](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/score.py:51) imports `WATCH_SCHEMA_VERSION` from [watch.py:66](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/watch.py:66), and [score.py:236](/home/forge/tmp/sol/arms7-wt/bench/anvil-arms/score.py:236) assigns `WATCH_SCHEMA_SUPPORTED = WATCH_SCHEMA_VERSION`.
 
 5. Cohort readiness: **GO**. Checkout remains clean at `23a7643`; port 7909 is free.
+
+---
+
+# Round 8 — Sol re-check at 54f3b50 (2026-09-03T11:40Z)
+
+Verdict: **NO-GO for 54f3b50** (the meta-ratchet has a false-green: a tally whose file operand points at another case's .out passes both case-45 checks); cohort-ready GO stays at **23a7643**. Round 9 launched on case 45.
+
+## Sol, verbatim
+
+## NO-GO
+
+Case 45 catches the requested missing-tally and orphan mutations, but a wrong-file tally produces a genuine false-green.
+
+Baseline summary:
+
+> `anvil-arms self-test: 386 passed, 0 failed  (workdir /home/forge/tmp/arms/solreview8/selftest-baseline)`
+
+Exact suffix-collision patterns:
+
+```bash
+grep -c '^FAIL case35' "$WORK/case35.out"
+grep -qF "grep -c '^FAIL ${base}'" "$HERE/self-test.sh"
+grep -c "^FAIL ${base}" "$f"
+grep -c '^FAIL case' "$f"
+```
+
+`^FAIL case35` does match `FAIL case35d ...`. It does not count the same file line twice in case 45, but it masks the case-ID mismatch by attributing the suffixed line to `case35`.
+
+1. [self-test.sh:1821](/home/forge/tmp/sol/arms8-wt/bench/anvil-arms/self-test.sh:1821): deleting both case35d tally lines produced `FAIL case35d.out...`, summary `383 passed, 1 failed`, rc 1. [Witness](/home/forge/tmp/arms/solreview8/missing-case35d-tally/run.log:445)
+
+2. [self-test.sh:1822](/home/forge/tmp/sol/arms8-wt/bench/anvil-arms/self-test.sh:1822): injected `FAIL case35d injected` was counted by the ordinary tally; summary `386 passed, 1 failed`, rc 1, while case 45 remained balanced. [Witness](/home/forge/tmp/arms/solreview8/counted-case35d-fail/run.log:390)
+
+3. [self-test.sh:2382](/home/forge/tmp/sol/arms8-wt/bench/anvil-arms/self-test.sh:2382): orphan `FAIL case99 orphan` passed (a), but (b) caught global 1 versus tallied 0; summary `385 passed, 1 failed`, rc 1. [Witness](/home/forge/tmp/arms/solreview8/orphan-case99/run.log:447)
+
+4. [self-test.sh:2375](/home/forge/tmp/sol/arms8-wt/bench/anvil-arms/self-test.sh:2375): the suffix probe counted `FAIL case35d` using `^FAIL case35`; both case-45 assertions passed with tallied/global 1. [Witness](/home/forge/tmp/arms/solreview8/suffix-case35-case35d/run.log:444)
+
+5. [self-test.sh:2372](/home/forge/tmp/sol/arms8-wt/bench/anvil-arms/self-test.sh:2372): decisive defect—the presence test ignores the tally’s file operand, then line 2375 reconstructs an idealized command against `$f`; pointing the actual case35d tally at `case35c.out` yielded a visible FAIL, both case-45 checks green, summary `386 passed, 0 failed`, rc 0. [Witness](/home/forge/tmp/arms/solreview8/wrong-file-case35d/run.log:390)
+
+Fix case 45 to validate the exact tally pattern and matching output-file operand, with a case-ID boundary such as `( |$)`.
+
+Checkout restored clean at `54f3b50`; no review test processes remain; port 7909 is free.
