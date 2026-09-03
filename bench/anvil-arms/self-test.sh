@@ -23,7 +23,11 @@
 set -uo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/anvil-arms-selftest.XXXXXX")}
+# The runner root for every arm on this box.  run-arm.sh refuses a --root outside it,
+# so the self-test runs where a real cohort runs -- not in an ambient system temp dir.
+ARMS_ROOT_BASE=/home/forge/tmp/arms
+mkdir -p "$ARMS_ROOT_BASE"
+WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "$ARMS_ROOT_BASE/selftest.XXXXXX")}
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
 

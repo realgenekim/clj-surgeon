@@ -33,3 +33,6 @@ cclsp.json
 .beads/proxieddb/
 .mcp.json
 .cpcache/
+
+# the prompt checker builds its comparison copy here, under the apparatus
+bench/anvil-arms/prompts/.check/

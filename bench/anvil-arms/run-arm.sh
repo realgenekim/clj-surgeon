@@ -22,6 +22,9 @@
 #   --dry-run                       print the plan and stop
 #
 # Boundaries this script enforces, not merely documents:
+#   * --root must resolve inside /home/forge/tmp/arms; anything else is ROOT-REFUSED
+#     before a single directory is created.  The driver's CODEX_HOME is per-arm, so
+#     nothing writes into a shared ~/.codex either.
 #   * a tool/free-choice arm's port must be in COHORT_PORTS (default 7907-7910).
 #     Nothing here ever contacts 7888, 7894, 7895 or 7906.
 #   * it kills only a server process THIS script started, by the pid in ready.edn.
@@ -65,6 +68,20 @@ done
 for required in ROOT EXP RUNG ARM SLOT PROMPT; do
   [ -n "${!required}" ] || { echo "run-arm: --${required,,} is required" >&2; exit 64; }
 done
+
+# Every byte this apparatus writes lands under the runner root or the arm's own
+# worktree.  Sol, item 12: --root was unconstrained, so an arm-run could scatter
+# evidence anywhere the caller pointed it, and afterwards nobody could say which bytes
+# on the box were part of the experiment.  The check is on the RESOLVED path, so a
+# ../ spelling cannot walk out of the root.
+ARMS_ROOT_BASE=/home/forge/tmp/arms
+ROOT_REAL=$(readlink -m "$ROOT")
+case "$ROOT_REAL" in
+  "$ARMS_ROOT_BASE"|"$ARMS_ROOT_BASE"/*) ;;
+  *) echo "run-arm: ROOT-REFUSED '$ROOT' resolves to '$ROOT_REAL', outside $ARMS_ROOT_BASE — nothing was created" >&2
+     exit 2;;
+esac
+ROOT=$ROOT_REAL
 
 A="$ROOT/$EXP-$RUNG-$ARM-$SLOT"
 case "$ARM" in

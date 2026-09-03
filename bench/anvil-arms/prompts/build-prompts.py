@@ -244,6 +244,9 @@ def main() -> int:
     ap.add_argument("--doc", default=str(DOC),
                     help="the pre-registration doc the prompts are extracted from")
     ap.add_argument("--l-prompt", default=str(L_PROMPT))
+    ap.add_argument("--check-dir", default=str(HERE / ".check"),
+                    help="where --check builds its comparison copy (under the "
+                         "apparatus, never an ambient system temp dir)")
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
     doc_path = pathlib.Path(args.doc)
@@ -257,7 +260,14 @@ def main() -> int:
             return 0
 
         installed = pathlib.Path(args.out)
-        with tempfile.TemporaryDirectory() as tmp:
+        # Build under the apparatus, not into an ambient system temp dir, and NAME the
+        # directory used (Sol, item 12).  A tool that will not say where it wrote
+        # cannot be audited for where it wrote.
+        check_base = pathlib.Path(args.check_dir)
+        check_base.mkdir(parents=True, exist_ok=True)
+        tmp = tempfile.mkdtemp(prefix="check-", dir=str(check_base))
+        print(f"check-dir: {tmp}")
+        try:
             build(pathlib.Path(tmp), doc_path, l_prompt_path)
             drift = []
             for name in NAMES:
@@ -280,6 +290,8 @@ def main() -> int:
                             check=False,
                         )
                 return 3
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
         print(f"prompts match {doc_path} (4 files + manifest with "
               f"{len(GOVERNING_SECTIONS)} governing-prose hashes)")
         return 0
