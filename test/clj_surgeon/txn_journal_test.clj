@@ -1803,7 +1803,148 @@
                    (:resolution (first (:interrupted-breaks result))))
                 (str "the scenario really is a finish: " (pr-str result)))
             (check! "finish" dir result))
-          (finally (cleanup! ws)))))))
+          (finally (cleanup! ws))))
+
+      ;; (d) SIX CONCURRENT `recover!` calls over ONE live claim - the shape
+      ;;     Opus round 8, finding 1 measured through the PUBLIC verb, with no
+      ;;     forgery, no hand cleanup and no crash. `recover!` takes no mutual
+      ;;     exclusion before resolving, so one call's REVERT deletes a
+      ;;     tombstone another call has already listed; the second then
+      ;;     resolved an ABSENT file and asserted `:evidence :retained :stamp
+      ;;     :ok` about it - 188 of 240 lines - and minted the orphan sidecar
+      ;;     it would report tomorrow, 40 of them, doing it. The single-caller
+      ;;     scenarios above cannot reach it because they never have a
+      ;;     concurrent deleter.
+      (let [ws (workspace! "receipt-names-storm" 2)
+            child (.start (ProcessBuilder. ["sleep" "60"]))
+            dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+            opts {:state-home (:state-home ws)}
+            lock (io/file dir "LOCK")
+            tombs 20
+            callers 6]
+        (try
+          (plant-lock! ws {:txid "A-LIVE" :pid (.pid child)
+                           :boot-id (boot-id-now)})
+          (doseq [i (range tombs)]
+            (Files/createLink
+              (.toPath (io/file dir (str "LOCK.broken.STORM-" i)))
+              (.toPath lock)))
+          (let [barrier (java.util.concurrent.CyclicBarrier. (int callers))
+                pool (java.util.concurrent.Executors/newFixedThreadPool
+                       (int callers))
+                receipts (try
+                           (mapv #(.get ^java.util.concurrent.Future %)
+                                 (.invokeAll
+                                   pool
+                                   (vec (repeat callers
+                                                (fn []
+                                                  (.await barrier)
+                                                  (journal/recover!
+                                                    (:root ws) opts))))))
+                           (finally (.shutdown pool)))
+                lines (vec (mapcat :interrupted-breaks receipts))
+                lied (filterv
+                       (fn [line]
+                         (and (= :retained (:evidence line))
+                              (not (.isFile (io/file dir ^String (:tombstone line))))))
+                       lines)
+                orphans (filterv (fn [^java.io.File f]
+                                   (.startsWith (.getName f) "LOCK.broken-at."))
+                                 (vec (.listFiles dir)))]
+            (is (seq lines)
+                (str "the storm really resolved interrupted breaks: "
+                     (count lines) " lines from " callers " callers"))
+            (is (zero? (count lied))
+                (str "no resolution says :evidence :retained for a tombstone "
+                     "that is not on disk - " (count lied) " of " (count lines)
+                     " lines did, e.g. " (pr-str (first lied))))
+            (is (zero? (count orphans))
+                (str "and no resolve MINTED the orphan sidecar it would report "
+                     "tomorrow - " (count orphans) " minted, e.g. "
+                     (pr-str (some-> ^java.io.File (first orphans) .getName)))))
+          (finally
+            (.destroyForcibly child)
+            (.waitFor child)
+            (cleanup! ws)))))))
+
+;; @spec MCP-OP-MEM-013
+(deftest a-resolution-never-says-retained-for-a-file-it-did-not-keep
+  (testing "Opus round 8, finding 1, probes E1 and E4. `:evidence :retained`
+            is a POSITIVE assertion about the state at return, and round
+            seven's witness asserts it verbatim - but the code emitted it, and
+            `:stamp :ok` beside it, with no check that the tombstone was ever
+            there. `touch-tombstone!` was the twin of the bug the round-eight
+            branch had already fixed two functions away: it caught its own
+            `setLastModifiedTime` failure and returned the clock REGARDLESS,
+            so `stamp-tombstone!`'s truth value came from the SIDECAR write
+            alone and said nothing about the file the receipt names.
+
+            A receipt must be honest AT CONSTRUCTION, not merely at return: a
+            false green terminates the investigation it exists to start."
+    ;; (a) the swallowed failure itself
+    (let [dir (temp-dir "touch-absent")]
+      (try
+        (is (nil? (@#'journal/touch-tombstone!
+                    (io/file dir "LOCK.broken.NOT-THERE")
+                    (System/currentTimeMillis)))
+            "setting the mtime of a file that is not there is not a stamp")
+        (finally (delete-tree! dir))))
+
+    ;; (b) the typed result both resolution branches read
+    (let [ws (workspace! "stamp-typed" 2)
+          dir (io/file (journal/transactions-dir (:root ws) (:state-home ws)))
+          lock (io/file dir "LOCK")
+          present (io/file dir "LOCK.broken.HERE")
+          absent (io/file dir "LOCK.broken.GONE")]
+      (try
+        (plant-lock! ws {:txid "ghost-s" :pid (reaped-pid)
+                         :boot-id (boot-id-now)})
+        (Files/createLink (.toPath present) (.toPath lock))
+        (let [kept (@#'journal/stamp-tombstone! present)
+              gone (@#'journal/stamp-tombstone! absent)]
+          (is (= :retained (:evidence kept))
+              (str "a tombstone that is on disk is retained: " (pr-str kept)))
+          (is (= :ok (:stamp kept))
+              (str "and both halves of its stamp happened: " (pr-str kept)))
+          (is (= :vanished (:evidence gone))
+              (str "a tombstone that is NOT on disk was not kept by this "
+                   "call, and the word for that is not :retained: "
+                   (pr-str gone)))
+          (is (not= :ok (:stamp gone))
+              (str "and a stamp that never touched a file is not :ok: "
+                   (pr-str gone)))
+          (is (not (.isFile (io/file dir "LOCK.broken-at.GONE")))
+              "and no sidecar is minted beside a tombstone that is not there"))
+        (finally (cleanup! ws))))
+
+    ;; (c) probe E1: the uncorroborated branch handed a tombstone that is not
+    ;;     there - deterministic, the state a concurrent revert leaves
+    (let [ws (workspace! "resolve-absent" 2)
+          child (.start (ProcessBuilder. ["sleep" "30"]))
+          transactions (journal/transactions-dir (:root ws) (:state-home ws))
+          dir (io/file transactions)
+          tomb (io/file dir "LOCK.broken.GONE")]
+      (try
+        (plant-lock! ws {:txid "A-LIVE" :pid (.pid child)
+                         :boot-id (boot-id-now)})
+        (let [line (@#'journal/resolve-interrupted-break!
+                     transactions tomb false nil)]
+          (is (not (.isFile tomb))
+              "the tombstone really was absent for the whole call")
+          (is (= :vanished (:evidence line))
+              (str "the resolution never says :retained for a file it did "
+                   "not keep: " (pr-str line)))
+          (is (not= :ok (:stamp line))
+              (str "and never :stamp :ok for a file it never stamped: "
+                   (pr-str line)))
+          (is (not (.isFile (io/file dir "LOCK.broken-at.GONE")))
+              (str "and the call mints no orphan sidecar doing it: "
+                   (pr-str (mapv (fn [^java.io.File f] (.getName f))
+                                 (vec (.listFiles dir)))))))
+        (finally
+          (.destroyForcibly child)
+          (.waitFor child)
+          (cleanup! ws))))))
 
 ;; @spec MCP-OP-MEM-013
 (deftest a-break-interrupted-between-the-link-and-the-unlink-is-not-a-break

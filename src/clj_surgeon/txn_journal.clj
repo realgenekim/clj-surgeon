@@ -748,17 +748,27 @@
       now)))
 
 (defn- touch-tombstone!
-  "Give the tombstone's own inode the break's creation time, and return it.
+  "Give the tombstone's own inode the break's creation time, and return it -
+   or NIL when that did not happen.
 
    Only once the break OWNS the file: setting mtime through one link sets it
    on the inode BOTH names, so doing this while the tombstone is still a
    second link would re-date the LOCK of a holder whose break has not even
-   completed."
+   completed.
+
+   IT RETURNS NIL ON A FAILED SET, and that return value is load-bearing. It
+   is the exact twin of the failure `stamp-broken-at!` was taught to report
+   two functions up, and it was left swallowed: the exception was caught and
+   the CLOCK returned regardless, so `:stamp :ok` became a word about the
+   sidecar write alone and said nothing about the file the receipt names. A
+   resolution then asserted `:evidence :retained :stamp :ok` for a tombstone
+   that was not on disk - measured through the public verb, with no forgery
+   and no crash, at 87 of 119 lines under six concurrent recoveries."
   [^File tomb now]
   (try
     (Files/setLastModifiedTime (.toPath tomb) (FileTime/fromMillis (long now)))
-    (catch Exception _ nil))
-  now)
+    now
+    (catch Exception _ nil)))
 
 (defn- stamp-tombstone!
   "Give the break's evidence its OWN creation time, twice over.
@@ -781,14 +791,38 @@
 
    Called only once the tombstone is a file this break OWNS: never while it is
    still a second link to a live LOCK, because setting mtime through one link
-   sets it on the inode both names."
+   sets it on the inode both names.
+
+   IT RETURNS A TYPED RESULT, not a timestamp, because its callers publish a
+   WORD about the file: `{:evidence :retained|:vanished :stamp
+   :ok|:unrecorded|:absent :broken-at-ms ms}`. `:retained` is a positive
+   assertion that the file is on disk and `:stamp :ok` that BOTH halves of the
+   stamp happened, so neither may be emitted by a branch that never looked.
+   `recover!` takes no mutual exclusion before resolving, so one call's revert
+   deletes a tombstone another call has already listed, and the second used to
+   assert it had kept and stamped a file it had never touched - and mint the
+   orphan sidecar it would report tomorrow doing it.
+
+   The residual window is one file wide and named here rather than left for a
+   reader to find: a tombstone deleted between this check and the sidecar
+   write leaves a sidecar with no tombstone, which the sweep already lists,
+   counts in `:orphan-sidecars` and retires on the published retention."
   [^File tomb]
-  (let [stamped (stamp-broken-at! tomb)]
-    ;; the mtime half is set from the clock even when the sidecar write
-    ;; failed, so the evidence is still retired on a time this run produced
-    ;; rather than on the age it inherited from the claim it broke
-    (touch-tombstone! tomb (or stamped (System/currentTimeMillis)))
-    stamped))
+  (if-not (.isFile tomb)
+    ;; there is no file to stamp, so there is nothing this call kept
+    {:evidence :vanished :stamp :absent}
+    (let [stamped (stamp-broken-at! tomb)
+          ;; the mtime half is set from the clock even when the sidecar write
+          ;; failed, so the evidence is still retired on a time this run
+          ;; produced rather than on the age it inherited from the claim it
+          ;; broke - but a set that did not happen is reported, not assumed
+          touched (touch-tombstone! tomb (or stamped
+                                             (System/currentTimeMillis)))]
+      (if (.isFile tomb)
+        {:evidence :retained
+         :stamp (if (and stamped touched) :ok :unrecorded)
+         :broken-at-ms stamped}
+        {:evidence :vanished :stamp :absent}))))
 
 (defn- mark-break-linked!
   "Record in the tombstone's OWN sidecar that a break has claimed the evidence
@@ -1142,7 +1176,7 @@
           {:broken true
            :tombstone (.getName tomb)
            :content-sha256 (:content-sha256 claim)
-           :broken-at-ms (stamp-tombstone! tomb)
+           :broken-at-ms (:broken-at-ms (stamp-tombstone! tomb))
            :break-path :move}
           ;; somebody else's claim: put it back untouched and break nothing
           (do
@@ -2771,14 +2805,33 @@
                               (legacy-lock-dead? lock holder now-ms)))))]
     (cond
       dead?
-      (do (Files/deleteIfExists (.toPath lock))
-          (stamp-tombstone! tomb)
-          {:tombstone (.getName tomb)
-           :resolution :interrupted-break-finished
-           ;; the file this line names is on disk when the call returns
-           :evidence :retained
-           :holder-txid (:txid holder)
-           :holder-cause cause})
+      ;; a break that cannot record itself does not happen, and neither does
+      ;; one whose evidence is no longer there to record. A concurrent
+      ;; recovery that already resolved this file leaves exactly that state,
+      ;; and unlinking the LOCK then would destroy a claim with nothing on
+      ;; disk naming who took it - the shape `break-by-link-finish!` refuses
+      ;; one function up. The ordinary break path in `recover!` still clears a
+      ;; dead holder's claim, with evidence of its own.
+      (if-not (.isFile tomb)
+        {:tombstone (.getName tomb)
+         :resolution :interrupted-break-vanished
+         :evidence :vanished
+         :stamp :absent
+         :cause :evidence-vanished
+         :holder-txid (:txid holder)
+         :holder-cause cause}
+        (do (Files/deleteIfExists (.toPath lock))
+            (let [stamp (stamp-tombstone! tomb)]
+              {:tombstone (.getName tomb)
+               :resolution (if (= :vanished (:evidence stamp))
+                             :interrupted-break-vanished
+                             :interrupted-break-finished)
+               ;; the word for the file this line names comes from the stamp
+               ;; that just tried to touch it, never from the branch we are in
+               :evidence (:evidence stamp)
+               :stamp (:stamp stamp)
+               :holder-txid (:txid holder)
+               :holder-cause cause})))
 
       ;; the LOCK is present and IS the claim this file is a second link to,
       ;; which is corroboration by the kernel: a completed break unlinks the
@@ -2804,13 +2857,20 @@
       ;; Stamp it so it is retired on the ordinary retention rather than on
       ;; the age it inherited from the claim, and keep it.
       :else
-      (let [stamped (stamp-tombstone! tomb)]
+      (let [stamp (stamp-tombstone! tomb)
+            gone? (= :vanished (:evidence stamp))]
         {:tombstone (.getName tomb)
-         :resolution :interrupted-break-uncorroborated
-         ;; the file this line names is on disk when the call returns
-         :evidence :retained
-         :cause :marker-uncorroborated
-         :stamp (if stamped :ok :unrecorded)
+         ;; a file that is not there was not kept by this call, and there is
+         ;; no marker left to disbelieve either: it is the state a CORRECT
+         ;; concurrent revert leaves, said rather than dressed as a keep
+         :resolution (if gone?
+                       :interrupted-break-vanished
+                       :interrupted-break-uncorroborated)
+         ;; the word for the file this line names comes from the stamp that
+         ;; just tried to touch it, never from the branch we are in
+         :evidence (:evidence stamp)
+         :cause (if gone? :evidence-vanished :marker-uncorroborated)
+         :stamp (:stamp stamp)
          :holder-txid (:txid holder)
          :holder-live (boolean (and claim (nil? cause)))
          :lock-present (.isFile lock)}))))
