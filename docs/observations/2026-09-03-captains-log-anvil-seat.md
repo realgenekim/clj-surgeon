@@ -43,3 +43,17 @@ executed). High: symlinks out of the root are outlined; the whole tree is parsed
 round lands and an independent re-review says GO** — exactly the class the 2026-09-02 andon memory
 covers, caught before merge this time. The names-only builder was told to finish and stop, and to put
 `--` before the pattern if it touches `grep-tree`. Mayor: item 2 is a pre-existing CLI exposure on main.
+
+## 02:19Z — lane 5 landed: FOLD-IDEM-004 (bd483802 + 619d3192 on `bridge/template-upsert`)
+
+Fact first, from a blessed history: two nil-id `comms.template-saved` facts COLLIDED under the
+hand-rolled loop (`(= nil nil)`), so the second silently replaced the first — "Draft A" lost. The only
+writer (`comms_templates.clj:21`) mints an id when none is supplied, so nil-id is unreachable from src.
+Decision: migrate to `(upsert-by comms-template-identity % template)` with a TOTAL identity (falls back
+to the value, the submission-speaker pattern); the reachable-shapes golden stayed byte-identical before
+re-blessing anything; only the nil-id open-case history was re-blessed (both drafts now survive — the
+new behaviour, pinned by its own witness). The param shadow the census flagged (`:unresolved-target`)
+disappears with the loop. Builder's unit 1054/13155/0; my own run in progress under the lock; push after.
+For Gene at merge time: on a historical log with nil-id templates (none known), the projection changes
+from collide to append.
+
