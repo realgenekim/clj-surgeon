@@ -3748,6 +3748,133 @@
                    (pr-str (:next-command result)))))))))
 
 ;; ---------------------------------------------------------------------------
+;; Sol's round-thirteen review, items 7 and 8, both blocking: a source that is
+;; NOT THERE was the one request shape neither entrance answered honestly.
+;;
+;; At the CLI it was not typed at all. `:file /tmp/does-not-exist.clj` reached
+;; `census-sources`, which stats the named path with `fs/size` before anything
+;; has asked whether it exists, and the `java.nio.file.NoSuchFileException` it
+;; throws surfaced through the launcher as a bare `:invalid-arguments` whose
+;; entire payload was the path — no type a caller can branch on, no anchor, no
+;; remedy. Existence is a filesystem question, so it cannot live in the pure
+;; shape pass; it belongs at the ENTRANCE, before the scan is forced, which is
+;; where every other filesystem refusal this op makes already lives.
+;;
+;; At the tool it was typed and the CONTINUATION was wrong, which is worse: a
+;; refusal whose next_call replays into the identical refusal is not a
+;; narrowing, it is a loop with a receipt. Measured before the fix, against a
+;; request naming one good source and one missing one:
+;;
+;;   error_type "unreadable-source-path"
+;;   next_call  {… :files ["src/does_not_exist.clj"]}
+;;
+;; — the continuation is the request narrowed to ONLY the entry that caused
+;; the refusal. The rule the oversized-source branch already follows is the
+;; rule here: the continuation is the same request WITHOUT the entries that
+;; could not be read, every other option carried through unchanged, and when
+;; removing them leaves no request there is no call to hand back and the
+;; refusal says so.
+;; ---------------------------------------------------------------------------
+
+(defn- refusal-or-throw
+  "Run `thunk`, reporting a thrown exception AS a receipt.
+
+   The defect under test is an entrance that throws instead of refusing, and a
+   witness that lets the throw escape reports a stack trace rather than the
+   shape of the answer."
+  [thunk]
+  (try (thunk)
+       (catch Throwable t
+         {:ok false :threw (.getName (class t)) :error (.getMessage t)})))
+
+;; @spec MCP-OP-CENSUS-014
+;; @spec MCP-OP-CENSUS-016
+;; @spec MCP-OP-CENSUS-019
+(deftest a-source-that-is-not-there-is-a-typed-refusal-on-both-entrances
+  (let [root (temp-dir)
+        arm "src/app/folds.clj"
+        missing "src/app/missing.clj"
+        gone "src/app/gone.clj"
+        absolute "/tmp/census15-fx/nope.clj"]
+    (try
+      (spit-file! (io/file root arm) arm-source)
+      (let [named (.getCanonicalPath root)
+            missing-path (str named "/" missing)
+            here (fn [params]
+                   (census-tool/execute-request! {:project-root named} params))]
+
+        (testing "the JVM CLI types the missing :file instead of throwing"
+          (let [result (refusal-or-throw
+                         #(core/run-relation-census {:file missing-path}))]
+            (is (nil? (:threw result))
+                (str "the entrance threw instead of refusing: "
+                     (pr-str result)))
+            (is (false? (:ok result)))
+            (is (= :file-not-found (:error-type result))
+                (str "the missing source is not a typed refusal: "
+                     (pr-str result)))
+            (is (= missing-path (:file result))
+                (str "the refusal does not name the path it could not find: "
+                     (pr-str result)))
+            (is (= missing-path (:absolute (:anchor result)))
+                (str "the refusal does not name the workspace the caller "
+                     "named: " (pr-str (:anchor result))))
+            (is (string? (:remedy result))
+                "the refusal offers neither a continuation nor a remedy")
+            (is (not (contains? result :next-command))
+                (str "a continuation was offered for a file that is the whole "
+                     "request: " (pr-str (:next-command result))))
+            (is (not (contains? result :next-command-argv)))))
+
+        (testing "the babashka CLI answers identically"
+          (let [result (bb-cli ":op" "relation-census" ":file" missing-path)]
+            (is (= :file-not-found (:error-type result))
+                (str "the bb entrance answered " (pr-str result)))
+            (is (= missing-path (:file result)))
+            (is (string? (:remedy result)))
+            (is (not (contains? result :next-command)))))
+
+        (testing "the tool's continuation is the request MINUS the missing entry"
+          (let [result (here {:files [arm missing]
+                              :doors ["upsert-by"]
+                              :pool_size 1})]
+            (is (false? (:ok result)))
+            (is (= "unreadable-source-path" (:error_type result)))
+            (is (= {:tool "relation_census"
+                    :workspace_root named
+                    :files [arm]
+                    :doors ["upsert-by"]
+                    :pool_size 1}
+                   (:next_call result))
+                (str "the continuation is not the request minus the entries "
+                     "it could not read: " (pr-str (:next_call result))))))
+
+        (testing "an out-of-fence entry is removed the same way"
+          (let [result (here {:files [absolute arm]})]
+            (is (= "unreadable-source-path" (:error_type result)))
+            (is (= [arm] (get-in result [:next_call :files]))
+                (str "the continuation kept the entry the fence refused: "
+                     (pr-str (:next_call result))))))
+
+        (testing "every named source missing leaves no request to make"
+          (let [result (here {:files [missing gone]})]
+            (is (= "unreadable-source-path" (:error_type result)))
+            (is (not (contains? result :next_call))
+                (str "the refusal hands back a call that replays into itself: "
+                     (pr-str (:next_call result))))
+            (is (string? (:remedy result))
+                "the refusal offers neither a continuation nor a remedy")))
+
+        (testing "a single missing source is never its own continuation"
+          (let [result (here {:files [missing]})]
+            (is (= "unreadable-source-path" (:error_type result)))
+            (is (not= [missing] (get-in result [:next_call :files]))
+                (str "the rejected request came back verbatim: "
+                     (pr-str (:next_call result))))
+            (is (not (contains? result :next_call))))))
+      (finally (delete-tree! root)))))
+
+;; ---------------------------------------------------------------------------
 ;; Sol's round-twelve review, item 3: the byte ceiling counted Java characters.
 ;;
 ;; `max-next-call-bytes` is named in bytes, documented in bytes, and reported
