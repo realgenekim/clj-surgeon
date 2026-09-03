@@ -685,6 +685,8 @@
                                                   "Scan a directory that contains Clojure sources."))}
                              (:file-count scan) (assoc :file_count (:file-count scan))
                              (:max-files scan) (assoc :max_files (:max-files scan))
+                             (:match-budget scan) (assoc :match_budget
+                                                         (:match-budget scan))
                              (:grep params) (assoc :grep (:grep params))
                              (:ns_grep params) (assoc :ns_grep (:ns_grep params)))
                            ;; A rejected PATTERN gets the treatment a rejected
@@ -697,6 +699,10 @@
                              :invalid-grep-pattern
                              (ls-tree-next-call (dissoc params :grep) {})
                              :invalid-ns-grep-pattern
+                             (ls-tree-next-call (dissoc params :ns_grep) {})
+                             ;; A pattern refused for what it COSTS is as
+                             ;; unsendable as one refused for not compiling.
+                             :ns-grep-match-budget-exceeded
                              (ls-tree-next-call (dissoc params :ns_grep) {})
                              (ls-tree-next-call params {:dir "."})))
           (let [projects (:projects scan)
@@ -852,6 +858,9 @@
     "mode" {:type "string"}
     "dir" {:type "string"}
     "grep" {:type ["string" "null"]}
+    "ns_grep" {:type ["string" "null"]}
+    "max_files" {:type "integer"}
+    "match_budget" {:type "integer"}
     "format" {:type "string"}
     "limit" {:type "integer"}
     "project_count" {:type "integer"}

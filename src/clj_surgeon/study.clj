@@ -400,24 +400,87 @@
       (re-pattern pattern))
     (catch Exception _e nil)))
 
+;; @spec MCP-OP-STUDY-031
+(def ns-grep-match-steps-per-file
+  "How many characters the regular-expression engine may READ, per discovered
+   file, while `ns-grep` filters one scan.
+
+   `java.util.regex` backtracks, so a caller-supplied pattern is
+   caller-supplied CPU. Measured through the read entrance over the 67 files
+   of this repository's `src/` — ordinary 36-character paths, no adversarial
+   file names — `(.*.*.*.*.*.*)*x` cost 43,589 ms and still returned
+   `ok=true`; each further `.*` multiplies that about six-fold. At `max-files`
+   2000 that one call is ~21 minutes, at the 20,000 ceiling ~3.5 hours.
+
+   Honest patterns are nowhere near it. Against
+   `src/clj_surgeon/mcp_inspect_tool.clj`: `mcp` reads 19 characters,
+   `^src/clj_surgeon/.*tool` reads 55, a six-way namespace alternation reads
+   91, and the same alternation over a 97-character path reads 341. 20,000 per
+   file is roughly sixty times the worst honest cost measured here and an
+   order of magnitude below the cheapest catastrophic one."
+  20000)
+
+;; @spec MCP-OP-STUDY-031
+(defn ns-grep-pool
+  "A mutable step allowance shared by every match in one ns-grep pass:
+   `[characters-left budget]`. Pooling it across the pass rather than per
+   match is what bounds the SCAN — a per-match budget still lets a pattern
+   that costs just under it be paid once per file."
+  ^longs [budget]
+  (long-array [(long budget) (long budget)]))
+
+;; @spec MCP-OP-STUDY-031
+(defn- budgeted-subject
+  "The match subject, wrapped so the regex engine's own character reads are
+   counted against `pool` and can run out.
+
+   A wall-clock deadline cannot do this job: `future-cancel` does not
+   interrupt a running matcher and `Matcher` polls no interrupt flag, so the
+   only place a backtracking match can be stopped from is inside the
+   `CharSequence` it reads. Exactly `budget` reads succeed; the next one
+   throws."
+  ^CharSequence [^String s ^longs pool]
+  (reify CharSequence
+    (length [_] (.length s))
+    (charAt [_ index]
+      (let [left (unchecked-dec (aget pool 0))]
+        (aset pool 0 left)
+        (when (neg? left)
+          (throw (ex-info "ns-grep match budget exhausted"
+                          {:error-type :ns-grep-match-budget-exceeded
+                           :budget (aget pool 1)}))))
+      (.charAt s index))
+    (subSequence [_ start end] (.subSequence s start end))
+    (toString [_] s)))
+
 ;; @spec MCP-OP-STUDY-012
-(defn- ns-grep-hit?
+;; @spec MCP-OP-STUDY-031
+(defn ns-grep-hit?
   "Pure: true if a source file's SCAN-RELATIVE path plausibly names a
    namespace matching the ALREADY COMPILED pattern. Tests the relative path as
    given and again with '_' turned into '-', because the Clojure require
    convention keeps a file's path in lockstep with its declared namespace
    (path segment <-> ns segment, '_' <-> '-'). Takes the path already
    relativized to the scanned dir — never the absolute filesystem path, whose
-   ancestor directories (e.g. a checkout named `…-store` or `…-study`) could
+   ancestor directories (e.g. a checkout named `...-store` or `...-study`) could
    spuriously match. Never opens or parses the file — this is a path/namespace
    filter, never a file-contents filter (that is `grep`, via
-   `filter-projects-by-hits`)."
-  [re rel-path]
-  (boolean (or (re-find re rel-path)
-               (re-find re (str/replace rel-path "_" "-")))))
+   `filter-projects-by-hits`).
+
+   `pool` is the shared step allowance from `ns-grep-pool`. Every character
+   the engine reads is charged to it, and an exhausted pool THROWS a typed
+   `:ns-grep-match-budget-exceeded` `ex-info` that `ls-tree` turns into a
+   typed refusal. The pattern was compiled under a guard and then matched
+   without one, which left the read entrance one call away from hours of
+   uninterruptible CPU."
+  [re rel-path pool]
+  (boolean (or (re-find re (budgeted-subject rel-path pool))
+               (re-find re (budgeted-subject (str/replace rel-path "_" "-")
+                                             pool)))))
 
 ;; @spec MCP-OP-STUDY-012
 ;; @spec MCP-OP-STUDY-022
+;; @spec MCP-OP-STUDY-031
 (defn filter-projects-by-ns-grep
   "Pure: keep only files whose path/namespace — relative to dir, never the
    absolute filesystem path — matches pattern. Narrower than
@@ -426,18 +489,23 @@
    substrings included. Drops projects left with no files.
 
    The pattern is compiled ONCE here; an uncompilable one is refused by
-   `ls-tree` long before this."
+   `ls-tree` long before this. The whole pass shares ONE step budget, sized
+   `ns-grep-match-steps-per-file` per discovered file, so the work this filter
+   can do is bounded by the tree it was handed rather than by the pattern it
+   was given."
   [projects dir pattern]
   (let [dir-path (fs/path dir)
         re (compile-pattern pattern)
-        rel (fn [f] (str (fs/relativize dir-path (fs/path f))))]
+        rel (fn [f] (str (fs/relativize dir-path (fs/path f))))
+        file-count (reduce + 0 (map #(count (:files %)) projects))
+        pool (ns-grep-pool (* ns-grep-match-steps-per-file (max 1 file-count)))]
     (if-not re
       []
       (->> projects
            (map (fn [project]
                   (update project :files
                           (fn [files]
-                            (filterv #(ns-grep-hit? re (rel %)) files)))))
+                            (filterv #(ns-grep-hit? re (rel %) pool) files)))))
            (remove #(empty? (:files %)))
            vec))))
 
@@ -843,11 +911,36 @@
                         (discover-projects-grep root hits dir cap))
                       ;; Full scan: discover all projects
                       (discover-projects root dir cap))
-          projects (if (and (:ok discovery) ns-grep)
-                     (filter-projects-by-ns-grep (:projects discovery) dir ns-grep)
-                     (:projects discovery))
+          ;; The ns-grep pass runs under a shared step budget, so an
+          ;; exhausted pool arrives here as a typed value rather than as a
+          ;; regex engine spinning for hours where nothing can cancel it.
+          filtered (when (and (:ok discovery) ns-grep)
+                     (try
+                       {:ok true
+                        :projects (filter-projects-by-ns-grep
+                                    (:projects discovery) dir ns-grep)}
+                       (catch clojure.lang.ExceptionInfo error
+                         (if (= :ns-grep-match-budget-exceeded
+                                (:error-type (ex-data error)))
+                           {:ok false :budget (:budget (ex-data error))}
+                           (throw error)))))
+          projects (if filtered (:projects filtered) (:projects discovery))
           file-count (total-file-count projects)]
       (cond
+        (and filtered (not (:ok filtered)))
+        {:ok false
+         :error-type :ns-grep-match-budget-exceeded
+         :dir dir
+         :grep grep
+         :ns-grep ns-grep
+         :match-budget (:budget filtered)
+         :error (format (str "Matching :ns-grep %s under %s exhausted the "
+                             "%d-character match budget for this scan")
+                        (pr-str ns-grep) named (:budget filtered))
+         :remedy (str "Use an ns_grep pattern without nested unbounded "
+                      "repetition: it matches a file's path, so a literal "
+                      "namespace segment or a simple alternation is enough.")}
+
         ;; Refused DURING discovery — which only lists names — and before any
         ;; file is opened. The count and the cap are both named so the caller
         ;; can choose a remedy instead of guessing one.

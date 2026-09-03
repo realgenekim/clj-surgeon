@@ -1392,3 +1392,54 @@
           (is (= (oracle pattern)
                  (set (map rel (mapcat :files filtered))))
               "the budgeted matcher selects exactly what an unguarded one does"))))))
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-ns-grep-budget-refuses-at-the-step-after-the-budget
+  ;; A ceiling is only a ceiling if it is asserted AT the ceiling. Exactly
+  ;; `budget` character reads must be answered and the very next one must
+  ;; refuse: an `>=` where a `>` belongs leaves every other witness here green.
+  (let [subject "clj_surgeon/mcp_inspect_tool.clj"
+        headroom 10000000]
+    (doseq [[pattern expected-hit] [["zzz" false]
+                                    ["mcp" true]
+                                    ["(?i)inspect|study" true]]]
+      (testing pattern
+        (let [re (study/compile-pattern pattern)
+              measured (study/ns-grep-pool headroom)
+              hit (study/ns-grep-hit? re subject measured)
+              used (- headroom (aget ^longs measured 0))]
+          (is (= expected-hit hit))
+          (is (< 0 used 1000)
+              (str "an honest pattern over a 31-character path costs tens of "
+                   "character reads, not thousands: " used))
+          (is (= expected-hit
+                 (study/ns-grep-hit? re subject (study/ns-grep-pool used)))
+              "a match costing exactly the budget is answered, not refused")
+          (let [thrown (try
+                         (study/ns-grep-hit?
+                           re subject (study/ns-grep-pool (dec used)))
+                         (catch clojure.lang.ExceptionInfo error error))]
+            (is (instance? clojure.lang.ExceptionInfo thrown)
+                "one character read past the budget refuses")
+            (is (= :ns-grep-match-budget-exceeded
+                   (:error-type (ex-data thrown))))
+            (is (= (dec used) (:budget (ex-data thrown)))
+                "and the refusal carries the budget it exhausted")))))))
+
+;; @spec MCP-OP-STUDY-031
+(deftest the-ns-grep-budget-is-pooled-across-the-scan-not-spent-per-match
+  ;; A PER-MATCH budget still lets a pattern that costs just under it be paid
+  ;; once per file, which is `max_files` multiplied by the budget rather than
+  ;; bounded by it. The pass therefore shares one allowance, sized by the tree
+  ;; discovery actually found.
+  (let [scan (study/ls-tree {:dir "src" :max-files 2000})
+        discovered (study/total-file-count (:projects scan))
+        response (run {"mode" "ls-tree" "dir" "src"
+                       "ns_grep" "(.*.*.*.*.*.*)*x"})]
+    (is (pos? discovered))
+    (is (= "ns-grep-match-budget-exceeded" (:error_type response)))
+    (is (= (* study/ns-grep-match-steps-per-file discovered)
+           (:match_budget response))
+        "the whole pass gets one allowance of steps-per-file x files found")
+    (is (empty? (output-schema-violations response))
+        "and the new receipt field does not break the tool's output schema")))
