@@ -273,17 +273,23 @@ def score(arm: pathlib.Path, args) -> int:
     wreturns = [w for w in watch if w.get("kind") == "return"]
     aborts = [w for w in watch if w.get("kind") == "abort"]
     no_output = [w for w in wcalls if w.get("outcome") == "no-output"]
+    # A `make` target the attest-time map could not resolve: what it RAN is unknown, so
+    # the run is incomplete rather than one more non-test action (Sol round two, item 6).
+    unresolved_make = sorted({tgt for c in wcalls
+                              for tgt in (c.get("make_unresolved") or [])})
 
     run = {}
     run_path = arm / "run.json"
     if run_path.exists():
         run = json.loads(run_path.read_text())
 
-    if no_output or any(a.get("error_type") == "incomplete-run" for a in aborts):
+    if (no_output or unresolved_make
+            or any(a.get("error_type") == "incomplete-run" for a in aborts)):
         return abort(arm, 3, f"incomplete-run {watch_path} "
                              f"({len(no_output)} tool call(s) whose result never "
                              f"arrived; seq="
-                             f"{[c.get('seq') for c in no_output]})")
+                             f"{[c.get('seq') for c in no_output]}; "
+                             f"unresolved make target(s)={unresolved_make})")
 
     # A WATCHER ABORT IS TERMINAL.  Sol round two, item 3: an abort was appended to
     # `notes` and the run was scored anyway, so an idle-stop (watcher rc 5) became a

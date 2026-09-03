@@ -26,7 +26,8 @@ Meters, and why each exists:
                 `start_utc`; it is never hand-typed and never self-reported.
 
 Exit codes: 0 metered; 2 usage / unattested arm; 4 zero returns; 5 idle or wall cap;
-6 incomplete run (a tool call whose result never arrived); 7 the rollout could not be
+6 incomplete run (a tool call whose result never arrived, or a `make` target the
+attest-time map does not resolve); 7 the rollout could not be
 bound to THIS driver's own announced session; 8 the bound rollout was ROTATED --
 replaced or truncated -- while the run was being metered.
 The driver's own exit status is recorded in run.json, never conflated with these.
@@ -196,6 +197,47 @@ def is_test_command(script: str, make_map: dict | None = None,
         if base == "bb" and any(a.endswith("run_all.clj") or a.startswith("test/") for a in rest):
             return True, f"bb {' '.join(rest[:2])}"
     return False, None
+
+
+def unresolved_make_targets(script: str, make_map: dict | None,
+                            _depth: int = 0) -> list[str]:
+    """Make targets the driver typed that the attest-time map does not resolve.
+
+    Sol round two, item 6: an unknown or conditional target fell through to the name
+    rule and was metered as one more NON-TEST ACTION -- the exact quantity E3's pass
+    line is stated in, so an unmetered test run landed on the other side of the
+    comparison rather than merely going missing.  What a target RUNS is either in the
+    map or it is not known, and not known is `incomplete-run`, never a smaller number.
+
+    Only the targets the driver actually typed are reported.  Recursion through the
+    map is the test predicate's business, and a prerequisite that happens to be a file
+    is not evidence about anything the driver did.
+    """
+    if _depth > 3:
+        return []
+    out: list[str] = []
+    for tokens in command_position_tokens(script):
+        head, rest = tokens[0], tokens[1:]
+        base = os.path.basename(head)
+        if base in SHELL_RUNNERS and rest:
+            for tok in rest:
+                if tok.startswith("-"):
+                    continue
+                out.extend(unresolved_make_targets(tok, make_map, _depth + 1))
+                break
+            continue
+        if base != "make":
+            continue
+        operands = [a for a in rest if not a.startswith("-") and "=" not in a]
+        if not operands:
+            # `make` with no goal: which recipe runs depends on .DEFAULT_GOAL and on
+            # declaration order, and the map does not carry that.
+            out.append("(default-goal)")
+            continue
+        for target in operands:
+            if not make_map or target not in make_map:
+                out.append(target)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -561,7 +603,8 @@ def main() -> int:
         rollout_path.write_text("")
 
     t0 = time.time()
-    state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0, "last_scan": 0.0}
+    state = {"returns": 0, "seq": 0, "open": {}, "last_event": t0, "last_scan": 0.0,
+             "make_unresolved": []}
 
     def emit(record: dict) -> None:
         record = {"t": utcnow(),
@@ -582,6 +625,9 @@ def main() -> int:
             script = _shell_script(args_text)
             test_call, why = (is_test_command(script, make_map) if script
                               else (False, None))
+            unresolved_targets = (unresolved_make_targets(script, make_map)
+                                  if script else [])
+            state["make_unresolved"].extend(unresolved_targets)
             tool = event.get("tool") or "unknown"
             short_tool = tool.split("__")[-1]
             is_patch = (
@@ -602,6 +648,7 @@ def main() -> int:
                 "cmd_head": (script.strip().split("\n")[0][:200] if script else None),
                 "test_call": test_call,
                 "test_match": why,
+                "make_unresolved": unresolved_targets,
                 "args_sha256": hashlib.sha256(args_text.encode()).hexdigest(),
                 "args_len": len(args_text),
                 "args": args_text[:4000],
@@ -886,6 +933,7 @@ def main() -> int:
             abort_reason = "rollout-unbound"
 
     incomplete = flush_open("driver-ended-before-output")
+    unresolved_targets = sorted(set(state["make_unresolved"]))
 
     end_utc = utcnow()
     end_dt = parse_utc(end_utc)
@@ -923,6 +971,7 @@ def main() -> int:
         "calls": calls,
         "abort": abort_reason,
         "calls_without_output": incomplete,
+        "unresolved_make_targets": unresolved_targets,
         "watch_jsonl": str(watch_path),
     }
 
@@ -965,7 +1014,7 @@ def main() -> int:
               f"driver_rc={driver_rc}", file=sys.stderr)
         return 4
 
-    if incomplete and not abort_reason:
+    if (incomplete or unresolved_targets) and not abort_reason:
         abort_reason = "incomplete-run"
         run["abort"] = abort_reason
 
@@ -980,9 +1029,11 @@ def main() -> int:
     (arm / "run.json").write_text(json.dumps(run, indent=2) + "\n")
     sink.close()
 
-    if incomplete:
+    if incomplete or unresolved_targets:
         print(f"WATCH-ABORT incomplete-run arm={arm.name} "
-              f"calls_without_output={incomplete} returns={state['returns']} "
+              f"calls_without_output={incomplete} "
+              f"unresolved_make_targets={unresolved_targets} "
+              f"returns={state['returns']} "
               f"calls={calls} driver_rc={driver_rc}", file=sys.stderr)
         return 6
 
