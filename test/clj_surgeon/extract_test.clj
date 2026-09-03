@@ -2589,3 +2589,57 @@
           (chmod! outside "rwxr-xr-x")
           (delete-recursive! outside)
           (delete-recursive! root))))))
+
+;; @spec MCP-OP-EXTRACT-041
+(deftest the-pre-write-fence-is-the-same-fence-as-the-plan-time-one
+  (testing "confine-workspace-paths is the check that runs in the instant
+            before the first atomic-write!. Its docstring promised the same
+            gate that runs where the walk turns the workspace into a read set;
+            it had only the outside-root half, so EXTRACT-037's prune had no
+            pre-write half and the filesystem could change between proving a
+            plan and committing it"
+    (let [confine #'clj-surgeon.extract/confine-workspace-paths
+          root (create-caller-project!)
+          src (io/file root "src" "app")
+          hooks (io/file root ".git" "hooks")
+          link (io/file src "alias_caller.clj")]
+      (try
+        (.mkdirs hooks)
+        (spit (io/file hooks "caller.clj") "(ns app.real-caller)\n")
+        (symlink! link "../../.git/hooks/caller.clj")
+        (let [skipped [{:dir (.getPath (io/file root ".git"))
+                        :reason :build-tree}]
+              result (try (confine root [(.getPath link)] skipped)
+                          (catch clojure.lang.ArityException error
+                            {:error-type :no-prune-half
+                             :error (.getMessage error)}))]
+          (is (= :caller-path-in-skipped-tree (:error-type result))
+              (str "the pre-write call must be the SAME gate as the plan-time "
+                   "one, or the two calls the docstring describes are two "
+                   "different checks: " (pr-str result)))
+          (is (str/includes? (str (:path result)) "alias_caller.clj"))
+          (is (str/includes? (str (:resolves-to result)) ".git/hooks/caller.clj"))
+          (is (str/includes? (str (:tree result)) ".git")))
+        (finally (delete-recursive! root)))))
+
+  (testing "and it subtracts the trees the walk READ, exactly as plan time
+            does, so a pruned NAME linking to a tree the walk descended does
+            not refuse the write at the last moment either"
+    (let [confine #'clj-surgeon.extract/confine-workspace-paths
+          root (create-caller-project!)
+          build-out (io/file root "build_out")
+          gen (io/file build-out "gen.clj")]
+      (try
+        (.mkdirs build-out)
+        (spit gen "(ns app.gen)\n")
+        (symlink! (io/file root "target") "build_out")
+        (let [skipped [{:dir (.getPath (io/file root "target"))
+                        :reason :build-tree}]
+              result (try (confine root [(.getPath gen)] skipped)
+                          (catch clojure.lang.ArityException error
+                            {:error-type :no-prune-half
+                             :error (.getMessage error)}))]
+          (is (nil? result)
+              (str "a tree the walk read is not a tree it declined: "
+                   (pr-str result))))
+        (finally (delete-recursive! root))))))
