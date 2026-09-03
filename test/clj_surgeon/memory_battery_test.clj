@@ -254,6 +254,7 @@
       (is (false? (:pass? result)))
       (is (contains? (lines-of result) :held-scales-with-n))
       (is (= {:op :rename-ns-plan-full-match
+              :profile :default
               :line :held-scales-with-n
               :observed 9.8
               :limit 3.0
@@ -298,7 +299,7 @@
           result (battery/verdict {:xmx-mb 512 :cells cells})]
       (is (false? (:pass? result)))
       (is (contains? (lines-of result) :retained-scales-with-n))
-      (is (= {:op :ls-tree :line :retained-scales-with-n
+      (is (= {:op :ls-tree :profile :default :line :retained-scales-with-n
               :observed 25.0 :limit 13.0 :small-n-observed 5.0 :slack-mb 8}
              (first (filter #(= :retained-scales-with-n (:line %))
                             (:failures result)))))))
@@ -436,6 +437,30 @@
                                   :profile :giant)]})]
       (is (str/includes? table "prof"))
       (is (str/includes? table "giant")))))
+
+;; @spec MCP-OP-MEM-011
+(deftest every-reported-line-names-the-corpus-it-came-from
+  ;; The giant and nested arms both sit at N=1. Without the corpus in the
+  ;; identity, their receipt lines are indistinguishable — two different
+  ;; findings printed as if they were the same one.
+  ;; start 24.0 is the JVM's real measured baseline, so the budget is 248.0 and
+  ;; both of these measured peaks cross it.
+  (let [cells [(assoc (cell :ls-tree 1 :fresh 333.9 50.0 :start 24.0)
+                      :profile :giant)
+               (assoc (cell :ls-tree 1 :fresh 259.0 50.0 :start 24.0)
+                      :profile :nested)]
+        result (battery/verdict {:xmx-mb 512 :cells cells})
+        trends (:trends result)]
+    (is (= 2 (count trends)))
+    (is (= #{:giant :nested} (set (map :profile trends)))
+        "each trend line names the corpus that produced it")
+    (is (= {:op :ls-tree :profile :giant :n 1 :phase :fresh :rep 1}
+           (select-keys (first (filter #(= :giant (:profile %)) trends))
+                        [:op :profile :n :phase :rep]))))
+  (testing "a default-corpus cell still says so"
+    (let [cells [(cell :ls-tree 1000 :warm 500.0 50.0)]
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= :default (:profile (first (:trends result))))))))
 
 ;; @spec MCP-OP-MEM-011
 (deftest the-generator-and-the-battery-agree-on-every-arm

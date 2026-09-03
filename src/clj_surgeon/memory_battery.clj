@@ -139,8 +139,12 @@
   #{:peak-over-budget :peak-scales-with-n})
 
 (defn- cell-identity
+  "What a reported line is ABOUT. The corpus profile is part of it: the giant
+  and nested arms both sit at N=1, so without it two different findings print
+  as if they were the same one."
   [cell]
-  (select-keys cell [:op :n :phase :rep]))
+  (assoc (select-keys cell [:op :n :phase :rep])
+         :profile (:profile cell :default)))
 
 (defn- cell-failures
   [xmx-mb {:keys [oom? heap-start-mb heap-used-peak-mb result-hash reference-hash]
@@ -186,6 +190,7 @@
 
       (> large (+ small (double slack)))
       [:fail {:op op
+              :profile :default
               :line line
               :observed large
               :limit (+ small (double slack))

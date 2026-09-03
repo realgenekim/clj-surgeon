@@ -5,7 +5,8 @@ their heap by the work they do or by the repository they are pointed at.
 
 It is a **measurement gate**, not a unit test. It changes no operation. It runs
 one JVM at a bounded heap, drives every tree-scale operation over synthetic
-repositories at 100 / 1,000 / 10,000 files, and returns a receipt and a verdict.
+repositories at 100 / 1,000 / 10,000 files plus three adversarial corpora, and
+returns a receipt and a verdict.
 
 Intents: **MCP-OP-MEM-001** (the per-operation memory/work receipt block) and
 **MCP-OP-MEM-011** (this battery as a release gate) —
@@ -19,9 +20,9 @@ Intents: **MCP-OP-MEM-001** (the per-operation memory/work receipt block) and
 make memory-battery
 ```
 
-That is the whole thing. It generates the trees if they are missing, runs the
-unbounded reference pass once if its hash cache is missing, then runs the
-bounded battery and prints the table.
+That is the whole thing. It builds and **verifies** the corpora, checks that the
+cached unbounded reference is attested to this run (rebuilding it if not), then
+runs the bounded battery and prints the table.
 
 Knobs, all optional:
 
@@ -37,13 +38,10 @@ Knobs, all optional:
 Sub-targets, if you want them separately:
 
 ```bash
-make memory-battery-generate    # build/verify the trees (~1 s for all three)
+make memory-battery-generate    # build/verify every corpus (~3 s when intact)
+make memory-battery-attest      # seconds: is the cached reference bound to this run?
 make memory-battery-reference   # (re)build the unbounded reference hashes
 make memory-battery-self-test   # millisecond self-test; this one IS in `make test`
-```
-
-```bash
-make memory-battery-attest      # seconds: is the cached reference bound to this run?
 ```
 
 ### The reference is attested, not merely present
