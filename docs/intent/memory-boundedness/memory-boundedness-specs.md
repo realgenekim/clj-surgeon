@@ -89,6 +89,11 @@ MCP-OP-MEM-011:
   opposite remedies.
 - "The bounded run produced a result, so output parity holds." Parity is against
   a cached unbounded reference hash; with no reference, parity is UNMEASURED.
+- "A reference-hashes file is present, so parity can be checked." Existence is
+  not attestation. The default corpus root is shared between worktrees, so a
+  present file may hold hashes from other code over another corpus; a reference
+  not bound to this run's operation sources, generator, corpus digests and JVM
+  is refused, never compared.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
 - "Retention after the result is released is flat, so retained heap is bounded."
   That measures leaks. What a receipt itself retains is measured with the result
@@ -114,6 +119,11 @@ MCP-OP-MEM-011:
 
 - The battery measures this branch's operations as black boxes through their
   public entrances. It never reaches inside an operation, and it changes none.
+- Output parity is claimed only against an unbounded reference attested to this
+  run's arms, operation sources, generator, corpus digests and JVM. The commit
+  sha is recorded for forensics but not compared: the source digest already
+  covers every change that could alter an operation's output, and binding to
+  HEAD would force a minutes-long reference rebuild on every unrelated commit.
 - Two of Sol's pass lines are NOT implemented by this battery and are out of
   scope for its current arms: the 450 x 1.9 MiB aggregate-admission case, and
   injected conflict at staging, validation, every commit boundary, and rollback.

@@ -229,6 +229,58 @@
      :exit (get exit-codes status)}))
 
 ;; ============================================================
+;; Reference attestation — parity is only a pass line against a reference
+;; that measured THIS code, THIS corpus, on THIS JVM
+;; ============================================================
+
+(def attested-fields
+  "Every field the cached unbounded reference is bound to. A difference in any
+  one of them means the cached hashes describe a different experiment.
+
+  `:head-sha` is deliberately NOT here. It is recorded in the reference for
+  forensics but not compared: binding parity to HEAD would invalidate the
+  reference on every unrelated commit, and the cost of rebuilding it is a
+  minutes-long 4 GiB pass. `:src-digest` covers every clj-surgeon source file,
+  so any change that could alter an operation's output already invalidates it —
+  which is the property parity actually needs."
+  [:ops :ops-digest :src-digest :generator-digest :corpus-digests :jvm])
+
+;; @spec MCP-OP-MEM-011
+(defn reference-staleness
+  "nil when `reference` was produced by exactly this code, generator, corpus and
+  JVM; otherwise a typed map naming what differs.
+
+  Before this existed, `make memory-battery` accepted any `reference-hashes.edn`
+  that happened to exist under a root shared across worktrees, so output parity
+  could be `ok` against hashes from other code over a different corpus."
+  [attestation reference]
+  (cond
+    (nil? reference)
+    {:reason :no-reference
+     :detail "no unbounded reference has been recorded; run the reference pass"}
+
+    (nil? (:attestation reference))
+    {:reason :unattested-reference
+     :detail (str "the cached reference carries no attestation, so nothing "
+                  "binds it to this code, corpus or JVM; rebuild it")}
+
+    (some #(= :unavailable (get attestation %)) attested-fields)
+    {:reason :attestation-unavailable
+     :fields (vec (filter #(= :unavailable (get attestation %)) attested-fields))
+     :detail "this run could not compute its own identity, so it cannot claim parity"}
+
+    :else
+    (let [found (:attestation reference)
+          diffs (vec (for [k attested-fields
+                           :when (not= (get attestation k) (get found k))]
+                       {:field k :expected (get attestation k) :found (get found k)}))]
+      (when (seq diffs)
+        {:reason :stale-reference
+         :fields (mapv :field diffs)
+         :differences diffs
+         :detail "the cached reference measured a different experiment"}))))
+
+;; ============================================================
 ;; One-screen table
 ;; ============================================================
 

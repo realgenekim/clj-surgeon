@@ -42,8 +42,41 @@ make memory-battery-reference   # (re)build the unbounded reference hashes
 make memory-battery-self-test   # millisecond self-test; this one IS in `make test`
 ```
 
-To force a fresh reference after changing an operation's output shape, delete
-`$MEMBAT_ROOT/reference-hashes.edn`.
+```bash
+make memory-battery-attest      # seconds: is the cached reference bound to this run?
+```
+
+### The reference is attested, not merely present
+
+Output parity is only a pass line against a reference that measured **this**
+experiment. `reference-hashes.edn` therefore carries an `:attestation` alongside
+its `:hashes`, and the battery **refuses** (exit 2) rather than compare against
+one that does not match:
+
+| bound field | why |
+|---|---|
+| `:ops` / `:ops-digest` | which arms were measured, and through which entrances |
+| `:src-digest` | every `src/clj_surgeon` source: any change that could alter an operation's output invalidates the reference |
+| `:generator-digest` | the corpus generator's own source |
+| `:corpus-digests` | each tree's content manifest digest |
+| `:jvm` | `java.version` |
+
+`:head-sha` is **recorded but not compared**. Binding parity to HEAD would
+invalidate the reference on every unrelated commit, and rebuilding it is a
+minutes-long 4 GiB pass; `:src-digest` already covers everything that could
+change an operation's output. A reference file with no attestation at all (the
+pre-attestation format) is `:unattested-reference` and is never trusted.
+
+`make memory-battery` runs `memory-battery-attest` first and rebuilds the
+reference when it is stale, so the refusal is normally invisible — it fires when
+the reference cannot be rebuilt, or when the battery is run directly.
+
+This matters because `MEMBAT_ROOT` defaults to a path **shared between
+worktrees**: before attestation, a `reference-hashes.edn` written from another
+branch over a different corpus was accepted simply because the file existed.
+
+To force a fresh reference by hand, delete `$MEMBAT_ROOT/reference-hashes.edn`
+or run `make memory-battery-reference`.
 
 ### Exit codes
 

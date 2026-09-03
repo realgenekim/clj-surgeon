@@ -251,6 +251,63 @@
            (set (map :op (:failures result)))))))
 
 ;; ------------------------------------------------------------------
+;; The unbounded reference must be attested to the thing it measured
+;; ------------------------------------------------------------------
+
+(defn- attestation
+  [& {:as overrides}]
+  (merge {:ops [:ls-tree :workspace-sources]
+          :ops-digest "opsdigest"
+          :src-digest "srcdigest"
+          :generator-digest "gendigest"
+          :corpus-digests {1000 "c1k" 10000 "c10k"}
+          :jvm "21.0.8"}
+         overrides))
+
+;; @spec MCP-OP-MEM-011
+(deftest a-reference-not-attested-to-this-corpus-and-code-is-refused
+  (testing "a reference stamped with the same code, corpus and JVM is fresh"
+    (is (nil? (battery/reference-staleness
+                (attestation)
+                {:attestation (attestation) :hashes {}}))))
+
+  (testing "a reference stamped with a DIFFERENT corpus digest is stale"
+    (let [stale (battery/reference-staleness
+                  (attestation)
+                  {:attestation (attestation :corpus-digests {1000 "c1k" 10000 "OTHER"})
+                   :hashes {}})]
+      (is (= :stale-reference (:reason stale)))
+      (is (= [:corpus-digests] (:fields stale)))))
+
+  (testing "the other bound fields are checked too"
+    (doseq [[field value] [[:src-digest "other"]
+                           [:generator-digest "other"]
+                           [:ops-digest "other"]
+                           [:ops [:ls-tree]]
+                           [:jvm "17.0.1"]]]
+      (testing (str field)
+        (is (= [field]
+               (:fields (battery/reference-staleness
+                          (attestation)
+                          {:attestation (attestation field value) :hashes {}})))))))
+
+  (testing "a missing reference is typed, not silently absent"
+    (is (= :no-reference (:reason (battery/reference-staleness (attestation) nil)))))
+
+  (testing "a reference file carrying no attestation at all is never trusted"
+    (is (= :unattested-reference
+           (:reason (battery/reference-staleness
+                      (attestation)
+                      {:ls-tree {1000 "hash"}})))))
+
+  (testing "an attestation that could not be computed fails closed"
+    (is (= :attestation-unavailable
+           (:reason (battery/reference-staleness
+                      (attestation :src-digest :unavailable)
+                      {:attestation (attestation :src-digest :unavailable)
+                       :hashes {}}))))))
+
+;; ------------------------------------------------------------------
 ;; The battery is a gate, and it is not in the fast gates
 ;; ------------------------------------------------------------------
 

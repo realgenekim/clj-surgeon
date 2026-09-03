@@ -248,9 +248,63 @@
 
 (defn- reference-file [root] (io/file root "reference-hashes.edn"))
 
-(defn- read-reference [root]
+(defn- read-reference
+  "The cached reference document, or nil when there is none. Legacy files hold
+  the bare {op {n hash}} map with no attestation; they are returned as they are
+  so `battery/reference-staleness` can name them :unattested-reference rather
+  than this reader guessing."
+  [root]
   (let [f (reference-file root)]
-    (if (.exists f) (edn/read-string (slurp f)) {})))
+    (when (.exists f) (edn/read-string (slurp f)))))
+
+;; ============================================================
+;; Attestation — the identity of this experiment
+;; ============================================================
+
+(defn- sha256-hex ^String [^String s]
+  (let [md (MessageDigest/getInstance "SHA-256")]
+    (apply str (map #(format "%02x" %) (.digest md (.getBytes s "UTF-8"))))))
+
+(defn- file-digest
+  "path:sha256 for one file, or nil when it cannot be read."
+  [^java.io.File f]
+  (when (.isFile f)
+    (str (.getPath f) ":" (sha256-hex (slurp f)))))
+
+(defn- tree-digest
+  "Digest over every Clojure source under `dir`, by path and content. Returns
+  :unavailable rather than a plausible-looking digest when the directory is not
+  there, so a run that cannot establish its own identity fails closed."
+  [dir]
+  (let [d (io/file dir)]
+    (if-not (.isDirectory d)
+      :unavailable
+      (let [entries (->> (file-seq d)
+                         (filter #(re-find #"\.cljc?$" (.getName ^java.io.File %)))
+                         (keep file-digest)
+                         sort)]
+        (if (empty? entries) :unavailable (sha256-hex (str/join "\n" entries)))))))
+
+(defn- ops-catalogue-digest []
+  (sha256-hex (pr-str (mapv #(select-keys % [:id :entrance :site]) ops))))
+
+(defn attestation
+  "What this run is: which arms, which operation source, which generator, which
+  corpus, which JVM. The cached unbounded reference is bound to all of it.
+
+  `:head-sha` is recorded for forensics and is NOT compared — see
+  `battery/attested-fields` for why."
+  [manifests]
+  {:ops (mapv :id ops)
+   :ops-digest (ops-catalogue-digest)
+   :src-digest (tree-digest "src/clj_surgeon")
+   :generator-digest (or (some-> (file-digest (io/file "bench/memory_battery/generate_tree.clj"))
+                                 sha256-hex)
+                         :unavailable)
+   :corpus-digests (into (sorted-map)
+                         (for [[n m] manifests] [n (:digest m)]))
+   :jvm (System/getProperty "java.version")
+   :head-sha (or (not-empty (System/getenv "MEMBAT_HEAD_SHA")) "unknown")})
 
 ;; ============================================================
 ;; Driver
@@ -279,7 +333,10 @@
         manifests (into {} (for [n scales] [n (read-manifest root n)]))
         missing (remove #(let [m (get manifests %)]
                            (and m (= % (:files m))))
-                        scales)]
+                        scales)
+        att (attestation manifests)
+        reference (read-reference root)
+        staleness (battery/reference-staleness att reference)]
     (cond
       (not (.isDirectory (io/file root)))
       {:exit (refuse (str "MEMBAT_ROOT is not a directory: " root) nil)}
@@ -297,9 +354,18 @@
       {:exit (refuse "the battery must run at the bounded budget"
                      {:xmx-mb xmx-mb :expected "<= 1024 (MEMBAT_XMX, default 512m)"})}
 
+      ;; Output parity means nothing against a reference that measured other
+      ;; code over another corpus on another JVM. Refuse; never quietly compare.
+      (and (= :battery mode) staleness)
+      {:exit (refuse (str "the cached unbounded reference is not attested to "
+                          "this run (" (name (:reason staleness)) ")")
+                     (assoc staleness
+                            :reference-file (str (reference-file root))
+                            :remedy "make memory-battery-reference"))}
+
       :else
       (let [sampler (start-sampler! sample-interval-ms)
-            reference (read-reference root)
+            hashes (:hashes reference)
             started (java.time.Instant/now)]
         (try
           (let [;; Load every operation's classes and namespaces BEFORE the
@@ -318,7 +384,7 @@
                       (reduce
                         (fn [{:keys [cells stop?] :as st} n]
                           (let [tree (tree-path root n)
-                                ref-hash (get-in reference [(:id op) n])]
+                                ref-hash (get-in hashes [(:id op) n])]
                             (if stop?
                               (do (println (format "  %-28s N=%-6d SKIPPED (a smaller N already exceeded MEMBAT_OP_TIMEOUT_MS=%d)"
                                                    (name (:id op)) n op-timeout-ms))
@@ -356,6 +422,7 @@
                 observation {:xmx-mb xmx-mb
                              :mode mode
                              :root root
+                             :attestation att
                              :reps reps
                              :scales (vec scales)
                              :sample-interval-ms sample-interval-ms
@@ -399,6 +466,26 @@
           (with-out-str (pprint/pprint observation)))
     (str f)))
 
+(defn- run-attest!
+  "Seconds-scale: is the cached unbounded reference attested to THIS run?
+
+  Exists so `make memory-battery` can rebuild a stale reference instead of
+  refusing halfway through a minutes-long battery. Exits 0 when fresh, and the
+  refusal code otherwise, naming the fields that differ."
+  [root scales]
+  (let [manifests (into {} (for [n scales] [n (read-manifest root n)]))
+        att (attestation manifests)
+        reference (read-reference root)
+        staleness (battery/reference-staleness att reference)]
+    (if staleness
+      (do (binding [*out* *err*]
+            (println "reference NOT attested to this run:"
+                     (name (:reason staleness)))
+            (println (pr-str (select-keys staleness [:fields :detail]))))
+          (:refusal battery/exit-codes))
+      (do (println "reference attested:" (pr-str (select-keys att battery/attested-fields)))
+          (:pass battery/exit-codes)))))
+
 (defn -main
   "Entry point for `make memory-battery`."
   [& _args]
@@ -409,6 +496,8 @@
         reps (Long/parseLong (env "MEMBAT_REPS" "5"))
         op-timeout-ms (Long/parseLong (env "MEMBAT_OP_TIMEOUT_MS" "600000"))
         sample-interval-ms (Long/parseLong (env "MEMBAT_SAMPLE_MS" "5"))]
+    (when (= :attest mode)
+      (System/exit (run-attest! root scales)))
     (println (format "memory battery: mode=%s root=%s scales=%s reps=%d Xmx=%dm"
                      (name mode) root (pr-str scales) reps (parse-xmx-mb)))
     (let [observation (run-battery {:root root :scales scales :reps reps
@@ -423,10 +512,16 @@
                                    (assoc-in acc [(:op c) (:n c)] (:result-hash c)))
                                  {}
                                  (:cells observation))]
+              ;; The hashes are only meaningful together with what produced
+              ;; them, so they are never written without their attestation.
               (spit (reference-file root)
-                    (with-out-str (pprint/pprint hashes)))
+                    (with-out-str
+                      (pprint/pprint {:attestation (:attestation observation)
+                                      :hashes hashes})))
               (println)
               (println "reference hashes written to" (str (reference-file root)))
+              (println "attested to" (pr-str (select-keys (:attestation observation)
+                                                          [:head-sha :jvm])))
               (println "receipt:" receipt)
               (System/exit (if (seq (:tool-errors observation))
                              (:tool-failure battery/exit-codes)

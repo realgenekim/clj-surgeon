@@ -832,8 +832,10 @@ MEMBAT_REFERENCE_XMX ?= 4g
 MEMBAT_REPS ?= 5
 MEMBAT_SCALES ?= 100,1000,10000
 MEMBAT_OP_TIMEOUT_MS ?= 600000
+MEMBAT_HEAD_SHA = $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 MEMBAT_ENV = MEMBAT_ROOT="$(MEMBAT_ROOT)" MEMBAT_REPS="$(MEMBAT_REPS)" \
-  MEMBAT_SCALES="$(MEMBAT_SCALES)" MEMBAT_OP_TIMEOUT_MS="$(MEMBAT_OP_TIMEOUT_MS)"
+  MEMBAT_SCALES="$(MEMBAT_SCALES)" MEMBAT_OP_TIMEOUT_MS="$(MEMBAT_OP_TIMEOUT_MS)" \
+  MEMBAT_HEAD_SHA="$(MEMBAT_HEAD_SHA)"
 
 memory-battery-generate:
 	bb bench/memory_battery/generate_tree.clj --root "$(MEMBAT_ROOT)" --scales "$(MEMBAT_SCALES)"
@@ -843,10 +845,19 @@ memory-battery-reference: memory-battery-generate
 	$(MEMBAT_ENV) MEMBAT_MODE=reference MEMBAT_REPS=1 \
 	  clojure -J-Xmx$(MEMBAT_REFERENCE_XMX) -M:clj-surgeon/memory-battery
 
+memory-battery-attest:
+	@# Seconds-scale: is the cached unbounded reference bound to THIS code,
+	@# generator, corpus and JVM? Exits non-zero when it is not, so the battery
+	@# can rebuild it up front instead of refusing minutes in.
+	@$(MEMBAT_ENV) MEMBAT_MODE=attest \
+	  clojure -J-Xmx256m -M:clj-surgeon/memory-battery
+
 memory-battery:
 	@# @spec MCP-OP-MEM-011
 	@$(MAKE) --no-print-directory memory-battery-generate
-	@test -f "$(MEMBAT_ROOT)/reference-hashes.edn" \
+	@# Existence is not attestation: a shared MEMBAT_ROOT can hold a reference
+	@# built from other code over another corpus. Rebuild unless it is attested.
+	@$(MAKE) --no-print-directory memory-battery-attest \
 	  || $(MAKE) --no-print-directory memory-battery-reference
 	$(MEMBAT_ENV) MEMBAT_MODE=battery \
 	  clojure -J-Xmx$(MEMBAT_XMX) -M:clj-surgeon/memory-battery
