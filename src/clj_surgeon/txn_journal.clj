@@ -610,15 +610,52 @@
            (str broken-at-prefix
                 (subs (.getName tomb) (count tombstone-prefix)))))
 
+(defn- broken-at-files
+  "Every `LOCK.broken-at.*` stamp sidecar in a transactions directory."
+  [transactions-dir]
+  (let [dir (io/file transactions-dir)]
+    (vec (sort-by #(.getName ^File %)
+                  (filter (fn [^File f]
+                            (and (.isFile f)
+                                 (str/starts-with? (.getName f) broken-at-prefix)))
+                          (seq (or (.listFiles dir) (make-array File 0))))))))
+
+(defn- orphan-sidecar-files
+  "Every stamp sidecar whose tombstone is no longer there.
+
+   The prune deletes a sidecar and then its tombstone, and the interrupted
+   revert does the same, so an ORPHAN is what anything else leaves: a hand
+   cleanup, a partial copy, a failed delete of the tombstone half. Listed by
+   nothing and retired by nothing, it is a small unbounded accumulation of
+   exactly the kind `broken-lock-retention-ms` exists to prevent - in the
+   directory that bound was written for."
+  [transactions-dir]
+  (let [dir (io/file transactions-dir)]
+    (filterv (fn [^File side]
+               (not (.isFile
+                      (io/file dir (str tombstone-prefix
+                                        (subs (.getName side)
+                                              (count broken-at-prefix)))))))
+             (broken-at-files transactions-dir))))
+
 (defn- read-broken-at-ms
-  "The creation time a tombstone's sidecar records, or nil."
-  [^File tomb]
-  (let [^File side (broken-at-file tomb)]
-    (when (.isFile side)
-      (try
-        (let [v (:broken-at-ms (read-string (slurp side)))]
-          (when (number? v) (long v)))
-        (catch Exception _ nil)))))
+  "What a stamp sidecar records: the creation time, nil, or `:unreadable`.
+
+   `nil` is 'this file records no break time', which a link-time `:phase`
+   marker legitimately does not - a break that BEGAN is not a break that
+   happened, and its marker is not a stamp. `:unreadable` is 'there is a
+   sidecar here and it does not carry a time', which is a different fact and
+   must not read as an absent one."
+  [^File side]
+  (when (.isFile side)
+    (try
+      (let [m (read-string (slurp side))
+            v (:broken-at-ms m)]
+        (cond
+          (number? v) (long v)
+          (:phase m) nil
+          :else :unreadable))
+      (catch Exception _ :unreadable))))
 
 (defn- stamp-tombstone!
   "Give the break's evidence its OWN creation time, twice over.
@@ -653,29 +690,57 @@
       (catch Exception _ nil))
     now))
 
-(defn- tombstone-basis-ms
-  "The stamp a tombstone's retention is measured against, or nil when absent.
+(defn- evidence-basis
+  "The stamp a piece of break evidence is retired against, and how its own
+   sidecar read: `{:basis ms :stamp :ok|:absent|:unreadable}`, or nil when the
+   file is not there.
 
-   The newest of what `lock-age-basis-ms` reads off the file - itself the
-   newest of mtime and ctime - and the `:broken-at-ms` its sidecar records.
-   Newest, because every way this value can be wrong except one makes evidence
-   look OLDER than it is, and retiring evidence early is the failure that
-   matters."
-  [^File tomb]
-  (when-let [basis (lock-age-basis-ms tomb)]
-    (let [stamped (read-broken-at-ms tomb)]
-      (max (long basis) (long (or stamped basis))))))
+   The basis is the newest of what `lock-age-basis-ms` reads off the file -
+   itself the newest of mtime and ctime - and the `:broken-at-ms` the sidecar
+   records. Newest, because every way that value can be wrong EXCEPT ONE makes
+   evidence look older than it is, and retiring evidence early is the failure
+   that matters.
 
-(defn- tombstone-age-ms
-  "How old a break's evidence is, or `:absent` when the file is not there.
+   That one exception is a stamp in the FUTURE, and it is the whole reason
+   this returns a `:stamp` as well as a number. `max` is fail-safe against a
+   stamp in the past and fail-OPEN against one ahead of the clock: any writer
+   of the transactions directory - or a clock that steps forward once and back
+   - made a tombstone permanent and published `:age-ms -315360000000`, an age
+   no clock produced, while the requirement promises evidence bound by a
+   published retention age that recovery enforces. A stamp
+   `broken-lock-stamp-tolerance-ms` or more ahead of the clock is therefore
+   not a time: the file falls back to its OWN basis and the row says
+   `:stamp :unreadable`, which is a typed fact rather than a silent one."
+  [^File f ^File side now]
+  (when-let [basis (lock-age-basis-ms f)]
+    (let [raw (read-broken-at-ms side)]
+      (cond
+        (nil? raw) {:basis (long basis) :stamp :absent}
+        (= :unreadable raw) {:basis (long basis) :stamp :unreadable}
+        (>= (long raw) (+ (long now) (long broken-lock-stamp-tolerance-ms)))
+        {:basis (long basis) :stamp :unreadable}
+        :else {:basis (max (long basis) (long raw)) :stamp :ok}))))
+
+(defn- evidence-age
+  "How old a piece of break evidence is and how its stamp read, or `:absent`.
+
+   The age is CLAMPED at zero. A negative age is not a measurement - it is a
+   clock disagreeing with a stamp - and publishing one puts a number in a
+   receipt that no clock produced and no reader can act on.
 
    `lastModified` of a missing file is 0, which reads as infinitely old and
    bills `:bytes 0`; a file that vanished between a listing and its stat is
    ABSENT, which is neither an age nor a zero."
-  [^File tomb now]
-  (if-let [basis (tombstone-basis-ms tomb)]
-    (- (long now) (long basis))
+  [^File f ^File side now]
+  (if-let [found (evidence-basis f side now)]
+    {:age-ms (max 0 (- (long now) (long (:basis found))))
+     :stamp (:stamp found)}
     :absent))
+
+(defn- tombstone-age
+  "`evidence-age` for a tombstone, read against its own stamp sidecar."
+  [^File tomb now]
+  (evidence-age tomb (broken-at-file tomb) now))
 
 (defn- interrupted-break-file
   "The tombstone that is a SECOND LINK to the live LOCK, or nil.
@@ -704,7 +769,12 @@
    missing file is 0, which reads as infinitely old, so the old count found
    them, failed to delete them, and inflated `:remaining` with files that no
    longer existed - 822 of 9,831 rows under concurrency. An absent file is
-   absent, which is neither an age nor a member of a standing count."
+   absent, which is neither an age nor a member of a standing count.
+
+   `:orphan-sidecars` is the same discipline one file down. A
+   `LOCK.broken-at.*` whose tombstone is gone was listed by nothing and
+   retired by nothing; it is retired here on the SAME published retention, and
+   counted, because a bucket nothing sweeps is accumulation whatever its size."
   [transactions-dir now-ms]
   (let [now (long (or now-ms (System/currentTimeMillis)))
         tombstones (broken-lock-files transactions-dir)
@@ -713,28 +783,41 @@
         ;; not one that happened: retiring it here would resolve it silently
         live (filterv (fn [^File f] (and lock-key (= lock-key (lock-file-key f))))
                       tombstones)
-        aged (mapv (fn [^File f] [f (tombstone-age-ms f now)])
+        ;; read BEFORE the tombstone prune, so a sidecar this call deletes
+        ;; alongside its own tombstone is never counted as an orphan
+        orphans (mapv (fn [^File f] [f (evidence-age f f now)])
+                      (orphan-sidecar-files transactions-dir))
+        aged (mapv (fn [^File f] [f (tombstone-age f now)])
                    (remove (set live) tombstones))
-        present (filterv (fn [entry] (number? (nth entry 1))) aged)
-        vanished (- (long (count aged)) (long (count present)))
-        found (long (count present))
-        pruned (long (reduce (fn [n entry]
-                               (let [^File f (nth entry 0)
-                                     age (long (nth entry 1))]
-                                 (if (>= age (long broken-lock-retention-ms))
-                                   (do (Files/deleteIfExists
-                                         (.toPath ^File (broken-at-file f)))
-                                       (if (Files/deleteIfExists (.toPath f))
-                                         (unchecked-inc (long n))
-                                         (long n)))
-                                   (long n))))
-                             0
-                             present))]
-    {:found found
-     :pruned pruned
-     :remaining (- found pruned)
-     :vanished vanished
+        retire! (fn [entries retire-one!]
+                  (let [present (filterv (fn [entry] (map? (nth entry 1))) entries)
+                        pruned (long (reduce
+                                       (fn [n entry]
+                                         (let [^File f (nth entry 0)
+                                               age (long (:age-ms (nth entry 1)))]
+                                           (if (and (>= age (long broken-lock-retention-ms))
+                                                    (retire-one! f))
+                                             (unchecked-inc (long n))
+                                             (long n))))
+                                       0
+                                       present))
+                        found (long (count present))]
+                    {:found found
+                     :pruned pruned
+                     :remaining (- found pruned)
+                     :vanished (- (long (count entries)) found)}))
+        tombs (retire! aged (fn [^File f]
+                              (Files/deleteIfExists
+                                (.toPath ^File (broken-at-file f)))
+                              (Files/deleteIfExists (.toPath f))))
+        sidecars (retire! orphans (fn [^File f]
+                                    (Files/deleteIfExists (.toPath f))))]
+    {:found (:found tombs)
+     :pruned (:pruned tombs)
+     :remaining (:remaining tombs)
+     :vanished (:vanished tombs)
      :interrupted (long (count live))
+     :orphan-sidecars (select-keys sidecars [:found :pruned :remaining])
      :retention-ms broken-lock-retention-ms}))
 
 (defn- displaced-line
@@ -2123,21 +2206,38 @@
        ;; row for one bills bytes that are not there against an age no clock
        ;; produced. `lastModified` of a missing file is 0, which the old row
        ;; read as infinitely old - 822 of 9,831 rows under concurrency.
-       (for [^File f (broken-lock-files transactions)
-             :let [age (tombstone-age-ms f now)
-                   bytes (.length f)]
-             :when (and (number? age) (pos? (long bytes)))]
-         (let [interrupted? (= (.getName f) (when interrupted
-                                              (.getName ^File interrupted)))]
+       (concat
+         (for [^File f (broken-lock-files transactions)
+               :let [aged (tombstone-age f now)
+                     bytes (.length f)]
+               :when (and (map? aged) (pos? (long bytes)))]
+           (let [interrupted? (= (.getName f) (when interrupted
+                                                (.getName ^File interrupted)))]
+             {:txid (.getName f)
+              :kind (if interrupted? :interrupted-break :broken-lock)
+              :status (if interrupted? :lock-break-interrupted :lock-broken)
+              :receipt-refs 0
+              :evictable false
+              :retired-by :txn/recover
+              :age-ms (:age-ms aged)
+              :stamp (:stamp aged)
+              :retention-ms broken-lock-retention-ms
+              :bytes bytes}))
+         ;; a stamp sidecar whose tombstone is gone is retired by `recover!`
+         ;; on the same published retention, so it is a row on the same terms
+         (for [^File f (orphan-sidecar-files transactions)
+               :let [aged (evidence-age f f now)]
+               :when (map? aged)]
            {:txid (.getName f)
-          :kind (if interrupted? :interrupted-break :broken-lock)
-          :status (if interrupted? :lock-break-interrupted :lock-broken)
-          :receipt-refs 0
-          :evictable false
-          :retired-by :txn/recover
-          :age-ms age
-          :retention-ms broken-lock-retention-ms
-          :bytes bytes}))))))
+            :kind :orphan-sidecar
+            :status :orphan-sidecar
+            :receipt-refs 0
+            :evictable false
+            :retired-by :txn/recover
+            :age-ms (:age-ms aged)
+            :stamp (:stamp aged)
+            :retention-ms broken-lock-retention-ms
+            :bytes (.length f)}))))))
 
 (defn undo!
   ;; @spec MCP-OP-MEM-006

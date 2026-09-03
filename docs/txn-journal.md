@@ -261,7 +261,8 @@ A transaction whose
 also retires the break tombstones older than `broken-lock-retention-ms`,
 measured against the tombstone's OWN creation stamp rather than the mtime it
 inherited from the claim it broke, and reports `:broken-locks {:found … :pruned
-… :remaining … :vanished … :interrupted … :retention-ms …}`. The ordering used
+… :remaining … :vanished … :interrupted … :orphan-sidecars {…} :retention-ms
+…}`. The ordering used
 to be the guarantee — "pruned after its own break" — and it was not one: a
 rename preserves mtime, so breaking a two-day-old crashed holder's lock produced
 `{:found 1 :pruned 1 :remaining 0}` beside a receipt naming
@@ -341,9 +342,19 @@ owns it, and a `LOCK.broken-at.<txid>` sidecar recording `:broken-at-ms` —
 because a link and a rename both PRESERVE the claim's mtime, so evidence
 retained on that stamp inherited the age of the thing it was evidence OF.
 Retention is measured against the newest of the sidecar stamp, the file's mtime
-and its ctime: newest, because every way that value can be wrong except one makes
+and its ctime: newest, because every way that value can be wrong EXCEPT ONE makes
 evidence look older than it is, and retiring evidence early is the failure that
-matters. Tombstones are rows in `retained-transactions` (`:kind :broken-lock`,
+matters. That one exception is a stamp in the FUTURE, where `max` is fail-open
+rather than fail-safe: any writer of the transactions directory, or a clock that
+steps forward once and back, made a tombstone permanent and published
+`:age-ms -315360000000`. A stamp `broken-lock-stamp-tolerance-ms` (one minute of
+clock skew) or more ahead of the clock is therefore not a time at all — the file
+falls back to its own mtime/ctime basis and its row says `:stamp :unreadable` —
+and no published age is ever negative, because the subtraction is clamped at
+zero. A `LOCK.broken-at.*` whose tombstone is gone is an ORPHAN: listed
+`:kind :orphan-sidecar`, counted in `:broken-locks :orphan-sidecars {:found …
+:pruned … :remaining …}`, and retired on the same published retention, because a
+bucket nothing sweeps is accumulation whatever its size. Tombstones are rows in `retained-transactions` (`:kind :broken-lock`,
 with the bytes they bill and their age) and `recover!` retires those past
 `broken-lock-retention-ms` (one day). Evidence nothing sweeps and nothing counts
 is accumulation, not durability; evidence its own recovery deletes is worse than
