@@ -12,7 +12,8 @@
   JIT-compiled ones, so the SAME file at the SAME -Xmx either throws
   StackOverflowError (cold) or completes while consuming hundreds of MB (warm).
   Both branches are measured, because a caller cannot choose which one it gets."
-  (:require [clj-surgeon.outline :as outline]))
+  (:require [clj-surgeon.outline :as outline]
+            [clj-surgeon.parse-admission :as admission]))
 
 (def ^:private warmup-source-path "src/clj_surgeon/mcp_hot_verify.clj")
 
@@ -62,10 +63,25 @@
                       (aset box 0 nil) (System/gc) {:outcome :out-of-memory})
                     (catch StackOverflowError _
                       (aset box 0 nil) (System/gc) {:outcome :stack-overflow})
+                    (catch clojure.lang.ExceptionInfo e
+                      (aset box 0 nil)
+                      (if (= :parser_admission_refused (:refusal (ex-data e)))
+                        {:outcome :parser-admission-refused
+                         :reason (:reason (ex-data e))
+                         :limit (:limit (ex-data e))
+                         :observed (:observed (ex-data e))}
+                        {:outcome :threw :class "clojure.lang.ExceptionInfo"}))
                     (catch Throwable t
                       (aset box 0 nil)
                       {:outcome :threw :class (.getName (class t))}))
-          wall-ms (quot (- (System/nanoTime) t0) 1000000)]
+          wall-ms (quot (- (System/nanoTime) t0) 1000000)
+          ;; The control's OWN cost, measured separately on the same string, so
+          ;; the wall column above (which includes reading the file) cannot be
+          ;; mistaken for it.
+          scan-ms (let [src (slurp path)
+                        t1 (System/nanoTime)]
+                    (admission/scan-shape src)
+                    (quot (- (System/nanoTime) t1) 1000000))]
       (.set running false)
       (.join thread 500)
       (println (pr-str (assoc outcome
@@ -75,6 +91,7 @@
                               :peak-mb (Double/parseDouble
                                          (format "%.1f" (/ (double (.get peak))
                                                            1048576.0)))
-                              :wall-ms wall-ms)))
+                              :wall-ms wall-ms
+                              :scan-ms scan-ms)))
       (flush)
       (System/exit 0))))

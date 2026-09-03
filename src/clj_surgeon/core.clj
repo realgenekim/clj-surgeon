@@ -23,6 +23,7 @@
    [clj-surgeon.intent-transaction :as intent-transaction]
    [clj-surgeon.move :as move]
    [clj-surgeon.outline :as outline]
+   [clj-surgeon.parse-admission :as admission]
    [clj-surgeon.rename :as rename]
    [clj-surgeon.show-form :as show-form]
    [clj-surgeon.structural-lens :as structural-lens]
@@ -311,12 +312,41 @@
          vec)))
 
 (defn- safe-outline
-  "Run outline on a file, returning error map on parse errors."
+  "Run outline on a file, returning error map on parse errors.
+
+   A parser-admission refusal (MCP-OP-MEM-005) is kept TYPED rather than
+   flattened to a message: the entry carries `:refusal`, `:reason`, `:limit`
+   and `:observed` so the scan's receipt can name and count it. It stays a
+   per-file skip — before this, a file deep enough to exhaust the reader's
+   stack threw a StackOverflowError, which is an `Error` and not an
+   `Exception`, and killed the whole scan."
+  ;; @spec MCP-OP-MEM-005
   [file]
   (try
     (outline/outline file)
+    (catch clojure.lang.ExceptionInfo e
+      (let [data (ex-data e)]
+        (if (= :parser_admission_refused (:refusal data))
+          (assoc (select-keys data [:refusal :reason :limit :observed :remedy])
+                 :file file
+                 :error (ex-message e))
+          {:file file :error (str (ex-message e))})))
     (catch Exception e
       {:file file :error (str (.getMessage e))})))
+
+(defn- admission-refusals
+  "Every parser-admission refusal in a scan, as receipt rows in path order."
+  ;; @spec MCP-OP-MEM-005
+  [projects dir]
+  (vec
+    (for [{:keys [outlines]} projects
+          [f result] outlines
+          :when (= :parser_admission_refused (:refusal result))]
+      {:file (str (fs/relativize (fs/path dir) (fs/path f)))
+       :reason (:reason result)
+       :limit (:limit result)
+       :observed (:observed result)
+       :remedy (:remedy result)})))
 
 (defn- outline-all-files
   "Compute outlines for all files across projects, in parallel.
@@ -387,19 +417,44 @@
         (.append sb (format-file-text result rel-path))
         (.append sb "\n")))
     (.append sb (format "── total: %d files, %d forms\n" total-files total-forms))
+    ;; @spec MCP-OP-MEM-005
+    ;; A refused file is a named, counted skip — never a silent one and never a
+    ;; dead scan. Nothing is appended when nothing was refused, so an ordinary
+    ;; scan's output is byte-identical to before this control existed.
+    (let [refused (admission-refusals projects dir)]
+      (when (seq refused)
+        (.append sb (format "── parser_admission_refused: %d file(s)\n"
+                            (count refused)))
+        (doseq [{:keys [file reason limit observed]} refused]
+          (.append sb (format "   %s  %s limit %d, observed %d\n"
+                              file
+                              (admission/public-ceiling-name reason)
+                              limit observed)))))
     (str sb)))
 
 (defn format-ls-tree-edn
   "Pure: format ls-tree results as EDN vector.
-   Expects projects with :outlines already computed."
+   Expects projects with :outlines already computed.
+
+   When parser admission refused one or more files, ONE trailing receipt map is
+   appended naming and counting them. Nothing is appended when nothing was
+   refused, so an ordinary scan's EDN is byte-identical to before this control
+   existed."
+  ;; @spec MCP-OP-MEM-005
   [projects dir]
-  (vec
-    (for [{:keys [outlines]} projects
-          [f result] outlines
-          :let [rel-path (str (fs/relativize (fs/path dir) (fs/path f)))]]
-      (-> result
-          (assoc :file rel-path)
-          (dissoc :forward-refs)))))
+  (let [entries (vec
+                  (for [{:keys [outlines]} projects
+                        [f result] outlines
+                        :let [rel-path (str (fs/relativize (fs/path dir)
+                                                           (fs/path f)))]]
+                    (-> result
+                        (assoc :file rel-path)
+                        (dissoc :forward-refs))))
+        refused (admission-refusals projects dir)]
+    (if (seq refused)
+      (conj entries {:receipt {:parser_admission_refused
+                               {:count (count refused) :files refused}}})
+      entries)))
 
 (defn- find-nearest-build-file
   "Walk up from a file to find the nearest deps.edn/project.clj/bb.edn."

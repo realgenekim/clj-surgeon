@@ -6,6 +6,7 @@
   (:require
    [clj-surgeon.cljc.walk :as cwalk]
    [clj-surgeon.forms :as forms]
+   [clj-surgeon.parse-admission :as admission]
    [clojure.string :as str]
    [rewrite-clj.node :as n]
    [rewrite-clj.zip :as z]))
@@ -272,8 +273,16 @@
 
    Every `top-level-form-records` arity delegates here rather than to another
    arity of itself: a caller that counts calls through the var must see one
-   call per outline, whichever arity it used."
+   call per outline, whichever arity it used.
+
+   This and `outline-source` are the read path's two tree constructors, so
+   parser admission sits at both: every operation that reads structure through
+   them — outline, ls_tree, show_form, compact locations, the extract read path,
+   the change buffer's owner scan — inherits the ceiling without knowing it
+   exists."
+  ;; @spec MCP-OP-MEM-005
   [file source project-aliases include-source?]
+  (admission/admit! file source)
   (let [defaults (cwalk/platforms-for-extension (file-extension file))
         walked (cwalk/top-level-forms source defaults)]
     (form-records-from-walked walked (str/split-lines source)
@@ -314,7 +323,9 @@
    (outline-source file source {}))
   ([file source project-aliases]
    (outline-source file source project-aliases {}))
+  ;; @spec MCP-OP-MEM-005
   ([file source project-aliases {:keys [include-string-symbols]}]
+   (admission/admit! file source)
    (let [root (z/of-string source {:track-position? true})
          lines (str/split-lines source)
          defaults (cwalk/platforms-for-extension (file-extension file))

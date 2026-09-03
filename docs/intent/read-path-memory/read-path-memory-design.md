@@ -1,6 +1,6 @@
 # Read-Path Memory Bounds
 
-Status: draft LLD; first slice (`MCP-OP-MEM-015`) implemented.
+Status: draft LLD; `MCP-OP-MEM-015` and `MCP-OP-MEM-005` implemented.
 
 ## Context
 
@@ -96,7 +96,7 @@ and a parse count (the cause a refactor is most likely to reintroduce).
 
 # Parser admission (`MCP-OP-MEM-005`)
 
-Status: LLD, registered 2026-09-03.
+Status: implemented 2026-09-03.
 
 ## Context
 

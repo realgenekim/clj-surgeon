@@ -120,9 +120,10 @@
     (doseq [[label r] [["nested cold" cold] ["nested warm" warm]
                        [(str "giant  " giant-oom-xmx) big]
                        [(str "giant  " battery-xmx) big-512]]]
-      (println (format "%-16s %-9s Xmx=%-5s warm=%-4s peak=%7.1f MB  %6d ms  %d source bytes"
+      (println (format "%-14s %-26s Xmx=%-5s warm=%-4s peak=%7.1f MB  wall %6d ms  scan %4s ms  %d source bytes"
                        label (name (:outcome r)) (:xmx r) (str (:warmups r))
                        (double (or (:peak-mb r) 0.0)) (long (or (:wall-ms r) 0))
+                       (str (or (:scan-ms r) "-"))
                        (long (or (:source-bytes r) 0)))))
     (println "----------------------------------------------------------------------")
     (let [results
@@ -137,25 +138,29 @@
              (check (str "giant " giant-oom-xmx ": one 1.9 MiB file OOMs")
                     (= :out-of-memory (:outcome big))
                     (select-keys big [:outcome :peak-mb]))]
-            [(check "nested cold: typed refusal, no crash"
-                    (= :completed (:outcome cold))
-                    (select-keys cold [:outcome :wall-ms]))
+            [(check "nested cold: typed refusal on depth, no crash"
+                    (and (= :parser-admission-refused (:outcome cold))
+                         (= :max-parse-depth (:reason cold)))
+                    (select-keys cold [:outcome :reason :limit :observed]))
              (check "nested cold: refuses in under 50 ms"
                     (< (long (or (:wall-ms cold) 99999)) 50)
-                    (select-keys cold [:wall-ms]))
-             (check "nested warm: typed refusal, under budget"
-                    (and (= :completed (:outcome warm))
+                    (select-keys cold [:wall-ms :scan-ms]))
+             (check "nested warm: typed refusal, well under budget"
+                    (and (= :parser-admission-refused (:outcome warm))
                          (< (:peak-mb warm) budget-mb))
                     (select-keys warm [:outcome :peak-mb]))
              (check "nested warm: refuses in under 50 ms"
                     (< (long (or (:wall-ms warm) 99999)) 50)
-                    (select-keys warm [:wall-ms]))
+                    (select-keys warm [:wall-ms :scan-ms]))
              (check (str "giant " giant-oom-xmx ": typed refusal, no OOM")
-                    (= :completed (:outcome big))
-                    (select-keys big [:outcome :peak-mb]))
-             (check (str "giant " giant-oom-xmx ": refuses in under 50 ms")
-                    (< (long (or (:wall-ms big) 99999)) 50)
-                    (select-keys big [:wall-ms]))])]
+                    (= :parser-admission-refused (:outcome big))
+                    (select-keys big [:outcome :reason :peak-mb]))
+             ;; The giant cell's wall includes reading 1.9 MiB from disk, which
+             ;; the 111 KB cells do not. The control's own cost is `scan-ms`;
+             ;; that is the figure the 50 ms line is about.
+             (check (str "giant " giant-oom-xmx ": admission scan under 50 ms")
+                    (< (long (or (:scan-ms big) 99999)) 50)
+                    (select-keys big [:wall-ms :scan-ms]))])]
       (println)
       (if (every? true? results)
         (do (println (format "memory-red: %d/%d assertions held (expect=%s)"
