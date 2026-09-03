@@ -211,3 +211,14 @@ tool on this seat. Memory `reply-seat-bridge-until-requested` still applies when
 - Also pending my suites: ratchets 49f6e12 (b1q8ixsp0, `~/tmp/ratchets2-*.log`), kondo f8a9ef9 (bvjc78bi1, `~/tmp/kondo-mcp-test.log`).
 - Running: fold-diff production re-review; rf2 r3 ruling commit; template-upsert; q5z r3; study r3; routing-doc.
 - Builder logs now go under `~/tmp/<lane>/` (a sibling lane overwrote a shared log).
+
+## RESUME DELTA 2026-09-03T04:34Z — NIGHT ORDERS IN FORCE
+Gene is asleep for ~9 h from 2026-09-03T04:34Z. Read `2026-09-03-night-orders-anvil.md` (goals + mayor help) and
+`2026-09-03-merge-queue-for-mayor.md`; keep `/tmp/anvil-pulse.txt` fresh (cron heartbeat every 10 min:
+read new `/tmp/mayor-*.txt`, honour `/tmp/anvil-halt.txt`). Live lanes at this write: ratchets Sol
+re-review (~/tmp/sol/ratchets-sol-review.md), census suites (~/tmp/census/my-*.log), rf2 r3, q5z r3,
+study r3, template-upsert fix, fold-diff r3, battery, B1 kernel, routing-doc fix. Opus memory consult
+LANDED (`2026-09-03-memory-design-opus-answer.md`): the node tree is 48× source, zippers add 1.2% — the
+zipper premise was wrong; outline double-parses (76 MB garbage per 52 KB file); aggregate-bytes ceiling
+is the missing control that explains the alias_migration OOM. Next: reconcile with Sol-2, launch B2
+read-path lane.
