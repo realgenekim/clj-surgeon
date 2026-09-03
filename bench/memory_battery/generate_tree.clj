@@ -2,8 +2,13 @@
 ;; Synthetic Clojure tree generator for the tree-scale memory battery.
 ;;
 ;; Deterministic: the bytes written for a given (generator-version, N) are a
-;; pure function of the file index. Re-running is a no-op once the manifest
-;; matches, so `make memory-battery` is cheap after the first build.
+;; pure function of the file index. Re-running VERIFIES rather than assumes: every
+;; promised file must exist with its exact byte count and content digest, no
+;; unlisted file may be present, and the manifest digest (which covers contents,
+;; not just paths and sizes) is rechecked against the bytes on disk. Mismatched
+;; bytes regenerate; unexpected files refuse. Verifying all three trees costs
+;; about 3 s, which is the price of a table that cannot print N=10,000 over a
+;; corpus of 9,999 files.
 ;;
 ;; Layout, one project per scale so the CLI's build-file discovery finds it:
 ;;
@@ -131,34 +136,148 @@
          (map #(format "%02x" %))
          (apply str))))
 
+(defn- file-sha256-hex
+  "Digest of the bytes actually on disk — never of what a manifest says is there."
+  [f]
+  (let [md (java.security.MessageDigest/getInstance "SHA-256")
+        buf (byte-array 65536)]
+    (with-open [in (io/input-stream f)]
+      (loop []
+        (let [read (.read in buf)]
+          (when (pos? read)
+            (.update md buf 0 read)
+            (recur)))))
+    (apply str (map #(format "%02x" %) (.digest md)))))
+
 (defn- deps-edn-text []
   "{:paths [\"src\"]\n :deps {org.clojure/clojure {:mvn/version \"1.12.1\"}}}\n")
 
-(defn generate-tree!
-  "Write (or verify) the N-file tree under `root`. Returns the manifest."
+(defn expected-entries
+  "The corpus the generator promises for `n`, as [rel bytes content-sha]. Derived
+  from `file-source`, which is deterministic, so no per-file digest has to be
+  stored anywhere for a later run to check the bytes."
+  [n]
+  (mapv (fn [i]
+          (let [text (file-source i n)]
+            [(rel-path-for i) (count (.getBytes ^String text "UTF-8"))
+             (sha256-hex text)]))
+        (range n)))
+
+(defn entries-digest
+  "Manifest digest over path, size AND content. The old path+size digest could
+  not distinguish two different corpora of the same shape."
+  [entries]
+  (sha256-hex (str/join "\n" (map (fn [[rel size sha]] (str rel ":" size ":" sha))
+                                  (sort-by first entries)))))
+
+(defn- actual-source-files
+  "Every regular file under the tree's src/, as tree-relative paths."
+  [dir]
+  (let [src (io/file dir "src")
+        prefix (str (.getPath (io/file dir)) "/")]
+    (when (.isDirectory src)
+      (into #{}
+            (comp (filter #(.isFile ^java.io.File %))
+                  (map #(str/replace (.getPath ^java.io.File %) prefix "")))
+            (file-seq src)))))
+
+(defn verify-tree
+  "Check the corpus on disk against what the generator promises for `n`.
+
+  Returns {:status :ok}, {:status :regenerate :reason ... :detail ...} when the
+  bytes are missing or wrong, or {:status :refuse :reason :unexpected-files ...}
+  when the tree holds files the generator never wrote — regenerating would not
+  remove those, and deleting files under MEMBAT_ROOT on the corpus's own say-so
+  is worse than stopping.
+
+  This exists because the previous no-op checked only :generator-version, :n and
+  the manifest's own claimed file count, so one deleted file could let a table
+  print N=10,000 over 9,999 files."
   [root n]
   (let [dir (io/file root (str n))
         manifest-file (io/file dir "manifest.edn")
         existing (when (.exists manifest-file)
-                   (try (read-string (slurp manifest-file)) (catch Exception _ nil)))]
-    (if (and existing
-             (= generator-version (:generator-version existing))
-             (= n (:n existing))
-             (= n (:files existing)))
-      (assoc existing :reused true)
+                   (try (read-string (slurp manifest-file)) (catch Exception _ nil)))
+        expected (expected-entries n)
+        expected-index (into {} (map (fn [[rel size sha]] [rel [size sha]])) expected)]
+    (cond
+      (nil? existing)
+      {:status :regenerate :reason :no-manifest :detail (str manifest-file)}
+
+      (not= generator-version (:generator-version existing))
+      {:status :regenerate :reason :generator-version
+       :detail {:manifest (:generator-version existing) :expected generator-version}}
+
+      (not= n (:n existing))
+      {:status :regenerate :reason :wrong-n
+       :detail {:manifest (:n existing) :expected n}}
+
+      (not (.exists (io/file dir "deps.edn")))
+      {:status :regenerate :reason :missing-file :detail "deps.edn"}
+
+      :else
+      (let [actual (or (actual-source-files dir) #{})
+            extras (sort (remove expected-index actual))]
+        (if (seq extras)
+          {:status :refuse :reason :unexpected-files
+           :detail {:count (count extras) :sample (vec (take 5 extras))}}
+          (or
+            ;; Every promised file: present, right size, right bytes.
+            (reduce
+              (fn [_ [rel size sha]]
+                (let [f (io/file dir rel)]
+                  (cond
+                    (not (.isFile f))
+                    (reduced {:status :regenerate :reason :missing-file :detail rel})
+
+                    (not= (long size) (.length f))
+                    (reduced {:status :regenerate :reason :size-mismatch
+                              :detail {:file rel :expected size :found (.length f)}})
+
+                    (not= sha (file-sha256-hex f))
+                    (reduced {:status :regenerate :reason :content-mismatch
+                              :detail rel})
+
+                    :else nil)))
+              nil
+              expected)
+            ;; ...and the manifest's own claims, rechecked against those bytes.
+            (when (not= (count expected) (:files existing))
+              {:status :regenerate :reason :file-count-mismatch
+               :detail {:manifest (:files existing) :expected (count expected)}})
+            (when (not= (entries-digest expected) (:digest existing))
+              {:status :regenerate :reason :digest-mismatch
+               :detail {:manifest (:digest existing)
+                        :expected (entries-digest expected)}})
+            {:status :ok}))))))
+
+(defn generate-tree!
+  "Write (or verify) the N-file tree under `root`. Returns the manifest.
+
+  The reuse path is only taken when `verify-tree` has confirmed the bytes on
+  disk; a corpus that does not match its promise is rewritten, and one carrying
+  files the generator never wrote is refused by throwing."
+  [root n]
+  (let [dir (io/file root (str n))
+        manifest-file (io/file dir "manifest.edn")
+        check (verify-tree root n)]
+    (case (:status check)
+      :refuse
+      (throw (ex-info (str "corpus at " dir " holds files the generator never wrote")
+                      (assoc check :root root :n n
+                             :remedy "remove them, or point MEMBAT_ROOT elsewhere")))
+
+      :ok
+      (assoc (read-string (slurp manifest-file)) :reused true)
+
       (do
         (.mkdirs dir)
         (spit (io/file dir "deps.edn") (deps-edn-text))
-        (let [entries
-              (doall
-                (for [i (range n)
-                      :let [rel (rel-path-for i)
-                            f (io/file dir rel)
-                            text (file-source i n)]]
-                  (do
+        (let [entries (expected-entries n)
+              _ (doseq [[i [rel _ _]] (map-indexed vector entries)]
+                  (let [f (io/file dir rel)]
                     (.mkdirs (.getParentFile f))
-                    (spit f text)
-                    [rel (count (.getBytes ^String text "UTF-8"))])))
+                    (spit f (file-source i n))))
               total-bytes (reduce + 0 (map second entries))
               manifest {:generator-version generator-version
                         :n n
@@ -166,10 +285,8 @@
                         :bytes total-bytes
                         :mean-file-bytes (long (/ total-bytes (max 1 (count entries))))
                         :largest-file-bytes (apply max 0 (map second entries))
-                        :digest (sha256-hex
-                                  (str/join "\n" (map (fn [[rel size]]
-                                                        (str rel ":" size))
-                                                      (sort-by first entries))))
+                        :digest (entries-digest entries)
+                        :verified-reason (:reason check)
                         :reused false}]
           (spit manifest-file (pr-str manifest))
           manifest)))))
@@ -191,6 +308,62 @@
         (recur (rest a) acc))
       acc)))
 
+(defn- rm-rf! [f]
+  (let [f (io/file f)]
+    (when (.exists f)
+      (when (.isDirectory f)
+        (doseq [c (.listFiles f)] (rm-rf! c)))
+      (.delete f))))
+
+;; The no-op path is the one that can lie: it decides, without looking at the
+;; corpus, that a table may print N=10,000. These assertions drive it against a
+;; real three-file tree on disk.
+(defn- verification-self-test! []
+  (let [root (str (io/file (System/getProperty "java.io.tmpdir")
+                           (str "membat-selftest-" (System/currentTimeMillis))))
+        dir (io/file root "3")
+        victim (io/file dir (rel-path-for 1))]
+    (try
+      (let [fresh (generate-tree! root 3)]
+        (assert (false? (:reused fresh)) "first build generates")
+        (assert (= 3 (:files fresh)) "three files written")
+        (assert (= :ok (:status (verify-tree root 3)))
+                "a tree that was just written verifies")
+        (assert (true? (:reused (generate-tree! root 3)))
+                "an intact tree is a no-op"))
+
+      ;; A DELETED file must never be reported as present.
+      (.delete victim)
+      (assert (= :regenerate (:status (verify-tree root 3)))
+              "a missing corpus file is detected, not trusted")
+      (assert (= :missing-file (:reason (verify-tree root 3))))
+      (assert (false? (:reused (generate-tree! root 3)))
+              "a missing corpus file regenerates the tree")
+      (assert (.exists victim) "regeneration restores the deleted file")
+
+      ;; MODIFIED content must never pass on its byte count alone.
+      (spit victim (str/replace (slurp victim) "defn-" "defn+"))
+      (assert (= :content-mismatch (:reason (verify-tree root 3)))
+              "same size, different bytes is caught by the content digest")
+      (generate-tree! root 3)
+      (assert (= :ok (:status (verify-tree root 3))))
+
+      ;; EXTRA files are refused, not regenerated: regeneration would not remove
+      ;; them, so it would loop, and deleting files under MEMBAT_ROOT is worse.
+      (spit (io/file dir "src/membat/pkg000/intruder.clj") "(ns membat.intruder)")
+      (assert (= :refuse (:status (verify-tree root 3)))
+              "an unlisted file in the corpus is a refusal")
+      (assert (= :unexpected-files (:reason (verify-tree root 3))))
+      (.delete (io/file dir "src/membat/pkg000/intruder.clj"))
+
+      ;; A TAMPERED manifest digest is not authority over the bytes.
+      (let [mf (io/file dir "manifest.edn")]
+        (spit mf (pr-str (assoc (read-string (slurp mf)) :digest "deadbeef")))
+        (assert (= :digest-mismatch (:reason (verify-tree root 3)))
+                "the manifest digest is rechecked against the actual bytes"))
+      (println "generate_tree verification self-test: ok")
+      (finally (rm-rf! root)))))
+
 (defn- self-test! []
   (let [a (file-source 3 100)
         b (file-source 3 100)
@@ -204,6 +377,7 @@
     (assert (= :small (bucket-for 0)))
     (assert (= :medium (bucket-for 6)))
     (assert (= :large (bucket-for 9)))
+    (verification-self-test!)
     (println "generate_tree self-test: ok")
     0))
 
@@ -214,12 +388,22 @@
       (do
         (doseq [n scales]
           (let [t0 (System/currentTimeMillis)
-                m (generate-tree! root n)
+                m (try
+                    (generate-tree! root n)
+                    (catch clojure.lang.ExceptionInfo e
+                      (binding [*out* *err*]
+                        (println "REFUSED:" (.getMessage e))
+                        (println (pr-str (ex-data e))))
+                      (System/exit 2)))
                 ms (- (System/currentTimeMillis) t0)]
             (println (format "%-8s files=%-7d bytes=%-11d mean=%-6d largest=%-7d %s (%d ms)"
                              (str n) (:files m) (:bytes m) (:mean-file-bytes m)
                              (:largest-file-bytes m)
-                             (if (:reused m) "reused" "generated") ms))))
+                             (if (:reused m)
+                               "verified"
+                               (str "generated:" (name (or (:verified-reason m)
+                                                           :no-manifest))))
+                             ms))))
         (System/exit 0)))))
 
 (when (= *file* (System/getProperty "babashka.file"))

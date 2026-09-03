@@ -74,6 +74,9 @@ MCP-OP-MEM-001:
 
 MCP-OP-MEM-011:
 
+- "The manifest says 10,000 files, so 10,000 files were measured." A manifest is
+  a claim about a corpus, not the corpus. The bytes on disk are checked against
+  the generator's deterministic promise before any cell is measured.
 - "The 10,000-file case timed out, so compare 100 and 1,000 instead." The
   cross-N lines are defined at 1,000 and 10,000. A missing 10,000 is UNMEASURED.
 - "No operation reports a reserved peak yet, so that line passes." An
@@ -125,6 +128,11 @@ MCP-OP-MEM-011:
 - The synthetic trees are representative small/medium Clojure sources. They do
   not include token-dense or deeply nested adversarial files; those are a
   separate arm.
+- The corpus is verified, not asserted: every promised file's existence, byte
+  count and content digest are checked against the deterministic generator, and
+  unlisted files under the tree are a refusal, before any cell is measured. A
+  cell's reported file and byte counts are therefore the corpus, not a manifest's
+  claim about it.
 - An arm measures one operation under one query shape. An operation whose result
   is small under the battery's query is not thereby bounded: `rename/plan` under
   a narrow prefix touches every file but retains almost nothing, and is measured

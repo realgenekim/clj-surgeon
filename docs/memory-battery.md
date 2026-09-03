@@ -196,8 +196,23 @@ and padding to a size bucket. 60 % are ~1.5 KB, 30 % ~5 KB, 10 % ~15 KB —
 mean 4,047 B/file, which is deliberately **smaller** than this repository's own
 17 KB mean, so the battery cannot be accused of being sized to fail.
 
-All three trees build in about one second and occupy 70 MB. Regeneration is a
-no-op once the manifest matches, so `make memory-battery` is cheap to re-run.
+All three trees build in about five seconds and occupy 70 MB.
+
+Re-running `memory-battery-generate` **verifies**; it does not assume. For every
+file the generator promises at that N it checks the file exists, its byte count
+is exact, and its content digest matches the deterministic source — then it
+rejects any file under `src/` the generator never wrote, and rechecks the
+manifest's own digest (which covers file *contents*, not just paths and sizes)
+against the bytes on disk. Bad or missing bytes regenerate the tree; unexpected
+files **refuse** with exit 2, because regeneration would not remove them and
+deleting files under `MEMBAT_ROOT` on the corpus's own say-so is worse than
+stopping.
+
+Verification costs about 3 s for all three trees. That is the price of a table
+that cannot print `N=10,000` over a corpus of 9,999 files: the previous no-op
+compared only `generator-version`, `n`, and the manifest's *claimed* file count,
+so one deleted file was invisible and its claim was copied straight into the
+receipt.
 
 They do **not** include token-dense or deeply nested adversarial files. That is
 a separate arm.
