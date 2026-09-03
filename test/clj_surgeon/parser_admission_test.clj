@@ -460,6 +460,24 @@
           "the text receipt names it too"))))
 
 ;; @spec MCP-OP-MEM-005
+(deftest the-scan-charges-itself-in-the-production-receipt
+  (testing "an unreported cost is one nobody notices regressing"
+    ;; `rg scan-ms src/` returned nothing before this: the charge was measured
+    ;; only in bench/. The first draft of `scan-shape` was 638x slower and every
+    ;; test passed, which is exactly the regression a receipt figure catches.
+    (let [root (scratch-tree!)
+          projects ((requiring-resolve 'clj-surgeon.core/outline-all-files)
+                    ((requiring-resolve 'clj-surgeon.core/discover-projects) root))
+          edn ((requiring-resolve 'clj-surgeon.core/format-ls-tree-edn)
+               projects root)
+          text ((requiring-resolve 'clj-surgeon.core/format-ls-tree-text)
+                projects root)
+          ms (get-in (last edn) [:receipt :resources :scan_ms])]
+      (is (number? ms) "the EDN receipt carries no :resources block")
+      (is (pos? ms) "the scan really ran and the clock really measured it")
+      (is (str/includes? text "scan_ms") "the text receipt charges it too"))))
+
+;; @spec MCP-OP-MEM-005
 (deftest ls-tree-output-is-unchanged-when-nothing-is-refused
   (testing "a scan with no refusal carries no receipt entry at all"
     (let [dir (java.nio.file.Files/createTempDirectory
