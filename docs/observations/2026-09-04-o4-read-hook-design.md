@@ -166,6 +166,49 @@ Pre-registration to be written before any arm, per the program's own rule.
   directory, that the read path answered. That is the first meter in this
   program that proves adoption without depending on the agent's cooperation.
 
+## The frozen receipt, and the gates
+
+Regenerated against the final build in one pass. `diff_bytes=0` on every row is
+the whole claim; `served_by` and `reason` come from the route log, not from the
+narrative.
+
+```
+FINAL RECEIPT  hook=6f37ff0  fixture=ab267f9  server=7941/26e4810  rg=15.1.0
+-n -C 5 System/currentTimeMillis|\(ns marvin-voice-remote src diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=300
+-n -C 8 System/currentTimeMillis|\*now-ms\*|\(ns  src      diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=233
+-n System/currentTimeMillis src                            diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=245
+-l System/currentTimeMillis src                            diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=283
+--files-with-matches System/currentTimeMillis src          diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=243
+-n -e System/currentTimeMillis src                         diff_exit=0 diff_bytes=0  served_by=surgeon reason=servable files=25 ms=220
+-n defn .                                                  diff_exit=0 diff_bytes=0  served_by=fallback reason=non-clojure-candidate ms=20
+-n --max-depth 1 System/currentTimeMillis src              diff_exit=0 diff_bytes=0  served_by=fallback reason=unsupported-flag ms=15
+-n System/currentTimeMillis src/marvin_voice_remote/channel.clj diff_exit=0 diff_bytes=0  served_by=fallback reason=path-argument-not-a-directory ms=10
+-n defn -main src src/marvin_voice_remote                  diff_exit=0 diff_bytes=0  served_by=fallback reason=overlapping-path-arguments ms=13
+routed: 6 surgeon / 10 invocations
+```
+
+Gates, ran-lines verbatim:
+
+```
+$ suite-run bb test/run_all.clj
+Ran 737 tests containing 6133 assertions.
+0 failures, 0 errors.
+rc=0
+
+$ suite-run clojure -M:clj-surgeon/mcp-test
+Ran 407 tests containing 4175 assertions.
+0 failures, 0 errors.
+rc=0
+
+$ make mcp-operation-oracle
+swipl -q -f test/mcp_operation_contract_oracle.pl
+mcp-operation oracle: pass; legacy counterexamples=[verification_failed,verification_pending]
+rc=0
+
+$ intent audit (clj-surgeon.mcp-intent-contract/audit-current-repository)
+audit ok: true   violations: 0   read-hook rows: 8
+```
+
 ## Deviations and refusals, every one
 
 1. **The witness server is a branch tip, not `main` and not the E6 merge.**
