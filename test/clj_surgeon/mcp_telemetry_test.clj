@@ -4,7 +4,7 @@
    [clj-surgeon.mcp-telemetry :as telemetry]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is]])
+   [clojure.test :refer [deftest is testing]])
   (:import
    (java.nio.file Files)
    (java.nio.file.attribute FileAttribute PosixFilePermissions)))
@@ -154,5 +154,68 @@
         (is (not (.exists stale)))
         (is (.exists fresh))
         (is (.exists unrelated)))
+      (finally
+        (delete-tree! directory)))))
+
+;; ============================================================
+;; Proving the connection, per arm
+;; ============================================================
+;; Field evidence (E6-Lb): three free-choice arms shared one server on 7909.
+;; Their telemetry held `server.start` (one PROCESS started) and, had they
+;; called, `tool.call` (SOME caller called) — neither of which distinguishes
+;; one client session from another. A silent connection failure and a
+;; deliberate decline are the same record, so the adoption null was credible
+;; rather than proven.
+
+;; @spec MCP-OP-STUDY-039
+(deftest session-start-names-each-workspace-a-server-serves
+  (let [directory (temp-dir)]
+    (try
+      (let [state (telemetry/start! {:mode :metrics :directory (.getPath directory)
+                                     :run-id "arm-run-1"})]
+        (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/f1"})
+        (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/f2"})
+        (testing "a second call on a root already seen emits nothing"
+          (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/f1"}))
+        (let [started (filterv #(= "session.start" (:event %)) (events state))]
+          (is (= 2 (count started))
+              "one event per distinct workspace root, and only the first time")
+          (is (= 2 (count (distinct (map :workspace_key started))))
+              "each arm is distinguishable by its workspace key")
+          (is (every? #(re-matches #"[0-9a-f]{16}" (:workspace_key %)) started)
+              "the key is a stable digest prefix, not a path")
+          (is (every? #(= "arm-run-1" (:run_id %)) started)
+              "the server run id still travels with it")
+          (testing "metrics mode never writes a path"
+            (is (every? #(nil? (:workspace_root %)) started))
+            (is (not (str/includes? (slurp (:file state)) "/tmp/arms"))))))
+      (finally
+        (delete-tree! directory)))))
+
+;; @spec MCP-OP-STUDY-039
+(deftest session-start-carries-the-root-in-full-mode-and-a-client-run-id
+  (let [directory (temp-dir)]
+    (try
+      (let [state (telemetry/start! {:mode :full :directory (.getPath directory)})]
+        (telemetry/record-session-start!
+          state {:workspace-root "/tmp/arms/e6/f3" :client-run-id "e6-f3"})
+        (let [event (first (filterv #(= "session.start" (:event %)) (events state)))]
+          (is (= "/tmp/arms/e6/f3" (:workspace_root event))
+              "full mode names the root")
+          (is (= "e6-f3" (:client_run_id event))
+              "a caller-supplied run id is carried when present")
+          (is (= (telemetry/workspace-key "/tmp/arms/e6/f3") (:workspace_key event))
+              "and the key a cohort can recompute is the same one")))
+      (finally
+        (delete-tree! directory)))))
+
+;; @spec MCP-OP-STUDY-039
+(deftest session-start-writes-nothing-in-off-mode
+  (let [directory (temp-dir)]
+    (try
+      (let [state (telemetry/start! {:mode :off :directory (.getPath directory)})]
+        (telemetry/record-session-start! state {:workspace-root "/tmp/arms/e6/f4"})
+        (is (nil? (:file state)))
+        (is (empty? (seq (.listFiles directory)))))
       (finally
         (delete-tree! directory)))))
