@@ -2643,3 +2643,87 @@
               (str "a tree the walk read is not a tree it declined: "
                    (pr-str result))))
         (finally (delete-recursive! root))))))
+
+(defn- pruned-caller-project!
+  "A caller project whose only link is `alias_caller.clj -> .git/hooks/...`:
+  a discovered source whose real file lives in a tree the walk pruned."
+  []
+  (let [root (create-caller-project!)
+        hooks (io/file root ".git" "hooks")]
+    (.mkdirs hooks)
+    (spit (io/file hooks "caller.clj")
+          (str "(ns app.real-caller\n"
+               "  (:require\n"
+               "   [app.core :as core]))\n\n"
+               "(defn go [x] (core/moved-two x))\n"))
+    (symlink! (io/file root "src" "app" "alias_caller.clj")
+              "../../.git/hooks/caller.clj")
+    root))
+
+;; @spec MCP-OP-EXTRACT-042
+(deftest a-preview-that-writes-nothing-reports-the-pruned-caller-instead-of-refusing
+  (testing "the dry run refuses to PREVIEW because of a link it would never
+            write, and the refusal carries no :discovery, so the reader cannot
+            see what was scanned or which other trees were pruned"
+    (let [root (pruned-caller-project!)
+          src (io/file root "src" "app")]
+      (try
+        (let [result (extract/plan {:file (.getPath (io/file src "core.clj"))
+                                    :forms '[moved-one moved-two]
+                                    :to (.getPath (io/file src "moved.clj"))
+                                    :alias "moved"
+                                    :compile-check false})]
+          (is (false? (:applied result))
+              (str "a preview writes nothing; it should PREVIEW: "
+                   (pr-str (select-keys result [:error-type :error]))))
+          (is (false? (:complete result))
+              "and say plainly that a caller was not resolved")
+          (is (some #(some (fn [c] (str/includes? (str c) "alias_caller.clj"))
+                           (:callers-in-skipped-trees %))
+                    (:callers-unresolved result))
+              (str "naming the offending link where the completeness verdict "
+                   "is made: " (pr-str (:callers-unresolved result))))
+          (is (seq (get-in result [:discovery :skipped-callers]))
+              (str "and carrying it in :discovery: "
+                   (pr-str (:discovery result)))))
+        (finally (delete-recursive! root)))))
+
+  (testing "and :rewire-callers false writes no caller byte at all, so it
+            reports the same way"
+    (let [root (pruned-caller-project!)
+          src (io/file root "src" "app")
+          hooked (io/file root ".git" "hooks" "caller.clj")
+          before (slurp hooked)]
+      (try
+        (let [result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :rewire-callers false
+                                        :compile-check false})]
+          (is (true? (:applied result))
+              (str "no caller is written in this mode, so there is nothing to "
+                   "refuse: " (pr-str (select-keys result [:error-type :error]))))
+          (is (false? (:complete result)))
+          (is (= before (slurp hooked))
+              "and the pruned tree is still byte-identical"))
+        (finally (delete-recursive! root)))))
+
+  (testing "but the apply that WOULD write callers still refuses -- and its
+            refusal now carries the discovery the reader needs"
+    (let [root (pruned-caller-project!)
+          src (io/file root "src" "app")
+          hooked (io/file root ".git" "hooks" "caller.clj")
+          before (slurp hooked)]
+      (try
+        (let [result (extract/execute! {:file (.getPath (io/file src "core.clj"))
+                                        :forms '[moved-one moved-two]
+                                        :to (.getPath (io/file src "moved.clj"))
+                                        :alias "moved"
+                                        :compile-check false})]
+          (is (= :caller-path-in-skipped-tree (:error-type result)))
+          (is (map? (:discovery result))
+              (str "a refusal that drops its context makes the reader re-run "
+                   "the scan by hand: " (pr-str (keys result))))
+          (is (= before (slurp hooked))))
+        (finally (delete-recursive! root))))))
