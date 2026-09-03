@@ -1398,6 +1398,121 @@ sys.exit(1 if fails else 0)
 PY22D
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 
+echo "== case 33: the make parser is a WHITELIST GRAMMAR — GNU Make is the oracle =="
+# Sol round three, finding (a).  A static parser is not a GNU Make oracle, and eight
+# controlled constructs proved it: `define`/`endef` overriding a simple assignment,
+# `:=` capturing a value a later `=` reassigns, a target-specific variable, a `%.test:`
+# pattern supplying an explicit target's recipe, a recipe continuation splitting `if`
+# and `then` across physical lines, `$(MAKE)` WITHOUT `+` reaching a target the parser
+# refused, a hard `include`, and a generated `-include`.  In every one of them the
+# parser resolved a non-test command and GNU Make ran the Kaocha stub.  A meter that
+# reports a test run as a non-test action is wrong in the exact quantity E3's pass line
+# is stated in.
+#
+# So the parser resolves a target ONLY when the WHOLE Makefile is inside a trivially
+# parseable subset -- simple `NAME = value` / `NAME := value` with no name assigned
+# twice, `target: deps` rules with literal recipe lines, `.PHONY`, comments.  Any other
+# construct refuses the WHOLE FILE with a typed feature name, no target resolves, and
+# every `make` call in that arm is `incomplete-run` at score time.  This case replays
+# all twelve of Sol's fixtures and uses GNU Make ITSELF as the oracle: for each one it
+# records whether the stub really ran.
+mkdir -p "$WORK/case33"
+python3 - "$HERE" "$WORK/case33" > "$WORK/case33.out" 2>&1 <<'PY33'
+import json, os, pathlib, subprocess, sys
+sys.dont_write_bytecode = True
+here, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+sys.path.insert(0, str(here))
+from watch import is_test_command, unresolved_make_targets
+
+# (target, Makefile, extra-file, must the parser REFUSE the whole file?)
+CASES = [
+    ("baseline", "verify", ".PHONY: verify\nverify:\n\tbin/kaocha\n", None, False),
+    ("phony", "verify", ".PHONY: verify\nverify:\n\tbin/kaocha\n", None, False),
+    ("recursive_assignment", "verify",
+     "CMD = $(LATE)\nLATE = bin/kaocha\n.PHONY: verify\nverify:\n\t$(CMD)\n", None, False),
+    ("define_endef", "verify",
+     "CMD = echo safe\ndefine CMD\nbin/kaocha\nendef\n.PHONY: verify\nverify:\n\t$(CMD)\n",
+     None, True),
+    ("simple_immediate_order", "verify",
+     "CMD = bin/kaocha\nNOW := $(CMD)\nCMD = echo safe\n.PHONY: verify\nverify:\n\t$(NOW)\n",
+     None, True),
+    ("target_specific", "verify",
+     "CMD = echo safe\n.PHONY: verify\nverify: CMD = bin/kaocha\nverify:\n\t$(CMD)\n",
+     None, True),
+    ("pattern_rule", "foo.test",
+     "dep:\n\t@:\n%.test:\n\tbin/kaocha\nfoo.test: dep\n", None, True),
+    ("recipe_continuation", "verify",
+     ".PHONY: verify\nverify:\n\ti\\\nf true; th\\\nen bin/kaocha; fi\n", None, True),
+    ("recursive_make_no_plus", "verify",
+     ".PHONY: verify hidden\nverify:\n\t$(MAKE) hidden\nhidden:\n"
+     "\tif [ \"$$RUN_TESTS\" = 1 ]; then bin/kaocha; else echo safe; fi\n", None, True),
+    ("dollar_escapes", "verify",
+     ".PHONY: verify\nverify:\n\tcmd=$$(printf bin/kaocha); $$cmd\n", None, True),
+    ("hard_include_existing", "verify",
+     "CMD = echo safe\ninclude rules.mk\n.PHONY: verify\nverify:\n\t$(CMD)\n",
+     ("rules.mk", "CMD = bin/kaocha\n"), True),
+    ("optional_include_generated", "verify",
+     "CMD = echo safe\n-include generated.mk\n.PHONY: verify\nverify:\n\t$(CMD)\n"
+     "generated.mk:\n\tprintf 'CMD = bin/kaocha\\n' > generated.mk\n", None, True),
+]
+
+passed = failed = 0
+def check(label, cond, detail=""):
+    global passed, failed
+    if cond:
+        passed += 1
+        print(f"ok   case33 {label}")
+    else:
+        failed += 1
+        print(f"FAIL case33 {label} {detail}")
+
+for name, target, makefile, extra, must_refuse in CASES:
+    case = root / name
+    (case / "bin").mkdir(parents=True, exist_ok=True)
+    marker = case / "kaocha-ran"
+    stub = case / "bin/kaocha"
+    stub.write_text("#!/usr/bin/env bash\nprintf 'ran\\n' >> \"$KAOCHA_MARKER\"\n")
+    stub.chmod(0o755)
+    (case / "Makefile").write_text(makefile)
+    if extra:
+        (case / extra[0]).write_text(extra[1])
+
+    out = case / "map.json"
+    parsed = subprocess.run([sys.executable, str(here / "_make_targets.py"),
+                             str(case), str(out)], text=True, capture_output=True)
+    payload = json.loads(out.read_text()) if out.exists() else {}
+    targets = payload.get("targets") or {}
+
+    # GNU Make ITSELF, as the oracle: did the Kaocha stub really run?
+    env = dict(os.environ, KAOCHA_MARKER=str(marker), RUN_TESTS="1")
+    subprocess.run(["make", "--no-print-directory", target], cwd=case, env=env,
+                   text=True, capture_output=True, timeout=20)
+    ran_kaocha = marker.exists()
+
+    if must_refuse:
+        refusal = payload.get("whitelist_refusal") or payload.get("dynamic_refusal")
+        check(f"{name}: GNU Make runs the Kaocha stub", ran_kaocha)
+        check(f"{name}: the whole file is refused ({refusal})",
+              bool(refusal) and target not in targets,
+              f"rc={parsed.returncode} refusal={refusal!r} targets={sorted(targets)}")
+        check(f"{name}: `make {target}` is unresolved, so the run is incomplete",
+              unresolved_make_targets(f"make {target}", targets or None) == [target],
+              f"got {unresolved_make_targets(f'make {target}', targets or None)}")
+    else:
+        check(f"{name}: the whitelist accepts it and it resolves",
+              parsed.returncode == 0 and target in targets and not payload.get("whitelist_refusal"),
+              f"rc={parsed.returncode} targets={sorted(targets)}")
+        check(f"{name}: resolved to the test runner GNU Make really ran",
+              ran_kaocha and is_test_command(f"make {target}", targets)[0],
+              f"ran_kaocha={ran_kaocha} resolved={targets.get(target)!r}")
+
+print(f"case33 {passed} passed, {failed} failed")
+sys.exit(1 if failed else 0)
+PY33
+cat "$WORK/case33.out"
+PASS=$((PASS + $(grep -c '^ok   case33' "$WORK/case33.out")))
+FAIL=$((FAIL + $(grep -c '^FAIL case33' "$WORK/case33.out")))
+
 echo "== case 20e: the apparatus writes no bytecode into the source tree, env or no env =="
 # Found while replaying Sol's probes by hand: the self-test exports
 # PYTHONDONTWRITEBYTECODE, so IT stays clean -- but a human (or a reviewer) running
