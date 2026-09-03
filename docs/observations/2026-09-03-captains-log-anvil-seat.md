@@ -98,3 +98,5 @@ settings-path literals 4 → 3, slug-keyed reminder sites 1 → 0, extra update-
 red-first. Builder's unit 1055/13163/0; my run in progress; push after. Neither arm is in the
 judge-sandbox log, so the replay golden is unchanged by construction — the arms are pinned by their own
 histories.
+
+## 02:26Z — `bridge/lens-followups` pushed at 7359b8f9 (my run 1055 tests, 13163 assertions, 0 failures). Stacked on settings-lens; for Gene's merge list after fold → store → lens (inb-ace545 closes when the mayor can update the inbox).
