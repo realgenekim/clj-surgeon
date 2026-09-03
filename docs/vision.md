@@ -642,3 +642,35 @@ winning in the squares we choose to compete against native. that's what your wor
 a watcher's number contradicting a confident self-report, ten lanes on sixteen cores with every
 suite under one lock, a usage meter read every hour, and a square conceded on the evidence as
 readily as one is claimed.
+
+### When the work is delegated (Gene, 2026-09-03: "we inspect the results, we analyze its telemetry, caring just as much about its methods and timings as if we did the work ourselves")
+
+Most of the typing on this program is done by Opus and Sol builders and reviewers. Delegation does
+not change the loop above; it changes who holds the tweezers. The seat that delegates still owns the
+measurement, and a delegated run is treated as an arm, not a handoff:
+
+1. **The brief is the spec and the pre-registration.** It names the verify command the agent must run
+   to green, the disjoint file-set, the witness that must fail first, and the exact probe the reviewer
+   will re-run. A brief the agent could satisfy with a green suite and a narrowed promise is a bad
+   brief; the deciding test from the linked-intent skill applies to briefs too.
+2. **The report is a claim; the artifacts are the result.** Read the diff, the suite's own
+   `Ran N tests` lines, the pushed sha from `ls-remote`, the refusal shapes from the log, never the
+   summary. A receipt that cannot name its subject, its evidence source, and the causal binding is
+   `:unverified`, and an agent that says "running" is not running until the process is seen.
+3. **Its telemetry is our telemetry, and it is a free adoption arm.** Every builder has the Surgeon
+   server on a port and nobody tells it to use it. `make study-agent-usage` per agent answers which
+   verbs it called, how many returns it spent, what it refused, what it declined; that is the
+   free-choice meter, fed by work we were doing anyway. Its wall, returns, and tokens are logged next
+   to ours (a re-review costing 165k tokens and 37 minutes is a number to compare with a hand
+   red-team, not a footnote).
+4. **Its friction is our ledger.** A refusal the agent paid, a probe it could not run, a fixture the
+   content filter would not read: each becomes a ledger item with the exact text, a ratchet, and a
+   trigger, exactly as if a human had paid it.
+5. **Independent, executed re-derivation before the queue.** A second model red-teams the branch by
+   running the probes, never by reading the report; when the builder and the reviewer disagree, the
+   disagreement is the finding. Nothing enters the merge queue on the builder's word, and nothing is
+   fixed by the reviewer: suspected defects are reported by agents and fixed by the seat that owns
+   the design.
+6. **Steer by the same squares.** A delegated result is judged by the square it wins or loses, with
+   the same numbers, and it is conceded as readily. Caring about its methods and timings as if we
+   had done the work ourselves is what keeps the measurement honest when we no longer hold the tool.
