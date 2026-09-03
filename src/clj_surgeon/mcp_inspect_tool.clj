@@ -841,6 +841,56 @@
     (contains? result :files) (json/generate-string (:files result))
     :else nil))
 
+;; @spec MCP-OP-STUDY-040
+(defn- abridged-tree-text
+  "The longest whole-line prefix of a rendered tree inside `limit`."
+  [tree limit]
+  (let [lines (str/split-lines tree)]
+    (loop [remaining lines kept [] used 0]
+      (if-let [line (first remaining)]
+        (let [next-used (+ used (count line) 1)]
+          (if (and (seq kept) (> next-used limit))
+            {:text (str/join "\n" kept) :shown (count kept)
+             :total (count lines) :abridged true}
+            (recur (next remaining) (conj kept line) next-used)))
+        {:text (str/join "\n" kept) :shown (count kept)
+         :total (count lines) :abridged false}))))
+
+;; @spec MCP-OP-STUDY-040
+(defn- abridged-files-text
+  "The longest whole-entry prefix of a `names`/`edn` payload inside `limit`.
+
+  Entries are dropped whole rather than cut mid-object: a caller must be able
+  to parse what it is handed, and half a JSON object is not evidence."
+  [files limit]
+  (loop [n (count files)]
+    (let [rendered (json/generate-string (subvec (vec files) 0 n))]
+      (if (or (<= (count rendered) limit) (<= n 1))
+        {:text rendered :shown n :total (count files) :abridged (< n (count files))}
+        (recur (dec n))))))
+
+;; @spec MCP-OP-STUDY-040
+(defn- ls-tree-payload-block
+  "The bounded payload the text block renders, and whether it was abridged.
+
+  `:text_evidence_limit` is set by `fit-public-result` when the complete
+  public result — text AND structured content together — would cross
+  `max-public-result-bytes`. Without it the payload travels whole."
+  [result]
+  (let [limit (:text_evidence_limit result)]
+    (cond
+      (nil? limit)
+      (when-let [payload (ls-tree-payload-text result)]
+        {:text payload :abridged false})
+
+      (string? (:tree result))
+      (abridged-tree-text (str/trim (:tree result)) limit)
+
+      (contains? result :files)
+      (abridged-files-text (:files result) limit)
+
+      :else nil)))
+
 ;; @spec MCP-OP-STUDY-036
 (defn ls-tree-summary
   "The text block a client renders for one `ls-tree` result.
@@ -859,7 +909,8 @@
             (mcp-operation/format-elapsed-ms (:elapsed_ms result))
             (:error result)
             (:next_action result))
-    (let [payload (ls-tree-payload-text result)]
+    (let [block (ls-tree-payload-block result)
+          payload (:text block)]
       (str/join
         "\n"
         (remove
@@ -875,6 +926,15 @@
            (when (seq payload) "")
            (when (seq payload) payload)
            ""
+           ;; @spec MCP-OP-STUDY-040
+           (when (:abridged block)
+             (format (str "! text abridged · %d of %d row%s rendered · the "
+                          "complete receipt is in structuredContent")
+                     (:shown block) (:total block)
+                     (if (= 1 (:total block)) "" "s")))
+           (when (:abridged block)
+             (str "→ lower limit, narrow dir, or add a grep pattern so the "
+                  "complete result fits the public output budget"))
            (if (:truncated result)
              (format "! bounded receipt · %d file%s omitted · read_complete=false"
                      (:omitted result)
@@ -1617,6 +1677,76 @@
 ;; @spec MCP-OP-READ-CONT-002
 ;; @spec MCP-OP-PREP-REQ-001
 ;; @spec MCP-OP-PREP-REQ-006
+
+;; @spec MCP-OP-STUDY-040
+(def ^:private text-budget-reserve
+  "Bytes held back from the text allowance for the JSON envelope, the
+  abridgement notice, and the difference between characters and UTF-8 bytes."
+  1024)
+
+;; @spec MCP-OP-STUDY-040
+(defn- public-budget-refusal
+  "The typed refusal for a receipt that cannot fit even with no evidence text.
+
+  Reached only when `structuredContent` ALONE crosses the declared budget: at
+  that point no rendering choice can help, and a caller that is handed the
+  result anyway has been told a bound the tool does not keep."
+  [result required-bytes]
+  (cond-> {:ok false
+           :operation "inspect_clojure"
+           :error_type "inspect-output-limit"
+           :scope "public_result"
+           :error (format (str "The complete inspect_clojure result is %d bytes; "
+                               "the public MCP output budget is %d")
+                          required-bytes max-public-result-bytes)
+           :required {:public_result_bytes required-bytes}
+           :limits {:public_result_bytes max-public-result-bytes}
+           :read_complete false
+           :source_unchanged true
+           :remedy (str "Lower limit, narrow dir/grep/ns_grep, or request "
+                        "fewer forms so the complete result fits the public "
+                        "output budget.")
+           :next_action "narrow_scope"}
+    (:mode result) (assoc :mode (:mode result))))
+
+;; @spec MCP-OP-STUDY-040
+(defn fit-public-result
+  "Bound the complete public MCP result — TEXT BLOCK INCLUDED — by the budget.
+
+  Field evidence (O2 re-review, 2026-09-03): rendering a receipt's rows into
+  `content[0].text` is the fix for a text-only caller and it roughly DOUBLES
+  the result on the wire. `ls-tree dir=src grep=defn limit=16384` measured
+  34,042 bytes against a declared 32,768, and the enforcement covered three
+  modes, so the overshoot was silent. A budget only three modes obey is a
+  number in a docstring.
+
+  The text is bounded FIRST, because the rows are a rendering of evidence the
+  caller already has in `structuredContent`, and a typed truncation keeps an
+  answer where a refusal returns none. A receipt whose structured content
+  alone crosses the budget is a typed refusal, because nothing about the text
+  can save it."
+  [raw-result]
+  (let [measure (fn [result]
+                  (mcp-result-byte-count
+                    (inspect-summary (assoc result :elapsed_ms 0.0))
+                    result))
+        required (measure raw-result)]
+    (if (<= required max-public-result-bytes)
+      raw-result
+      (let [structured-bytes (mcp-result-byte-count "" raw-result)
+            headroom (- max-public-result-bytes structured-bytes
+                        text-budget-reserve)]
+        (loop [limit headroom attempts 4]
+          (cond
+            (or (not (pos? limit)) (zero? attempts))
+            (public-budget-refusal raw-result required)
+
+            :else
+            (let [candidate (assoc raw-result :text_evidence_limit limit)]
+              (if (<= (measure candidate) max-public-result-bytes)
+                candidate
+                (recur (quot limit 2) (dec attempts))))))))))
+
 (defn enforce-result-budget
   "Bound the complete public MCP result — its text block included."
   [ordinary-result raw-result]
@@ -1653,7 +1783,10 @@
          :source_unchanged true
          :next_action "narrow_request"}))
 
-    :else raw-result))
+    ;; @spec MCP-OP-STUDY-040
+    ;; Every other mode — `ls-tree` and every typed study read — used to fall
+    ;; through unenforced.
+    :else (fit-public-result raw-result)))
 
 ;; @spec MCP-OP-TIME-004
 ;; @spec MCP-OP-ASYNC-001

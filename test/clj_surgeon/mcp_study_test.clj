@@ -2038,3 +2038,25 @@
         (is (>= inspect-tool/max-public-result-bytes (public-bytes raw)))
         (is (= raw (inspect-tool/enforce-result-budget raw raw))
             "a result inside the budget is never rewritten")))))
+
+;; @spec MCP-OP-STUDY-040
+(deftest a-names-payload-is-abridged-on-whole-entries
+  ;; Half a JSON object is not evidence. The `names`/`edn` payload travels as
+  ;; data, so an abridged rendering must still parse.
+  (with-tmp-project
+    #(build-toy-project! % 200)
+    (fn [config]
+      (let [raw (inspect-tool/execute-ls-tree
+                  config {:mode "ls-tree" :dir "." :format "names"
+                          :limit 16384})
+            fitted (inspect-tool/enforce-result-budget raw raw)
+            text (inspect-tool/inspect-summary (assoc fitted :elapsed_ms 0.0))
+            payload (first (filter #(str/starts-with? % "[")
+                                   (str/split-lines text)))]
+        (is (<= (public-bytes fitted) inspect-tool/max-public-result-bytes))
+        (when (:text_evidence_limit fitted)
+          (is (str/includes? text "text abridged"))
+          (is (sequential? (json/parse-string payload true))
+              "the abridged names payload must still parse as JSON")
+          (is (< (count (json/parse-string payload true)) (:returned fitted))
+              "and it must carry fewer whole entries than the receipt"))))))
