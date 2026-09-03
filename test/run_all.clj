@@ -1,6 +1,7 @@
 (ns run-all
   (:require
    [clj-surgeon.agent-routing-test]
+   [clj-surgeon.alias-migration-test]
    [clj-surgeon.analyze-test]
    [clj-surgeon.cli-dispatch-test]
    [clj-surgeon.cljc-existing-ops-test]
@@ -47,6 +48,7 @@
    [clojure.test :refer [run-tests]]))
 
 (let [r (run-tests 'clj-surgeon.forms-test
+                   'clj-surgeon.alias-migration-test
                    'clj-surgeon.agent-routing-test
                    'clj-surgeon.outline-test
                    'clj-surgeon.move-test

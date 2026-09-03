@@ -13,7 +13,9 @@
    [rewrite-clj.parser :as parser]
    [rewrite-clj.zip :as z])
   (:import
-   (java.nio.file CopyOption Files StandardCopyOption)))
+   (java.nio.file CopyOption Files OpenOption StandardCopyOption
+                  StandardOpenOption)
+   (java.util UUID)))
 
 (def transaction-version 1)
 (def receipt-version 1)
@@ -2325,6 +2327,25 @@
                [file result-hash]))
         file-plans))
 
+(def ^:dynamic *on-write-boundary*
+  "Called once, immediately before a transaction writes its first source byte.
+
+  A DYNAMIC binding rather than an extra argument, deliberately. `change!` has
+  exactly one runtime path — the single-arity `commit-compiled!` — and that is
+  a ratchet the architecture tests hold: threading this through the injected io
+  map would fork the public commit onto a second arity, and hoisting the io map
+  out of `commit-compiled!` to share it would move the raw filesystem effects
+  out of the one form whose effect inventory is bounded. Nothing here is
+  asynchronous, so a thread-local binding is exactly scoped to the commit it
+  wraps.
+
+  It exists because heap exhaustion has to be answerable: everything before
+  this point — spec validation, the frozen read, compilation, receipt staging,
+  the whole-file hash preflight — leaves the tree byte-identical, and a caller
+  that reports `mutation_attempted` from its own call site cannot tell the
+  difference."
+  nil)
+
 (defn commit-compiled!
   "Commit a successfully compiled transaction through injected source I/O.
    Ordinary handled failures restore files that still equal either the original
@@ -2332,7 +2353,15 @@
 
    A compiled transaction may also carry :created-files, which are written only
    after every edit has committed and read back, and :deleted-files, which an
-   inverse transaction uses to retire what a forward creation made."
+   inverse transaction uses to retire what a forward creation made.
+
+   `*on-write-boundary*`, when bound, is called exactly once immediately before
+   the first source byte is written and after every read-only preflight has
+   passed. It is the transaction's own write boundary: a caller that has to tell
+   an operator whether its tree may have been mutated reads it from here rather
+   than from the entrance of the call, which precedes spec validation, the
+   frozen read, compilation, receipt staging, and the whole-file hash
+   preflight."
   ([compiled]
    (commit-compiled! compiled
                      {:read-source slurp
@@ -2370,6 +2399,10 @@
              (refuse! :target-already-exists
                       (str "Creation target already exists: " file)
                       {:file file :path file})))
+         ;; the write boundary: every refusal above this line leaves the tree
+         ;; exactly as the caller left it, and every byte written is below it
+         (when-let [notify *on-write-boundary*]
+           (notify))
          (try
            (execute-writes! read-source write-source! futures file-plans)
            (execute-creations! read-source (or create-source! write-source!)
@@ -2727,7 +2760,24 @@
   [receipt]
   (str (pr-str receipt) "\n"))
 
+;; @spec MCP-OP-ALIAS-056
 (defn- stage-receipt!
+  "Write one receipt to a staging file beside its destination.
+
+  The staging file is opened CREATE_NEW: an open that FAILS when anything
+  already holds the STAGING name — a regular file, or a symlink pointing
+  somewhere else — rather than following it, and the publish below is an
+  ATOMIC_MOVE off that name.
+
+  That pair protects the staging name and NOT the destination name. The
+  receipt path arrives here already canonicalised (`canonical-receipt-path`
+  → `getCanonicalPath`), so a link sitting on the DESTINATION name was
+  resolved before this function computed its parent: there is no link left for
+  the rename to replace, and both the staging file and the published receipt
+  land in the link's target directory. Detecting that redirect is
+  MCP-OP-ALIAS-056's post-write proof, which reads the published file's real
+  path — parent AND `.edn` extension — and rolls the transaction back rather
+  than reporting ok over a receipt no undo can read."
   [receipt-path receipt]
   (let [target (io/file receipt-path)
         parent (.getParentFile (.getAbsoluteFile target))]
@@ -2735,10 +2785,15 @@
       (refuse! :invalid-receipt-path
                "Receipt parent directory does not exist"
                {:path receipt-path}))
-    (let [staged (java.io.File/createTempFile
-                   ".clj-surgeon-receipt-" ".edn" parent)]
+    (let [staged (io/file parent (str ".clj-surgeon-receipt-"
+                                      (UUID/randomUUID) ".edn"))]
       (try
-        (spit staged (receipt-source receipt))
+        (with-open [^java.io.OutputStream out
+                    (Files/newOutputStream
+                      (.toPath staged)
+                      (into-array OpenOption [StandardOpenOption/CREATE_NEW
+                                              StandardOpenOption/WRITE]))]
+          (.write out (.getBytes ^String (receipt-source receipt) "UTF-8")))
         (validate-receipt! (edn/read-string (slurp staged)))
         staged
         (catch Exception e
@@ -2844,11 +2899,12 @@
   "Compile, commit, verify, and publish one durable inverse receipt."
   [context
    {:keys [spec receipt-out prepare-compiled! prepare-spec
-           write-refusal-context expect-matched]
+           write-refusal-context expect-matched on-write-boundary]
     :as opts}]
   (try
     (let [unknown (vec (sort (remove #{:op :spec :receipt-out :prepare-compiled! :prepare-spec
-                                       :write-refusal-context :expect-matched}
+                                       :write-refusal-context :expect-matched
+                                       :on-write-boundary}
                                      (keys opts))))]
       (when (seq unknown)
         (refuse! :unknown-arguments
@@ -2914,7 +2970,8 @@
                   :receipt-stage capabilities compiled nil stage-error)
                 (let [staged (:staged staged-result)]
                   (try
-                    (let [commit (commit-compiled! compiled)]
+                    (let [commit (binding [*on-write-boundary* on-write-boundary]
+                                   (commit-compiled! compiled))]
                       (if (:error commit)
                         (observe-change-result
                           :commit capabilities compiled nil commit)

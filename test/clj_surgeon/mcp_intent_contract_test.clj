@@ -175,40 +175,55 @@
       (is (and (string? reason) (<= 40 (count (str/trim reason))))
           (str "exclusion needs a substantive one-line reason: " path)))))
 
+(def ^:private expected-spec-docs
+  "The spec documents the scan is expected to find at this HEAD, asserted exactly so
+   that drift in docs/intent is VISIBLE rather than silent. A lane that adds an intent
+   leaf adds one line here and one line to `lanes-added-since-derivation` below --
+   in the WITNESS, never in the production registry, which is what the ratchet was for."
+  ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
+   "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
+   "docs/intent/alias-migration/alias-migration-specs.md"
+   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
+   "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
+   "docs/intent/operation-algebra/operation-algebra-specs.md"
+   "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
+   "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
+   "docs/intent/prepared-request/prepared-request-specs.md"
+   "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+   "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
+   "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
+   "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
+   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"])
+
+(def ^:private pre-derivation-literal-vector
+  "The literal vector `audit-current-repository` carried before the registry was
+   derived (main @ 99394bf)."
+  ["docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
+   "docs/intent/read-request-normalization/read-request-normalization-specs.md"
+   "docs/intent/prepared-request/prepared-request-specs.md"
+   "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
+   "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"
+   "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
+   "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"])
+
+(def ^:private lanes-added-since-derivation
+  "Intent leaves merged onto the integration branch after the registry was derived.
+   Each one used to mean a line in the shared production vector; now it means a file."
+  ["docs/intent/alias-migration/alias-migration-specs.md"])
+
 (deftest the-derived-spec-doc-set-matches-the-expected-set-exactly
   (testing "drift in docs/intent is visible here, not silent"
-    (is (= ["docs/intent/2026-08-29-ratification/measurement-evidence-specs.md"
-            "docs/intent/2026-08-30-prepared-request-ratification/prepared-request-specs.md"
-            "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
-            "docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
-            "docs/intent/operation-algebra/operation-algebra-specs.md"
-            "docs/intent/performance-regression-sentinel/performance-regression-sentinel-specs.md"
-            "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
-            "docs/intent/prepared-request/prepared-request-specs.md"
-            "docs/intent/read-request-normalization/read-request-normalization-specs.md"
-            "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"
-            "docs/intent/sibling-pair-edit/sibling-pair-edit-specs.md"
-            "docs/intent/worktree-lifecycle/worktree-lifecycle-specs.md"
-            "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"]
-           (spec-doc-paths ".")))))
+    (is (= expected-spec-docs (spec-doc-paths ".")))))
 
-(deftest the-derived-audit-covers-exactly-the-old-literal-vector-intents
+(deftest the-derived-audit-covers-exactly-the-registered-lane-intents
   (testing "deriving the list changed WHICH FILES are scanned, not WHICH INTENTS are audited"
-    (let [literal-vector
-          ["docs/intent/mcp-operation-contract/mcp-operation-contract-specs.md"
-           "docs/intent/read-request-normalization/read-request-normalization-specs.md"
-           "docs/intent/prepared-request/prepared-request-specs.md"
-           "docs/intent/prepared-request-actions/prepared-request-actions-specs.md"
-           "docs/intent/write-refusal-completeness/write-refusal-completeness-specs.md"
-           "docs/intent/insertion-boundary-and-gap/insertion-boundary-and-gap-specs.md"
-           "docs/intent/shell-argv-safety/shell-argv-safety-specs.md"]
-          old (spec-ids "." literal-vector)
+    (let [registered (spec-ids "." (concat pre-derivation-literal-vector
+                                           lanes-added-since-derivation))
           derived (spec-ids "." (spec-doc-paths "."))]
-      ;; The six additionally-scanned documents contribute either no MCP-OP IDs at
-      ;; all (measurement-evidence, operation-algebra, performance-regression-sentinel,
+      ;; The additionally-scanned documents contribute either no MCP-OP IDs at all
+      ;; (measurement-evidence, operation-algebra, performance-regression-sentinel,
       ;; sibling-pair-edit, worktree-lifecycle use other prefixes) or a duplicate of
       ;; the prepared-request IDs (the 2026-08-30 ratification copy).
-      (is (= old derived)
-          (str "added: " (sort (set/difference derived old))
-               " removed: " (sort (set/difference old derived))))
-      (is (= 187 (count derived))))))
+      (is (= registered derived)
+          (str "added: " (sort (set/difference derived registered))
+               " removed: " (sort (set/difference registered derived)))))))
