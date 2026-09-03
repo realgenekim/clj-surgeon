@@ -29,10 +29,28 @@
 
 (defn- to-mb [bytes] (double (/ (double bytes) mb)))
 
+(def ^:private retention-peak (atom 0))
+
+(defn sample-retention!
+  "Force a full collection and record what is still live.
+
+   This is the only honest retention meter at a small heap. `heap-used-peak`
+   under default G1 tracks how close allocation ran to the ceiling, not what the
+   arm holds: an eight-file control that retained twelve megabytes peaked at two
+   hundred and fifty-one. Call this at checkpoints, not in a loop; it is a stop
+   the world."
+  []
+  (System/gc)
+  (Thread/sleep 60)
+  (let [used (heap-used)]
+    (swap! retention-peak max used)
+    used))
+
 (defn measure
   "Run `body-fn` with a sampler attached and return {:result r :memory m}."
   [body-fn]
   (let [start (heap-used)
+        _ (reset! retention-peak 0)
         peak (atom start)
         after-gc-peak (atom 0)
         running (atom true)
@@ -59,6 +77,7 @@
                   :heap-used-peak-mb (to-mb @peak)
                   :heap-used-end-mb (to-mb (heap-used))
                   :heap-after-gc-peak-mb (to-mb @after-gc-peak)
+                  :heap-retained-peak-mb (to-mb @retention-peak)
                   :wall-ms wall-ms}})
       (finally
         (reset! running false)))))

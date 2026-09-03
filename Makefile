@@ -821,9 +821,11 @@ MEMORY_JAVA_OPTS ?= -J-Xms64m -J-Xmx512m
 
 # The memory namespaces are deliberately outside test-fast and mcp-test: they
 # spawn child JVMs at explicit heap ceilings, write hundreds of megabytes of
-# synthetic scope, and cost minutes of wall. `memory-red` reproduces the frozen
-# read's OutOfMemoryError and proves the same arm completes when the scope fits;
-# once the journal lands it also runs the green arm at the same ceiling.
+# synthetic scope, and cost minutes of wall. The target carries the whole
+# red-to-green history: the frozen read dies of OutOfMemoryError at -Xmx256m on
+# a 600-file scope every ceiling admits, the same arm completes when the scope
+# fits, and the same scenario at the same ceiling completes through the
+# transaction journal with output parity against the unbounded reference.
 memory-red:
 	clojure $(MEMORY_JAVA_OPTS) -M:clj-surgeon/memory-test
 
