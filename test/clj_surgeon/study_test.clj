@@ -14,6 +14,10 @@
 (def ^:private real-file "src/clj_surgeon/analyze.clj")
 (def ^:private fixture-dir "test-fixtures/cljc/existing-ops")
 (def ^:private golden-file "test-fixtures/study/ls-tree-existing-ops.golden.txt")
+(def ^:private edn-golden-file
+  "test-fixtures/study/ls-tree-existing-ops-edn.golden.txt")
+(def ^:private refusal-golden-file
+  "test-fixtures/study/ls-tree-no-clojure-files.golden.txt")
 
 ;; ============================================================
 ;; The kernel takes data and returns data
@@ -240,6 +244,31 @@
                               ":op" ":ls-tree" ":dir" fixture-dir)]
     (is (zero? (:exit result)))
     (is (= (slurp golden-file) (:out result)))))
+
+;; @spec MCP-OP-STUDY-008
+(deftest cli-ls-tree-edn-bytes-match-the-frozen-golden
+  ;; The golden covered only the default text path, so `run-ls-tree`'s :edn
+  ;; branch and its refusal branch — the two places its `format` destructuring
+  ;; actually mattered — were unfrozen.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" fixture-dir
+                              ":format" ":edn")]
+    (is (zero? (:exit result)))
+    (is (= (slurp edn-golden-file) (:out result)))))
+
+;; @spec MCP-OP-STUDY-008
+(deftest cli-ls-tree-refusal-bytes-match-the-frozen-golden
+  ;; The refusal names the canonical scanned directory, which is
+  ;; machine-specific, so the workspace root is the one thing normalized.
+  (let [result (process/shell {:out :string :err :string :continue true}
+                              "bb" "-m" "clj-surgeon.core"
+                              ":op" ":ls-tree" ":dir" "docs/intent/study-ops")]
+    (is (= 1 (:exit result)))
+    (is (= (slurp refusal-golden-file)
+           (str/replace (:out result)
+                        (System/getProperty "user.dir")
+                        "<WORKSPACE>")))))
 
 ;; ============================================================
 ;; The format shadow that made a documented refusal unreachable

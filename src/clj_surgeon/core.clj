@@ -144,8 +144,14 @@
 ;; ============================================================
 
 (defn run-ls-tree
-  "CLI entrance: one study kernel scan, then print. No second implementation."
-  [{:keys [format] :as opts}]
+  "CLI entrance: one study kernel scan, then print. No second implementation.
+
+   `:format` is bound as `output-format` on purpose. Destructuring it as
+   `format` shadowed `clojure.core/format` for the whole body, which is how
+   the refusal branch once threw a NullPointerException instead of printing
+   its message. The shadow is harmless today only because nothing in the body
+   calls `format`; naming it away is what keeps it harmless."
+  [{output-format :format :as opts}]
   (let [scan (study/ls-tree opts)]
     (if-not (:ok scan)
       (do (println (:error scan))
@@ -153,7 +159,7 @@
       ;; The CLI has no byte budget, so it asks for the whole tree; the MCP
       ;; entrance grows the same `outline-take` only as far as its receipt fits.
       (let [projects (study/outline-all (:projects scan))]
-        (if (= format :edn)
+        (if (= output-format :edn)
           (study/format-ls-tree-edn projects (:dir scan))
           (study/format-ls-tree-text projects (:dir scan)))))))
 
