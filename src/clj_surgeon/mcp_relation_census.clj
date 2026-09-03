@@ -18,8 +18,8 @@
    [clojure.java.io :as io]
    [clojure.string :as str]))
 
-(def max-scanned-files 4000)
-(def max-source-bytes (* 2 1024 1024))
+(def max-scanned-files census/max-scanned-files)
+(def max-source-bytes census/max-source-bytes)
 (def max-receipt-bytes 4096)
 (def max-listed-sites 12)
 (def max-listed-files 12)
@@ -113,6 +113,78 @@
           :read_complete false
           :next_call next-call}
          data))
+
+;; ---------------------------------------------------------------------------
+;; Parameter validation (server-side; the advertised schema is only a hint)
+;; ---------------------------------------------------------------------------
+
+(def ^:private census-fields #{:files :doors :pool_size})
+
+;; @spec MCP-OP-CENSUS-016
+(defn validate-census-params
+  "Validate relation_census parameters before any filesystem work.
+
+   The JSON schema this tool advertises is a hint to a well-behaved caller. A
+   malformed call reaches the server anyway, so every bound the schema states is
+   re-checked here and refused with a typed reason and an executable next_call."
+  [params workspace-root]
+  (let [next-call (cond-> {:tool "relation_census" :pool_size 8}
+                    workspace-root (assoc :workspace_root workspace-root))
+        refuse (fn [reason message data]
+                 (refusal :invalid-mcp-request message next-call
+                          (merge {:reason (name reason)} data)))
+        unknown (vec (sort (map name (remove census-fields (keys params)))))
+        files (:files params)
+        doors (:doors params)
+        pool-size (:pool_size params)]
+    (cond
+      (seq unknown)
+      (refuse :unknown-fields
+              (str "relation_census does not accept " (str/join ", " unknown))
+              {:unknown unknown
+               :accepted (vec (sort (map name census-fields)))})
+
+      (and (some? files) (not (sequential? files)))
+      (refuse :files-not-an-array "files must be a JSON array of paths" {})
+
+      (and (some? files) (empty? files))
+      (refuse :empty-file-list
+              "files must name at least one path; omit files to census the tree"
+              {})
+
+      (and (some? files) (> (count files) census/max-requested-files))
+      (refuse :too-many-files
+              "files exceeds the maximum file count"
+              {:maximum census/max-requested-files :actual (count files)})
+
+      (and (some? files) (not (every? #(and (string? %) (not (str/blank? %))) files)))
+      (refuse :file-not-a-string "every entry in files must be a non-blank string" {})
+
+      (and (some? doors) (not (sequential? doors)))
+      (refuse :doors-not-an-array "doors must be a JSON array of symbols" {})
+
+      (and (some? doors) (> (count doors) census/max-doors))
+      (refuse :too-many-doors "doors exceeds the maximum door count"
+              {:maximum census/max-doors :actual (count doors)})
+
+      :else
+      (let [coerced (when (some? pool-size) (census/coerce-pool-size pool-size))]
+        (cond
+          (and coerced (not (:ok coerced)) (= :not-an-integer (:reason coerced)))
+          (refuse :pool-size-not-an-integer
+                  (str "pool_size must be an integer between 1 and "
+                       census/max-pool-size)
+                  {:maximum census/max-pool-size :value (:value coerced)})
+
+          (and coerced (not (:ok coerced)))
+          (refuse :pool-size-out-of-range
+                  (str "pool_size must be between 1 and " census/max-pool-size)
+                  {:maximum census/max-pool-size :value (:value coerced)})
+
+          :else
+          {:ok true
+           :params (cond-> params
+                     coerced (assoc :pool_size (:size coerced)))})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Discovery
@@ -216,7 +288,7 @@
 
 ;; @spec MCP-OP-CENSUS-013
 (defn- build-receipt
-  [{:keys [merged pool-size phases scanned]}]
+  [{:keys [merged pool-size requested-pool phases scanned]}]
   (let [counts (:counts merged)
         sites (:all-sites merged)]
     (bound-receipt
@@ -243,6 +315,9 @@
              :guarded (listed sites :guarded)
              :unknown (listed sites :unknown)
              :pool_size pool-size
+             :pool_size_requested (when (and requested-pool
+                                             (> requested-pool pool-size))
+                                    requested-pool)
              :phases_elapsed_ms phases
              :next_action (next-action counts)}))))
 
@@ -316,7 +391,8 @@
                         :doors (vec (sort (map str census/default-doors)))}
                        {:door (:invalid resolved-doors)
                         :known_doors (vec (sort (map str census/default-doors)))})
-              (let [pool-size (or pool_size (census-pool/default-pool-size))
+              (let [requested-pool (or pool_size (census-pool/default-pool-size))
+                    pool-size (census/effective-pool-size requested-pool)
                     t2 (System/nanoTime)
                     planned (census/plan {:inputs candidates
                                           :doors resolved-doors
@@ -331,6 +407,7 @@
                   (build-receipt
                     {:merged planned
                      :pool-size pool-size
+                     :requested-pool requested-pool
                      :scanned (count scanned)
                      :phases (-> {:discover (/ (- t1 t0) 1e6)
                                   :parse (/ (- t2 t1) 1e6)}
@@ -351,8 +428,12 @@
              :read_complete false
              :next_call {:tool "relation_census"
                          :workspace_root "<an existing absolute directory>"})
-      (assoc (execute-in-context! (:config routed) (:params routed))
-             :workspace_root (:workspace-root routed)))))
+      (let [validated (validate-census-params (:params routed)
+                                              (:workspace-root routed))]
+        (if-not (:ok validated)
+          (assoc validated :workspace_root (:workspace-root routed))
+          (assoc (execute-in-context! (:config routed) (:params validated))
+                 :workspace_root (:workspace-root routed)))))))
 
 (defn- summary
   [result]

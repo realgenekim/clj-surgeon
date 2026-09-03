@@ -16,6 +16,57 @@
 
 (def census-version 1)
 
+;; ---------------------------------------------------------------------------
+;; Shared bounds: one kernel for both entrances (MCP tool and CLI op)
+;; ---------------------------------------------------------------------------
+
+(def max-pool-size
+  "The largest plan-phase pool a caller may ask for."
+  64)
+
+(def max-requested-files
+  "The largest explicit file list a caller may pass."
+  512)
+
+(def max-doors
+  "The largest identity-door list a caller may pass."
+  32)
+
+(def max-source-bytes
+  "A single source larger than this is not censused."
+  (* 2 1024 1024))
+
+(def max-scanned-files
+  "Discovery stops after this many candidate sources."
+  4000)
+
+;; @spec MCP-OP-CENSUS-016
+(defn coerce-pool-size
+  "Pure pool-size kernel shared by the MCP tool and the CLI op.
+
+   Accepts an integer or its decimal digits (the CLI hands every value over as
+   a string). Returns {:ok true :size n} or a typed reason."
+  [value]
+  (let [text (str/trim (str value))
+        parsed (cond
+                 (integer? value) (long value)
+                 (re-matches #"\d{1,9}" text) (parse-long text)
+                 :else nil)]
+    (cond
+      (nil? parsed) {:ok false :reason :not-an-integer :value text}
+      (or (< parsed 1) (> parsed max-pool-size))
+      {:ok false :reason :out-of-range :value parsed :maximum max-pool-size}
+      :else {:ok true :size parsed})))
+
+;; @spec MCP-OP-CENSUS-016
+(defn effective-pool-size
+  "The pool a census may actually use: never more than the box has processors.
+
+   The one function in this namespace that reads the runtime rather than its
+   arguments; it changes elapsed time and never the answer."
+  [requested]
+  (max 1 (min (long requested) (.availableProcessors (Runtime/getRuntime)))))
+
 (def default-doors
   "Identity doors: a write routed through one of these is already keyed."
   #{'conj-once 'cons-once 'upsert-by 'conj-distinct-by 'cons-distinct-by})

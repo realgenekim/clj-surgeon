@@ -188,3 +188,55 @@
 (deftest the-default-doors-are-the-documented-set
   (is (= #{"conj-once" "cons-once" "upsert-by" "conj-distinct-by" "cons-distinct-by"}
          (set (map str census/default-doors)))))
+
+;; @spec MCP-OP-CENSUS-016
+(deftest bounds-pool-size-and-file-count-server-side
+  (testing "pool_size 0 refuses typed instead of failing inside the adapter"
+    (let [result (run {:files [fixture] :pool_size 0})]
+      (is (false? (:ok result)))
+      (is (= "invalid-mcp-request" (:error_type result)))
+      (is (= "pool-size-out-of-range" (:reason result)))
+      (is (nil? (:counts result)))
+      (is (= "relation_census" (get-in result [:next_call :tool])))
+      (is (= 8 (get-in result [:next_call :pool_size])))))
+
+  (testing "pool_size 4096 refuses instead of starting 4096 platform threads"
+    (let [result (run {:files [fixture] :pool_size 4096})]
+      (is (false? (:ok result)))
+      (is (= "invalid-mcp-request" (:error_type result)))
+      (is (= "pool-size-out-of-range" (:reason result)))
+      (is (= 64 (:maximum result)))))
+
+  (testing "a non-integer pool_size refuses typed"
+    (let [result (run {:files [fixture] :pool_size "many"})]
+      (is (false? (:ok result)))
+      (is (= "pool-size-not-an-integer" (:reason result)))))
+
+  (testing "a file list beyond the advertised maximum refuses before any read"
+    (let [result (run {:files (vec (repeat 513 fixture))})]
+      (is (false? (:ok result)))
+      (is (= "invalid-mcp-request" (:error_type result)))
+      (is (= "too-many-files" (:reason result)))
+      (is (= 512 (:maximum result)))
+      (is (= 513 (:actual result)))))
+
+  (testing "an empty file list refuses rather than silently censusing the tree"
+    (let [result (run {:files []})]
+      (is (false? (:ok result)))
+      (is (= "empty-file-list" (:reason result)))))
+
+  (testing "an unknown field refuses"
+    (let [result (run {:files [fixture] :threads 8})]
+      (is (false? (:ok result)))
+      (is (= "unknown-fields" (:reason result)))
+      (is (= ["threads"] (:unknown result)))))
+
+  (testing "the effective pool is capped at the box and the receipt says so"
+    (let [result (run {:files [fixture] :pool_size 64})
+          effective (min 64 (.availableProcessors (Runtime/getRuntime)))]
+      (is (true? (:ok result)))
+      (is (= effective (:pool_size result)))
+      (is (<= (:pool_size result) (.availableProcessors (Runtime/getRuntime))))
+      (if (< effective 64)
+        (is (= 64 (:pool_size_requested result)))
+        (is (nil? (:pool_size_requested result)))))))

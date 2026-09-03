@@ -5,11 +5,13 @@
    and never the answer: `clj-surgeon.relation-census/merge-results` re-keys by
    path, so an unordered pool cannot reorder the census."
   (:require
+   [clj-surgeon.relation-census :as census]
    [com.climate.claypoole :as cp]))
 
 (defn default-pool-size
+  "The pool used when the caller asks for none: the box's processor count."
   []
-  (max 1 (.availableProcessors (Runtime/getRuntime))))
+  (census/effective-pool-size census/max-pool-size))
 
 ;; @spec MCP-OP-CENSUS-010
 (defn pooled-map

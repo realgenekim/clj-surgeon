@@ -35,6 +35,10 @@ IDs are stable and must not be reused if a requirement is deleted.
 - [x] **MCP-OP-CENSUS-014**: If the workspace root does not resolve to an existing absolute directory, if no scanned file defines `defmethod fold-event` arms, if a scanned file cannot be parsed, or if a supplied door is not a symbol, shadows a collection write head, or is defined in no scanned file, clj-surgeon shall refuse with the corresponding typed reason, shall name the offending workspace, files, or door, shall publish no counts, and shall carry an executable `next_call`.
 - [x] **MCP-OP-CENSUS-015**: When clj-surgeon exposes the census, it shall expose it as the read-only `relation_census` MCP tool and as the `:relation-census` CLI op, and neither surface shall write any file.
 
+## Input bounds
+
+- [x] **MCP-OP-CENSUS-016**: When clj-surgeon receives a census request, it shall validate server-side, before any filesystem work, that no unknown field is present, that `files` when supplied is a non-empty array of at most 512 non-blank strings, that `doors` when supplied is an array of at most 32 entries, and that `pool_size` when supplied is an integer between 1 and 64, and it shall refuse a violation with a typed reason, the offending bound, and an executable `next_call`; when a valid `pool_size` exceeds the box's available processors, clj-surgeon shall run the plan phase on a pool of the available processors and shall publish both the pool it used and the pool that was requested.
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
