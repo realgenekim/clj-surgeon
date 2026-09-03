@@ -244,3 +244,5 @@ one lock-wait timeout killed a command mid-swap and left `study.clj` at HEAD for
 builder noticed and restored it — a hazard of file-swap witnesses under contention; later swaps used a
 bounded inner timeout with guaranteed restore. My full suites queued; push → re-review → queue.
 
+
+## 03:42Z — `bridge/q5z-alias-migration` pushed at 23ea871 (my suites: test-fast 734/6257 baseline five; full `make mcp-test` 409/4593 baseline one, oracle PASS). Re-review acb7e66e0b6224894 running (the seven probes re-run, the walk depth bound, the ceilings' refusal shape, retire-before-write, derived :committed, retention race, the hygiene gate on bb, the restored over-declare idiom on both entrances).
