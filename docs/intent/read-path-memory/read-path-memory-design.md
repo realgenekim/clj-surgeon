@@ -264,25 +264,112 @@ text at the cap).
 When the ceiling binds the caller gets one of two TYPED answers:
 
 - a **continuation** — the first `R` records plus `:next_call`, whose cursor is
-  `<offset>:<manifest-digest>`; or
+  `<cursor-id>:<offset>:<mac>`; or
 - a **refusal** — `:result-ceiling-exceeded`, when the caller passed
   `:complete true`, naming `R`, the observed count and what fits.
 
-The cursor is bound to a **manifest digest**, not to an offset alone: SHA-256
-over the ordered `<relative-path>\t<size>\t<mtime>` lines of the candidate list,
-folded one candidate at a time and never materialised. A page taken after the
-tree changed would silently interleave records from two different repositories,
-so it refuses with `:stale-result-cursor`.
+## Cursor integrity: a PINNED SNAPSHOT, not a re-derived digest
+
+The first design bound the cursor to a digest folded from
+`<relative-path>\t<size>\t<mtime>` per candidate, re-derived on every page.
+Sol's executed review (2026-09-03, findings 1, 2 and 7) killed it on three
+counts, and the first two were silent wrong results rather than refusals:
+
+1. A file whose BYTES changed while path, size and mtime were preserved paged
+   as unchanged, so page 2 served content page 1's tree never held.
+2. A cursor minted against one root was accepted against a DIFFERENT root whose
+   files carried the same stats.
+3. Re-deriving the digest per page made discovery `O(pages x N)`: two 1,000-record
+   pages over a 10,000-file corpus each folded all 10,000 stat rows.
+
+The remedy is PINNING rather than re-deriving. The first page that needs a
+cursor writes an immutable snapshot under the workspace state root
+(`~/.local/state/clj-surgeon/workspaces/<sha256 of canonical root>/ls-tree-cursors/<cursor-id>.edn`
+plus a `.rows` file): the ordered candidate list, and for every candidate its
+path, size, mtime and the SHA-256 of its CONTENT. Later pages are served FROM
+that snapshot. Four facts a caller's cursor can carry become four typed
+refusals, and each names a DIFFERENT fact:
+
+| the fact about the caller's cursor | the refusal |
+|---|---|
+| this server did not mint that token — the MAC does not verify | `:invalid-result-cursor` |
+| it did, but this root holds no such snapshot (another root, pruned, expired) | `:unknown-result-cursor` |
+| it did, and the offset is past the end of the pinned manifest | `:result-cursor-out-of-range` |
+| it did, and a file this page must serve no longer holds its pinned content | `:stale-result-cursor`, NAMING the path |
+
+The MAC is `sha256(cursor-id ‖ offset ‖ snapshot-secret)`, keyed on a
+per-snapshot secret that is written into the snapshot and NEVER returned to a
+caller. Keying it on the published manifest digest instead would let any holder
+of a receipt mint any offset, which is finding 2 rather than a fix for it.
+`:result-cursor-out-of-range` is deliberately distinct from
+`:invalid-result-cursor`: one says the token was not ours, the other says the
+token was ours and the position is not there. Before the range check a genuine
+cursor past the end returned an empty vector with no receipt — which every
+caller reads as a complete result.
+
+The snapshot costs nothing a scan under the ceiling would otherwise pay: a
+result at or under `R` needs no cursor, so it pins nothing, stats nothing and
+digests nothing. When it does pin, it is written STREAMING — one row rendered,
+digested, written and dropped — and read streaming, a transducer over
+`line-seq` keeping only the slice the page encodes. Heap is one 64 KB block
+buffer plus the page, at N = 10 and at N = 10,000 alike. The meta file is
+written last and renamed into place, so a snapshot is complete or absent; a
+crash mid-write leaves rows nobody can address and a cursor that resolves to
+`:unknown-result-cursor` rather than to a truncated manifest.
+
+**Every digest is taken AT ISSUE TIME, not lazily when a page is served.** The
+cheaper variant — digest each file only when its own page is read, so the
+scan's single read (MEM-015) pays for it — was considered and rejected, because
+it does not close the blocker. A digest computed when page 3 is served is taken
+AFTER any change between page 1 and page 3, so it pins the changed bytes and
+reports them as unchanged: exactly the silent wrong result finding 1 names,
+moved later in the sequence and made harder to see. A snapshot is only immutable
+if it is complete when it is taken. The measured price is one extra pass over
+the corpus's bytes on the page that pins — SHA-256 over the battery's 40 MB
+corpus, inside the 565 ms page 1 below — and pages that pin nothing (every scan
+at or under `R`) pay none of it.
+
+The price, stated plainly: **a continuation is a SNAPSHOT read, not a live
+one.** Files created after the snapshot are not in it and will not appear on
+later pages; a file deleted or rewritten refuses when its own page is served.
+That is the honest trade for a page that reads its own slice instead of
+re-walking the tree, and it is strictly safer than what it replaces, which
+interleaved two repositories without saying so. Callers who need the new file
+rescan, and the receipt names the snapshot so they can tell.
+
+### Measured, 2026-09-03 (10,000-file corpus, `:max-results 1000`)
+
+| page | wall | manifest rows folded | tree walks |
+|---|---:|---:|---:|
+| 1 — discovers and PINS | 565 ms | 10,000 (once, at issue) | 1 |
+| 2 — served FROM the pin | **152 ms** | **1,000** | **0** |
+
+Sol measured the re-derived design at 1,305 ms and 661 ms for the same two
+pages, each folding all 10,000 stat rows. The row fold is the number that
+matters: it was `O(pages x N)` and is now `O(page)`, so page cost stops growing
+with the repository. Wall time follows it, but wall time alone would not have
+distinguished a faster walk from no walk at all — which is why the witness
+counts calls rather than clocking them.
 
 ## Boundary
 
 - **It does not change outline CONTENT.** Every result at or under `R` is
   byte-identical to the batch encoder's, in both the text and EDN encodings, and
   in record order. The ceiling is invisible until it binds.
-- **It does not bound the WALK.** Per-file bytes, aggregate bytes, walk entries
-  and depth are `MCP-OP-MEM-002`'s; the bounded walker is q5z's. This row bounds
-  the ENCODER only, which is why discovery still holds one path string per
-  candidate.
+- **It bounds the CLI `ls-tree` ENCODER, and the EARS says so.** The requirement
+  names that encoder rather than "`ls-tree`" at large, because the untightened
+  wording claimed more than the code delivers (Sol, finding 12).
+- **It does not bound the WALK, and DISCOVERY STILL RETAINS AN N-SIZED PATH
+  COLLECTION.** `discover-projects` returns a vector of project maps each
+  holding a vector of every candidate's absolute path, and that vector is live
+  for the whole scan — one path string per file, growing linearly in N. It is
+  roughly two orders of magnitude smaller per file than the 9.4 KB outline this
+  row removed, which is why the battery's held line passes at 10,000 files, but
+  it is NOT zero and it is NOT bounded. A repository large enough for the path
+  collection alone to matter is still unbounded here. Per-file bytes, aggregate
+  bytes, walk entries and depth are `MCP-OP-MEM-002`'s; the bounded walker is
+  q5z's. Anyone reading the battery's green line as "`ls-tree` is bounded in N"
+  is reading more than this row proves.
 - **It is not a peak-heap promise.** Peak is heap-size dependent under G1 and is
   a trend line, not a gate. The promise is on retained result heap.
 - **A ceiling is never a silent truncation.** Every bounded result carries either
@@ -305,7 +392,15 @@ so it refuses with `:stale-result-cursor`.
   be lowered by any request; raising the server cap requires re-measuring the
   battery.
 - *A cursor is just an offset.* An offset alone silently interleaves two
-  different trees. The digest is what makes a second page honest.
+  different trees, and an offset nobody range-checks returns an empty page that
+  reads as a complete result. The MAC and the pinned snapshot are what make a
+  second page honest.
+- *Stat identity is content identity.* It is not. Path, size and mtime are all
+  preserved by a byte swap, and two different roots can carry identical stats.
+  Identity here is the SHA-256 of the file's CONTENT, pinned at issue time.
+- *The declared pool size is the concurrency.* Only if something MEASURES it.
+  `pmap` under a chunked window ran 33 outlines against a declared 18 while the
+  constant, the docstring and the window arithmetic all said 18.
 - *The materialiser window can be unbounded because the outlines are dropped.*
   The window is what the parallel materialiser holds in flight; it is a constant
   (`4 x pool`), and the retained-heap witness gates on `R + window`, not on `R`.
@@ -315,16 +410,32 @@ so it refuses with `:stale-result-cursor`.
 - A result of exactly `R` records is COMPLETE, carries no receipt, and equals
   the unbounded result exactly.
 - `R+1` candidates yield a continuation whose `:next_call` cursor parses to
-  `{:offset R :manifest-digest <64 hex>}`, and whose pages concatenate to the
-  unbounded result in the same order — a bounded result is the PREFIX of the
-  unbounded one, never a sample.
+  `{:cursor-id <64 hex> :offset R :mac <64 hex>}`, and whose pages concatenate
+  to the unbounded result in the same order — a bounded result is the PREFIX of
+  the unbounded one, never a sample.
 - With `:complete true`, `R+1` candidates refuse with `:error-type
   :result-ceiling-exceeded`, `:complete false`, `:source-unchanged true`, and a
   `:limit` naming `:requested`, `:server-max`, `:observed` and `:fits`. The
   remedy narrows the scope; it never says raise the heap.
-- A cursor issued before a file was added is refused as `:stale-result-cursor`
-  with the two digests named.
-- A malformed `:max-results` is `:invalid`, never silently promoted to the cap.
+- A cursor whose pinned file's BYTES changed under a preserved path, size and
+  mtime is refused as `:stale-result-cursor`, naming the path and both digests.
+- A cursor minted against another root is `:unknown-result-cursor`; a forged
+  offset is `:invalid-result-cursor`; a genuine offset past the end is
+  `:result-cursor-out-of-range`, naming the offset and the manifest total. None
+  of the four is ever an empty vector without a receipt.
+- A malformed `:max-results` is `:invalid`, never silently promoted to the cap;
+  a 40-digit `:max-results` or cursor offset is that same typed refusal, never a
+  `NumberFormatException`.
+- The ceiling is exercised at the SHIPPED server value `R = 1000`, not only at a
+  caller-lowered fixture ceiling.
+- Measured maximum outline concurrency is at or below `outline-pool-size`, taken
+  with the scan instrumented and separately proved non-serial (a serial peak
+  would make the bound vacuous), and `outline-window-size` is a fixed multiple
+  of the pool at every corpus size.
+- A continuation page performs NO discovery: it reads its own slice of the
+  pinned rows and nothing else.
+- An empty scan prints what it searched and exits 1 — never a receipt whose
+  `:error` is nil.
 - Retained heap tracks `R`, not `N`: at a fixed `R`, scanning 8x the files must
   not retain measurably more, and an unbounded control on the same corpus must
   retain measurably more than both — otherwise the witness is measuring nothing.
