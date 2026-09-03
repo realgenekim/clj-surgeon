@@ -50,7 +50,10 @@ In the requirements below:
   the 1,000-file peak, keep 10,000-file after-GC retention within 8 MiB of
   1,000-file after-GC retention, and refuse before any mutation when the request
   is over budget; and the battery shall report any of those lines it did not
-  observe as UNMEASURED rather than as a pass.
+  observe as UNMEASURED rather than as a pass, terminating in exactly one of
+  PASS, FAIL or INCOMPLETE, where a run with no failures and at least one
+  UNMEASURED line terminates INCOMPLETE with a nonzero exit distinct from both
+  PASS and FAIL.
 
 ## Misreadings
 
@@ -75,6 +78,12 @@ MCP-OP-MEM-011:
   cross-N lines are defined at 1,000 and 10,000. A missing 10,000 is UNMEASURED.
 - "No operation reports a reserved peak yet, so that line passes." An
   unobserved line is not a satisfied line.
+- "Mark the run incomplete but exit 0, since nothing measured failed." Exit
+  status is what a release gate reads. An INCOMPLETE run that exits 0 is a pass
+  in every way that matters, whatever the table prints above it.
+- "INCOMPLETE is just a FAIL, so give it exit 1." Then no caller can tell an
+  operation that broke a line from a line nobody measured, and the two have
+  opposite remedies.
 - "The bounded run produced a result, so output parity holds." Parity is against
   a cached unbounded reference hash; with no reference, parity is UNMEASURED.
 - "Raise `-Xmx` until the battery is green." The budget is the requirement.
@@ -106,6 +115,9 @@ MCP-OP-MEM-011:
   scope for its current arms: the 450 x 1.9 MiB aggregate-admission case, and
   injected conflict at staging, validation, every commit boundary, and rollback.
   They belong with the transactional kernel.
+- A run that both fails a measured line and leaves another unobserved is a FAIL:
+  the failure outranks the unmeasured line for the exit code, and the verdict row
+  says `FAIL (INCOMPLETE)` so the unobserved line is not lost.
 - Wall time and spill bytes MAY grow with N; the battery records them and does
   not gate on them, except that an operation exceeding `MEMBAT_OP_TIMEOUT_MS`
   causes its larger N cells to be recorded as skipped, which makes the cross-N

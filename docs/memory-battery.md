@@ -49,10 +49,17 @@ To force a fresh reference after changing an operation's output shape, delete
 
 | code | meaning |
 |---|---|
-| 0 | every measured pass line held |
-| 1 | at least one pass line failed |
-| 2 | refusal — bad environment (root missing, trees incomplete, wrong heap for the mode) |
+| 0 | **PASS** — every pass line was observed and held |
+| 1 | **FAIL** — at least one pass line failed |
+| 2 | refusal — bad environment (root missing, trees incomplete, wrong heap for the mode, stale reference attestation) |
 | 3 | tool failure — an operation threw something that is not an `OutOfMemoryError` |
+| 4 | **INCOMPLETE** — nothing measured failed, but at least one line was never observed |
+
+There are **three terminal states**, not two. `INCOMPLETE` is nonzero on purpose:
+an all-green run that never observed a line is not evidence of boundedness, and a
+release gate must block on it. It is separate from `FAIL` because nothing that was
+measured actually broke — the remedy is to measure the missing line, not to fix an
+operation.
 
 ---
 
@@ -88,8 +95,9 @@ operation did not leak.
 ### UNMEASURED is not a pass
 
 Three lines report **UNMEASURED** rather than passing when their inputs were not
-observed, and any unmeasured line sets `:complete? false` and prints
-`(INCOMPLETE)` on the verdict row:
+observed. Any unmeasured line sets `:complete? false`, makes `:pass?` false, and
+drives the terminal state to `INCOMPLETE` (exit 4) unless a real failure outranks
+it:
 
 - `reserved-peak-over-budget` — no operation on this branch has an admission
   accountant, so nothing reports an attributable reserved peak. The sampled
@@ -98,8 +106,10 @@ observed, and any unmeasured line sets `:complete? false` and prints
   10,000 files, e.g. because a smaller N blew `MEMBAT_OP_TIMEOUT_MS`.
 - `reference-mismatch` — no cached unbounded reference hash to compare against.
 
-An exit code of 0 with `(INCOMPLETE)` means "nothing I measured failed", not
-"the operation is bounded". Read the UNMEASURED rows.
+A run whose only problem is an unobserved line prints `verdict: INCOMPLETE` and
+exits **4**. It never prints `PASS` and never exits 0. `FAIL (INCOMPLETE)` means
+both happened: something measured broke *and* something else was never observed;
+the failure wins the exit code. Read the UNMEASURED rows in either case.
 
 ### Two of Sol's lines this battery does not run
 

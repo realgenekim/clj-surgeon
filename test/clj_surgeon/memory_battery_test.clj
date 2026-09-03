@@ -84,7 +84,32 @@
   (is (= 0 (:pass battery/exit-codes)))
   (is (= 1 (:fail battery/exit-codes)))
   (is (= 2 (:refusal battery/exit-codes)))
-  (is (= 3 (:tool-failure battery/exit-codes))))
+  (is (= 3 (:tool-failure battery/exit-codes)))
+  (is (= 4 (:incomplete battery/exit-codes))
+      "INCOMPLETE is a third terminal state with its own nonzero release-gate exit"))
+
+;; @spec MCP-OP-MEM-011
+(deftest an-all-green-but-unmeasured-run-is-incomplete-never-a-pass
+  (testing "every measured line held, but a line was never observed"
+    (let [cells (mapv #(assoc % :heap-reserved-peak-mb nil) (clean-cells))
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= [] (:failures result)))
+      (is (false? (:complete? result)))
+      (is (= :incomplete (:status result)))
+      (is (false? (:pass? result))
+          "an unobserved line is never a pass")
+      (is (= 4 (:exit result))
+          "INCOMPLETE blocks the release gate with its own exit code")))
+  (testing "a failure outranks an unmeasured line"
+    (let [cells (conj (mapv #(assoc % :heap-reserved-peak-mb nil) (clean-cells))
+                      (cell :ls-tree 10000 :fresh 400.0 60.0 :oom? true))
+          result (battery/verdict {:xmx-mb 512 :cells cells})]
+      (is (= :fail (:status result)))
+      (is (= 1 (:exit result)))))
+  (testing "the table names the terminal state"
+    (let [cells (mapv #(assoc % :heap-reserved-peak-mb nil) (clean-cells))]
+      (is (str/includes? (battery/render-table {:xmx-mb 512 :cells cells})
+                         "verdict: INCOMPLETE   exit 4")))))
 
 ;; ------------------------------------------------------------------
 ;; The five pass lines
@@ -95,6 +120,8 @@
 (deftest a-flat-battery-passes-every-line
   (let [result (battery/verdict {:xmx-mb 512 :cells (clean-cells)})]
     (is (true? (:pass? result)))
+    (is (= :pass (:status result)))
+    (is (true? (:complete? result)))
     (is (= [] (:failures result)))
     (is (= 0 (:exit result)))))
 

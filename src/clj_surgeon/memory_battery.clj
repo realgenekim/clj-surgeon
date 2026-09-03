@@ -48,11 +48,17 @@
    :scale-large-n           10000})
 
 (def exit-codes
-  "Process exit contract for `make memory-battery`."
+  "Process exit contract for `make memory-battery`.
+
+  Three TERMINAL states, not two. `:incomplete` exists because an all-green run
+  that never observed a line is not a pass: exit 0 would let a release gate
+  through on lines nobody measured. It is distinct from `:fail` because nothing
+  measured actually broke — the remedy is to measure, not to fix."
   {:pass         0
    :fail         1
    :refusal      2
-   :tool-failure 3})
+   :tool-failure 3
+   :incomplete   4})
 
 (def tree-scales
   "The file counts the battery builds and measures."
@@ -173,13 +179,16 @@
            :heap-reserved-peak-mb :heap-result-retained-mb
            :oom? :result-hash :reference-hash}
 
-  Output: {:pass? bool :complete? bool :exit int
+  Output: {:status #{:pass :fail :incomplete}
+           :pass? bool :complete? bool :exit int
            :failures [...] :unmeasured [...]}
 
   `:complete?` is false when a line could not be evaluated (for example the
   10,000-file case was skipped for wall-clock reasons, or no admission
   accountant reports a reserved peak). An unmeasured line is never counted as
-  a pass."
+  a pass: with no failures and something unobserved the terminal state is
+  `:incomplete`, `:pass?` is false, and the exit code is the distinct nonzero
+  `:incomplete` code so a release gate blocks on it."
   [{:keys [xmx-mb cells]}]
   (let [measured (remove :skipped? cells)
         per-cell (vec (mapcat #(cell-failures xmx-mb %) measured))
@@ -207,12 +216,17 @@
         unmeasured (vec (keep (fn [[status m]]
                                 (when (= :unmeasured status) m))
                               op-results))
-        failures (vec (concat per-cell op-failures))]
-    {:pass? (empty? failures)
+        failures (vec (concat per-cell op-failures))
+        status (cond
+                 (seq failures) :fail
+                 (seq unmeasured) :incomplete
+                 :else :pass)]
+    {:status status
+     :pass? (= :pass status)
      :complete? (empty? unmeasured)
      :failures failures
      :unmeasured unmeasured
-     :exit (if (empty? failures) (:pass exit-codes) (:fail exit-codes))}))
+     :exit (get exit-codes status)}))
 
 ;; ============================================================
 ;; One-screen table
@@ -282,8 +296,14 @@
          sep header sep]
         rows
         [sep
-         (str "verdict: " (if (:pass? v) "PASS" "FAIL")
-              (when-not (:complete? v) " (INCOMPLETE)")
+         (str "verdict: "
+              (case (:status v)
+                :pass "PASS"
+                :incomplete "INCOMPLETE"
+                "FAIL")
+              ;; A run that both failed and left lines unobserved says so.
+              (when (and (= :fail (:status v)) (not (:complete? v)))
+                " (INCOMPLETE)")
               "   exit " (:exit v))]
         (for [f (:failures v)]
           (str "  FAIL " (name (:line f)) " " (pr-str (dissoc f :line))))
