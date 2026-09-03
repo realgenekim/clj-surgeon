@@ -13,6 +13,7 @@
    [babashka.fs :as fs]
    [babashka.process]
    [clj-surgeon.analyze :as analyze]
+   [clj-surgeon.mcp-paths :as mcp-paths]
    [clj-surgeon.outline :as outline]
    [clojure.edn :as edn]
    [clojure.string :as str]))
@@ -76,10 +77,15 @@
   (let [rel (str (fs/relativize root path))]
     (boolean (some skip-dirs (str/split rel #"/")))))
 
+;; @spec MCP-OP-STUDY-014
 (defn- find-build-files
   "Find deps.edn, project.clj, bb.edn under dir, skipping hidden/cache dirs.
-   Uses system find with -prune for speed (~10x faster than fs/glob on large trees)."
-  [dir]
+   Uses system find with -prune for speed (~10x faster than fs/glob on large trees).
+
+   Every hit is re-resolved against the canonical scan root: `find` reports a
+   symlink by the LINK's own name, so a `deps.edn` symlinked out of the root
+   would otherwise be slurped and read as a build file."
+  [root dir]
   (try
     (let [;; argv, never `sh -c`: a workspace-confined directory name must not
           ;; be able to reach a shell from the MCP read entrance.
@@ -95,6 +101,7 @@
       (if (zero? (:exit result))
         (->> (str/split-lines (str/trim (:out result)))
              (remove str/blank?)
+             (filter #(some? (mcp-paths/real-path-within root %)))
              sort
              vec)
         []))
@@ -141,9 +148,17 @@
                                                  (slurp (str build-file))))
       (catch Exception _e ["src"]))))
 
+;; @spec MCP-OP-STUDY-014
 (defn- find-clj-files
-  "Find all .clj/.cljs/.cljc files under a directory using system find."
-  [dir]
+  "Find all .clj/.cljs/.cljc files under a directory using system find.
+
+   Every hit is re-resolved against the canonical scan root and dropped when
+   its realpath lands outside: `find` reports a symlink by the LINK's own
+   name, so `src/leak.clj -> /etc/passwd` matches `-name '*.clj'` and would
+   otherwise be outlined — that is, slurped — even though its bytes are
+   outside the root. The path RETURNED is the one the walk produced, so the
+   scan-relative rendering is unchanged; only escapes are removed."
+  [root dir]
   (when (fs/directory? dir)
     (try
       (let [result (babashka.process/shell
@@ -152,25 +167,39 @@
                      "-name" "*.clj" "-o" "-name" "*.cljs" "-o" "-name" "*.cljc")]
         (when (zero? (:exit result))
           (->> (str/split-lines (str/trim (:out result)))
-               (remove str/blank?))))
+               (remove str/blank?)
+               (filter #(some? (mcp-paths/real-path-within root %))))))
       (catch Exception _e nil))))
+
+;; @spec MCP-OP-STUDY-014
+(defn- confined-source-dirs
+  "Resolve a build file's declared source paths under its project root,
+   keeping only those that stay inside the canonical scan root.
+
+   `(fs/path project-root \"../../..\")` is NOT normalized by `fs/path`, so an
+   unnormalized escape used to be handed straight to `find` and moved the
+   whole scan outside the root."
+  [root project-root src-paths]
+  (keep #(mcp-paths/normalized-path-within root project-root %) src-paths))
 
 (defn- discover-projects
   "Find projects under dir via build files. Returns [{:name :root :files}].
-   Falls back to recursive scan if no build files found."
-  [dir]
+   Falls back to recursive scan if no build files found.
+
+   `root` is the canonical scan root: nothing outside it is discovered."
+  [root dir]
   (let [dir (fs/path dir)
-        build-files (find-build-files dir)
+        build-files (find-build-files root dir)
         ;; Group by project root, keep first build file per root
         by-root (group-by #(str (fs/parent %)) build-files)]
     (if (seq by-root)
       (->> by-root
-           (map (fn [[root files]]
+           (map (fn [[project-root files]]
                   (let [build-file (first files)
                         src-paths (extract-source-paths build-file)
-                        root-path (fs/path root)
-                        clj-files (->> src-paths
-                                       (mapcat #(find-clj-files (fs/path root %)))
+                        root-path (fs/path project-root)
+                        clj-files (->> (confined-source-dirs root root-path src-paths)
+                                       (mapcat #(find-clj-files root %))
                                        (map str)
                                        sort
                                        vec)]
@@ -181,7 +210,7 @@
            (sort-by :name)
            vec)
       ;; No build files — fallback to recursive scan
-      (let [clj-files (->> (find-clj-files dir)
+      (let [clj-files (->> (find-clj-files root dir)
                            (remove #(in-skip-dir? % dir))
                            (map str)
                            sort
@@ -408,11 +437,14 @@
           {:build-file found :root (str dir)}
           (recur (fs/parent dir)))))))
 
+;; @spec MCP-OP-STUDY-014
 (defn- discover-projects-grep
   "Fast path: use rg/grep results to build project list without globbing.
    For projects with matching deps.edn: find all their source files.
-   For individual matching source files: group by nearest project root."
-  [grep-hits dir]
+   For individual matching source files: group by nearest project root.
+
+   `root` is the canonical scan root; `grep-hits` are already confined to it."
+  [root grep-hits dir]
   (let [build-files #{"deps.edn" "project.clj" "bb.edn"}
         {build-hits true src-hits false}
         (group-by #(contains? build-files (str (fs/file-name %))) grep-hits)
@@ -421,15 +453,16 @@
         build-projects
         (->> (or build-hits [])
              (map (fn [bf]
-                    (let [root (str (fs/parent (fs/path bf)))
+                    (let [project-root (str (fs/parent (fs/path bf)))
                           src-paths (extract-source-paths bf)
-                          clj-files (->> src-paths
-                                         (mapcat #(find-clj-files (str root "/" %)))
+                          clj-files (->> (confined-source-dirs
+                                           root (fs/path project-root) src-paths)
+                                         (mapcat #(find-clj-files root %))
                                          (remove nil?)
                                          sort
                                          vec)]
-                      {:name (str (fs/file-name (fs/path root)))
-                       :root root
+                      {:name (str (fs/file-name (fs/path project-root)))
+                       :root project-root
                        :files clj-files})))
              (remove #(empty? (:files %))))
 
@@ -461,6 +494,16 @@
 ;; ============================================================
 ;; :ls-tree kernel — directory in, data out
 ;; ============================================================
+
+;; @spec MCP-OP-STUDY-014
+(defn- canonical-scan-root
+  "The canonical realpath of the directory to scan, or nil when it is not an
+   existing directory. Everything discovery reports must resolve inside it."
+  [dir]
+  (try
+    (let [root (mcp-paths/real-root dir)]
+      (when (fs/directory? (str root)) root))
+    (catch Exception _e nil)))
 
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-012
@@ -501,14 +544,27 @@
      :ns-grep ns-grep
      :error "Error: :ns-grep must not start with '-'"}
 
+    (nil? (canonical-scan-root dir))
+    {:ok false
+     :error-type :dir-not-found
+     :dir (str (fs/absolutize dir))
+     :error (format "Error: :dir %s is not an existing directory" dir)}
+
     :else
-    (let [dir (str (fs/absolutize dir))
+    ;; The canonical realpath of the scanned directory IS the confinement
+    ;; boundary for everything discovery reports. `fs/absolutize` alone left
+    ;; symlinked components unresolved, so a realpath comparison against it
+    ;; could not be made at all.
+    (let [root (canonical-scan-root dir)
+          dir (str root)
           discovered (if grep
                        ;; Fast path: rg first, skip expensive directory globbing
-                       (let [hits (grep-tree grep dir)]
-                         (discover-projects-grep hits dir))
+                       (let [hits (->> (grep-tree grep dir)
+                                       (filter #(some? (mcp-paths/real-path-within
+                                                         root %))))]
+                         (discover-projects-grep root hits dir))
                        ;; Full scan: discover all projects
-                       (discover-projects dir))
+                       (discover-projects root dir))
           projects (if ns-grep
                      (filter-projects-by-ns-grep discovered dir ns-grep)
                      discovered)]

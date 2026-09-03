@@ -168,6 +168,51 @@
               (fs/delete-if-exists build-file))))))))
 
 ;; ============================================================
+;; Discovery is confined to the canonical scan root
+;; ============================================================
+
+(defn- build-confinement-fixture!
+  "A scan root holding exactly one real source file, plus the two escapes the
+   red team executed: a .clj SYMLINK whose target is outside the root, and a
+   sibling project whose deps.edn declares an unnormalized parent-traversal
+   source path. `<tmp>/a/b` is the scan root, so the traversal escape lands on
+   `<tmp>` — small and bounded — rather than on `/` or `/tmp`."
+  [tmp]
+  (let [scan-root (str (fs/path tmp "a" "b"))]
+    (fs/create-dirs (str (fs/path scan-root "proj" "src")))
+    (fs/create-dirs (str (fs/path scan-root "escape")))
+    (spit (str (fs/path scan-root "proj" "deps.edn")) "{:paths [\"src\"]}")
+    (spit (str (fs/path scan-root "proj" "src" "real.clj"))
+          "(ns real)\n(defn only-file [] :ok)")
+    (fs/create-sym-link (str (fs/path scan-root "proj" "src" "leak.clj"))
+                        "/etc/passwd")
+    ;; `<scan-root>/escape/../../..` normalizes to <tmp>
+    (spit (str (fs/path scan-root "escape" "deps.edn")) "{:paths [\"../../..\"]}")
+    (spit (str (fs/path tmp "decoy.clj")) "(ns decoy)\n(defn decoy-fn [] :no)")
+    scan-root))
+
+;; @spec MCP-OP-STUDY-014
+(deftest ls-tree-kernel-drops-paths-that-resolve-outside-the-scan-root
+  ;; Both escapes executed against the branch bytes: `find` reports a symlink
+  ;; by the LINK's own name, so `src/leak.clj -> /etc/passwd` matched
+  ;; `-name '*.clj'` and was outlined (slurped); and `(fs/path root "../../..")`
+  ;; was NOT normalized, so a scanned deps.edn could move discovery outside the
+  ;; root entirely.
+  (with-temp-dir
+    (fn [tmp]
+      (let [scan-root (build-confinement-fixture! tmp)
+            result (study/ls-tree {:dir scan-root})
+            files (mapcat :files (:projects result))]
+        (is (true? (:ok result)))
+        (is (= 1 (count files))
+            "exactly the one real source file inside the scan root")
+        (is (str/ends-with? (first files) "/proj/src/real.clj"))
+        (is (not-any? #(str/includes? % "leak") files)
+            "a .clj symlink whose realpath is outside the root must be dropped")
+        (is (not-any? #(str/includes? % "decoy") files)
+            "an unnormalized :paths traversal must not move the scan out")))))
+
+;; ============================================================
 ;; One kernel: the CLI handler adds print, never a second answer
 ;; ============================================================
 

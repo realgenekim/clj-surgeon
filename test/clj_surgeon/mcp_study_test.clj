@@ -253,6 +253,54 @@
         (is (nil? (:files response)))))))
 
 ;; @spec MCP-OP-STUDY-006
+;; @spec MCP-OP-STUDY-014
+(deftest ls-tree-does-not-read-through-a-symlink-out-of-the-root
+  ;; The MCP-OP-STUDY-006 falsifier the suite promised ("a symlink out of the
+  ;; root") but did not have. Two escapes, both executed against the branch
+  ;; bytes: `find` reports a symlink by the LINK's own name, so
+  ;; `src/leak.clj -> /etc/passwd` matched `-name '*.clj'` and was outlined —
+  ;; that is, slurped; and `:paths ["../../.."]` in a scanned deps.edn reached
+  ;; `find` unnormalized and moved the whole scan outside the root.
+  ;;
+  ;; `<fixture>/a/b` is the scanned directory, so the traversal escape lands on
+  ;; `<fixture>` and its decoy file — bounded, deterministic, and off the
+  ;; workspace's real sources.
+  (with-scratch-project
+    "test-fixtures/study/scratch-confine"
+    (fn [dir]
+      (let [scan-root (str (fs/path dir "a" "b"))]
+        (write-clj-file! (str (fs/path scan-root "proj" "src" "real.clj"))
+                         "(ns real)"
+                         "(defn only-file [] :ok)")
+        (spit (str (fs/path scan-root "proj" "deps.edn")) "{:paths [\"src\"]}")
+        (fs/create-sym-link (str (fs/path scan-root "proj" "src" "leak.clj"))
+                            "/etc/passwd")
+        (fs/create-dirs (str (fs/path scan-root "escape")))
+        (spit (str (fs/path scan-root "escape" "deps.edn"))
+              "{:paths [\"../../..\"]}")
+        (write-clj-file! (str (fs/path dir "decoy.clj"))
+                         "(ns decoy)"
+                         "(defn decoy-fn [] :no)")))
+    (fn []
+      (let [rel-dir "test-fixtures/study/scratch-confine/a/b"]
+        (doseq [output-format ["names" "edn" "text"]]
+          (testing output-format
+            (let [response (run {"mode" "ls-tree" "dir" rel-dir
+                                 "format" output-format "limit" 16384})
+                  payload (pr-str (select-keys response [:tree :files]))]
+              (is (true? (:ok response)))
+              (is (= 1 (:file_count response))
+                  "exactly the one real source file inside the scan root")
+              (is (= 1 (:returned response)))
+              (is (str/includes? payload "real.clj"))
+              (is (not (str/includes? payload "leak"))
+                  "a .clj symlink resolving out of the root must not be listed")
+              (is (not (str/includes? payload "root:"))
+                  "and its bytes must never be read")
+              (is (not (str/includes? payload "decoy"))
+                  "an unnormalized :paths traversal must not move the scan out"))))))))
+
+;; @spec MCP-OP-STUDY-006
 (deftest ls-tree-refuses-a-directory-without-clojure-sources
   (let [response (run {"mode" "ls-tree" "dir" "docs/intent/study-ops"})]
     (is (false? (:ok response)))

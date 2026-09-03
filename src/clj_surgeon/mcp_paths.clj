@@ -79,6 +79,41 @@
       (catch Exception error
         (path-refusal :invalid-source-path (.getMessage error) relative)))))
 
+;; @spec MCP-OP-STUDY-014
+(defn real-path-within
+  "Return an absolute path's canonical realpath when it stays inside canonical
+  root, and nil otherwise.
+
+  The filesystem half of DISCOVERY confinement — the same resolve-then-compare
+  `resolve-source-path` already makes for one caller-named file, applied to a
+  path a directory walk produced. `find` reports a symlink by the LINK's own
+  name, so `src/leak.clj -> /etc/passwd` matches `-name '*.clj'` and can only
+  be recognised as an escape after resolution. A path that does not exist or
+  cannot be resolved is not within the root.
+
+  Adds no confinement policy and relaxes no existing check."
+  ^Path [^Path root path]
+  (try
+    (let [real (.toRealPath (Paths/get (str path) (make-array String 0))
+                            (make-array LinkOption 0))]
+      (when (.startsWith real root) real))
+    (catch Exception _ nil)))
+
+;; @spec MCP-OP-STUDY-014
+(defn normalized-path-within
+  "Return `base` resolved against `child` and lexically normalized, when the
+  result stays inside canonical root; nil otherwise.
+
+  The lexical half of discovery confinement, for a path a BUILD FILE declared
+  rather than one a caller named: `:paths [\"../../..\"]` in a scanned
+  deps.edn must not move the scan outside the root. Performs no I/O — pair it
+  with `real-path-within` on whatever the walk then finds."
+  ^Path [^Path root ^Path base child]
+  (try
+    (let [normalized (.normalize (.resolve base (str child)))]
+      (when (.startsWith normalized root) normalized))
+    (catch Exception _ nil)))
+
 (defn resolve-new-source-path
   "Resolve one absent source path below a real project-confined ancestor.
 
