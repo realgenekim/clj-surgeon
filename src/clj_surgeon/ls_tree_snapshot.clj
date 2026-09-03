@@ -590,7 +590,13 @@
    `{:path p}` — or `nil` when every row resolves inside it.
 
    Checked BEFORE staleness and before any candidate is built, so an
-   unconfined row is never opened: the refusal costs no read at all."
+   unconfined row is never opened: the refusal costs no read at all.
+
+   That claim is about the WHOLE refusal, not only the offending row, and it
+   was false when it was first written — `stale-row` was a sibling `let`
+   binding in `run-pinned-page`, evaluated regardless, so every confined row
+   before the offending one was digested. It is a `delay` now, and
+   `an-unconfined-row-refusal-really-costs-no-read` counts the reads."
   [root rows]
   (some (fn [{:keys [p]}] (when-not (row-file root p) {:path p})) rows))
 
@@ -601,7 +607,8 @@
    `:observed` is `nil` for a file that has been deleted, which reads as
    exactly what it is in the refusal — and for an unconfined row, which is
    never opened here; `unconfined-row` names that case properly and runs
-   first."
+   first. Its caller must not evaluate this until confinement has passed, or
+   the confinement refusal costs the reads this one would have made."
   [root rows]
   (some (fn [{:keys [p h]}]
           (let [f (row-file root p)

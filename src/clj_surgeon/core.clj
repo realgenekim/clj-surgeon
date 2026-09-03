@@ -903,7 +903,13 @@
               slice (min ceiling remaining)
               rows (:rows page)
               unconfined (snapshot/unconfined-row abs rows)
-              stale (snapshot/stale-row abs rows)
+              ;; A DELAY, not a sibling binding. `unconfined-row` promises the
+              ;; confinement refusal costs no read, and a sibling `let` broke
+              ;; that promise quietly: `stale-row` digests every confined row
+              ;; before the offending one whether or not confinement refuses.
+              ;; The order of the `cond` below is the whole point of the
+              ;; promise, so the evaluation has to follow it.
+              stale (delay (snapshot/stale-row abs rows))
               request (assoc base :digest (:digest snap) :total total
                              :offset offset)]
           (cond
@@ -926,8 +932,8 @@
             (render (budget/unconfined-row-refusal
                       (assoc base :path (:path unconfined))))
 
-            stale
-            (render (budget/stale-cursor-refusal (merge base stale)))
+            @stale
+            (render (budget/stale-cursor-refusal (merge base @stale)))
 
             (and complete over?)
             (render (budget/ceiling-refusal
