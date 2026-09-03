@@ -18,20 +18,20 @@
    [clj-surgeon.core :as core]
    [clojure.test :refer [deftest is testing]]))
 
-(def ^:private andon-fixture-root
-  "Every fixture and canary written by this namespace lives under this root."
-  "/tmp/andon-fx")
-
 (def ^:private find-build-files
   "Private discovery helper under test; the reviewer's direct reproduction."
   #'clj-surgeon.core/find-build-files)
 
 (defn- fresh-sandbox
-  "Create and return a unique sandbox directory for one witness."
+  "Create and return a unique sandbox directory for one witness.
+
+   `fs/create-temp-dir` and not a fixed root: this namespace runs in BOTH
+   `test/run_all.clj` and `test/clj_surgeon/mcp_test_runner.clj`, which the
+   fleet runs concurrently, and a fixed `/tmp/<name>` root is owned by whoever
+   created it first — on a shared box that breaks the suite for every other
+   user with no code change. The repo idiom is `create-temp-dir` (55 sites)."
   []
-  (let [dir (fs/path andon-fixture-root (str "shell-safety-" (random-uuid)))]
-    (fs/create-dirs dir)
-    dir))
+  (fs/create-temp-dir {:prefix "andon-shell-safety"}))
 
 (defn- make-project!
   "Create a minimal deps.edn project named `name` under `root`."
@@ -82,7 +82,7 @@
               ;; Catch so the canary assertion is reported independently of any
               ;; downstream throw; a green run never throws here.
               result  (try (core/run-ls-tree {:dir hostile :format :edn})
-                           (catch Throwable t {:threw (.getMessage t)}))]
+                           (catch Exception t {:threw (.getMessage t)}))]
           (is (not (fs/exists? canary))
               "canary must not exist: the :ls-tree entrance must never shell out on :dir")
           (is (= :workspace-root-not-a-directory (:error-type result))
@@ -96,7 +96,7 @@
         (let [canary  (str (fs/path sandbox "PWNED-E2E-SUBST"))
               hostile (str (fs/path sandbox "H") "$(touch " canary ")")
               result  (try (core/run-ls-tree {:dir hostile :format :edn})
-                           (catch Throwable t {:threw (.getMessage t)}))]
+                           (catch Exception t {:threw (.getMessage t)}))]
           (is (not (fs/exists? canary))
               "canary must not exist: the :ls-tree entrance must never shell out on :dir")
           (is (= :workspace-root-not-a-directory (:error-type result))
