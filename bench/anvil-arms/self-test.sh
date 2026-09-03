@@ -108,6 +108,11 @@ done
 WORK=${ANVIL_ARMS_SELFTEST_DIR:-$(mktemp -d "$ARMS_ROOT_BASE/selftest.XXXXXX")}
 CLEAN=${ANVIL_ARMS_SELFTEST_KEEP:-0}
 PASS=0; FAIL=0
+# The tally LEDGER (case 45).  Every `tally <id>` call appends one row here, so what
+# the suite folded into its totals is a RUNTIME ARTIFACT of this run, never a claim
+# about this file's source text.
+TALLY_LEDGER="$WORK/tallied"
+: > "$TALLY_LEDGER"
 
 # THE SHELL-ERROR TRAP.  Sol round three, finding (5): a backticked word inside a
 # double-quoted case header EXECUTED -- `self-test.sh: line 941: end: command not
@@ -122,6 +127,26 @@ exec 3>&2 2>"$STDERR_LOG"
 
 ok   () { PASS=$((PASS+1)); printf 'ok   %s\n' "$1"; }
 bad  () { FAIL=$((FAIL+1)); printf 'FAIL %s\n' "$1"; }
+tally () { # tally <id> -- fold ONE python-heredoc case's own ok/FAIL lines into the
+  # suite totals, and record what was folded.  Rounds eight and nine tried to VERIFY
+  # these foldings by parsing self-test.sh's own source text, and shipped the same
+  # species of defect twice: source text is not execution.  Round nine's exact
+  # character-for-character parser accepted a tally-shaped line sitting inside an
+  # inert quoted heredoc -- a visible `FAIL case35d heredoc-probe` still summarised
+  # "386 passed, 0 failed", rc 0 -- and rejected a semantically IDENTICAL call
+  # written `tally  case35d`, a false failure.  No regex over source can decide
+  # whether a line RAN.  A function that is CALLED cannot be faked by a string that
+  # is not: the ledger row below exists if and only if this body executed, with the
+  # id it was actually called with, whatever the caller's quoting or spacing.  The
+  # id boundary "( |$)" is here too, so a short id ("case35") can never absorb a
+  # longer one's lines ("case35d ...").
+  local _tid=$1 _tok _tfail
+  _tok=$(grep -cE "^ok   ${_tid}( |\$)" "$WORK/${_tid}.out" 2>/dev/null || true)
+  _tfail=$(grep -cE "^FAIL ${_tid}( |\$)" "$WORK/${_tid}.out" 2>/dev/null || true)
+  PASS=$((PASS + ${_tok:-0}))
+  FAIL=$((FAIL + ${_tfail:-0}))
+  printf '%s %s %s\n' "$_tid" "${_tok:-0}" "${_tfail:-0}" >> "$TALLY_LEDGER"
+}
 want () { # want <label> <expected> <actual>
   if [ "$2" = "$3" ]; then ok "$1 = $3"; else bad "$1: expected $2, got $3"; fi
 }
@@ -1637,8 +1662,7 @@ print(f"case33 {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
 PY33
 cat "$WORK/case33.out"
-PASS=$((PASS + $(grep -c '^ok   case33' "$WORK/case33.out")))
-FAIL=$((FAIL + $(grep -c '^FAIL case33' "$WORK/case33.out")))
+tally case33
 
 echo "== case 34: a grandchild forked BETWEEN scans does not escape the reap =="
 # Sol round three, finding (b).  The descendant walk ran once a second.  A child spawned
@@ -1736,8 +1760,7 @@ print(f"case34 {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
 PY34
 cat "$WORK/case34.out"
-PASS=$((PASS + $(grep -c '^ok   case34' "$WORK/case34.out")))
-FAIL=$((FAIL + $(grep -c '^FAIL case34' "$WORK/case34.out")))
+tally case34
 
 echo "== case 35: an unversioned watch stream is REFUSED, never rescored =="
 # Sol round three, finding (e).  The watcher was repaired to bind its rollout by inode
@@ -1816,10 +1839,8 @@ for label, cond in checks:
     print(("ok   " if cond else "FAIL ") + label)
 PY35D
 cat "$WORK/case35d.out"
-PASS=$((PASS + $(grep -c '^ok   case35c' "$WORK/case35c.out")))
-FAIL=$((FAIL + $(grep -c '^FAIL case35c' "$WORK/case35c.out")))
-PASS=$((PASS + $(grep -c '^ok   case35d' "$WORK/case35d.out")))
-FAIL=$((FAIL + $(grep -c '^FAIL case35d' "$WORK/case35d.out")))
+tally case35c
+tally case35d
 
 echo "== case 36: a stat that ERRORED is not a stat that said no rotation =="
 # Sol round three, finding (c).  The inode binding is re-checked every poll, and BOTH
@@ -1922,8 +1943,7 @@ print(f"case36 {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
 PY36
 cat "$WORK/case36.out"
-PASS=$((PASS + $(grep -c '^ok   case36' "$WORK/case36.out")))
-FAIL=$((FAIL + $(grep -c '^FAIL case36' "$WORK/case36.out")))
+tally case36
 
 echo "== case 37: a backticked word in a case header EXECUTES; the trap catches it =="
 # The exact line Sol saw fire (self-test.sh:941, `case 25: ... no final `end` ...`),
@@ -2348,93 +2368,124 @@ if [ "$FAIL" -ne 0 ] && [ -s "$STDERR_LOG" ]; then
   tail -40 "$STDERR_LOG" >&2
 fi
 
-echo "== case 45: every caseNN.out with ok/FAIL lines is actually tallied into PASS/FAIL =="
-# Round nine (Sol round eight, decisive defect).  The round-eight check ignored the
-# tally line's own FILE operand, then reconstructed an "idealised" command against
-# $f instead of the file the tally line actually names -- so a real tally line
-# `grep -c '^FAIL case35d' "$WORK/case35c.out"` (case35d's own tally, pointed at
-# case35c's file) passed both checks while the real FAIL went uncounted:
-# "386 passed, 0 failed", rc 0.  And a bare id prefix (`^FAIL case35`) matched a
-# suffixed id (`FAIL case35d ...`), masking a case-ID mismatch.
+echo "== case 45: every caseNN.out with ok/FAIL lines is tallied EXACTLY once, by the ledger the RUN wrote =="
+# Rounds eight and nine both verified the per-case tallies by PARSING THIS FILE'S
+# SOURCE TEXT, and both shipped a defect of the same species.  Round nine's exact
+# parser accepted a tally line inside an inert quoted heredoc (a visible
+# `FAIL case35d heredoc-probe`, rc 0, "386 passed, 0 failed" -- a false green over a
+# real failure) and rejected the same call written with different spacing (a false
+# failure).  Both directions are the one mistake: source text is not execution.
 #
-# Fixed by parsing every PASS/FAIL tally line CHARACTER FOR CHARACTER out of the
-# running script ($BASH_SOURCE) -- id and file operand together, never apart --
-# and comparing ids by EXACT string equality, never substring/prefix.  That closes
-# the suffix-collision hole without needing a boundary character in the grep
-# pattern text itself: the string "case35" is never equal to the string "case35d".
+# Round ten makes the bad state unrepresentable rather than detected.  Every case
+# folds itself in through the shell function `tally <id>`, the ONLY writer of the
+# ledger "$WORK/tallied".  A row exists if and only if that function body ran, under
+# the id it was called with; inert text writes nothing, and quoting/spacing is the
+# shell's business, not a regex's.  So case 45 reads no source text at all -- it
+# compares two runtime artifacts of this very run:
 #
-#   (a) every $WORK/caseNN.out that carries an ok/FAIL-prefixed line has BOTH a
-#       PASS-tally and a FAIL-tally line in the script, for an id EXACTLY equal
-#       to caseNN, pointed at the file operand EXACTLY "$WORK/caseNN.out";
-#   (b) the FAIL total obtained by RE-EXECUTING every FAIL-tally line's own
-#       parsed id+file (not an idealised reconstruction) is not smaller than a
-#       plain global recount of every `^FAIL case` line across every .out file --
-#       so a tally line that exists but names the wrong id or the wrong file is
-#       caught too, not just one that's missing outright.
-untallied45=0
-global_fail45=0
-tallied_fail45=0
+#   (a) COVERAGE -- every $WORK/case*.out carrying an "ok   caseNN"/"FAIL caseNN"
+#       line has EXACTLY ONE ledger row whose id equals that file's own basename;
+#       a missing row, a duplicate row, and a ledger row naming a file that carries
+#       no such output are each a failure, each named by id;
+#   (b) ARITHMETIC -- per id, and then in total, the ledger's ok and FAIL counts
+#       equal an INDEPENDENT global recount of "^ok   caseNN"/"^FAIL caseNN" over
+#       every $WORK/*.out, with an exact id boundary so "case35" can never absorb
+#       "case35d"'s lines and an orphan id nothing tallied is named outright;
+#   (c) the ledger is NON-EMPTY -- "nothing to compare" must never read as agreement.
+LEDGER45="$TALLY_LEDGER"
+GLOBAL45="$WORK/case45-global-counts"
 
-tally_rows45=$(python3 - "${BASH_SOURCE[0]}" <<'PYTALLY45'
-import re, sys
-src = open(sys.argv[1]).read()
-ok_pat = re.compile(
-    r"""^PASS=\$\(\(PASS \+ \$\(grep -c '\^ok   ([A-Za-z0-9_]+)' "(\$WORK/[A-Za-z0-9_]+\.out)"\)\)\)$""",
-    re.M)
-fail_pat = re.compile(
-    r"""^FAIL=\$\(\(FAIL \+ \$\(grep -c '\^FAIL ([A-Za-z0-9_]+)' "(\$WORK/[A-Za-z0-9_]+\.out)"\)\)\)$""",
-    re.M)
-for m in ok_pat.finditer(src):
-    print(f"ok\t{m.group(1)}\t{m.group(2)}")
-for m in fail_pat.finditer(src):
-    print(f"fail\t{m.group(1)}\t{m.group(2)}")
-PYTALLY45
-)
-
-declare -A ok_valid45 fail_valid45
-if [ -n "$tally_rows45" ]; then
-  while IFS=$'\t' read -r kind45 id45 file45; do
-    [ -n "$kind45" ] || continue
-    expect45="\$WORK/${id45}.out"
-    if [ "$kind45" = "ok" ]; then
-      [ "$file45" = "$expect45" ] && ok_valid45["$id45"]=1
-    else
-      [ "$file45" = "$expect45" ] && fail_valid45["$id45"]=1
-      # (b) re-execute the SAME command this tally line names -- id and file
-      # together, exactly as parsed, valid or not: the script's own arithmetic,
-      # never a second author of the logic.
-      real_file45="$WORK/${file45#\$WORK/}"
-      # boundary: the id must be followed by a space or end-of-line, exactly as
-      # every real print does ("FAIL <id> <label>") -- a bare id-prefix match
-      # would let a coarse/short id "count" a longer suffixed id's own line
-      # (e.g. "case35" silently absorbing "case35d ...").
-      bpat45="^FAIL ${id45}"'( |$)'
-      tc45=$(grep -Ec "$bpat45" "$real_file45" 2>/dev/null || true)
-      tallied_fail45=$((tallied_fail45 + ${tc45:-0}))
-    fi
-  done <<< "$tally_rows45"
+declare -A ledger_rows45=() ledger_ok45=() ledger_fail45=()
+ledger_ok_sum45=0
+ledger_fail_sum45=0
+if [ -s "$LEDGER45" ]; then
+  while read -r lid45 lok45 lfl45; do
+    [ -n "$lid45" ] || continue
+    ledger_rows45["$lid45"]=$(( ${ledger_rows45["$lid45"]:-0} + 1 ))
+    ledger_ok45["$lid45"]=$(( ${ledger_ok45["$lid45"]:-0} + ${lok45:-0} ))
+    ledger_fail45["$lid45"]=$(( ${ledger_fail45["$lid45"]:-0} + ${lfl45:-0} ))
+    ledger_ok_sum45=$((ledger_ok_sum45 + ${lok45:-0}))
+    ledger_fail_sum45=$((ledger_fail_sum45 + ${lfl45:-0}))
+  done < "$LEDGER45"
 fi
 
-for f in "$WORK"/case*.out; do
-  [ -e "$f" ] || continue
-  base=$(basename "$f" .out)   # e.g. "case35d" -- already carries the "case" prefix
-  if grep -Eq '^(ok   |FAIL )case' "$f" 2>/dev/null; then
-    if [ -n "${ok_valid45[$base]:-}" ] && [ -n "${fail_valid45[$base]:-}" ]; then
-      :   # both tally lines exist, each pointed at exactly "$WORK/${base}.out"
-    else
-      bad "${base}.out has ok/FAIL lines but no exact-matching PASS+FAIL tally line in self-test.sh (want id \"${base}\" and file operand \"\$WORK/${base}.out\" exactly)"
-      untallied45=$((untallied45 + 1))
-    fi
+# The independent recount.  Field-split, so the id is a whole token by construction
+# ($2), and anchored, so only the exact "ok   "/"FAIL " prefixes a real print emits
+# are counted.  This never looks at the ledger.
+awk '
+  /^ok   case/  && $1 == "ok"   && $2 ~ /^case[A-Za-z0-9]*$/ { o[$2]++; seen[$2]=1; next }
+  /^FAIL case/  && $1 == "FAIL" && $2 ~ /^case[A-Za-z0-9]*$/ { f[$2]++; seen[$2]=1; next }
+  END { for (k in seen) printf "%s %d %d\n", k, o[k]+0, f[k]+0 }
+' "$WORK"/*.out > "$GLOBAL45" 2>/dev/null || : > "$GLOBAL45"
+
+declare -A global_ok45=() global_fail45=()
+global_ok_sum45=0
+global_fail_sum45=0
+while read -r gid45 gok45 gfl45; do
+  [ -n "$gid45" ] || continue
+  global_ok45["$gid45"]=${gok45:-0}
+  global_fail45["$gid45"]=${gfl45:-0}
+  global_ok_sum45=$((global_ok_sum45 + ${gok45:-0}))
+  global_fail_sum45=$((global_fail_sum45 + ${gfl45:-0}))
+done < "$GLOBAL45"
+
+# (a) coverage: one file that carries results <-> one ledger row with that file's id
+cov45=0
+for f45 in "$WORK"/case*.out; do
+  [ -e "$f45" ] || continue
+  base45=$(basename "$f45" .out)
+  grep -Eq '^(ok   |FAIL )case' "$f45" 2>/dev/null || continue
+  rows45=${ledger_rows45["$base45"]:-0}
+  if [ "$rows45" -eq 0 ]; then
+    cov45=$((cov45 + 1))
+    bad "case45 ${base45}.out carries ok/FAIL result lines but the run's tally ledger has NO row for \"${base45}\" -- tally ${base45} never executed, so those lines were never folded into the totals"
+  elif [ "$rows45" -gt 1 ]; then
+    cov45=$((cov45 + 1))
+    bad "case45 the tally ledger holds $rows45 rows for \"${base45}\" -- tally ${base45} executed more than once and its ok/FAIL lines are double-counted"
   fi
-  gc=$(grep -c '^FAIL case' "$f" 2>/dev/null || true)
-  global_fail45=$((global_fail45 + ${gc:-0}))
 done
-[ "$untallied45" -eq 0 ] \
-  && ok "case45 every caseNN.out with ok/FAIL lines has an exact-matching PASS+FAIL tally line in self-test.sh"
-if [ "$global_fail45" -gt "$tallied_fail45" ]; then
-  bad "case45 global FAIL recount ($global_fail45) exceeds what the tally lines' own re-executed arithmetic counted ($tallied_fail45) -- a FAIL line exists that no tally line correctly reaches"
+if [ "${#ledger_rows45[@]}" -gt 0 ]; then
+  for lid45 in "${!ledger_rows45[@]}"; do
+    if [ ! -f "$WORK/${lid45}.out" ] || ! grep -Eq '^(ok   |FAIL )case' "$WORK/${lid45}.out" 2>/dev/null; then
+      cov45=$((cov45 + 1))
+      bad "case45 the tally ledger has a row for \"${lid45}\" but \$WORK/${lid45}.out carries no ok/FAIL result lines -- tally ran against a file that proves nothing"
+    fi
+  done
+fi
+[ "$cov45" -eq 0 ] \
+  && ok "case45 every caseNN.out with ok/FAIL lines has exactly one tally ledger row, and every ledger row has its file (${#ledger_rows45[@]} rows)"
+
+# (b) arithmetic, per id first so a discrepancy is NAMED, then in total
+mism45=0
+if [ "${#global_ok45[@]}" -gt 0 ]; then
+  for gid45 in "${!global_ok45[@]}"; do
+    lo45=${ledger_ok45["$gid45"]:-0}
+    lf45=${ledger_fail45["$gid45"]:-0}
+    if [ "$lo45" -ne "${global_ok45[$gid45]}" ] || [ "$lf45" -ne "${global_fail45[$gid45]}" ]; then
+      mism45=$((mism45 + 1))
+      bad "case45 ${gid45}: the run's .out files hold ${global_ok45[$gid45]} ok / ${global_fail45[$gid45]} FAIL lines, but the tally ledger recorded $lo45 ok / $lf45 FAIL for that id -- a result line no tally reached, or a tally counting lines that are not this id's"
+    fi
+  done
+fi
+[ "$mism45" -eq 0 ] \
+  && ok "case45 per case id, the tally ledger's ok/FAIL counts equal the independent recount over every \$WORK/*.out (${#global_ok45[@]} ids)"
+
+if [ "$ledger_ok_sum45" -eq "$global_ok_sum45" ]; then
+  ok "case45 the tally ledger's ok sum ($ledger_ok_sum45) equals the global recount of ok case lines ($global_ok_sum45)"
 else
-  ok "case45 the tally lines' own re-executed FAIL count ($tallied_fail45) covers every FAIL case line on disk ($global_fail45)"
+  bad "case45 the tally ledger's ok sum ($ledger_ok_sum45) differs from the global recount of ok case lines ($global_ok_sum45)"
+fi
+if [ "$ledger_fail_sum45" -eq "$global_fail_sum45" ]; then
+  ok "case45 the tally ledger's FAIL sum ($ledger_fail_sum45) equals the global recount of FAIL case lines ($global_fail_sum45)"
+else
+  bad "case45 the tally ledger's FAIL sum ($ledger_fail_sum45) differs from the global recount of FAIL case lines ($global_fail_sum45) -- a FAIL line exists that no tally folded into the total"
+fi
+
+# (c) an empty ledger is not agreement
+if [ -s "$LEDGER45" ]; then
+  ok "case45 the tally ledger \$WORK/tallied is non-empty (${#ledger_rows45[@]} ids)"
+else
+  bad "case45 the tally ledger \$WORK/tallied is missing or empty -- no case folded itself into the totals, and an empty comparison is not agreement"
 fi
 
 echo
