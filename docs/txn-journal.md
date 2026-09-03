@@ -152,7 +152,9 @@ workspace's own durable state root, beside the receipts:
     ~/.local/state/clj-surgeon/workspaces/<sha256 of canonical root>/
       receipts/
       transactions/
-        LOCK                     one holder: {:txid :pid :acquired-at}
+        LOCK                     one holder: {:txid :lock-format :acquired-at
+                                              :pid :start-ticks :boot-id}
+        LOCK.broken.<txid>       a claim a break removed, kept as its evidence
         <txid>/
           manifest.tsv           sorted read set, streamed as it is observed
                                  path-id \t path \t bytes \t sha256 \t mode
@@ -244,6 +246,28 @@ a lock exactly once when that triple PROVES the holder is gone, leaving
 `lock-broken` journal line. It never breaks a lock whose holder is live, and it
 never breaks one it cannot read: an unparsable LOCK is an unknown, refused
 fail-closed, and `recover!` is the remedy that clears it.
+
+**The break removes the exact claim it judged.** A read followed by an
+unconditional delete is two operations, and the gap between them is reachable: a
+second transaction can break the same stale claim and acquire inside it, after
+which the first breaker deletes a LIVE holder's brand new LOCK and acquires as
+well. So a break renames the LOCK to `LOCK.broken.<txid>` and then rechecks what
+actually moved — the content and the `(device, inode)` must still be the claim
+that was judged. If they are not, the file is put straight back and nothing is
+broken. The renamed claim stays on disk as the break's evidence. `release-lock!`
+is scoped the same way: it unlinks the LOCK only while it still names the
+releasing transaction.
+
+**A LOCK from an earlier build is unreadable, not unbreakable.** A claim that
+records a pid and no boot id cannot be checked at all — a reused pid is
+indistinguishable from the original holder — so it fails closed under its own
+name: `:holder-cause :legacy-format`, `:holder-format :pid-only`, and a refusal
+that says the lock was written by an earlier build. `recover!` with
+`:break-legacy-lock true` is the remedy, and it is not a waiver: it breaks the
+claim only on a RECEIPT of the holder's death — the recorded pid names no live
+process **and** the claim is at least `legacy-lock-break-age-ms` (one hour) old
+— and refuses when either half is missing. New locks carry `:lock-format 2`, so
+a later build names the format rather than inferring it from absence.
 
 **`undo!` is a write, and behaves like one.** It takes the same publish lock as
 the commit path and rechecks every begun path's digest and NOFOLLOW identity
