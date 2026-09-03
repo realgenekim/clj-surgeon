@@ -361,3 +361,17 @@ The seat's Claude weekly limit (resets 19:00 UTC) killed three subagents and sil
 | apparatus | **77e6237 GO cohort-ready** (Sol r10) | CLOSED | — |
 
 Ten GOs unmerged; no merges observed from the mayor all night. Gene report at 2f05a46 (13:00Z). Usage watch unchanged 96/49/47.
+
+## RESUME DELTA 21:35Z — evening state (after the andon)
+
+**ANDON inb-d27b79 (shell injection in `core/find-build-files` on main)** — pulled 20:26Z, acked by the mayor 20:35Z (/tmp/mayor-2035.txt): release-lane freeze GRANTED (no install/reload/merge touching find-build-files or callers until the fix merges with adversarial review); mayor owns the 7888 blast-radius question; bead clj-surgeon-0me gated. Fix branch **bridge/andon-find-build-files-argv 32c0c7f** (11 commits on 11413f2): Opus adversarial review GO-WITH-FIX at 811f4b0, both required items landed; seat probes clean at the tip; handed to the mayor 21:21Z (session msg e0895374 + inb-d27b79) for their independent probe + merge. **Waiting on the mayor.** Follow-up inb-75aaf7 (find expression-start tokens).
+
+| lane | tip on origin | status | running now |
+|---|---|---|---|
+| census | d338554 | r14 pushed; 13 executed rounds so far (last Sol NO-GO on U+FFFD+unknown-field continuation, MCP remedies, missing file — all addressed in r14) | Sol r14 re-check (~/tmp/sol/census15-*) |
+| MEM-003 | **95b0881 GO** (Opus r8 "merge 95b0881") | CLOSED — eleventh GO | — |
+| kernel | **5a2d254 = merge point** (Opus r8: replaces 11c7377) | r9 pre-adoption hardening building | Opus r9 builder in ~/src/clj-surgeon-txn |
+| fold-diff | 3d344432 (production pin 347fe6d3) | r11 pushed (self-owned log, receipt/exit binding, rebind, driver-aborted) | Opus r11 review in ~/tmp/sol/folddiff11-wt — asks whether the tip may replace the pin |
+| apparatus | **77e6237 GO** | CLOSED | — |
+
+GOs for the mayor now: the ten from the night + MEM-003 95b0881 + apparatus 77e6237 + kernel 5a2d254 (latent). No merges observed from the mayor yet. Weekly Claude limit resets 19:00Z (hit once today, 13:03–19:03Z outage). Usage watch unchanged 96/49/47. Follow-ups filed today: inb-ef6dd6 (MEM-005 absolute path in :error), inb-eca3b1 (System/exit in ls-tree op), inb-1f9a27, inb-00d296, inb-75aaf7.
