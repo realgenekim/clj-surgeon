@@ -389,6 +389,40 @@
    file does not contain it either."
   (str "zzzz" "nosuch" "pattern"))
 
+;; @spec MCP-OP-STUDY-019
+(deftest ls-tree-validates-its-own-parameters-server-side
+  ;; The ls-tree branch skipped `validate-inspect-params` entirely: an unknown
+  ;; `format` fell through the render `case` to the text branch while the
+  ;; receipt echoed the caller's raw string back as if it had been honoured,
+  ;; and an unknown top-level key was silently ignored.
+  (testing "format is checked against the enum, never echoed"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "EDN"})]
+      (is (false? (:ok response)))
+      (is (= "invalid-format" (:error_type response)))
+      (is (= "EDN" (:format response)) "the refusal names what was rejected")
+      (is (= ["edn" "names" "text"] (:supported response)))
+      (is (false? (:read_complete response)))
+      (is (true? (:source_unchanged response)))
+      (is (nil? (:tree response)))
+      (is (nil? (:files response)))
+      (is (some? (:next_call response)))
+      (is (nil? (get-in response [:next_call :arguments :format]))
+          "the continuation must not repeat the rejected value")))
+  (testing "an unknown top-level key refuses instead of being ignored"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "formatt" "edn"})]
+      (is (false? (:ok response)))
+      (is (= "unknown-parameter" (:error_type response)))
+      (is (= ["formatt"] (:unknown response)))
+      (is (some? (:supported response)))
+      (is (nil? (:tree response)))
+      (is (nil? (:files response)))))
+  (testing "every documented parameter is accepted"
+    (let [response (run {"mode" "ls-tree" "dir" fixture-dir "format" "edn"
+                         "grep" "ns" "ns_grep" "logging" "limit" 16384
+                         "max_files" 100})]
+      (is (true? (:ok response)))
+      (is (= "edn" (:format response))))))
+
 ;; @spec MCP-OP-STUDY-007
 (deftest ls-tree-refusal-serves-no-continuation-identical-to-the-request
   ;; `ls-tree-refusal` attached `{:dir "."}` unconditionally, so a failed

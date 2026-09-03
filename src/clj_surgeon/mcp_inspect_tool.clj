@@ -455,17 +455,26 @@
                        (:max_files params) (assoc :max_files (:max_files params)))
                      overrides)})
 
-(def ^:private ls-tree-request-fields
-  "The request fields a continuation reproduces. `workspace_root` is excluded
-  on purpose: `ls-tree-next-call` never emits it, so counting it would make
-  every routed request look different from its own continuation."
-  [:mode :dir :grep :ns_grep :format :limit :max_files])
+(def ^:private ls-tree-formats
+  "The complete `format` vocabulary. The ls-tree branch skips
+  `validate-inspect-params`, so this is checked here or nowhere."
+  #{"names" "text" "edn"})
+
+(def ^:private ls-tree-fields
+  "The complete ls-tree parameter vocabulary, checked server-side. The JSON
+  schema declares `additionalProperties false`, but a schema is a contract
+  with a well-behaved client, not a server-side check."
+  #{:mode :dir :grep :ns_grep :format :limit :max_files :workspace_root})
 
 (defn- ls-tree-request-arguments
-  "The arguments of the call just made, shaped exactly as a continuation is."
+  "The arguments of the call just made, shaped as a continuation is.
+
+  EVERY supplied field counts — an unknown or rejected key makes a request
+  genuinely different from a continuation that drops it — except
+  `workspace_root`, which a continuation never carries, and counting it would
+  make every routed request differ from its own continuation."
   [params]
-  (merge {:mode "ls-tree" :dir "."}
-         (select-keys params ls-tree-request-fields)))
+  (merge {:mode "ls-tree" :dir "."} (dissoc params :workspace_root)))
 
 ;; @spec MCP-OP-STUDY-007
 (defn- ls-tree-refusal
@@ -475,11 +484,16 @@
   The `{:dir \".\"}` continuation was unconditional, so `grep` at the root
   handed back the exact request just made — `no-clojure-files` at `\".\"`
   proposing `no-clojure-files` at `\".\"`. Narrowing is a caller judgment
-  there, exactly as at the receipt ceiling."
-  [params error-type message extra]
-  (let [continuation (ls-tree-next-call params {:dir "."})
-        repeats? (= (:arguments continuation)
-                    (ls-tree-request-arguments params))]
+  there, exactly as at the receipt ceiling.
+
+  A caller may supply the continuation when the corrective move is known —
+  a rejected `format` is dropped rather than echoed back."
+  ([params error-type message extra]
+   (ls-tree-refusal params error-type message extra
+                    (ls-tree-next-call params {:dir "."})))
+  ([params error-type message extra continuation]
+   (let [repeats? (= (:arguments continuation)
+                     (ls-tree-request-arguments params))]
     (merge
       (cond-> {:ok false
                :operation "inspect_clojure"
@@ -490,7 +504,7 @@
                :source_unchanged true
                :next_action (if repeats? "narrow_scope" "correct_request")}
         (not repeats?) (assoc :next_call continuation))
-      extra)))
+      extra))))
 
 ;; @spec MCP-OP-STUDY-001
 ;; @spec MCP-OP-STUDY-006
@@ -506,8 +520,36 @@
         limit (or (:limit params) ls-tree-default-limit)
         max-files (or (:max_files params) study/default-max-scan-files)
         root (mcp-paths/real-root project-root)
+        unknown-fields (vec (sort (map name (remove ls-tree-fields (keys params)))))
         resolved (mcp-paths/resolve-directory-path root dir)]
     (cond
+      ;; The ls-tree branch never reaches `validate-inspect-params`, so its own
+      ;; vocabulary is checked here or nowhere. Before this, an unknown key was
+      ;; silently ignored and an unknown `format` fell through the render
+      ;; `case` to text while the receipt echoed the raw string back.
+      (seq unknown-fields)
+      (ls-tree-refusal
+        params :unknown-parameter
+        "inspect_clojure ls-tree received an unknown parameter"
+        {:dir dir
+         :unknown unknown-fields
+         :supported (vec (sort (map name ls-tree-fields)))
+         :remedy "Remove the unknown parameter; the ls-tree vocabulary is fixed."}
+        (ls-tree-next-call params {}))
+
+      (and (contains? params :format)
+           (not (contains? ls-tree-formats (:format params))))
+      (ls-tree-refusal
+        params :invalid-format
+        "Expected format to be one of names, text, or edn"
+        {:dir dir
+         :format (:format params)
+         :supported (vec (sort ls-tree-formats))
+         :remedy "Use format=names, format=text, or format=edn."}
+        ;; The corrective move is known, so the continuation drops the
+        ;; rejected value instead of handing it straight back.
+        (ls-tree-next-call (dissoc params :format) {}))
+
       (not (:ok resolved))
       (ls-tree-refusal
         params
