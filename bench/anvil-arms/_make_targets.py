@@ -16,7 +16,33 @@ prefixed `+` is defined to run even under -n.  Sol watched both happen.  The
 attestation whose whole job is to decide whether a repository may run was executing
 that repository's code to make the decision.
 
-So nothing here runs.  The Makefile is PARSED as text:
+Sol's THIRD executed review, finding (a): parsing as text is not enough either.  A
+static parser is not a GNU Make oracle.  Eight controlled constructs -- a
+`define`/`endef` override, `:=` capturing a value a later `=` reassigns, a
+target-specific variable, a `%.test:` pattern supplying an explicit target's recipe, a
+recipe continuation splitting `if` from `then`, `$(MAKE)` WITHOUT `+` reaching a
+refused target, a hard `include`, and a generated `-include` -- each made this parser
+resolve a harmless-looking command while GNU Make ran the Kaocha stub.  Every one of
+those is a test run metered as a NON-TEST action, which is the exact quantity E3's
+pass line is stated in.
+
+So the parser is a WHITELIST GRAMMAR and it fails closed.  A target resolves ONLY when
+the WHOLE Makefile is inside a trivially parseable subset:
+
+  * `NAME = value` / `NAME := value`, with no name assigned twice;
+  * `target: deps` rules whose recipes are literal lines;
+  * `.PHONY`, blank lines and comments.
+
+Any other construct -- `define`, a pattern rule, a target-specific variable,
+`include`/`-include`, `$(shell`, `$(eval`, `$(MAKE)` with or WITHOUT `+`, a backslash
+continuation inside a recipe, `$$`, a backtick, `ifeq`/`ifdef`, or a variable assigned
+a second time -- refuses the WHOLE FILE as `makefile-outside-whitelist:<feature>`.  No
+target resolves, and every `make` call in that arm is `incomplete-run` at score time.
+THE TRADE, stated plainly: the meter is EXACT on the whitelist and HONEST ("incomplete")
+outside it.  An arm on a Makefile outside the subset must invoke kaocha directly to be
+metered at all.
+
+Inside the whitelist the file is PARSED as text:
 
   * simple variable assignments are collected and expanded into recipes, so
     `verify: $(KAOCHA) --focus …` resolves without a make process;
@@ -40,9 +66,12 @@ guessing from the name is what produced the original hole.
 Writes {"root", "makefile", "parser", "generated_utc", "declared", "targets",
         "refused", "unresolved", "includes", "dynamic_refusal", "truncated"}.
 
-Exit 0 = a trustworthy map was written.  Exit 3 = no Makefile (the caller records
-"no map", a fact about the project, not a failure).  Exit 4 = a map was written and
-it is NOT trustworthy; `dynamic_refusal` says why and the arm must not launch.
+Exit 0 = a trustworthy map was written.  It may resolve NOTHING: when
+`whitelist_refusal` is set the file is outside the parseable subset, the arm still
+runs, and every `make` call in it is `incomplete-run`.  Exit 3 = no Makefile (the
+caller records "no map", a fact about the project, not a failure).  Exit 4 = a map was
+written and it is NOT trustworthy; `dynamic_refusal` says why and the arm must not
+launch at all.
 """
 from __future__ import annotations
 
@@ -81,6 +110,133 @@ BUILTIN_VARS = {"MAKE": "make"}
 
 class MakefileUntrustworthy(RuntimeError):
     """The parse cannot see the whole Makefile.  The map must not be used."""
+
+
+class OutsideWhitelist(RuntimeError):
+    """The Makefile uses a construct this parser is not a GNU Make oracle for.
+
+    Distinct from MakefileUntrustworthy: that one means make would BUILD a file
+    carrying target definitions no static read can ever see, so the arm must not
+    launch at all.  This one means the arm may run -- it simply cannot be metered
+    THROUGH `make`, and every `make` call it makes is `incomplete-run`.
+    """
+
+
+# Directives that take the whole Makefile outside the subset.  Named, so the refusal
+# says which construct -- a refusal that will not name its cause cannot be argued with.
+DIRECTIVE_RE = re.compile(
+    r"^[ \t]*(?:export[ \t]+|override[ \t]+)*"
+    r"(define|endef|undefine|unexport|export|override|vpath|include|-include|sinclude|"
+    r"ifeq|ifneq|ifdef|ifndef|else|endif|load|\.SUFFIXES|\.DEFAULT_GOAL|\.SECONDEXPANSION|"
+    r"\.ONESHELL|\.EXPORT_ALL_VARIABLES|\.NOTPARALLEL|\.DELETE_ON_ERROR)\b")
+# The ONLY assignment shapes inside the subset.
+SIMPLE_ASSIGN_RE = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_.]*)[ \t]*(:?=)[ \t]*(.*)$")
+# Any other assignment operator (`?=`, `+=`, `::=`, `!=`) is outside it.
+OTHER_ASSIGN_RE = re.compile(
+    r"^(?:export[ \t]+|override[ \t]+)*[A-Za-z_][A-Za-z0-9_.]*[ \t]*(\?=|\+=|::=|!=)")
+# A rule header inside the subset: plain names, `:`, then plain prerequisites.
+SIMPLE_RULE_RE = re.compile(
+    r"^([A-Za-z0-9][A-Za-z0-9._/+-]*(?:[ \t]+[A-Za-z0-9][A-Za-z0-9._/+-]*)*)"
+    r"[ \t]*:(?!:|=)[ \t]*([^=]*)$")
+PHONY_LINE_RE = re.compile(r"^\.PHONY[ \t]*:[ \t]*(.*)$")
+
+# Text features that make the LINE unreadable as a literal, wherever they appear.
+TEXT_FEATURES = (
+    ("$(shell", "$(shell"), ("${shell", "$(shell"),
+    ("$(eval", "$(eval"), ("${eval", "$(eval"),
+    ("$(MAKE)", "$(MAKE)"), ("${MAKE}", "$(MAKE)"),
+    ("$$", "$$"), ("`", "backtick"),
+)
+
+
+def text_feature(line: str) -> str | None:
+    for marker, name in TEXT_FEATURES:
+        if marker in line:
+            return name
+    return None
+
+
+def whitelist_feature(text: str, root: pathlib.Path) -> str | None:
+    """The FIRST construct that takes this Makefile outside the parseable subset.
+
+    Returns None when the whole file is inside it.  Raises MakefileUntrustworthy for a
+    hard `include` of a file make would GENERATE -- targets can be defined there that
+    no static read can see, so that arm must not launch at all rather than merely go
+    unmetered.
+    """
+    assigned: set[str] = set()
+    for raw in text.split("\n"):
+        if raw.startswith("\t"):
+            # A recipe line.  Continuations are what split `if` from `then` in Sol's
+            # fixture: joining them produced `i f true; th en bin/kaocha`, which reads
+            # as a harmless command and runs Kaocha.
+            if raw.endswith("\\"):
+                return "recipe-continuation"
+            feature = text_feature(raw)
+            if feature:
+                return feature
+            continue
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        directive = DIRECTIVE_RE.match(raw)
+        if directive:
+            kind = directive.group(1)
+            if kind in ("include", "-include", "sinclude"):
+                rest = raw.split(None, 1)[1] if len(raw.split(None, 1)) > 1 else ""
+                for token in rest.split():
+                    if kind == "include" and not (root / token).is_file():
+                        # make would BUILD this file and read targets out of it.
+                        raise MakefileUntrustworthy(f"include-generated:{token}")
+                return kind
+            return kind
+
+        feature = text_feature(raw)
+        if feature:
+            return feature
+
+        if PHONY_LINE_RE.match(stripped):
+            continue
+
+        other = OTHER_ASSIGN_RE.match(stripped)
+        if other:
+            return f"assignment-operator:{other.group(1)}"
+
+        if "%" in stripped and ":" in stripped:
+            # `%.test:` supplies the recipe of an explicit `foo.test:` that declares
+            # only prerequisites -- and nothing in the explicit rule says so.
+            return "pattern-rule"
+
+        rule = SIMPLE_RULE_RE.match(stripped)
+        if rule and not ASSIGN_RE.match(stripped):
+            names, prereqs = rule.group(1), rule.group(2)
+            if "%" in names or "%" in prereqs:
+                return "pattern-rule"
+            if "$" in names or "$" in prereqs:
+                return "computed-target-name"
+            continue
+        if ":" in stripped and "=" in stripped and TARGET_RE.match(stripped):
+            # `verify: CMD = bin/kaocha` -- a target-specific variable silently
+            # replaces the value the recipe expands, and nothing in the recipe says so.
+            return "target-specific-variable"
+        if "::" in stripped and TARGET_RE.match(stripped):
+            return "double-colon-rule"
+
+        simple = SIMPLE_ASSIGN_RE.match(stripped)
+        if simple:
+            name = simple.group(1)
+            if name in assigned:
+                # `CMD = bin/kaocha` / `NOW := $(CMD)` / `CMD = echo safe`: which value
+                # a recipe sees depends on the flavour AND the order, and this parser
+                # collapses both.
+                return f"variable-reassigned:{name}"
+            assigned.add(name)
+            continue
+
+        return f"unrecognized-line:{stripped.split()[0][:40]}"
+    return None
 
 
 def makefile_in(root: pathlib.Path) -> pathlib.Path | None:
@@ -333,8 +489,31 @@ def main() -> int:
         "includes": [],
         "optional_includes_missing": [],
         "dynamic_refusal": None,
+        "whitelist_refusal": None,
         "truncated": False,
     }
+
+    text = makefile.read_text(errors="replace")
+    try:
+        outside = whitelist_feature(text, root)
+    except MakefileUntrustworthy as exc:
+        payload["dynamic_refusal"] = str(exc)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        print(f"MAKE-MAP-REFUSED {out} {exc}", file=sys.stderr)
+        return 4
+    if outside is not None:
+        # THE WHOLE FILE, not one target.  A construct like a target-specific variable
+        # or a `define` override changes what a recipe elsewhere in the file expands
+        # to, so "this target is still clean" is not a statement this parser can make.
+        refusal = f"makefile-outside-whitelist:{outside}"
+        payload["whitelist_refusal"] = refusal
+        payload["unresolved"] = [f"{makefile.name}:{refusal}"]
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        print(f"MAKE-MAP {out} parser=static declared=0 resolved=0 "
+              f"refused=whole-file:{outside} truncated=False")
+        return 0
 
     try:
         parsed = parse(makefile, root)

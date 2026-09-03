@@ -20,10 +20,50 @@ driver (`make anvil-arms-self-test`, 32 cases / 278 assertions, ~50 s).
 | `run-arm.sh` | B.6 §5 | one arm-run: attest → watch(driver) → freeze diff → score |
 | `run-cohort.sh` | B.3 / C.4 | n slots per arm, serial, **mirrored order** |
 | `stop-server.sh` | A.5 | stops **only** the server this arm-run spawned, by recorded pid, recorded start time **and** recorded boot id |
-| `_make_targets.py` | A.10 | resolves the worktree's Make targets by **parsing the Makefile as text** at attest time — nothing is executed — so a test runner behind `make verify` is metered as one, and a target it cannot resolve is refused rather than guessed |
+| `_make_targets.py` | A.10 | resolves the worktree's Make targets by **parsing the Makefile as text** at attest time — nothing is executed — so a test runner behind `make verify` is metered as one. It is a **whitelist grammar and fails closed**: a Makefile outside the trivially-parseable subset resolves **nothing at all** (see *The meter is exact on the whitelist and honest outside it*, below) |
 | `fake-driver.sh` | PF-5 | a synthetic rollout, so the chain is provable with no arm-run budget |
 | `self-test.sh` | PF-5 | 32 cases / 278 assertions; `make anvil-arms-self-test`, which honours `COHORT_PORTS` and refuses at preflight if a named port is held |
 | `prompts/` | B.4 | the four E3 arm prompts, extracted from the doc, hashed |
+
+## The meter is exact on the whitelist and honest outside it
+
+A static parser is **not a GNU Make oracle**, and pretending otherwise is how a test run
+gets metered as a non-test action — the exact quantity E3's pass line is stated in. Sol's
+round-three review proved it with eight controlled Makefiles: a `define`/`endef`
+override, `:=` capturing a value a later `=` reassigns, a target-specific variable, a
+`%.test:` pattern supplying an explicit target's recipe, a recipe continuation splitting
+`if` from `then`, `$(MAKE)` *without* `+` reaching a refused target, a hard `include`,
+and a generated `-include`. In every one the old parser resolved a harmless-looking
+command and GNU Make ran the Kaocha stub.
+
+So `_make_targets.py` resolves a target **only when the whole Makefile is inside a
+trivially-parseable subset**:
+
+- `NAME = value` / `NAME := value`, with **no name assigned twice**;
+- `target: deps` rules whose recipes are **literal lines**;
+- `.PHONY`, blank lines, comments.
+
+Anything else — `define`, a pattern rule, a target-specific variable, `include` /
+`-include`, `$(shell`, `$(eval`, `$(MAKE)` (with or without `+`), a backslash
+continuation inside a recipe, `$$`, a backtick, `ifeq` / `ifdef`, or a variable assigned
+a second time — refuses the **whole file** as
+`whitelist_refusal: makefile-outside-whitelist:<feature>`. Not one target: a `define`
+override or a target-specific variable silently changes what a *clean-looking* recipe
+elsewhere in the file expands to, so "this target is still fine" is not a statement a
+text parse may make.
+
+**The trade, stated plainly.** On the whitelist the meter is *exact*: `make verify` is
+followed through the map to the runner it really invokes. Outside it the meter is
+*honest*: nothing resolves, so every `make` call in that arm is `incomplete-run` (watcher
+rc 6, scorer rc 3, no receipt) instead of a wrong number. **An arm whose repository has a
+Makefile outside the subset must invoke its test runner directly — `bin/kaocha …`, not
+`make test` — to be metered at all.** `run-arm.sh` writes that sentence into `driver.log`
+when it happens.
+
+One case is stricter still: a **hard `include` of a file that does not exist** is a file
+make would *generate*, carrying target definitions no static read can ever see. That is
+`dynamic_refusal: include-generated:<file>`, exit 4, `ATTEST-MISMATCH makefile-dynamic` —
+and the arm never launches.
 
 ## The prompts are not typed by hand
 

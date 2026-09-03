@@ -155,12 +155,20 @@ cp "$PROMPT" "$A/prompt.md" || { echo "run-arm: cannot copy prompt" >&2; exit 2;
 sha256sum "$A/prompt.md" | cut -d' ' -f1 > "$A/prompt.sha256"
 
 # --- 2b. resolve this worktree's Make targets to the commands they RUN -------------
-# `make -n` prints a recipe and executes nothing.  The watcher and the scorer both
-# read this map, so a test runner behind a target whose NAME does not say "test"
-# (e.g. `make verify`) is metered as a test action instead of a non-test one.
+# The Makefile is PARSED, never executed, and only inside a whitelisted subset: the
+# watcher and the scorer both read this map, so a test runner behind a target whose
+# NAME does not say "test" (e.g. `make verify`) is metered as a test action instead of
+# a non-test one -- and a Makefile outside the subset resolves NOTHING, which makes
+# every `make` call in that arm `incomplete-run` rather than a wrong number.
 python3 "$HERE/_make_targets.py" "$A/worktree" "$A/make-targets.json" >> "$A/driver.log" 2>&1
 make_map_rc=$?
 [ $make_map_rc -eq 0 ] || echo "run-arm: make targets unresolved (rc=$make_map_rc)" >> "$A/driver.log"
+make_map_whitelist=$(python3 -c 'import json,sys
+try:
+    print(json.load(open(sys.argv[1])).get("whitelist_refusal") or "")
+except Exception:
+    print("")' "$A/make-targets.json" 2>/dev/null)
+[ -z "$make_map_whitelist" ] || echo "run-arm: $make_map_whitelist — no make target resolves in this worktree; any \`make\` call this arm issues is incomplete-run, so the arm must invoke its test runner directly to be metered" >> "$A/driver.log"
 
 # --- 3. this arm's MCP server, bound to THIS worktree (A.5) ------------------------
 SERVER_STARTED=0

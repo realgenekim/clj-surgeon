@@ -825,14 +825,38 @@ want "case22 map rc" 0 "$?"
   && bad "case22 attest-time mapping EXECUTED a + recipe line" \
   || ok "case22 the + recipe lines were parsed, never executed"
 want "case22 parser" static "$(jqf "$MK22/map.json" parser)"
-want "case22 verify resolves through \$(KAOCHA)" \
+# Sol round THREE, finding (a): this file used to resolve `verify` and `build` beside a
+# refused `recurse`.  "This target is still clean" is not a statement a text parser can
+# make about a file that also holds $(shell and $(MAKE): a define override or a
+# target-specific variable elsewhere silently changes what a clean-looking recipe
+# expands to.  The whole file is refused now, by its FIRST offending feature.
+want "case22 the whole file is outside the whitelist" 'makefile-outside-whitelist:$(shell' \
+     "$(jqf "$MK22/map.json" whitelist_refusal)"
+want "case22 verify does not resolve" null "$(jqf "$MK22/map.json" targets.verify)"
+want "case22 build does not resolve" null "$(jqf "$MK22/map.json" targets.build)"
+want "case22 recurse does not resolve" null "$(jqf "$MK22/map.json" targets.recurse)"
+want "case22 the map still attests (the arm runs; its make calls are incomplete)" \
+     null "$(jqf "$MK22/map.json" dynamic_refusal)"
+
+# 22e -- the control the whitelist exists to keep exact: the SAME `$(KAOCHA)` shape,
+# inside the subset, still resolves through the variable and is metered as a test.
+MK22E="$WORK/mk22e"; mkdir -p "$MK22E"
+{ printf 'KAOCHA = bin/kaocha\n'
+  printf 'verify:\n\t$(KAOCHA) --focus marvin-voice-remote.bridge3-new-test\n'
+  printf 'build:\n\techo building\n'
+  printf 'conditional:\n\tif test -f RUN_KAOCHA; then bin/kaocha; else echo skipped; fi\n'
+} > "$MK22E/Makefile"
+python3 "$HERE/_make_targets.py" "$MK22E" "$MK22E/map.json" > "$WORK/case22e.out" 2>&1
+want "case22e map rc" 0 "$?"
+want "case22e whitelist refusal" null "$(jqf "$MK22E/map.json" whitelist_refusal)"
+want "case22e verify resolves through \$(KAOCHA)" \
      "bin/kaocha --focus marvin-voice-remote.bridge3-new-test" \
-     "$(jqf "$MK22/map.json" targets.verify)"
-want "case22 build resolves" "echo building" "$(jqf "$MK22/map.json" targets.build)"
-want "case22 recurse is REFUSED, not resolved" 'dynamic:+$(MAKE)' \
-     "$(jqf "$MK22/map.json" refused.recurse)"
-want "case22 recurse is not in the resolved map" null \
-     "$(jqf "$MK22/map.json" targets.recurse)"
+     "$(jqf "$MK22E/map.json" targets.verify)"
+want "case22e build resolves" "echo building" "$(jqf "$MK22E/map.json" targets.build)"
+# per-target refusals still stand INSIDE the whitelist: the text is fully known and
+# still does not say which command runs.
+want "case22e a shell-conditional recipe is still refused per target" shell-conditional \
+     "$(jqf "$MK22E/map.json" refused.conditional)"
 
 # 22b -- a hard `include` of a file make would GENERATE: the parse cannot see those
 # targets at all, so the whole map is untrustworthy and the arm never launches.
@@ -872,11 +896,15 @@ MK22C="$WORK/mk22c"; mkdir -p "$MK22C"
 } > "$MK22C/Makefile"
 python3 "$HERE/_make_targets.py" "$MK22C" "$MK22C/map.json" > "$WORK/case22c.out" 2>&1
 want "case22c map rc" 0 "$?"
-want "case22c conditional target refused" conditional \
-     "$(jqf "$MK22C/map.json" refused.conditional)"
+# Round three: `ifeq` takes the whole file outside the subset.  A conditional does not
+# merely make ONE target depend on the environment -- it can redefine a variable a
+# target elsewhere expands, so `build` beside it is no longer a target this parser may
+# claim to know.
+want "case22c the whole file is outside the whitelist" makefile-outside-whitelist:ifeq \
+     "$(jqf "$MK22C/map.json" whitelist_refusal)"
 want "case22c conditional target not resolved" null \
      "$(jqf "$MK22C/map.json" targets.conditional)"
-want "case22c an unconditional target beside it still resolves" "echo building" \
+want "case22c the unconditional target beside it does not resolve either" null \
      "$(jqf "$MK22C/map.json" targets.build)"
 
 echo "== case 24: ANY watcher abort refuses at score time — no receipt, ever =="
@@ -1377,20 +1405,21 @@ want "case22d map rc" 0 "$?"
   || ok "case22d Sol's \$(shell …) did not fire"
 [ -e "$MK22D/recursive-recipe-ran" ] && bad "case22d Sol's + recipe fired again" \
   || ok "case22d Sol's + recipe did not fire"
-want "case22d recursive refused" 'dynamic:+$(MAKE)' "$(jqf "$MK22D/map.json" refused.recursive)"
-want "case22d conditional refused" shell-conditional "$(jqf "$MK22D/map.json" refused.conditional)"
+want "case22d the whole file is outside the whitelist" 'makefile-outside-whitelist:$(shell' \
+     "$(jqf "$MK22D/map.json" whitelist_refusal)"
+want "case22d recursive not resolved" null "$(jqf "$MK22D/map.json" targets.recursive)"
 want "case22d conditional not resolved" null "$(jqf "$MK22D/map.json" targets.conditional)"
-want "case22d safe still resolves" "echo safe" "$(jqf "$MK22D/map.json" targets.safe)"
+want "case22d safe does not resolve either" null "$(jqf "$MK22D/map.json" targets.safe)"
 python3 - "$HERE" "$MK22D/map.json" <<'PY22D'
 import sys, json
 sys.path.insert(0, sys.argv[1])
 from watch import unresolved_make_targets as u
 m = json.load(open(sys.argv[2]))["targets"]
 fails = []
-if u("make conditional", m) != ["conditional"]:
-    fails.append(f"`make conditional` is not unresolved: {u('make conditional', m)}")
-if u("make safe", m) != []:
-    fails.append(f"`make safe` is unresolved: {u('make safe', m)}")
+if u("make conditional", m or None) != ["conditional"]:
+    fails.append(f"`make conditional` is not unresolved: {u('make conditional', m or None)}")
+if u("make safe", m or None) != ["safe"]:
+    fails.append(f"`make safe` is resolved from a refused file: {u('make safe', m or None)}")
 for f in fails:
     print(f"FAIL case22d {f}")
 print(f"ok   case22d a run calling Sol's conditional target is incomplete ({2-len(fails)}/2)")
