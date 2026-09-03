@@ -273,3 +273,5 @@ delta → then the mayor's production run (inb-3a9818 updated with the new comma
 
 
 ## 03:52Z — `bridge/fold-diff-tool` pushed at a765d859 (my run 1076/13210/0, compile-check green); inb-3a9818 carries the new command marked DO NOT RUN YET; re-review a94e2e37c80843f35 hunts the Postgres path (loaders that could reach ensure-schema!, guard coverage incl. store-pg/append-line!, the secrets symlink, the new MAX(seq) query, DEPLOYED_REVISION semantics, gap wording, heap, hooks, stdout leakage) before the mayor runs it.
+
+## 03:58Z — q5z re-review GO-WITH-FIX: seven closed on their probes; three new blockers in the silent-drop class (aggregate bytes unbounded → OOM under both ceilings; depth bound truncates; unreadable subtree vanishes). Verdict filed; round three launched. The homebrew clj-kondo path test (the standing 'one baseline failure') gets fixed on main separately.
