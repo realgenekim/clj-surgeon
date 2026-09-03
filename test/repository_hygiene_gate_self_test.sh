@@ -53,7 +53,30 @@ check 1 "a repository with no ignore rule fails the gate" "$unignored"
 outside=$(mktemp -d)
 check 1 "a directory git cannot answer for fails the gate" "$outside"
 
-rm -rf "$clean" "$deep" "$rooted" "$unignored" "$outside"
+# @spec MCP-OP-ALIAS-053
+#
+# git can answer SOME questions and not others. A stub that answers rev-parse
+# and check-ignore but cannot produce the file inventory is the shape a broken
+# index, an unreadable object store, or a permissions fault presents: the gate
+# must not read the empty pipeline as "nothing is tracked".
+stubbed=$(mktemp -d)
+mkdir -p "$stubbed/bin" "$stubbed/repo"
+cat > "$stubbed/bin/git" <<'STUB'
+#!/bin/sh
+case "$1" in
+  ls-files) echo "fatal: unable to read index" >&2; exit 128 ;;
+  *) exit 0 ;;
+esac
+STUB
+chmod +x "$stubbed/bin/git"
+saved_path="$PATH"
+PATH="$stubbed/bin:$saved_path"
+export PATH
+check 1 "a tree whose file inventory git cannot produce fails the gate" "$stubbed/repo"
+PATH="$saved_path"
+export PATH
+
+rm -rf "$clean" "$deep" "$rooted" "$unignored" "$outside" "$stubbed"
 
 if [ "$failures" != "0" ]; then
   echo "repository hygiene gate self-test: $failures failure(s)"
