@@ -137,71 +137,100 @@
   [^Path root ^Path candidate]
   (str/replace (.toString (.relativize root candidate)) "\\" "/"))
 
-(def ^:private max-scope-depth
-  "Directory depth bound for one scope walk.
+(def max-scope-depth
+  "Segment bound on one scope walk, counted from the project root.
 
   The walk never follows a symlinked directory, so no link cycle can form; this
-  bound is a second, independent stop for a pathologically deep real tree."
+  bound is a second, independent stop for a pathologically deep real tree. It is
+  a REFUSAL and never a truncation: a file dropped for being deep is a file
+  missing from the found count, and the verb's over-declare idiom would then
+  launder that omission into a commit that leaves the deep namespace requiring
+  the retired lib."
   64)
 
+;; @spec MCP-OP-ALIAS-004
 ;; @spec MCP-OP-ALIAS-037
-(defn- scope-files
-  "Every regular file under root, without following symlinked directories.
+;; @spec MCP-OP-ALIAS-048
+(defn scan-scope
+  "Every confined project-relative Clojure source under scope.paths, or a scan
+  refusal.
 
   `Files/walkFileTree` is called with an empty option set, so `FOLLOW_LINKS` is
   off: a symlinked directory is reported once and never descended. A link cycle
   inside the root therefore terminates, and a directory link pointing out of the
   root is never entered — the realpath gate downstream then has nothing to
   refuse rather than a whole foreign tree. Build output and version-control
-  directories are pruned as whole subtrees rather than filtered afterwards."
-  [^Path root]
-  (let [found (java.util.ArrayList.)
+  directories are pruned as whole subtrees rather than filtered afterwards.
+
+  Depth is checked per entry rather than handed to `walkFileTree` as its
+  `maxDepth`, because that parameter truncates silently and this bound must be
+  observable to the caller."
+  [^Path root {:keys [paths exclude]}]
+  (let [matchers (mapv glob-matcher paths)
+        excluded (set exclude)
+        default-fs (FileSystems/getDefault)
+        found (java.util.ArrayList.)
+        too-deep (volatile! nil)
+        depth-of (fn [^Path candidate]
+                   (.getNameCount (.relativize root ^Path candidate)))
+        record-too-deep!
+        (fn [^Path candidate depth]
+          (vreset! too-deep {:path (relative-path root candidate) :depth depth})
+          FileVisitResult/TERMINATE)
         visitor
         (proxy [SimpleFileVisitor] []
           (preVisitDirectory [dir _attrs]
-            (let [^Path directory dir]
-              (if (and (not (.equals root directory))
-                       (contains? skipped-directories
-                                  (str (.getFileName directory))))
+            (let [^Path directory dir
+                  depth (depth-of directory)]
+              (cond
+                (> depth max-scope-depth)
+                (record-too-deep! directory depth)
+
+                (and (not (.equals root directory))
+                     (contains? skipped-directories
+                                (str (.getFileName directory))))
                 FileVisitResult/SKIP_SUBTREE
-                FileVisitResult/CONTINUE)))
+
+                :else FileVisitResult/CONTINUE)))
           (visitFile [file _attrs]
-            (let [^Path candidate file]
-              (when (Files/isRegularFile candidate (make-array LinkOption 0))
-                (.add found (relative-path root candidate))))
-            FileVisitResult/CONTINUE)
+            (let [^Path candidate file
+                  depth (depth-of candidate)]
+              (if (> depth max-scope-depth)
+                (record-too-deep! candidate depth)
+                (do
+                  (when (Files/isRegularFile candidate (make-array LinkOption 0))
+                    (let [relative (relative-path root candidate)]
+                      (when (and (mcp-paths/relative-source-path? relative)
+                                 (not (str/ends-with? relative ".edn"))
+                                 (not (contains? excluded relative))
+                                 (some #(.matches ^PathMatcher %
+                                                  (.getPath default-fs relative
+                                                            (make-array String 0)))
+                                       matchers))
+                        (.add found relative))))
+                  FileVisitResult/CONTINUE))))
           (visitFileFailed [_file _error]
             FileVisitResult/CONTINUE))]
     (Files/walkFileTree root
                         (EnumSet/noneOf FileVisitOption)
-                        (int max-scope-depth)
+                        Integer/MAX_VALUE
                         visitor)
-    (vec found)))
+    (if-let [deep @too-deep]
+      {:ok false
+       :error-type :alias-migration-scope-too-deep
+       :path (:path deep)
+       :depth (:depth deep)
+       :max-depth max-scope-depth}
+      {:ok true :files (vec (sort found))})))
 
 ;; @spec MCP-OP-ALIAS-004
-;; @spec MCP-OP-ALIAS-037
 (defn expand-scope
-  "Every confined project-relative Clojure source under scope.paths.
+  "The sources one scope selects, when the bounded scan admits it.
 
-  The walk is bounded to the workspace root, skips build output and version
-  control directories, and follows no directory symlink; it never leaves the
-  configured project root."
-  [^Path root {:keys [paths exclude]}]
-  (let [matchers (mapv glob-matcher paths)
-        excluded (set exclude)]
-    (->> (scope-files root)
-         (keep (fn [relative]
-                 (when (and (mcp-paths/relative-source-path? relative)
-                            (not (str/ends-with? relative ".edn"))
-                            (not (contains? excluded relative))
-                            (some #(.matches ^PathMatcher %
-                                             (.getPath (FileSystems/getDefault)
-                                                       relative
-                                                       (make-array String 0)))
-                                  matchers))
-                   relative)))
-         sort
-         vec)))
+  `scan-scope` is the entrance that carries the scan's typed refusals; this is
+  the projection callers that only need the file list use."
+  [^Path root scope]
+  (vec (:files (scan-scope root scope))))
 
 ;; ---------------------------------------------------------------------------
 ;; planning
@@ -251,6 +280,7 @@
 ;; @spec MCP-OP-ALIAS-038
 ;; @spec MCP-OP-ALIAS-039
 ;; @spec MCP-OP-ALIAS-046
+;; @spec MCP-OP-ALIAS-048
 (defn plan!
   "Expand scope, confine every path, bound the read, freeze the sources, and plan.
 
@@ -261,10 +291,26 @@
   must reach discovery to earn a found count and an executable next_call."
   [workspace-root request]
   (let [root (mcp-paths/real-root workspace-root)
-        relatives (expand-scope root (:scope request))
+        scan (scan-scope root (:scope request))
+        relatives (:files scan)
         scanned (count relatives)
         expected (get-in request [:expect :files])]
     (cond
+      ;; @spec MCP-OP-ALIAS-048
+      (= :alias-migration-scope-too-deep (:error-type scan))
+      (refusal :alias-migration-scope-too-deep
+               (str (:path scan) " is " (:depth scan)
+                    " path segments below the project root, past the "
+                    max-scope-depth "-segment bound one alias_migration walks")
+               {:path (:path scan)
+                :depth (:depth scan)
+                :max_depth (:max-depth scan)
+                :next_call nil
+                :remedy (str "Narrow scope.paths so the walk does not reach "
+                             (:path scan) ", or flatten that tree; the bound is "
+                             "refused rather than truncated so no file can "
+                             "silently leave the found count.")})
+
       (> scanned max-scope-files)
       (refusal :alias-migration-scope-too-large
                (str "scope.paths selects " scanned " files, above the "

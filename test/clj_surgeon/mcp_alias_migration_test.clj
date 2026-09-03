@@ -575,6 +575,47 @@
       (finally
         (delete-tree! workspace)))))
 
+(defn- deep-relative-path
+  "One project-relative path of exactly `segments` segments ending in a source."
+  [segments]
+  (str/join "/" (concat ["src"]
+                        (map #(str "d" %) (range 1 (dec segments)))
+                        ["deep.clj"])))
+
+;; @spec MCP-OP-ALIAS-048
+(deftest a-path-deeper-than-the-bound-refuses-instead-of-vanishing-from-scope
+  (let [workspace (bare-workspace!)
+        receipt-dir (io/file workspace "receipts")
+        deep (deep-relative-path 65)
+        shallow "src/shallow.clj"
+        requiring (fn [namespace-name]
+                    (str "(ns " namespace-name "\n  (:require\n   ["
+                         fixture/from-lib " :as store]))\n\n"
+                         "(defn one [id] (store/" fixture/from-var " id))\n"))]
+    (.mkdirs receipt-dir)
+    (try
+      (is (= 65 (count (str/split deep #"/"))))
+      (write-tree! workspace {deep (requiring "deep.one")
+                              shallow (requiring "shallow.one")})
+      (let [result (alias-migration/execute!
+                     (config workspace receipt-dir)
+                     (cap-request workspace {:expect {:files 2}}))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-scope-too-deep" (:error_type result))
+            "a file past the depth bound was truncated out of scope instead")
+        (is (= deep (:path result)))
+        (is (= 65 (:depth result)))
+        (is (= alias-migration/max-scope-depth (:max_depth result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result))))
+      (testing "the truncation the bound used to launder is impossible"
+        ;; the over-declare idiom re-sends found_files; had the deep file been
+        ;; dropped, the caller would have committed a migration that left
+        ;; deep.one requiring the retired lib
+        (is (= (slurp (io/file workspace deep)) (requiring "deep.one"))))
+      (finally
+        (delete-tree! workspace)))))
+
 (defn- sparse-source!
   "One .clj file that REPORTS `bytes` in size without occupying them.
 
