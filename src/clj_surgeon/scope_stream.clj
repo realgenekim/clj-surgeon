@@ -282,120 +282,120 @@
                     :next_call {:op :scope/stream
                                 :scope {:narrow-to "a subtree whose file list fits the work budget"}}
                     :remedy "Narrow the scope: the walk holds every matching path for the whole stream, so the path list alone must fit the budget."})
-        (loop [remaining (:relatives walked)
-               aggregate 0
-               files 0
-               largest 0
-               reserved-peak held
-               records []
-               record-bytes 0]
-          (if (empty? remaining)
-            {:ok true
-             :complete true
-             :work {:walk-entries (:walk-entries walked)
-                    :files-discovered (count (:relatives walked))
-                    :files-read files
-                    :source-bytes aggregate
-                    :largest-file-bytes largest
-                    :receipt-records (count records)
-                    :receipt-bytes record-bytes}
-             :reserved {:heap-reserved-peak-bytes reserved-peak
-                        :path-list-bytes held
-                        :discovered-files (count (:relatives walked))
-                        :work-budget-bytes work-budget-bytes
-                        :parse-factor parse-factor
-                        :aggregate-bytes aggregate
-                        :aggregate-bytes-max max-aggregate-bytes}
-             :records records}
-            (let [relative (first remaining)
-                  resolved (mcp-paths/resolve-source-path real-root relative)]
-              (if-not (:ok resolved)
-                (refusal :scope-path-refused (:error resolved)
-                         {:path relative :next_call nil})
-                (let [^Path canonical (:canonical resolved)
-                      ;; the cap is the smaller of the per-file ceiling and what
-                      ;; the aggregate budget has left, so a file that grew
-                      ;; since discovery is stopped against the REMAINING budget
-                      cap (min max-file-bytes (- max-aggregate-bytes aggregate))
-                      read (read-bounded canonical cap)
-                      truncated? (:truncated? read)
-                      source (:source read)
-                      bytes (long (:bytes read))]
-                  (cond
-                    (and truncated? (> bytes max-file-bytes))
-                    (refusal :scope-source-too-large
-                             (str relative " is larger than the " max-file-bytes
-                                  "-byte ceiling this walk admits")
-                             {:path relative :max-bytes max-file-bytes
-                              :observed-at-least bytes
-                              :next_call {:op :scope/stream
-                                          :scope {:exclude relative}}
-                              :remedy (str "Exclude " relative ", or narrow the scope. Excluding a file may change semantics; say so in the plan.")})
+          (loop [remaining (:relatives walked)
+                 aggregate 0
+                 files 0
+                 largest 0
+                 reserved-peak held
+                 records []
+                 record-bytes 0]
+            (if (empty? remaining)
+              {:ok true
+               :complete true
+               :work {:walk-entries (:walk-entries walked)
+                      :files-discovered (count (:relatives walked))
+                      :files-read files
+                      :source-bytes aggregate
+                      :largest-file-bytes largest
+                      :receipt-records (count records)
+                      :receipt-bytes record-bytes}
+               :reserved {:heap-reserved-peak-bytes reserved-peak
+                          :path-list-bytes held
+                          :discovered-files (count (:relatives walked))
+                          :work-budget-bytes work-budget-bytes
+                          :parse-factor parse-factor
+                          :aggregate-bytes aggregate
+                          :aggregate-bytes-max max-aggregate-bytes}
+               :records records}
+              (let [relative (first remaining)
+                    resolved (mcp-paths/resolve-source-path real-root relative)]
+                (if-not (:ok resolved)
+                  (refusal :scope-path-refused (:error resolved)
+                           {:path relative :next_call nil})
+                  (let [^Path canonical (:canonical resolved)
+                        ;; the cap is the smaller of the per-file ceiling and what
+                        ;; the aggregate budget has left, so a file that grew
+                        ;; since discovery is stopped against the REMAINING budget
+                        cap (min max-file-bytes (- max-aggregate-bytes aggregate))
+                        bounded (read-bounded canonical cap)
+                        truncated? (:truncated? bounded)
+                        source (:source bounded)
+                        bytes (long (:bytes bounded))]
+                    (cond
+                      (and truncated? (> bytes max-file-bytes))
+                      (refusal :scope-source-too-large
+                               (str relative " is larger than the " max-file-bytes
+                                    "-byte ceiling this walk admits")
+                               {:path relative :max-bytes max-file-bytes
+                                :observed-at-least bytes
+                                :next_call {:op :scope/stream
+                                            :scope {:exclude relative}}
+                                :remedy (str "Exclude " relative ", or narrow the scope. Excluding a file may change semantics; say so in the plan.")})
 
-                    truncated?
-                    (refusal :scope-aggregate-bytes-exceeded
-                             (str "Reading " relative " would pass the "
-                                  max-aggregate-bytes "-byte aggregate ceiling")
-                             {:path relative :max-bytes max-aggregate-bytes
-                              :observed-at-least (+ aggregate bytes)
-                              :files-read files
-                              :next_call {:op :scope/stream
-                                          :scope {:narrow-to "a subtree that fits the aggregate budget"}}})
+                      truncated?
+                      (refusal :scope-aggregate-bytes-exceeded
+                               (str "Reading " relative " would pass the "
+                                    max-aggregate-bytes "-byte aggregate ceiling")
+                               {:path relative :max-bytes max-aggregate-bytes
+                                :observed-at-least (+ aggregate bytes)
+                                :files-read files
+                                :next_call {:op :scope/stream
+                                            :scope {:narrow-to "a subtree that fits the aggregate budget"}}})
 
-                    (> (+ held (* bytes parse-factor)) work-budget-bytes)
-                    (refusal :scope-work-budget-exceeded
-                             (str "Parsing " relative " would reserve "
-                                  (+ held (* bytes parse-factor))
-                                  " bytes of heap beside the retained path list, above the "
-                                  work-budget-bytes "-byte work budget")
-                             {:path relative
-                              :bytes bytes
-                              :parse-factor parse-factor
-                              :reserved-for :file-parse
-                              :path-list-bytes held
-                              :work-budget-bytes work-budget-bytes
-                              :next_call nil
-                              :remedy "One admitted file must fit the work budget beside the discovered path list; there is no correctness-preserving way to split it here."})
+                      (> (+ held (* bytes parse-factor)) work-budget-bytes)
+                      (refusal :scope-work-budget-exceeded
+                               (str "Parsing " relative " would reserve "
+                                    (+ held (* bytes parse-factor))
+                                    " bytes of heap beside the retained path list, above the "
+                                    work-budget-bytes "-byte work budget")
+                               {:path relative
+                                :bytes bytes
+                                :parse-factor parse-factor
+                                :reserved-for :file-parse
+                                :path-list-bytes held
+                                :work-budget-bytes work-budget-bytes
+                                :next_call nil
+                                :remedy "One admitted file must fit the work budget beside the discovered path list; there is no correctness-preserving way to split it here."})
 
-                    :else
-                    (let [reserved (+ held (* bytes parse-factor))
-                          entry {:relative relative
-                                 :path (:path resolved)
-                                 :bytes bytes
-                                 :sha256 (journal/sha256-string source)
-                                 :source source}
-                          result (plan-fn entry)
-                          record (when collect (collect (dissoc entry :source) result))
-                          record-size (long (if record (count (pr-str record)) 0))]
-                      (cond
-                        (and record (>= (count records) max-receipt-records))
-                        (refusal :scope-receipt-too-large
-                                 (str "The receipt reached its ceiling of "
-                                      max-receipt-records " records at " relative)
-                                 {:path relative
-                                  :max-records max-receipt-records
-                                  :observed-at-least (inc (count records))
-                                  :next_call {:op :scope/stream
-                                              :scope {:narrow-to "a scope whose receipt fits, or a summary projection"}}
-                                  :remedy "A mutation receipt is refused rather than truncated: a truncated receipt hides work that was done."})
+                      :else
+                      (let [reserved (+ held (* bytes parse-factor))
+                            entry {:relative relative
+                                   :path (:path resolved)
+                                   :bytes bytes
+                                   :sha256 (journal/sha256-string source)
+                                   :source source}
+                            result (plan-fn entry)
+                            record (when collect (collect (dissoc entry :source) result))
+                            record-size (long (if record (count (pr-str record)) 0))]
+                        (cond
+                          (and record (>= (count records) max-receipt-records))
+                          (refusal :scope-receipt-too-large
+                                   (str "The receipt reached its ceiling of "
+                                        max-receipt-records " records at " relative)
+                                   {:path relative
+                                    :max-records max-receipt-records
+                                    :observed-at-least (inc (count records))
+                                    :next_call {:op :scope/stream
+                                                :scope {:narrow-to "a scope whose receipt fits, or a summary projection"}}
+                                    :remedy "A mutation receipt is refused rather than truncated: a truncated receipt hides work that was done."})
 
-                        (and record (> (+ record-bytes record-size) max-receipt-bytes))
-                        (refusal :scope-receipt-too-large
-                                 (str "The receipt would reach " (+ record-bytes record-size)
-                                      " bytes at " relative ", above the "
-                                      max-receipt-bytes "-byte ceiling")
-                                 {:path relative
-                                  :max-bytes max-receipt-bytes
-                                  :observed-at-least (+ record-bytes record-size)
-                                  :next_call {:op :scope/stream
-                                              :scope {:narrow-to "a scope whose receipt fits, or a summary projection"}}
-                                  :remedy "A mutation receipt is refused rather than truncated: a truncated receipt hides work that was done."})
+                          (and record (> (+ record-bytes record-size) max-receipt-bytes))
+                          (refusal :scope-receipt-too-large
+                                   (str "The receipt would reach " (+ record-bytes record-size)
+                                        " bytes at " relative ", above the "
+                                        max-receipt-bytes "-byte ceiling")
+                                   {:path relative
+                                    :max-bytes max-receipt-bytes
+                                    :observed-at-least (+ record-bytes record-size)
+                                    :next_call {:op :scope/stream
+                                                :scope {:narrow-to "a scope whose receipt fits, or a summary projection"}}
+                                    :remedy "A mutation receipt is refused rather than truncated: a truncated receipt hides work that was done."})
 
-                        :else
-                        (recur (rest remaining)
-                               (+ aggregate bytes)
-                               (inc files)
-                               (max largest bytes)
-                               (max reserved-peak reserved)
-                               (if record (conj records record) records)
-                               (+ record-bytes record-size)))))))))))))))
+                          :else
+                          (recur (rest remaining)
+                                 (+ aggregate bytes)
+                                 (inc files)
+                                 (max largest bytes)
+                                 (max reserved-peak reserved)
+                                 (if record (conj records record) records)
+                                 (+ record-bytes record-size)))))))))))))))
