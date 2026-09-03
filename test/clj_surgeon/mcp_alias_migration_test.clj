@@ -2229,3 +2229,75 @@
       (finally
         (delete-tree! workspace)
         (delete-tree! outside)))))
+
+;; ---------------------------------------------------------------------------
+;; round nine: the two secondary fields a post-write refusal also owes
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-post-write-refusal-says-a-mutation-was-attempted
+  ;; `mutation_attempted` is the one field whose entire purpose is "did we
+  ;; touch the tree", and the shared `refusal` helper hardcoded it to `false`
+  ;; for every refusal this verb publishes. A post-write refusal is published
+  ;; over twelve files the transaction kernel wrote, and the same verb already
+  ;; answers `true` for the identical tree state on its heap-exhaustion path
+  ;; (ALIAS-047), from the kernel's own write boundary. One verb, one answer:
+  ;; a caller that gates its retry on `mutation_attempted` was told to retry
+  ;; over a mid-migration workspace.
+  (let [workspace (workspace!)
+        details (io/file workspace ".clj-surgeon" "alias-migration")
+        receipts (io/file workspace "receipts")]
+    (.mkdirs details)
+    (try
+      (testing "a rollback that failed leaves the tree migrated"
+        (let [result (post-write-redirect!
+                       workspace details receipts
+                       (fn [_] {:ok false :error "injected rollback failure"}))]
+          (is (false? (:ok result)) (pr-str result))
+          (is (= "post-write" (:phase result)))
+          (is (= 12 (count (still-migrated workspace)))
+              "the scenario did not leave a migrated tree")
+          (is (true? (:mutation_attempted result))
+              "twelve files were written and mutation_attempted said false")))
+      (finally
+        (delete-tree! workspace)))
+    (let [workspace (workspace!)
+          details (io/file workspace ".clj-surgeon" "alias-migration")
+          receipts (io/file workspace "receipts")]
+      (.mkdirs details)
+      (try
+        (testing "and a rollback that SUCCEEDED still attempted the mutation"
+          ;; the kernel wrote every file and then put it back. The tree is
+          ;; unchanged and `source_unchanged` says so; the question
+          ;; `mutation_attempted` answers is a different one, and the honest
+          ;; answer is that the write boundary was crossed.
+          (let [result (post-write-redirect! workspace details receipts nil)]
+            (is (false? (:ok result)) (pr-str result))
+            (is (true? (:source_unchanged result)))
+            (is (empty? (still-migrated workspace)))
+            (is (true? (:mutation_attempted result))
+                "the kernel wrote every file before the rollback restored it")))
+        (finally
+          (delete-tree! workspace))))))
+
+;; @spec MCP-OP-ALIAS-056
+(deftest a-pre-write-refusal-still-says-no-mutation-was-attempted
+  ;; The other half of the same claim: `mutation_attempted` is READ from the
+  ;; kernel's write boundary, so making it honest for a post-write refusal must
+  ;; not turn it into a constant `true`. A refusal decided on paths alone, with
+  ;; no byte written, answers `false` and sends the caller back to correct its
+  ;; request.
+  (let [workspace (workspace!)
+        heads (io/file workspace ".git" "refs" "heads")]
+    (.mkdirs heads)
+    (try
+      (let [result (alias-migration/execute! (config workspace heads)
+                                             (request workspace))]
+        (is (false? (:ok result)) (pr-str result))
+        (is (= "alias-migration-receipt-dir-in-control-directory"
+               (:error_type result)))
+        (is (true? (:source_unchanged result)))
+        (is (false? (:mutation_attempted result)))
+        (is (= "correct_request" (:next_action result)))
+        (is (empty? (still-migrated workspace))))
+      (finally
+        (delete-tree! workspace)))))
