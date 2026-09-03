@@ -93,6 +93,10 @@ IDs are stable and must not be reused if a requirement is deleted.
 
 - [x] **MCP-OP-STUDY-038**: The `limit` ceiling shall remain a typed boundary rather than a target: a tree whose complete rendering fits shall return complete, and the next file over shall return `truncated=true`, `read_complete=false`, `next_action="narrow_scope"`, and a remedy naming what to do instead — witnessed AT the boundary, on N files that fit and N+1 that do not, never asserted about the constant alone.
 
+## Proving the connection, per arm
+
+- [x] **MCP-OP-STUDY-039**: A clj-surgeon MCP server shall emit one `session.start` telemetry event the FIRST time it serves each distinct workspace root, carrying a content-free `workspace_key` (a stable digest prefix of the canonical root) in every telemetry mode, the `workspace_root` itself only in `:full` mode, and a `client_run_id` when the caller supplied one. `server.start` records that a PROCESS started and `tool.call` records that SOME caller called; neither distinguishes one client session from another when one server serves several, so an adoption number measured against such a server is credible rather than proven. *Field evidence (E6-Lb): three free-choice arms shared one server on 7909; their telemetry held only `server.start`, so a silent connection failure and a deliberate decline were indistinguishable in the record.*
+
 ## Falsifiers
 
 | ID | Defensible opposite to test | Required witness families |
@@ -132,3 +136,4 @@ IDs are stable and must not be reused if a requirement is deleted.
 | `MCP-OP-STUDY-036` | `structuredContent` is the receipt; the text block is a summary and a summary has no rows. | A ten-file, thirty-form tree whose `content[0].text` names all ten namespaces, carries >= 22 form rows and the requires summary (before: 0, 0, and 0 in a 113-character header); a truncated receipt whose text spells `next call: inspect_clojure … limit=16384`; a receipt at the ceiling whose text spells the remedy and no continuation. |
 | `MCP-OP-STUDY-037` | One default serves every study receipt, and a caller who wants more can raise the limit. | A twenty-five-file tree truncated at 4096 and complete at the default (before: 19 of 25); a ten-file, thirty-form tree complete in one call in 2,178 characters of text (before: 113 characters and no rows); the receipt reporting the constant it was bounded by. |
 | `MCP-OP-STUDY-038` | A ceiling that refuses is a ceiling set too low. | 77 toy files (16,370 characters) complete at `limit 16384` and 78 truncating to 76 with `narrow_scope` and the remedy in the text. |
+| `MCP-OP-STUDY-039` | `server.start` plus `tool.call` already prove a client connected. | Two distinct workspace roots served by one telemetry session emitting exactly two `session.start` events with different `workspace_key`s; a second call on the same root emitting none; `workspace_root` absent in `:metrics` mode and present in `:full`. |

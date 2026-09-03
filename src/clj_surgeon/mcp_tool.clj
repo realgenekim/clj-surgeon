@@ -443,6 +443,13 @@
         result (f)]
     [result (elapsed-ms started)]))
 
+;; @spec MCP-OP-STUDY-039
+(defn- record-session!
+  "Announce the workspace this call was served from, once per root."
+  [telemetry-state project-root]
+  (telemetry/record-session-start! telemetry-state {:workspace-root project-root})
+  telemetry-state)
+
 (defn- record-result!
   [telemetry-state request response total-start timings]
   (when telemetry-state
@@ -697,6 +704,7 @@
   "Validate, confine, and execute one typed request through the loaded kernel."
   [{:keys [project-root receipt-dir telemetry] :as config} params
    public-operation]
+  (record-session! telemetry project-root)
   (let [normalized-params (json/parse-string (json/generate-string params) true)
         editor-gesture? (some #(contains? normalized-params %)
                               [:edits :programs :delete_owners :create_files

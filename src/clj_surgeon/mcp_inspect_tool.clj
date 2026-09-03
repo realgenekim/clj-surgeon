@@ -1410,10 +1410,15 @@
           :next_action "correct_request"}
          snapshot-guards (assoc :failed_stage "snapshot"))))))
 
+;; @spec MCP-OP-STUDY-039
 (defn- execute-inspect-in-context!
   "Validate, confine, snapshot once, and evaluate one typed inspect request."
   [{:keys [project-root telemetry read-source output-limits semantic-resolver] :as config}
    params]
+  ;; The first call routed to a workspace root announces that session. One
+  ;; server serves several arms of a cohort; without this the record cannot
+  ;; tell a silent connection failure from a deliberate decline.
+  (telemetry/record-session-start! telemetry {:workspace-root project-root})
   (let [started (System/nanoTime)
         normalized-params (json/parse-string (json/generate-string params) true)
         prepare? (= "prepare-change" (:mode normalized-params))

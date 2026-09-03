@@ -7,10 +7,12 @@
    @spec MCP-OP-STUDY-010 MCP-OP-STUDY-011 MCP-OP-STUDY-012"
   (:require
    [babashka.fs :as fs]
+   [cheshire.core :as json]
    [clj-surgeon.core :as core]
    [clj-surgeon.mcp-inspect :as inspect]
    [clj-surgeon.mcp-inspect-tool :as inspect-tool]
    [clj-surgeon.mcp-paths :as mcp-paths]
+   [clj-surgeon.mcp-telemetry :as telemetry]
    [clj-surgeon.mcp-tool :as mcp-tool]
    [clj-surgeon.outline :as outline]
    [clj-surgeon.parallel :as parallel]
@@ -1953,3 +1955,32 @@
           (is (= "narrow_scope" (:next_action result)))
           (is (str/includes? (text-block result) "maximum limit")))))
     (is (= 77 @n))))
+
+;; @spec MCP-OP-STUDY-039
+(deftest ls-tree-entrance-announces-the-workspace-it-serves
+  ;; The unit witnesses prove the recorder. This proves the ENTRANCE calls it:
+  ;; without a real call emitting the event, a cohort still cannot bind an arm
+  ;; to a connection, which is the whole point.
+  (let [telemetry-dir (str (fs/create-temp-dir {:prefix "o2-tel-"}))]
+    (try
+      (with-tmp-project
+        #(build-toy-project! % 3)
+        (fn [config]
+          (let [state (telemetry/start! {:mode :metrics :directory telemetry-dir
+                                         :run-id "o2-witness"})
+                config (assoc config :telemetry state)]
+            (inspect-tool/execute-inspect! config {"mode" "ls-tree" "dir" "."})
+            (inspect-tool/execute-inspect! config {"mode" "ls-tree" "dir" "."})
+            (let [lines (remove str/blank? (str/split-lines (slurp (:file state))))
+                  parsed (mapv #(json/parse-string % true) lines)
+                  started (filterv #(= "session.start" (:event %)) parsed)
+                  calls (filterv #(= "tool.call" (:event %)) parsed)]
+              (is (= 2 (count calls)) "both calls were recorded")
+              (is (= 1 (count started))
+                  "the workspace is announced once, not once per call")
+              (is (= (telemetry/workspace-key (:project-root config))
+                     (:workspace_key (first started)))
+                  "and it names the root a cohort can recompute")
+              (is (= "o2-witness" (:run_id (first started))))))))
+      (finally
+        (fs/delete-tree telemetry-dir)))))
