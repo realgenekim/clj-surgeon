@@ -32,3 +32,14 @@ Codex on this seat is unauthenticated (401 on `codex exec`), so Sol is unavailab
 provisions the login — a morning item; Opus stands in for the red-team tonight. Load at launch 3.9/16.
 
 ## 02:02Z — lane 5: inb-06d376 (comms.template-saved characterization + shadow rename + upsert decision) — Sonnet on `~/src/curtaincall-cfp-tmpl` (`bridge/template-upsert` from settings-lens). Five lanes; suites serialised.
+
+## 02:12Z — RED-TEAM NO-GO on the study-ops branch: two code-execution holes reachable from one inspect call
+
+`docs/observations/2026-09-03-study-ops-redteam-NO-GO.md`. Critical: `grep` reaches ripgrep unescaped
+(`--pre=/bin/sh` executed files in the red-team's own experiment, receipt said no-clojure-files);
+`extract-source-paths` uses `clojure.core/read-string` with read-eval on scanned deps.edn (`#=(spit …)`
+executed). High: symlinks out of the root are outlined; the whole tree is parsed before any bound
+(618 MB for 1072 files). Eight more items. **The branch is out of the mayor's queue until the security
+round lands and an independent re-review says GO** — exactly the class the 2026-09-02 andon memory
+covers, caught before merge this time. The names-only builder was told to finish and stop, and to put
+`--` before the pattern if it touches `grep-tree`. Mayor: item 2 is a pre-existing CLI exposure on main.
