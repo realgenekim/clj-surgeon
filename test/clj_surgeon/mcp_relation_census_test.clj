@@ -2170,7 +2170,18 @@
              [run {:workspace_root (.getCanonicalPath root)
                    :files [big small]}]
              :no-arms-scanned [run {:files [helpers]}]
-             :no-arms-empty [empty-here {}]}
+             :no-arms-empty [empty-here {}]
+             ;; Sol's round-ten item 8: the remedy branch this battery had
+             ;; never held. A workspace_root that is not a string cannot be
+             ;; carried into a next_call the published schema would accept,
+             ;; and a next_call without it targets a different tree — so the
+             ;; refusal offers no continuation and a remedy instead. A remedy
+             ;; is only worth publishing if following it WORKS, so the
+             ;; battery holds the remedied request beside it and replays what
+             ;; that one hands back.
+             :non-string-workspace-root [run {:workspace_root 42 :doors [1]}]
+             :non-string-workspace-root-remedied
+             [run {:workspace_root (.getCanonicalPath root) :doors [1]}]}
             mcp-refusals (into {}
                                (map (fn [[label [entrance params]]]
                                       [label (entrance params)]))
@@ -2297,6 +2308,47 @@
                 "the oversized-file check ran before doors was validated")
             (is (not (contains? (:next_call mixed) :doors))
                 "a malformed door reached the oversized-file continuation")))
+
+        (testing "a workspace_root that is not a string offers a remedy, not a continuation"
+          (let [result (:non-string-workspace-root mcp-refusals)]
+            (is (= "invalid-mcp-request" (:error_type result)))
+            (is (= "doors-not-strings" (:reason result))
+                "a routing field's type beat the shape order it is not part of")
+            (is (not (contains? result :next_call))
+                (str "the continuation silently retargets the census: "
+                     (pr-str (:next_call result))))
+            (is (string? (:remedy result)))
+            (is (str/includes? (:remedy result) "workspace_root")
+                "the remedy does not name the field the caller must fix")
+            (is (str/includes? (:remedy result) "absolute")
+                "the remedy does not say what a carriable value looks like")))
+
+        (testing "following that remedy yields a continuation that replays"
+          ;; The remedy says: retry with workspace_root naming an existing
+          ;; absolute directory. Doing exactly that must produce a refusal
+          ;; whose continuation targets the SAME root and replays without
+          ;; refusing — otherwise the remedy is advice that leads to another
+          ;; dead end, which is the failure mode MCP-OP-CENSUS-014 exists to
+          ;; prevent.
+          (let [remedied (:non-string-workspace-root-remedied mcp-refusals)
+                next-call (:next_call remedied)
+                asked (.getCanonicalPath root)]
+            (is (= "doors-not-strings" (:reason remedied)))
+            (is (some? next-call)
+                "the remedied request still hands back no continuation")
+            (is (= (same-target asked) (same-target (:workspace_root next-call)))
+                (str "the remedied continuation retargets the census: "
+                     (pr-str next-call)))
+            (let [replayed (run (dissoc next-call :tool))]
+              (is (true? (:ok replayed))
+                  (str "the remedied continuation refused: "
+                       (:error_type replayed) " " (:error replayed)))
+              (is (= (same-target asked) (same-target (:workspace_root replayed)))
+                  (str "the replay censused another tree: "
+                       (pr-str (:workspace_root replayed))))
+              (is (= 1 (:files replayed))
+                  (str "the replay scanned " (:files replayed)
+                       " arm-bearing file(s); the remedied workspace holds 1")))))
 
         (testing "every next_call this battery emits validates against the published schema"
           ;; The published schema, not a hand read, is the authority on
