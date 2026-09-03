@@ -212,6 +212,7 @@
     (catch Throwable _ true)))
 
 ;; @spec MCP-OP-CENSUS-018
+;; @spec MCP-OP-CENSUS-027
 (defn- candidate-files
   "Project-relative Clojure sources under one canonical root, bounded.
 
@@ -219,10 +220,16 @@
    directory is never descended: `dev/checkouts/foo -> ../../foo` costs one
    counted skip instead of refusing the whole census. Skip-directories are
    pruned before they are read rather than filtered out of the result, and the
-   file cap terminates the walk rather than truncating it afterwards."
+   file cap terminates the walk rather than truncating it afterwards.
+
+   Reaching the cap is a REFUSAL, not a result: the walk stops at one candidate
+   past the ceiling and reports `:exceeded?` with the count it had seen, so the
+   caller is told the tree is larger than the census may read instead of being
+   handed a subset dressed as a complete answer."
   [^Path root]
   (let [found (java.util.ArrayList.)
         skipped (atom 0)
+        exceeded (atom false)
         visitor
         (proxy [SimpleFileVisitor] []
           (preVisitDirectory [dir _attrs]
@@ -235,16 +242,21 @@
             (let [^Path path path
                   ^BasicFileAttributes attrs attrs]
               (cond
-                (>= (.size found) census/max-scanned-files)
-                FileVisitResult/TERMINATE
-
                 (and (.isRegularFile attrs)
                      (source-name? path)
                      (<= (.size attrs) census/max-source-bytes))
-                (do (if (escapes-root? root path)
-                      (swap! skipped inc)
-                      (.add found (str (.relativize root path))))
-                    FileVisitResult/CONTINUE)
+                (cond
+                  (escapes-root? root path)
+                  (do (swap! skipped inc)
+                      FileVisitResult/CONTINUE)
+
+                  (>= (.size found) census/max-scanned-files)
+                  (do (reset! exceeded true)
+                      FileVisitResult/TERMINATE)
+
+                  :else
+                  (do (.add found (str (.relativize root path)))
+                      FileVisitResult/CONTINUE))
 
                 (and (.isSymbolicLink attrs) (escapes-root? root path))
                 (do (swap! skipped inc)
@@ -254,7 +266,9 @@
           (visitFileFailed [_path _error] FileVisitResult/CONTINUE))]
     (Files/walkFileTree root #{} Integer/MAX_VALUE visitor)
     {:files (vec (sort found))
-     :skipped-outside-root @skipped}))
+     :skipped-outside-root @skipped
+     :exceeded? @exceeded
+     :observed (cond-> (.size found) @exceeded inc)}))
 
 ;; @spec MCP-OP-CENSUS-017
 (defn collect-inputs
@@ -435,6 +449,32 @@
 ;; Execution
 ;; ---------------------------------------------------------------------------
 
+;; @spec MCP-OP-CENSUS-027
+(defn- ceiling-refusal
+  "Refuse a tree that holds more candidate sources than the census may read.
+
+   The caller gets the ceiling, the count that fits, the count the walk had
+   observed when it stopped (a lower bound, because the walk stops rather than
+   enumerating the rest), and a next_call that narrows the scan."
+  [discovered canonical]
+  (refusal :too-many-candidate-files
+           (str "This workspace holds more than " census/max-scanned-files
+                " candidate Clojure sources (" (:observed discovered)
+                " seen before the walk stopped). The census reads at most "
+                census/max-scanned-files
+                " and will not report a truncated tree as a complete census: "
+                "name the sources, or point workspace_root at a narrower "
+                "subtree.")
+           {:tool "relation_census"
+            :workspace_root canonical
+            :files [(str "<at most " census/max-scanned-files
+                         " named sources under this root>")]}
+           {:maximum census/max-scanned-files
+            :fits census/max-scanned-files
+            :observed (:observed discovered)
+            :observed_at_least true
+            :files_read 0}))
+
 ;; @spec MCP-OP-CENSUS-014
 (defn- door-refusal
   [invalid canonical]
@@ -458,9 +498,15 @@
         scanned (or requested (:files discovered))
         skipped-outside-root (:skipped-outside-root discovered 0)
         t-discovered (System/nanoTime)
-        loaded (collect-inputs root scanned {:declared? want-declared?})
+        ;; The ceiling is checked BEFORE any read: a tree the census may not
+        ;; finish is refused, never partially read and published as complete.
+        loaded (when-not (:exceeded? discovered)
+                 (collect-inputs root scanned {:declared? want-declared?}))
         t-read (System/nanoTime)]
     (cond
+      (:exceeded? discovered)
+      (ceiling-refusal discovered canonical)
+
       (:refusal loaded)
       (refusal :unreadable-source-path
                (str (:error (:refusal loaded)) " (" (:file loaded) ")")

@@ -145,7 +145,10 @@ does and does not do:
   in `skipped_outside_root`, never read;
 - `.git`, `node_modules`, `target` and their relatives are pruned before they
   are read, not filtered out afterwards;
-- the walk terminates at `max-scanned-files`, and a source above
+- the walk stops at `max-scanned-files`, and reaching that ceiling is a
+  REFUSAL (`too-many-candidate-files`, naming the ceiling, the count that
+  fits, the observed lower bound, and a narrowing `next_call`) rather than
+  a truncated scan published as a complete census; a source above
   `max-source-bytes` is never read;
 - only the sources that define arms are retained, and the receipt carries
   one-line excerpts, never file text.
